@@ -1,0 +1,25 @@
+//! Port defaults for the action bus broker.
+//!
+//! Distinct from `message_bus` (15560/15561) and `service_bus` (15662/15663)
+//! to avoid collisions.
+
+pub const FRONTEND_PORT: u16 = 15664;
+pub const BACKEND_PORT: u16 = 15665;
+
+pub const FRONTEND_CHANNEL: &str = "action_bus/frontend";
+pub const BACKEND_CHANNEL: &str = "action_bus/backend";
+
+pub const DEFAULT_FRONTEND_BIND: &str = "tcp://0.0.0.0:15664";
+pub const DEFAULT_BACKEND_BIND: &str = "tcp://0.0.0.0:15665";
+
+/// Feedback streams can be bursty; allow a deeper queue than `message_bus`
+/// (which uses 2 to prefer dropping over buffering for real-time frames).
+pub const DEFAULT_SND_HWM: i32 = 8;
+pub const DEFAULT_RCV_HWM: i32 = 8;
+
+/// Worker heartbeat protocol.
+///
+/// Workers send `HEARTBEAT` every `HEARTBEAT_INTERVAL_MS`; the broker evicts a
+/// worker if no frame is seen within `HEARTBEAT_TIMEOUT_MS`.
+pub const DEFAULT_HEARTBEAT_INTERVAL_MS: u64 = 2500;
+pub const DEFAULT_HEARTBEAT_TIMEOUT_MS: u64 = 7500;

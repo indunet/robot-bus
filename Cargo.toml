@@ -1,0 +1,28 @@
+[package]
+name = "robot_bus"
+version = "0.1.0"
+edition = "2024"
+description = "ZeroMQ message bus: broker routing and participant SDK"
+
+[dependencies]
+anyhow = "1"
+log = "0.4"
+thiserror = "2"
+uuid = { version = "1", features = ["v4"] }
+zmq = "0.10"
+
+[[bin]]
+name = "message_bus_broker"
+path = "src/bin/message_bus.rs"
+
+[[bin]]
+name = "service_bus_broker"
+path = "src/bin/service_bus.rs"
+
+[[bin]]
+name = "action_bus_broker"
+path = "src/bin/action_bus.rs"
+
+[[bin]]
+name = "robot_bus_broker"
+path = "src/bin/robot_bus_broker.rs"

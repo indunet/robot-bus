@@ -1,0 +1,11 @@
+# Build artifacts
+target/
+
+# IDE / OS
+.idea/
+.vscode/
+.DS_Store
+
+# Local env
+.env
+.env.*
