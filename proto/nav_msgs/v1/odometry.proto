@@ -1,0 +1,14 @@
+syntax = "proto3";
+
+package nav_msgs.v1;
+
+import "std_msgs/v1/header.proto";
+import "geometry_msgs/v1/covariance.proto";
+
+// Equivalent to ROS 2 `nav_msgs/msg/Odometry`.
+message Odometry {
+  std_msgs.v1.Header header = 1;
+  string child_frame_id = 2;
+  geometry_msgs.v1.PoseWithCovariance pose = 3;
+  geometry_msgs.v1.TwistWithCovariance twist = 4;
+}

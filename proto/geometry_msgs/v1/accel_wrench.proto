@@ -1,0 +1,17 @@
+syntax = "proto3";
+
+package geometry_msgs.v1;
+
+import "geometry_msgs/v1/vector3.proto";
+
+// Equivalent to ROS 2 `geometry_msgs/msg/Accel`.
+message Accel {
+  Vector3 linear = 1;
+  Vector3 angular = 2;
+}
+
+// Equivalent to ROS 2 `geometry_msgs/msg/Wrench`.
+message Wrench {
+  Vector3 force = 1;
+  Vector3 torque = 2;
+}

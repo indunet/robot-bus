@@ -1,0 +1,12 @@
+syntax = "proto3";
+
+package sensor_msgs.v1;
+
+import "std_msgs/v1/header.proto";
+
+// Equivalent to ROS 2 `sensor_msgs/msg/CompressedImage`.
+message CompressedImage {
+  std_msgs.v1.Header header = 1;
+  string format = 2;
+  bytes data = 3;
+}

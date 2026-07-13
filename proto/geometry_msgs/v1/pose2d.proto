@@ -1,0 +1,11 @@
+syntax = "proto3";
+
+package geometry_msgs.v1;
+
+// Equivalent to ROS 2 `geometry_msgs/msg/Pose2D`.
+// Deprecated in ROS 2 Foxy; retained for compatibility.
+message Pose2D {
+  double x = 1;
+  double y = 2;
+  double theta = 3;
+}

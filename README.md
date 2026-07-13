@@ -6,6 +6,7 @@
 |------|------|
 | `broker::` | 路由进程（message / service / action 三种 bus） |
 | 顶层 API | Publisher / Subscriber / Client / Worker |
+| [`proto/`](proto/) | ROS 2 标准消息的 Protobuf 定义 |
 
 ## 架构
 
@@ -57,3 +58,7 @@ sub.subscribe("wireless.imu")?;
 ```bash
 cargo test
 ```
+
+## Protobuf（ROS 2 消息）
+
+[`proto/`](proto/) 目录包含 ROS 2 常用标准消息的 Protobuf 重定义（`builtin_interfaces`、`std_msgs`、`geometry_msgs`、`sensor_msgs`、`nav_msgs`），字段语义贴近原始 `.msg` 定义。详见 [`proto/README.md`](proto/README.md)。

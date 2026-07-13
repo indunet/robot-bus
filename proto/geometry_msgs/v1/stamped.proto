@@ -1,0 +1,40 @@
+syntax = "proto3";
+
+package geometry_msgs.v1;
+
+import "std_msgs/v1/header.proto";
+import "geometry_msgs/v1/pose.proto";
+import "geometry_msgs/v1/twist.proto";
+import "geometry_msgs/v1/transform.proto";
+import "geometry_msgs/v1/accel_wrench.proto";
+
+// Equivalent to ROS 2 `geometry_msgs/msg/PoseStamped`.
+message PoseStamped {
+  std_msgs.v1.Header header = 1;
+  Pose pose = 2;
+}
+
+// Equivalent to ROS 2 `geometry_msgs/msg/TwistStamped`.
+message TwistStamped {
+  std_msgs.v1.Header header = 1;
+  Twist twist = 2;
+}
+
+// Equivalent to ROS 2 `geometry_msgs/msg/TransformStamped`.
+message TransformStamped {
+  std_msgs.v1.Header header = 1;
+  string child_frame_id = 2;
+  Transform transform = 3;
+}
+
+// Equivalent to ROS 2 `geometry_msgs/msg/AccelStamped`.
+message AccelStamped {
+  std_msgs.v1.Header header = 1;
+  Accel accel = 2;
+}
+
+// Equivalent to ROS 2 `geometry_msgs/msg/WrenchStamped`.
+message WrenchStamped {
+  std_msgs.v1.Header header = 1;
+  Wrench wrench = 2;
+}

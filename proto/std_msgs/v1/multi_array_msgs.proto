@@ -1,0 +1,29 @@
+syntax = "proto3";
+
+package std_msgs.v1;
+
+import "std_msgs/v1/multi_array.proto";
+
+// Equivalent to ROS 2 `std_msgs/msg/Float64MultiArray`.
+message Float64MultiArray {
+  MultiArrayLayout layout = 1;
+  repeated double data = 2;
+}
+
+// Equivalent to ROS 2 `std_msgs/msg/Float32MultiArray`.
+message Float32MultiArray {
+  MultiArrayLayout layout = 1;
+  repeated float data = 2;
+}
+
+// Equivalent to ROS 2 `std_msgs/msg/Int32MultiArray`.
+message Int32MultiArray {
+  MultiArrayLayout layout = 1;
+  repeated int32 data = 2;
+}
+
+// Equivalent to ROS 2 `std_msgs/msg/ByteMultiArray`.
+message ByteMultiArray {
+  MultiArrayLayout layout = 1;
+  bytes data = 2;
+}

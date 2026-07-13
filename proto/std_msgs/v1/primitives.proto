@@ -1,0 +1,57 @@
+syntax = "proto3";
+
+package std_msgs.v1;
+
+// Primitive wrapper messages, equivalent to ROS 2 `std_msgs/msg/*`.
+
+message Bool {
+  bool data = 1;
+}
+
+message Int8 {
+  int32 data = 1;
+}
+
+message Int16 {
+  int32 data = 1;
+}
+
+message Int32 {
+  int32 data = 1;
+}
+
+message Int64 {
+  int64 data = 1;
+}
+
+message UInt8 {
+  uint32 data = 1;
+}
+
+message UInt16 {
+  uint32 data = 1;
+}
+
+message UInt32 {
+  uint32 data = 1;
+}
+
+message UInt64 {
+  uint64 data = 1;
+}
+
+message Float32 {
+  float data = 1;
+}
+
+message Float64 {
+  double data = 1;
+}
+
+message String {
+  string data = 1;
+}
+
+message Byte {
+  uint32 data = 1;
+}

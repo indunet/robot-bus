@@ -1,0 +1,12 @@
+syntax = "proto3";
+
+package geometry_msgs.v1;
+
+import "geometry_msgs/v1/point.proto";
+import "geometry_msgs/v1/quaternion.proto";
+
+// Equivalent to ROS 2 `geometry_msgs/msg/Pose`.
+message Pose {
+  Point position = 1;
+  Quaternion orientation = 2;
+}
