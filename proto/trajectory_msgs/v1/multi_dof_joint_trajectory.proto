@@ -1,0 +1,23 @@
+syntax = "proto3";
+
+package trajectory_msgs.v1;
+
+import "std_msgs/v1/header.proto";
+import "builtin_interfaces/v1/duration.proto";
+import "geometry_msgs/v1/transform.proto";
+import "geometry_msgs/v1/twist.proto";
+
+// Equivalent to ROS 2 `trajectory_msgs/msg/MultiDOFJointTrajectoryPoint`.
+message MultiDOFJointTrajectoryPoint {
+  repeated geometry_msgs.v1.Transform transforms = 1;
+  repeated geometry_msgs.v1.Twist velocities = 2;
+  repeated geometry_msgs.v1.Twist accelerations = 3;
+  builtin_interfaces.v1.Duration time_from_start = 4;
+}
+
+// Equivalent to ROS 2 `trajectory_msgs/msg/MultiDOFJointTrajectory`.
+message MultiDOFJointTrajectory {
+  std_msgs.v1.Header header = 1;
+  repeated string joint_names = 2;
+  repeated MultiDOFJointTrajectoryPoint points = 3;
+}

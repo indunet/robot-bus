@@ -1,0 +1,16 @@
+syntax = "proto3";
+
+package sensor_msgs.v1;
+
+import "std_msgs/v1/header.proto";
+
+// Equivalent to ROS 2 `sensor_msgs/msg/FluidPressure`.
+message FluidPressure {
+  std_msgs.v1.Header header = 1;
+
+  // Absolute pressure reading in Pascals.
+  double fluid_pressure = 2;
+
+  // 0 is interpreted as variance unknown.
+  double variance = 3;
+}

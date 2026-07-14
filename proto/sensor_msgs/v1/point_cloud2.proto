@@ -1,0 +1,50 @@
+syntax = "proto3";
+
+package sensor_msgs.v1;
+
+import "std_msgs/v1/header.proto";
+
+// Equivalent to ROS 2 `sensor_msgs/msg/PointField`.
+// Describes one channel in a PointCloud2.
+message PointField {
+  // Common names: x, y, z, rgb, rgba, intensity, normal_*, ...
+  string name = 1;
+
+  // Byte offset into each point for this field.
+  uint32 offset = 2;
+
+  // uint8 in ROS 2:
+  //   INT8 = 1, UINT8 = 2, INT16 = 3, UINT16 = 4,
+  //   INT32 = 5, UINT32 = 6, FLOAT32 = 7, FLOAT64 = 8
+  uint32 datatype = 3;
+
+  // How many elements in the field (1 for scalars, N for arrays).
+  uint32 count = 4;
+}
+
+// Equivalent to ROS 2 `sensor_msgs/msg/PointCloud2`.
+// This message holds a collection of N-dimensional points with optional
+// additional information about each point.
+message PointCloud2 {
+  std_msgs.v1.Header header = 1;
+
+  // 2D structure of the point cloud. If continuous, height is 1 and width is
+  // the point count.
+  uint32 height = 2;
+  uint32 width = 3;
+
+  repeated PointField fields = 4;
+
+  bool is_bigendian = 5;
+
+  // Length of a point in bytes.
+  uint32 point_step = 6;
+
+  // Length of a row in bytes.
+  uint32 row_step = 7;
+
+  // Actual point data, size is row_step * height.
+  bytes data = 8;
+
+  bool is_dense = 9;
+}

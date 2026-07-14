@@ -1,0 +1,18 @@
+syntax = "proto3";
+
+package nav2_msgs.v1;
+
+import "std_msgs/v1/header.proto";
+import "geometry_msgs/v1/pose.proto";
+
+// Equivalent to ROS 2 `nav2_msgs/msg/Particle`.
+message Particle {
+  geometry_msgs.v1.Pose pose = 1;
+  double weight = 2;
+}
+
+// Equivalent to ROS 2 `nav2_msgs/msg/ParticleCloud`.
+message ParticleCloud {
+  std_msgs.v1.Header header = 1;
+  repeated Particle particles = 2;
+}

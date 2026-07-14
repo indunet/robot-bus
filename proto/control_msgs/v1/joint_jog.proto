@@ -1,0 +1,21 @@
+syntax = "proto3";
+
+package control_msgs.v1;
+
+import "std_msgs/v1/header.proto";
+
+// Equivalent to ROS 2 `control_msgs/msg/JointJog`.
+// Used to command a set of joints to move a specified displacement or velocity.
+message JointJog {
+  std_msgs.v1.Header header = 1;
+  repeated string joint_names = 2;
+
+  // Distance to move in meters / radians. Length must match joint_names or be empty.
+  repeated double displacements = 3;
+
+  // Velocity to move in m/s / rad/s. Length must match joint_names or be empty.
+  repeated double velocities = 4;
+
+  // How long to take to move that far. If 0, use displacements/velocities.
+  double duration = 5;
+}

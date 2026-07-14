@@ -1,0 +1,30 @@
+syntax = "proto3";
+
+package nav2_msgs.v1;
+
+import "geometry_msgs/v1/point.proto";
+
+// Equivalent to ROS 2 `nav2_msgs/msg/RouteNode`.
+message RouteNode {
+  uint32 nodeid = 1;
+  geometry_msgs.v1.Point position = 2;
+}
+
+// Equivalent to ROS 2 `nav2_msgs/msg/RouteEdge`.
+message RouteEdge {
+  uint32 edgeid = 1;
+  uint32 start = 2;
+  uint32 end = 3;
+}
+
+// Equivalent to ROS 2 `nav2_msgs/msg/EdgeCost`.
+message EdgeCost {
+  uint32 edgeid = 1;
+  float cost = 2;
+}
+
+// Equivalent to ROS 2 `nav2_msgs/msg/Route`.
+message Route {
+  repeated RouteNode nodes = 1;
+  repeated RouteEdge edges = 2;
+}

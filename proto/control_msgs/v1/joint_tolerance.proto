@@ -1,0 +1,15 @@
+syntax = "proto3";
+
+package control_msgs.v1;
+
+// Equivalent to ROS 2 `control_msgs/msg/JointTolerance`.
+// A single joint, and a set of tolerances for that joint when moving.
+message JointTolerance {
+  string name = 1;
+
+  // In radians or meters, depending on joint type. Absolute values.
+  // Set to 0 to indicate no tolerance.
+  double position = 2;
+  double velocity = 3;
+  double acceleration = 4;
+}

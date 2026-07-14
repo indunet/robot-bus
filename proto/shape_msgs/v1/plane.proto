@@ -1,0 +1,10 @@
+syntax = "proto3";
+
+package shape_msgs.v1;
+
+// Equivalent to ROS 2 `shape_msgs/msg/Plane`.
+// Representation of a plane, using the plane equation ax + by + cz + d = 0.
+message Plane {
+  // Fixed size 4 in ROS 2: [a, b, c, d].
+  repeated double coef = 1;
+}

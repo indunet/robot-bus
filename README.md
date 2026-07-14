@@ -61,4 +61,6 @@ cargo test
 
 ## Protobuf（ROS 2 消息）
 
-[`proto/`](proto/) 目录包含 ROS 2 常用标准消息的 Protobuf 重定义（`builtin_interfaces`、`std_msgs`、`geometry_msgs`、`sensor_msgs`、`nav_msgs`），字段语义贴近原始 `.msg` 定义。详见 [`proto/README.md`](proto/README.md)。
+[`proto/`](proto/) 下是 ROS 2 常用消息的 Protobuf 重定义，经 `build.rs` + prost 生成到 `robot_bus::msgs`。传输层 body 仍是 opaque bytes，业务侧自行 `encode` / `decode`。
+
+已覆盖包：`builtin_interfaces`、`std_msgs`、`geometry_msgs`、`sensor_msgs`、`nav_msgs`、`tf2_msgs`、`trajectory_msgs`、`diagnostic_msgs`、`unique_identifier_msgs`、`shape_msgs`、`visualization_msgs`、`control_msgs`、`nav2_msgs`。

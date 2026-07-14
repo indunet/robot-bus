@@ -1,0 +1,16 @@
+syntax = "proto3";
+
+package sensor_msgs.v1;
+
+import "std_msgs/v1/header.proto";
+
+// Equivalent to ROS 2 `sensor_msgs/msg/Temperature`.
+message Temperature {
+  std_msgs.v1.Header header = 1;
+
+  // Temperature reading in Degrees Celsius.
+  double temperature = 2;
+
+  // 0 is interpreted as variance unknown.
+  double variance = 3;
+}

@@ -1,0 +1,24 @@
+syntax = "proto3";
+
+package trajectory_msgs.v1;
+
+import "std_msgs/v1/header.proto";
+import "builtin_interfaces/v1/duration.proto";
+
+// Equivalent to ROS 2 `trajectory_msgs/msg/JointTrajectoryPoint`.
+// Each trajectory point specifies positions, velocities, accelerations, and
+// effort for a set of joints at a given time from the trajectory start.
+message JointTrajectoryPoint {
+  repeated double positions = 1;
+  repeated double velocities = 2;
+  repeated double accelerations = 3;
+  repeated double effort = 4;
+  builtin_interfaces.v1.Duration time_from_start = 5;
+}
+
+// Equivalent to ROS 2 `trajectory_msgs/msg/JointTrajectory`.
+message JointTrajectory {
+  std_msgs.v1.Header header = 1;
+  repeated string joint_names = 2;
+  repeated JointTrajectoryPoint points = 3;
+}

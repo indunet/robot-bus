@@ -1,0 +1,13 @@
+syntax = "proto3";
+
+package nav_msgs.v1;
+
+import "std_msgs/v1/header.proto";
+import "geometry_msgs/v1/stamped.proto";
+
+// Equivalent to ROS 2 `nav_msgs/msg/Path`.
+// An array of poses that represents a path for a robot to follow.
+message Path {
+  std_msgs.v1.Header header = 1;
+  repeated geometry_msgs.v1.PoseStamped poses = 2;
+}

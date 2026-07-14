@@ -1,0 +1,19 @@
+syntax = "proto3";
+
+package nav2_msgs.v1;
+
+import "builtin_interfaces/v1/time.proto";
+
+// Equivalent to ROS 2 `nav2_msgs/msg/BehaviorTreeStatusChange`.
+message BehaviorTreeStatusChange {
+  builtin_interfaces.v1.Time timestamp = 1;
+  string node_name = 2;
+  string previous_status = 3;
+  string current_status = 4;
+}
+
+// Equivalent to ROS 2 `nav2_msgs/msg/BehaviorTreeLog`.
+message BehaviorTreeLog {
+  builtin_interfaces.v1.Time timestamp = 1;
+  repeated BehaviorTreeStatusChange event_log = 2;
+}

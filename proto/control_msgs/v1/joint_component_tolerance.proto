@@ -1,0 +1,15 @@
+syntax = "proto3";
+
+package control_msgs.v1;
+
+// Equivalent to ROS 2 `control_msgs/msg/JointComponentTolerance`.
+message JointComponentTolerance {
+  string joint_name = 1;
+
+  // uint16 in ROS 2:
+  //   X_AXIS = 1, Y_AXIS = 2, Z_AXIS = 3,
+  //   TRANSLATION = 4, ROTATION = 5
+  uint32 component = 2;
+
+  double value = 3;
+}

@@ -1,0 +1,19 @@
+syntax = "proto3";
+
+package sensor_msgs.v1;
+
+import "std_msgs/v1/header.proto";
+import "geometry_msgs/v1/transform.proto";
+import "geometry_msgs/v1/twist.proto";
+import "geometry_msgs/v1/accel_wrench.proto";
+
+// Equivalent to ROS 2 `sensor_msgs/msg/MultiDOFJointState`.
+// Representation of state for joints with multiple degrees of freedom,
+// following the structure of JointState.
+message MultiDOFJointState {
+  std_msgs.v1.Header header = 1;
+  repeated string joint_names = 2;
+  repeated geometry_msgs.v1.Transform transforms = 3;
+  repeated geometry_msgs.v1.Twist twist = 4;
+  repeated geometry_msgs.v1.Wrench wrench = 5;
+}

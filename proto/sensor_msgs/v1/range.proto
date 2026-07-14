@@ -1,0 +1,26 @@
+syntax = "proto3";
+
+package sensor_msgs.v1;
+
+import "std_msgs/v1/header.proto";
+
+// Equivalent to ROS 2 `sensor_msgs/msg/Range`.
+// Single-reading distance measurement from an active ranger.
+message Range {
+  std_msgs.v1.Header header = 1;
+
+  // uint8 in ROS 2:
+  //   ULTRASOUND = 0
+  //   INFRARED = 1
+  uint32 radiation_type = 2;
+
+  // Fixed field of view [rad].
+  float field_of_view = 3;
+
+  float min_range = 4;
+  float max_range = 5;
+
+  // Measured range [m]. Values less than min_range / greater than max_range
+  // should be discarded.
+  float range = 6;
+}

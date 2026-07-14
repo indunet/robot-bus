@@ -1,0 +1,44 @@
+syntax = "proto3";
+
+package sensor_msgs.v1;
+
+import "std_msgs/v1/header.proto";
+
+// Equivalent to ROS 2 `sensor_msgs/msg/RegionOfInterest`.
+// Used to specify a rectangular region within an image.
+message RegionOfInterest {
+  uint32 x_offset = 1;
+  uint32 y_offset = 2;
+  uint32 height = 3;
+  uint32 width = 4;
+  bool do_rectify = 5;
+}
+
+// Equivalent to ROS 2 `sensor_msgs/msg/CameraInfo`.
+// Meta information for a camera.
+message CameraInfo {
+  std_msgs.v1.Header header = 1;
+
+  uint32 height = 2;
+  uint32 width = 3;
+
+  // Distortion model: plumb_bob, rational_polynomial, equidistant, ...
+  string distortion_model = 4;
+
+  // Distortion parameters (D).
+  repeated double d = 5;
+
+  // Intrinsic camera matrix K (3x3 row-major). Fixed size 9 in ROS 2.
+  repeated double k = 6;
+
+  // Rectification matrix R (3x3 row-major). Fixed size 9 in ROS 2.
+  repeated double r = 7;
+
+  // Projection / camera matrix P (3x4 row-major). Fixed size 12 in ROS 2.
+  repeated double p = 8;
+
+  uint32 binning_x = 9;
+  uint32 binning_y = 10;
+
+  RegionOfInterest roi = 11;
+}

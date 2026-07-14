@@ -1,0 +1,10 @@
+syntax = "proto3";
+
+package tf2_msgs.v1;
+
+import "geometry_msgs/v1/stamped.proto";
+
+// Equivalent to ROS 2 `tf2_msgs/msg/TFMessage`.
+message TFMessage {
+  repeated geometry_msgs.v1.TransformStamped transforms = 1;
+}
