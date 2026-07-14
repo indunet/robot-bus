@@ -1,6 +1,9 @@
 # Build artifacts
 target/
 
+# Library crate: dependents use their own lockfile
+Cargo.lock
+
 # IDE / OS
 .idea/
 .vscode/

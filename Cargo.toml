@@ -7,9 +7,13 @@ description = "ZeroMQ message bus: broker routing and participant SDK"
 [dependencies]
 anyhow = "1"
 log = "0.4"
+prost = "0.13"
 thiserror = "2"
 uuid = { version = "1", features = ["v4"] }
 zmq = "0.10"
+
+[build-dependencies]
+prost-build = "0.13"
 
 [[bin]]
 name = "message_bus_broker"

@@ -4,6 +4,7 @@ pub mod action_bus;
 pub mod broker;
 pub mod errors;
 pub mod message_bus;
+pub mod msgs;
 pub mod runtime;
 pub mod service_bus;
 pub mod shutdown;
@@ -12,6 +13,9 @@ pub mod worker_thread;
 pub mod zmq_helpers;
 
 pub use action_bus::{ActionClient, ActionKind, ActionMessage, ActionWorker};
+pub use broker::{
+    ActionBusBroker, MessageBusBroker, RobotBusBroker, RobotBusConfig, ServiceBusBroker,
+};
 pub use errors::{parse_error_body, BusError, Result};
 pub use message_bus::{Publisher, Subscriber};
 pub use runtime::BusRuntime;

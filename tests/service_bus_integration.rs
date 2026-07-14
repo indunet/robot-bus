@@ -3,57 +3,48 @@
 //! Each test spins up a real broker (in-process, ephemeral ports) plus a
 //! client (REQ) and worker(s) (DEALER), then verifies end-to-end routing.
 
-use robot_bus::broker::service_bus::{run_loop, ServiceBusConfig};
+use robot_bus::broker::service_bus::ServiceBusConfig;
+use robot_bus::ServiceBusBroker;
+use std::net::TcpListener;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex, MutexGuard};
 use std::thread;
 use std::time::Duration;
 use zmq::{Context as ZmqContext, SocketType};
 
-/// Helper: bind a ROUTER to `tcp://127.0.0.1:0` and return (socket, real_endpoint).
-fn bind_ephemeral_router(ctx: &ZmqContext) -> (zmq::Socket, String) {
-    let sock = ctx.socket(SocketType::ROUTER).expect("create ROUTER");
-    sock.bind("tcp://127.0.0.1:0").expect("bind ephemeral");
-    let endpoint = match sock.get_last_endpoint().expect("last_endpoint") {
-        Ok(s) => s,
-        Err(_) => panic!("endpoint not utf8"),
-    };
-    (sock, endpoint)
+/// Serialize broker starts: `bind_all` uses fixed inproc/ipc channel names.
+static BROKER_LOCK: Mutex<()> = Mutex::new(());
+
+fn free_port() -> u16 {
+    TcpListener::bind("127.0.0.1:0")
+        .expect("bind ephemeral port")
+        .local_addr()
+        .expect("local addr")
+        .port()
 }
 
-/// Spawn a broker thread bound to ephemeral ports.
+/// Spawn a broker via [`ServiceBusBroker::start`] on ephemeral TCP ports.
 struct BrokerHandle {
-    shutdown: Arc<AtomicBool>,
+    _guard: MutexGuard<'static, ()>,
     frontend_ep: String,
     backend_ep: String,
-    handle: Option<thread::JoinHandle<()>>,
+    _broker: ServiceBusBroker,
 }
 
-impl Drop for BrokerHandle {
-    fn drop(&mut self) {
-        self.shutdown.store(true, Ordering::Release);
-        if let Some(h) = self.handle.take() {
-            let _ = h.join();
-        }
-    }
-}
-
-fn spawn_broker(config: ServiceBusConfig) -> BrokerHandle {
-    let ctx = ZmqContext::new();
-    let (frontend, frontend_ep) = bind_ephemeral_router(&ctx);
-    let (backend, backend_ep) = bind_ephemeral_router(&ctx);
-    let shutdown = Arc::new(AtomicBool::new(false));
-    let shutdown_broker = shutdown.clone();
-    let cfg = config.clone();
-    let handle = thread::spawn(move || {
-        let _ = run_loop(&frontend, &backend, &cfg, &shutdown_broker);
-    });
-    thread::sleep(Duration::from_millis(50));
+fn spawn_broker(mut config: ServiceBusConfig) -> BrokerHandle {
+    let guard = BROKER_LOCK
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    config.frontend_bind = format!("tcp://127.0.0.1:{}", free_port());
+    config.backend_bind = format!("tcp://127.0.0.1:{}", free_port());
+    let frontend_ep = config.frontend_bind.clone();
+    let backend_ep = config.backend_bind.clone();
+    let broker = ServiceBusBroker::start(config).expect("start ServiceBusBroker");
     BrokerHandle {
-        shutdown,
+        _guard: guard,
         frontend_ep,
         backend_ep,
-        handle: Some(handle),
+        _broker: broker,
     }
 }
 

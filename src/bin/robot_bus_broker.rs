@@ -1,11 +1,10 @@
-use anyhow::{Context, Result};
-use robot_bus::broker::action_bus::{run_with_shutdown as run_action, ActionBusConfig};
-use robot_bus::broker::message_bus::{run_with_shutdown as run_message, BusConfig};
-use robot_bus::broker::service_bus::{run_with_shutdown as run_service, ServiceBusConfig};
+use anyhow::Result;
+use robot_bus::broker::{RobotBusBroker, RobotBusConfig};
 use robot_bus::shutdown;
-use std::sync::atomic::AtomicBool;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::thread;
+use std::time::Duration;
 
 fn main() -> Result<()> {
     let args: Vec<String> = std::env::args().skip(1).collect();
@@ -21,32 +20,13 @@ fn main() -> Result<()> {
     shutdown::install(shutdown.clone());
 
     println!("robot_bus_broker starting message + service + action buses…");
+    let broker = RobotBusBroker::start(RobotBusConfig::default())?;
 
-    let handles: Vec<_> = vec![
-        thread::spawn({
-            let shutdown = shutdown.clone();
-            move || run_message(BusConfig::default(), shutdown)
-        }),
-        thread::spawn({
-            let shutdown = shutdown.clone();
-            move || run_service(ServiceBusConfig::default(), shutdown)
-        }),
-        thread::spawn({
-            let shutdown = shutdown.clone();
-            move || run_action(ActionBusConfig::default(), shutdown)
-        }),
-    ];
-
-    for (name, handle) in ["message_bus", "service_bus", "action_bus"]
-        .into_iter()
-        .zip(handles)
-    {
-        let result = handle
-            .join()
-            .map_err(|e| anyhow::anyhow!("{name} thread panicked: {e:?}"))?;
-        result.with_context(|| format!("{name} exited with error"))?;
+    while !shutdown.load(Ordering::Acquire) {
+        thread::sleep(Duration::from_millis(50));
     }
 
+    broker.stop()?;
     println!("robot_bus_broker stopped");
     Ok(())
 }
@@ -60,6 +40,7 @@ message_bus  15560 / 15561 (XSUB/XPUB proxy)\n  \
 service_bus  15662 / 15663 (REQ service broker)\n  \
 action_bus   15664 / 15665 (DEALER action broker)\n\n\
 Press Ctrl+C to stop all buses.\n\n\
-To run a single bus only, use message_bus_broker, service_bus_broker, or action_bus_broker.\n"
+To run a single bus only, use message_bus_broker, service_bus_broker, or action_bus_broker.\n\
+To embed in application code, use robot_bus::RobotBusBroker::start(...).\n"
     );
 }
