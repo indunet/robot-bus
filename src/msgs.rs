@@ -1,7 +1,10 @@
-//! Generated ROS 2–style protobuf message types from [`proto/`](../../proto).
+//! Generated ROS 2–style protobuf message and service types from [`proto/`](../../proto).
 //!
 //! The bus still treats wire bodies as opaque bytes; this module is for
 //! callers that want typed encode/decode of those payloads.
+//!
+//! Service (`.srv`) definitions are Request/Response message pairs (e.g.
+//! `std_srvs::v1::SetBoolRequest`), not gRPC `service`/`rpc` stubs.
 
 pub mod builtin_interfaces {
     pub mod v1 {
@@ -12,6 +15,12 @@ pub mod builtin_interfaces {
 pub mod std_msgs {
     pub mod v1 {
         include!(concat!(env!("OUT_DIR"), "/std_msgs.v1.rs"));
+    }
+}
+
+pub mod std_srvs {
+    pub mod v1 {
+        include!(concat!(env!("OUT_DIR"), "/std_srvs.v1.rs"));
     }
 }
 

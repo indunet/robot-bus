@@ -1,0 +1,14 @@
+syntax = "proto3";
+
+package std_srvs.v1;
+
+// Equivalent to ROS 2 `std_srvs/srv/SetBool`.
+// Set a boolean state (e.g. enable/disable hardware).
+message SetBoolRequest {
+  bool data = 1;
+}
+
+message SetBoolResponse {
+  bool success = 1;
+  string message = 2;
+}

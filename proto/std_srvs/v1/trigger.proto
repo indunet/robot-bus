@@ -1,0 +1,12 @@
+syntax = "proto3";
+
+package std_srvs.v1;
+
+// Equivalent to ROS 2 `std_srvs/srv/Trigger`.
+// Empty request used to trigger an action; response reports success.
+message TriggerRequest {}
+
+message TriggerResponse {
+  bool success = 1;
+  string message = 2;
+}

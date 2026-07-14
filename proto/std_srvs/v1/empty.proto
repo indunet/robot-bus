@@ -1,0 +1,9 @@
+syntax = "proto3";
+
+package std_srvs.v1;
+
+// Equivalent to ROS 2 `std_srvs/srv/Empty`.
+// A service with an empty request and an empty response.
+message EmptyRequest {}
+
+message EmptyResponse {}

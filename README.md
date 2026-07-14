@@ -6,7 +6,7 @@
 |------|------|
 | `broker::` | 路由进程（message / service / action 三种 bus） |
 | 顶层 API | Publisher / Subscriber / Client / Worker |
-| [`proto/`](proto/) | ROS 2 标准消息的 Protobuf 定义 |
+| [`proto/`](proto/) | ROS 2 标准消息 / Service 的 Protobuf 定义 |
 
 ## 架构
 
@@ -59,8 +59,12 @@ sub.subscribe("wireless.imu")?;
 cargo test
 ```
 
-## Protobuf（ROS 2 消息）
+## Protobuf（ROS 2 消息 / Service）
 
-[`proto/`](proto/) 下是 ROS 2 常用消息的 Protobuf 重定义，经 `build.rs` + prost 生成到 `robot_bus::msgs`。传输层 body 仍是 opaque bytes，业务侧自行 `encode` / `decode`。
+[`proto/`](proto/) 下是 ROS 2 常用 **msg** 与 **srv** 的 Protobuf 重定义，经 `build.rs` + prost 生成到 `robot_bus::msgs`。
 
-已覆盖包：`builtin_interfaces`、`std_msgs`、`geometry_msgs`、`sensor_msgs`、`nav_msgs`、`tf2_msgs`、`trajectory_msgs`、`diagnostic_msgs`、`unique_identifier_msgs`、`shape_msgs`、`visualization_msgs`、`control_msgs`、`nav2_msgs`。
+- **msg**：普通 message（如 `Twist`、`Odometry`）
+- **srv**：一对 `*Request` / `*Response` message（如 `std_srvs::SetBoolRequest`），**不是 gRPC**（无 `service`/`rpc` 块，也不走 HTTP/2）
+- 传输层 body 仍是 opaque bytes；message bus / service bus 都不解析类型，业务侧自行 `encode` / `decode`
+
+已覆盖包：`builtin_interfaces`、`std_msgs`、`std_srvs`、`geometry_msgs`、`sensor_msgs`、`nav_msgs`（含 GetMap / SetMap / GetPlan）、`tf2_msgs`、`trajectory_msgs`、`diagnostic_msgs`、`unique_identifier_msgs`、`shape_msgs`、`visualization_msgs`、`control_msgs`、`nav2_msgs`。
