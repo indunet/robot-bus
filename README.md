@@ -33,7 +33,7 @@ cargo run --bin robot_bus_broker
 在 `Cargo.toml` 中添加 path 依赖：
 
 ```toml
-robot_bus = { path = "../robot-bus" }
+robot-bus = { path = "../robot-bus" }
 ```
 
 ```rust

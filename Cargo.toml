@@ -1,5 +1,5 @@
 [package]
-name = "robot_bus"
+name = "robot-bus"
 version = "0.0.1"
 edition = "2024"
 description = "ZeroMQ message bus: broker routing and participant SDK"
