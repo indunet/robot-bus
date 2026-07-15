@@ -18,7 +18,9 @@ pub use broker::{
 };
 pub use errors::{parse_error_body, BusError, Result};
 pub use message_bus::{Publisher, Subscriber};
-pub use runtime::{BusRuntime, MessageCallback, ServiceHandler, ShutdownHandle};
+pub use runtime::{
+    BusRuntime, MessageCallback, ServiceHandler, ShutdownHandle, TimerCallback, TimerHandle,
+};
 pub use service_bus::{ServiceClient, ServiceWorker};
 pub use transports::{
     action_backend_endpoint, action_frontend_endpoint, bind_all, format_endpoints, inproc_endpoint,

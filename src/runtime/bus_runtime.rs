@@ -29,6 +29,9 @@ use crate::runtime::registrations::{
     ActionClientRegistration, ActionGoalHandler, ActionRegistration, MessageCallback,
     Registration, ServiceHandler, ServiceRegistration, SubRegistration,
 };
+use crate::runtime::timers::{
+    effective_poll_timeout_ms, tick_timers, Timer, TimerCallback, TimerHandle,
+};
 use crate::runtime::worker_pool::WorkerPool;
 use crate::transports::{
     action_backend_endpoint, action_frontend_endpoint, message_xpub_endpoint,
@@ -68,6 +71,8 @@ pub struct BusRuntime {
     outbound_rx: Option<Receiver<OutboundCommand>>,
     reply_tx: Sender<ReplyMessage>,
     reply_rx: Option<Receiver<ReplyMessage>>,
+    timers: Vec<Timer>,
+    next_timer_id: u64,
     worker_pool: Option<WorkerPool>,
     running: Arc<AtomicBool>,
     started: bool,
@@ -106,6 +111,8 @@ impl BusRuntime {
             outbound_rx: Some(outbound_rx),
             reply_tx,
             reply_rx: Some(reply_rx),
+            timers: Vec::new(),
+            next_timer_id: 1,
             worker_pool,
             running: Arc::new(AtomicBool::new(false)),
             started: false,
@@ -162,6 +169,49 @@ impl BusRuntime {
             .entry(topic.to_string())
             .or_default()
             .push(callback);
+        Ok(())
+    }
+
+    /// Create a periodic timer (ROS 2 `create_timer`).
+    ///
+    /// The callback runs on the spin / I/O thread. First fire is after `period`.
+    pub fn create_timer(
+        &mut self,
+        period: Duration,
+        callback: TimerCallback,
+    ) -> Result<TimerHandle> {
+        self.ensure_open()?;
+        if self.started {
+            return Err(BusError::Protocol(
+                "create_timer() cannot run while start() is active".into(),
+            ));
+        }
+        if period.is_zero() {
+            return Err(BusError::Protocol(
+                "timer period must be greater than zero".into(),
+            ));
+        }
+        let id = self.next_timer_id;
+        self.next_timer_id += 1;
+        self.timers.push(Timer::new(id, period, callback));
+        Ok(TimerHandle { id })
+    }
+
+    /// Cancel a timer created by [`create_timer`](Self::create_timer).
+    pub fn cancel_timer(&mut self, handle: TimerHandle) -> Result<()> {
+        self.ensure_open()?;
+        if self.started {
+            return Err(BusError::Protocol(
+                "cancel_timer() cannot run while start() is active".into(),
+            ));
+        }
+        let Some(timer) = self.timers.iter_mut().find(|t| t.id == handle.id) else {
+            return Err(BusError::Protocol(format!(
+                "unknown timer id {}",
+                handle.id
+            )));
+        };
+        timer.cancelled = true;
         Ok(())
     }
 
@@ -285,9 +335,9 @@ impl BusRuntime {
     }
 
     /// One executor step (ROS 2 `spin_once`): wait up to `timeout`, then
-    /// dispatch every currently readable registration.
+    /// dispatch every currently readable registration and due timers.
     ///
-    /// Returns `true` if at least one socket was readable.
+    /// Returns `true` if at least one socket was readable or a timer fired.
     pub fn spin_once(&mut self, timeout: Option<Duration>) -> Result<bool> {
         self.ensure_open()?;
         if self.started {
@@ -306,6 +356,7 @@ impl BusRuntime {
             .ok_or_else(|| BusError::Protocol("runtime already started".into()))?;
         Ok(spin_once_inner(
             &mut self.socket_registrations,
+            &mut self.timers,
             &self.topic_callbacks,
             outbound_rx,
             reply_rx,
@@ -317,8 +368,8 @@ impl BusRuntime {
 
     /// Wait up to `timeout` for work, then drain ready callbacks (ROS 2 `spin_some`).
     ///
-    /// After the first successful poll, further iterations use a zero timeout so
-    /// only already-queued messages are processed before returning.
+    /// After the first successful poll / timer fire, further iterations use a zero
+    /// timeout so only already-queued messages are processed before returning.
     pub fn spin_some(&mut self, timeout: Option<Duration>) -> Result<()> {
         self.ensure_open()?;
         if self.started {
@@ -358,6 +409,7 @@ impl BusRuntime {
                 .ok_or_else(|| BusError::Protocol("runtime already started".into()))?;
             let had_work = spin_once_inner(
                 &mut self.socket_registrations,
+                &mut self.timers,
                 &self.topic_callbacks,
                 outbound_rx,
                 reply_rx,
@@ -395,6 +447,7 @@ impl BusRuntime {
         while self.running.load(Ordering::Acquire) {
             spin_once_inner(
                 &mut self.socket_registrations,
+                &mut self.timers,
                 &self.topic_callbacks,
                 outbound_rx,
                 reply_rx,
@@ -418,6 +471,7 @@ impl BusRuntime {
         self.started = true;
         let running = self.running.clone();
         let mut registrations = std::mem::take(&mut self.socket_registrations);
+        let mut timers = std::mem::take(&mut self.timers);
         let topic_callbacks = self.topic_callbacks.clone();
         let outbound_rx = self
             .outbound_rx
@@ -433,6 +487,7 @@ impl BusRuntime {
             while running.load(Ordering::Acquire) {
                 spin_once_inner(
                     &mut registrations,
+                    &mut timers,
                     &topic_callbacks,
                     &outbound_rx,
                     &reply_rx,
@@ -471,9 +526,11 @@ impl BusRuntime {
         if self.socket_registrations.is_empty() {
             self.sync_all_registrations();
         }
-        if self.socket_registrations.is_empty() {
+        let has_timers = self.timers.iter().any(|t| !t.cancelled);
+        if self.socket_registrations.is_empty() && !has_timers {
             return Err(BusError::Protocol(
-                "nothing registered; connect_subscriber or register worker first".into(),
+                "nothing registered; connect_subscriber, register worker, or create_timer first"
+                    .into(),
             ));
         }
         Ok(())
@@ -538,6 +595,7 @@ impl BusRuntime {
         self.service_registrations.clear();
         self.action_registrations.clear();
         self.action_client_registration = None;
+        self.timers.clear();
     }
 }
 
@@ -561,9 +619,10 @@ fn timeout_to_ms(timeout: Option<Duration>) -> i64 {
     }
 }
 
-/// One poll + dispatch iteration. Returns whether any socket was readable.
+/// One poll + dispatch iteration. Returns whether sockets were readable or a timer fired.
 fn spin_once_inner(
     registrations: &mut [Registration],
+    timers: &mut [Timer],
     topic_callbacks: &HashMap<String, Vec<MessageCallback>>,
     outbound_rx: &Receiver<OutboundCommand>,
     reply_rx: &Receiver<ReplyMessage>,
@@ -580,27 +639,42 @@ fn spin_once_inner(
     }
     flush_reply_queue(registrations, reply_rx);
 
+    let mut had_work = tick_timers(timers, now);
+
+    let poll_ms = effective_poll_timeout_ms(timers, poll_timeout_ms, Instant::now());
     let mut poll_items: Vec<zmq::PollItem> = registrations
         .iter()
         .map(|reg| reg.socket().as_poll_item(zmq::POLLIN))
         .collect();
-    if zmq::poll(&mut poll_items, poll_timeout_ms).unwrap_or(0) == 0 {
-        return false;
+    let readable_count = if poll_items.is_empty() {
+        if poll_ms > 0 {
+            thread::sleep(Duration::from_millis(poll_ms as u64));
+        }
+        0
+    } else {
+        zmq::poll(&mut poll_items, poll_ms).unwrap_or(0)
+    };
+
+    if readable_count > 0 {
+        let readable: Vec<usize> = poll_items
+            .iter()
+            .enumerate()
+            .filter(|(_, item)| item.is_readable())
+            .map(|(index, _)| index)
+            .collect();
+        for index in readable {
+            dispatch_registration(
+                &mut registrations[index],
+                topic_callbacks,
+                reply_tx,
+                worker_pool,
+            );
+        }
+        had_work = true;
     }
 
-    let readable: Vec<usize> = poll_items
-        .iter()
-        .enumerate()
-        .filter(|(_, item)| item.is_readable())
-        .map(|(index, _)| index)
-        .collect();
-    for index in readable {
-        dispatch_registration(
-            &mut registrations[index],
-            topic_callbacks,
-            reply_tx,
-            worker_pool,
-        );
+    if tick_timers(timers, Instant::now()) {
+        had_work = true;
     }
-    true
+    had_work
 }

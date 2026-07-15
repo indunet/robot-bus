@@ -60,6 +60,11 @@ let cb: MessageCallback = Arc::new(|topic, payload| {
 });
 rt.subscribe("wireless.imu", cb)?;
 
+// 定时器（同样由 spin 驱动）
+rt.create_timer(Duration::from_millis(100), Arc::new(|| {
+    // 控制周期 / 心跳 / 状态上报
+}))?;
+
 // 方式 A：阻塞直到别的线程调用 shutdown
 let handle = rt.shutdown_handle();
 std::thread::spawn(move || { /* ... */ handle.shutdown(); });
@@ -72,9 +77,9 @@ rt.spin()?;
 // rt.start()?;  /* ... */  rt.shutdown(); rt.wait();
 ```
 
-- 默认 `BusRuntime::new()`：所有回调在 I/O / spin 线程执行（类似 SingleThreadedExecutor）
-- `BusRuntime::with_executor(n)`：service / action handler 最多 `n` 个并发线程；订阅回调仍在 I/O 线程；池满时回退到同步执行
-
+- 默认 `BusRuntime::new()`：所有回调（含 timer）在 I/O / spin 线程执行（类似 SingleThreadedExecutor）
+- `BusRuntime::with_executor(n)`：service / action handler 最多 `n` 个并发线程；订阅与 timer 回调仍在 I/O 线程；池满时回退到同步执行
+- 也可只注册 timer、不连 subscriber，用 `spin` / `spin_once` 驱动
 ## 二进制
 
 | 二进制 | 说明 |

@@ -104,3 +104,59 @@ fn spin_some_processes_pending_then_returns() {
         .expect("spin_some");
     assert!(hits.load(Ordering::SeqCst) >= 1);
 }
+
+#[test]
+fn timer_fires_via_spin_once() {
+    let hits = Arc::new(AtomicUsize::new(0));
+    let hits_cb = hits.clone();
+
+    let mut runtime = BusRuntime::new();
+    runtime
+        .create_timer(
+            Duration::from_millis(40),
+            Arc::new(move || {
+                hits_cb.fetch_add(1, Ordering::SeqCst);
+            }),
+        )
+        .expect("create_timer");
+
+    let deadline = std::time::Instant::now() + Duration::from_secs(2);
+    while hits.load(Ordering::SeqCst) == 0 {
+        assert!(
+            deadline > std::time::Instant::now(),
+            "timed out waiting for timer"
+        );
+        runtime
+            .spin_once(Some(Duration::from_millis(100)))
+            .expect("spin_once");
+    }
+    assert!(hits.load(Ordering::SeqCst) >= 1);
+}
+
+#[test]
+fn cancel_timer_stops_firing() {
+    let hits = Arc::new(AtomicUsize::new(0));
+    let hits_cb = hits.clone();
+
+    let mut runtime = BusRuntime::new();
+    let handle = runtime
+        .create_timer(
+            Duration::from_millis(30),
+            Arc::new(move || {
+                hits_cb.fetch_add(1, Ordering::SeqCst);
+            }),
+        )
+        .expect("create_timer");
+    // Keep one active timer so the executor still has work to wait on.
+    runtime
+        .create_timer(Duration::from_secs(60), Arc::new(|| {}))
+        .expect("keepalive timer");
+    runtime.cancel_timer(handle).expect("cancel");
+
+    for _ in 0..5 {
+        runtime
+            .spin_once(Some(Duration::from_millis(50)))
+            .expect("spin_once");
+    }
+    assert_eq!(hits.load(Ordering::SeqCst), 0);
+}
