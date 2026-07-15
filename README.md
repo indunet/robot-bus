@@ -5,7 +5,8 @@
 | 模块 | 职责 |
 |------|------|
 | `broker::` | 路由进程（message / service / action 三种 bus） |
-| 顶层 API | Publisher / Subscriber / Client / Worker |
+| 顶层 API | Publisher / Subscriber / Client / Worker（拉取 / serve） |
+| `runtime::BusRuntime` | ROS 2 风格回调 executor（`spin` / `spin_once`） |
 | [`proto/`](proto/) | ROS 2 标准消息 / Service 的 Protobuf 定义 |
 
 ## 架构
@@ -27,7 +28,7 @@ robot_bus_broker 进程  (cargo build)
 cargo run --bin robot_bus_broker
 ```
 
-### 2. 业务代码
+### 2. 业务代码（拉取式）
 
 在 `Cargo.toml` 中添加 path 依赖：
 
@@ -44,10 +45,40 @@ let sub = Subscriber::new(Some(&message_xpub_endpoint("localhost", "tcp")?))?;
 sub.subscribe("wireless.imu")?;
 ```
 
+### 3. 回调式（ROS 2 风格 spin）
+
+注册回调后用 executor 驱动，语义接近 ROS 2 的 `spin` / `spin_once` / `spin_some`：
+
+```rust
+use std::sync::Arc;
+use robot_bus::{BusRuntime, MessageCallback, message_xpub_endpoint};
+
+let mut rt = BusRuntime::new(); // 单线程：回调跑在 spin 线程
+rt.connect_subscriber(Some(&message_xpub_endpoint("localhost", "tcp")?))?;
+let cb: MessageCallback = Arc::new(|topic, payload| {
+    println!("{topic}: {} bytes", payload.len());
+});
+rt.subscribe("wireless.imu", cb)?;
+
+// 方式 A：阻塞直到别的线程调用 shutdown
+let handle = rt.shutdown_handle();
+std::thread::spawn(move || { /* ... */ handle.shutdown(); });
+rt.spin()?;
+
+// 方式 B：自己轮询（可嵌入其它循环）
+// while running { rt.spin_once(Some(Duration::from_millis(100)))?; }
+
+// 方式 C：后台线程
+// rt.start()?;  /* ... */  rt.shutdown(); rt.wait();
+```
+
+- 默认 `BusRuntime::new()`：所有回调在 I/O / spin 线程执行（类似 SingleThreadedExecutor）
+- `BusRuntime::with_executor(n)`：service / action handler 最多 `n` 个并发线程；订阅回调仍在 I/O 线程；池满时回退到同步执行
+
 ## 二进制
 
 | 二进制 | 说明 |
-|--------|------|
+|------|------|
 | `robot_bus_broker` | 一次启动三个 bus |
 | `message_bus_broker` | 仅 message bus |
 | `service_bus_broker` | 仅 service bus |

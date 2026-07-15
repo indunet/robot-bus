@@ -1,8 +1,12 @@
 [package]
 name = "robot_bus"
-version = "0.1.0"
+version = "0.0.1"
 edition = "2024"
 description = "ZeroMQ message bus: broker routing and participant SDK"
+license = "Apache-2.0"
+authors = ["deng_ran <deng_ran@aliyun.com>"]
+repository = "https://github.com/indunet/robot-bus"
+readme = "README.md"
 
 [dependencies]
 anyhow = "1"

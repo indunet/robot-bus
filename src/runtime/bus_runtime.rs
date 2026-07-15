@@ -1,11 +1,21 @@
 //! Unified poll loop for subscriptions and worker callbacks.
+//!
+//! Mirrors a simplified ROS 2 executor:
+//! - register callbacks (`subscribe` / `register_service` / …)
+//! - drive them with [`BusRuntime::spin`], [`BusRuntime::spin_once`], or
+//!   [`BusRuntime::spin_some`]
+//! - stop with [`BusRuntime::shutdown`] (from any thread)
+//!
+//! Default mode is single-threaded: callbacks run on the spin/I/O thread.
+//! [`BusRuntime::with_executor`] offloads long service/action handlers to a
+//! bounded worker pool (subscription callbacks stay on the I/O thread).
 
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{self, Receiver, Sender};
 use std::sync::Arc;
 use std::thread::{self, JoinHandle};
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 use uuid::Uuid;
 use zmq::{Context, SocketType};
@@ -19,18 +29,36 @@ use crate::runtime::registrations::{
     ActionClientRegistration, ActionGoalHandler, ActionRegistration, MessageCallback,
     Registration, ServiceHandler, ServiceRegistration, SubRegistration,
 };
+use crate::runtime::worker_pool::WorkerPool;
 use crate::transports::{
     action_backend_endpoint, action_frontend_endpoint, message_xpub_endpoint,
     service_backend_endpoint,
 };
 use crate::zmq_helpers::{apply_subscriber_options, wait_for_connection};
 
-const POLL_TIMEOUT_MS: i64 = 250;
+const DEFAULT_POLL_TIMEOUT_MS: i64 = 250;
+const DEFAULT_HEARTBEAT_INTERVAL_MS: u64 = 2500;
+
+/// Token that can interrupt [`BusRuntime::spin`] / background [`BusRuntime::start`]
+/// from another thread (ROS 2–style cancel).
+#[derive(Clone)]
+pub struct ShutdownHandle {
+    running: Arc<AtomicBool>,
+}
+
+impl ShutdownHandle {
+    pub fn shutdown(&self) {
+        self.running.store(false, Ordering::Release);
+    }
+
+    pub fn is_running(&self) -> bool {
+        self.running.load(Ordering::Acquire)
+    }
+}
 
 pub struct BusRuntime {
     context: Context,
     heartbeat_interval_ms: u64,
-    sub_registrations: Vec<SubRegistration>,
     service_registrations: Vec<ServiceRegistration>,
     action_registrations: Vec<ActionRegistration>,
     action_client_registration: Option<ActionClientRegistration>,
@@ -40,7 +68,7 @@ pub struct BusRuntime {
     outbound_rx: Option<Receiver<OutboundCommand>>,
     reply_tx: Sender<ReplyMessage>,
     reply_rx: Option<Receiver<ReplyMessage>>,
-    use_thread_pool: bool,
+    worker_pool: Option<WorkerPool>,
     running: Arc<AtomicBool>,
     started: bool,
     closed: bool,
@@ -48,22 +76,27 @@ pub struct BusRuntime {
 }
 
 impl BusRuntime {
+    /// Single-threaded executor: all callbacks run on the spin/I/O thread.
     pub fn new() -> Self {
-        Self::with_options(2500, false)
+        Self::with_options(DEFAULT_HEARTBEAT_INTERVAL_MS, None)
     }
 
+    /// Offload service/action handlers to at most `max_workers` threads.
+    /// Subscription and action-client callbacks still run on the I/O thread.
+    /// If the pool is saturated, handlers fall back to inline execution.
     pub fn with_executor(max_workers: usize) -> Self {
-        let _ = max_workers;
-        Self::with_options(2500, true)
+        Self::with_options(
+            DEFAULT_HEARTBEAT_INTERVAL_MS,
+            Some(WorkerPool::new(max_workers)),
+        )
     }
 
-    fn with_options(heartbeat_interval_ms: u64, use_thread_pool: bool) -> Self {
+    fn with_options(heartbeat_interval_ms: u64, worker_pool: Option<WorkerPool>) -> Self {
         let (outbound_tx, outbound_rx) = mpsc::channel();
         let (reply_tx, reply_rx) = mpsc::channel();
         Self {
             context: Context::new(),
             heartbeat_interval_ms,
-            sub_registrations: Vec::new(),
             service_registrations: Vec::new(),
             action_registrations: Vec::new(),
             action_client_registration: None,
@@ -73,12 +106,24 @@ impl BusRuntime {
             outbound_rx: Some(outbound_rx),
             reply_tx,
             reply_rx: Some(reply_rx),
-            use_thread_pool,
+            worker_pool,
             running: Arc::new(AtomicBool::new(false)),
             started: false,
             closed: false,
             thread: None,
         }
+    }
+
+    /// Cloneable handle to stop [`spin`](Self::spin) / [`start`](Self::start).
+    pub fn shutdown_handle(&self) -> ShutdownHandle {
+        ShutdownHandle {
+            running: self.running.clone(),
+        }
+    }
+
+    /// Signal the executor to leave `spin` / background `start`.
+    pub fn shutdown(&self) {
+        self.running.store(false, Ordering::Release);
     }
 
     pub fn connect_subscriber(&mut self, endpoint: Option<&str>) -> Result<()> {
@@ -239,19 +284,136 @@ impl BusRuntime {
         Ok(())
     }
 
+    /// One executor step (ROS 2 `spin_once`): wait up to `timeout`, then
+    /// dispatch every currently readable registration.
+    ///
+    /// Returns `true` if at least one socket was readable.
+    pub fn spin_once(&mut self, timeout: Option<Duration>) -> Result<bool> {
+        self.ensure_open()?;
+        if self.started {
+            return Err(BusError::Protocol(
+                "spin_once() cannot run while start() is active".into(),
+            ));
+        }
+        self.prepare_for_spin()?;
+        let outbound_rx = self
+            .outbound_rx
+            .as_ref()
+            .ok_or_else(|| BusError::Protocol("runtime already started".into()))?;
+        let reply_rx = self
+            .reply_rx
+            .as_ref()
+            .ok_or_else(|| BusError::Protocol("runtime already started".into()))?;
+        Ok(spin_once_inner(
+            &mut self.socket_registrations,
+            &self.topic_callbacks,
+            outbound_rx,
+            reply_rx,
+            &self.reply_tx,
+            self.worker_pool.as_ref(),
+            timeout_to_ms(timeout),
+        ))
+    }
+
+    /// Wait up to `timeout` for work, then drain ready callbacks (ROS 2 `spin_some`).
+    ///
+    /// After the first successful poll, further iterations use a zero timeout so
+    /// only already-queued messages are processed before returning.
+    pub fn spin_some(&mut self, timeout: Option<Duration>) -> Result<()> {
+        self.ensure_open()?;
+        if self.started {
+            return Err(BusError::Protocol(
+                "spin_some() cannot run while start() is active".into(),
+            ));
+        }
+        self.prepare_for_spin()?;
+        self.running.store(true, Ordering::Release);
+        let deadline = timeout.map(|t| Instant::now() + t);
+        let mut draining = false;
+        loop {
+            if !self.running.load(Ordering::Acquire) {
+                break;
+            }
+            let poll_ms = if draining {
+                0
+            } else {
+                match deadline {
+                    Some(end) => {
+                        let remaining = end.saturating_duration_since(Instant::now());
+                        if remaining.is_zero() {
+                            break;
+                        }
+                        remaining.as_millis().min(i64::MAX as u128) as i64
+                    }
+                    None => DEFAULT_POLL_TIMEOUT_MS,
+                }
+            };
+            let outbound_rx = self
+                .outbound_rx
+                .as_ref()
+                .ok_or_else(|| BusError::Protocol("runtime already started".into()))?;
+            let reply_rx = self
+                .reply_rx
+                .as_ref()
+                .ok_or_else(|| BusError::Protocol("runtime already started".into()))?;
+            let had_work = spin_once_inner(
+                &mut self.socket_registrations,
+                &self.topic_callbacks,
+                outbound_rx,
+                reply_rx,
+                &self.reply_tx,
+                self.worker_pool.as_ref(),
+                poll_ms,
+            );
+            if had_work {
+                draining = true;
+                continue;
+            }
+            break;
+        }
+        Ok(())
+    }
+
+    /// Block on the executor until [`shutdown`](Self::shutdown) (ROS 2 `spin`).
+    pub fn spin(&mut self) -> Result<()> {
+        self.ensure_open()?;
+        if self.started {
+            return Err(BusError::Protocol(
+                "spin() cannot run while start() is active".into(),
+            ));
+        }
+        self.prepare_for_spin()?;
+        self.running.store(true, Ordering::Release);
+        let outbound_rx = self
+            .outbound_rx
+            .as_ref()
+            .ok_or_else(|| BusError::Protocol("runtime already started".into()))?;
+        let reply_rx = self
+            .reply_rx
+            .as_ref()
+            .ok_or_else(|| BusError::Protocol("runtime already started".into()))?;
+        while self.running.load(Ordering::Acquire) {
+            spin_once_inner(
+                &mut self.socket_registrations,
+                &self.topic_callbacks,
+                outbound_rx,
+                reply_rx,
+                &self.reply_tx,
+                self.worker_pool.as_ref(),
+                DEFAULT_POLL_TIMEOUT_MS,
+            );
+        }
+        Ok(())
+    }
+
+    /// Run the executor on a background thread until [`shutdown`](Self::shutdown)
+    /// or [`stop`](Self::stop).
     pub fn start(&mut self) -> Result<()> {
         self.ensure_open()?;
         if self.started {
             return Ok(());
         }
-        if self.socket_registrations.is_empty() {
-            self.sync_all_registrations();
-        }
-        if self.socket_registrations.is_empty() {
-            return Err(BusError::Protocol(
-                "nothing registered; connect_subscriber or register worker first".into(),
-            ));
-        }
+        self.prepare_for_spin()?;
         self.running.store(true, Ordering::Release);
         self.started = true;
         let running = self.running.clone();
@@ -266,17 +428,19 @@ impl BusRuntime {
             .take()
             .ok_or_else(|| BusError::Protocol("runtime already started".into()))?;
         let reply_tx = self.reply_tx.clone();
-        let use_thread_pool = self.use_thread_pool;
+        let worker_pool = self.worker_pool.clone();
         let handle = thread::spawn(move || {
-            io_loop(
-                &mut registrations,
-                &topic_callbacks,
-                &outbound_rx,
-                &reply_rx,
-                &reply_tx,
-                use_thread_pool,
-                &running,
-            );
+            while running.load(Ordering::Acquire) {
+                spin_once_inner(
+                    &mut registrations,
+                    &topic_callbacks,
+                    &outbound_rx,
+                    &reply_rx,
+                    &reply_tx,
+                    worker_pool.as_ref(),
+                    DEFAULT_POLL_TIMEOUT_MS,
+                );
+            }
         });
         self.thread = Some(handle);
         Ok(())
@@ -296,13 +460,14 @@ impl BusRuntime {
         self.closed = true;
     }
 
-    pub fn spin(&mut self) -> Result<()> {
-        self.ensure_open()?;
-        if self.started {
-            return Err(BusError::Protocol(
-                "spin() cannot run while start() is active".into(),
-            ));
+    pub fn wait(&mut self) {
+        if let Some(handle) = self.thread.take() {
+            let _ = handle.join();
+            self.thread = None;
         }
+    }
+
+    fn prepare_for_spin(&mut self) -> Result<()> {
         if self.socket_registrations.is_empty() {
             self.sync_all_registrations();
         }
@@ -311,34 +476,7 @@ impl BusRuntime {
                 "nothing registered; connect_subscriber or register worker first".into(),
             ));
         }
-        self.running.store(true, Ordering::Release);
-        let running = self.running.clone();
-        let outbound_rx = self
-            .outbound_rx
-            .as_ref()
-            .ok_or_else(|| BusError::Protocol("runtime already started".into()))?;
-        let reply_rx = self
-            .reply_rx
-            .as_ref()
-            .ok_or_else(|| BusError::Protocol("runtime already started".into()))?;
-        io_loop(
-            &mut self.socket_registrations,
-            &self.topic_callbacks,
-            outbound_rx,
-            reply_rx,
-            &self.reply_tx,
-            self.use_thread_pool,
-            &running,
-        );
-        self.running.store(false, Ordering::Release);
         Ok(())
-    }
-
-    pub fn wait(&mut self) {
-        if let Some(handle) = self.thread.take() {
-            let _ = handle.join();
-            self.thread = None;
-        }
     }
 
     fn ensure_open(&self) -> Result<()> {
@@ -360,19 +498,10 @@ impl BusRuntime {
             .any(|reg| matches!(reg, Registration::ActionClient(_)))
     }
 
-    fn sub_registrations_mut(&mut self) -> impl Iterator<Item = &mut SubRegistration> {
-        self.socket_registrations.iter_mut().filter_map(|reg| {
-            if let Registration::Sub(sub) = reg {
-                Some(sub)
-            } else {
-                None
-            }
-        })
-    }
-
     fn sync_action_client_registration(&mut self) {
         if let Some(reg) = self.action_client_registration.take() {
-            self.socket_registrations.push(Registration::ActionClient(reg));
+            self.socket_registrations
+                .push(Registration::ActionClient(reg));
         }
     }
 
@@ -387,9 +516,6 @@ impl BusRuntime {
     }
 
     fn sync_all_registrations(&mut self) {
-        for reg in self.sub_registrations.drain(..) {
-            self.socket_registrations.push(Registration::Sub(reg));
-        }
         self.sync_worker_registrations();
         self.sync_action_client_registration();
     }
@@ -409,7 +535,6 @@ impl BusRuntime {
             let _ = reg.socket().set_linger(0);
         }
         self.socket_registrations.clear();
-        self.sub_registrations.clear();
         self.service_registrations.clear();
         self.action_registrations.clear();
         self.action_client_registration = None;
@@ -428,46 +553,54 @@ impl Drop for BusRuntime {
     }
 }
 
-fn io_loop(
+fn timeout_to_ms(timeout: Option<Duration>) -> i64 {
+    match timeout {
+        None => DEFAULT_POLL_TIMEOUT_MS,
+        Some(duration) if duration.is_zero() => 0,
+        Some(duration) => duration.as_millis().min(i64::MAX as u128) as i64,
+    }
+}
+
+/// One poll + dispatch iteration. Returns whether any socket was readable.
+fn spin_once_inner(
     registrations: &mut [Registration],
     topic_callbacks: &HashMap<String, Vec<MessageCallback>>,
     outbound_rx: &Receiver<OutboundCommand>,
     reply_rx: &Receiver<ReplyMessage>,
     reply_tx: &Sender<ReplyMessage>,
-    use_thread_pool: bool,
-    running: &AtomicBool,
-) {
-    while running.load(Ordering::Acquire) {
-        let now = Instant::now();
-        tick_heartbeats(registrations, now);
-        for reg in registrations.iter_mut() {
-            if let Registration::ActionClient(client) = reg {
-                flush_outbound(client, outbound_rx);
-            }
-        }
-        flush_reply_queue(registrations, reply_rx);
-
-        let mut poll_items: Vec<zmq::PollItem> = registrations
-            .iter()
-            .map(|reg| reg.socket().as_poll_item(zmq::POLLIN))
-            .collect();
-        if zmq::poll(&mut poll_items, POLL_TIMEOUT_MS).unwrap_or(0) == 0 {
-            continue;
-        }
-
-        let readable: Vec<usize> = poll_items
-            .iter()
-            .enumerate()
-            .filter(|(_, item)| item.is_readable())
-            .map(|(index, _)| index)
-            .collect();
-        for index in readable {
-            dispatch_registration(
-                &mut registrations[index],
-                topic_callbacks,
-                reply_tx,
-                use_thread_pool,
-            );
+    worker_pool: Option<&WorkerPool>,
+    poll_timeout_ms: i64,
+) -> bool {
+    let now = Instant::now();
+    tick_heartbeats(registrations, now);
+    for reg in registrations.iter_mut() {
+        if let Registration::ActionClient(client) = reg {
+            flush_outbound(client, outbound_rx);
         }
     }
+    flush_reply_queue(registrations, reply_rx);
+
+    let mut poll_items: Vec<zmq::PollItem> = registrations
+        .iter()
+        .map(|reg| reg.socket().as_poll_item(zmq::POLLIN))
+        .collect();
+    if zmq::poll(&mut poll_items, poll_timeout_ms).unwrap_or(0) == 0 {
+        return false;
+    }
+
+    let readable: Vec<usize> = poll_items
+        .iter()
+        .enumerate()
+        .filter(|(_, item)| item.is_readable())
+        .map(|(index, _)| index)
+        .collect();
+    for index in readable {
+        dispatch_registration(
+            &mut registrations[index],
+            topic_callbacks,
+            reply_tx,
+            worker_pool,
+        );
+    }
+    true
 }

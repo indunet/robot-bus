@@ -11,12 +11,13 @@ use crate::runtime::registrations::{
     ActionClientRegistration, ActionRegistration, MessageCallback, Registration,
     RegistrationKind, ServiceRegistration, SubRegistration,
 };
+use crate::runtime::worker_pool::WorkerPool;
 
 pub fn dispatch_registration(
     reg: &mut Registration,
     topic_callbacks: &HashMap<String, Vec<MessageCallback>>,
     reply_tx: &Sender<ReplyMessage>,
-    use_thread_pool: bool,
+    worker_pool: Option<&WorkerPool>,
 ) {
     match reg.kind() {
         RegistrationKind::Sub => {
@@ -26,12 +27,12 @@ pub fn dispatch_registration(
         }
         RegistrationKind::Service => {
             if let Registration::Service(service) = reg {
-                dispatch_service_request(service, reply_tx, use_thread_pool);
+                dispatch_service_request(service, reply_tx, worker_pool);
             }
         }
         RegistrationKind::Action => {
             if let Registration::Action(action) = reg {
-                dispatch_action_message(action, reply_tx, use_thread_pool);
+                dispatch_action_message(action, reply_tx, worker_pool);
             }
         }
         RegistrationKind::ActionClient => {
@@ -90,7 +91,7 @@ fn callbacks_for_topic(
 pub fn dispatch_service_request(
     reg: &ServiceRegistration,
     reply_tx: &Sender<ReplyMessage>,
-    use_thread_pool: bool,
+    worker_pool: Option<&WorkerPool>,
 ) {
     let frames = match reg.socket.recv_multipart(0) {
         Ok(frames) => frames,
@@ -112,23 +113,27 @@ pub fn dispatch_service_request(
         return;
     }
 
-    if use_thread_pool {
-        let handler = Arc::clone(&reg.handler);
-        let service_name = reg.service_name.clone();
-        let reply_tx = reply_tx.clone();
-        thread::spawn(move || {
-            let reply_body = handler(&client_id, &req_id, &body);
-            let _ = reply_tx.send(ReplyMessage::Service {
-                service_name,
-                reply: ServiceReply {
-                    client_id,
-                    service: svc,
-                    request_id: req_id,
-                    body: reply_body,
-                },
+    if let Some(pool) = worker_pool {
+        if pool.try_acquire() {
+            let handler = Arc::clone(&reg.handler);
+            let service_name = reg.service_name.clone();
+            let reply_tx = reply_tx.clone();
+            let pool = pool.clone();
+            thread::spawn(move || {
+                let reply_body = handler(&client_id, &req_id, &body);
+                let _ = reply_tx.send(ReplyMessage::Service {
+                    service_name,
+                    reply: ServiceReply {
+                        client_id,
+                        service: svc,
+                        request_id: req_id,
+                        body: reply_body,
+                    },
+                });
+                pool.release();
             });
-        });
-        return;
+            return;
+        }
     }
 
     let reply_body = (reg.handler)(&client_id, &req_id, &body);
@@ -144,7 +149,7 @@ pub fn dispatch_service_request(
 pub fn dispatch_action_message(
     reg: &ActionRegistration,
     reply_tx: &Sender<ReplyMessage>,
-    use_thread_pool: bool,
+    worker_pool: Option<&WorkerPool>,
 ) {
     let frames = match reg.socket.recv_multipart(0) {
         Ok(frames) => frames,
@@ -173,27 +178,31 @@ pub fn dispatch_action_message(
     }
     let payload: Vec<u8> = if kind_str == "GOAL" { body } else { kind };
 
-    if use_thread_pool {
-        let handler = Arc::clone(&reg.handler);
-        let action_name = reg.action_name.clone();
-        let goal_id_copy = goal_id.clone();
-        let client_id_copy = client_id.clone();
-        let reply_tx = reply_tx.clone();
-        thread::spawn(move || {
-            let replies = handler(&client_id_copy, &goal_id_copy, &payload);
-            for (phase, chunk) in replies {
-                let _ = reply_tx.send(ReplyMessage::Action {
-                    action_name: action_name.clone(),
-                    reply: ActionReply {
-                        client_id: client_id_copy.clone(),
-                        goal_id: goal_id_copy.clone(),
-                        kind: phase.into_bytes(),
-                        body: chunk,
-                    },
-                });
-            }
-        });
-        return;
+    if let Some(pool) = worker_pool {
+        if pool.try_acquire() {
+            let handler = Arc::clone(&reg.handler);
+            let action_name = reg.action_name.clone();
+            let goal_id_copy = goal_id.clone();
+            let client_id_copy = client_id.clone();
+            let reply_tx = reply_tx.clone();
+            let pool = pool.clone();
+            thread::spawn(move || {
+                let replies = handler(&client_id_copy, &goal_id_copy, &payload);
+                for (phase, chunk) in replies {
+                    let _ = reply_tx.send(ReplyMessage::Action {
+                        action_name: action_name.clone(),
+                        reply: ActionReply {
+                            client_id: client_id_copy.clone(),
+                            goal_id: goal_id_copy.clone(),
+                            kind: phase.into_bytes(),
+                            body: chunk,
+                        },
+                    });
+                }
+                pool.release();
+            });
+            return;
+        }
     }
 
     let replies = (reg.handler)(&client_id, &goal_id, &payload);
