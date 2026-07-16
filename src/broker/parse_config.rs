@@ -245,7 +245,8 @@ mod tests {
 
     #[test]
     fn parses_prefixed_binds_and_shared_hwm() {
-        let config = parse_robot_bus_config(&args(&[
+        #[allow(unused_mut)] // mutated only when feature `grpc` is enabled
+        let mut argv = args(&[
             "--message-xsub-bind",
             "127.0.0.1:20001",
             "--service-frontend-bind",
@@ -255,13 +256,17 @@ mod tests {
             "--snd-hwm",
             "16",
             "--tcp-only",
-            "--grpc-listen",
-            "127.0.0.1:20070",
-            "--cors-origin",
-            "http://localhost:3000",
-        ]))
-        .unwrap()
-        .expect("config");
+        ]);
+        #[cfg(feature = "grpc")]
+        {
+            argv.extend(args(&[
+                "--grpc-listen",
+                "127.0.0.1:20070",
+                "--cors-origin",
+                "http://localhost:3000",
+            ]));
+        }
+        let config = parse_robot_bus_config(&argv).unwrap().expect("config");
 
         assert_eq!(config.message.xsub_bind, "tcp://127.0.0.1:20001");
         assert_eq!(config.service.frontend_bind, "tcp://0.0.0.0:20002");

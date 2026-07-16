@@ -9,7 +9,9 @@ use std::time::Duration;
 use robot_bus::broker::action_bus::ActionBusConfig;
 use robot_bus::broker::message_bus::BusConfig;
 use robot_bus::broker::service_bus::ServiceBusConfig;
-use robot_bus::{GrpcBrokerConfig, RobotBusBroker, RobotBusConfig};
+#[cfg(feature = "grpc")]
+use robot_bus::GrpcBrokerConfig;
+use robot_bus::{RobotBusBroker, RobotBusConfig};
 use zmq::{Context, Socket, SocketType};
 
 static PROXY_ID: AtomicU64 = AtomicU64::new(0);
@@ -51,6 +53,7 @@ pub fn ephemeral_robot_bus_config() -> RobotBusConfig {
             bind_all_transports: false,
             ..ActionBusConfig::default()
         },
+        #[cfg(feature = "grpc")]
         grpc: GrpcBrokerConfig {
             listen: format!("127.0.0.1:{}", free_port())
                 .parse()
@@ -113,7 +116,8 @@ impl Drop for MessageProxy {
     }
 }
 
-/// In-process robot bus (all buses + gRPC) with ephemeral TCP ports.
+/// In-process robot bus (all buses, and gRPC when the `grpc` feature is on)
+/// with ephemeral TCP ports.
 ///
 /// `frontend_endpoint` / `backend_endpoint` are the service or action pair
 /// selected by [`Self::spawn_service`] / [`Self::spawn_action`].
