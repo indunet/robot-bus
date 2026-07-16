@@ -4,6 +4,7 @@ on:
   push:
     tags:
       - "v*"
+  workflow_dispatch:
 
 jobs:
   publish:
@@ -20,6 +21,7 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
 
       - name: Check tag matches Cargo.toml version
+        if: github.event_name == 'push'
         run: |
           TAG="${GITHUB_REF_NAME#v}"
           CRATE_VERSION="$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -n1)"
@@ -27,6 +29,12 @@ jobs:
             echo "Tag version ($TAG) does not match Cargo.toml version ($CRATE_VERSION)"
             exit 1
           fi
+
+      - name: Show version (manual run)
+        if: github.event_name == 'workflow_dispatch'
+        run: |
+          CRATE_VERSION="$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -n1)"
+          echo "Publishing Cargo.toml=$CRATE_VERSION from ref=$GITHUB_REF_NAME"
 
       - name: Publish to crates.io
         env:
