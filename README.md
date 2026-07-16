@@ -27,11 +27,31 @@ robot_bus_broker 进程
 
 ### 1. 启动 broker
 
+Rust：
+
 ```bash
 cargo run --bin robot_bus_broker
 ```
 
-Broker 由 Rust 二进制提供；Python wheel 暂不内嵌 broker。
+Python（`pip install robot-bus` 后自带可执行入口）：
+
+```bash
+robot-bus-broker
+```
+
+或在代码里进程内启动：
+
+```python
+import robot_bus
+
+with robot_bus.RobotBusBroker.start() as broker:
+    # ... 业务代码 ...
+    pass
+# 离开 with 自动 stop
+
+# 或阻塞运行（等同于命令行，Ctrl+C 退出）
+# robot_bus.run_broker()
+```
 
 ### Python
 

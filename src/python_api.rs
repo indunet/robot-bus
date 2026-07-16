@@ -1,20 +1,28 @@
 //! PyO3 bindings for the v1 Python SDK surface.
 
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
+use std::thread;
 use std::time::Duration;
 
 use pyo3::exceptions::PyRuntimeError;
 use pyo3::prelude::*;
 use pyo3::types::PyBytes;
 
+use crate::broker::{RobotBusBroker as RustRobotBusBroker, RobotBusConfig};
 use crate::errors::BusError;
 use crate::message_bus::{Publisher as RustPublisher, Subscriber as RustSubscriber};
 use crate::runtime::{
     Node as RustNode, ShutdownHandle as RustShutdownHandle, TimerHandle as RustTimerHandle,
 };
+use crate::shutdown;
 use crate::transports;
 
 fn bus_err(err: BusError) -> PyErr {
+    PyRuntimeError::new_err(err.to_string())
+}
+
+fn anyhow_err(err: anyhow::Error) -> PyErr {
     PyRuntimeError::new_err(err.to_string())
 }
 
@@ -228,6 +236,140 @@ impl PyNode {
     }
 }
 
+/// In-process broker: message + service + action buses on background threads.
+#[pyclass(name = "RobotBusBroker", unsendable)]
+struct PyRobotBusBroker {
+    inner: Option<RustRobotBusBroker>,
+}
+
+#[pymethods]
+impl PyRobotBusBroker {
+    /// Start all three buses with default binds (same as `robot_bus_broker`).
+    #[staticmethod]
+    fn start() -> PyResult<Self> {
+        let broker = RustRobotBusBroker::start(RobotBusConfig::default()).map_err(anyhow_err)?;
+        Ok(Self {
+            inner: Some(broker),
+        })
+    }
+
+    /// Stop all buses and join their threads. Safe to call more than once.
+    fn stop(&mut self) -> PyResult<()> {
+        if let Some(broker) = self.inner.take() {
+            broker.stop().map_err(anyhow_err)?;
+        }
+        Ok(())
+    }
+
+    fn __enter__(slf: PyRef<'_, Self>) -> PyRef<'_, Self> {
+        slf
+    }
+
+    fn __exit__(
+        &mut self,
+        _exc_type: Option<&Bound<'_, PyAny>>,
+        _exc_value: Option<&Bound<'_, PyAny>>,
+        _traceback: Option<&Bound<'_, PyAny>>,
+    ) -> PyResult<bool> {
+        self.stop()?;
+        Ok(false)
+    }
+
+    #[getter]
+    fn message_xsub_bind(&self) -> PyResult<String> {
+        self.with_broker(|b| b.message.xsub_bind.clone())
+    }
+
+    #[getter]
+    fn message_xpub_bind(&self) -> PyResult<String> {
+        self.with_broker(|b| b.message.xpub_bind.clone())
+    }
+
+    #[getter]
+    fn service_frontend_bind(&self) -> PyResult<String> {
+        self.with_broker(|b| b.service.frontend_bind.clone())
+    }
+
+    #[getter]
+    fn service_backend_bind(&self) -> PyResult<String> {
+        self.with_broker(|b| b.service.backend_bind.clone())
+    }
+
+    #[getter]
+    fn action_frontend_bind(&self) -> PyResult<String> {
+        self.with_broker(|b| b.action.frontend_bind.clone())
+    }
+
+    #[getter]
+    fn action_backend_bind(&self) -> PyResult<String> {
+        self.with_broker(|b| b.action.backend_bind.clone())
+    }
+}
+
+impl PyRobotBusBroker {
+    fn with_broker<T>(&self, f: impl FnOnce(&RustRobotBusBroker) -> T) -> PyResult<T> {
+        self.inner
+            .as_ref()
+            .map(f)
+            .ok_or_else(|| PyRuntimeError::new_err("broker already stopped"))
+    }
+}
+
+fn print_broker_help() {
+    println!(
+        "robot-bus-broker — start all ZeroMQ buses in one process\n\n\
+Usage:\n  robot-bus-broker\n\n\
+Starts with default ports and tcp + inproc + ipc on each socket:\n  \
+message_bus  15560 / 15561 (XSUB/XPUB proxy)\n  \
+service_bus  15662 / 15663 (REQ service broker)\n  \
+action_bus   15664 / 15665 (DEALER action broker)\n\n\
+Press Ctrl+C to stop all buses.\n\n\
+In Python: robot_bus.RobotBusBroker.start() / robot_bus.run_broker()\n"
+    );
+}
+
+/// Blocking CLI entry: start broker and wait for Ctrl+C (or Unix SIGTERM).
+///
+/// Used by the `robot-bus-broker` console script after `pip install robot-bus`.
+#[pyfunction]
+fn run_broker(py: Python<'_>) -> PyResult<()> {
+    let args: Vec<String> = std::env::args().skip(1).collect();
+    if args.iter().any(|a| a == "--help" || a == "-h") {
+        print_broker_help();
+        return Ok(());
+    }
+    if !args.is_empty() {
+        return Err(PyRuntimeError::new_err(format!(
+            "unknown arguments: {args:?} (try --help)"
+        )));
+    }
+
+    let flag = Arc::new(AtomicBool::new(false));
+    shutdown::install(flag.clone());
+
+    println!("robot-bus-broker starting message + service + action buses…");
+    let mut broker = PyRobotBusBroker::start()?;
+
+    loop {
+        if flag.load(Ordering::Acquire) {
+            break;
+        }
+        // Raises KeyboardInterrupt on Ctrl+C (works on Windows too).
+        if let Err(err) = py.check_signals() {
+            if err.is_instance_of::<pyo3::exceptions::PyKeyboardInterrupt>(py) {
+                break;
+            }
+            broker.stop()?;
+            return Err(err);
+        }
+        py.allow_threads(|| thread::sleep(Duration::from_millis(50)));
+    }
+
+    broker.stop()?;
+    println!("robot-bus-broker stopped");
+    Ok(())
+}
+
 #[pymodule]
 fn robot_bus(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyPublisher>()?;
@@ -235,8 +377,10 @@ fn robot_bus(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyNode>()?;
     m.add_class::<PyShutdownHandle>()?;
     m.add_class::<PyTimerHandle>()?;
+    m.add_class::<PyRobotBusBroker>()?;
     m.add_function(wrap_pyfunction!(message_xsub_endpoint, m)?)?;
     m.add_function(wrap_pyfunction!(message_xpub_endpoint, m)?)?;
+    m.add_function(wrap_pyfunction!(run_broker, m)?)?;
     m.add("__version__", env!("CARGO_PKG_VERSION"))?;
     Ok(())
 }

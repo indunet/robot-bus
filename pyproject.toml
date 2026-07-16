@@ -22,6 +22,9 @@ classifiers = [
 ]
 urls = { Repository = "https://github.com/indunet/robot-bus" }
 
+[project.scripts]
+robot-bus-broker = "robot_bus:run_broker"
+
 [tool.maturin]
 features = ["extension-module"]
 module-name = "robot_bus"
