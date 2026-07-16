@@ -11,7 +11,9 @@ use prost::Message;
 use robot_bus::message_bus::Publisher;
 use robot_bus::geometry_msgs::msg::v1::Vector3;
 use robot_bus::sensor_msgs::msg::v1::Imu;
-use robot_bus::{Executor, HighWaterMark, MessageCallback, Node, NodeOptions};
+use robot_bus::{
+    Executor, HighWaterMark, MessageCallback, Node, NodeOptions, SingleThreadedExecutor,
+};
 use support::MessageProxy;
 
 #[test]
@@ -183,13 +185,15 @@ fn publisher_subscriber_hwm_roundtrip() {
     assert_eq!(executor.stream_hwm(), HighWaterMark::new(20, 20));
 }
 
-fn node_with_proxy(name: &str, proxy: &MessageProxy) -> Node {
+fn node_with_proxy(name: &str, proxy: &MessageProxy) -> (SingleThreadedExecutor, Node) {
     let options = NodeOptions {
         message_xsub: Some(proxy.xsub_endpoint.clone()),
         message_xpub: Some(proxy.xpub_endpoint.clone()),
         ..NodeOptions::default()
     };
-    Node::with_options(name, options)
+    let executor = SingleThreadedExecutor::new();
+    let node = executor.create_node_with_options(name, options);
+    (executor, node)
 }
 
 #[test]
@@ -206,7 +210,7 @@ fn node_subscription_uses_topic_as_given() {
         hits_cb.fetch_add(1, Ordering::SeqCst);
     });
 
-    let mut node = node_with_proxy("pilot", &proxy);
+    let (executor, mut node) = node_with_proxy("pilot", &proxy);
     node.create_subscription("/robot1/imu", callback)
         .expect("create_subscription");
     thread::sleep(Duration::from_millis(150));
@@ -219,7 +223,8 @@ fn node_subscription_uses_topic_as_given() {
             deadline > std::time::Instant::now(),
             "timed out waiting for node callback"
         );
-        node.spin_once(Some(Duration::from_millis(100)))
+        executor
+            .spin_once(Some(Duration::from_millis(100)))
             .expect("spin_once");
     }
     assert_eq!(hits.load(Ordering::SeqCst), 1);
@@ -233,7 +238,7 @@ fn node_publish_uses_topic_as_given() {
     let hits = Arc::new(AtomicUsize::new(0));
     let hits_cb = hits.clone();
 
-    let mut sub_node = node_with_proxy("listener", &proxy);
+    let (executor, mut sub_node) = node_with_proxy("listener", &proxy);
     sub_node
         .create_subscription(
             "/robot1/cmd_vel",
@@ -246,7 +251,9 @@ fn node_publish_uses_topic_as_given() {
         .expect("create_subscription");
     thread::sleep(Duration::from_millis(150));
 
-    let mut pub_node = node_with_proxy("pilot", &proxy);
+    let (_pub_exec, mut pub_node) = node_with_proxy("pilot", &proxy);
+    // Same XPUB/XSUB proxy: attach pub node to the shared message bus via its own
+    // single-threaded executor is fine; spinning the subscriber's executor is enough.
     pub_node.create_publisher().expect("create_publisher");
     pub_node
         .publish("/robot1/cmd_vel", b"go")
@@ -258,7 +265,7 @@ fn node_publish_uses_topic_as_given() {
             deadline > std::time::Instant::now(),
             "timed out waiting for node publish"
         );
-        sub_node
+        executor
             .spin_once(Some(Duration::from_millis(100)))
             .expect("spin_once");
     }
@@ -270,7 +277,8 @@ fn node_timer_via_spin_once() {
     let hits = Arc::new(AtomicUsize::new(0));
     let hits_cb = hits.clone();
 
-    let mut node = Node::new("timer_node");
+    let executor = SingleThreadedExecutor::new();
+    let mut node = executor.create_node("timer_node");
     node.create_timer(
         Duration::from_millis(40),
         Arc::new(move || {
@@ -285,7 +293,8 @@ fn node_timer_via_spin_once() {
             deadline > std::time::Instant::now(),
             "timed out waiting for node timer"
         );
-        node.spin_once(Some(Duration::from_millis(100)))
+        executor
+            .spin_once(Some(Duration::from_millis(100)))
             .expect("spin_once");
     }
     assert!(hits.load(Ordering::SeqCst) >= 1);
@@ -300,7 +309,7 @@ fn node_subscription_typed_imu() {
     let hits = Arc::new(AtomicUsize::new(0));
     let hits_cb = hits.clone();
 
-    let mut node = node_with_proxy("imu_node", &proxy);
+    let (executor, mut node) = node_with_proxy("imu_node", &proxy);
     node.create_subscription_typed::<Imu, _>("/robot1/imu", move |topic, imu| {
         assert_eq!(topic, "/robot1/imu");
         // Only count the intentionally valid sample (bad frames are skipped or default).
@@ -336,12 +345,14 @@ fn node_subscription_typed_imu() {
             deadline > std::time::Instant::now(),
             "timed out waiting for typed callback"
         );
-        node.spin_once(Some(Duration::from_millis(100)))
+        executor
+            .spin_once(Some(Duration::from_millis(100)))
             .expect("spin_once");
     }
     // Drain a bit more so a bad decode would have a chance to mis-count.
     for _ in 0..3 {
-        node.spin_once(Some(Duration::from_millis(50)))
+        executor
+            .spin_once(Some(Duration::from_millis(50)))
             .expect("spin_once");
     }
     assert_eq!(hits.load(Ordering::SeqCst), 1);

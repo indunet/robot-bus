@@ -1,6 +1,9 @@
 //! Unified poll loop for subscriptions and worker callbacks.
 //!
-//! Mirrors a simplified ROS 2 executor:
+//! Prefer [`crate::runtime::SingleThreadedExecutor`] /
+//! [`crate::runtime::MultiThreadedExecutor`] for application code.
+//! This type is the shared poll-loop engine behind those wrappers.
+//!
 //! - register callbacks (`subscribe` / `register_service` / …)
 //! - drive them with [`Executor::spin`], [`Executor::spin_once`], or
 //!   [`Executor::spin_some`]

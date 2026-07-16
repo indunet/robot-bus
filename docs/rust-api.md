@@ -77,13 +77,13 @@ service.stop()?;
 action.stop()?;
 ```
 
-连接由 [`Node`](../src/runtime/node.rs) 的 `NodeOptions` 管理。底层 `Executor` 负责 `spin`；一般业务代码用 Node 即可。
+连接由 [`Node`](../src/runtime/node.rs) 的 `NodeOptions` 管理。用 `SingleThreadedExecutor` / `MultiThreadedExecutor` 的 `create_node` 建节点，再 `spin` 执行器。
 
 ---
 
-## Message bus（Node + spin）
+## Message bus（Executor + Node + spin）
 
-接近 ROS 2：`create_publisher` / `create_subscription` / `spin`。推荐 typed 订阅（标准 `sensor_msgs::msg::v1::Imu`）；也可传 raw `&[u8]` 回调自行 decode。
+接近 ROS 2：先建 Executor，再 `create_node`，然后 `create_publisher` / `create_subscription` / `spin`。推荐 typed 订阅（标准 `sensor_msgs::msg::v1::Imu`）；也可传 raw `&[u8]` 回调自行 decode。
 
 ```rust
 use std::sync::Arc;
@@ -91,11 +91,12 @@ use std::time::Duration;
 use prost::Message;
 use robot_bus::geometry_msgs::msg::v1::Vector3;
 use robot_bus::sensor_msgs::msg::v1::Imu;
-use robot_bus::Node;
+use robot_bus::SingleThreadedExecutor;
 
 fn main() -> robot_bus::Result<()> {
-    let mut node = Node::new("pilot");
-    // 默认连本机 broker；进程内 / 自定义地址用 Node::with_options(..., NodeOptions { ... })
+    let executor = SingleThreadedExecutor::new();
+    // 进程内 / 自定义地址：executor.create_node_with_options("pilot", NodeOptions { ... })
+    let mut node = executor.create_node("pilot");
     node.create_publisher()?;
     node.create_subscription_typed::<Imu, _>("/robot1/imu", |topic, imu| {
         println!("{topic}: angular_z={:?}", imu.angular_velocity);
@@ -120,23 +121,23 @@ fn main() -> robot_bus::Result<()> {
         // 周期任务
     }))?;
 
-    let handle = node.shutdown_handle();
+    let handle = executor.shutdown_handle()?;
     std::thread::spawn(move || {
         std::thread::sleep(Duration::from_secs(5));
         handle.shutdown();
     });
 
-    node.spin()?; // 阻塞
-    // 或：node.spin_once(Some(Duration::from_millis(100)))?;
+    executor.spin()?; // 阻塞
+    // 或：executor.spin_once(Some(Duration::from_millis(100)))?;
     Ok(())
 }
 ```
 
 Raw bytes 回调：`node.create_subscription("/robot1/imu", Arc::new(|topic, payload| { ... }))?`。
 
-topic / service / action 名按传入原样使用（请自行写全路径，无 `/robot1/imu`）。
+topic / service / action 名按传入原样使用（请自行写全路径，如 `/robot1/imu`）。
 
-`Node::with_worker_pool(n)` / `with_options_and_pool`：service / action handler 最多 `n` 个并发线程；订阅与 timer 仍在 I/O 线程。底层对应 `Executor::with_worker_pool(n)`。
+`MultiThreadedExecutor::new(n)`：service / action handler 最多 `n` 个并发线程；订阅与 timer 仍在 I/O 线程。
 
 ### 高水位（HWM）
 
@@ -235,7 +236,7 @@ Node：`create_action` / `connect_action_client` 同样使用 `NodeOptions` 里�
 
 ```rust
 use std::sync::Arc;
-use robot_bus::{Node, NodeOptions, RobotBusBroker, RobotBusConfig};
+use robot_bus::{NodeOptions, RobotBusBroker, RobotBusConfig, SingleThreadedExecutor};
 
 fn main() -> anyhow::Result<()> {
     let broker = RobotBusBroker::start(RobotBusConfig::default())?;
@@ -245,14 +246,15 @@ fn main() -> anyhow::Result<()> {
         message_xpub: Some(broker.message.xpub_bind.clone()),
         ..NodeOptions::default()
     };
-    let mut node = Node::with_options("demo", options);
+    let executor = SingleThreadedExecutor::new();
+    let mut node = executor.create_node_with_options("demo", options);
     node.create_publisher()?;
     node.create_subscription(
         "/robot1/imu",
         Arc::new(|topic, payload| println!("{topic}: {} bytes", payload.len())),
     )?;
     node.publish("/robot1/imu", b"hello")?;
-    node.spin_once(None)?;
+    executor.spin_once(None)?;
 
     broker.stop()?;
     Ok(())

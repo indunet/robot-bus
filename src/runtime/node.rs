@@ -1,10 +1,11 @@
-//! ROS 2–style [`Node`]: named facade over [`super::Executor`].
+//! ROS 2–style [`Node`]: named participant attached to an executor.
 //!
 //! Owns broker connection config ([`NodeOptions`]) plus a node name.
 //! Topic / service / action names are used as given (pass full paths yourself).
-//! Prefer `create_subscription` / `create_publisher` / … over passing endpoints
-//! on every call; spin via the owned [`Executor`].
+//! Create via [`crate::runtime::SingleThreadedExecutor::create_node`] or
+//! [`crate::runtime::MultiThreadedExecutor::create_node`], then `spin` the executor.
 
+use std::sync::MutexGuard;
 use std::time::Duration;
 
 use prost::Message;
@@ -12,6 +13,7 @@ use prost::Message;
 use crate::errors::{BusError, Result};
 use crate::message_bus::Publisher;
 use crate::runtime::executor::{Executor, ShutdownHandle};
+use crate::runtime::executors::ExecutorHandle;
 use crate::runtime::queues::ActionMessageCallback;
 use crate::runtime::registrations::{ActionGoalHandler, MessageCallback, ServiceHandler};
 use crate::runtime::timers::{TimerCallback, TimerHandle};
@@ -91,52 +93,32 @@ impl NodeOptions {
     }
 }
 
-/// Named participant that owns an [`Executor`] (simplified ROS 2 `Node`).
+/// Named participant attached to a shared executor (simplified ROS 2 `Node`).
 pub struct Node {
     name: String,
     options: NodeOptions,
-    executor: Executor,
+    executor: ExecutorHandle,
     publisher: Option<Publisher>,
     subscriber_connected: bool,
 }
 
 impl Node {
-    /// Create a node with default broker options.
-    pub fn new(name: impl Into<String>) -> Self {
-        Self::with_options(name, NodeOptions::default())
-    }
-
-    /// Like [`new`](Self::new), but service/action handlers may use a worker pool.
-    pub fn with_worker_pool(name: impl Into<String>, max_workers: usize) -> Self {
-        Self::with_options_and_pool(name, NodeOptions::default(), max_workers)
-    }
-
-    /// Construct with explicit broker connection options (default single-threaded executor).
-    pub fn with_options(name: impl Into<String>, options: NodeOptions) -> Self {
-        Self::build(name.into(), options, Executor::new())
-    }
-
-    /// Options + bounded worker pool for service/action handlers.
-    pub fn with_options_and_pool(
+    pub(crate) fn attach(
         name: impl Into<String>,
         options: NodeOptions,
-        max_workers: usize,
+        executor: ExecutorHandle,
     ) -> Self {
-        Self::build(
-            name.into(),
-            options,
-            Executor::with_worker_pool(max_workers),
-        )
-    }
-
-    fn build(name: String, options: NodeOptions, executor: Executor) -> Self {
         Self {
-            name,
+            name: name.into(),
             options,
             executor,
             publisher: None,
             subscriber_connected: false,
         }
+    }
+
+    fn lock_executor(&self) -> Result<MutexGuard<'_, Executor>> {
+        self.executor.lock()
     }
 
     pub fn name(&self) -> &str {
@@ -147,11 +129,16 @@ impl Node {
         &self.options
     }
 
+    /// Shared executor handle (same as the parent `*ThreadedExecutor`).
+    pub fn executor_handle(&self) -> &ExecutorHandle {
+        &self.executor
+    }
+
     /// Connect a publisher using this node's message XSUB endpoint.
     ///
     /// Call once; subsequent calls replace the publisher. Uses stream HWM defaults.
     pub fn create_publisher(&mut self) -> Result<()> {
-        let hwm = self.executor.stream_hwm();
+        let hwm = self.lock_executor()?.stream_hwm();
         self.create_publisher_with_hwm(hwm)
     }
 
@@ -190,28 +177,28 @@ impl Node {
         pub_.set_high_water_mark(hwm)
     }
 
-    pub fn stream_hwm(&self) -> HighWaterMark {
-        self.executor.stream_hwm()
+    pub fn stream_hwm(&self) -> Result<HighWaterMark> {
+        Ok(self.lock_executor()?.stream_hwm())
     }
 
-    pub fn set_stream_hwm(&mut self, hwm: HighWaterMark) -> Result<()> {
-        self.executor.set_stream_hwm(hwm)
+    pub fn set_stream_hwm(&self, hwm: HighWaterMark) -> Result<()> {
+        self.lock_executor()?.set_stream_hwm(hwm)
     }
 
-    pub fn rpc_hwm(&self) -> HighWaterMark {
-        self.executor.rpc_hwm()
+    pub fn rpc_hwm(&self) -> Result<HighWaterMark> {
+        Ok(self.lock_executor()?.rpc_hwm())
     }
 
-    pub fn set_rpc_hwm(&mut self, hwm: HighWaterMark) -> Result<()> {
-        self.executor.set_rpc_hwm(hwm)
+    pub fn set_rpc_hwm(&self, hwm: HighWaterMark) -> Result<()> {
+        self.lock_executor()?.set_rpc_hwm(hwm)
     }
 
-    pub fn action_hwm(&self) -> HighWaterMark {
-        self.executor.action_hwm()
+    pub fn action_hwm(&self) -> Result<HighWaterMark> {
+        Ok(self.lock_executor()?.action_hwm())
     }
 
-    pub fn set_action_hwm(&mut self, hwm: HighWaterMark) -> Result<()> {
-        self.executor.set_action_hwm(hwm)
+    pub fn set_action_hwm(&self, hwm: HighWaterMark) -> Result<()> {
+        self.lock_executor()?.set_action_hwm(hwm)
     }
 
     /// Subscribe with a raw-bytes callback (ROS 2 `create_subscription`).
@@ -223,7 +210,7 @@ impl Node {
         callback: MessageCallback,
     ) -> Result<()> {
         self.ensure_subscriber()?;
-        self.executor.subscribe(topic, callback)
+        self.lock_executor()?.subscribe(topic, callback)
     }
 
     /// Subscribe with a protobuf-typed callback. Decode failures are skipped.
@@ -233,13 +220,15 @@ impl Node {
         F: Fn(&str, M) + Send + Sync + 'static,
     {
         self.ensure_subscriber()?;
-        self.executor.subscribe_typed::<M, F>(topic, callback)
+        self.lock_executor()?
+            .subscribe_typed::<M, F>(topic, callback)
     }
 
     fn ensure_subscriber(&mut self) -> Result<()> {
         if !self.subscriber_connected {
             let endpoint = self.options.message_xpub_endpoint()?;
-            self.executor.connect_subscriber(Some(&endpoint))?;
+            self.lock_executor()?
+                .connect_subscriber(Some(&endpoint))?;
             self.subscriber_connected = true;
         }
         Ok(())
@@ -251,11 +240,11 @@ impl Node {
         period: Duration,
         callback: TimerCallback,
     ) -> Result<TimerHandle> {
-        self.executor.create_timer(period, callback)
+        self.lock_executor()?.create_timer(period, callback)
     }
 
     pub fn cancel_timer(&mut self, handle: TimerHandle) -> Result<()> {
-        self.executor.cancel_timer(handle)
+        self.lock_executor()?.cancel_timer(handle)
     }
 
     /// Register a service worker (ROS 2 `create_service`).
@@ -266,7 +255,7 @@ impl Node {
         identity: Option<&str>,
     ) -> Result<()> {
         let endpoint = self.options.service_backend_endpoint()?;
-        self.executor
+        self.lock_executor()?
             .register_service(service_name, handler, Some(&endpoint), identity)
     }
 
@@ -278,13 +267,14 @@ impl Node {
         identity: Option<&str>,
     ) -> Result<()> {
         let endpoint = self.options.action_backend_endpoint()?;
-        self.executor
+        self.lock_executor()?
             .register_action(action_name, handler, Some(&endpoint), identity)
     }
 
     pub fn connect_action_client(&mut self) -> Result<()> {
         let endpoint = self.options.action_frontend_endpoint()?;
-        self.executor.connect_action_client(Some(&endpoint))
+        self.lock_executor()?
+            .connect_action_client(Some(&endpoint))
     }
 
     pub fn send_goal(
@@ -294,59 +284,53 @@ impl Node {
         callback: ActionMessageCallback,
         goal_id: Option<&str>,
     ) -> Result<String> {
-        self.executor
+        self.lock_executor()?
             .send_goal(action_name, body, callback, goal_id)
     }
 
     pub fn cancel_goal(&self, action_name: &str, goal_id: &str, body: &[u8]) -> Result<()> {
-        self.executor.cancel_goal(action_name, goal_id, body)
+        self.lock_executor()?
+            .cancel_goal(action_name, goal_id, body)
     }
 
-    pub fn shutdown_handle(&self) -> ShutdownHandle {
+    pub fn shutdown_handle(&self) -> Result<ShutdownHandle> {
         self.executor.shutdown_handle()
     }
 
-    pub fn shutdown(&self) {
-        self.executor.shutdown();
+    pub fn shutdown(&self) -> Result<()> {
+        self.executor.shutdown()
     }
 
-    pub fn spin_once(&mut self, timeout: Option<Duration>) -> Result<bool> {
+    /// Convenience: spin the shared executor (same as `executor.spin()`).
+    pub fn spin_once(&self, timeout: Option<Duration>) -> Result<bool> {
         self.executor.spin_once(timeout)
     }
 
-    pub fn spin_some(&mut self, timeout: Option<Duration>) -> Result<()> {
+    pub fn spin_some(&self, timeout: Option<Duration>) -> Result<()> {
         self.executor.spin_some(timeout)
     }
 
-    pub fn spin(&mut self) -> Result<()> {
+    pub fn spin(&self) -> Result<()> {
         self.executor.spin()
     }
 
-    pub fn start(&mut self) -> Result<()> {
+    pub fn start(&self) -> Result<()> {
         self.executor.start()
     }
 
-    pub fn stop(&mut self) {
-        self.executor.stop();
+    pub fn stop(&self) -> Result<()> {
+        self.executor.stop()
     }
 
-    pub fn wait(&mut self) {
-        self.executor.wait();
-    }
-
-    /// Escape hatch to the underlying executor.
-    pub fn executor(&self) -> &Executor {
-        &self.executor
-    }
-
-    pub fn executor_mut(&mut self) -> &mut Executor {
-        &mut self.executor
+    pub fn wait(&self) -> Result<()> {
+        self.executor.wait()
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::runtime::SingleThreadedExecutor;
 
     #[test]
     fn options_override_endpoints() {
@@ -362,7 +346,8 @@ mod tests {
 
     #[test]
     fn name_is_stored() {
-        let node = Node::new("pilot");
+        let executor = SingleThreadedExecutor::new();
+        let node = executor.create_node("pilot");
         assert_eq!(node.name(), "pilot");
     }
 }

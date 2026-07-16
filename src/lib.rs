@@ -34,8 +34,8 @@ pub use broker::{
 pub use errors::{parse_error_body, BusError, Result};
 pub use message_bus::{Publisher, Subscriber};
 pub use runtime::{
-    Executor, MessageCallback, Node, NodeOptions, ServiceHandler, ShutdownHandle, TimerCallback,
-    TimerHandle,
+    Executor, ExecutorHandle, MessageCallback, MultiThreadedExecutor, Node, NodeOptions,
+    ServiceHandler, ShutdownHandle, SingleThreadedExecutor, TimerCallback, TimerHandle,
 };
 pub use service_bus::{ServiceClient, ServiceWorker};
 pub use transports::{

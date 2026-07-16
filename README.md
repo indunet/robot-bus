@@ -1,6 +1,6 @@
 # Robot Bus
 
-轻量级、免环境配置的 ROS 2 风格通信库：基于 ZeroMQ，提供 topic / service / action，以及 `Node` + `spin` 回调模型。
+轻量级、免环境配置的 ROS 2 风格通信库：基于 ZeroMQ，提供 topic / service / action，以及 `Executor` + `Node` + `spin` 回调模型。
 
 不依赖 ROS 发行版、不需要 `source setup.bash`、不搭 workspace。一个 broker 进程 + SDK（Rust / Python）即可。
 
@@ -12,8 +12,9 @@
 |------|------|
 | `broker::` | 路由进程（message / service / action） |
 | 顶层 API | Publisher / Subscriber / Client / Worker |
-| `runtime::Executor` | 回调 executor（`spin` / `spin_once`） |
-| `runtime::Node` | Node 门面（连接配置 + 名字 + `create_*`；topic 用全路径） |
+| `runtime::Executor` | 底层 poll loop（一般用下面两个包装） |
+| `runtime::SingleThreadedExecutor` / `MultiThreadedExecutor` | ROS 2 风格执行器；`create_node` + `spin` |
+| `runtime::Node` | 节点门面（连接配置 + 名字 + `create_*`；topic 用全路径） |
 | `grpc::`（feature） | gRPC / gRPC-Web 网关（Subscribe / Call / Run） |
 | [`proto/`](proto/) | ROS 风格 Protobuf：`proto/<pkg>/{msg\|srv\|grpc}/v1/` → Rust/Python `robot_bus.<pkg>…` |
 
@@ -80,17 +81,18 @@ def on_imu(topic, payload):
     imu.ParseFromString(payload)
     print(topic, imu.linear_acceleration)
 
-node = robot_bus.Node("pilot")
+executor = robot_bus.SingleThreadedExecutor()
+node = executor.create_node("pilot")
 node.create_publisher()
 node.create_subscription("/robot1/imu", on_imu)
 node.publish(
     "/robot1/imu",
     Imu(linear_acceleration=Vector3(x=0.0, y=0.0, z=9.8)).SerializeToString(),
 )
-# node.spin()  # 阻塞直到其它线程调用 node.shutdown()
+# executor.spin()  # 阻塞直到其它线程调用 executor.shutdown()
 ```
 
-### 2. Rust（Node + spin）
+### 2. Rust（Executor + Node + spin）
 
 在 `Cargo.toml` 中添加依赖：
 
@@ -99,7 +101,7 @@ robot-bus = { path = "../robot-bus" }
 # 或 crates.io：robot-bus = "0.0.2"
 ```
 
-语义接近 ROS 2：连接由 `Node` / `NodeOptions` 管理，订阅回调 + `spin`：
+语义接近 ROS 2：先建 Executor，再 `create_node`，订阅回调后 `spin`：
 
 ```rust
 use std::sync::Arc;
@@ -107,9 +109,10 @@ use std::time::Duration;
 use prost::Message;
 use robot_bus::geometry_msgs::msg::v1::Vector3;
 use robot_bus::sensor_msgs::msg::v1::Imu;
-use robot_bus::Node;
+use robot_bus::SingleThreadedExecutor;
 
-let mut node = Node::new("pilot");
+let executor = SingleThreadedExecutor::new();
+let mut node = executor.create_node("pilot");
 node.create_publisher()?;
 node.create_subscription_typed::<Imu, _>("/robot1/imu", |topic, imu| {
     println!("{topic}: {:?}", imu.linear_acceleration);
@@ -125,15 +128,15 @@ node.create_timer(Duration::from_millis(100), Arc::new(|| {
     // 控制周期 / 心跳
 }))?;
 
-let handle = node.shutdown_handle();
+let handle = executor.shutdown_handle()?;
 std::thread::spawn(move || { /* ... */ handle.shutdown(); });
-node.spin()?;
+executor.spin()?;
 ```
 
-- 默认单线程：回调在 I/O / spin 线程执行
-- `Node::with_worker_pool(n)`：service / action handler 最多 `n` 个并发线程；订阅与 timer 仍在 I/O 线程
+- `SingleThreadedExecutor`：回调在 I/O / spin 线程串行（默认）
+- `MultiThreadedExecutor::new(n)`：service / action handler 最多 `n` 个并发线程；订阅与 timer 仍在 I/O 线程
 - Raw bytes：`create_subscription(topic, Arc::new(|topic, payload| { ... }))`
-- 底层 escape hatch：`Executor`（`node.executor()`）
+- 底层 escape hatch：`Executor`（高级用法）
 
 发送 / 接收水位（ZMQ HWM，不是完整 QoS）可在创建时或运行中设置：
 

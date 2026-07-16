@@ -1,9 +1,11 @@
 //! Unified poll loop runtime (ROS 2–style executor / node).
 //!
-//! Register callbacks on [`Executor`] (or the [`Node`] facade), then drive
-//! them with `spin` / `spin_once` / `spin_some`.
+//! Create a [`SingleThreadedExecutor`] or [`MultiThreadedExecutor`], attach
+//! nodes with `create_node`, register callbacks on the [`Node`], then drive
+//! them with `spin` / `spin_once` / `spin_some` on the executor.
 
 mod executor;
+mod executors;
 mod dispatch;
 mod node;
 mod queues;
@@ -12,6 +14,7 @@ mod timers;
 mod worker_pool;
 
 pub use executor::{Executor, ShutdownHandle};
+pub use executors::{ExecutorHandle, MultiThreadedExecutor, SingleThreadedExecutor};
 pub use node::{Node, NodeOptions};
 pub use queues::ActionMessageCallback;
 pub use registrations::{ActionGoalHandler, MessageCallback, ServiceHandler};

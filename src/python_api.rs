@@ -13,7 +13,9 @@ use crate::broker::{RobotBusBroker as RustRobotBusBroker, RobotBusConfig};
 use crate::errors::BusError;
 use crate::message_bus::{Publisher as RustPublisher, Subscriber as RustSubscriber};
 use crate::runtime::{
-    Node as RustNode, ShutdownHandle as RustShutdownHandle, TimerHandle as RustTimerHandle,
+    MultiThreadedExecutor as RustMultiThreadedExecutor, Node as RustNode,
+    ShutdownHandle as RustShutdownHandle, SingleThreadedExecutor as RustSingleThreadedExecutor,
+    TimerHandle as RustTimerHandle,
 };
 use crate::shutdown;
 use crate::transports;
@@ -126,14 +128,20 @@ struct PyTimerHandle {
     inner: RustTimerHandle,
 }
 
-#[pyclass(name = "Node", unsendable)]
-struct PyNode {
-    inner: RustNode,
+#[pyclass(name = "SingleThreadedExecutor", unsendable)]
+struct PySingleThreadedExecutor {
+    inner: RustSingleThreadedExecutor,
 }
 
 #[pymethods]
-impl PyNode {
+impl PySingleThreadedExecutor {
     #[new]
+    fn new() -> Self {
+        Self {
+            inner: RustSingleThreadedExecutor::new(),
+        }
+    }
+
     #[pyo3(signature = (
         name,
         host="localhost",
@@ -141,13 +149,14 @@ impl PyNode {
         message_xsub=None,
         message_xpub=None,
     ))]
-    fn new(
+    fn create_node(
+        &self,
         name: String,
         host: &str,
         transport: &str,
         message_xsub: Option<String>,
         message_xpub: Option<String>,
-    ) -> Self {
+    ) -> PyNode {
         let options = crate::runtime::NodeOptions {
             host: host.into(),
             transport: transport.into(),
@@ -155,11 +164,102 @@ impl PyNode {
             message_xpub,
             ..crate::runtime::NodeOptions::default()
         };
-        Self {
-            inner: RustNode::with_options(name, options),
+        PyNode {
+            inner: self.inner.create_node_with_options(name, options),
         }
     }
 
+    fn shutdown_handle(&self) -> PyResult<PyShutdownHandle> {
+        Ok(PyShutdownHandle {
+            inner: self.inner.shutdown_handle().map_err(bus_err)?,
+        })
+    }
+
+    fn shutdown(&self) -> PyResult<()> {
+        self.inner.shutdown().map_err(bus_err)
+    }
+
+    #[pyo3(signature = (timeout=None))]
+    fn spin_once(&self, timeout: Option<f64>) -> PyResult<bool> {
+        let timeout = timeout.map(Duration::from_secs_f64);
+        self.inner.spin_once(timeout).map_err(bus_err)
+    }
+
+    fn spin(&self) -> PyResult<()> {
+        self.inner.spin().map_err(bus_err)
+    }
+}
+
+#[pyclass(name = "MultiThreadedExecutor", unsendable)]
+struct PyMultiThreadedExecutor {
+    inner: RustMultiThreadedExecutor,
+}
+
+#[pymethods]
+impl PyMultiThreadedExecutor {
+    #[new]
+    #[pyo3(signature = (num_threads=4))]
+    fn new(num_threads: usize) -> Self {
+        Self {
+            inner: RustMultiThreadedExecutor::new(num_threads),
+        }
+    }
+
+    #[pyo3(signature = (
+        name,
+        host="localhost",
+        transport="tcp",
+        message_xsub=None,
+        message_xpub=None,
+    ))]
+    fn create_node(
+        &self,
+        name: String,
+        host: &str,
+        transport: &str,
+        message_xsub: Option<String>,
+        message_xpub: Option<String>,
+    ) -> PyNode {
+        let options = crate::runtime::NodeOptions {
+            host: host.into(),
+            transport: transport.into(),
+            message_xsub,
+            message_xpub,
+            ..crate::runtime::NodeOptions::default()
+        };
+        PyNode {
+            inner: self.inner.create_node_with_options(name, options),
+        }
+    }
+
+    fn shutdown_handle(&self) -> PyResult<PyShutdownHandle> {
+        Ok(PyShutdownHandle {
+            inner: self.inner.shutdown_handle().map_err(bus_err)?,
+        })
+    }
+
+    fn shutdown(&self) -> PyResult<()> {
+        self.inner.shutdown().map_err(bus_err)
+    }
+
+    #[pyo3(signature = (timeout=None))]
+    fn spin_once(&self, timeout: Option<f64>) -> PyResult<bool> {
+        let timeout = timeout.map(Duration::from_secs_f64);
+        self.inner.spin_once(timeout).map_err(bus_err)
+    }
+
+    fn spin(&self) -> PyResult<()> {
+        self.inner.spin().map_err(bus_err)
+    }
+}
+
+#[pyclass(name = "Node", unsendable)]
+struct PyNode {
+    inner: RustNode,
+}
+
+#[pymethods]
+impl PyNode {
     #[getter]
     fn name(&self) -> &str {
         self.inner.name()
@@ -208,25 +308,25 @@ impl PyNode {
         self.inner.cancel_timer(handle.inner).map_err(bus_err)
     }
 
-    fn shutdown_handle(&self) -> PyShutdownHandle {
-        PyShutdownHandle {
-            inner: self.inner.shutdown_handle(),
-        }
+    fn shutdown_handle(&self) -> PyResult<PyShutdownHandle> {
+        Ok(PyShutdownHandle {
+            inner: self.inner.shutdown_handle().map_err(bus_err)?,
+        })
     }
 
-    fn shutdown(&self) {
-        self.inner.shutdown();
+    fn shutdown(&self) -> PyResult<()> {
+        self.inner.shutdown().map_err(bus_err)
     }
 
     /// Poll once. `timeout` is seconds; `None` uses the executor default.
     #[pyo3(signature = (timeout=None))]
-    fn spin_once(&mut self, py: Python<'_>, timeout: Option<f64>) -> PyResult<bool> {
+    fn spin_once(&self, timeout: Option<f64>) -> PyResult<bool> {
         let timeout = timeout.map(Duration::from_secs_f64);
-        py.allow_threads(|| self.inner.spin_once(timeout).map_err(bus_err))
+        self.inner.spin_once(timeout).map_err(bus_err)
     }
 
-    fn spin(&mut self, py: Python<'_>) -> PyResult<()> {
-        py.allow_threads(|| self.inner.spin().map_err(bus_err))
+    fn spin(&self) -> PyResult<()> {
+        self.inner.spin().map_err(bus_err)
     }
 }
 
@@ -368,6 +468,8 @@ fn run_broker(py: Python<'_>) -> PyResult<()> {
 fn _native(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyPublisher>()?;
     m.add_class::<PySubscriber>()?;
+    m.add_class::<PySingleThreadedExecutor>()?;
+    m.add_class::<PyMultiThreadedExecutor>()?;
     m.add_class::<PyNode>()?;
     m.add_class::<PyShutdownHandle>()?;
     m.add_class::<PyTimerHandle>()?;
