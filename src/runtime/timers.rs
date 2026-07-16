@@ -1,11 +1,11 @@
-//! Periodic timers for [`super::BusRuntime`] (ROS 2–style `create_timer`).
+//! Periodic timers for [`super::Executor`] (ROS 2–style `create_timer`).
 
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 pub type TimerCallback = Arc<dyn Fn() + Send + Sync>;
 
-/// Opaque id returned by [`super::BusRuntime::create_timer`].
+/// Opaque id returned by [`super::Executor::create_timer`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct TimerHandle {
     pub(crate) id: u64,

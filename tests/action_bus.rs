@@ -40,7 +40,7 @@ fn action_no_worker() {
     let broker = BrokerProcess::spawn_action();
     let client = ActionClient::new(Some(&broker.frontend_endpoint)).expect("client");
     let err = client
-        .send_goal("act.none", b"x", None, Some(Duration::from_secs(8)))
+        .send_goal("act.none", b"x", None, Some(Duration::from_secs(2)))
         .expect_err("expected error");
     assert!(matches!(err, BusError::NoWorker { .. }));
 }

@@ -1,4 +1,4 @@
-//! Frame parsing and inline callback dispatch for [`super::BusRuntime`].
+//! Frame parsing and inline callback dispatch for [`super::Executor`].
 
 use std::collections::HashMap;
 use std::sync::mpsc::Sender;

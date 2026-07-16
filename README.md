@@ -10,8 +10,8 @@
 |------|------|
 | `broker::` | 路由进程（message / service / action） |
 | 顶层 API | Publisher / Subscriber / Client / Worker |
-| `runtime::BusRuntime` | 回调 executor（`spin` / `spin_once`） |
-| `runtime::Node` | Node 门面（名字 / 命名空间 + `create_*`） |
+| `runtime::Executor` | 回调 executor（`spin` / `spin_once`） |
+| `runtime::Node` | Node 门面（连接配置 + 名字 / 命名空间 + `create_*`） |
 | `grpc::`（feature） | gRPC / gRPC-Web 网关（独立进程，先支持 Subscribe） |
 | [`proto/`](proto/) | ROS 风格 Protobuf：`proto/<pkg>/{msg\|srv\|grpc}/v1/` |
 
@@ -79,8 +79,8 @@ def on_imu(topic, payload):
     print(topic, imu.linear_acceleration)
 
 node = robot_bus.Node("pilot", namespace="robot1")
-node.create_publisher(robot_bus.message_xsub_endpoint())
-node.create_subscription("imu", on_imu, robot_bus.message_xpub_endpoint())
+node.create_publisher()
+node.create_subscription("imu", on_imu)
 node.publish(
     "imu",
     Imu(linear_acceleration=Vector3(x=0.0, y=0.0, z=9.8)).SerializeToString(),
@@ -88,7 +88,7 @@ node.publish(
 # node.spin()  # 阻塞直到其它线程调用 node.shutdown()
 ```
 
-### 2. Rust（回调 / spin）
+### 2. Rust（Node + spin）
 
 在 `Cargo.toml` 中添加依赖：
 
@@ -97,44 +97,41 @@ robot-bus = { path = "../robot-bus" }
 # 或 crates.io：robot-bus = "0.0.2"
 ```
 
-语义接近 ROS 2 的 `spin` / `spin_once` / `spin_some`：
+语义接近 ROS 2：连接由 `Node` / `NodeOptions` 管理，订阅回调 + `spin`：
 
 ```rust
 use std::sync::Arc;
+use std::time::Duration;
 use prost::Message;
 use robot_bus::msgs::geometry_msgs::msg::v1::Vector3;
 use robot_bus::msgs::sensor_msgs::msg::v1::Imu;
-use robot_bus::{
-    BusRuntime, MessageCallback, Publisher, message_xpub_endpoint, message_xsub_endpoint,
-};
+use robot_bus::Node;
 
-let pub_ = Publisher::new(Some(&message_xsub_endpoint("localhost", "tcp")?))?;
-let mut rt = BusRuntime::new();
-rt.connect_subscriber(Some(&message_xpub_endpoint("localhost", "tcp")?))?;
-
-let cb: MessageCallback = Arc::new(|topic, payload| {
-    let imu = Imu::decode(payload).expect("decode Imu");
+let mut node = Node::with_namespace("pilot", "robot1");
+node.create_publisher()?;
+node.create_subscription_typed::<Imu, _>("imu", |topic, imu| {
     println!("{topic}: {:?}", imu.linear_acceleration);
-});
-rt.subscribe("imu", cb)?;
+})?;
 
 let imu = Imu {
     linear_acceleration: Some(Vector3 { x: 0.0, y: 0.0, z: 9.8 }),
     ..Default::default()
 };
-pub_.publish("imu", &imu.encode_to_vec())?;
+node.publish("imu", &imu.encode_to_vec())?;
 
-rt.create_timer(Duration::from_millis(100), Arc::new(|| {
+node.create_timer(Duration::from_millis(100), Arc::new(|| {
     // 控制周期 / 心跳
 }))?;
 
-let handle = rt.shutdown_handle();
+let handle = node.shutdown_handle();
 std::thread::spawn(move || { /* ... */ handle.shutdown(); });
-rt.spin()?;
+node.spin()?;
 ```
 
-- `BusRuntime::new()`：回调在 I/O / spin 线程执行
-- `BusRuntime::with_executor(n)`：service / action handler 最多 `n` 个并发线程；订阅与 timer 仍在 I/O 线程
+- 默认单线程：回调在 I/O / spin 线程执行
+- `Node::with_worker_pool(n)`：service / action handler 最多 `n` 个并发线程；订阅与 timer 仍在 I/O 线程
+- Raw bytes：`create_subscription(topic, Arc::new(|topic, payload| { ... }))`
+- 底层 escape hatch：`Executor`（`node.executor()`）
 
 发送 / 接收水位（ZMQ HWM，不是完整 QoS）可在创建时或运行中设置：
 
@@ -146,26 +143,6 @@ pub_.set_high_water_mark(HighWaterMark { snd: 10, rcv: 10 })?;
 ```
 
 默认：message `STREAM(2/2)`、service `RPC(4/4)`、action `ACTION(8/8)`。Broker 侧用 `--snd-hwm` / `--rcv-hwm`。
-
-### 3. Node 门面
-
-`Node` 包一层 `BusRuntime`，API 接近 ROS 2：`create_subscription` / `create_publisher` / `create_timer` / `create_service`。相对名会加命名空间前缀；以 `/` 开头的绝对名不变。
-
-```rust
-use std::sync::Arc;
-use robot_bus::{Node, message_xpub_endpoint, message_xsub_endpoint};
-
-let mut node = Node::with_namespace("pilot", "robot1");
-node.create_publisher(Some(&message_xsub_endpoint("localhost", "tcp")?))?;
-node.create_subscription(
-    "imu", // → robot1/imu
-    Arc::new(|topic, payload| println!("{topic}: {} bytes", payload.len())),
-    Some(&message_xpub_endpoint("localhost", "tcp")?),
-)?;
-node.create_timer(Duration::from_millis(100), Arc::new(|| { /* ... */ }))?;
-node.publish("cmd_vel", twist_bytes)?; // → robot1/cmd_vel
-node.spin()?;
-```
 
 ## 二进制
 
@@ -202,7 +179,7 @@ cargo test --features grpc
 
 [`proto/`](proto/) 按 ROS 包布局：`proto/<pkg>/{msg|srv|grpc}/v1/*.proto`，经 `build.rs` + prost 生成到 `robot_bus::msgs::<pkg>::{msg|srv}::v1`。
 
-- 传输层 body 仍是 opaque bytes；bus 不解析类型，业务侧自行 `encode` / `decode`
+- 传输层 body 仍是 opaque bytes；bus 不解析类型，业务侧自行 `encode` / `decode`（或用 `create_subscription_typed`）
 - **srv** 是一对 `*Request` / `*Response` message，不是 gRPC
 - **grpc**（`robot_bus`）是网关 RPC 契约，走 feature `grpc` + tonic
 

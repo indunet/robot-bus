@@ -7,7 +7,8 @@ pub use broker::{
 };
 pub use ports::{
     BACKEND_PORT, DEFAULT_BACKEND_BIND, DEFAULT_FRONTEND_BIND, DEFAULT_HEARTBEAT_INTERVAL_MS,
-    DEFAULT_HEARTBEAT_TIMEOUT_MS, DEFAULT_RCV_HWM, DEFAULT_SND_HWM, FRONTEND_PORT,
+    DEFAULT_HEARTBEAT_TIMEOUT_MS, DEFAULT_PENDING_TIMEOUT_MS, DEFAULT_RCV_HWM, DEFAULT_SND_HWM,
+    FRONTEND_PORT,
 };
 
 use anyhow::{Context, Result};
@@ -25,6 +26,12 @@ pub struct ActionBusConfig {
     pub rcv_hwm: i32,
     pub heartbeat_interval_ms: u64,
     pub heartbeat_timeout_ms: u64,
+    /// Give up on a queued goal (no worker appeared) after this many ms.
+    pub pending_timeout_ms: u64,
+    /// When true (default), also bind inproc + ipc aliases via [`bind_all`].
+    /// Tests that spawn many brokers on ephemeral TCP ports should set this
+    /// false so they do not fight over the fixed `/tmp/robot_bus/*.ipc` paths.
+    pub bind_all_transports: bool,
 }
 
 impl Default for ActionBusConfig {
@@ -36,6 +43,8 @@ impl Default for ActionBusConfig {
             rcv_hwm: DEFAULT_RCV_HWM,
             heartbeat_interval_ms: DEFAULT_HEARTBEAT_INTERVAL_MS,
             heartbeat_timeout_ms: DEFAULT_HEARTBEAT_TIMEOUT_MS,
+            pending_timeout_ms: DEFAULT_PENDING_TIMEOUT_MS,
+            bind_all_transports: true,
         }
     }
 }
@@ -53,17 +62,37 @@ pub fn run_with_shutdown(config: ActionBusConfig, shutdown: Arc<AtomicBool>) -> 
     apply_low_latency_options(&frontend, config.snd_hwm, config.rcv_hwm)?;
     apply_low_latency_options(&backend, config.snd_hwm, config.rcv_hwm)?;
 
-    let frontend_endpoints = bind_all(&frontend, &config.frontend_bind, ports::FRONTEND_CHANNEL)?;
-    let backend_endpoints = bind_all(&backend, &config.backend_bind, ports::BACKEND_CHANNEL)?;
+    let (frontend_endpoints, backend_endpoints) = if config.bind_all_transports {
+        (
+            bind_all(&frontend, &config.frontend_bind, ports::FRONTEND_CHANNEL)?,
+            bind_all(&backend, &config.backend_bind, ports::BACKEND_CHANNEL)?,
+        )
+    } else {
+        frontend
+            .bind(&config.frontend_bind)
+            .with_context(|| format!("bind frontend {}", config.frontend_bind))?;
+        backend
+            .bind(&config.backend_bind)
+            .with_context(|| format!("bind backend {}", config.backend_bind))?;
+        (
+            vec![config.frontend_bind.clone()],
+            vec![config.backend_bind.clone()],
+        )
+    };
 
     println!(
         "action_bus_broker broker started\n  \
          clients (DEALER) connect ->\n    {}\n  \
          workers (DEALER) connect ->\n    {}\n  \
-         transports: tcp + inproc + ipc per socket\n  \
+         transports: {}\n  \
          routing: by action_name frame, goal_id tracked, body opaque",
         format_endpoints(&frontend_endpoints),
         format_endpoints(&backend_endpoints),
+        if config.bind_all_transports {
+            "tcp + inproc + ipc per socket"
+        } else {
+            "tcp only"
+        },
     );
 
     broker::run_loop(&frontend, &backend, &config, &shutdown).context("broker loop")?;

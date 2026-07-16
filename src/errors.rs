@@ -20,7 +20,7 @@ pub enum BusError {
     #[error("{0}")]
     Protocol(String),
 
-    #[error("BusRuntime is closed")]
+    #[error("Executor is closed")]
     Closed,
 
     #[error("zmq error: {0}")]

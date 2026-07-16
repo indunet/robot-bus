@@ -1,4 +1,4 @@
-//! BusRuntime / Node callback executor (subscribe + spin_once / spin / shutdown).
+//! Executor / Node callback executor (subscribe + spin_once / spin / shutdown).
 
 mod support;
 
@@ -7,8 +7,11 @@ use std::sync::Arc;
 use std::thread;
 use std::time::Duration;
 
+use prost::Message;
 use robot_bus::message_bus::Publisher;
-use robot_bus::{BusRuntime, HighWaterMark, MessageCallback, Node};
+use robot_bus::msgs::geometry_msgs::msg::v1::Vector3;
+use robot_bus::msgs::sensor_msgs::msg::v1::Imu;
+use robot_bus::{Executor, HighWaterMark, MessageCallback, Node, NodeOptions};
 use support::MessageProxy;
 
 #[test]
@@ -25,11 +28,11 @@ fn subscribe_callback_via_spin_once() {
         hits_cb.fetch_add(1, Ordering::SeqCst);
     });
 
-    let mut runtime = BusRuntime::new();
-    runtime
+    let mut executor = Executor::new();
+    executor
         .connect_subscriber(Some(&proxy.xpub_endpoint))
         .expect("connect subscriber");
-    runtime
+    executor
         .subscribe("demo.topic", callback)
         .expect("subscribe");
     thread::sleep(Duration::from_millis(150));
@@ -42,7 +45,7 @@ fn subscribe_callback_via_spin_once() {
             deadline > std::time::Instant::now(),
             "timed out waiting for callback"
         );
-        runtime
+        executor
             .spin_once(Some(Duration::from_millis(100)))
             .expect("spin_once");
     }
@@ -52,24 +55,21 @@ fn subscribe_callback_via_spin_once() {
 #[test]
 fn spin_stops_on_shutdown() {
     let proxy = MessageProxy::spawn();
-    let mut runtime = BusRuntime::new();
-    runtime
+    let mut executor = Executor::new();
+    executor
         .connect_subscriber(Some(&proxy.xpub_endpoint))
         .expect("connect subscriber");
-    runtime
-        .subscribe(
-            "unused",
-            Arc::new(|_topic, _payload| {}),
-        )
+    executor
+        .subscribe("unused", Arc::new(|_topic, _payload| {}))
         .expect("subscribe");
 
-    let handle = runtime.shutdown_handle();
+    let handle = executor.shutdown_handle();
     let joiner = thread::spawn(move || {
         thread::sleep(Duration::from_millis(200));
         handle.shutdown();
     });
 
-    runtime.spin().expect("spin");
+    executor.spin().expect("spin");
     joiner.join().expect("joiner");
 }
 
@@ -82,11 +82,11 @@ fn spin_some_processes_pending_then_returns() {
     let hits = Arc::new(AtomicUsize::new(0));
     let hits_cb = hits.clone();
 
-    let mut runtime = BusRuntime::new();
-    runtime
+    let mut executor = Executor::new();
+    executor
         .connect_subscriber(Some(&proxy.xpub_endpoint))
         .expect("connect subscriber");
-    runtime
+    executor
         .subscribe(
             "demo.topic",
             Arc::new(move |_topic, _payload| {
@@ -99,7 +99,7 @@ fn spin_some_processes_pending_then_returns() {
     pub_.publish("demo.topic", b"a").expect("publish");
     pub_.publish("demo.topic", b"b").expect("publish");
 
-    runtime
+    executor
         .spin_some(Some(Duration::from_secs(2)))
         .expect("spin_some");
     assert!(hits.load(Ordering::SeqCst) >= 1);
@@ -110,8 +110,8 @@ fn timer_fires_via_spin_once() {
     let hits = Arc::new(AtomicUsize::new(0));
     let hits_cb = hits.clone();
 
-    let mut runtime = BusRuntime::new();
-    runtime
+    let mut executor = Executor::new();
+    executor
         .create_timer(
             Duration::from_millis(40),
             Arc::new(move || {
@@ -126,7 +126,7 @@ fn timer_fires_via_spin_once() {
             deadline > std::time::Instant::now(),
             "timed out waiting for timer"
         );
-        runtime
+        executor
             .spin_once(Some(Duration::from_millis(100)))
             .expect("spin_once");
     }
@@ -138,8 +138,8 @@ fn cancel_timer_stops_firing() {
     let hits = Arc::new(AtomicUsize::new(0));
     let hits_cb = hits.clone();
 
-    let mut runtime = BusRuntime::new();
-    let handle = runtime
+    let mut executor = Executor::new();
+    let handle = executor
         .create_timer(
             Duration::from_millis(30),
             Arc::new(move || {
@@ -148,13 +148,13 @@ fn cancel_timer_stops_firing() {
         )
         .expect("create_timer");
     // Keep one active timer so the executor still has work to wait on.
-    runtime
+    executor
         .create_timer(Duration::from_secs(60), Arc::new(|| {}))
         .expect("keepalive timer");
-    runtime.cancel_timer(handle).expect("cancel");
+    executor.cancel_timer(handle).expect("cancel");
 
     for _ in 0..5 {
-        runtime
+        executor
             .spin_once(Some(Duration::from_millis(50)))
             .expect("spin_once");
     }
@@ -173,14 +173,23 @@ fn publisher_subscriber_hwm_roundtrip() {
     pub_.set_high_water_mark(bumped).expect("set");
     assert_eq!(pub_.high_water_mark().expect("get"), bumped);
 
-    let mut runtime = BusRuntime::new();
-    runtime
+    let mut executor = Executor::new();
+    executor
         .set_stream_hwm(HighWaterMark::new(20, 20))
         .expect("set_stream_hwm");
-    runtime
+    executor
         .connect_subscriber(Some(&proxy.xpub_endpoint))
         .expect("connect");
-    assert_eq!(runtime.stream_hwm(), HighWaterMark::new(20, 20));
+    assert_eq!(executor.stream_hwm(), HighWaterMark::new(20, 20));
+}
+
+fn node_with_proxy(name: &str, namespace: &str, proxy: &MessageProxy) -> Node {
+    let options = NodeOptions {
+        message_xsub: Some(proxy.xsub_endpoint.clone()),
+        message_xpub: Some(proxy.xpub_endpoint.clone()),
+        ..NodeOptions::default()
+    };
+    Node::with_options(name, namespace, options)
 }
 
 #[test]
@@ -197,8 +206,8 @@ fn node_subscription_applies_namespace() {
         hits_cb.fetch_add(1, Ordering::SeqCst);
     });
 
-    let mut node = Node::with_namespace("pilot", "robot1");
-    node.create_subscription("imu", callback, Some(&proxy.xpub_endpoint))
+    let mut node = node_with_proxy("pilot", "robot1", &proxy);
+    node.create_subscription("imu", callback)
         .expect("create_subscription");
     thread::sleep(Duration::from_millis(150));
 
@@ -224,7 +233,7 @@ fn node_publish_applies_namespace() {
     let hits = Arc::new(AtomicUsize::new(0));
     let hits_cb = hits.clone();
 
-    let mut sub_node = Node::new("listener");
+    let mut sub_node = node_with_proxy("listener", "", &proxy);
     sub_node
         .create_subscription(
             "robot1/cmd_vel",
@@ -233,15 +242,12 @@ fn node_publish_applies_namespace() {
                 assert_eq!(payload, b"go");
                 hits_cb.fetch_add(1, Ordering::SeqCst);
             }),
-            Some(&proxy.xpub_endpoint),
         )
         .expect("create_subscription");
     thread::sleep(Duration::from_millis(150));
 
-    let mut pub_node = Node::with_namespace("pilot", "robot1");
-    pub_node
-        .create_publisher(Some(&proxy.xsub_endpoint))
-        .expect("create_publisher");
+    let mut pub_node = node_with_proxy("pilot", "robot1", &proxy);
+    pub_node.create_publisher().expect("create_publisher");
     pub_node.publish("cmd_vel", b"go").expect("publish");
 
     let deadline = std::time::Instant::now() + Duration::from_secs(2);
@@ -281,4 +287,55 @@ fn node_timer_via_spin_once() {
             .expect("spin_once");
     }
     assert!(hits.load(Ordering::SeqCst) >= 1);
+}
+
+#[test]
+fn node_subscription_typed_imu() {
+    let proxy = MessageProxy::spawn();
+    let pub_ = Publisher::new(Some(&proxy.xsub_endpoint)).expect("publisher");
+    thread::sleep(Duration::from_millis(50));
+
+    let hits = Arc::new(AtomicUsize::new(0));
+    let hits_cb = hits.clone();
+
+    let mut node = node_with_proxy("imu_node", "", &proxy);
+    node.create_subscription_typed::<Imu, _>("imu", move |topic, imu| {
+        assert_eq!(topic, "imu");
+        // Only count the intentionally valid sample (bad frames are skipped or default).
+        if imu.linear_acceleration.as_ref().map(|v| v.z) == Some(9.8) {
+            hits_cb.fetch_add(1, Ordering::SeqCst);
+        }
+    })
+    .expect("create_subscription_typed");
+    thread::sleep(Duration::from_millis(150));
+
+    let imu = Imu {
+        linear_acceleration: Some(Vector3 {
+            x: 0.0,
+            y: 0.0,
+            z: 9.8,
+        }),
+        ..Default::default()
+    };
+    pub_.publish("imu", &imu.encode_to_vec()).expect("publish");
+    // Truncated/invalid protobuf varint — decode should fail and be skipped.
+    pub_
+        .publish("imu", &[0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x01])
+        .expect("publish bad");
+
+    let deadline = std::time::Instant::now() + Duration::from_secs(2);
+    while hits.load(Ordering::SeqCst) == 0 {
+        assert!(
+            deadline > std::time::Instant::now(),
+            "timed out waiting for typed callback"
+        );
+        node.spin_once(Some(Duration::from_millis(100)))
+            .expect("spin_once");
+    }
+    // Drain a bit more so a bad decode would have a chance to mis-count.
+    for _ in 0..3 {
+        node.spin_once(Some(Duration::from_millis(50)))
+            .expect("spin_once");
+    }
+    assert_eq!(hits.load(Ordering::SeqCst), 1);
 }

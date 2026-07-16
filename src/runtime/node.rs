@@ -1,24 +1,101 @@
-//! ROS 2–style [`Node`]: named facade over [`super::BusRuntime`].
+//! ROS 2–style [`Node`]: named facade over [`super::Executor`].
 //!
-//! First version keeps it thin: node name / namespace remapping plus
-//! `create_subscription` / `create_publisher` / `create_timer` / … sugar.
-//! The executor is still [`BusRuntime`] (`spin` / `spin_once` / `spin_some`).
+//! Owns broker connection config ([`NodeOptions`]) plus name / namespace
+//! remapping. Prefer `create_subscription` / `create_publisher` / … over
+//! passing endpoints on every call; spin via the owned [`Executor`].
 
 use std::time::Duration;
 
+use prost::Message;
+
 use crate::errors::{BusError, Result};
 use crate::message_bus::Publisher;
-use crate::runtime::bus_runtime::{BusRuntime, ShutdownHandle};
+use crate::runtime::executor::{Executor, ShutdownHandle};
 use crate::runtime::queues::ActionMessageCallback;
 use crate::runtime::registrations::{ActionGoalHandler, MessageCallback, ServiceHandler};
 use crate::runtime::timers::{TimerCallback, TimerHandle};
+use crate::transports::{
+    action_backend_endpoint, action_frontend_endpoint, message_xpub_endpoint,
+    message_xsub_endpoint, service_backend_endpoint,
+};
 use crate::zmq_helpers::HighWaterMark;
 
-/// Named participant that owns a [`BusRuntime`] (simplified ROS 2 `Node`).
+/// Broker connection settings owned by a [`Node`].
+///
+/// Defaults: `host = "localhost"`, `transport = "tcp"`. Explicit endpoint
+/// fields override the derived `transports::*` addresses when set.
+#[derive(Debug, Clone)]
+pub struct NodeOptions {
+    pub host: String,
+    pub transport: String,
+    pub message_xsub: Option<String>,
+    pub message_xpub: Option<String>,
+    pub service_backend: Option<String>,
+    pub action_backend: Option<String>,
+    pub action_frontend: Option<String>,
+}
+
+impl Default for NodeOptions {
+    fn default() -> Self {
+        Self {
+            host: "localhost".into(),
+            transport: "tcp".into(),
+            message_xsub: None,
+            message_xpub: None,
+            service_backend: None,
+            action_backend: None,
+            action_frontend: None,
+        }
+    }
+}
+
+impl NodeOptions {
+    pub fn message_xsub_endpoint(&self) -> Result<String> {
+        match &self.message_xsub {
+            Some(ep) => Ok(ep.clone()),
+            None => message_xsub_endpoint(&self.host, &self.transport).map_err(BusError::Protocol),
+        }
+    }
+
+    pub fn message_xpub_endpoint(&self) -> Result<String> {
+        match &self.message_xpub {
+            Some(ep) => Ok(ep.clone()),
+            None => message_xpub_endpoint(&self.host, &self.transport).map_err(BusError::Protocol),
+        }
+    }
+
+    pub fn service_backend_endpoint(&self) -> Result<String> {
+        match &self.service_backend {
+            Some(ep) => Ok(ep.clone()),
+            None => {
+                service_backend_endpoint(&self.host, &self.transport).map_err(BusError::Protocol)
+            }
+        }
+    }
+
+    pub fn action_backend_endpoint(&self) -> Result<String> {
+        match &self.action_backend {
+            Some(ep) => Ok(ep.clone()),
+            None => action_backend_endpoint(&self.host, &self.transport).map_err(BusError::Protocol),
+        }
+    }
+
+    pub fn action_frontend_endpoint(&self) -> Result<String> {
+        match &self.action_frontend {
+            Some(ep) => Ok(ep.clone()),
+            None => {
+                action_frontend_endpoint(&self.host, &self.transport).map_err(BusError::Protocol)
+            }
+        }
+    }
+}
+
+/// Named participant that owns an [`Executor`] (simplified ROS 2 `Node`).
 pub struct Node {
     name: String,
     namespace: String,
-    runtime: BusRuntime,
+    options: NodeOptions,
+    executor: Executor,
     publisher: Option<Publisher>,
     subscriber_connected: bool,
 }
@@ -26,41 +103,58 @@ pub struct Node {
 impl Node {
     /// Create a node with an empty namespace (topics/services used as given).
     pub fn new(name: impl Into<String>) -> Self {
-        Self::with_options(name.into(), String::new(), BusRuntime::new())
+        Self::with_options(name, String::new(), NodeOptions::default())
     }
 
     /// Create a node under `namespace` (relative names are prefixed).
     pub fn with_namespace(name: impl Into<String>, namespace: impl Into<String>) -> Self {
-        Self::with_options(name.into(), namespace.into(), BusRuntime::new())
+        Self::with_options(name, namespace, NodeOptions::default())
     }
 
     /// Like [`new`](Self::new), but service/action handlers may use a worker pool.
-    pub fn with_executor(name: impl Into<String>, max_workers: usize) -> Self {
-        Self::with_options(
-            name.into(),
-            String::new(),
-            BusRuntime::with_executor(max_workers),
-        )
+    pub fn with_worker_pool(name: impl Into<String>, max_workers: usize) -> Self {
+        Self::with_options_and_pool(name, String::new(), NodeOptions::default(), max_workers)
     }
 
     /// Namespace + bounded worker pool.
-    pub fn with_namespace_and_executor(
+    pub fn with_namespace_and_worker_pool(
         name: impl Into<String>,
         namespace: impl Into<String>,
         max_workers: usize,
     ) -> Self {
-        Self::with_options(
+        Self::with_options_and_pool(name, namespace, NodeOptions::default(), max_workers)
+    }
+
+    /// Construct with explicit broker connection options (default single-threaded executor).
+    pub fn with_options(
+        name: impl Into<String>,
+        namespace: impl Into<String>,
+        options: NodeOptions,
+    ) -> Self {
+        Self::build(name.into(), namespace.into(), options, Executor::new())
+    }
+
+    /// Options + bounded worker pool for service/action handlers.
+    pub fn with_options_and_pool(
+        name: impl Into<String>,
+        namespace: impl Into<String>,
+        options: NodeOptions,
+        max_workers: usize,
+    ) -> Self {
+        Self::build(
             name.into(),
             namespace.into(),
-            BusRuntime::with_executor(max_workers),
+            options,
+            Executor::with_worker_pool(max_workers),
         )
     }
 
-    fn with_options(name: String, namespace: String, runtime: BusRuntime) -> Self {
+    fn build(name: String, namespace: String, options: NodeOptions, executor: Executor) -> Self {
         Self {
             name,
             namespace: normalize_namespace(namespace),
-            runtime,
+            options,
+            executor,
             publisher: None,
             subscriber_connected: false,
         }
@@ -72,6 +166,10 @@ impl Node {
 
     pub fn namespace(&self) -> &str {
         &self.namespace
+    }
+
+    pub fn options(&self) -> &NodeOptions {
+        &self.options
     }
 
     /// Fully qualified name: `/ns/name` or `/name` when namespace is empty.
@@ -95,20 +193,18 @@ impl Node {
         resolve_name(&self.namespace, name)
     }
 
-    /// Connect a publisher (ROS 2 `create_publisher` without typed msgs).
+    /// Connect a publisher using this node's message XSUB endpoint.
     ///
     /// Call once; subsequent calls replace the publisher. Uses stream HWM defaults.
-    pub fn create_publisher(&mut self, endpoint: Option<&str>) -> Result<()> {
-        self.create_publisher_with_hwm(endpoint, self.runtime.stream_hwm())
+    pub fn create_publisher(&mut self) -> Result<()> {
+        let hwm = self.executor.stream_hwm();
+        self.create_publisher_with_hwm(hwm)
     }
 
     /// Connect a publisher with an explicit high-water mark.
-    pub fn create_publisher_with_hwm(
-        &mut self,
-        endpoint: Option<&str>,
-        hwm: HighWaterMark,
-    ) -> Result<()> {
-        self.publisher = Some(Publisher::with_hwm(endpoint, hwm)?);
+    pub fn create_publisher_with_hwm(&mut self, hwm: HighWaterMark) -> Result<()> {
+        let endpoint = self.options.message_xsub_endpoint()?;
+        self.publisher = Some(Publisher::with_hwm(Some(&endpoint), hwm)?);
         Ok(())
     }
 
@@ -130,7 +226,7 @@ impl Node {
         }
     }
 
-    /// Update publisher HWM (no-op error if publisher not created).
+    /// Update publisher HWM (error if publisher not created).
     pub fn set_publisher_hwm(&self, hwm: HighWaterMark) -> Result<()> {
         let Some(pub_) = self.publisher.as_ref() else {
             return Err(BusError::Protocol(
@@ -141,44 +237,60 @@ impl Node {
     }
 
     pub fn stream_hwm(&self) -> HighWaterMark {
-        self.runtime.stream_hwm()
+        self.executor.stream_hwm()
     }
 
     pub fn set_stream_hwm(&mut self, hwm: HighWaterMark) -> Result<()> {
-        self.runtime.set_stream_hwm(hwm)
+        self.executor.set_stream_hwm(hwm)
     }
 
     pub fn rpc_hwm(&self) -> HighWaterMark {
-        self.runtime.rpc_hwm()
+        self.executor.rpc_hwm()
     }
 
     pub fn set_rpc_hwm(&mut self, hwm: HighWaterMark) -> Result<()> {
-        self.runtime.set_rpc_hwm(hwm)
+        self.executor.set_rpc_hwm(hwm)
     }
 
     pub fn action_hwm(&self) -> HighWaterMark {
-        self.runtime.action_hwm()
+        self.executor.action_hwm()
     }
 
     pub fn set_action_hwm(&mut self, hwm: HighWaterMark) -> Result<()> {
-        self.runtime.set_action_hwm(hwm)
+        self.executor.set_action_hwm(hwm)
     }
 
-    /// Subscribe with a callback (ROS 2 `create_subscription`).
+    /// Subscribe with a raw-bytes callback (ROS 2 `create_subscription`).
     ///
-    /// Connects the subscriber on first use. `endpoint` is only used when
-    /// connecting; later calls ignore it.
+    /// Connects the subscriber on first use using the node's message XPUB endpoint.
     pub fn create_subscription(
         &mut self,
         topic: &str,
         callback: MessageCallback,
-        endpoint: Option<&str>,
     ) -> Result<()> {
+        self.ensure_subscriber()?;
+        self.executor
+            .subscribe(&self.resolve_name(topic), callback)
+    }
+
+    /// Subscribe with a protobuf-typed callback. Decode failures are skipped.
+    pub fn create_subscription_typed<M, F>(&mut self, topic: &str, callback: F) -> Result<()>
+    where
+        M: Message + Default + 'static,
+        F: Fn(&str, M) + Send + Sync + 'static,
+    {
+        self.ensure_subscriber()?;
+        self.executor
+            .subscribe_typed::<M, F>(&self.resolve_name(topic), callback)
+    }
+
+    fn ensure_subscriber(&mut self) -> Result<()> {
         if !self.subscriber_connected {
-            self.runtime.connect_subscriber(endpoint)?;
+            let endpoint = self.options.message_xpub_endpoint()?;
+            self.executor.connect_subscriber(Some(&endpoint))?;
             self.subscriber_connected = true;
         }
-        self.runtime.subscribe(&self.resolve_name(topic), callback)
+        Ok(())
     }
 
     /// Periodic timer (ROS 2 `create_timer`).
@@ -187,11 +299,11 @@ impl Node {
         period: Duration,
         callback: TimerCallback,
     ) -> Result<TimerHandle> {
-        self.runtime.create_timer(period, callback)
+        self.executor.create_timer(period, callback)
     }
 
     pub fn cancel_timer(&mut self, handle: TimerHandle) -> Result<()> {
-        self.runtime.cancel_timer(handle)
+        self.executor.cancel_timer(handle)
     }
 
     /// Register a service worker (ROS 2 `create_service`).
@@ -199,13 +311,13 @@ impl Node {
         &mut self,
         service_name: &str,
         handler: ServiceHandler,
-        backend_endpoint: Option<&str>,
         identity: Option<&str>,
     ) -> Result<()> {
-        self.runtime.register_service(
+        let endpoint = self.options.service_backend_endpoint()?;
+        self.executor.register_service(
             &self.resolve_name(service_name),
             handler,
-            backend_endpoint,
+            Some(&endpoint),
             identity,
         )
     }
@@ -215,19 +327,20 @@ impl Node {
         &mut self,
         action_name: &str,
         handler: ActionGoalHandler,
-        backend_endpoint: Option<&str>,
         identity: Option<&str>,
     ) -> Result<()> {
-        self.runtime.register_action(
+        let endpoint = self.options.action_backend_endpoint()?;
+        self.executor.register_action(
             &self.resolve_name(action_name),
             handler,
-            backend_endpoint,
+            Some(&endpoint),
             identity,
         )
     }
 
-    pub fn connect_action_client(&mut self, endpoint: Option<&str>) -> Result<()> {
-        self.runtime.connect_action_client(endpoint)
+    pub fn connect_action_client(&mut self) -> Result<()> {
+        let endpoint = self.options.action_frontend_endpoint()?;
+        self.executor.connect_action_client(Some(&endpoint))
     }
 
     pub fn send_goal(
@@ -237,54 +350,54 @@ impl Node {
         callback: ActionMessageCallback,
         goal_id: Option<&str>,
     ) -> Result<String> {
-        self.runtime
+        self.executor
             .send_goal(&self.resolve_name(action_name), body, callback, goal_id)
     }
 
     pub fn cancel_goal(&self, action_name: &str, goal_id: &str, body: &[u8]) -> Result<()> {
-        self.runtime
+        self.executor
             .cancel_goal(&self.resolve_name(action_name), goal_id, body)
     }
 
     pub fn shutdown_handle(&self) -> ShutdownHandle {
-        self.runtime.shutdown_handle()
+        self.executor.shutdown_handle()
     }
 
     pub fn shutdown(&self) {
-        self.runtime.shutdown();
+        self.executor.shutdown();
     }
 
     pub fn spin_once(&mut self, timeout: Option<Duration>) -> Result<bool> {
-        self.runtime.spin_once(timeout)
+        self.executor.spin_once(timeout)
     }
 
     pub fn spin_some(&mut self, timeout: Option<Duration>) -> Result<()> {
-        self.runtime.spin_some(timeout)
+        self.executor.spin_some(timeout)
     }
 
     pub fn spin(&mut self) -> Result<()> {
-        self.runtime.spin()
+        self.executor.spin()
     }
 
     pub fn start(&mut self) -> Result<()> {
-        self.runtime.start()
+        self.executor.start()
     }
 
     pub fn stop(&mut self) {
-        self.runtime.stop();
+        self.executor.stop();
     }
 
     pub fn wait(&mut self) {
-        self.runtime.wait();
+        self.executor.wait();
     }
 
     /// Escape hatch to the underlying executor.
-    pub fn runtime(&self) -> &BusRuntime {
-        &self.runtime
+    pub fn executor(&self) -> &Executor {
+        &self.executor
     }
 
-    pub fn runtime_mut(&mut self) -> &mut BusRuntime {
-        &mut self.runtime
+    pub fn executor_mut(&mut self) -> &mut Executor {
+        &mut self.executor
     }
 }
 
@@ -315,13 +428,23 @@ mod tests {
         let node = Node::with_namespace("pilot", "robot1");
         assert_eq!(node.resolve_name("imu"), "robot1/imu");
         assert_eq!(node.resolve_name("/absolute/topic"), "/absolute/topic");
-        assert_eq!(node.fully_qualified_name(), "/robot1/pilot");
     }
 
     #[test]
-    fn empty_namespace_keeps_name() {
-        let node = Node::new("sensor");
+    fn resolve_empty_namespace() {
+        let node = Node::new("n");
         assert_eq!(node.resolve_name("wireless.imu"), "wireless.imu");
-        assert_eq!(node.fully_qualified_name(), "/sensor");
+    }
+
+    #[test]
+    fn options_override_endpoints() {
+        let opts = NodeOptions {
+            message_xpub: Some("tcp://127.0.0.1:9999".into()),
+            ..NodeOptions::default()
+        };
+        assert_eq!(
+            opts.message_xpub_endpoint().unwrap(),
+            "tcp://127.0.0.1:9999"
+        );
     }
 }

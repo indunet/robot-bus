@@ -1,4 +1,4 @@
-//! Registration types for sockets managed by [`super::BusRuntime`].
+//! Registration types for sockets managed by [`super::Executor`].
 
 use std::sync::Arc;
 use std::time::{Duration, Instant};

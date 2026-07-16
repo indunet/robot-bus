@@ -134,15 +134,32 @@ struct PyNode {
 #[pymethods]
 impl PyNode {
     #[new]
-    #[pyo3(signature = (name, namespace=None))]
-    fn new(name: String, namespace: Option<String>) -> Self {
-        match namespace {
-            Some(ns) => Self {
-                inner: RustNode::with_namespace(name, ns),
-            },
-            None => Self {
-                inner: RustNode::new(name),
-            },
+    #[pyo3(signature = (
+        name,
+        namespace=None,
+        host="localhost",
+        transport="tcp",
+        message_xsub=None,
+        message_xpub=None,
+    ))]
+    fn new(
+        name: String,
+        namespace: Option<String>,
+        host: &str,
+        transport: &str,
+        message_xsub: Option<String>,
+        message_xpub: Option<String>,
+    ) -> Self {
+        let options = crate::runtime::NodeOptions {
+            host: host.into(),
+            transport: transport.into(),
+            message_xsub,
+            message_xpub,
+            ..crate::runtime::NodeOptions::default()
+        };
+        let ns = namespace.unwrap_or_default();
+        Self {
+            inner: RustNode::with_options(name, ns, options),
         }
     }
 
@@ -164,9 +181,8 @@ impl PyNode {
         self.inner.resolve_name(name)
     }
 
-    #[pyo3(signature = (endpoint=None))]
-    fn create_publisher(&mut self, endpoint: Option<&str>) -> PyResult<()> {
-        self.inner.create_publisher(endpoint).map_err(bus_err)
+    fn create_publisher(&mut self) -> PyResult<()> {
+        self.inner.create_publisher().map_err(bus_err)
     }
 
     fn publish(&self, topic: &str, payload: &[u8]) -> PyResult<()> {
@@ -174,13 +190,7 @@ impl PyNode {
     }
 
     /// Register a subscription callback `callback(topic: str, payload: bytes)`.
-    #[pyo3(signature = (topic, callback, endpoint=None))]
-    fn create_subscription(
-        &mut self,
-        topic: &str,
-        callback: Py<PyAny>,
-        endpoint: Option<&str>,
-    ) -> PyResult<()> {
+    fn create_subscription(&mut self, topic: &str, callback: Py<PyAny>) -> PyResult<()> {
         let cb: crate::runtime::MessageCallback = Arc::new(move |topic, payload| {
             Python::with_gil(|py| {
                 let payload = PyBytes::new(py, payload);
@@ -190,7 +200,7 @@ impl PyNode {
             });
         });
         self.inner
-            .create_subscription(topic, cb, endpoint)
+            .create_subscription(topic, cb)
             .map_err(bus_err)
     }
 
@@ -224,7 +234,7 @@ impl PyNode {
         self.inner.shutdown();
     }
 
-    /// Poll once. `timeout` is seconds; `None` uses the runtime default.
+    /// Poll once. `timeout` is seconds; `None` uses the executor default.
     #[pyo3(signature = (timeout=None))]
     fn spin_once(&mut self, py: Python<'_>, timeout: Option<f64>) -> PyResult<bool> {
         let timeout = timeout.map(Duration::from_secs_f64);

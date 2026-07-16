@@ -249,11 +249,12 @@ fn route_by_action_name() {
 fn no_worker_returns_error_result() {
     let mut cfg = default_test_config();
     cfg.heartbeat_interval_ms = 50;
+    cfg.pending_timeout_ms = 200;
     let broker = spawn_broker(cfg);
     let client = make_client(&broker.frontend_ep);
 
     // No worker registered. The broker queues the goal; the pending timeout
-    // (5s) fires and returns NO_WORKER as a RESULT.
+    // fires and returns NO_WORKER as a RESULT.
     client
         .send_multipart(
             [
@@ -265,7 +266,7 @@ fn no_worker_returns_error_result() {
             0,
         )
         .expect("send");
-    client.set_rcvtimeo(8000).expect("rcvtimeo");
+    client.set_rcvtimeo(3000).expect("rcvtimeo");
     let reply = client.recv_multipart(0).expect("recv");
     assert_eq!(reply.len(), 4);
     assert_eq!(reply[0], b"act.none");

@@ -126,9 +126,12 @@ impl BrokerProcess {
                 "--backend-bind",
                 &backend,
                 "--heartbeat-interval-ms",
-                "200",
+                "100",
                 "--heartbeat-timeout-ms",
                 "600",
+                "--pending-timeout-ms",
+                "200",
+                "--tcp-only",
             ])
             .current_dir(repo_root())
             .stdout(Stdio::null())

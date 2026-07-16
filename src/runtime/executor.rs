@@ -2,12 +2,12 @@
 //!
 //! Mirrors a simplified ROS 2 executor:
 //! - register callbacks (`subscribe` / `register_service` / …)
-//! - drive them with [`BusRuntime::spin`], [`BusRuntime::spin_once`], or
-//!   [`BusRuntime::spin_some`]
-//! - stop with [`BusRuntime::shutdown`] (from any thread)
+//! - drive them with [`Executor::spin`], [`Executor::spin_once`], or
+//!   [`Executor::spin_some`]
+//! - stop with [`Executor::shutdown`] (from any thread)
 //!
 //! Default mode is single-threaded: callbacks run on the spin/I/O thread.
-//! [`BusRuntime::with_executor`] offloads long service/action handlers to a
+//! [`Executor::with_worker_pool`] offloads long service/action handlers to a
 //! bounded worker pool (subscription callbacks stay on the I/O thread).
 
 use std::collections::HashMap;
@@ -17,6 +17,7 @@ use std::sync::Arc;
 use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant};
 
+use prost::Message;
 use uuid::Uuid;
 use zmq::{Context, SocketType};
 
@@ -44,7 +45,7 @@ use crate::zmq_helpers::{
 const DEFAULT_POLL_TIMEOUT_MS: i64 = 250;
 const DEFAULT_HEARTBEAT_INTERVAL_MS: u64 = 2500;
 
-/// Token that can interrupt [`BusRuntime::spin`] / background [`BusRuntime::start`]
+/// Token that can interrupt [`Executor::spin`] / background [`Executor::start`]
 /// from another thread (ROS 2–style cancel).
 #[derive(Clone)]
 pub struct ShutdownHandle {
@@ -61,7 +62,7 @@ impl ShutdownHandle {
     }
 }
 
-pub struct BusRuntime {
+pub struct Executor {
     context: Context,
     heartbeat_interval_ms: u64,
     stream_hwm: HighWaterMark,
@@ -85,7 +86,7 @@ pub struct BusRuntime {
     thread: Option<JoinHandle<()>>,
 }
 
-impl BusRuntime {
+impl Executor {
     /// Single-threaded executor: all callbacks run on the spin/I/O thread.
     pub fn new() -> Self {
         Self::with_options(DEFAULT_HEARTBEAT_INTERVAL_MS, None)
@@ -94,7 +95,7 @@ impl BusRuntime {
     /// Offload service/action handlers to at most `max_workers` threads.
     /// Subscription and action-client callbacks still run on the I/O thread.
     /// If the pool is saturated, handlers fall back to inline execution.
-    pub fn with_executor(max_workers: usize) -> Self {
+    pub fn with_worker_pool(max_workers: usize) -> Self {
         Self::with_options(
             DEFAULT_HEARTBEAT_INTERVAL_MS,
             Some(WorkerPool::new(max_workers)),
@@ -233,6 +234,19 @@ impl BusRuntime {
             .or_default()
             .push(callback);
         Ok(())
+    }
+
+    /// Subscribe with a protobuf-typed callback. Decode failures are skipped.
+    pub fn subscribe_typed<M, F>(&mut self, topic: &str, callback: F) -> Result<()>
+    where
+        M: Message + Default + 'static,
+        F: Fn(&str, M) + Send + Sync + 'static,
+    {
+        let cb: MessageCallback = Arc::new(move |topic, payload| match M::decode(payload) {
+            Ok(msg) => callback(topic, msg),
+            Err(err) => log::warn!("typed subscribe decode failed on {topic}: {err}"),
+        });
+        self.subscribe(topic, cb)
     }
 
     /// Create a periodic timer (ROS 2 `create_timer`).
@@ -664,13 +678,13 @@ impl BusRuntime {
     }
 }
 
-impl Default for BusRuntime {
+impl Default for Executor {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl Drop for BusRuntime {
+impl Drop for Executor {
     fn drop(&mut self) {
         self.stop();
     }

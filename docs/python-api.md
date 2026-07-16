@@ -14,6 +14,8 @@ maturin develop --features extension-module
 
 模块名：`robot_bus`。当前 Python 绑定覆盖 **message bus** 与 **内嵌 broker**；service / action 请用 Rust 或后续版本。
 
+连接由 `Node` 管理（默认 `localhost` + `tcp`）；`create_publisher` / `create_subscription` 不再传 endpoint。
+
 ---
 
 ## 启动 broker
@@ -46,22 +48,9 @@ robot_bus.run_broker()
 
 ---
 
-## 端点辅助函数
-
-```python
-import robot_bus
-
-xsub = robot_bus.message_xsub_endpoint()              # 默认 localhost + tcp
-xpub = robot_bus.message_xpub_endpoint("127.0.0.1", "tcp")
-```
-
-默认连本机 broker：XSUB `15560`，XPUB `15561`。
-
----
-
 ## Message bus（Node + spin）
 
-接近 ROS 2 的 `create_publisher` / `create_subscription` / `spin`；payload 用与 Rust `robot_bus::msgs` 同 schema 的 protobuf（此处标准 `Imu`）：
+接近 ROS 2 的 `create_publisher` / `create_subscription` / `spin`。回调收到 `bytes`，用与 Rust `robot_bus::msgs` 同 schema 的 protobuf 自行解析（此处标准 `Imu`）：
 
 ```python
 import robot_bus
@@ -75,8 +64,9 @@ def on_imu(topic, payload):
     print(topic, imu.angular_velocity)
 
 node = robot_bus.Node("pilot", namespace="robot1")
-node.create_publisher(robot_bus.message_xsub_endpoint())
-node.create_subscription("imu", on_imu, robot_bus.message_xpub_endpoint())
+# 可选：host=..., transport=..., message_xsub=..., message_xpub=...
+node.create_publisher()
+node.create_subscription("imu", on_imu)
 
 imu = Imu(
     angular_velocity=Vector3(x=0.0, y=0.0, z=0.1),
@@ -110,7 +100,7 @@ node.cancel_timer(handle)
 import robot_bus
 
 node = robot_bus.Node("poller")
-node.create_subscription("imu", lambda t, p: print(t), robot_bus.message_xpub_endpoint())
+node.create_subscription("imu", lambda t, p: print(t))
 
 while True:
     node.spin_once(timeout=0.1)  # 秒
@@ -168,7 +158,22 @@ twist = Twist(linear=Vector3(x=1.0, y=0.0, z=0.0))
 node.publish("cmd_vel", twist.SerializeToString())
 ```
 
-仓库内 ROS 风格 proto 在 `proto/<pkg>/{msg|srv|grpc}/v1/`，Rust 侧由 `robot_bus::msgs` 提供类型。
+仓库内 ROS 风格 proto 在 `proto/<pkg>/{msg|srv|grpc}/v1/`，Rust 侧由 `robot_bus::msgs` 提供类型。Typed 订阅（回调直接收解码后的消息）目前仅 Rust：`create_subscription_typed`。
+
+---
+
+## 端点辅助函数
+
+低层 `Publisher` / 手工拼地址时仍可用：
+
+```python
+import robot_bus
+
+xsub = robot_bus.message_xsub_endpoint()              # 默认 localhost + tcp
+xpub = robot_bus.message_xpub_endpoint("127.0.0.1", "tcp")
+```
+
+默认本机 broker：XSUB `15560`，XPUB `15561`。
 
 ---
 
@@ -186,12 +191,12 @@ print(robot_bus.__version__)
 
 | 符号 | 说明 |
 |------|------|
-| `Node(name, namespace=None)` | 命名空间 + publisher / subscription / timer / spin |
-| `Publisher(endpoint=None)` | 连 XSUB，发布 topic（也可经 `Node.publish`） |
+| `Node(name, namespace=None, host=..., transport=..., message_xsub=..., message_xpub=...)` | 连接配置 + publisher / subscription / timer / spin |
+| `Publisher(endpoint=None)` | 低层连 XSUB（也可经 `Node.publish`） |
 | `RobotBusBroker.start()` | 进程内启动三个 bus |
 | `run_broker()` | 阻塞 CLI 入口 |
-| `message_xsub_endpoint(host, transport)` | 发布端点 |
-| `message_xpub_endpoint(host, transport)` | 订阅端点 |
+| `message_xsub_endpoint(host, transport)` | 发布端点辅助 |
+| `message_xpub_endpoint(host, transport)` | 订阅端点辅助 |
 | `ShutdownHandle` / `TimerHandle` | spin 与定时器控制 |
 
 Service / Action、gRPC 网关目前仅 Rust 侧提供；见 [rust-api.md](rust-api.md)。

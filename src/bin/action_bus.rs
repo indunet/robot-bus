@@ -1,7 +1,7 @@
 use anyhow::{Context, Result};
 use robot_bus::broker::action_bus::{
     run, ActionBusConfig, DEFAULT_HEARTBEAT_INTERVAL_MS, DEFAULT_HEARTBEAT_TIMEOUT_MS,
-    DEFAULT_RCV_HWM, DEFAULT_SND_HWM,
+    DEFAULT_PENDING_TIMEOUT_MS, DEFAULT_RCV_HWM, DEFAULT_SND_HWM,
 };
 use std::env;
 
@@ -51,6 +51,16 @@ fn parse_config() -> Result<ActionBusConfig> {
                     .parse()
                     .context("invalid --heartbeat-timeout-ms")?;
             }
+            "--pending-timeout-ms" => {
+                config.pending_timeout_ms = args
+                    .next()
+                    .context("--pending-timeout-ms requires a number")?
+                    .parse()
+                    .context("invalid --pending-timeout-ms")?;
+            }
+            "--tcp-only" => {
+                config.bind_all_transports = false;
+            }
             "--help" | "-h" => {
                 print_help();
                 std::process::exit(0);
@@ -94,6 +104,8 @@ Options:\n  \
 --snd-hwm N               send high-water mark (default {DEFAULT_SND_HWM})\n  \
 --rcv-hwm N               receive high-water mark (default {DEFAULT_RCV_HWM})\n  \
 --heartbeat-interval-ms N worker heartbeat interval (default {DEFAULT_HEARTBEAT_INTERVAL_MS})\n  \
---heartbeat-timeout-ms N  worker eviction timeout (default {DEFAULT_HEARTBEAT_TIMEOUT_MS})\n"
+--heartbeat-timeout-ms N  worker eviction timeout (default {DEFAULT_HEARTBEAT_TIMEOUT_MS})\n  \
+--pending-timeout-ms N    NO_WORKER after queued goal waits this long (default {DEFAULT_PENDING_TIMEOUT_MS})\n  \
+--tcp-only                bind only the TCP endpoints (skip shared ipc/inproc aliases)\n"
     );
 }

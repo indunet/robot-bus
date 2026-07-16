@@ -45,9 +45,6 @@ const POLL_CAP_MS: i64 = 200;
 /// Max queued goals before the broker starts rejecting with NO_WORKER.
 const MAX_PENDING: usize = 64;
 
-/// Give up on a queued goal (no worker appeared) after this long.
-const PENDING_TIMEOUT: Duration = Duration::from_secs(5);
-
 #[derive(Clone, Debug)]
 struct WorkerInfo {
     identity: Vec<u8>,
@@ -483,7 +480,15 @@ pub fn run_loop(
             for wid in dead {
                 reclaim_worker_goals(frontend, &mut goals, &wid)?;
             }
-            retry_pending(frontend, backend, &mut pending, &mut registry, &mut goals, now)?;
+            retry_pending(
+                frontend,
+                backend,
+                &mut pending,
+                &mut registry,
+                &mut goals,
+                now,
+                Duration::from_millis(config.pending_timeout_ms),
+            )?;
             next_sweep = now + Duration::from_millis(config.heartbeat_interval_ms);
         }
     }
@@ -658,6 +663,7 @@ fn retry_pending(
     registry: &mut WorkerRegistry,
     goals: &mut GoalTable,
     now: Instant,
+    pending_timeout: Duration,
 ) -> Result<()> {
     let mut still_pending = VecDeque::new();
     while let Some(req) = pending.pop_front() {
@@ -682,7 +688,7 @@ fn retry_pending(
             backend
                 .send_multipart(fwd, 0)
                 .context("backend send pending goal")?;
-        } else if now.duration_since(req.queued_at) > PENDING_TIMEOUT {
+        } else if now.duration_since(req.queued_at) > pending_timeout {
             let err = build_error_body(ERR_NO_WORKER, &req.action);
             let reply = build_client_reply(
                 &req.client_identity,

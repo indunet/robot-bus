@@ -10,11 +10,13 @@ robot-bus = "0.0.2"
 
 先启动 broker：`cargo run --bin robot_bus_broker`。
 
+连接由 [`Node`](../src/runtime/node.rs) 的 `NodeOptions` 管理（默认 `localhost` + `tcp`）。底层 `Executor` 负责 `spin`；一般业务代码用 Node 即可。
+
 ---
 
-## Message bus（`BusRuntime` / 回调）
+## Message bus（Node + spin）
 
-接近 ROS 2：订阅时注册回调，由 `spin` / `spin_once` 驱动；payload 为不透明 `&[u8]`，业务侧用 `robot_bus::msgs` encode / decode（此处用标准 `sensor_msgs::msg::v1::Imu`）：
+接近 ROS 2：`create_publisher` / `create_subscription` / `spin`。推荐 typed 订阅（标准 `sensor_msgs::msg::v1::Imu`）；也可传 raw `&[u8]` 回调自行 decode。
 
 ```rust
 use std::sync::Arc;
@@ -22,21 +24,16 @@ use std::time::Duration;
 use prost::Message;
 use robot_bus::msgs::geometry_msgs::msg::v1::Vector3;
 use robot_bus::msgs::sensor_msgs::msg::v1::Imu;
-use robot_bus::{
-    BusRuntime, MessageCallback, Publisher, message_xpub_endpoint, message_xsub_endpoint,
-};
+use robot_bus::Node;
 
 fn main() -> robot_bus::Result<()> {
-    let pub_ = Publisher::new(Some(&message_xsub_endpoint("localhost", "tcp")?))?;
-
-    let mut rt = BusRuntime::new();
-    rt.connect_subscriber(Some(&message_xpub_endpoint("localhost", "tcp")?))?;
-
-    let cb: MessageCallback = Arc::new(|topic, payload| {
-        let imu = Imu::decode(payload).expect("decode Imu");
+    let mut node = Node::with_namespace("pilot", "robot1");
+    // 默认连本机 broker；进程内 / 自定义地址用 Node::with_options(..., NodeOptions { ... })
+    node.create_publisher()?;
+    node.create_subscription_typed::<Imu, _>("imu", |topic, imu| {
+        // 实际 topic: robot1/imu
         println!("{topic}: angular_z={:?}", imu.angular_velocity);
-    });
-    rt.subscribe("imu", cb)?;
+    })?;
 
     let imu = Imu {
         angular_velocity: Some(Vector3 {
@@ -51,26 +48,29 @@ fn main() -> robot_bus::Result<()> {
         }),
         ..Default::default()
     };
-    pub_.publish("imu", &imu.encode_to_vec())?;
+    node.publish("imu", &imu.encode_to_vec())?;
 
-    rt.create_timer(Duration::from_millis(100), Arc::new(|| {
+    node.create_timer(Duration::from_millis(100), Arc::new(|| {
         // 周期任务
     }))?;
 
-    // 另一线程触发退出
-    let handle = rt.shutdown_handle();
+    let handle = node.shutdown_handle();
     std::thread::spawn(move || {
         std::thread::sleep(Duration::from_secs(5));
         handle.shutdown();
     });
 
-    rt.spin()?; // 阻塞
-    // 或嵌入自己的循环：rt.spin_once(Some(Duration::from_millis(100)))?;
+    node.spin()?; // 阻塞
+    // 或：node.spin_once(Some(Duration::from_millis(100)))?;
     Ok(())
 }
 ```
 
-`BusRuntime::with_executor(n)`：service / action handler 最多 `n` 个并发线程；订阅与 timer 仍在 I/O 线程。
+Raw bytes 回调：`node.create_subscription("imu", Arc::new(|topic, payload| { ... }))?`。
+
+绝对名以 `/` 开头时不加命名空间前缀。
+
+`Node::with_worker_pool(n)` / `with_options_and_pool`：service / action handler 最多 `n` 个并发线程；订阅与 timer 仍在 I/O 线程。底层对应 `Executor::with_worker_pool(n)`。
 
 ### 高水位（HWM）
 
@@ -80,35 +80,6 @@ use robot_bus::{Publisher, HighWaterMark};
 let pub_ = Publisher::with_hwm(None, HighWaterMark::new(10, 10))?;
 pub_.set_high_water_mark(HighWaterMark { snd: 10, rcv: 10 })?;
 ```
-
----
-
-## Node 门面
-
-带名字与命名空间，相对 topic 自动加前缀：
-
-```rust
-use std::sync::Arc;
-use std::time::Duration;
-use robot_bus::{Node, message_xpub_endpoint, message_xsub_endpoint};
-
-fn main() -> robot_bus::Result<()> {
-    let mut node = Node::with_namespace("pilot", "robot1");
-    node.create_publisher(Some(&message_xsub_endpoint("localhost", "tcp")?))?;
-    node.create_subscription(
-        "imu", // → robot1/imu
-        Arc::new(|topic, payload| println!("{topic}: {} bytes", payload.len())),
-        Some(&message_xpub_endpoint("localhost", "tcp")?),
-    )?;
-    node.create_timer(Duration::from_millis(100), Arc::new(|| {}))?;
-
-    node.publish("cmd_vel", b"...")?; // → robot1/cmd_vel
-  // node.spin()?;
-    Ok(())
-}
-```
-
-绝对名以 `/` 开头时不加命名空间前缀。
 
 ---
 
@@ -140,7 +111,11 @@ fn main() -> robot_bus::Result<()> {
 }
 ```
 
-也可用 `Node::create_service` + `spin` 在回调模型里注册 handler（见 `runtime::node`）。
+也可用 `Node::create_service` + `spin`（endpoint 取自 `NodeOptions`）：
+
+```rust
+node.create_service("echo", handler, /* identity */ None)?;
+```
 
 ---
 
@@ -184,25 +159,31 @@ fn main() -> robot_bus::Result<()> {
 }
 ```
 
+Node：`create_action` / `connect_action_client` 同样使用 `NodeOptions` 里的 action endpoint。
+
 ---
 
 ## 进程内 broker
 
-不必单独起 `robot_bus_broker` 二进制，可在应用内启动：
+不必单独起 `robot_bus_broker` 二进制；用 `NodeOptions` 填入 broker 返回的 bind 地址：
 
 ```rust
 use std::sync::Arc;
-use robot_bus::{Node, RobotBusBroker, RobotBusConfig};
+use robot_bus::{Node, NodeOptions, RobotBusBroker, RobotBusConfig};
 
 fn main() -> anyhow::Result<()> {
     let broker = RobotBusBroker::start(RobotBusConfig::default())?;
 
-    let mut node = Node::new("demo");
-    node.create_publisher(Some(&broker.message.xsub_bind))?;
+    let options = NodeOptions {
+        message_xsub: Some(broker.message.xsub_bind.clone()),
+        message_xpub: Some(broker.message.xpub_bind.clone()),
+        ..NodeOptions::default()
+    };
+    let mut node = Node::with_options("demo", "", options);
+    node.create_publisher()?;
     node.create_subscription(
         "imu",
         Arc::new(|topic, payload| println!("{topic}: {} bytes", payload.len())),
-        Some(&broker.message.xpub_bind),
     )?;
     node.publish("imu", b"hello")?;
     node.spin_once(None)?;
@@ -216,7 +197,7 @@ fn main() -> anyhow::Result<()> {
 
 ## Protobuf 消息（`robot_bus::msgs`）
 
-总线仍传 opaque bytes；在 publish 前 encode、在订阅回调里 decode。上面示例用的是标准 `sensor_msgs::msg::v1::Imu`（见 `proto/sensor_msgs/msg/v1/imu.proto`）。其它消息同理，例如 `geometry_msgs::msg::v1::Twist`：
+总线仍传 opaque bytes。`create_subscription_typed` 会自动 decode；raw 回调则自行 `Message::decode`。其它消息同理，例如 `geometry_msgs::msg::v1::Twist`：
 
 ```rust
 use prost::Message;
@@ -227,9 +208,6 @@ let twist = Twist {
     angular: Some(Vector3::default()),
 };
 node.publish("cmd_vel", &twist.encode_to_vec())?;
-
-// 订阅回调里：
-// let decoded = Twist::decode(payload)?;
 ```
 
 Service 的 Request / Response 同理（如 `std_srvs::srv::v1::SetBoolRequest`）。
@@ -277,6 +255,8 @@ Proto 包名：`robot_bus.grpc.v1`（与 ROS `*.msg.v1` / `*.srv.v1` 区分）�
 ---
 
 ## 传输与端点
+
+一般由 `NodeOptions` 推导；需要手工拼地址时：
 
 ```rust
 use robot_bus::transports::{
