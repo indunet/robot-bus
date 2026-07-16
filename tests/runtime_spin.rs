@@ -12,7 +12,8 @@ use robot_bus::message_bus::Publisher;
 use robot_bus::geometry_msgs::msg::v1::Vector3;
 use robot_bus::sensor_msgs::msg::v1::Imu;
 use robot_bus::{
-    Executor, HighWaterMark, MessageCallback, Node, NodeOptions, SingleThreadedExecutor,
+    CallbackGroup, Executor, HighWaterMark, MessageCallback, Node, NodeOptions,
+    SingleThreadedExecutor,
 };
 use support::MessageProxy;
 
@@ -35,7 +36,7 @@ fn subscribe_callback_via_spin_once() {
         .connect_subscriber(Some(&proxy.xpub_endpoint))
         .expect("connect subscriber");
     executor
-        .subscribe("demo.topic", callback)
+        .subscribe("demo.topic", callback, CallbackGroup::mutually_exclusive())
         .expect("subscribe");
     thread::sleep(Duration::from_millis(150));
 
@@ -62,7 +63,7 @@ fn spin_stops_on_shutdown() {
         .connect_subscriber(Some(&proxy.xpub_endpoint))
         .expect("connect subscriber");
     executor
-        .subscribe("unused", Arc::new(|_topic, _payload| {}))
+        .subscribe("unused", Arc::new(|_topic, _payload| {}), CallbackGroup::mutually_exclusive())
         .expect("subscribe");
 
     let handle = executor.shutdown_handle();
@@ -94,6 +95,7 @@ fn spin_some_processes_pending_then_returns() {
             Arc::new(move |_topic, _payload| {
                 hits_cb.fetch_add(1, Ordering::SeqCst);
             }),
+            CallbackGroup::mutually_exclusive(),
         )
         .expect("subscribe");
     thread::sleep(Duration::from_millis(150));
@@ -119,6 +121,7 @@ fn timer_fires_via_spin_once() {
             Arc::new(move || {
                 hits_cb.fetch_add(1, Ordering::SeqCst);
             }),
+            CallbackGroup::mutually_exclusive(),
         )
         .expect("create_timer");
 
@@ -147,11 +150,16 @@ fn cancel_timer_stops_firing() {
             Arc::new(move || {
                 hits_cb.fetch_add(1, Ordering::SeqCst);
             }),
+            CallbackGroup::mutually_exclusive(),
         )
         .expect("create_timer");
     // Keep one active timer so the executor still has work to wait on.
     executor
-        .create_timer(Duration::from_secs(60), Arc::new(|| {}))
+        .create_timer(
+            Duration::from_secs(60),
+            Arc::new(|| {}),
+            CallbackGroup::mutually_exclusive(),
+        )
         .expect("keepalive timer");
     executor.cancel_timer(handle).expect("cancel");
 

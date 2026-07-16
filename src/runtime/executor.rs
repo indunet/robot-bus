@@ -10,8 +10,9 @@
 //! - stop with [`Executor::shutdown`] (from any thread)
 //!
 //! Default mode is single-threaded: callbacks run on the spin/I/O thread.
-//! [`Executor::with_worker_pool`] offloads long service/action handlers to a
-//! bounded worker pool (subscription callbacks stay on the I/O thread).
+//! [`Executor::with_worker_pool`] offloads callbacks to a bounded worker pool
+//! according to each [`crate::runtime::CallbackGroup`] (subscription callbacks
+//! included when the group is reentrant).
 
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -25,6 +26,7 @@ use uuid::Uuid;
 use zmq::{Context, SocketType};
 
 use crate::errors::{BusError, Result};
+use crate::runtime::callback_group::{CallbackGroup, SubscriptionCallback};
 use crate::runtime::dispatch::{
     dispatch_registration, flush_outbound, flush_reply_queue, tick_heartbeats,
 };
@@ -74,7 +76,7 @@ pub struct Executor {
     service_registrations: Vec<ServiceRegistration>,
     action_registrations: Vec<ActionRegistration>,
     action_client_registration: Option<ActionClientRegistration>,
-    topic_callbacks: HashMap<String, Vec<MessageCallback>>,
+    topic_callbacks: HashMap<String, Vec<SubscriptionCallback>>,
     socket_registrations: Vec<Registration>,
     outbound_tx: Sender<OutboundCommand>,
     outbound_rx: Option<Receiver<OutboundCommand>>,
@@ -219,7 +221,12 @@ impl Executor {
         Ok(())
     }
 
-    pub fn subscribe(&mut self, topic: &str, callback: MessageCallback) -> Result<()> {
+    pub fn subscribe(
+        &mut self,
+        topic: &str,
+        callback: MessageCallback,
+        group: CallbackGroup,
+    ) -> Result<()> {
         self.ensure_open()?;
         if !self.has_sub_registration() {
             return Err(BusError::Protocol(
@@ -235,12 +242,17 @@ impl Executor {
         self.topic_callbacks
             .entry(topic.to_string())
             .or_default()
-            .push(callback);
+            .push(SubscriptionCallback { callback, group });
         Ok(())
     }
 
     /// Subscribe with a protobuf-typed callback. Decode failures are skipped.
-    pub fn subscribe_typed<M, F>(&mut self, topic: &str, callback: F) -> Result<()>
+    pub fn subscribe_typed<M, F>(
+        &mut self,
+        topic: &str,
+        callback: F,
+        group: CallbackGroup,
+    ) -> Result<()>
     where
         M: Message + Default + 'static,
         F: Fn(&str, M) + Send + Sync + 'static,
@@ -249,16 +261,17 @@ impl Executor {
             Ok(msg) => callback(topic, msg),
             Err(err) => log::warn!("typed subscribe decode failed on {topic}: {err}"),
         });
-        self.subscribe(topic, cb)
+        self.subscribe(topic, cb, group)
     }
 
     /// Create a periodic timer (ROS 2 `create_timer`).
     ///
-    /// The callback runs on the spin / I/O thread. First fire is after `period`.
+    /// First fire is after `period`. Concurrency follows `group`.
     pub fn create_timer(
         &mut self,
         period: Duration,
         callback: TimerCallback,
+        group: CallbackGroup,
     ) -> Result<TimerHandle> {
         self.ensure_open()?;
         if self.started {
@@ -273,7 +286,7 @@ impl Executor {
         }
         let id = self.next_timer_id;
         self.next_timer_id += 1;
-        self.timers.push(Timer::new(id, period, callback));
+        self.timers.push(Timer::new(id, period, callback, group));
         Ok(TimerHandle { id })
     }
 
@@ -360,6 +373,7 @@ impl Executor {
         &mut self,
         service_name: &str,
         handler: ServiceHandler,
+        callback_group: CallbackGroup,
         backend_endpoint: Option<&str>,
         identity: Option<&str>,
     ) -> Result<()> {
@@ -372,6 +386,7 @@ impl Executor {
             &self.context,
             service_name,
             handler,
+            callback_group,
             &endpoint,
             identity,
             self.heartbeat_interval_ms,
@@ -390,6 +405,7 @@ impl Executor {
         &mut self,
         action_name: &str,
         handler: ActionGoalHandler,
+        callback_group: CallbackGroup,
         backend_endpoint: Option<&str>,
         identity: Option<&str>,
     ) -> Result<()> {
@@ -402,6 +418,7 @@ impl Executor {
             &self.context,
             action_name,
             handler,
+            callback_group,
             &endpoint,
             identity,
             self.heartbeat_interval_ms,
@@ -705,7 +722,7 @@ fn timeout_to_ms(timeout: Option<Duration>) -> i64 {
 fn spin_once_inner(
     registrations: &mut [Registration],
     timers: &mut [Timer],
-    topic_callbacks: &HashMap<String, Vec<MessageCallback>>,
+    topic_callbacks: &HashMap<String, Vec<SubscriptionCallback>>,
     outbound_rx: &Receiver<OutboundCommand>,
     reply_rx: &Receiver<ReplyMessage>,
     reply_tx: &Sender<ReplyMessage>,
@@ -721,7 +738,7 @@ fn spin_once_inner(
     }
     flush_reply_queue(registrations, reply_rx);
 
-    let mut had_work = tick_timers(timers, now);
+    let mut had_work = tick_timers(timers, now, worker_pool);
 
     let poll_ms = effective_poll_timeout_ms(timers, poll_timeout_ms, Instant::now());
     let mut poll_items: Vec<zmq::PollItem> = registrations
@@ -755,7 +772,10 @@ fn spin_once_inner(
         had_work = true;
     }
 
-    if tick_timers(timers, Instant::now()) {
+    // Flush replies produced by inline / worker handlers during this step.
+    flush_reply_queue(registrations, reply_rx);
+
+    if tick_timers(timers, Instant::now(), worker_pool) {
         had_work = true;
     }
     had_work

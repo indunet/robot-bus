@@ -15,6 +15,7 @@ use prost::Message;
 
 use crate::errors::{BusError, Result};
 use crate::message_bus::Publisher as BusPublisher;
+use crate::runtime::callback_group::{CallbackGroup, CallbackGroupType};
 use crate::runtime::executor::{Executor, ShutdownHandle};
 use crate::runtime::executors::ExecutorHandle;
 use crate::runtime::queues::ActionMessageCallback;
@@ -133,6 +134,7 @@ pub struct Node {
     executor: Option<ExecutorHandle>,
     publisher: Option<Arc<BusPublisher>>,
     subscriber_connected: bool,
+    default_callback_group: CallbackGroup,
 }
 
 impl Node {
@@ -149,6 +151,7 @@ impl Node {
             executor: None,
             publisher: None,
             subscriber_connected: false,
+            default_callback_group: CallbackGroup::mutually_exclusive(),
         }
     }
 
@@ -180,6 +183,16 @@ impl Node {
 
     pub fn options(&self) -> &NodeOptions {
         &self.options
+    }
+
+    /// Default mutually exclusive group (ROS 2 node default callback group).
+    pub fn default_callback_group(&self) -> &CallbackGroup {
+        &self.default_callback_group
+    }
+
+    /// Create a callback group (ROS 2 `create_callback_group`).
+    pub fn create_callback_group(&self, kind: CallbackGroupType) -> CallbackGroup {
+        CallbackGroup::new(kind)
     }
 
     /// Shared executor handle after [`add_node`](crate::runtime::SingleThreadedExecutor::add_node).
@@ -275,15 +288,25 @@ impl Node {
 
     /// Subscribe with a raw-bytes callback (ROS 2 `create_subscription`).
     ///
-    /// Requires the node to be added to an executor. Connects the subscriber on
-    /// first use using the node's message XPUB endpoint.
+    /// Uses the node's default mutually exclusive callback group.
     pub fn create_subscription(
         &mut self,
         topic: &str,
         callback: MessageCallback,
     ) -> Result<()> {
+        self.create_subscription_with_group(topic, callback, &self.default_callback_group.clone())
+    }
+
+    /// Like [`create_subscription`](Self::create_subscription), with an explicit callback group.
+    pub fn create_subscription_with_group(
+        &mut self,
+        topic: &str,
+        callback: MessageCallback,
+        group: &CallbackGroup,
+    ) -> Result<()> {
         self.ensure_subscriber()?;
-        self.lock_executor()?.subscribe(topic, callback)
+        self.lock_executor()?
+            .subscribe(topic, callback, group.clone())
     }
 
     /// Subscribe with a protobuf-typed callback. Decode failures are skipped.
@@ -292,9 +315,27 @@ impl Node {
         M: Message + Default + 'static,
         F: Fn(&str, M) + Send + Sync + 'static,
     {
+        self.create_subscription_typed_with_group(
+            topic,
+            callback,
+            &self.default_callback_group.clone(),
+        )
+    }
+
+    /// Typed subscribe with an explicit callback group.
+    pub fn create_subscription_typed_with_group<M, F>(
+        &mut self,
+        topic: &str,
+        callback: F,
+        group: &CallbackGroup,
+    ) -> Result<()>
+    where
+        M: Message + Default + 'static,
+        F: Fn(&str, M) + Send + Sync + 'static,
+    {
         self.ensure_subscriber()?;
         self.lock_executor()?
-            .subscribe_typed::<M, F>(topic, callback)
+            .subscribe_typed::<M, F>(topic, callback, group.clone())
     }
 
     fn ensure_subscriber(&mut self) -> Result<()> {
@@ -307,41 +348,94 @@ impl Node {
         Ok(())
     }
 
-    /// Periodic timer (ROS 2 `create_timer`).
+    /// Periodic timer (ROS 2 `create_timer`) on the default callback group.
     pub fn create_timer(
         &mut self,
         period: Duration,
         callback: TimerCallback,
     ) -> Result<TimerHandle> {
-        self.lock_executor()?.create_timer(period, callback)
+        self.create_timer_with_group(period, callback, &self.default_callback_group.clone())
+    }
+
+    /// Timer with an explicit callback group.
+    pub fn create_timer_with_group(
+        &mut self,
+        period: Duration,
+        callback: TimerCallback,
+        group: &CallbackGroup,
+    ) -> Result<TimerHandle> {
+        self.lock_executor()?
+            .create_timer(period, callback, group.clone())
     }
 
     pub fn cancel_timer(&mut self, handle: TimerHandle) -> Result<()> {
         self.lock_executor()?.cancel_timer(handle)
     }
 
-    /// Register a service worker (ROS 2 `create_service`).
+    /// Register a service worker (ROS 2 `create_service`) on the default group.
     pub fn create_service(
         &mut self,
         service_name: &str,
         handler: ServiceHandler,
         identity: Option<&str>,
     ) -> Result<()> {
-        let endpoint = self.options.service_backend_endpoint()?;
-        self.lock_executor()?
-            .register_service(service_name, handler, Some(&endpoint), identity)
+        self.create_service_with_group(
+            service_name,
+            handler,
+            identity,
+            &self.default_callback_group.clone(),
+        )
     }
 
-    /// Register an action worker (ROS 2 `create_action_server` / action worker).
+    /// Service with an explicit callback group.
+    pub fn create_service_with_group(
+        &mut self,
+        service_name: &str,
+        handler: ServiceHandler,
+        identity: Option<&str>,
+        group: &CallbackGroup,
+    ) -> Result<()> {
+        let endpoint = self.options.service_backend_endpoint()?;
+        self.lock_executor()?.register_service(
+            service_name,
+            handler,
+            group.clone(),
+            Some(&endpoint),
+            identity,
+        )
+    }
+
+    /// Register an action worker on the default group.
     pub fn create_action(
         &mut self,
         action_name: &str,
         handler: ActionGoalHandler,
         identity: Option<&str>,
     ) -> Result<()> {
+        self.create_action_with_group(
+            action_name,
+            handler,
+            identity,
+            &self.default_callback_group.clone(),
+        )
+    }
+
+    /// Action with an explicit callback group.
+    pub fn create_action_with_group(
+        &mut self,
+        action_name: &str,
+        handler: ActionGoalHandler,
+        identity: Option<&str>,
+        group: &CallbackGroup,
+    ) -> Result<()> {
         let endpoint = self.options.action_backend_endpoint()?;
-        self.lock_executor()?
-            .register_action(action_name, handler, Some(&endpoint), identity)
+        self.lock_executor()?.register_action(
+            action_name,
+            handler,
+            group.clone(),
+            Some(&endpoint),
+            identity,
+        )
     }
 
     pub fn connect_action_client(&mut self) -> Result<()> {
@@ -436,5 +530,15 @@ mod tests {
             .create_subscription("/imu", Arc::new(|_, _| {}))
             .unwrap_err();
         assert!(err.to_string().contains("add_node"));
+    }
+
+    #[test]
+    fn create_callback_group_kinds() {
+        let node = Node::new("pilot");
+        let exclusive = node.create_callback_group(CallbackGroupType::MutuallyExclusive);
+        let reentrant = node.create_callback_group(CallbackGroupType::Reentrant);
+        assert_eq!(exclusive.kind(), CallbackGroupType::MutuallyExclusive);
+        assert_eq!(reentrant.kind(), CallbackGroupType::Reentrant);
+        assert_ne!(exclusive.id(), reentrant.id());
     }
 }

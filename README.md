@@ -16,7 +16,7 @@
 | 顶层 API | Publisher / Subscriber / Client / Worker |
 | `runtime::Executor` | 底层 poll loop（一般用下面两个包装） |
 | `runtime::SingleThreadedExecutor` / `MultiThreadedExecutor` | ROS 2 风格执行器；`add_node` + `spin` |
-| `runtime::Node` / `TopicPublisher` | 节点 + `create_publisher(topic)` 返回的 publisher |
+| `runtime::Node` / `TopicPublisher` / `CallbackGroup` | 节点、publisher、callback group（互斥 / 可重入） |
 | `grpc::`（feature） | gRPC / gRPC-Web 网关（Subscribe / Call / Run） |
 | [`proto/`](proto/) | ROS 风格 Protobuf：`proto/<pkg>/{msg\|srv\|grpc}/v1/` → Rust/Python `robot_bus.<pkg>…` |
 
@@ -139,7 +139,8 @@ executor.spin()?;
 ```
 
 - `SingleThreadedExecutor`：回调在 I/O / spin 线程串行（默认）
-- `MultiThreadedExecutor::new(n)`：service / action handler 最多 `n` 个并发线程；订阅与 timer 仍在 I/O 线程
+- `MultiThreadedExecutor::new(n)`：最多 `n` 个 worker；`Reentrant` group 可并行，`MutuallyExclusive` 组内串行
+- Callback group：`MutuallyExclusive` / `Reentrant`（`create_callback_group`；默认互斥组）
 - Raw bytes：`create_subscription(topic, Arc::new(|topic, payload| { ... }))`
 - 底层 escape hatch：`Executor`（高级用法）
 

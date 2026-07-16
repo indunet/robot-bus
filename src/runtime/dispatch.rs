@@ -3,26 +3,26 @@
 use std::collections::HashMap;
 use std::sync::mpsc::Sender;
 use std::sync::Arc;
-use std::thread;
 
 use crate::action_bus::{ActionKind, ActionMessage};
+use crate::runtime::callback_group::SubscriptionCallback;
 use crate::runtime::queues::{ActionReply, OutboundCommand, ReplyMessage, ServiceReply};
 use crate::runtime::registrations::{
-    ActionClientRegistration, ActionRegistration, MessageCallback, Registration,
-    RegistrationKind, ServiceRegistration, SubRegistration,
+    ActionClientRegistration, ActionRegistration, Registration, RegistrationKind,
+    ServiceRegistration, SubRegistration,
 };
 use crate::runtime::worker_pool::WorkerPool;
 
 pub fn dispatch_registration(
     reg: &mut Registration,
-    topic_callbacks: &HashMap<String, Vec<MessageCallback>>,
+    topic_callbacks: &HashMap<String, Vec<SubscriptionCallback>>,
     reply_tx: &Sender<ReplyMessage>,
     worker_pool: Option<&WorkerPool>,
 ) {
     match reg.kind() {
         RegistrationKind::Sub => {
             if let Registration::Sub(sub) = reg {
-                dispatch_sub_message(sub, topic_callbacks);
+                dispatch_sub_message(sub, topic_callbacks, worker_pool);
             }
         }
         RegistrationKind::Service => {
@@ -45,7 +45,8 @@ pub fn dispatch_registration(
 
 pub fn dispatch_sub_message(
     reg: &SubRegistration,
-    topic_callbacks: &HashMap<String, Vec<MessageCallback>>,
+    topic_callbacks: &HashMap<String, Vec<SubscriptionCallback>>,
+    worker_pool: Option<&WorkerPool>,
 ) {
     let frames = match reg.socket.recv_multipart(0) {
         Ok(frames) => frames,
@@ -62,25 +63,29 @@ pub fn dispatch_sub_message(
         );
         return;
     }
-    let topic = String::from_utf8_lossy(&frames[0]);
-    let payload = &frames[1];
-    for callback in callbacks_for_topic(&topic, topic_callbacks) {
-        callback(&topic, payload);
+    let topic = String::from_utf8_lossy(&frames[0]).into_owned();
+    let payload = frames[1].clone();
+    for entry in callbacks_for_topic(&topic, topic_callbacks) {
+        let callback = Arc::clone(&entry.callback);
+        let group = entry.group.clone();
+        let topic = topic.clone();
+        let payload = payload.clone();
+        group.run(worker_pool, move || callback(&topic, &payload));
     }
 }
 
 fn callbacks_for_topic(
     topic: &str,
-    topic_callbacks: &HashMap<String, Vec<MessageCallback>>,
-) -> Vec<MessageCallback> {
+    topic_callbacks: &HashMap<String, Vec<SubscriptionCallback>>,
+) -> Vec<SubscriptionCallback> {
     let mut matched = Vec::new();
     let mut seen = std::collections::HashSet::new();
     for (pattern, callbacks) in topic_callbacks {
         if topic == pattern.as_str() || (!pattern.is_empty() && topic.starts_with(pattern)) {
-            for callback in callbacks {
-                let ptr = Arc::as_ptr(callback) as *const ();
+            for entry in callbacks {
+                let ptr = Arc::as_ptr(&entry.callback) as *const ();
                 if seen.insert(ptr) {
-                    matched.push(Arc::clone(callback));
+                    matched.push(entry.clone());
                 }
             }
         }
@@ -113,37 +118,22 @@ pub fn dispatch_service_request(
         return;
     }
 
-    if let Some(pool) = worker_pool {
-        if pool.try_acquire() {
-            let handler = Arc::clone(&reg.handler);
-            let service_name = reg.service_name.clone();
-            let reply_tx = reply_tx.clone();
-            let pool = pool.clone();
-            thread::spawn(move || {
-                let reply_body = handler(&client_id, &req_id, &body);
-                let _ = reply_tx.send(ReplyMessage::Service {
-                    service_name,
-                    reply: ServiceReply {
-                        client_id,
-                        service: svc,
-                        request_id: req_id,
-                        body: reply_body,
-                    },
-                });
-                pool.release();
-            });
-            return;
-        }
-    }
-
-    let reply_body = (reg.handler)(&client_id, &req_id, &body);
-    let _ = send_service_reply(
-        &reg.socket,
-        &client_id,
-        &svc,
-        &req_id,
-        &reply_body,
-    );
+    let handler = Arc::clone(&reg.handler);
+    let service_name = reg.service_name.clone();
+    let reply_tx = reply_tx.clone();
+    let group = reg.callback_group.clone();
+    group.run(worker_pool, move || {
+        let reply_body = handler(&client_id, &req_id, &body);
+        let _ = reply_tx.send(ReplyMessage::Service {
+            service_name,
+            reply: ServiceReply {
+                client_id,
+                service: svc,
+                request_id: req_id,
+                body: reply_body,
+            },
+        });
+    });
 }
 
 pub fn dispatch_action_message(
@@ -178,46 +168,24 @@ pub fn dispatch_action_message(
     }
     let payload: Vec<u8> = if kind_str == "GOAL" { body } else { kind };
 
-    if let Some(pool) = worker_pool {
-        if pool.try_acquire() {
-            let handler = Arc::clone(&reg.handler);
-            let action_name = reg.action_name.clone();
-            let goal_id_copy = goal_id.clone();
-            let client_id_copy = client_id.clone();
-            let reply_tx = reply_tx.clone();
-            let pool = pool.clone();
-            thread::spawn(move || {
-                let replies = handler(&client_id_copy, &goal_id_copy, &payload);
-                for (phase, chunk) in replies {
-                    let _ = reply_tx.send(ReplyMessage::Action {
-                        action_name: action_name.clone(),
-                        reply: ActionReply {
-                            client_id: client_id_copy.clone(),
-                            goal_id: goal_id_copy.clone(),
-                            kind: phase.into_bytes(),
-                            body: chunk,
-                        },
-                    });
-                }
-                pool.release();
+    let handler = Arc::clone(&reg.handler);
+    let action_name = reg.action_name.clone();
+    let reply_tx = reply_tx.clone();
+    let group = reg.callback_group.clone();
+    group.run(worker_pool, move || {
+        let replies = handler(&client_id, &goal_id, &payload);
+        for (phase, chunk) in replies {
+            let _ = reply_tx.send(ReplyMessage::Action {
+                action_name: action_name.clone(),
+                reply: ActionReply {
+                    client_id: client_id.clone(),
+                    goal_id: goal_id.clone(),
+                    kind: phase.into_bytes(),
+                    body: chunk,
+                },
             });
-            return;
         }
-    }
-
-    let replies = (reg.handler)(&client_id, &goal_id, &payload);
-    for (phase, chunk) in replies {
-        let _ = reg.socket.send_multipart(
-            [
-                client_id.as_slice(),
-                reg.action_name.as_bytes(),
-                goal_id.as_slice(),
-                phase.as_bytes(),
-                chunk.as_slice(),
-            ],
-            0,
-        );
-    }
+    });
 }
 
 pub fn dispatch_action_client_message(reg: &mut ActionClientRegistration) {

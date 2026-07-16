@@ -67,6 +67,16 @@ executor = robot_bus.MultiThreadedExecutor(num_threads=4)
 executor.add_node(node)
 ```
 
+### Callback group
+
+```python
+group = node.create_callback_group(robot_bus.CallbackGroupType.Reentrant)
+node.create_subscription("/robot1/imu", on_imu, callback_group=group)
+node.create_timer(0.1, on_tick, callback_group=group)
+```
+
+默认不传 `callback_group` 时使用节点自带的互斥组。`Reentrant` 需配合 `MultiThreadedExecutor` 才有实际并行。
+
 ### 定时器
 
 ```python
@@ -161,6 +171,8 @@ print(robot_bus.__version__)
 | `MultiThreadedExecutor(num_threads=4)` | service/action handler 可并行 |
 | `executor.add_node(node)` | 把节点挂到执行器（ROS 2 同款） |
 | `node.create_publisher(topic)` → `TopicPublisher` | 返回 publisher，再 `publish(bytes)` |
+| `CallbackGroupType` / `create_callback_group` | `MutuallyExclusive` / `Reentrant` |
+| `create_subscription(..., callback_group=)` | 可选 callback group |
 | `Publisher(endpoint=None)` | 低层连 XSUB（不经 Node） |
 | `RobotBusBroker.start()` | 进程内启动三个 bus |
 | `run_broker()` | 阻塞 CLI 入口 |

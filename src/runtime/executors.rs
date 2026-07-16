@@ -163,10 +163,9 @@ impl SingleThreadedExecutor {
     }
 }
 
-/// Service / action handlers may run on a bounded worker pool
-/// (simplified ROS 2 `MultiThreadedExecutor`).
-///
-/// Subscription, timer, and action-client callbacks still run on the I/O thread.
+/// Service / action / subscription / timer callbacks may use a bounded worker
+/// pool (simplified ROS 2 `MultiThreadedExecutor`), subject to each
+/// [`crate::runtime::CallbackGroup`]'s type.
 #[derive(Clone)]
 pub struct MultiThreadedExecutor {
     handle: ExecutorHandle,

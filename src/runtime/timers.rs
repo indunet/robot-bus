@@ -3,6 +3,9 @@
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
+use crate::runtime::callback_group::CallbackGroup;
+use crate::runtime::worker_pool::WorkerPool;
+
 pub type TimerCallback = Arc<dyn Fn() + Send + Sync>;
 
 /// Opaque id returned by [`super::Executor::create_timer`].
@@ -16,16 +19,23 @@ pub(crate) struct Timer {
     pub period: Duration,
     pub next_deadline: Instant,
     pub callback: TimerCallback,
+    pub group: CallbackGroup,
     pub cancelled: bool,
 }
 
 impl Timer {
-    pub fn new(id: u64, period: Duration, callback: TimerCallback) -> Self {
+    pub fn new(
+        id: u64,
+        period: Duration,
+        callback: TimerCallback,
+        group: CallbackGroup,
+    ) -> Self {
         Self {
             id,
             period,
             next_deadline: Instant::now() + period,
             callback,
+            group,
             cancelled: false,
         }
     }
@@ -33,14 +43,20 @@ impl Timer {
 
 /// Fire every due timer once, then reschedule from `now + period`.
 ///
-/// Returns `true` if at least one callback ran.
-pub(crate) fn tick_timers(timers: &mut [Timer], now: Instant) -> bool {
+/// Returns `true` if at least one callback was scheduled/ran.
+pub(crate) fn tick_timers(
+    timers: &mut [Timer],
+    now: Instant,
+    worker_pool: Option<&WorkerPool>,
+) -> bool {
     let mut fired = false;
     for timer in timers.iter_mut() {
         if timer.cancelled || timer.next_deadline > now {
             continue;
         }
-        (timer.callback)();
+        let callback = Arc::clone(&timer.callback);
+        let group = timer.group.clone();
+        group.run(worker_pool, move || callback());
         timer.next_deadline = now + timer.period;
         fired = true;
     }

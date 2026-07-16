@@ -13,9 +13,10 @@ use crate::broker::{RobotBusBroker as RustRobotBusBroker, RobotBusConfig};
 use crate::errors::BusError;
 use crate::message_bus::{Publisher as RustPublisher, Subscriber as RustSubscriber};
 use crate::runtime::{
-    MultiThreadedExecutor as RustMultiThreadedExecutor, Node as RustNode,
-    ShutdownHandle as RustShutdownHandle, SingleThreadedExecutor as RustSingleThreadedExecutor,
-    TimerHandle as RustTimerHandle, TopicPublisher as RustTopicPublisher,
+    CallbackGroup, CallbackGroupType, MultiThreadedExecutor as RustMultiThreadedExecutor,
+    Node as RustNode, ShutdownHandle as RustShutdownHandle,
+    SingleThreadedExecutor as RustSingleThreadedExecutor, TimerHandle as RustTimerHandle,
+    TopicPublisher as RustTopicPublisher,
 };
 use crate::shutdown;
 use crate::transports;
@@ -126,6 +127,44 @@ impl PyShutdownHandle {
 #[derive(Clone, Copy)]
 struct PyTimerHandle {
     inner: RustTimerHandle,
+}
+
+#[pyclass(name = "CallbackGroupType", eq, eq_int)]
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum PyCallbackGroupType {
+    MutuallyExclusive = 0,
+    Reentrant = 1,
+}
+
+impl From<PyCallbackGroupType> for CallbackGroupType {
+    fn from(value: PyCallbackGroupType) -> Self {
+        match value {
+            PyCallbackGroupType::MutuallyExclusive => CallbackGroupType::MutuallyExclusive,
+            PyCallbackGroupType::Reentrant => CallbackGroupType::Reentrant,
+        }
+    }
+}
+
+#[pyclass(name = "CallbackGroup", unsendable)]
+#[derive(Clone)]
+struct PyCallbackGroup {
+    inner: CallbackGroup,
+}
+
+#[pymethods]
+impl PyCallbackGroup {
+    #[getter]
+    fn id(&self) -> u64 {
+        self.inner.id()
+    }
+
+    #[getter]
+    fn kind(&self) -> PyCallbackGroupType {
+        match self.inner.kind() {
+            CallbackGroupType::MutuallyExclusive => PyCallbackGroupType::MutuallyExclusive,
+            CallbackGroupType::Reentrant => PyCallbackGroupType::Reentrant,
+        }
+    }
 }
 
 #[pyclass(name = "TopicPublisher", unsendable)]
@@ -323,6 +362,12 @@ impl PyNode {
         self.inner.name()
     }
 
+    fn create_callback_group(&self, kind: PyCallbackGroupType) -> PyCallbackGroup {
+        PyCallbackGroup {
+            inner: self.inner.create_callback_group(kind.into()),
+        }
+    }
+
     fn create_publisher(&mut self, topic: &str) -> PyResult<PyTopicPublisher> {
         Ok(PyTopicPublisher {
             inner: self.inner.create_publisher(topic).map_err(bus_err)?,
@@ -330,7 +375,13 @@ impl PyNode {
     }
 
     /// Register a subscription callback `callback(topic: str, payload: bytes)`.
-    fn create_subscription(&mut self, topic: &str, callback: Py<PyAny>) -> PyResult<()> {
+    #[pyo3(signature = (topic, callback, callback_group=None))]
+    fn create_subscription(
+        &mut self,
+        topic: &str,
+        callback: Py<PyAny>,
+        callback_group: Option<&PyCallbackGroup>,
+    ) -> PyResult<()> {
         let cb: crate::runtime::MessageCallback = Arc::new(move |topic, payload| {
             Python::with_gil(|py| {
                 let payload = PyBytes::new(py, payload);
@@ -339,13 +390,23 @@ impl PyNode {
                 }
             });
         });
-        self.inner
-            .create_subscription(topic, cb)
-            .map_err(bus_err)
+        match callback_group {
+            Some(group) => self
+                .inner
+                .create_subscription_with_group(topic, cb, &group.inner)
+                .map_err(bus_err),
+            None => self.inner.create_subscription(topic, cb).map_err(bus_err),
+        }
     }
 
     /// Periodic timer; `callback()` takes no arguments. `period` is seconds.
-    fn create_timer(&mut self, period: f64, callback: Py<PyAny>) -> PyResult<PyTimerHandle> {
+    #[pyo3(signature = (period, callback, callback_group=None))]
+    fn create_timer(
+        &mut self,
+        period: f64,
+        callback: Py<PyAny>,
+        callback_group: Option<&PyCallbackGroup>,
+    ) -> PyResult<PyTimerHandle> {
         let cb: crate::runtime::TimerCallback = Arc::new(move || {
             Python::with_gil(|py| {
                 if let Err(err) = callback.call0(py) {
@@ -353,10 +414,16 @@ impl PyNode {
                 }
             });
         });
-        let handle = self
-            .inner
-            .create_timer(Duration::from_secs_f64(period), cb)
-            .map_err(bus_err)?;
+        let handle = match callback_group {
+            Some(group) => self
+                .inner
+                .create_timer_with_group(Duration::from_secs_f64(period), cb, &group.inner)
+                .map_err(bus_err)?,
+            None => self
+                .inner
+                .create_timer(Duration::from_secs_f64(period), cb)
+                .map_err(bus_err)?,
+        };
         Ok(PyTimerHandle { inner: handle })
     }
 
@@ -524,6 +591,8 @@ fn run_broker(py: Python<'_>) -> PyResult<()> {
 fn _native(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyPublisher>()?;
     m.add_class::<PySubscriber>()?;
+    m.add_class::<PyCallbackGroupType>()?;
+    m.add_class::<PyCallbackGroup>()?;
     m.add_class::<PySingleThreadedExecutor>()?;
     m.add_class::<PyMultiThreadedExecutor>()?;
     m.add_class::<PyNode>()?;

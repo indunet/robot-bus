@@ -6,6 +6,7 @@ use std::time::{Duration, Instant};
 use uuid::Uuid;
 use zmq::{Context, Socket, SocketType};
 
+use crate::runtime::callback_group::CallbackGroup;
 use crate::runtime::queues::ActionMessageCallback;
 use crate::zmq_helpers::{
     apply_action_options_with, apply_rpc_options_with, HighWaterMark,
@@ -38,6 +39,7 @@ pub struct ServiceRegistration {
     pub socket: Socket,
     pub service_name: String,
     pub handler: ServiceHandler,
+    pub callback_group: CallbackGroup,
     pub endpoint: String,
     pub identity: Vec<u8>,
     pub heartbeat_interval: Duration,
@@ -49,6 +51,7 @@ impl ServiceRegistration {
         context: &Context,
         service_name: &str,
         handler: ServiceHandler,
+        callback_group: CallbackGroup,
         endpoint: &str,
         identity: Option<&str>,
         heartbeat_interval_ms: u64,
@@ -66,6 +69,7 @@ impl ServiceRegistration {
             socket,
             service_name: service_name.to_string(),
             handler,
+            callback_group,
             endpoint: endpoint.to_string(),
             identity,
             heartbeat_interval: Duration::from_millis(heartbeat_interval_ms),
@@ -99,6 +103,7 @@ pub struct ActionRegistration {
     pub socket: Socket,
     pub action_name: String,
     pub handler: ActionGoalHandler,
+    pub callback_group: CallbackGroup,
     pub endpoint: String,
     pub identity: Vec<u8>,
     pub heartbeat_interval: Duration,
@@ -110,6 +115,7 @@ impl ActionRegistration {
         context: &Context,
         action_name: &str,
         handler: ActionGoalHandler,
+        callback_group: CallbackGroup,
         endpoint: &str,
         identity: Option<&str>,
         heartbeat_interval_ms: u64,
@@ -127,6 +133,7 @@ impl ActionRegistration {
             socket,
             action_name: action_name.to_string(),
             handler,
+            callback_group,
             endpoint: endpoint.to_string(),
             identity,
             heartbeat_interval: Duration::from_millis(heartbeat_interval_ms),

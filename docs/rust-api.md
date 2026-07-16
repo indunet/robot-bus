@@ -138,7 +138,32 @@ Raw bytes 回调：`node.create_subscription("/robot1/imu", Arc::new(|topic, pay
 
 topic / service / action 名按传入原样使用（请自行写全路径）。
 
-`MultiThreadedExecutor::new(n)`：service / action handler 最多 `n` 个并发线程；订阅与 timer 仍在 I/O 线程。
+`MultiThreadedExecutor::new(n)`：最多 `n` 个 worker；配合 `Reentrant` callback group 时订阅 / timer / service / action 都可并行。`MutuallyExclusive` 组内仍串行。
+
+### Callback group
+
+接近 ROS 2：`MutuallyExclusive`（组内互斥）与 `Reentrant`（组内可并行，配合 `MultiThreadedExecutor`）。节点默认有一个互斥 group；未指定时订阅 / timer / service / action 都挂在默认组上。
+
+```rust
+use robot_bus::{CallbackGroupType, MultiThreadedExecutor, Node};
+
+let mut node = Node::new("pilot");
+let executor = MultiThreadedExecutor::new(4);
+executor.add_node(&mut node)?;
+
+let reentrant = node.create_callback_group(CallbackGroupType::Reentrant);
+node.create_subscription_with_group(
+    "/robot1/imu",
+    Arc::new(|_topic, _payload| { /* 可与同组其它回调并行 */ }),
+    &reentrant,
+)?;
+node.create_timer_with_group(
+    Duration::from_millis(100),
+    Arc::new(|| {}),
+    &reentrant,
+)?;
+```
+
 
 ### 高水位（HWM）
 
