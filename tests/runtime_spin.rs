@@ -192,7 +192,8 @@ fn node_with_proxy(name: &str, proxy: &MessageProxy) -> (SingleThreadedExecutor,
         ..NodeOptions::default()
     };
     let executor = SingleThreadedExecutor::new();
-    let node = executor.create_node_with_options(name, options);
+    let mut node = Node::with_options(name, options);
+    executor.add_node(&mut node).expect("add_node");
     (executor, node)
 }
 
@@ -252,12 +253,10 @@ fn node_publish_uses_topic_as_given() {
     thread::sleep(Duration::from_millis(150));
 
     let (_pub_exec, mut pub_node) = node_with_proxy("pilot", &proxy);
-    // Same XPUB/XSUB proxy: attach pub node to the shared message bus via its own
-    // single-threaded executor is fine; spinning the subscriber's executor is enough.
-    pub_node.create_publisher().expect("create_publisher");
-    pub_node
-        .publish("/robot1/cmd_vel", b"go")
-        .expect("publish");
+    let publisher = pub_node
+        .create_publisher("/robot1/cmd_vel")
+        .expect("create_publisher");
+    publisher.publish(b"go").expect("publish");
 
     let deadline = std::time::Instant::now() + Duration::from_secs(2);
     while hits.load(Ordering::SeqCst) == 0 {
@@ -278,7 +277,8 @@ fn node_timer_via_spin_once() {
     let hits_cb = hits.clone();
 
     let executor = SingleThreadedExecutor::new();
-    let mut node = executor.create_node("timer_node");
+    let mut node = Node::new("timer_node");
+    executor.add_node(&mut node).expect("add_node");
     node.create_timer(
         Duration::from_millis(40),
         Arc::new(move || {

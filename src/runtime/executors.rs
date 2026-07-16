@@ -1,7 +1,12 @@
 //! ROS 2–style executors: [`SingleThreadedExecutor`] and [`MultiThreadedExecutor`].
 //!
-//! Create nodes with [`ExecutorHandle::create_node`], then drive callbacks with
-//! `spin` / `spin_once` / `spin_some` on the executor (not on the node).
+//! Typical flow:
+//! ```ignore
+//! let mut node = Node::new("pilot");
+//! let executor = SingleThreadedExecutor::new();
+//! executor.add_node(&mut node)?;
+//! executor.spin()?;
+//! ```
 
 use std::sync::{Arc, Mutex, MutexGuard};
 use std::time::Duration;
@@ -11,10 +16,6 @@ use crate::runtime::executor::{Executor, ShutdownHandle};
 use crate::runtime::node::{Node, NodeOptions};
 
 /// Shared handle to the underlying poll-loop [`Executor`].
-///
-/// Both executor wrappers and [`Node`] hold clones of this handle so that
-/// `create_node` + `spin` match the ROS 2 ownership split without fighting
-/// the borrow checker.
 #[derive(Clone)]
 pub struct ExecutorHandle {
     inner: Arc<Mutex<Executor>>,
@@ -33,18 +34,25 @@ impl ExecutorHandle {
             .map_err(|_| BusError::Protocol("executor mutex poisoned".into()))
     }
 
-    /// Create a [`Node`] attached to this executor (ROS 2 `create_node` / `add_node`).
-    pub fn create_node(&self, name: impl Into<String>) -> Node {
+    /// Attach an existing [`Node`] (ROS 2 `add_node`).
+    pub fn add_node(&self, node: &mut Node) -> Result<()> {
+        node.attach_executor(self.clone())
+    }
+
+    /// Convenience: `Node::new` + [`add_node`](Self::add_node).
+    pub fn create_node(&self, name: impl Into<String>) -> Result<Node> {
         self.create_node_with_options(name, NodeOptions::default())
     }
 
-    /// Like [`create_node`](Self::create_node), with explicit broker endpoints.
+    /// Convenience: `Node::with_options` + [`add_node`](Self::add_node).
     pub fn create_node_with_options(
         &self,
         name: impl Into<String>,
         options: NodeOptions,
-    ) -> Node {
-        Node::attach(name, options, self.clone())
+    ) -> Result<Node> {
+        let mut node = Node::with_options(name, options);
+        self.add_node(&mut node)?;
+        Ok(node)
     }
 
     pub fn shutdown_handle(&self) -> Result<ShutdownHandle> {
@@ -106,7 +114,11 @@ impl SingleThreadedExecutor {
         &self.handle
     }
 
-    pub fn create_node(&self, name: impl Into<String>) -> Node {
+    pub fn add_node(&self, node: &mut Node) -> Result<()> {
+        self.handle.add_node(node)
+    }
+
+    pub fn create_node(&self, name: impl Into<String>) -> Result<Node> {
         self.handle.create_node(name)
     }
 
@@ -114,7 +126,7 @@ impl SingleThreadedExecutor {
         &self,
         name: impl Into<String>,
         options: NodeOptions,
-    ) -> Node {
+    ) -> Result<Node> {
         self.handle.create_node_with_options(name, options)
     }
 
@@ -172,7 +184,11 @@ impl MultiThreadedExecutor {
         &self.handle
     }
 
-    pub fn create_node(&self, name: impl Into<String>) -> Node {
+    pub fn add_node(&self, node: &mut Node) -> Result<()> {
+        self.handle.add_node(node)
+    }
+
+    pub fn create_node(&self, name: impl Into<String>) -> Result<Node> {
         self.handle.create_node(name)
     }
 
@@ -180,7 +196,7 @@ impl MultiThreadedExecutor {
         &self,
         name: impl Into<String>,
         options: NodeOptions,
-    ) -> Node {
+    ) -> Result<Node> {
         self.handle.create_node_with_options(name, options)
     }
 

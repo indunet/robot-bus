@@ -15,7 +15,7 @@ mod worker_pool;
 
 pub use executor::{Executor, ShutdownHandle};
 pub use executors::{ExecutorHandle, MultiThreadedExecutor, SingleThreadedExecutor};
-pub use node::{Node, NodeOptions};
+pub use node::{Node, NodeOptions, TopicPublisher};
 pub use queues::ActionMessageCallback;
 pub use registrations::{ActionGoalHandler, MessageCallback, ServiceHandler};
 pub use timers::{TimerCallback, TimerHandle};

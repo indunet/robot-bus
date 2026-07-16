@@ -15,7 +15,7 @@ use crate::message_bus::{Publisher as RustPublisher, Subscriber as RustSubscribe
 use crate::runtime::{
     MultiThreadedExecutor as RustMultiThreadedExecutor, Node as RustNode,
     ShutdownHandle as RustShutdownHandle, SingleThreadedExecutor as RustSingleThreadedExecutor,
-    TimerHandle as RustTimerHandle,
+    TimerHandle as RustTimerHandle, TopicPublisher as RustTopicPublisher,
 };
 use crate::shutdown;
 use crate::transports;
@@ -128,6 +128,23 @@ struct PyTimerHandle {
     inner: RustTimerHandle,
 }
 
+#[pyclass(name = "TopicPublisher", unsendable)]
+struct PyTopicPublisher {
+    inner: RustTopicPublisher,
+}
+
+#[pymethods]
+impl PyTopicPublisher {
+    #[getter]
+    fn topic(&self) -> &str {
+        self.inner.topic()
+    }
+
+    fn publish(&self, payload: &[u8]) -> PyResult<()> {
+        self.inner.publish(payload).map_err(bus_err)
+    }
+}
+
 #[pyclass(name = "SingleThreadedExecutor", unsendable)]
 struct PySingleThreadedExecutor {
     inner: RustSingleThreadedExecutor,
@@ -140,6 +157,10 @@ impl PySingleThreadedExecutor {
         Self {
             inner: RustSingleThreadedExecutor::new(),
         }
+    }
+
+    fn add_node(&self, node: &mut PyNode) -> PyResult<()> {
+        self.inner.add_node(&mut node.inner).map_err(bus_err)
     }
 
     #[pyo3(signature = (
@@ -156,7 +177,7 @@ impl PySingleThreadedExecutor {
         transport: &str,
         message_xsub: Option<String>,
         message_xpub: Option<String>,
-    ) -> PyNode {
+    ) -> PyResult<PyNode> {
         let options = crate::runtime::NodeOptions {
             host: host.into(),
             transport: transport.into(),
@@ -164,9 +185,12 @@ impl PySingleThreadedExecutor {
             message_xpub,
             ..crate::runtime::NodeOptions::default()
         };
-        PyNode {
-            inner: self.inner.create_node_with_options(name, options),
-        }
+        Ok(PyNode {
+            inner: self
+                .inner
+                .create_node_with_options(name, options)
+                .map_err(bus_err)?,
+        })
     }
 
     fn shutdown_handle(&self) -> PyResult<PyShutdownHandle> {
@@ -205,6 +229,10 @@ impl PyMultiThreadedExecutor {
         }
     }
 
+    fn add_node(&self, node: &mut PyNode) -> PyResult<()> {
+        self.inner.add_node(&mut node.inner).map_err(bus_err)
+    }
+
     #[pyo3(signature = (
         name,
         host="localhost",
@@ -219,7 +247,7 @@ impl PyMultiThreadedExecutor {
         transport: &str,
         message_xsub: Option<String>,
         message_xpub: Option<String>,
-    ) -> PyNode {
+    ) -> PyResult<PyNode> {
         let options = crate::runtime::NodeOptions {
             host: host.into(),
             transport: transport.into(),
@@ -227,9 +255,12 @@ impl PyMultiThreadedExecutor {
             message_xpub,
             ..crate::runtime::NodeOptions::default()
         };
-        PyNode {
-            inner: self.inner.create_node_with_options(name, options),
-        }
+        Ok(PyNode {
+            inner: self
+                .inner
+                .create_node_with_options(name, options)
+                .map_err(bus_err)?,
+        })
     }
 
     fn shutdown_handle(&self) -> PyResult<PyShutdownHandle> {
@@ -260,17 +291,42 @@ struct PyNode {
 
 #[pymethods]
 impl PyNode {
+    #[new]
+    #[pyo3(signature = (
+        name,
+        host="localhost",
+        transport="tcp",
+        message_xsub=None,
+        message_xpub=None,
+    ))]
+    fn new(
+        name: String,
+        host: &str,
+        transport: &str,
+        message_xsub: Option<String>,
+        message_xpub: Option<String>,
+    ) -> Self {
+        let options = crate::runtime::NodeOptions {
+            host: host.into(),
+            transport: transport.into(),
+            message_xsub,
+            message_xpub,
+            ..crate::runtime::NodeOptions::default()
+        };
+        Self {
+            inner: RustNode::with_options(name, options),
+        }
+    }
+
     #[getter]
     fn name(&self) -> &str {
         self.inner.name()
     }
 
-    fn create_publisher(&mut self) -> PyResult<()> {
-        self.inner.create_publisher().map_err(bus_err)
-    }
-
-    fn publish(&self, topic: &str, payload: &[u8]) -> PyResult<()> {
-        self.inner.publish(topic, payload).map_err(bus_err)
+    fn create_publisher(&mut self, topic: &str) -> PyResult<PyTopicPublisher> {
+        Ok(PyTopicPublisher {
+            inner: self.inner.create_publisher(topic).map_err(bus_err)?,
+        })
     }
 
     /// Register a subscription callback `callback(topic: str, payload: bytes)`.
@@ -471,6 +527,7 @@ fn _native(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PySingleThreadedExecutor>()?;
     m.add_class::<PyMultiThreadedExecutor>()?;
     m.add_class::<PyNode>()?;
+    m.add_class::<PyTopicPublisher>()?;
     m.add_class::<PyShutdownHandle>()?;
     m.add_class::<PyTimerHandle>()?;
     m.add_class::<PyRobotBusBroker>()?;

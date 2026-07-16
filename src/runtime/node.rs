@@ -1,17 +1,20 @@
-//! ROS 2–style [`Node`]: named participant attached to an executor.
+//! ROS 2–style [`Node`]: named participant, then attached to an executor.
 //!
-//! Owns broker connection config ([`NodeOptions`]) plus a node name.
+//! Typical flow (matches ROS 2):
+//! 1. `let mut node = Node::new("pilot");`
+//! 2. `executor.add_node(&mut node)?;`
+//! 3. `let pub_ = node.create_publisher("/robot1/imu")?; pub_.publish(&bytes)?;`
+//! 4. `executor.spin()?;`
+//!
 //! Topic / service / action names are used as given (pass full paths yourself).
-//! Create via [`crate::runtime::SingleThreadedExecutor::create_node`] or
-//! [`crate::runtime::MultiThreadedExecutor::create_node`], then `spin` the executor.
 
-use std::sync::MutexGuard;
+use std::sync::{Arc, MutexGuard};
 use std::time::Duration;
 
 use prost::Message;
 
 use crate::errors::{BusError, Result};
-use crate::message_bus::Publisher;
+use crate::message_bus::Publisher as BusPublisher;
 use crate::runtime::executor::{Executor, ShutdownHandle};
 use crate::runtime::executors::ExecutorHandle;
 use crate::runtime::queues::ActionMessageCallback;
@@ -93,32 +96,82 @@ impl NodeOptions {
     }
 }
 
-/// Named participant attached to a shared executor (simplified ROS 2 `Node`).
+/// Topic-bound publisher returned by [`Node::create_publisher`] (ROS 2 style).
+///
+/// Shares one underlying bus PUB socket per node; each handle remembers its topic.
+#[derive(Clone)]
+pub struct TopicPublisher {
+    inner: Arc<BusPublisher>,
+    topic: String,
+}
+
+impl TopicPublisher {
+    pub fn topic(&self) -> &str {
+        &self.topic
+    }
+
+    pub fn publish(&self, payload: &[u8]) -> Result<()> {
+        self.inner.publish(&self.topic, payload)
+    }
+
+    pub fn high_water_mark(&self) -> Result<HighWaterMark> {
+        self.inner.high_water_mark()
+    }
+
+    pub fn set_high_water_mark(&self, hwm: HighWaterMark) -> Result<()> {
+        self.inner.set_high_water_mark(hwm)
+    }
+}
+
+/// Named participant (simplified ROS 2 `Node`).
+///
+/// Create with [`Node::new`], then [`crate::runtime::SingleThreadedExecutor::add_node`]
+/// (or the multi-threaded variant) before subscriptions / timers / services.
 pub struct Node {
     name: String,
     options: NodeOptions,
-    executor: ExecutorHandle,
-    publisher: Option<Publisher>,
+    executor: Option<ExecutorHandle>,
+    publisher: Option<Arc<BusPublisher>>,
     subscriber_connected: bool,
 }
 
 impl Node {
-    pub(crate) fn attach(
-        name: impl Into<String>,
-        options: NodeOptions,
-        executor: ExecutorHandle,
-    ) -> Self {
+    /// Create a node that is not yet attached to an executor.
+    pub fn new(name: impl Into<String>) -> Self {
+        Self::with_options(name, NodeOptions::default())
+    }
+
+    /// Create a node with explicit broker connection options.
+    pub fn with_options(name: impl Into<String>, options: NodeOptions) -> Self {
         Self {
             name: name.into(),
             options,
-            executor,
+            executor: None,
             publisher: None,
             subscriber_connected: false,
         }
     }
 
+    pub(crate) fn attach_executor(&mut self, handle: ExecutorHandle) -> Result<()> {
+        if self.executor.is_some() {
+            return Err(BusError::Protocol(
+                "node is already added to an executor".into(),
+            ));
+        }
+        self.executor = Some(handle);
+        Ok(())
+    }
+
+    fn require_executor(&self) -> Result<&ExecutorHandle> {
+        self.executor.as_ref().ok_or_else(|| {
+            BusError::Protocol(
+                "call executor.add_node(&mut node) before subscriptions/timers/services".into(),
+            )
+        })
+    }
+
     fn lock_executor(&self) -> Result<MutexGuard<'_, Executor>> {
-        self.executor.lock()
+        self.require_executor()?.lock()
     }
 
     pub fn name(&self) -> &str {
@@ -129,37 +182,56 @@ impl Node {
         &self.options
     }
 
-    /// Shared executor handle (same as the parent `*ThreadedExecutor`).
-    pub fn executor_handle(&self) -> &ExecutorHandle {
-        &self.executor
+    /// Shared executor handle after [`add_node`](crate::runtime::SingleThreadedExecutor::add_node).
+    pub fn executor_handle(&self) -> Option<&ExecutorHandle> {
+        self.executor.as_ref()
     }
 
-    /// Connect a publisher using this node's message XSUB endpoint.
+    /// Create a topic publisher (ROS 2 `create_publisher`).
     ///
-    /// Call once; subsequent calls replace the publisher. Uses stream HWM defaults.
-    pub fn create_publisher(&mut self) -> Result<()> {
-        let hwm = self.lock_executor()?.stream_hwm();
-        self.create_publisher_with_hwm(hwm)
+    /// Returns a handle; call [`TopicPublisher::publish`] to send. Multiple
+    /// publishers on the same node share one bus PUB socket.
+    pub fn create_publisher(&mut self, topic: impl Into<String>) -> Result<TopicPublisher> {
+        self.ensure_bus_publisher(None)?;
+        Ok(TopicPublisher {
+            inner: Arc::clone(self.publisher.as_ref().expect("publisher just ensured")),
+            topic: topic.into(),
+        })
     }
 
-    /// Connect a publisher with an explicit high-water mark.
-    pub fn create_publisher_with_hwm(&mut self, hwm: HighWaterMark) -> Result<()> {
+    /// Like [`create_publisher`](Self::create_publisher), setting HWM on first socket connect.
+    pub fn create_publisher_with_hwm(
+        &mut self,
+        topic: impl Into<String>,
+        hwm: HighWaterMark,
+    ) -> Result<TopicPublisher> {
+        self.ensure_bus_publisher(Some(hwm))?;
+        Ok(TopicPublisher {
+            inner: Arc::clone(self.publisher.as_ref().expect("publisher just ensured")),
+            topic: topic.into(),
+        })
+    }
+
+    fn ensure_bus_publisher(&mut self, hwm: Option<HighWaterMark>) -> Result<()> {
+        if let Some(pub_) = &self.publisher {
+            if let Some(hwm) = hwm {
+                pub_.set_high_water_mark(hwm)?;
+            }
+            return Ok(());
+        }
+        let hwm = match hwm {
+            Some(h) => h,
+            None => match &self.executor {
+                Some(exec) => exec.lock()?.stream_hwm(),
+                None => HighWaterMark::STREAM,
+            },
+        };
         let endpoint = self.options.message_xsub_endpoint()?;
-        self.publisher = Some(Publisher::with_hwm(Some(&endpoint), hwm)?);
+        self.publisher = Some(Arc::new(BusPublisher::with_hwm(Some(&endpoint), hwm)?));
         Ok(())
     }
 
-    /// Publish on `topic` (use a full path). Requires [`create_publisher`].
-    pub fn publish(&self, topic: &str, payload: &[u8]) -> Result<()> {
-        let Some(pub_) = self.publisher.as_ref() else {
-            return Err(BusError::Protocol(
-                "create_publisher() before publish()".into(),
-            ));
-        };
-        pub_.publish(topic, payload)
-    }
-
-    /// Current publisher HWM, if a publisher exists.
+    /// Current shared publisher HWM, if any publisher was created.
     pub fn publisher_hwm(&self) -> Result<Option<HighWaterMark>> {
         match &self.publisher {
             Some(pub_) => Ok(Some(pub_.high_water_mark()?)),
@@ -167,7 +239,7 @@ impl Node {
         }
     }
 
-    /// Update publisher HWM (error if publisher not created).
+    /// Update shared publisher HWM (error if no publisher created yet).
     pub fn set_publisher_hwm(&self, hwm: HighWaterMark) -> Result<()> {
         let Some(pub_) = self.publisher.as_ref() else {
             return Err(BusError::Protocol(
@@ -203,7 +275,8 @@ impl Node {
 
     /// Subscribe with a raw-bytes callback (ROS 2 `create_subscription`).
     ///
-    /// Connects the subscriber on first use using the node's message XPUB endpoint.
+    /// Requires the node to be added to an executor. Connects the subscriber on
+    /// first use using the node's message XPUB endpoint.
     pub fn create_subscription(
         &mut self,
         topic: &str,
@@ -294,41 +367,43 @@ impl Node {
     }
 
     pub fn shutdown_handle(&self) -> Result<ShutdownHandle> {
-        self.executor.shutdown_handle()
+        self.require_executor()?.shutdown_handle()
     }
 
     pub fn shutdown(&self) -> Result<()> {
-        self.executor.shutdown()
+        self.require_executor()?.shutdown()
     }
 
-    /// Convenience: spin the shared executor (same as `executor.spin()`).
+    /// Convenience: spin the attached executor (same as `executor.spin()`).
     pub fn spin_once(&self, timeout: Option<Duration>) -> Result<bool> {
-        self.executor.spin_once(timeout)
+        self.require_executor()?.spin_once(timeout)
     }
 
     pub fn spin_some(&self, timeout: Option<Duration>) -> Result<()> {
-        self.executor.spin_some(timeout)
+        self.require_executor()?.spin_some(timeout)
     }
 
     pub fn spin(&self) -> Result<()> {
-        self.executor.spin()
+        self.require_executor()?.spin()
     }
 
     pub fn start(&self) -> Result<()> {
-        self.executor.start()
+        self.require_executor()?.start()
     }
 
     pub fn stop(&self) -> Result<()> {
-        self.executor.stop()
+        self.require_executor()?.stop()
     }
 
     pub fn wait(&self) -> Result<()> {
-        self.executor.wait()
+        self.require_executor()?.wait()
     }
 }
 
 #[cfg(test)]
 mod tests {
+    use std::sync::Arc;
+
     use super::*;
     use crate::runtime::SingleThreadedExecutor;
 
@@ -345,9 +420,21 @@ mod tests {
     }
 
     #[test]
-    fn name_is_stored() {
+    fn add_node_then_create_publisher() {
+        let mut node = Node::new("pilot");
         let executor = SingleThreadedExecutor::new();
-        let node = executor.create_node("pilot");
+        executor.add_node(&mut node).unwrap();
         assert_eq!(node.name(), "pilot");
+        let pub_ = node.create_publisher("/robot1/imu").unwrap();
+        assert_eq!(pub_.topic(), "/robot1/imu");
+    }
+
+    #[test]
+    fn subscription_requires_add_node() {
+        let mut node = Node::new("pilot");
+        let err = node
+            .create_subscription("/imu", Arc::new(|_, _| {}))
+            .unwrap_err();
+        assert!(err.to_string().contains("add_node"));
     }
 }

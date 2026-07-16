@@ -30,7 +30,7 @@ with robot_bus.RobotBusBroker.start() as broker:
 
 ## Message bus（Executor + Node + spin）
 
-接近 ROS 2：先建 Executor，再 `create_node`，然后 `create_publisher` / `create_subscription` / `spin`。回调收到 `bytes`，用同 schema 的 protobuf 解析（标准 `Imu` 随 `robot-bus` 打包）：
+接近 ROS 2：`Node(...)` → `executor.add_node(node)` → `create_publisher(topic)` → `publisher.publish(...)`。
 
 ```python
 import robot_bus
@@ -42,17 +42,19 @@ def on_imu(topic, payload):
     imu.ParseFromString(payload)
     print(topic, imu.angular_velocity)
 
+node = robot_bus.Node("pilot")
+# 可选：Node(..., host=..., transport=..., message_xsub=..., message_xpub=...)
 executor = robot_bus.SingleThreadedExecutor()
-# 可选：create_node(..., host=..., transport=..., message_xsub=..., message_xpub=...)
-node = executor.create_node("pilot")
-node.create_publisher()
+executor.add_node(node)
+
+imu_pub = node.create_publisher("/robot1/imu")
 node.create_subscription("/robot1/imu", on_imu)
 
 imu = Imu(
     angular_velocity=Vector3(x=0.0, y=0.0, z=0.1),
     linear_acceleration=Vector3(x=0.0, y=0.0, z=9.8),
 )
-node.publish("/robot1/imu", imu.SerializeToString())
+imu_pub.publish(imu.SerializeToString())
 
 # 阻塞直到 executor.shutdown() 或 shutdown_handle().shutdown()
 # executor.spin()
@@ -62,7 +64,7 @@ node.publish("/robot1/imu", imu.SerializeToString())
 
 ```python
 executor = robot_bus.MultiThreadedExecutor(num_threads=4)
-node = executor.create_node("pilot")
+executor.add_node(node)
 ```
 
 ### 定时器
@@ -70,8 +72,9 @@ node = executor.create_node("pilot")
 ```python
 import robot_bus
 
+node = robot_bus.Node("timer_demo")
 executor = robot_bus.SingleThreadedExecutor()
-node = executor.create_node("timer_demo")
+executor.add_node(node)
 
 def on_tick():
     print("tick")
@@ -87,8 +90,9 @@ node.cancel_timer(handle)
 ```python
 import robot_bus
 
+node = robot_bus.Node("poller")
 executor = robot_bus.SingleThreadedExecutor()
-node = executor.create_node("poller")
+executor.add_node(node)
 node.create_subscription("/robot1/imu", lambda t, p: print(t))
 
 while True:
@@ -106,8 +110,9 @@ import threading
 import time
 import robot_bus
 
+node = robot_bus.Node("worker")
 executor = robot_bus.SingleThreadedExecutor()
-node = executor.create_node("worker")
+executor.add_node(node)
 handle = executor.shutdown_handle()
 
 def stop_later():
@@ -151,14 +156,14 @@ print(robot_bus.__version__)
 
 | 符号 | 说明 |
 |------|------|
-| `SingleThreadedExecutor()` | 单线程执行器；`create_node` + `spin` |
+| `Node(name, host=..., …)` | 建节点（尚未挂到 executor） |
+| `SingleThreadedExecutor()` | 单线程执行器；`add_node` + `spin` |
 | `MultiThreadedExecutor(num_threads=4)` | service/action handler 可并行 |
-| `executor.create_node(name, host=..., …)` | 创建 Node；topic 用全路径 |
-| `Publisher(endpoint=None)` | 低层连 XSUB（也可经 `Node.publish`） |
+| `executor.add_node(node)` | 把节点挂到执行器（ROS 2 同款） |
+| `node.create_publisher(topic)` → `TopicPublisher` | 返回 publisher，再 `publish(bytes)` |
+| `Publisher(endpoint=None)` | 低层连 XSUB（不经 Node） |
 | `RobotBusBroker.start()` | 进程内启动三个 bus |
 | `run_broker()` | 阻塞 CLI 入口 |
-| `message_xsub_endpoint(host, transport)` | 发布端点辅助 |
-| `message_xpub_endpoint(host, transport)` | 订阅端点辅助 |
 | `ShutdownHandle` / `TimerHandle` | spin 与定时器控制 |
 
 Service / Action、gRPC 网关目前仅 Rust 侧提供；见 [rust-api.md](rust-api.md)。
