@@ -1,0 +1,42 @@
+name: CI
+
+on:
+  push:
+    branches: [master, main]
+  pull_request:
+
+jobs:
+  rust:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y protobuf-compiler libzmq3-dev pkg-config
+      - uses: dtolnay/rust-toolchain@stable
+      - run: cargo test
+      - run: cargo test --features grpc
+
+  python-msgs:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install protobuf compiler (match codegen)
+        run: |
+          set -eux
+          curl -fsSL -o /tmp/protoc.zip \
+            "https://github.com/protocolbuffers/protobuf/releases/download/v28.3/protoc-28.3-linux-x86_64.zip"
+          sudo unzip -o /tmp/protoc.zip -d /usr/local
+          protoc --version
+      - name: Install protobuf runtime
+        run: pip install 'protobuf>=5.28'
+      - name: Check generated Python msgs are fresh
+        run: |
+          python3 scripts/generate_python_msgs.py
+          git diff --exit-code -- python/robot_bus
+      - name: Smoke test message round-trip
+        run: PYTHONPATH=python python3 tests/python/test_msgs_roundtrip.py

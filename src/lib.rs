@@ -4,13 +4,22 @@ pub mod action_bus;
 pub mod broker;
 pub mod errors;
 pub mod message_bus;
-pub mod msgs;
 pub mod runtime;
 pub mod service_bus;
 pub mod shutdown;
 pub mod transports;
 pub mod worker_thread;
 pub mod zmq_helpers;
+
+// Keep packages under a private module so prost `super::…` paths resolve;
+// re-export at crate root as `robot_bus::sensor_msgs::…`.
+mod msgs;
+
+pub use msgs::{
+    builtin_interfaces, control_msgs, diagnostic_msgs, geometry_msgs, nav2_msgs, nav_msgs,
+    sensor_msgs, shape_msgs, std_msgs, std_srvs, tf2_msgs, trajectory_msgs, unique_identifier_msgs,
+    visualization_msgs,
+};
 
 #[cfg(feature = "grpc")]
 pub mod grpc;

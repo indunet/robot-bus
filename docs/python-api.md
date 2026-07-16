@@ -50,13 +50,12 @@ robot_bus.run_broker()
 
 ## Message bus（Node + spin）
 
-接近 ROS 2 的 `create_publisher` / `create_subscription` / `spin`。回调收到 `bytes`，用与 Rust `robot_bus::msgs` 同 schema 的 protobuf 自行解析（此处标准 `Imu`）：
+接近 ROS 2 的 `create_publisher` / `create_subscription` / `spin`。回调收到 `bytes`，用同 schema 的 protobuf 解析（标准 `Imu` 随 `robot-bus` 打包）：
 
 ```python
 import robot_bus
-# 与 Rust `robot_bus::msgs::sensor_msgs::msg::v1::Imu` 同 schema（需自行生成 pb）
-from sensor_msgs_pb2 import Imu
-from geometry_msgs_pb2 import Vector3
+from robot_bus.sensor_msgs.msg.v1 import Imu
+from robot_bus.geometry_msgs.msg.v1 import Vector3
 
 def on_imu(topic, payload):
     imu = Imu()
@@ -148,17 +147,22 @@ assert node.resolve_name("/imu") == "/imu"  # 绝对名不变
 
 ## 与 Protobuf 配合
 
-Python 侧自行用 `protobuf` 包编码（与 `robot_bus::msgs` 同 schema）。上面示例用的是标准 `sensor_msgs/msg/v1/Imu`；其它消息同理，例如 `Twist`：
+`pip install robot-bus` 后消息类型已在 `robot_bus` 命名空间下（与 Rust `robot_bus::<pkg>::…` 同 proto schema）。例如 `Twist`：
 
 ```python
-# 假设已生成 geometry_msgs_pb2.Twist
-from geometry_msgs_pb2 import Twist, Vector3
+from robot_bus.geometry_msgs.msg.v1 import Twist, Vector3
 
 twist = Twist(linear=Vector3(x=1.0, y=0.0, z=0.0))
 node.publish("cmd_vel", twist.SerializeToString())
 ```
 
-仓库内 ROS 风格 proto 在 `proto/<pkg>/{msg|srv|grpc}/v1/`，Rust 侧由 `robot_bus::msgs` 提供类型。Typed 订阅（回调直接收解码后的消息）目前仅 Rust：`create_subscription_typed`。
+仓库内 ROS 风格 proto 在 `proto/<pkg>/{msg|srv|grpc}/v1/`。Python 生成物在 `python/robot_bus/<pkg>/…`（由 `scripts/generate_python_msgs.py` 生成并随 wheel 发布）。Typed 订阅（回调直接收解码后的消息）目前仅 Rust：`create_subscription_typed`。
+
+说明：
+
+- 路径形如 `robot_bus.sensor_msgs.msg.v1`，**不占用** ROS 顶层包名 `sensor_msgs`
+- 编码是 protobuf；与 ROS IDL/CDR **字节不互通**（除非另做 bridge）
+- 生成文件名 `*_pb2.py` 是 protoc 惯例，不表示 proto2
 
 ---
 

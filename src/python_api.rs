@@ -381,7 +381,7 @@ fn run_broker(py: Python<'_>) -> PyResult<()> {
 }
 
 #[pymodule]
-fn robot_bus(m: &Bound<'_, PyModule>) -> PyResult<()> {
+fn _native(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyPublisher>()?;
     m.add_class::<PySubscriber>()?;
     m.add_class::<PyNode>()?;

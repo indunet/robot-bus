@@ -15,3 +15,6 @@ Cargo.lock
 # Local env
 .env
 .env.*
+.venv/
+**/__pycache__/
+*.py[cod]

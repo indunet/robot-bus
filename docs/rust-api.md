@@ -8,9 +8,51 @@ robot-bus = "0.0.2"
 # gRPC 网关：robot-bus = { version = "0.0.2", features = ["grpc"] }
 ```
 
-先启动 broker：`cargo run --bin robot_bus_broker`。
+## Broker 启动
 
-连接由 [`Node`](../src/runtime/node.rs) 的 `NodeOptions` 管理（默认 `localhost` + `tcp`）。底层 `Executor` 负责 `spin`；一般业务代码用 Node 即可。
+SDK 默认连本机 broker（`localhost` + `tcp`）。运行示例前需先启动对应路由进程；也可在应用内嵌 broker（见下文「进程内 broker」）。
+
+| 总线 | 默认端口 | 二进制 | 说明 |
+|------|----------|--------|------|
+| message | 15560 (XSUB) / 15561 (XPUB) | `message_bus_broker` | PUB/SUB 透明代理 |
+| service | 15662 (frontend) / 15663 (backend) | `service_bus_broker` | REQ 客户端 ↔ DEALER worker |
+| action | 15664 (frontend) / 15665 (backend) | `action_bus_broker` | DEALER 客户端 ↔ DEALER worker |
+
+**一次启动三条总线（最常用）：**
+
+```bash
+cargo run --bin robot_bus_broker
+# Ctrl+C 停止
+```
+
+**只启动某一条总线：**
+
+```bash
+cargo run --bin message_bus_broker
+cargo run --bin service_bus_broker
+cargo run --bin action_bus_broker
+# 各二进制支持 --help 查看 bind / HWM 等参数
+```
+
+**gRPC 网关**（feature `grpc`，订阅 message topic；需 message broker 已运行）：
+
+```bash
+cargo run --bin robot_bus_broker
+cargo run --features grpc --bin robot_bus_grpc_gateway
+# 默认 http://0.0.0.0:15770
+```
+
+**进程内嵌入**（不必单独起二进制）：
+
+```rust
+use robot_bus::broker::{RobotBusBroker, RobotBusConfig};
+
+let broker = RobotBusBroker::start(RobotBusConfig::default())?;
+// broker.message.xsub_bind / xpub_bind 等填入 NodeOptions
+broker.stop()?;
+```
+
+连接由 [`Node`](../src/runtime/node.rs) 的 `NodeOptions` 管理。底层 `Executor` 负责 `spin`；一般业务代码用 Node 即可。
 
 ---
 
@@ -22,8 +64,8 @@ robot-bus = "0.0.2"
 use std::sync::Arc;
 use std::time::Duration;
 use prost::Message;
-use robot_bus::msgs::geometry_msgs::msg::v1::Vector3;
-use robot_bus::msgs::sensor_msgs::msg::v1::Imu;
+use robot_bus::geometry_msgs::msg::v1::Vector3;
+use robot_bus::sensor_msgs::msg::v1::Imu;
 use robot_bus::Node;
 
 fn main() -> robot_bus::Result<()> {
@@ -195,13 +237,13 @@ fn main() -> anyhow::Result<()> {
 
 ---
 
-## Protobuf 消息（`robot_bus::msgs`）
+## Protobuf 消息（`robot_bus::<pkg>`）
 
-总线仍传 opaque bytes。`create_subscription_typed` 会自动 decode；raw 回调则自行 `Message::decode`。其它消息同理，例如 `geometry_msgs::msg::v1::Twist`：
+总线仍传 opaque bytes。消息类型挂在 crate 命名空间下，例如 `robot_bus::sensor_msgs::msg::v1::Imu`（无中间 `msgs` 层）。`create_subscription_typed` 会自动 decode；raw 回调则自行 `Message::decode`。其它消息同理，例如 `geometry_msgs::msg::v1::Twist`：
 
 ```rust
 use prost::Message;
-use robot_bus::msgs::geometry_msgs::msg::v1::{Twist, Vector3};
+use robot_bus::geometry_msgs::msg::v1::{Twist, Vector3};
 
 let twist = Twist {
     linear: Some(Vector3 { x: 1.0, y: 0.0, z: 0.0 }),
@@ -210,19 +252,13 @@ let twist = Twist {
 node.publish("cmd_vel", &twist.encode_to_vec())?;
 ```
 
-Service 的 Request / Response 同理（如 `std_srvs::srv::v1::SetBoolRequest`）。
+Service 的 Request / Response 同理（如 `robot_bus::std_srvs::srv::v1::SetBoolRequest`）。
 
 ---
 
 ## gRPC / gRPC-Web 网关（feature `grpc`）
 
-独立进程，浏览器或原生 gRPC 客户端订阅 message topic：
-
-```bash
-cargo run --bin robot_bus_broker
-cargo run --features grpc --bin robot_bus_grpc_gateway
-# 默认 http://0.0.0.0:15770
-```
+独立进程，浏览器或原生 gRPC 客户端订阅 message topic（启动方式见上文「Broker 启动」）。
 
 Rust 客户端示例（集成测试同款）：
 

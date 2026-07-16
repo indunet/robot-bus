@@ -9,8 +9,8 @@ use std::time::Duration;
 
 use prost::Message;
 use robot_bus::message_bus::Publisher;
-use robot_bus::msgs::geometry_msgs::msg::v1::Vector3;
-use robot_bus::msgs::sensor_msgs::msg::v1::Imu;
+use robot_bus::geometry_msgs::msg::v1::Vector3;
+use robot_bus::sensor_msgs::msg::v1::Imu;
 use robot_bus::{Executor, HighWaterMark, MessageCallback, Node, NodeOptions};
 use support::MessageProxy;
 

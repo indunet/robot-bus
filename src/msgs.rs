@@ -1,9 +1,10 @@
 //! Generated ROS 2–style protobuf message and service types from [`proto/`](../../proto).
 //!
-//! Layout mirrors ROS packages: `proto/<pkg>/{msg|srv}/v1/*.proto`, exposed as
-//! `robot_bus::msgs::<pkg>::{msg|srv}::v1::...`.
+//! Internal layout mirrors ROS packages under this module so prost `super::…`
+//! paths resolve. Public API re-exports each package at the crate root:
+//! `robot_bus::<pkg>::{msg|srv}::v1::...`.
 //!
-//! The bus still treats wire bodies as opaque bytes; this module is for
+//! The bus still treats wire bodies as opaque bytes; these modules are for
 //! callers that want typed encode/decode of those payloads.
 //!
 //! Service (`.srv`) definitions are Request/Response message pairs (e.g.

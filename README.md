@@ -13,7 +13,7 @@
 | `runtime::Executor` | 回调 executor（`spin` / `spin_once`） |
 | `runtime::Node` | Node 门面（连接配置 + 名字 / 命名空间 + `create_*`） |
 | `grpc::`（feature） | gRPC / gRPC-Web 网关（独立进程，先支持 Subscribe） |
-| [`proto/`](proto/) | ROS 风格 Protobuf：`proto/<pkg>/{msg\|srv\|grpc}/v1/` |
+| [`proto/`](proto/) | ROS 风格 Protobuf：`proto/<pkg>/{msg\|srv\|grpc}/v1/` → Rust/Python `robot_bus.<pkg>…` |
 
 ## 架构
 
@@ -70,8 +70,8 @@ maturin develop --features extension-module
 
 ```python
 import robot_bus
-from sensor_msgs_pb2 import Imu
-from geometry_msgs_pb2 import Vector3
+from robot_bus.sensor_msgs.msg.v1 import Imu
+from robot_bus.geometry_msgs.msg.v1 import Vector3
 
 def on_imu(topic, payload):
     imu = Imu()
@@ -103,8 +103,8 @@ robot-bus = { path = "../robot-bus" }
 use std::sync::Arc;
 use std::time::Duration;
 use prost::Message;
-use robot_bus::msgs::geometry_msgs::msg::v1::Vector3;
-use robot_bus::msgs::sensor_msgs::msg::v1::Imu;
+use robot_bus::geometry_msgs::msg::v1::Vector3;
+use robot_bus::sensor_msgs::msg::v1::Imu;
 use robot_bus::Node;
 
 let mut node = Node::with_namespace("pilot", "robot1");
@@ -173,14 +173,22 @@ Proto：[`proto/robot_bus/grpc/v1/message_gateway.proto`](proto/robot_bus/grpc/v
 ```bash
 cargo test
 cargo test --features grpc
+PYTHONPATH=python python3 tests/python/test_msgs_roundtrip.py
 ```
 
 ## Protobuf 消息
 
-[`proto/`](proto/) 按 ROS 包布局：`proto/<pkg>/{msg|srv|grpc}/v1/*.proto`，经 `build.rs` + prost 生成到 `robot_bus::msgs::<pkg>::{msg|srv}::v1`。
+[`proto/`](proto/) 按 ROS 包布局：`proto/<pkg>/{msg|srv|grpc}/v1/*.proto`。
+
+| 语言 | 路径 | 说明 |
+|------|------|------|
+| Rust | `robot_bus::<pkg>::{msg\|srv}::v1` | `build.rs` + prost；挂在 crate 命名空间下 |
+| Python | `robot_bus.<pkg>.{msg\|srv}.v1` | 随 wheel 打包；`scripts/generate_python_msgs.py` 生成 |
 
 - 传输层 body 仍是 opaque bytes；bus 不解析类型，业务侧自行 `encode` / `decode`（或用 `create_subscription_typed`）
 - **srv** 是一对 `*Request` / `*Response` message，不是 gRPC
 - **grpc**（`robot_bus`）是网关 RPC 契约，走 feature `grpc` + tonic
+- 消息在 `robot_bus` 命名空间下，**不占用** ROS 顶层 `sensor_msgs` 包名；编码是 protobuf，与 ROS CDR 不互通
+- 改 proto 后跑：`python3 scripts/generate_python_msgs.py`（建议 protoc 28.x，与 CI 一致）
 
 已覆盖：`builtin_interfaces`、`std_msgs`、`std_srvs`、`geometry_msgs`、`sensor_msgs`、`nav_msgs`、`tf2_msgs`、`trajectory_msgs`、`diagnostic_msgs`、`unique_identifier_msgs`、`shape_msgs`、`visualization_msgs`、`control_msgs`、`nav2_msgs`。

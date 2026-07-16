@@ -10,6 +10,7 @@ readme = "README.md"
 requires-python = ">=3.9"
 license = "Apache-2.0"
 authors = [{ name = "deng_ran", email = "deng_ran@aliyun.com" }]
+dependencies = ["protobuf>=5.28"]
 classifiers = [
     "Programming Language :: Rust",
     "Programming Language :: Python :: Implementation :: CPython",
@@ -27,4 +28,5 @@ robot-bus-broker = "robot_bus:run_broker"
 
 [tool.maturin]
 features = ["extension-module"]
-module-name = "robot_bus"
+python-source = "python"
+module-name = "robot_bus._native"
