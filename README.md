@@ -75,7 +75,7 @@ topic, payload = sub.receive(timeout=1.0)
 
 ```toml
 robot-bus = { path = "../robot-bus" }
-# 或 crates.io：robot-bus = "0.0.1"
+# 或 crates.io：robot-bus = "0.0.2"
 ```
 
 ```rust
