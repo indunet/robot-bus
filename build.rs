@@ -1,6 +1,15 @@
+use std::env;
 use std::path::PathBuf;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
+    // libzmq uses Advapi32 security APIs on Windows. Recent Rust toolchains no
+    // longer link advapi32 via std, so cdylib (maturin) builds fail with
+    // LNK2019 for InitializeSecurityDescriptor / SetSecurityDescriptorDacl.
+    let target = env::var("TARGET").unwrap_or_default();
+    if target.contains("windows") {
+        println!("cargo:rustc-link-lib=advapi32");
+    }
+
     let proto_root = PathBuf::from("proto");
     let mut protos = Vec::new();
     collect_protos(&proto_root, &mut protos)?;
