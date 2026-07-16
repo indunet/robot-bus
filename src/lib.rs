@@ -12,6 +12,9 @@ pub mod transports;
 pub mod worker_thread;
 pub mod zmq_helpers;
 
+#[cfg(feature = "extension-module")]
+mod python_api;
+
 pub use action_bus::{ActionClient, ActionKind, ActionMessage, ActionWorker};
 pub use broker::{
     ActionBusBroker, MessageBusBroker, RobotBusBroker, RobotBusConfig, ServiceBusBroker,
@@ -19,7 +22,7 @@ pub use broker::{
 pub use errors::{parse_error_body, BusError, Result};
 pub use message_bus::{Publisher, Subscriber};
 pub use runtime::{
-    BusRuntime, MessageCallback, ServiceHandler, ShutdownHandle, TimerCallback, TimerHandle,
+    BusRuntime, MessageCallback, Node, ServiceHandler, ShutdownHandle, TimerCallback, TimerHandle,
 };
 pub use service_bus::{ServiceClient, ServiceWorker};
 pub use transports::{
@@ -27,3 +30,4 @@ pub use transports::{
     ipc_endpoint, message_xpub_endpoint, message_xsub_endpoint, service_backend_endpoint,
     service_frontend_endpoint,
 };
+pub use zmq_helpers::HighWaterMark;

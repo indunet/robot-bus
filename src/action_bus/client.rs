@@ -7,7 +7,7 @@ use zmq::{Context, Socket, SocketType};
 
 use crate::errors::{parse_error_body, BusError, Result};
 use crate::transports;
-use crate::zmq_helpers::{apply_action_options, poll_readable};
+use crate::zmq_helpers::{apply_action_options_with, poll_readable, HighWaterMark};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ActionKind {
@@ -54,6 +54,10 @@ pub struct ActionClient {
 
 impl ActionClient {
     pub fn new(endpoint: Option<&str>) -> Result<Self> {
+        Self::with_hwm(endpoint, HighWaterMark::ACTION)
+    }
+
+    pub fn with_hwm(endpoint: Option<&str>, hwm: HighWaterMark) -> Result<Self> {
         let endpoint = match endpoint {
             Some(ep) => ep.to_string(),
             None => transports::action_frontend_endpoint("localhost", "tcp")
@@ -61,7 +65,7 @@ impl ActionClient {
         };
         let context = Context::new();
         let socket = context.socket(SocketType::DEALER)?;
-        apply_action_options(&socket)?;
+        apply_action_options_with(&socket, hwm)?;
         socket.connect(&endpoint)?;
         log::info!("action client connected to {endpoint}");
         Ok(Self {
@@ -73,6 +77,15 @@ impl ActionClient {
 
     pub fn endpoint(&self) -> &str {
         &self.endpoint
+    }
+
+    pub fn high_water_mark(&self) -> Result<HighWaterMark> {
+        Ok(HighWaterMark::from_socket(&self.socket)?)
+    }
+
+    pub fn set_high_water_mark(&self, hwm: HighWaterMark) -> Result<()> {
+        hwm.apply(&self.socket)?;
+        Ok(())
     }
 
     pub fn send_goal(

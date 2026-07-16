@@ -6,9 +6,9 @@ use std::time::{Duration, Instant};
 use uuid::Uuid;
 use zmq::{Context, Socket, SocketType};
 
-use crate::errors::Result;
+use crate::errors::{BusError, Result};
 use crate::transports;
-use crate::zmq_helpers::{apply_rpc_options, poll_readable};
+use crate::zmq_helpers::{apply_rpc_options_with, poll_readable, HighWaterMark};
 
 pub type ServiceHandler = Arc<dyn Fn(&[u8], &[u8], &[u8]) -> Vec<u8> + Send + Sync>;
 
@@ -31,6 +31,24 @@ impl ServiceWorker {
         identity: Option<&str>,
         heartbeat_interval_ms: u64,
     ) -> Result<Self> {
+        Self::with_hwm(
+            service_name,
+            handler,
+            endpoint,
+            identity,
+            heartbeat_interval_ms,
+            HighWaterMark::RPC,
+        )
+    }
+
+    pub fn with_hwm(
+        service_name: impl Into<String>,
+        handler: ServiceHandler,
+        endpoint: Option<&str>,
+        identity: Option<&str>,
+        heartbeat_interval_ms: u64,
+        hwm: HighWaterMark,
+    ) -> Result<Self> {
         let service_name = service_name.into();
         let endpoint = match endpoint {
             Some(ep) => ep.to_string(),
@@ -45,7 +63,7 @@ impl ServiceWorker {
 
         let context = Context::new();
         let socket = context.socket(SocketType::DEALER)?;
-        apply_rpc_options(&socket)?;
+        apply_rpc_options_with(&socket, hwm)?;
         socket.set_identity(&identity_bytes)?;
         socket.connect(&endpoint)?;
         let mut worker = Self {
@@ -70,6 +88,21 @@ impl ServiceWorker {
 
     pub fn endpoint(&self) -> &str {
         &self.endpoint
+    }
+
+    pub fn high_water_mark(&self) -> Result<HighWaterMark> {
+        let Some(socket) = &self.socket else {
+            return Err(BusError::Closed);
+        };
+        Ok(HighWaterMark::from_socket(socket)?)
+    }
+
+    pub fn set_high_water_mark(&self, hwm: HighWaterMark) -> Result<()> {
+        let Some(socket) = &self.socket else {
+            return Err(BusError::Closed);
+        };
+        hwm.apply(socket)?;
+        Ok(())
     }
 
     fn send_control(&self, command: &[u8]) -> Result<()> {

@@ -6,7 +6,9 @@ use zmq::{Context, Socket, SocketType};
 
 use crate::errors::{BusError, Result};
 use crate::transports;
-use crate::zmq_helpers::{apply_subscriber_options, poll_readable, wait_for_connection};
+use crate::zmq_helpers::{
+    apply_subscriber_options_with, poll_readable, wait_for_connection, HighWaterMark,
+};
 
 pub struct Subscriber {
     endpoint: String,
@@ -16,6 +18,10 @@ pub struct Subscriber {
 
 impl Subscriber {
     pub fn new(endpoint: Option<&str>) -> Result<Self> {
+        Self::with_hwm(endpoint, HighWaterMark::STREAM)
+    }
+
+    pub fn with_hwm(endpoint: Option<&str>, hwm: HighWaterMark) -> Result<Self> {
         let endpoint = match endpoint {
             Some(ep) => ep.to_string(),
             None => transports::message_xpub_endpoint("localhost", "tcp")
@@ -23,7 +29,7 @@ impl Subscriber {
         };
         let context = Context::new();
         let socket = context.socket(SocketType::SUB)?;
-        apply_subscriber_options(&socket)?;
+        apply_subscriber_options_with(&socket, hwm)?;
         socket.connect(&endpoint)?;
         wait_for_connection();
         log::info!("subscriber connected to {endpoint}");
@@ -36,6 +42,17 @@ impl Subscriber {
 
     pub fn endpoint(&self) -> &str {
         &self.endpoint
+    }
+
+    /// Current send / receive high-water marks.
+    pub fn high_water_mark(&self) -> Result<HighWaterMark> {
+        Ok(HighWaterMark::from_socket(&self.socket)?)
+    }
+
+    /// Update send / receive high-water marks on the live socket.
+    pub fn set_high_water_mark(&self, hwm: HighWaterMark) -> Result<()> {
+        hwm.apply(&self.socket)?;
+        Ok(())
     }
 
     pub fn subscribe(&self, topic: &str) -> Result<()> {

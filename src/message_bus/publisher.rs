@@ -4,7 +4,9 @@ use zmq::{Context, Socket, SocketType};
 
 use crate::errors::Result;
 use crate::transports;
-use crate::zmq_helpers::{apply_publisher_options, wait_for_connection};
+use crate::zmq_helpers::{
+    apply_publisher_options_with, wait_for_connection, HighWaterMark,
+};
 
 pub struct Publisher {
     endpoint: String,
@@ -14,6 +16,10 @@ pub struct Publisher {
 
 impl Publisher {
     pub fn new(endpoint: Option<&str>) -> Result<Self> {
+        Self::with_hwm(endpoint, HighWaterMark::STREAM)
+    }
+
+    pub fn with_hwm(endpoint: Option<&str>, hwm: HighWaterMark) -> Result<Self> {
         let endpoint = match endpoint {
             Some(ep) => ep.to_string(),
             None => transports::message_xsub_endpoint("localhost", "tcp")
@@ -21,7 +27,7 @@ impl Publisher {
         };
         let context = Context::new();
         let socket = context.socket(SocketType::PUB)?;
-        apply_publisher_options(&socket)?;
+        apply_publisher_options_with(&socket, hwm)?;
         socket.connect(&endpoint)?;
         wait_for_connection();
         log::info!("publisher connected to {endpoint}");
@@ -34,6 +40,17 @@ impl Publisher {
 
     pub fn endpoint(&self) -> &str {
         &self.endpoint
+    }
+
+    /// Current send / receive high-water marks.
+    pub fn high_water_mark(&self) -> Result<HighWaterMark> {
+        Ok(HighWaterMark::from_socket(&self.socket)?)
+    }
+
+    /// Update send / receive high-water marks on the live socket.
+    pub fn set_high_water_mark(&self, hwm: HighWaterMark) -> Result<()> {
+        hwm.apply(&self.socket)?;
+        Ok(())
     }
 
     pub fn publish(&self, topic: &str, payload: &[u8]) -> Result<()> {

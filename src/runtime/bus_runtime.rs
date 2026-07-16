@@ -37,7 +37,9 @@ use crate::transports::{
     action_backend_endpoint, action_frontend_endpoint, message_xpub_endpoint,
     service_backend_endpoint,
 };
-use crate::zmq_helpers::{apply_subscriber_options, wait_for_connection};
+use crate::zmq_helpers::{
+    apply_subscriber_options_with, wait_for_connection, HighWaterMark,
+};
 
 const DEFAULT_POLL_TIMEOUT_MS: i64 = 250;
 const DEFAULT_HEARTBEAT_INTERVAL_MS: u64 = 2500;
@@ -62,6 +64,9 @@ impl ShutdownHandle {
 pub struct BusRuntime {
     context: Context,
     heartbeat_interval_ms: u64,
+    stream_hwm: HighWaterMark,
+    rpc_hwm: HighWaterMark,
+    action_hwm: HighWaterMark,
     service_registrations: Vec<ServiceRegistration>,
     action_registrations: Vec<ActionRegistration>,
     action_client_registration: Option<ActionClientRegistration>,
@@ -102,6 +107,9 @@ impl BusRuntime {
         Self {
             context: Context::new(),
             heartbeat_interval_ms,
+            stream_hwm: HighWaterMark::STREAM,
+            rpc_hwm: HighWaterMark::RPC,
+            action_hwm: HighWaterMark::ACTION,
             service_registrations: Vec::new(),
             action_registrations: Vec::new(),
             action_client_registration: None,
@@ -128,6 +136,61 @@ impl BusRuntime {
         }
     }
 
+    /// Defaults used for newly connected PUB/SUB sockets.
+    pub fn stream_hwm(&self) -> HighWaterMark {
+        self.stream_hwm
+    }
+
+    /// Defaults used for newly registered service workers.
+    pub fn rpc_hwm(&self) -> HighWaterMark {
+        self.rpc_hwm
+    }
+
+    /// Defaults used for newly connected action sockets.
+    pub fn action_hwm(&self) -> HighWaterMark {
+        self.action_hwm
+    }
+
+    /// Set HWM applied to subsequent `connect_subscriber` sockets.
+    ///
+    /// Already-connected SUB sockets are updated in place when present.
+    pub fn set_stream_hwm(&mut self, hwm: HighWaterMark) -> Result<()> {
+        self.ensure_open()?;
+        self.stream_hwm = hwm;
+        for reg in &self.socket_registrations {
+            if let Registration::Sub(sub) = reg {
+                hwm.apply(&sub.socket)?;
+            }
+        }
+        Ok(())
+    }
+
+    /// Set HWM applied to subsequent `register_service` sockets.
+    pub fn set_rpc_hwm(&mut self, hwm: HighWaterMark) -> Result<()> {
+        self.ensure_open()?;
+        self.rpc_hwm = hwm;
+        for reg in &self.socket_registrations {
+            if let Registration::Service(svc) = reg {
+                hwm.apply(&svc.socket)?;
+            }
+        }
+        Ok(())
+    }
+
+    /// Set HWM applied to subsequent action client / worker sockets.
+    pub fn set_action_hwm(&mut self, hwm: HighWaterMark) -> Result<()> {
+        self.ensure_open()?;
+        self.action_hwm = hwm;
+        for reg in &self.socket_registrations {
+            match reg {
+                Registration::Action(action) => hwm.apply(&action.socket)?,
+                Registration::ActionClient(client) => hwm.apply(&client.socket)?,
+                _ => {}
+            }
+        }
+        Ok(())
+    }
+
     /// Signal the executor to leave `spin` / background `start`.
     pub fn shutdown(&self) {
         self.running.store(false, Ordering::Release);
@@ -140,7 +203,7 @@ impl BusRuntime {
             None => message_xpub_endpoint("localhost", "tcp").map_err(BusError::Protocol)?,
         };
         let socket = self.context.socket(SocketType::SUB)?;
-        apply_subscriber_options(&socket)?;
+        apply_subscriber_options_with(&socket, self.stream_hwm)?;
         socket.connect(&endpoint)?;
         wait_for_connection();
         let reg = SubRegistration {
@@ -226,7 +289,7 @@ impl BusRuntime {
             Some(ep) => ep.to_string(),
             None => action_frontend_endpoint("localhost", "tcp").map_err(BusError::Protocol)?,
         };
-        let reg = ActionClientRegistration::create(&self.context, &endpoint)?;
+        let reg = ActionClientRegistration::create(&self.context, &endpoint, self.action_hwm)?;
         log::info!("action client connected to {endpoint}");
         self.action_client_registration = Some(reg);
         self.sync_action_client_registration();
@@ -295,6 +358,7 @@ impl BusRuntime {
             &endpoint,
             identity,
             self.heartbeat_interval_ms,
+            self.rpc_hwm,
         )?;
         log::info!(
             "service worker {:?} registered for {service_name} on {endpoint}",
@@ -324,6 +388,7 @@ impl BusRuntime {
             &endpoint,
             identity,
             self.heartbeat_interval_ms,
+            self.action_hwm,
         )?;
         log::info!(
             "action worker {:?} registered for {action_name} on {endpoint}",

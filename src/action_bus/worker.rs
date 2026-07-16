@@ -6,9 +6,9 @@ use std::time::{Duration, Instant};
 use uuid::Uuid;
 use zmq::{Context, Socket, SocketType};
 
-use crate::errors::Result;
+use crate::errors::{BusError, Result};
 use crate::transports;
-use crate::zmq_helpers::{apply_action_options, poll_readable};
+use crate::zmq_helpers::{apply_action_options_with, poll_readable, HighWaterMark};
 
 pub type ActionGoalHandler =
     Arc<dyn Fn(&[u8], &[u8], &[u8]) -> Vec<(String, Vec<u8>)> + Send + Sync>;
@@ -32,6 +32,24 @@ impl ActionWorker {
         identity: Option<&str>,
         heartbeat_interval_ms: u64,
     ) -> Result<Self> {
+        Self::with_hwm(
+            action_name,
+            handler,
+            endpoint,
+            identity,
+            heartbeat_interval_ms,
+            HighWaterMark::ACTION,
+        )
+    }
+
+    pub fn with_hwm(
+        action_name: impl Into<String>,
+        handler: ActionGoalHandler,
+        endpoint: Option<&str>,
+        identity: Option<&str>,
+        heartbeat_interval_ms: u64,
+        hwm: HighWaterMark,
+    ) -> Result<Self> {
         let action_name = action_name.into();
         let endpoint = match endpoint {
             Some(ep) => ep.to_string(),
@@ -46,7 +64,7 @@ impl ActionWorker {
 
         let context = Context::new();
         let socket = context.socket(SocketType::DEALER)?;
-        apply_action_options(&socket)?;
+        apply_action_options_with(&socket, hwm)?;
         socket.set_identity(&identity_bytes)?;
         socket.connect(&endpoint)?;
         let mut worker = Self {
@@ -71,6 +89,21 @@ impl ActionWorker {
 
     pub fn endpoint(&self) -> &str {
         &self.endpoint
+    }
+
+    pub fn high_water_mark(&self) -> Result<HighWaterMark> {
+        let Some(socket) = &self.socket else {
+            return Err(BusError::Closed);
+        };
+        Ok(HighWaterMark::from_socket(socket)?)
+    }
+
+    pub fn set_high_water_mark(&self, hwm: HighWaterMark) -> Result<()> {
+        let Some(socket) = &self.socket else {
+            return Err(BusError::Closed);
+        };
+        hwm.apply(socket)?;
+        Ok(())
     }
 
     fn send_control(&self, command: &[u8]) -> Result<()> {

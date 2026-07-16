@@ -7,7 +7,9 @@ use uuid::Uuid;
 use zmq::{Context, Socket, SocketType};
 
 use crate::runtime::queues::ActionMessageCallback;
-use crate::zmq_helpers::{apply_action_options, apply_rpc_options};
+use crate::zmq_helpers::{
+    apply_action_options_with, apply_rpc_options_with, HighWaterMark,
+};
 
 pub type MessageCallback = Arc<dyn Fn(&str, &[u8]) + Send + Sync>;
 pub type ServiceHandler = Arc<dyn Fn(&[u8], &[u8], &[u8]) -> Vec<u8> + Send + Sync>;
@@ -50,9 +52,10 @@ impl ServiceRegistration {
         endpoint: &str,
         identity: Option<&str>,
         heartbeat_interval_ms: u64,
+        hwm: HighWaterMark,
     ) -> crate::errors::Result<Self> {
         let socket = context.socket(SocketType::DEALER)?;
-        apply_rpc_options(&socket)?;
+        apply_rpc_options_with(&socket, hwm)?;
         let worker_id = identity
             .map(str::to_string)
             .unwrap_or_else(|| format!("worker-{}", &Uuid::new_v4().simple().to_string()[..8]));
@@ -110,9 +113,10 @@ impl ActionRegistration {
         endpoint: &str,
         identity: Option<&str>,
         heartbeat_interval_ms: u64,
+        hwm: HighWaterMark,
     ) -> crate::errors::Result<Self> {
         let socket = context.socket(SocketType::DEALER)?;
-        apply_action_options(&socket)?;
+        apply_action_options_with(&socket, hwm)?;
         let worker_id = identity
             .map(str::to_string)
             .unwrap_or_else(|| format!("worker-{}", &Uuid::new_v4().simple().to_string()[..8]));
@@ -159,9 +163,13 @@ pub struct ActionClientRegistration {
 }
 
 impl ActionClientRegistration {
-    pub fn create(context: &Context, endpoint: &str) -> crate::errors::Result<Self> {
+    pub fn create(
+        context: &Context,
+        endpoint: &str,
+        hwm: HighWaterMark,
+    ) -> crate::errors::Result<Self> {
         let socket = context.socket(SocketType::DEALER)?;
-        apply_action_options(&socket)?;
+        apply_action_options_with(&socket, hwm)?;
         socket.connect(endpoint)?;
         Ok(Self {
             socket,

@@ -1,5 +1,8 @@
 # Build artifacts
 target/
+dist/
+*.whl
+*.egg-info/
 
 # Library crate: dependents use their own lockfile
 Cargo.lock

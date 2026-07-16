@@ -7,7 +7,7 @@ use zmq::{Context, Socket, SocketType};
 
 use crate::errors::{parse_error_body, BusError, Result};
 use crate::transports;
-use crate::zmq_helpers::{apply_rpc_options, poll_readable};
+use crate::zmq_helpers::{apply_rpc_options_with, poll_readable, HighWaterMark};
 
 pub struct ServiceClient {
     endpoint: String,
@@ -17,6 +17,10 @@ pub struct ServiceClient {
 
 impl ServiceClient {
     pub fn new(endpoint: Option<&str>) -> Result<Self> {
+        Self::with_hwm(endpoint, HighWaterMark::RPC)
+    }
+
+    pub fn with_hwm(endpoint: Option<&str>, hwm: HighWaterMark) -> Result<Self> {
         let endpoint = match endpoint {
             Some(ep) => ep.to_string(),
             None => transports::service_frontend_endpoint("localhost", "tcp")
@@ -24,7 +28,7 @@ impl ServiceClient {
         };
         let context = Context::new();
         let socket = context.socket(SocketType::REQ)?;
-        apply_rpc_options(&socket)?;
+        apply_rpc_options_with(&socket, hwm)?;
         socket.connect(&endpoint)?;
         log::info!("service client connected to {endpoint}");
         Ok(Self {
@@ -36,6 +40,15 @@ impl ServiceClient {
 
     pub fn endpoint(&self) -> &str {
         &self.endpoint
+    }
+
+    pub fn high_water_mark(&self) -> Result<HighWaterMark> {
+        Ok(HighWaterMark::from_socket(&self.socket)?)
+    }
+
+    pub fn set_high_water_mark(&self, hwm: HighWaterMark) -> Result<()> {
+        hwm.apply(&self.socket)?;
+        Ok(())
     }
 
     pub fn call(
