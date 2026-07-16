@@ -4,6 +4,8 @@
 
 不依赖 ROS 发行版、不需要 `source setup.bash`、不搭 workspace。一个 broker 进程 + SDK（Rust / Python）即可。
 
+> **预发布说明**：当前仍处于预发布阶段。接下来 API 可能会有较多变更，运行稳定性也尚不完善，请谨慎用于生产环境。
+
 更多 API 示例见 [`docs/`](docs/)。
 
 | 模块 | 职责 |
@@ -11,8 +13,8 @@
 | `broker::` | 路由进程（message / service / action） |
 | 顶层 API | Publisher / Subscriber / Client / Worker |
 | `runtime::Executor` | 回调 executor（`spin` / `spin_once`） |
-| `runtime::Node` | Node 门面（连接配置 + 名字 / 命名空间 + `create_*`） |
-| `grpc::`（feature） | gRPC / gRPC-Web 网关（独立进程，先支持 Subscribe） |
+| `runtime::Node` | Node 门面（连接配置 + 名字 + `create_*`；topic 用全路径） |
+| `grpc::`（feature） | gRPC / gRPC-Web 网关（Subscribe / Call / Run） |
 | [`proto/`](proto/) | ROS 风格 Protobuf：`proto/<pkg>/{msg\|srv\|grpc}/v1/` → Rust/Python `robot_bus.<pkg>…` |
 
 ## 架构
@@ -78,11 +80,11 @@ def on_imu(topic, payload):
     imu.ParseFromString(payload)
     print(topic, imu.linear_acceleration)
 
-node = robot_bus.Node("pilot", namespace="robot1")
+node = robot_bus.Node("pilot")
 node.create_publisher()
-node.create_subscription("imu", on_imu)
+node.create_subscription("/robot1/imu", on_imu)
 node.publish(
-    "imu",
+    "/robot1/imu",
     Imu(linear_acceleration=Vector3(x=0.0, y=0.0, z=9.8)).SerializeToString(),
 )
 # node.spin()  # 阻塞直到其它线程调用 node.shutdown()
@@ -107,9 +109,9 @@ use robot_bus::geometry_msgs::msg::v1::Vector3;
 use robot_bus::sensor_msgs::msg::v1::Imu;
 use robot_bus::Node;
 
-let mut node = Node::with_namespace("pilot", "robot1");
+let mut node = Node::new("pilot");
 node.create_publisher()?;
-node.create_subscription_typed::<Imu, _>("imu", |topic, imu| {
+node.create_subscription_typed::<Imu, _>("/robot1/imu", |topic, imu| {
     println!("{topic}: {:?}", imu.linear_acceleration);
 })?;
 
@@ -117,7 +119,7 @@ let imu = Imu {
     linear_acceleration: Some(Vector3 { x: 0.0, y: 0.0, z: 9.8 }),
     ..Default::default()
 };
-node.publish("imu", &imu.encode_to_vec())?;
+node.publish("/robot1/imu", &imu.encode_to_vec())?;
 
 node.create_timer(Duration::from_millis(100), Arc::new(|| {
     // 控制周期 / 心跳
@@ -156,17 +158,29 @@ pub_.set_high_water_mark(HighWaterMark { snd: 10, rcv: 10 })?;
 
 ## gRPC / gRPC-Web 网关
 
-独立进程，连已有 message bus XPUB；按请求里的 topic 前缀订阅，服务端流式返回二进制 payload。标准 gRPC 与 gRPC-Web **同端口**（默认 `0.0.0.0:15770`）。后续可在同一网关扩展 Service / Action。
+独立进程，连已有 message / service / action bus；标准 gRPC 与 gRPC-Web **同端口**（默认 `0.0.0.0:15770`）。
+
+| RPC | 语义 |
+|-----|------|
+| `MessageGateway.Subscribe` | 按 topic 前缀订阅，服务端流式返回二进制 payload |
+| `ServiceGateway.Call` | 一元：`service_name` + request bytes → response bytes |
+| `ActionGateway.Run` | 双向流：客户端发 GOAL / CANCEL，服务端推 `ActionEvent`（`kind` 区分 FEEDBACK / RESULT） |
 
 ```bash
 cargo run --bin robot_bus_broker
 cargo run --features grpc --bin robot_bus_grpc_gateway
 # --listen 0.0.0.0:15770
 # --message-xpub tcp://127.0.0.1:15561
+# --service-frontend tcp://127.0.0.1:15662
+# --action-frontend tcp://127.0.0.1:15664
 # --cors-origin http://localhost:3000   # 可重复；默认允许任意 origin
 ```
 
-Proto：[`proto/robot_bus/grpc/v1/message_gateway.proto`](proto/robot_bus/grpc/v1/message_gateway.proto)（包名 `robot_bus.grpc.v1`，与 ROS `*.msg.v1` / `*.srv.v1` 区分）— `MessageGateway.Subscribe`。
+Proto（包名 `robot_bus.grpc.v1`，与 ROS `*.msg.v1` / `*.srv.v1` 区分）：
+
+- [`message_gateway.proto`](proto/robot_bus/grpc/v1/message_gateway.proto)
+- [`service_gateway.proto`](proto/robot_bus/grpc/v1/service_gateway.proto)
+- [`action_gateway.proto`](proto/robot_bus/grpc/v1/action_gateway.proto)
 
 ## 测试
 

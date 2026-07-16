@@ -106,18 +106,13 @@ impl ActionClient {
         goal_id: Option<&str>,
         timeout: Option<Duration>,
     ) -> ActionGoalIter<'_> {
-        let gid = goal_id
-            .map(str::to_string)
-            .unwrap_or_else(|| Uuid::new_v4().simple().to_string());
-        let _ = self.socket.send_multipart(
-            [
-                action_name.as_bytes(),
-                gid.as_bytes(),
-                b"GOAL",
-                body,
-            ],
-            0,
-        );
+        let gid = self
+            .submit_goal(action_name, body, goal_id)
+            .unwrap_or_else(|_| {
+                goal_id
+                    .map(str::to_string)
+                    .unwrap_or_else(|| Uuid::new_v4().simple().to_string())
+            });
         ActionGoalIter {
             client: self,
             action_name: action_name.to_string(),
@@ -127,13 +122,35 @@ impl ActionClient {
         }
     }
 
-    pub fn cancel(
+    /// Send a GOAL frame without waiting for replies. Returns the goal id used.
+    pub fn submit_goal(
+        &self,
+        action_name: &str,
+        body: &[u8],
+        goal_id: Option<&str>,
+    ) -> Result<String> {
+        let gid = goal_id
+            .map(str::to_string)
+            .unwrap_or_else(|| Uuid::new_v4().simple().to_string());
+        self.socket.send_multipart(
+            [
+                action_name.as_bytes(),
+                gid.as_bytes(),
+                b"GOAL",
+                body,
+            ],
+            0,
+        )?;
+        Ok(gid)
+    }
+
+    /// Send a CANCEL frame without waiting for RESULT.
+    pub fn submit_cancel(
         &self,
         action_name: &str,
         goal_id: &str,
         body: &[u8],
-        timeout: Option<Duration>,
-    ) -> Result<ActionMessage> {
+    ) -> Result<()> {
         self.socket.send_multipart(
             [
                 action_name.as_bytes(),
@@ -143,6 +160,17 @@ impl ActionClient {
             ],
             0,
         )?;
+        Ok(())
+    }
+
+    pub fn cancel(
+        &self,
+        action_name: &str,
+        goal_id: &str,
+        body: &[u8],
+        timeout: Option<Duration>,
+    ) -> Result<ActionMessage> {
+        self.submit_cancel(action_name, goal_id, body)?;
         loop {
             let msg = self.recv_message(timeout)?;
             if msg.action_name != action_name || msg.goal_id != goal_id {
@@ -158,7 +186,8 @@ impl ActionClient {
         }
     }
 
-    fn recv_message(&self, timeout: Option<Duration>) -> Result<ActionMessage> {
+    /// Receive one action-bus reply frame (optionally with a poll timeout).
+    pub fn recv_message(&self, timeout: Option<Duration>) -> Result<ActionMessage> {
         if let Some(duration) = timeout {
             let ms = duration.as_millis().min(i64::MAX as u128) as i64;
             if !poll_readable(&self.socket, ms)? {

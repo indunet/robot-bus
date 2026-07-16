@@ -9,13 +9,19 @@ use tonic::transport::Server;
 use tonic_web::GrpcWebLayer;
 use tower_http::cors::{AllowOrigin, Any, CorsLayer};
 
+use super::action::ActionGatewayService;
 use super::message::MessageGatewayService;
+use super::pb::action_gateway_server::ActionGatewayServer;
 use super::pb::message_gateway_server::MessageGatewayServer;
+use super::pb::service_gateway_server::ServiceGatewayServer;
+use super::service::ServiceGatewayService;
 
 #[derive(Clone, Debug)]
 pub struct GatewayConfig {
     pub listen: SocketAddr,
     pub message_xpub: String,
+    pub service_frontend: String,
+    pub action_frontend: String,
     /// When empty, allow any origin (local-dev default).
     pub cors_origins: Vec<String>,
 }
@@ -26,26 +32,37 @@ impl Default for GatewayConfig {
             listen: "0.0.0.0:15770".parse().expect("default listen"),
             message_xpub: crate::transports::message_xpub_endpoint("127.0.0.1", "tcp")
                 .unwrap_or_else(|_| "tcp://127.0.0.1:15561".to_string()),
+            service_frontend: crate::transports::service_frontend_endpoint("127.0.0.1", "tcp")
+                .unwrap_or_else(|_| "tcp://127.0.0.1:15662".to_string()),
+            action_frontend: crate::transports::action_frontend_endpoint("127.0.0.1", "tcp")
+                .unwrap_or_else(|_| "tcp://127.0.0.1:15664".to_string()),
             cors_origins: Vec::new(),
         }
     }
 }
 
 pub async fn serve(config: GatewayConfig) -> Result<()> {
-    let service = MessageGatewayService::new(config.message_xpub.clone());
+    let message = MessageGatewayService::new(config.message_xpub.clone());
+    let service = ServiceGatewayService::new(config.service_frontend.clone());
+    let action = ActionGatewayService::new(config.action_frontend.clone());
     let cors = build_cors(&config.cors_origins)?;
 
     log::info!(
-        "robot_bus_grpc_gateway listening on http://{} (gRPC + gRPC-Web); message XPUB {}",
+        "robot_bus_grpc_gateway listening on http://{} (gRPC + gRPC-Web); \
+         message XPUB {}; service frontend {}; action frontend {}",
         config.listen,
-        config.message_xpub
+        config.message_xpub,
+        config.service_frontend,
+        config.action_frontend
     );
 
     Server::builder()
         .accept_http1(true)
         .layer(cors)
         .layer(GrpcWebLayer::new())
-        .add_service(MessageGatewayServer::new(service))
+        .add_service(MessageGatewayServer::new(message))
+        .add_service(ServiceGatewayServer::new(service))
+        .add_service(ActionGatewayServer::new(action))
         .serve(config.listen)
         .await
         .context("gateway server")?;

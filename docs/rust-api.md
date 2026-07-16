@@ -34,15 +34,18 @@ cargo run --bin action_bus_broker
 # 各二进制支持 --help 查看 bind / HWM 等参数
 ```
 
-**gRPC 网关**（feature `grpc`，订阅 message topic；需 message broker 已运行）：
+**gRPC 网关**（feature `grpc`；需对应 broker 已运行）：
 
 ```bash
 cargo run --bin robot_bus_broker
 cargo run --features grpc --bin robot_bus_grpc_gateway
 # 默认 http://0.0.0.0:15770
+# MessageGateway.Subscribe / ServiceGateway.Call / ActionGateway.Run
 ```
 
 **进程内嵌入**（不必单独起二进制）：
+
+一次启动三条（最常用）：
 
 ```rust
 use robot_bus::broker::{RobotBusBroker, RobotBusConfig};
@@ -50,6 +53,28 @@ use robot_bus::broker::{RobotBusBroker, RobotBusConfig};
 let broker = RobotBusBroker::start(RobotBusConfig::default())?;
 // broker.message.xsub_bind / xpub_bind 等填入 NodeOptions
 broker.stop()?;
+```
+
+只启动某一条（与 CLI 单二进制对应）：
+
+```rust
+use robot_bus::broker::action_bus::ActionBusConfig;
+use robot_bus::broker::message_bus::BusConfig;
+use robot_bus::broker::service_bus::ServiceBusConfig;
+use robot_bus::broker::{ActionBusBroker, MessageBusBroker, ServiceBusBroker};
+
+let message = MessageBusBroker::start(BusConfig::default())?;
+// message.xsub_bind / xpub_bind → NodeOptions
+
+let service = ServiceBusBroker::start(ServiceBusConfig::default())?;
+// service.frontend_bind / backend_bind
+
+let action = ActionBusBroker::start(ActionBusConfig::default())?;
+// action.frontend_bind / backend_bind
+
+message.stop()?;
+service.stop()?;
+action.stop()?;
 ```
 
 连接由 [`Node`](../src/runtime/node.rs) 的 `NodeOptions` 管理。底层 `Executor` 负责 `spin`；一般业务代码用 Node 即可。
@@ -69,11 +94,10 @@ use robot_bus::sensor_msgs::msg::v1::Imu;
 use robot_bus::Node;
 
 fn main() -> robot_bus::Result<()> {
-    let mut node = Node::with_namespace("pilot", "robot1");
+    let mut node = Node::new("pilot");
     // 默认连本机 broker；进程内 / 自定义地址用 Node::with_options(..., NodeOptions { ... })
     node.create_publisher()?;
-    node.create_subscription_typed::<Imu, _>("imu", |topic, imu| {
-        // 实际 topic: robot1/imu
+    node.create_subscription_typed::<Imu, _>("/robot1/imu", |topic, imu| {
         println!("{topic}: angular_z={:?}", imu.angular_velocity);
     })?;
 
@@ -90,7 +114,7 @@ fn main() -> robot_bus::Result<()> {
         }),
         ..Default::default()
     };
-    node.publish("imu", &imu.encode_to_vec())?;
+    node.publish("/robot1/imu", &imu.encode_to_vec())?;
 
     node.create_timer(Duration::from_millis(100), Arc::new(|| {
         // 周期任务
@@ -108,9 +132,9 @@ fn main() -> robot_bus::Result<()> {
 }
 ```
 
-Raw bytes 回调：`node.create_subscription("imu", Arc::new(|topic, payload| { ... }))?`。
+Raw bytes 回调：`node.create_subscription("/robot1/imu", Arc::new(|topic, payload| { ... }))?`。
 
-绝对名以 `/` 开头时不加命名空间前缀。
+topic / service / action 名按传入原样使用（请自行写全路径，无 `/robot1/imu`）。
 
 `Node::with_worker_pool(n)` / `with_options_and_pool`：service / action handler 最多 `n` 个并发线程；订阅与 timer 仍在 I/O 线程。底层对应 `Executor::with_worker_pool(n)`。
 
@@ -221,13 +245,13 @@ fn main() -> anyhow::Result<()> {
         message_xpub: Some(broker.message.xpub_bind.clone()),
         ..NodeOptions::default()
     };
-    let mut node = Node::with_options("demo", "", options);
+    let mut node = Node::with_options("demo", options);
     node.create_publisher()?;
     node.create_subscription(
-        "imu",
+        "/robot1/imu",
         Arc::new(|topic, payload| println!("{topic}: {} bytes", payload.len())),
     )?;
-    node.publish("imu", b"hello")?;
+    node.publish("/robot1/imu", b"hello")?;
     node.spin_once(None)?;
 
     broker.stop()?;
@@ -258,9 +282,15 @@ Service 的 Request / Response 同理（如 `robot_bus::std_srvs::srv::v1::SetBo
 
 ## gRPC / gRPC-Web 网关（feature `grpc`）
 
-独立进程，浏览器或原生 gRPC 客户端订阅 message topic（启动方式见上文「Broker 启动」）。
+独立进程，桥接 message / service / action bus（启动方式见上文「Broker 启动」）。
 
-Rust 客户端示例（集成测试同款）：
+| RPC | 说明 |
+|-----|------|
+| `MessageGateway.Subscribe` | server stream：topic 前缀 → `TopicMessage` |
+| `ServiceGateway.Call` | 一元：`service_name` + request bytes → response bytes |
+| `ActionGateway.Run` | 双向流：客户端 `GoalCommand` / `CancelCommand` ↔ 服务端 `ActionEvent` |
+
+Subscribe 示例：
 
 ```rust
 use robot_bus::grpc::pb::message_gateway_client::MessageGatewayClient;
@@ -286,7 +316,50 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 ```
 
-Proto 包名：`robot_bus.grpc.v1`（与 ROS `*.msg.v1` / `*.srv.v1` 区分）。见 `proto/robot_bus/grpc/v1/message_gateway.proto`。
+Service / Action 示例：
+
+```rust
+use robot_bus::grpc::pb::action_gateway_client::ActionGatewayClient;
+use robot_bus::grpc::pb::service_gateway_client::ServiceGatewayClient;
+use robot_bus::grpc::pb::{
+    action_client_message, ActionClientMessage, ActionKind, GoalCommand, ServiceCallRequest,
+};
+use tonic::Request;
+use tokio_stream::{self, StreamExt};
+
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let mut svc = ServiceGatewayClient::connect("http://127.0.0.1:15770").await?;
+    let resp = svc
+        .call(Request::new(ServiceCallRequest {
+            service_name: "svc.echo".into(),
+            request: b"ping".to_vec(),
+            request_id: String::new(),
+            timeout_ms: 5_000,
+        }))
+        .await?
+        .into_inner();
+    println!("service: {} bytes", resp.response.len());
+
+    let mut act = ActionGatewayClient::connect("http://127.0.0.1:15770").await?;
+    let outbound = tokio_stream::iter(vec![ActionClientMessage {
+        msg: Some(action_client_message::Msg::Goal(GoalCommand {
+            action_name: "act.demo".into(),
+            goal: b"go".to_vec(),
+            goal_id: String::new(),
+            timeout_ms: 10_000,
+        })),
+    }]);
+    let mut stream = act.run(Request::new(outbound)).await?.into_inner();
+    while let Some(ev) = stream.next().await {
+        let ev = ev?;
+        println!("{:?}: {} bytes", ActionKind::try_from(ev.kind), ev.body.len());
+    }
+    Ok(())
+}
+```
+
+Proto 包名：`robot_bus.grpc.v1`。见 `proto/robot_bus/grpc/v1/{message,service,action}_gateway.proto`。
 
 ---
 

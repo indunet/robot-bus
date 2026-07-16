@@ -62,16 +62,16 @@ def on_imu(topic, payload):
     imu.ParseFromString(payload)
     print(topic, imu.angular_velocity)
 
-node = robot_bus.Node("pilot", namespace="robot1")
+node = robot_bus.Node("pilot")
 # 可选：host=..., transport=..., message_xsub=..., message_xpub=...
 node.create_publisher()
-node.create_subscription("imu", on_imu)
+node.create_subscription("/robot1/imu", on_imu)
 
 imu = Imu(
     angular_velocity=Vector3(x=0.0, y=0.0, z=0.1),
     linear_acceleration=Vector3(x=0.0, y=0.0, z=9.8),
 )
-node.publish("imu", imu.SerializeToString())  # 实际 topic: robot1/imu
+node.publish("/robot1/imu", imu.SerializeToString())
 
 # 阻塞直到 node.shutdown() 或 shutdown_handle().shutdown()
 # node.spin()
@@ -99,7 +99,7 @@ node.cancel_timer(handle)
 import robot_bus
 
 node = robot_bus.Node("poller")
-node.create_subscription("imu", lambda t, p: print(t))
+node.create_subscription("/robot1/imu", lambda t, p: print(t))
 
 while True:
     node.spin_once(timeout=0.1)  # 秒
@@ -125,22 +125,6 @@ def stop_later():
 
 threading.Thread(target=stop_later, daemon=True).start()
 # node.spin()
-```
-
----
-
-## 命名空间
-
-```python
-import robot_bus
-
-node = robot_bus.Node("pilot", namespace="robot1")
-
-assert node.name == "pilot"
-assert node.namespace == "robot1"
-assert node.fully_qualified_name() == "robot1/pilot"
-assert node.resolve_name("imu") == "robot1/imu"
-assert node.resolve_name("/imu") == "/imu"  # 绝对名不变
 ```
 
 ---
@@ -195,7 +179,7 @@ print(robot_bus.__version__)
 
 | 符号 | 说明 |
 |------|------|
-| `Node(name, namespace=None, host=..., transport=..., message_xsub=..., message_xpub=...)` | 连接配置 + publisher / subscription / timer / spin |
+| `Node(name, host=..., transport=..., message_xsub=..., message_xpub=...)` | 连接配置 + publisher / subscription / timer / spin；topic 用全路径 |
 | `Publisher(endpoint=None)` | 低层连 XSUB（也可经 `Node.publish`） |
 | `RobotBusBroker.start()` | 进程内启动三个 bus |
 | `run_broker()` | 阻塞 CLI 入口 |

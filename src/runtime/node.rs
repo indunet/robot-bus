@@ -1,8 +1,9 @@
 //! ROS 2–style [`Node`]: named facade over [`super::Executor`].
 //!
-//! Owns broker connection config ([`NodeOptions`]) plus name / namespace
-//! remapping. Prefer `create_subscription` / `create_publisher` / … over
-//! passing endpoints on every call; spin via the owned [`Executor`].
+//! Owns broker connection config ([`NodeOptions`]) plus a node name.
+//! Topic / service / action names are used as given (pass full paths yourself).
+//! Prefer `create_subscription` / `create_publisher` / … over passing endpoints
+//! on every call; spin via the owned [`Executor`].
 
 use std::time::Duration;
 
@@ -93,7 +94,6 @@ impl NodeOptions {
 /// Named participant that owns an [`Executor`] (simplified ROS 2 `Node`).
 pub struct Node {
     name: String,
-    namespace: String,
     options: NodeOptions,
     executor: Executor,
     publisher: Option<Publisher>,
@@ -101,58 +101,37 @@ pub struct Node {
 }
 
 impl Node {
-    /// Create a node with an empty namespace (topics/services used as given).
+    /// Create a node with default broker options.
     pub fn new(name: impl Into<String>) -> Self {
-        Self::with_options(name, String::new(), NodeOptions::default())
-    }
-
-    /// Create a node under `namespace` (relative names are prefixed).
-    pub fn with_namespace(name: impl Into<String>, namespace: impl Into<String>) -> Self {
-        Self::with_options(name, namespace, NodeOptions::default())
+        Self::with_options(name, NodeOptions::default())
     }
 
     /// Like [`new`](Self::new), but service/action handlers may use a worker pool.
     pub fn with_worker_pool(name: impl Into<String>, max_workers: usize) -> Self {
-        Self::with_options_and_pool(name, String::new(), NodeOptions::default(), max_workers)
-    }
-
-    /// Namespace + bounded worker pool.
-    pub fn with_namespace_and_worker_pool(
-        name: impl Into<String>,
-        namespace: impl Into<String>,
-        max_workers: usize,
-    ) -> Self {
-        Self::with_options_and_pool(name, namespace, NodeOptions::default(), max_workers)
+        Self::with_options_and_pool(name, NodeOptions::default(), max_workers)
     }
 
     /// Construct with explicit broker connection options (default single-threaded executor).
-    pub fn with_options(
-        name: impl Into<String>,
-        namespace: impl Into<String>,
-        options: NodeOptions,
-    ) -> Self {
-        Self::build(name.into(), namespace.into(), options, Executor::new())
+    pub fn with_options(name: impl Into<String>, options: NodeOptions) -> Self {
+        Self::build(name.into(), options, Executor::new())
     }
 
     /// Options + bounded worker pool for service/action handlers.
     pub fn with_options_and_pool(
         name: impl Into<String>,
-        namespace: impl Into<String>,
         options: NodeOptions,
         max_workers: usize,
     ) -> Self {
         Self::build(
             name.into(),
-            namespace.into(),
             options,
             Executor::with_worker_pool(max_workers),
         )
     }
 
-    fn build(name: String, namespace: String, options: NodeOptions, executor: Executor) -> Self {
+    fn build(name: String, options: NodeOptions, executor: Executor) -> Self {
         Self {
             name,
-            namespace: normalize_namespace(namespace),
             options,
             executor,
             publisher: None,
@@ -164,33 +143,8 @@ impl Node {
         &self.name
     }
 
-    pub fn namespace(&self) -> &str {
-        &self.namespace
-    }
-
     pub fn options(&self) -> &NodeOptions {
         &self.options
-    }
-
-    /// Fully qualified name: `/ns/name` or `/name` when namespace is empty.
-    pub fn fully_qualified_name(&self) -> String {
-        if self.namespace.is_empty() {
-            format!("/{}", self.name.trim_matches('/'))
-        } else {
-            format!(
-                "/{}/{}",
-                self.namespace.trim_matches('/'),
-                self.name.trim_matches('/')
-            )
-        }
-    }
-
-    /// Resolve a relative topic/service/action name against this node's namespace.
-    ///
-    /// - Names starting with `/` are absolute (leading `/` is kept on the wire).
-    /// - Otherwise: `{namespace}/{name}` when namespace is set, else `name` as-is.
-    pub fn resolve_name(&self, name: &str) -> String {
-        resolve_name(&self.namespace, name)
     }
 
     /// Connect a publisher using this node's message XSUB endpoint.
@@ -208,14 +162,14 @@ impl Node {
         Ok(())
     }
 
-    /// Publish on a (possibly namespaced) topic. Requires [`create_publisher`].
+    /// Publish on `topic` (use a full path). Requires [`create_publisher`].
     pub fn publish(&self, topic: &str, payload: &[u8]) -> Result<()> {
         let Some(pub_) = self.publisher.as_ref() else {
             return Err(BusError::Protocol(
                 "create_publisher() before publish()".into(),
             ));
         };
-        pub_.publish(&self.resolve_name(topic), payload)
+        pub_.publish(topic, payload)
     }
 
     /// Current publisher HWM, if a publisher exists.
@@ -269,8 +223,7 @@ impl Node {
         callback: MessageCallback,
     ) -> Result<()> {
         self.ensure_subscriber()?;
-        self.executor
-            .subscribe(&self.resolve_name(topic), callback)
+        self.executor.subscribe(topic, callback)
     }
 
     /// Subscribe with a protobuf-typed callback. Decode failures are skipped.
@@ -280,8 +233,7 @@ impl Node {
         F: Fn(&str, M) + Send + Sync + 'static,
     {
         self.ensure_subscriber()?;
-        self.executor
-            .subscribe_typed::<M, F>(&self.resolve_name(topic), callback)
+        self.executor.subscribe_typed::<M, F>(topic, callback)
     }
 
     fn ensure_subscriber(&mut self) -> Result<()> {
@@ -314,12 +266,8 @@ impl Node {
         identity: Option<&str>,
     ) -> Result<()> {
         let endpoint = self.options.service_backend_endpoint()?;
-        self.executor.register_service(
-            &self.resolve_name(service_name),
-            handler,
-            Some(&endpoint),
-            identity,
-        )
+        self.executor
+            .register_service(service_name, handler, Some(&endpoint), identity)
     }
 
     /// Register an action worker (ROS 2 `create_action_server` / action worker).
@@ -330,12 +278,8 @@ impl Node {
         identity: Option<&str>,
     ) -> Result<()> {
         let endpoint = self.options.action_backend_endpoint()?;
-        self.executor.register_action(
-            &self.resolve_name(action_name),
-            handler,
-            Some(&endpoint),
-            identity,
-        )
+        self.executor
+            .register_action(action_name, handler, Some(&endpoint), identity)
     }
 
     pub fn connect_action_client(&mut self) -> Result<()> {
@@ -351,12 +295,11 @@ impl Node {
         goal_id: Option<&str>,
     ) -> Result<String> {
         self.executor
-            .send_goal(&self.resolve_name(action_name), body, callback, goal_id)
+            .send_goal(action_name, body, callback, goal_id)
     }
 
     pub fn cancel_goal(&self, action_name: &str, goal_id: &str, body: &[u8]) -> Result<()> {
-        self.executor
-            .cancel_goal(&self.resolve_name(action_name), goal_id, body)
+        self.executor.cancel_goal(action_name, goal_id, body)
     }
 
     pub fn shutdown_handle(&self) -> ShutdownHandle {
@@ -401,40 +344,9 @@ impl Node {
     }
 }
 
-fn normalize_namespace(namespace: String) -> String {
-    namespace.trim().trim_matches('/').to_string()
-}
-
-fn resolve_name(namespace: &str, name: &str) -> String {
-    let name = name.trim();
-    if name.is_empty() {
-        return name.to_string();
-    }
-    if name.starts_with('/') {
-        return name.to_string();
-    }
-    if namespace.is_empty() {
-        return name.to_string();
-    }
-    format!("{namespace}/{name}")
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn resolve_relative_and_absolute() {
-        let node = Node::with_namespace("pilot", "robot1");
-        assert_eq!(node.resolve_name("imu"), "robot1/imu");
-        assert_eq!(node.resolve_name("/absolute/topic"), "/absolute/topic");
-    }
-
-    #[test]
-    fn resolve_empty_namespace() {
-        let node = Node::new("n");
-        assert_eq!(node.resolve_name("wireless.imu"), "wireless.imu");
-    }
 
     #[test]
     fn options_override_endpoints() {
@@ -446,5 +358,11 @@ mod tests {
             opts.message_xpub_endpoint().unwrap(),
             "tcp://127.0.0.1:9999"
         );
+    }
+
+    #[test]
+    fn name_is_stored() {
+        let node = Node::new("pilot");
+        assert_eq!(node.name(), "pilot");
     }
 }

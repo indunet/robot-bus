@@ -26,12 +26,18 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     #[cfg(feature = "grpc")]
     {
-        let gateway = PathBuf::from("proto/robot_bus/grpc/v1/message_gateway.proto");
-        println!("cargo:rerun-if-changed={}", gateway.display());
+        let gateways = [
+            PathBuf::from("proto/robot_bus/grpc/v1/message_gateway.proto"),
+            PathBuf::from("proto/robot_bus/grpc/v1/service_gateway.proto"),
+            PathBuf::from("proto/robot_bus/grpc/v1/action_gateway.proto"),
+        ];
+        for gateway in &gateways {
+            println!("cargo:rerun-if-changed={}", gateway.display());
+        }
         tonic_prost_build::configure()
             .build_server(true)
             .build_client(true)
-            .compile_protos(&[gateway], &[proto_root])?;
+            .compile_protos(&gateways, &[proto_root])?;
     }
 
     Ok(())

@@ -136,7 +136,6 @@ impl PyNode {
     #[new]
     #[pyo3(signature = (
         name,
-        namespace=None,
         host="localhost",
         transport="tcp",
         message_xsub=None,
@@ -144,7 +143,6 @@ impl PyNode {
     ))]
     fn new(
         name: String,
-        namespace: Option<String>,
         host: &str,
         transport: &str,
         message_xsub: Option<String>,
@@ -157,28 +155,14 @@ impl PyNode {
             message_xpub,
             ..crate::runtime::NodeOptions::default()
         };
-        let ns = namespace.unwrap_or_default();
         Self {
-            inner: RustNode::with_options(name, ns, options),
+            inner: RustNode::with_options(name, options),
         }
     }
 
     #[getter]
     fn name(&self) -> &str {
         self.inner.name()
-    }
-
-    #[getter]
-    fn namespace(&self) -> &str {
-        self.inner.namespace()
-    }
-
-    fn fully_qualified_name(&self) -> String {
-        self.inner.fully_qualified_name()
-    }
-
-    fn resolve_name(&self, name: &str) -> String {
-        self.inner.resolve_name(name)
     }
 
     fn create_publisher(&mut self) -> PyResult<()> {

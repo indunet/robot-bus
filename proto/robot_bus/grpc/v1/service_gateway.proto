@@ -1,0 +1,23 @@
+syntax = "proto3";
+
+// gRPC gateway API for the service bus. Opaque request/response bytes;
+// typed payloads live under proto/<ros_pkg>/srv/v1/.
+package robot_bus.grpc.v1;
+
+service ServiceGateway {
+  // Call a named service on the service bus (REQ/REP over ZMQ).
+  rpc Call(ServiceCallRequest) returns (ServiceCallResponse);
+}
+
+message ServiceCallRequest {
+  string service_name = 1;
+  bytes request = 2;
+  // Optional; empty → gateway generates a UUID.
+  string request_id = 3;
+  // 0 → no timeout (block until reply).
+  uint32 timeout_ms = 4;
+}
+
+message ServiceCallResponse {
+  bytes response = 1;
+}

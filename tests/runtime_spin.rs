@@ -183,17 +183,17 @@ fn publisher_subscriber_hwm_roundtrip() {
     assert_eq!(executor.stream_hwm(), HighWaterMark::new(20, 20));
 }
 
-fn node_with_proxy(name: &str, namespace: &str, proxy: &MessageProxy) -> Node {
+fn node_with_proxy(name: &str, proxy: &MessageProxy) -> Node {
     let options = NodeOptions {
         message_xsub: Some(proxy.xsub_endpoint.clone()),
         message_xpub: Some(proxy.xpub_endpoint.clone()),
         ..NodeOptions::default()
     };
-    Node::with_options(name, namespace, options)
+    Node::with_options(name, options)
 }
 
 #[test]
-fn node_subscription_applies_namespace() {
+fn node_subscription_uses_topic_as_given() {
     let proxy = MessageProxy::spawn();
     let pub_ = Publisher::new(Some(&proxy.xsub_endpoint)).expect("publisher");
     thread::sleep(Duration::from_millis(50));
@@ -201,17 +201,17 @@ fn node_subscription_applies_namespace() {
     let hits = Arc::new(AtomicUsize::new(0));
     let hits_cb = hits.clone();
     let callback: MessageCallback = Arc::new(move |topic, payload| {
-        assert_eq!(topic, "robot1/imu");
+        assert_eq!(topic, "/robot1/imu");
         assert_eq!(payload, b"hello");
         hits_cb.fetch_add(1, Ordering::SeqCst);
     });
 
-    let mut node = node_with_proxy("pilot", "robot1", &proxy);
-    node.create_subscription("imu", callback)
+    let mut node = node_with_proxy("pilot", &proxy);
+    node.create_subscription("/robot1/imu", callback)
         .expect("create_subscription");
     thread::sleep(Duration::from_millis(150));
 
-    pub_.publish("robot1/imu", b"hello").expect("publish");
+    pub_.publish("/robot1/imu", b"hello").expect("publish");
 
     let deadline = std::time::Instant::now() + Duration::from_secs(2);
     while hits.load(Ordering::SeqCst) == 0 {
@@ -226,19 +226,19 @@ fn node_subscription_applies_namespace() {
 }
 
 #[test]
-fn node_publish_applies_namespace() {
+fn node_publish_uses_topic_as_given() {
     let proxy = MessageProxy::spawn();
     thread::sleep(Duration::from_millis(50));
 
     let hits = Arc::new(AtomicUsize::new(0));
     let hits_cb = hits.clone();
 
-    let mut sub_node = node_with_proxy("listener", "", &proxy);
+    let mut sub_node = node_with_proxy("listener", &proxy);
     sub_node
         .create_subscription(
-            "robot1/cmd_vel",
+            "/robot1/cmd_vel",
             Arc::new(move |topic, payload| {
-                assert_eq!(topic, "robot1/cmd_vel");
+                assert_eq!(topic, "/robot1/cmd_vel");
                 assert_eq!(payload, b"go");
                 hits_cb.fetch_add(1, Ordering::SeqCst);
             }),
@@ -246,15 +246,17 @@ fn node_publish_applies_namespace() {
         .expect("create_subscription");
     thread::sleep(Duration::from_millis(150));
 
-    let mut pub_node = node_with_proxy("pilot", "robot1", &proxy);
+    let mut pub_node = node_with_proxy("pilot", &proxy);
     pub_node.create_publisher().expect("create_publisher");
-    pub_node.publish("cmd_vel", b"go").expect("publish");
+    pub_node
+        .publish("/robot1/cmd_vel", b"go")
+        .expect("publish");
 
     let deadline = std::time::Instant::now() + Duration::from_secs(2);
     while hits.load(Ordering::SeqCst) == 0 {
         assert!(
             deadline > std::time::Instant::now(),
-            "timed out waiting for namespaced publish"
+            "timed out waiting for node publish"
         );
         sub_node
             .spin_once(Some(Duration::from_millis(100)))
@@ -298,9 +300,9 @@ fn node_subscription_typed_imu() {
     let hits = Arc::new(AtomicUsize::new(0));
     let hits_cb = hits.clone();
 
-    let mut node = node_with_proxy("imu_node", "", &proxy);
-    node.create_subscription_typed::<Imu, _>("imu", move |topic, imu| {
-        assert_eq!(topic, "imu");
+    let mut node = node_with_proxy("imu_node", &proxy);
+    node.create_subscription_typed::<Imu, _>("/robot1/imu", move |topic, imu| {
+        assert_eq!(topic, "/robot1/imu");
         // Only count the intentionally valid sample (bad frames are skipped or default).
         if imu.linear_acceleration.as_ref().map(|v| v.z) == Some(9.8) {
             hits_cb.fetch_add(1, Ordering::SeqCst);
@@ -317,10 +319,15 @@ fn node_subscription_typed_imu() {
         }),
         ..Default::default()
     };
-    pub_.publish("imu", &imu.encode_to_vec()).expect("publish");
+    pub_
+        .publish("/robot1/imu", &imu.encode_to_vec())
+        .expect("publish");
     // Truncated/invalid protobuf varint — decode should fail and be skipped.
     pub_
-        .publish("imu", &[0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x01])
+        .publish(
+            "/robot1/imu",
+            &[0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x01],
+        )
         .expect("publish bad");
 
     let deadline = std::time::Instant::now() + Duration::from_secs(2);
