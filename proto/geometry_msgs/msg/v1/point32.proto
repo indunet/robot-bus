@@ -1,0 +1,11 @@
+syntax = "proto3";
+
+package geometry_msgs.msg.v1;
+
+// Equivalent to ROS 2 `geometry_msgs/msg/Point32`.
+// 32-bit version of Point; common in higher-bandwidth graphs.
+message Point32 {
+  float x = 1;
+  float y = 2;
+  float z = 3;
+}

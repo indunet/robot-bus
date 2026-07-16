@@ -1,0 +1,23 @@
+syntax = "proto3";
+
+package control_msgs.msg.v1;
+
+import "std_msgs/msg/v1/header.proto";
+
+// Equivalent to ROS 2 `control_msgs/msg/JointControllerState`.
+// This message presents current controller state of one joint.
+message JointControllerState {
+  std_msgs.msg.v1.Header header = 1;
+
+  double set_point = 2;
+  double process_value = 3;
+  double process_value_dot = 4;
+  double error = 5;
+  double time_step = 6;
+  double command = 7;
+  double p = 8;
+  double i = 9;
+  double d = 10;
+  double i_clamp = 11;
+  bool antiwindup = 12;
+}

@@ -1,0 +1,22 @@
+syntax = "proto3";
+
+package nav2_msgs.msg.v1;
+
+import "std_msgs/msg/v1/header.proto";
+import "geometry_msgs/msg/v1/point32.proto";
+import "geometry_msgs/msg/v1/vector3.proto";
+
+// Equivalent to ROS 2 `nav2_msgs/msg/VoxelGrid`.
+message VoxelGrid {
+  std_msgs.msg.v1.Header header = 1;
+
+  // uint32[] in ROS 2, row-major.
+  repeated uint32 data = 2;
+
+  geometry_msgs.msg.v1.Point32 origin = 3;
+  geometry_msgs.msg.v1.Vector3 resolutions = 4;
+
+  uint32 size_x = 5;
+  uint32 size_y = 6;
+  uint32 size_z = 7;
+}

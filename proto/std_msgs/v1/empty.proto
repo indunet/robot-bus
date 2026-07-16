@@ -1,7 +1,0 @@
-syntax = "proto3";
-
-package std_msgs.v1;
-
-// Equivalent to ROS 2 `std_msgs/msg/Empty`.
-// Useful as a placeholder request/response with no payload.
-message Empty {}

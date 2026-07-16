@@ -1,0 +1,20 @@
+syntax = "proto3";
+
+package visualization_msgs.msg.v1;
+
+// Equivalent to ROS 2 `visualization_msgs/msg/MenuEntry`.
+message MenuEntry {
+  uint32 id = 1;
+
+  // ID of the parent of this menu entry; if 0, this is a top-level entry.
+  uint32 parent_id = 2;
+
+  string title = 3;
+  string command = 4;
+
+  // uint8 in ROS 2:
+  //   FEEDBACK = 0  // return menu entry via feedback topic
+  //   ROSRUN = 1    // "xterm -e rosrun ..."
+  //   ROSLAUNCH = 2 // "xterm -e roslaunch ..."
+  uint32 command_type = 5;
+}

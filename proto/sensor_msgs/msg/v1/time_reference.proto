@@ -1,0 +1,18 @@
+syntax = "proto3";
+
+package sensor_msgs.msg.v1;
+
+import "std_msgs/msg/v1/header.proto";
+import "builtin_interfaces/msg/v1/time.proto";
+
+// Equivalent to ROS 2 `sensor_msgs/msg/TimeReference`.
+// Measurement from a device like a GPS that publishes a reference time.
+message TimeReference {
+  std_msgs.msg.v1.Header header = 1;
+
+  // Corresponding time from this device's clock.
+  builtin_interfaces.msg.v1.Time time_ref = 2;
+
+  // Name of the originating time source.
+  string source = 3;
+}

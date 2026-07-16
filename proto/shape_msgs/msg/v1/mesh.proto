@@ -1,0 +1,19 @@
+syntax = "proto3";
+
+package shape_msgs.msg.v1;
+
+import "geometry_msgs/msg/v1/point.proto";
+
+// Equivalent to ROS 2 `shape_msgs/msg/MeshTriangle`.
+// Definition of a triangle's vertices.
+message MeshTriangle {
+  // Fixed size 3 in ROS 2.
+  repeated uint32 vertex_indices = 1;
+}
+
+// Equivalent to ROS 2 `shape_msgs/msg/Mesh`.
+// Definition of a mesh.
+message Mesh {
+  repeated MeshTriangle triangles = 1;
+  repeated geometry_msgs.msg.v1.Point vertices = 2;
+}

@@ -1,0 +1,31 @@
+syntax = "proto3";
+
+package sensor_msgs.msg.v1;
+
+import "std_msgs/msg/v1/header.proto";
+import "sensor_msgs/msg/v1/nav_sat_status.proto";
+
+// Equivalent to ROS 2 `sensor_msgs/msg/NavSatFix`.
+message NavSatFix {
+  std_msgs.msg.v1.Header header = 1;
+  NavSatStatus status = 2;
+
+  // Latitude [degrees]. Positive is north of equator.
+  double latitude = 3;
+
+  // Longitude [degrees]. Positive is east of prime meridian.
+  double longitude = 4;
+
+  // Altitude [m]. Positive is above the WGS 84 ellipsoid.
+  double altitude = 5;
+
+  // Position covariance [m^2], ENU row-major. Fixed size 9 in ROS 2.
+  repeated double position_covariance = 6;
+
+  // uint8 in ROS 2:
+  //   COVARIANCE_TYPE_UNKNOWN = 0
+  //   COVARIANCE_TYPE_APPROXIMATED = 1
+  //   COVARIANCE_TYPE_DIAGONAL_KNOWN = 2
+  //   COVARIANCE_TYPE_KNOWN = 3
+  uint32 position_covariance_type = 7;
+}

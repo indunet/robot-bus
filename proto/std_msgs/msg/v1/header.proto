@@ -1,0 +1,15 @@
+syntax = "proto3";
+
+package std_msgs.msg.v1;
+
+import "builtin_interfaces/msg/v1/time.proto";
+
+// Equivalent to ROS 2 `std_msgs/msg/Header`.
+// Standard metadata for higher-level stamped data types.
+message Header {
+  // Two-integer timestamp that is expressed as seconds and nanoseconds.
+  builtin_interfaces.msg.v1.Time stamp = 1;
+
+  // Transform frame with which this data is associated.
+  string frame_id = 2;
+}

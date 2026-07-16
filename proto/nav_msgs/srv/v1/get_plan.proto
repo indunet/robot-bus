@@ -1,0 +1,20 @@
+syntax = "proto3";
+
+package nav_msgs.srv.v1;
+
+import "geometry_msgs/msg/v1/stamped.proto";
+import "nav_msgs/msg/v1/path.proto";
+
+// Equivalent to ROS 2 `nav_msgs/srv/GetPlan`.
+message GetPlanRequest {
+  geometry_msgs.msg.v1.PoseStamped start = 1;
+  geometry_msgs.msg.v1.PoseStamped goal = 2;
+
+  // If a path cannot be found that is farther than this distance away from
+  // an obstacle, that path will still be returned. [m]
+  float tolerance = 3;
+}
+
+message GetPlanResponse {
+  Path plan = 1;
+}

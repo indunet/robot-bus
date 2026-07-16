@@ -1,9 +1,0 @@
-syntax = "proto3";
-
-package control_msgs.v1;
-
-// Equivalent to ROS 2 `control_msgs/msg/GripperCommand`.
-message GripperCommand {
-  double position = 1;
-  double max_effort = 2;
-}

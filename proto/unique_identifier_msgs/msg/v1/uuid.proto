@@ -1,0 +1,9 @@
+syntax = "proto3";
+
+package unique_identifier_msgs.msg.v1;
+
+// Equivalent to ROS 2 `unique_identifier_msgs/msg/UUID`.
+message UUID {
+  // Fixed size 16 in ROS 2 (RFC 4122).
+  bytes uuid = 1;
+}

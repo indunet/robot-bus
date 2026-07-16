@@ -12,6 +12,9 @@ pub mod transports;
 pub mod worker_thread;
 pub mod zmq_helpers;
 
+#[cfg(feature = "grpc")]
+pub mod grpc;
+
 #[cfg(feature = "extension-module")]
 mod python_api;
 

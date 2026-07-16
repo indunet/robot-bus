@@ -1,0 +1,90 @@
+syntax = "proto3";
+
+package visualization_msgs.msg.v1;
+
+import "std_msgs/msg/v1/header.proto";
+import "geometry_msgs/msg/v1/pose.proto";
+import "geometry_msgs/msg/v1/quaternion.proto";
+import "geometry_msgs/msg/v1/point.proto";
+import "visualization_msgs/msg/v1/marker.proto";
+import "visualization_msgs/msg/v1/menu_entry.proto";
+
+// Equivalent to ROS 2 `visualization_msgs/msg/InteractiveMarkerControl`.
+message InteractiveMarkerControl {
+  string name = 1;
+
+  // Orientation of the control. For FIXED style, the orientation is relative
+  // to the interactive marker's frame; otherwise relative to the marker pose.
+  geometry_msgs.msg.v1.Quaternion orientation = 2;
+
+  // uint8 in ROS 2:
+  //   INHERIT = 0, FIXED = 1, VIEW_FACING = 2
+  uint32 orientation_mode = 3;
+
+  // uint8 in ROS 2:
+  //   NONE = 0, MENU = 1, BUTTON = 2, MOVE_AXIS = 3, MOVE_PLANE = 4,
+  //   ROTATE_AXIS = 5, MOVE_ROTATE = 6, MOVE_3D = 7, ROTATE_3D = 8,
+  //   MOVE_ROTATE_3D = 9
+  uint32 interaction_mode = 4;
+
+  bool always_visible = 5;
+  repeated Marker markers = 6;
+  bool independent_marker_orientation = 7;
+  string description = 8;
+}
+
+// Equivalent to ROS 2 `visualization_msgs/msg/InteractiveMarker`.
+message InteractiveMarker {
+  std_msgs.msg.v1.Header header = 1;
+  geometry_msgs.msg.v1.Pose pose = 2;
+  string name = 3;
+  string description = 4;
+  float scale = 5;
+  repeated MenuEntry menu_entries = 6;
+  repeated InteractiveMarkerControl controls = 7;
+}
+
+// Equivalent to ROS 2 `visualization_msgs/msg/InteractiveMarkerPose`.
+message InteractiveMarkerPose {
+  std_msgs.msg.v1.Header header = 1;
+  geometry_msgs.msg.v1.Pose pose = 2;
+  string name = 3;
+}
+
+// Equivalent to ROS 2 `visualization_msgs/msg/InteractiveMarkerInit`.
+message InteractiveMarkerInit {
+  string server_id = 1;
+  uint64 seq_num = 2;
+  repeated InteractiveMarker markers = 3;
+}
+
+// Equivalent to ROS 2 `visualization_msgs/msg/InteractiveMarkerUpdate`.
+message InteractiveMarkerUpdate {
+  string server_id = 1;
+  uint64 seq_num = 2;
+
+  // uint8 in ROS 2: KEEP_ALIVE = 0, UPDATE = 1
+  uint32 type = 3;
+
+  repeated InteractiveMarker markers = 4;
+  repeated InteractiveMarkerPose poses = 5;
+  repeated string erases = 6;
+}
+
+// Equivalent to ROS 2 `visualization_msgs/msg/InteractiveMarkerFeedback`.
+message InteractiveMarkerFeedback {
+  std_msgs.msg.v1.Header header = 1;
+  string client_id = 2;
+  string marker_name = 3;
+  string control_name = 4;
+
+  // uint8 in ROS 2:
+  //   KEEP_ALIVE = 0, POSE_UPDATE = 1, MENU_SELECT = 2, BUTTON_CLICK = 3,
+  //   MOUSE_DOWN = 4, MOUSE_UP = 5
+  uint32 event_type = 5;
+
+  geometry_msgs.msg.v1.Pose pose = 6;
+  uint32 menu_entry_id = 7;
+  geometry_msgs.msg.v1.Point mouse_point = 8;
+  bool mouse_point_valid = 9;
+}

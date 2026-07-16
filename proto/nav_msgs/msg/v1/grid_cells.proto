@@ -1,0 +1,15 @@
+syntax = "proto3";
+
+package nav_msgs.msg.v1;
+
+import "std_msgs/msg/v1/header.proto";
+import "geometry_msgs/msg/v1/point.proto";
+
+// Equivalent to ROS 2 `nav_msgs/msg/GridCells`.
+// An array of cells in a 2D grid.
+message GridCells {
+  std_msgs.msg.v1.Header header = 1;
+  float cell_width = 2;
+  float cell_height = 3;
+  repeated geometry_msgs.msg.v1.Point cells = 4;
+}

@@ -1,0 +1,21 @@
+syntax = "proto3";
+
+package sensor_msgs.msg.v1;
+
+// Equivalent to ROS 2 `sensor_msgs/msg/NavSatStatus`.
+message NavSatStatus {
+  // int8 in ROS 2:
+  //   STATUS_UNKNOWN = -2
+  //   STATUS_NO_FIX = -1
+  //   STATUS_FIX = 0
+  //   STATUS_SBAS_FIX = 1
+  //   STATUS_GBAS_FIX = 2
+  int32 status = 1;
+
+  // uint16 bitfield in ROS 2:
+  //   SERVICE_GPS = 1
+  //   SERVICE_GLONASS = 2
+  //   SERVICE_COMPASS = 4  (includes BeiDou)
+  //   SERVICE_GALILEO = 8
+  uint32 service = 2;
+}

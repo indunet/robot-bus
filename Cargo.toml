@@ -16,18 +16,48 @@ crate-type = ["cdylib", "rlib"]
 default = []
 # Enable with maturin / `cargo build --features extension-module` for the Python module.
 extension-module = ["dep:pyo3", "pyo3/extension-module"]
+# gRPC / gRPC-Web gateway (Subscribe stream over the message bus).
+grpc = [
+    "dep:tokio",
+    "dep:tonic",
+    "dep:tonic-prost",
+    "dep:tonic-web",
+    "dep:tower-http",
+    "dep:tokio-stream",
+    "dep:http",
+    "dep:tonic-prost-build",
+]
 
 [dependencies]
 anyhow = "1"
+http = { version = "1", optional = true }
 log = "0.4"
-prost = "0.13"
+prost = "0.14"
 pyo3 = { version = "0.25", optional = true, features = ["abi3-py39"] }
 thiserror = "2"
+tokio = { version = "1", optional = true, features = ["rt-multi-thread", "macros", "net", "sync", "time", "signal"] }
+tokio-stream = { version = "0.1", optional = true }
+tonic = { version = "0.14", optional = true }
+tonic-prost = { version = "0.14", optional = true }
+tonic-web = { version = "0.14", optional = true }
+tower-http = { version = "0.6", optional = true, features = ["cors"] }
 uuid = { version = "1", features = ["v4"] }
 zmq = "0.10"
 
 [build-dependencies]
-prost-build = "0.13"
+prost-build = "0.14"
+tonic-prost-build = { version = "0.14", optional = true }
+
+[dev-dependencies]
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "sync", "time"] }
+tonic = "0.14"
+tonic-prost = "0.14"
+tokio-stream = "0.1"
+
+[[test]]
+name = "grpc_gateway"
+path = "tests/grpc_gateway.rs"
+required-features = ["grpc"]
 
 [[bin]]
 name = "message_bus_broker"
@@ -44,3 +74,11 @@ path = "src/bin/action_bus.rs"
 [[bin]]
 name = "robot_bus_broker"
 path = "src/bin/robot_bus_broker.rs"
+
+[[bin]]
+name = "robot_bus_grpc_gateway"
+path = "src/bin/robot_bus_grpc_gateway.rs"
+required-features = ["grpc"]
+
+[package.metadata.docs.rs]
+features = ["grpc"]

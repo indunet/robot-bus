@@ -1,0 +1,74 @@
+syntax = "proto3";
+
+package geometry_msgs.msg.v1;
+
+import "std_msgs/msg/v1/header.proto";
+import "geometry_msgs/msg/v1/point.proto";
+import "geometry_msgs/msg/v1/vector3.proto";
+import "geometry_msgs/msg/v1/quaternion.proto";
+import "geometry_msgs/msg/v1/pose.proto";
+import "geometry_msgs/msg/v1/twist.proto";
+import "geometry_msgs/msg/v1/transform.proto";
+import "geometry_msgs/msg/v1/accel_wrench.proto";
+import "geometry_msgs/msg/v1/covariance.proto";
+
+// Equivalent to ROS 2 `geometry_msgs/msg/PointStamped`.
+message PointStamped {
+  std_msgs.msg.v1.Header header = 1;
+  Point point = 2;
+}
+
+// Equivalent to ROS 2 `geometry_msgs/msg/Vector3Stamped`.
+message Vector3Stamped {
+  std_msgs.msg.v1.Header header = 1;
+  Vector3 vector = 2;
+}
+
+// Equivalent to ROS 2 `geometry_msgs/msg/QuaternionStamped`.
+message QuaternionStamped {
+  std_msgs.msg.v1.Header header = 1;
+  Quaternion quaternion = 2;
+}
+
+// Equivalent to ROS 2 `geometry_msgs/msg/PoseStamped`.
+message PoseStamped {
+  std_msgs.msg.v1.Header header = 1;
+  Pose pose = 2;
+}
+
+// Equivalent to ROS 2 `geometry_msgs/msg/TwistStamped`.
+message TwistStamped {
+  std_msgs.msg.v1.Header header = 1;
+  Twist twist = 2;
+}
+
+// Equivalent to ROS 2 `geometry_msgs/msg/TransformStamped`.
+message TransformStamped {
+  std_msgs.msg.v1.Header header = 1;
+  string child_frame_id = 2;
+  Transform transform = 3;
+}
+
+// Equivalent to ROS 2 `geometry_msgs/msg/AccelStamped`.
+message AccelStamped {
+  std_msgs.msg.v1.Header header = 1;
+  Accel accel = 2;
+}
+
+// Equivalent to ROS 2 `geometry_msgs/msg/WrenchStamped`.
+message WrenchStamped {
+  std_msgs.msg.v1.Header header = 1;
+  Wrench wrench = 2;
+}
+
+// Equivalent to ROS 2 `geometry_msgs/msg/PoseWithCovarianceStamped`.
+message PoseWithCovarianceStamped {
+  std_msgs.msg.v1.Header header = 1;
+  PoseWithCovariance pose = 2;
+}
+
+// Equivalent to ROS 2 `geometry_msgs/msg/TwistWithCovarianceStamped`.
+message TwistWithCovarianceStamped {
+  std_msgs.msg.v1.Header header = 1;
+  TwistWithCovariance twist = 2;
+}

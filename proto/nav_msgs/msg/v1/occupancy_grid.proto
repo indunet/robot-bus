@@ -1,0 +1,38 @@
+syntax = "proto3";
+
+package nav_msgs.msg.v1;
+
+import "std_msgs/msg/v1/header.proto";
+import "builtin_interfaces/msg/v1/time.proto";
+import "geometry_msgs/msg/v1/pose.proto";
+
+// Equivalent to ROS 2 `nav_msgs/msg/MapMetaData`.
+// Meta information for an OccupancyGrid.
+message MapMetaData {
+  builtin_interfaces.msg.v1.Time map_load_time = 1;
+
+  // Map resolution [m/cell].
+  float resolution = 2;
+
+  uint32 width = 3;
+  uint32 height = 4;
+
+  // Real-world pose of the cell (0, 0) in the map.
+  geometry_msgs.msg.v1.Pose origin = 5;
+}
+
+// Equivalent to ROS 2 `nav_msgs/msg/OccupancyGrid`.
+// Represents a 2-D grid map where each cell represents the probability of
+// occupancy.
+message OccupancyGrid {
+  std_msgs.msg.v1.Header header = 1;
+  MapMetaData info = 2;
+
+  // Cell data in row-major order, starting with (0,0). Values:
+  //   -1 = unknown
+  //    0 = free
+  //  100 = occupied
+  // Other values are probabilities [0..100].
+  // int8[] in ROS 2; modeled as int32 for protobuf / prost.
+  repeated int32 data = 3;
+}

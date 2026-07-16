@@ -1,0 +1,17 @@
+syntax = "proto3";
+
+package sensor_msgs.msg.v1;
+
+import "std_msgs/msg/v1/header.proto";
+
+// Equivalent to ROS 2 `sensor_msgs/msg/Illuminance`.
+// Single photometric illuminance measurement for Ambient Light Sensors.
+message Illuminance {
+  std_msgs.msg.v1.Header header = 1;
+
+  // Measurement of the Photometric Illuminance in Lux.
+  double illuminance = 2;
+
+  // 0 is interpreted as variance unknown.
+  double variance = 3;
+}

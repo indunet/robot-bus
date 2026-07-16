@@ -1,0 +1,13 @@
+syntax = "proto3";
+
+package geometry_msgs.msg.v1;
+
+import "std_msgs/msg/v1/header.proto";
+import "geometry_msgs/msg/v1/pose.proto";
+
+// Equivalent to ROS 2 `geometry_msgs/msg/PoseArray`.
+// An array of poses with a header.
+message PoseArray {
+  std_msgs.msg.v1.Header header = 1;
+  repeated Pose poses = 2;
+}

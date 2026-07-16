@@ -1,0 +1,22 @@
+syntax = "proto3";
+
+package sensor_msgs.msg.v1;
+
+import "std_msgs/msg/v1/header.proto";
+
+// Equivalent to ROS 2 `sensor_msgs/msg/Image`.
+//
+// (0, 0) is at the top-left corner of the image.
+// Encoding values follow sensor_msgs/image_encodings.hpp.
+message Image {
+  std_msgs.msg.v1.Header header = 1;
+
+  uint32 height = 2;
+  uint32 width = 3;
+  string encoding = 4;
+  bool is_bigendian = 5;
+  uint32 step = 6;
+
+  // Raw pixel matrix; size is step * rows.
+  bytes data = 7;
+}

@@ -1,0 +1,16 @@
+syntax = "proto3";
+
+package std_msgs.msg.v1;
+
+// Equivalent to ROS 2 `std_msgs/msg/MultiArrayDimension`.
+message MultiArrayDimension {
+  string label = 1;
+  uint32 size = 2;
+  uint32 stride = 3;
+}
+
+// Equivalent to ROS 2 `std_msgs/msg/MultiArrayLayout`.
+message MultiArrayLayout {
+  repeated MultiArrayDimension dim = 1;
+  uint32 data_offset = 2;
+}

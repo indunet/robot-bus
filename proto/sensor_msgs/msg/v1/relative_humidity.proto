@@ -1,0 +1,16 @@
+syntax = "proto3";
+
+package sensor_msgs.msg.v1;
+
+import "std_msgs/msg/v1/header.proto";
+
+// Equivalent to ROS 2 `sensor_msgs/msg/RelativeHumidity`.
+message RelativeHumidity {
+  std_msgs.msg.v1.Header header = 1;
+
+  // From 0.0 to 1.0, where 1.0 is 100% relative humidity.
+  double relative_humidity = 2;
+
+  // 0 is interpreted as variance unknown.
+  double variance = 3;
+}

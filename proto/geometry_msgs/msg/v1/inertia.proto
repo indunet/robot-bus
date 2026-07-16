@@ -1,0 +1,25 @@
+syntax = "proto3";
+
+package geometry_msgs.msg.v1;
+
+import "std_msgs/msg/v1/header.proto";
+import "geometry_msgs/msg/v1/vector3.proto";
+
+// Equivalent to ROS 2 `geometry_msgs/msg/Inertia`.
+// Mass properties of a rigid body.
+message Inertia {
+  double m = 1;
+  Vector3 com = 2;
+  double ixx = 3;
+  double ixy = 4;
+  double ixz = 5;
+  double iyy = 6;
+  double iyz = 7;
+  double izz = 8;
+}
+
+// Equivalent to ROS 2 `geometry_msgs/msg/InertiaStamped`.
+message InertiaStamped {
+  std_msgs.msg.v1.Header header = 1;
+  Inertia inertia = 2;
+}

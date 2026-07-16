@@ -1,0 +1,19 @@
+syntax = "proto3";
+
+package geometry_msgs.msg.v1;
+
+import "geometry_msgs/msg/v1/pose.proto";
+import "geometry_msgs/msg/v1/twist.proto";
+
+// Equivalent to ROS 2 `geometry_msgs/msg/PoseWithCovariance`.
+message PoseWithCovariance {
+  Pose pose = 1;
+  // Row-major 6x6 covariance (36 elements) in ROS 2.
+  repeated double covariance = 2;
+}
+
+// Equivalent to ROS 2 `geometry_msgs/msg/TwistWithCovariance`.
+message TwistWithCovariance {
+  Twist twist = 1;
+  repeated double covariance = 2;
+}

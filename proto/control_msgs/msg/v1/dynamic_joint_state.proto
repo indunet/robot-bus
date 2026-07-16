@@ -1,0 +1,26 @@
+syntax = "proto3";
+
+package control_msgs.msg.v1;
+
+import "std_msgs/msg/v1/header.proto";
+
+// Equivalent to ROS 2 `control_msgs/msg/InterfaceValue`.
+message InterfaceValue {
+  repeated string interface_names = 1;
+  repeated double values = 2;
+}
+
+// Equivalent to ROS 2 `control_msgs/msg/DynamicJointState`.
+message DynamicJointState {
+  std_msgs.msg.v1.Header header = 1;
+  repeated string joint_names = 2;
+  // One InterfaceValue per joint, same order as joint_names.
+  repeated InterfaceValue interface_values = 3;
+}
+
+// Equivalent to ROS 2 `control_msgs/msg/DynamicInterfaceGroupValues`.
+message DynamicInterfaceGroupValues {
+  std_msgs.msg.v1.Header header = 1;
+  repeated string interface_groups = 2;
+  repeated InterfaceValue interface_values = 3;
+}

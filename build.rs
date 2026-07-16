@@ -13,6 +13,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let proto_root = PathBuf::from("proto");
     let mut protos = Vec::new();
     collect_protos(&proto_root, &mut protos)?;
+    // gRPC API protos (proto/robot_bus/grpc/) use tonic stubs, not plain prost.
+    protos.retain(|p| !path_is_under(p, "proto/robot_bus"));
     protos.sort();
 
     for proto in &protos {
@@ -20,8 +22,23 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     prost_build::Config::new()
-        .compile_protos(&protos, &[proto_root])?;
+        .compile_protos(&protos, &[proto_root.clone()])?;
+
+    #[cfg(feature = "grpc")]
+    {
+        let gateway = PathBuf::from("proto/robot_bus/grpc/v1/message_gateway.proto");
+        println!("cargo:rerun-if-changed={}", gateway.display());
+        tonic_prost_build::configure()
+            .build_server(true)
+            .build_client(true)
+            .compile_protos(&[gateway], &[proto_root])?;
+    }
+
     Ok(())
+}
+
+fn path_is_under(path: &std::path::Path, prefix: &str) -> bool {
+    path.to_string_lossy().replace('\\', "/").contains(prefix)
 }
 
 fn collect_protos(

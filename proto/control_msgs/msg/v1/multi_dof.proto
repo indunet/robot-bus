@@ -1,0 +1,19 @@
+syntax = "proto3";
+
+package control_msgs.msg.v1;
+
+import "std_msgs/msg/v1/header.proto";
+import "control_msgs/msg/v1/single_dof_state.proto";
+
+// Equivalent to ROS 2 `control_msgs/msg/MultiDOFCommand`.
+message MultiDOFCommand {
+  repeated string dof_names = 1;
+  repeated double values = 2;
+  repeated double values_dot = 3;
+}
+
+// Equivalent to ROS 2 `control_msgs/msg/MultiDOFStateStamped`.
+message MultiDOFStateStamped {
+  std_msgs.msg.v1.Header header = 1;
+  repeated SingleDOFState dof_states = 2;
+}
