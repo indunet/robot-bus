@@ -100,9 +100,13 @@ fn main() -> robot_bus::Result<()> {
     executor.add_node(&mut node)?;
 
     let imu_pub = node.create_publisher("/robot1/imu")?;
-    node.create_subscription_typed::<Imu, _>("/robot1/imu", |topic, imu| {
-        println!("{topic}: angular_z={:?}", imu.angular_velocity);
-    })?;
+    node.create_subscription_typed::<Imu, _>(
+        "/robot1/imu",
+        |topic, imu| {
+            println!("{topic}: angular_z={:?}", imu.angular_velocity);
+        },
+        None,
+    )?;
 
     let imu = Imu {
         angular_velocity: Some(Vector3 {
@@ -119,9 +123,13 @@ fn main() -> robot_bus::Result<()> {
     };
     imu_pub.publish(&imu.encode_to_vec())?;
 
-    node.create_timer(Duration::from_millis(100), Arc::new(|| {
-        // 周期任务
-    }))?;
+    node.create_timer(
+        Duration::from_millis(100),
+        Arc::new(|| {
+            // 周期任务
+        }),
+        None,
+    )?;
 
     let handle = executor.shutdown_handle()?;
     std::thread::spawn(move || {
@@ -134,7 +142,7 @@ fn main() -> robot_bus::Result<()> {
 }
 ```
 
-Raw bytes 回调：`node.create_subscription("/robot1/imu", Arc::new(|topic, payload| { ... }))?`。
+Raw bytes 回调：`node.create_subscription("/robot1/imu", Arc::new(|topic, payload| { ... }), None)?`。
 
 topic / service / action 名按传入原样使用（请自行写全路径）。
 
@@ -142,7 +150,7 @@ topic / service / action 名按传入原样使用（请自行写全路径）。
 
 ### Callback group
 
-接近 ROS 2：`MutuallyExclusive`（组内互斥）与 `Reentrant`（组内可并行，配合 `MultiThreadedExecutor`）。节点默认有一个互斥 group；未指定时订阅 / timer / service / action 都挂在默认组上。
+接近 ROS 2：`MutuallyExclusive`（组内互斥）与 `Reentrant`（组内可并行，配合 `MultiThreadedExecutor`）。节点默认有一个互斥 group；`callback_group` 传 `None` 时用默认组（与 ROS 2 把 group 作为参数传入一致）。
 
 ```rust
 use robot_bus::{CallbackGroupType, MultiThreadedExecutor, Node};
@@ -152,15 +160,15 @@ let executor = MultiThreadedExecutor::new(4);
 executor.add_node(&mut node)?;
 
 let reentrant = node.create_callback_group(CallbackGroupType::Reentrant);
-node.create_subscription_with_group(
+node.create_subscription(
     "/robot1/imu",
     Arc::new(|_topic, _payload| { /* 可与同组其它回调并行 */ }),
-    &reentrant,
+    Some(&reentrant),
 )?;
-node.create_timer_with_group(
+node.create_timer(
     Duration::from_millis(100),
     Arc::new(|| {}),
-    &reentrant,
+    Some(&reentrant),
 )?;
 ```
 
@@ -207,7 +215,7 @@ fn main() -> robot_bus::Result<()> {
 也可用 `Node::create_service` + `spin`（endpoint 取自 `NodeOptions`）：
 
 ```rust
-node.create_service("echo", handler, /* identity */ None)?;
+node.create_service("echo", handler, /* identity */ None, /* callback_group */ None)?;
 ```
 
 ---
@@ -279,6 +287,7 @@ fn main() -> anyhow::Result<()> {
     node.create_subscription(
         "/robot1/imu",
         Arc::new(|topic, payload| println!("{topic}: {} bytes", payload.len())),
+        None,
     )?;
     imu_pub.publish(b"hello")?;
     executor.spin_once(None)?;

@@ -220,7 +220,7 @@ fn node_subscription_uses_topic_as_given() {
     });
 
     let (executor, mut node) = node_with_proxy("pilot", &proxy);
-    node.create_subscription("/robot1/imu", callback)
+    node.create_subscription("/robot1/imu", callback, None)
         .expect("create_subscription");
     thread::sleep(Duration::from_millis(150));
 
@@ -256,6 +256,7 @@ fn node_publish_uses_topic_as_given() {
                 assert_eq!(payload, b"go");
                 hits_cb.fetch_add(1, Ordering::SeqCst);
             }),
+            None,
         )
         .expect("create_subscription");
     thread::sleep(Duration::from_millis(150));
@@ -292,6 +293,7 @@ fn node_timer_via_spin_once() {
         Arc::new(move || {
             hits_cb.fetch_add(1, Ordering::SeqCst);
         }),
+        None,
     )
     .expect("create_timer");
 
@@ -318,13 +320,17 @@ fn node_subscription_typed_imu() {
     let hits_cb = hits.clone();
 
     let (executor, mut node) = node_with_proxy("imu_node", &proxy);
-    node.create_subscription_typed::<Imu, _>("/robot1/imu", move |topic, imu| {
-        assert_eq!(topic, "/robot1/imu");
-        // Only count the intentionally valid sample (bad frames are skipped or default).
-        if imu.linear_acceleration.as_ref().map(|v| v.z) == Some(9.8) {
-            hits_cb.fetch_add(1, Ordering::SeqCst);
-        }
-    })
+    node.create_subscription_typed::<Imu, _>(
+        "/robot1/imu",
+        move |topic, imu| {
+            assert_eq!(topic, "/robot1/imu");
+            // Only count the intentionally valid sample (bad frames are skipped or default).
+            if imu.linear_acceleration.as_ref().map(|v| v.z) == Some(9.8) {
+                hits_cb.fetch_add(1, Ordering::SeqCst);
+            }
+        },
+        None,
+    )
     .expect("create_subscription_typed");
     thread::sleep(Duration::from_millis(150));
 

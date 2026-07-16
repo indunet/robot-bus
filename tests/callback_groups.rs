@@ -24,7 +24,7 @@ fn mutually_exclusive_group_serializes_timers() {
     for _ in 0..2 {
         let overlapping = overlapping_cb.clone();
         let max_seen = max_seen_cb.clone();
-        node.create_timer_with_group(
+        node.create_timer(
             Duration::from_millis(20),
             Arc::new(move || {
                 let now = overlapping.fetch_add(1, Ordering::SeqCst) + 1;
@@ -32,7 +32,7 @@ fn mutually_exclusive_group_serializes_timers() {
                 thread::sleep(Duration::from_millis(40));
                 overlapping.fetch_sub(1, Ordering::SeqCst);
             }),
-            &group,
+            Some(&group),
         )
         .expect("timer");
     }
@@ -76,7 +76,7 @@ fn reentrant_group_allows_parallel_timers() {
         let barrier = barrier.clone();
         let entered = entered.clone();
         let parallel = parallel.clone();
-        node.create_timer_with_group(
+        node.create_timer(
             Duration::from_millis(20),
             Arc::new(move || {
                 {
@@ -87,7 +87,7 @@ fn reentrant_group_allows_parallel_timers() {
                 parallel.fetch_add(1, Ordering::SeqCst);
                 thread::sleep(Duration::from_millis(30));
             }),
-            &group,
+            Some(&group),
         )
         .expect("timer");
     }

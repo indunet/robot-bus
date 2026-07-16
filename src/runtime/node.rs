@@ -288,54 +288,38 @@ impl Node {
 
     /// Subscribe with a raw-bytes callback (ROS 2 `create_subscription`).
     ///
-    /// Uses the node's default mutually exclusive callback group.
+    /// Pass `callback_group` like ROS 2; `None` uses the node's default
+    /// mutually exclusive group.
     pub fn create_subscription(
         &mut self,
         topic: &str,
         callback: MessageCallback,
-    ) -> Result<()> {
-        self.create_subscription_with_group(topic, callback, &self.default_callback_group.clone())
-    }
-
-    /// Like [`create_subscription`](Self::create_subscription), with an explicit callback group.
-    pub fn create_subscription_with_group(
-        &mut self,
-        topic: &str,
-        callback: MessageCallback,
-        group: &CallbackGroup,
+        callback_group: Option<&CallbackGroup>,
     ) -> Result<()> {
         self.ensure_subscriber()?;
-        self.lock_executor()?
-            .subscribe(topic, callback, group.clone())
+        let group = callback_group
+            .cloned()
+            .unwrap_or_else(|| self.default_callback_group.clone());
+        self.lock_executor()?.subscribe(topic, callback, group)
     }
 
     /// Subscribe with a protobuf-typed callback. Decode failures are skipped.
-    pub fn create_subscription_typed<M, F>(&mut self, topic: &str, callback: F) -> Result<()>
-    where
-        M: Message + Default + 'static,
-        F: Fn(&str, M) + Send + Sync + 'static,
-    {
-        self.create_subscription_typed_with_group(
-            topic,
-            callback,
-            &self.default_callback_group.clone(),
-        )
-    }
-
-    /// Typed subscribe with an explicit callback group.
-    pub fn create_subscription_typed_with_group<M, F>(
+    pub fn create_subscription_typed<M, F>(
         &mut self,
         topic: &str,
         callback: F,
-        group: &CallbackGroup,
+        callback_group: Option<&CallbackGroup>,
     ) -> Result<()>
     where
         M: Message + Default + 'static,
         F: Fn(&str, M) + Send + Sync + 'static,
     {
         self.ensure_subscriber()?;
+        let group = callback_group
+            .cloned()
+            .unwrap_or_else(|| self.default_callback_group.clone());
         self.lock_executor()?
-            .subscribe_typed::<M, F>(topic, callback, group.clone())
+            .subscribe_typed::<M, F>(topic, callback, group)
     }
 
     fn ensure_subscriber(&mut self) -> Result<()> {
@@ -348,91 +332,63 @@ impl Node {
         Ok(())
     }
 
-    /// Periodic timer (ROS 2 `create_timer`) on the default callback group.
+    /// Periodic timer (ROS 2 `create_timer`).
+    ///
+    /// `callback_group: None` → default mutually exclusive group.
     pub fn create_timer(
         &mut self,
         period: Duration,
         callback: TimerCallback,
+        callback_group: Option<&CallbackGroup>,
     ) -> Result<TimerHandle> {
-        self.create_timer_with_group(period, callback, &self.default_callback_group.clone())
-    }
-
-    /// Timer with an explicit callback group.
-    pub fn create_timer_with_group(
-        &mut self,
-        period: Duration,
-        callback: TimerCallback,
-        group: &CallbackGroup,
-    ) -> Result<TimerHandle> {
+        let group = callback_group
+            .cloned()
+            .unwrap_or_else(|| self.default_callback_group.clone());
         self.lock_executor()?
-            .create_timer(period, callback, group.clone())
+            .create_timer(period, callback, group)
     }
 
     pub fn cancel_timer(&mut self, handle: TimerHandle) -> Result<()> {
         self.lock_executor()?.cancel_timer(handle)
     }
 
-    /// Register a service worker (ROS 2 `create_service`) on the default group.
+    /// Register a service worker (ROS 2 `create_service`).
     pub fn create_service(
         &mut self,
         service_name: &str,
         handler: ServiceHandler,
         identity: Option<&str>,
-    ) -> Result<()> {
-        self.create_service_with_group(
-            service_name,
-            handler,
-            identity,
-            &self.default_callback_group.clone(),
-        )
-    }
-
-    /// Service with an explicit callback group.
-    pub fn create_service_with_group(
-        &mut self,
-        service_name: &str,
-        handler: ServiceHandler,
-        identity: Option<&str>,
-        group: &CallbackGroup,
+        callback_group: Option<&CallbackGroup>,
     ) -> Result<()> {
         let endpoint = self.options.service_backend_endpoint()?;
+        let group = callback_group
+            .cloned()
+            .unwrap_or_else(|| self.default_callback_group.clone());
         self.lock_executor()?.register_service(
             service_name,
             handler,
-            group.clone(),
+            group,
             Some(&endpoint),
             identity,
         )
     }
 
-    /// Register an action worker on the default group.
+    /// Register an action worker (ROS 2 `create_action_server` / action worker).
     pub fn create_action(
         &mut self,
         action_name: &str,
         handler: ActionGoalHandler,
         identity: Option<&str>,
-    ) -> Result<()> {
-        self.create_action_with_group(
-            action_name,
-            handler,
-            identity,
-            &self.default_callback_group.clone(),
-        )
-    }
-
-    /// Action with an explicit callback group.
-    pub fn create_action_with_group(
-        &mut self,
-        action_name: &str,
-        handler: ActionGoalHandler,
-        identity: Option<&str>,
-        group: &CallbackGroup,
+        callback_group: Option<&CallbackGroup>,
     ) -> Result<()> {
         let endpoint = self.options.action_backend_endpoint()?;
+        let group = callback_group
+            .cloned()
+            .unwrap_or_else(|| self.default_callback_group.clone());
         self.lock_executor()?.register_action(
             action_name,
             handler,
-            group.clone(),
+            group,
             Some(&endpoint),
             identity,
         )
@@ -527,7 +483,7 @@ mod tests {
     fn subscription_requires_add_node() {
         let mut node = Node::new("pilot");
         let err = node
-            .create_subscription("/imu", Arc::new(|_, _| {}))
+            .create_subscription("/imu", Arc::new(|_, _| {}), None)
             .unwrap_err();
         assert!(err.to_string().contains("add_node"));
     }

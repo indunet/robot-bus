@@ -208,6 +208,9 @@ impl PySingleThreadedExecutor {
         transport="tcp",
         message_xsub=None,
         message_xpub=None,
+        service_backend=None,
+        action_backend=None,
+        action_frontend=None,
     ))]
     fn create_node(
         &self,
@@ -216,13 +219,18 @@ impl PySingleThreadedExecutor {
         transport: &str,
         message_xsub: Option<String>,
         message_xpub: Option<String>,
+        service_backend: Option<String>,
+        action_backend: Option<String>,
+        action_frontend: Option<String>,
     ) -> PyResult<PyNode> {
         let options = crate::runtime::NodeOptions {
             host: host.into(),
             transport: transport.into(),
             message_xsub,
             message_xpub,
-            ..crate::runtime::NodeOptions::default()
+            service_backend,
+            action_backend,
+            action_frontend,
         };
         Ok(PyNode {
             inner: self
@@ -278,6 +286,9 @@ impl PyMultiThreadedExecutor {
         transport="tcp",
         message_xsub=None,
         message_xpub=None,
+        service_backend=None,
+        action_backend=None,
+        action_frontend=None,
     ))]
     fn create_node(
         &self,
@@ -286,13 +297,18 @@ impl PyMultiThreadedExecutor {
         transport: &str,
         message_xsub: Option<String>,
         message_xpub: Option<String>,
+        service_backend: Option<String>,
+        action_backend: Option<String>,
+        action_frontend: Option<String>,
     ) -> PyResult<PyNode> {
         let options = crate::runtime::NodeOptions {
             host: host.into(),
             transport: transport.into(),
             message_xsub,
             message_xpub,
-            ..crate::runtime::NodeOptions::default()
+            service_backend,
+            action_backend,
+            action_frontend,
         };
         Ok(PyNode {
             inner: self
@@ -337,6 +353,9 @@ impl PyNode {
         transport="tcp",
         message_xsub=None,
         message_xpub=None,
+        service_backend=None,
+        action_backend=None,
+        action_frontend=None,
     ))]
     fn new(
         name: String,
@@ -344,13 +363,18 @@ impl PyNode {
         transport: &str,
         message_xsub: Option<String>,
         message_xpub: Option<String>,
+        service_backend: Option<String>,
+        action_backend: Option<String>,
+        action_frontend: Option<String>,
     ) -> Self {
         let options = crate::runtime::NodeOptions {
             host: host.into(),
             transport: transport.into(),
             message_xsub,
             message_xpub,
-            ..crate::runtime::NodeOptions::default()
+            service_backend,
+            action_backend,
+            action_frontend,
         };
         Self {
             inner: RustNode::with_options(name, options),
@@ -390,13 +414,10 @@ impl PyNode {
                 }
             });
         });
-        match callback_group {
-            Some(group) => self
-                .inner
-                .create_subscription_with_group(topic, cb, &group.inner)
-                .map_err(bus_err),
-            None => self.inner.create_subscription(topic, cb).map_err(bus_err),
-        }
+        let group = callback_group.map(|g| &g.inner);
+        self.inner
+            .create_subscription(topic, cb, group)
+            .map_err(bus_err)
     }
 
     /// Periodic timer; `callback()` takes no arguments. `period` is seconds.
@@ -414,21 +435,100 @@ impl PyNode {
                 }
             });
         });
-        let handle = match callback_group {
-            Some(group) => self
-                .inner
-                .create_timer_with_group(Duration::from_secs_f64(period), cb, &group.inner)
-                .map_err(bus_err)?,
-            None => self
-                .inner
-                .create_timer(Duration::from_secs_f64(period), cb)
-                .map_err(bus_err)?,
-        };
+        let group = callback_group.map(|g| &g.inner);
+        let handle = self
+            .inner
+            .create_timer(Duration::from_secs_f64(period), cb, group)
+            .map_err(bus_err)?;
         Ok(PyTimerHandle { inner: handle })
     }
 
     fn cancel_timer(&mut self, handle: PyTimerHandle) -> PyResult<()> {
         self.inner.cancel_timer(handle.inner).map_err(bus_err)
+    }
+
+    /// Register a service worker.
+    ///
+    /// `handler(client_id: bytes, request_id: bytes, body: bytes) -> bytes`
+    #[pyo3(signature = (service_name, handler, identity=None, callback_group=None))]
+    fn create_service(
+        &mut self,
+        service_name: &str,
+        handler: Py<PyAny>,
+        identity: Option<&str>,
+        callback_group: Option<&PyCallbackGroup>,
+    ) -> PyResult<()> {
+        let cb: crate::runtime::ServiceHandler = Arc::new(move |client_id, request_id, body| {
+            Python::with_gil(|py| {
+                let args = (
+                    PyBytes::new(py, client_id),
+                    PyBytes::new(py, request_id),
+                    PyBytes::new(py, body),
+                );
+                match handler.call1(py, args) {
+                    Ok(obj) => match obj.extract::<Vec<u8>>(py) {
+                        Ok(bytes) => bytes,
+                        Err(err) => {
+                            err.print(py);
+                            Vec::new()
+                        }
+                    },
+                    Err(err) => {
+                        err.print(py);
+                        Vec::new()
+                    }
+                }
+            })
+        });
+        let group = callback_group.map(|g| &g.inner);
+        self.inner
+            .create_service(service_name, cb, identity, group)
+            .map_err(bus_err)
+    }
+
+    /// Register an action worker.
+    ///
+    /// `handler(client_id: bytes, goal_id: bytes, payload: bytes) -> list[tuple[str, bytes]]`
+    /// where each tuple is `(phase, body)` and `phase` is typically `"FEEDBACK"` / `"RESULT"`.
+    #[pyo3(signature = (action_name, handler, identity=None, callback_group=None))]
+    fn create_action(
+        &mut self,
+        action_name: &str,
+        handler: Py<PyAny>,
+        identity: Option<&str>,
+        callback_group: Option<&PyCallbackGroup>,
+    ) -> PyResult<()> {
+        let cb: crate::runtime::ActionGoalHandler =
+            Arc::new(move |client_id, goal_id, payload| {
+                Python::with_gil(|py| {
+                    let args = (
+                        PyBytes::new(py, client_id),
+                        PyBytes::new(py, goal_id),
+                        PyBytes::new(py, payload),
+                    );
+                    match handler.call1(py, args) {
+                        Ok(obj) => match obj.extract::<Vec<(String, Vec<u8>)>>(py) {
+                            Ok(replies) => replies,
+                            Err(err) => {
+                                err.print(py);
+                                Vec::new()
+                            }
+                        },
+                        Err(err) => {
+                            err.print(py);
+                            Vec::new()
+                        }
+                    }
+                })
+            });
+        let group = callback_group.map(|g| &g.inner);
+        self.inner
+            .create_action(action_name, cb, identity, group)
+            .map_err(bus_err)
+    }
+
+    fn connect_action_client(&mut self) -> PyResult<()> {
+        self.inner.connect_action_client().map_err(bus_err)
     }
 
     fn shutdown_handle(&self) -> PyResult<PyShutdownHandle> {

@@ -119,9 +119,13 @@ let executor = SingleThreadedExecutor::new();
 executor.add_node(&mut node)?;
 
 let imu_pub = node.create_publisher("/robot1/imu")?;
-node.create_subscription_typed::<Imu, _>("/robot1/imu", |topic, imu| {
-    println!("{topic}: {:?}", imu.linear_acceleration);
-})?;
+node.create_subscription_typed::<Imu, _>(
+    "/robot1/imu",
+    |topic, imu| {
+        println!("{topic}: {:?}", imu.linear_acceleration);
+    },
+    None,
+)?;
 
 let imu = Imu {
     linear_acceleration: Some(Vector3 { x: 0.0, y: 0.0, z: 9.8 }),
@@ -129,9 +133,13 @@ let imu = Imu {
 };
 imu_pub.publish(&imu.encode_to_vec())?;
 
-node.create_timer(Duration::from_millis(100), Arc::new(|| {
-    // 控制周期 / 心跳
-}))?;
+node.create_timer(
+    Duration::from_millis(100),
+    Arc::new(|| {
+        // 控制周期 / 心跳
+    }),
+    None,
+)?;
 
 let handle = executor.shutdown_handle()?;
 std::thread::spawn(move || { /* ... */ handle.shutdown(); });
@@ -141,7 +149,7 @@ executor.spin()?;
 - `SingleThreadedExecutor`：回调在 I/O / spin 线程串行（默认）
 - `MultiThreadedExecutor::new(n)`：最多 `n` 个 worker；`Reentrant` group 可并行，`MutuallyExclusive` 组内串行
 - Callback group：`MutuallyExclusive` / `Reentrant`（`create_callback_group`；默认互斥组）
-- Raw bytes：`create_subscription(topic, Arc::new(|topic, payload| { ... }))`
+- Raw bytes：`create_subscription(topic, Arc::new(|topic, payload| { ... }), None)`
 - 底层 escape hatch：`Executor`（高级用法）
 
 发送 / 接收水位（ZMQ HWM，不是完整 QoS）可在创建时或运行中设置：
