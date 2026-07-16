@@ -16,5 +16,5 @@ message GetPlanRequest {
 }
 
 message GetPlanResponse {
-  Path plan = 1;
+  nav_msgs.msg.v1.Path plan = 1;
 }

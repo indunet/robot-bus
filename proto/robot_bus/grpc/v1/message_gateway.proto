@@ -1,7 +1,8 @@
 syntax = "proto3";
 
 // gRPC gateway API (service/rpc). Distinct from ROS-style msg/srv packages
-// under proto/<ros_pkg>/v1/ (e.g. std_msgs.v1), which are payload types only.
+// under proto/<ros_pkg>/{msg|srv}/v1/ (e.g. std_msgs.msg.v1), which are
+// payload types only.
 package robot_bus.grpc.v1;
 
 service MessageGateway {

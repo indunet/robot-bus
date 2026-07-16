@@ -7,7 +7,7 @@ import "geometry_msgs/msg/v1/stamped.proto";
 
 // Equivalent to ROS 2 `nav_msgs/srv/SetMap`.
 message SetMapRequest {
-  OccupancyGrid map = 1;
+  nav_msgs.msg.v1.OccupancyGrid map = 1;
   geometry_msgs.msg.v1.PoseWithCovarianceStamped initial_pose = 2;
 }
 

@@ -14,15 +14,15 @@ use robot_bus::broker::action_bus::ActionBusConfig;
 use robot_bus::broker::message_bus::BusConfig;
 use robot_bus::broker::service_bus::ServiceBusConfig;
 use robot_bus::message_bus::{Publisher, Subscriber};
-use robot_bus::msgs::geometry_msgs::v1::{
+use robot_bus::msgs::geometry_msgs::msg::v1::{
     Pose, Pose2D, PoseStamped, PoseWithCovariance, PoseWithCovarianceStamped, Twist, Vector3,
 };
-use robot_bus::msgs::nav_msgs::v1::{
-    GetMapRequest, GetMapResponse, GetPlanRequest, GetPlanResponse, MapMetaData, OccupancyGrid,
-    Odometry, Path, SetMapRequest, SetMapResponse,
+use robot_bus::msgs::nav_msgs::msg::v1::{MapMetaData, OccupancyGrid, Odometry, Path};
+use robot_bus::msgs::nav_msgs::srv::v1::{
+    GetMapRequest, GetMapResponse, GetPlanRequest, GetPlanResponse, SetMapRequest, SetMapResponse,
 };
-use robot_bus::msgs::std_msgs::v1::{Header, Int32, String as ProtoString};
-use robot_bus::msgs::std_srvs::v1::{
+use robot_bus::msgs::std_msgs::msg::v1::{Header, Int32, String as ProtoString};
+use robot_bus::msgs::std_srvs::srv::v1::{
     SetBoolRequest, SetBoolResponse, TriggerRequest, TriggerResponse,
 };
 use robot_bus::service_bus::ServiceClient;
@@ -106,7 +106,7 @@ fn message_bus_odometry_pubsub() {
 
     let odom = Odometry {
         header: Some(Header {
-            stamp: Some(robot_bus::msgs::builtin_interfaces::v1::Time {
+            stamp: Some(robot_bus::msgs::builtin_interfaces::msg::v1::Time {
                 sec: 10,
                 nanosec: 500_000_000,
             }),
@@ -426,7 +426,7 @@ fn service_bus_nav_msgs_set_map_and_get_plan() {
                     }),
                     pose: Some(PoseWithCovariance {
                         pose: Some(Pose {
-                            position: Some(robot_bus::msgs::geometry_msgs::v1::Point {
+                            position: Some(robot_bus::msgs::geometry_msgs::msg::v1::Point {
                                 x: 0.0,
                                 y: 0.0,
                                 z: 0.0,
@@ -451,7 +451,7 @@ fn service_bus_nav_msgs_set_map_and_get_plan() {
             frame_id: "map".into(),
         }),
         pose: Some(Pose {
-            position: Some(robot_bus::msgs::geometry_msgs::v1::Point {
+            position: Some(robot_bus::msgs::geometry_msgs::msg::v1::Point {
                 x: 0.0,
                 y: 0.0,
                 z: 0.0,
@@ -465,7 +465,7 @@ fn service_bus_nav_msgs_set_map_and_get_plan() {
             frame_id: "map".into(),
         }),
         pose: Some(Pose {
-            position: Some(robot_bus::msgs::geometry_msgs::v1::Point {
+            position: Some(robot_bus::msgs::geometry_msgs::msg::v1::Point {
                 x: 1.0,
                 y: 2.0,
                 z: 0.0,

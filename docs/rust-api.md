@@ -14,14 +14,14 @@ robot-bus = "0.0.2"
 
 ## Message bus（`BusRuntime` / 回调）
 
-接近 ROS 2：订阅时注册回调，由 `spin` / `spin_once` 驱动；payload 为不透明 `&[u8]`，业务侧用 `robot_bus::msgs` encode / decode（此处用标准 `sensor_msgs::v1::Imu`）：
+接近 ROS 2：订阅时注册回调，由 `spin` / `spin_once` 驱动；payload 为不透明 `&[u8]`，业务侧用 `robot_bus::msgs` encode / decode（此处用标准 `sensor_msgs::msg::v1::Imu`）：
 
 ```rust
 use std::sync::Arc;
 use std::time::Duration;
 use prost::Message;
-use robot_bus::msgs::geometry_msgs::v1::Vector3;
-use robot_bus::msgs::sensor_msgs::v1::Imu;
+use robot_bus::msgs::geometry_msgs::msg::v1::Vector3;
+use robot_bus::msgs::sensor_msgs::msg::v1::Imu;
 use robot_bus::{
     BusRuntime, MessageCallback, Publisher, message_xpub_endpoint, message_xsub_endpoint,
 };
@@ -216,11 +216,11 @@ fn main() -> anyhow::Result<()> {
 
 ## Protobuf 消息（`robot_bus::msgs`）
 
-总线仍传 opaque bytes；在 publish 前 encode、在订阅回调里 decode。上面示例用的是标准 `sensor_msgs::v1::Imu`（见 `proto/sensor_msgs/v1/imu.proto`）。其它消息同理，例如 `geometry_msgs::v1::Twist`：
+总线仍传 opaque bytes；在 publish 前 encode、在订阅回调里 decode。上面示例用的是标准 `sensor_msgs::msg::v1::Imu`（见 `proto/sensor_msgs/msg/v1/imu.proto`）。其它消息同理，例如 `geometry_msgs::msg::v1::Twist`：
 
 ```rust
 use prost::Message;
-use robot_bus::msgs::geometry_msgs::v1::{Twist, Vector3};
+use robot_bus::msgs::geometry_msgs::msg::v1::{Twist, Vector3};
 
 let twist = Twist {
     linear: Some(Vector3 { x: 1.0, y: 0.0, z: 0.0 }),
@@ -232,7 +232,7 @@ node.publish("cmd_vel", &twist.encode_to_vec())?;
 // let decoded = Twist::decode(payload)?;
 ```
 
-Service 的 Request / Response 同理（如 `std_srvs::v1::SetBoolRequest`）。
+Service 的 Request / Response 同理（如 `std_srvs::srv::v1::SetBoolRequest`）。
 
 ---
 
@@ -272,7 +272,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 ```
 
-Proto 包名：`robot_bus.grpc.v1`（与 ROS msg/srv 的 `*.v1` 区分）。见 `proto/robot_bus/grpc/v1/message_gateway.proto`。
+Proto 包名：`robot_bus.grpc.v1`（与 ROS `*.msg.v1` / `*.srv.v1` 区分）。见 `proto/robot_bus/grpc/v1/message_gateway.proto`。
 
 ---
 

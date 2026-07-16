@@ -65,7 +65,7 @@ xpub = robot_bus.message_xpub_endpoint("127.0.0.1", "tcp")
 
 ```python
 import robot_bus
-# 与 Rust `robot_bus::msgs::sensor_msgs::v1::Imu` 同 schema（需自行生成 pb）
+# 与 Rust `robot_bus::msgs::sensor_msgs::msg::v1::Imu` 同 schema（需自行生成 pb）
 from sensor_msgs_pb2 import Imu
 from geometry_msgs_pb2 import Vector3
 
@@ -158,7 +158,7 @@ assert node.resolve_name("/imu") == "/imu"  # 绝对名不变
 
 ## 与 Protobuf 配合
 
-Python 侧自行用 `protobuf` 包编码（与 `robot_bus::msgs` 同 schema）。上面示例用的是标准 `sensor_msgs/v1/Imu`；其它消息同理，例如 `Twist`：
+Python 侧自行用 `protobuf` 包编码（与 `robot_bus::msgs` 同 schema）。上面示例用的是标准 `sensor_msgs/msg/v1/Imu`；其它消息同理，例如 `Twist`：
 
 ```python
 # 假设已生成 geometry_msgs_pb2.Twist
@@ -168,7 +168,7 @@ twist = Twist(linear=Vector3(x=1.0, y=0.0, z=0.0))
 node.publish("cmd_vel", twist.SerializeToString())
 ```
 
-仓库内 ROS 风格 proto 在 `proto/` 目录，Rust 侧由 `robot_bus::msgs` 提供类型。
+仓库内 ROS 风格 proto 在 `proto/<pkg>/{msg|srv|grpc}/v1/`，Rust 侧由 `robot_bus::msgs` 提供类型。
 
 ---
 

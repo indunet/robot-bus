@@ -13,7 +13,7 @@
 | `runtime::BusRuntime` | 回调 executor（`spin` / `spin_once`） |
 | `runtime::Node` | Node 门面（名字 / 命名空间 + `create_*`） |
 | `grpc::`（feature） | gRPC / gRPC-Web 网关（独立进程，先支持 Subscribe） |
-| [`proto/`](proto/) | 常用 ROS 2 消息 / Service 的 Protobuf 定义 |
+| [`proto/`](proto/) | ROS 风格 Protobuf：`proto/<pkg>/{msg\|srv\|grpc}/v1/` |
 
 ## 架构
 
@@ -102,8 +102,8 @@ robot-bus = { path = "../robot-bus" }
 ```rust
 use std::sync::Arc;
 use prost::Message;
-use robot_bus::msgs::geometry_msgs::v1::Vector3;
-use robot_bus::msgs::sensor_msgs::v1::Imu;
+use robot_bus::msgs::geometry_msgs::msg::v1::Vector3;
+use robot_bus::msgs::sensor_msgs::msg::v1::Imu;
 use robot_bus::{
     BusRuntime, MessageCallback, Publisher, message_xpub_endpoint, message_xsub_endpoint,
 };
@@ -189,7 +189,7 @@ cargo run --features grpc --bin robot_bus_grpc_gateway
 # --cors-origin http://localhost:3000   # 可重复；默认允许任意 origin
 ```
 
-Proto：[`proto/robot_bus/grpc/v1/message_gateway.proto`](proto/robot_bus/grpc/v1/message_gateway.proto)（包名 `robot_bus.grpc.v1`，与 ROS msg/srv 的 `*.v1` 区分）— `MessageGateway.Subscribe`。
+Proto：[`proto/robot_bus/grpc/v1/message_gateway.proto`](proto/robot_bus/grpc/v1/message_gateway.proto)（包名 `robot_bus.grpc.v1`，与 ROS `*.msg.v1` / `*.srv.v1` 区分）— `MessageGateway.Subscribe`。
 
 ## 测试
 
@@ -200,9 +200,10 @@ cargo test --features grpc
 
 ## Protobuf 消息
 
-[`proto/`](proto/) 是常用 ROS 2 **msg** / **srv** 的 Protobuf 重定义，经 `build.rs` + prost 生成到 `robot_bus::msgs`。
+[`proto/`](proto/) 按 ROS 包布局：`proto/<pkg>/{msg|srv|grpc}/v1/*.proto`，经 `build.rs` + prost 生成到 `robot_bus::msgs::<pkg>::{msg|srv}::v1`。
 
 - 传输层 body 仍是 opaque bytes；bus 不解析类型，业务侧自行 `encode` / `decode`
 - **srv** 是一对 `*Request` / `*Response` message，不是 gRPC
+- **grpc**（`robot_bus`）是网关 RPC 契约，走 feature `grpc` + tonic
 
 已覆盖：`builtin_interfaces`、`std_msgs`、`std_srvs`、`geometry_msgs`、`sensor_msgs`、`nav_msgs`、`tf2_msgs`、`trajectory_msgs`、`diagnostic_msgs`、`unique_identifier_msgs`、`shape_msgs`、`visualization_msgs`、`control_msgs`、`nav2_msgs`。

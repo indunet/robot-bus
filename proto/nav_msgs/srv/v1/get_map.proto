@@ -8,5 +8,5 @@ import "nav_msgs/msg/v1/occupancy_grid.proto";
 message GetMapRequest {}
 
 message GetMapResponse {
-  OccupancyGrid map = 1;
+  nav_msgs.msg.v1.OccupancyGrid map = 1;
 }
