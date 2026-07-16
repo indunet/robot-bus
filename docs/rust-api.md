@@ -180,81 +180,90 @@ pub_.set_high_water_mark(HighWaterMark { snd: 10, rcv: 10 })?;
 
 ## Service bus
 
+与 topic 相同：`Node` → `executor.add_node` → `create_service` / `create_client` → `spin`（worker 侧）。
+
 ```rust
 use std::sync::Arc;
 use std::time::Duration;
-use robot_bus::service_bus::ServiceClient;
-use robot_bus::worker_thread::WorkerThread;
-use robot_bus::service_frontend_endpoint;
+use robot_bus::{Node, SingleThreadedExecutor};
 
 fn main() -> robot_bus::Result<()> {
-    let frontend = service_frontend_endpoint("localhost", "tcp")?;
-    let backend = robot_bus::service_backend_endpoint("localhost", "tcp")?;
+    let mut server = Node::new("svc_server");
+    let mut client_node = Node::new("svc_client");
+    let executor = SingleThreadedExecutor::new();
+    executor.add_node(&mut server)?;
 
-    let handler: Arc<dyn Fn(&[u8], &[u8], &[u8]) -> Vec<u8> + Send + Sync> =
-        Arc::new(|_client_id, _req_id, body| [b"echo:", body].concat());
+    server.create_service(
+        "echo",
+        Arc::new(|_client_id, _req_id, body| [b"echo:", body].concat()),
+        None,
+        None,
+    )?;
 
-    let worker = WorkerThread::spawn_service("svc.echo", handler, &backend)?;
-    std::thread::sleep(Duration::from_millis(100));
+    let client = client_node.create_client("echo")?;
+    let handle = executor.shutdown_handle()?;
+    std::thread::spawn(move || {
+        std::thread::sleep(Duration::from_millis(100));
+        let reply = client
+            .call(b"ping", Some(Duration::from_secs(5)))
+            .expect("call");
+        assert_eq!(reply, b"echo:ping");
+        handle.shutdown();
+    });
 
-    let client = ServiceClient::new(Some(&frontend))?;
-    let reply = client.call("svc.echo", b"ping", None, Some(Duration::from_secs(10)))?;
-    assert_eq!(reply, b"echo:ping");
-
-    worker.stop();
+    executor.spin()?;
     Ok(())
 }
 ```
 
-也可用 `Node::create_service` + `spin`（endpoint 取自 `NodeOptions`）：
-
-```rust
-node.create_service("echo", handler, /* identity */ None, /* callback_group */ None)?;
-```
+endpoint 取自 `NodeOptions`（`service_frontend` / `service_backend`）；也可用 `Node::with_options` 覆盖。
 
 ---
 
 ## Action bus
 
+同样挂在 Node 上：`create_action`（worker）/ `create_action_client`（client）。
+
 ```rust
 use std::sync::Arc;
 use std::time::Duration;
-use robot_bus::action_bus::{ActionClient, ActionKind};
-use robot_bus::worker_thread::WorkerThread;
-use robot_bus::{action_backend_endpoint, action_frontend_endpoint};
+use robot_bus::action_bus::ActionKind;
+use robot_bus::{Node, SingleThreadedExecutor};
 
 fn main() -> robot_bus::Result<()> {
-    let frontend = action_frontend_endpoint("localhost", "tcp")?;
-    let backend = action_backend_endpoint("localhost", "tcp")?;
+    let mut server = Node::new("act_server");
+    let mut client_node = Node::new("act_client");
+    let executor = SingleThreadedExecutor::new();
+    executor.add_node(&mut server)?;
 
-    let handler: Arc<dyn Fn(&[u8], &[u8], &[u8]) -> Vec<(String, Vec<u8>)> + Send + Sync> =
+    server.create_action(
+        "demo",
         Arc::new(|_client_id, _goal_id, body| {
             vec![
                 ("FEEDBACK".into(), b"step-1".to_vec()),
                 ("RESULT".into(), [b"done:", body].concat()),
             ]
-        });
+        }),
+        None,
+        None,
+    )?;
 
-    let worker = WorkerThread::spawn_action("act.demo", handler, &backend)?;
-    std::thread::sleep(Duration::from_millis(100));
+    let client = client_node.create_action_client("demo")?;
+    let handle = executor.shutdown_handle()?;
+    std::thread::spawn(move || {
+        std::thread::sleep(Duration::from_millis(100));
+        let messages = client
+            .send_goal(b"fly", None, Some(Duration::from_secs(10)))
+            .expect("goal");
+        assert_eq!(messages[0].kind, ActionKind::Feedback);
+        assert_eq!(messages.last().unwrap().kind, ActionKind::Result);
+        handle.shutdown();
+    });
 
-    let client = ActionClient::new(Some(&frontend))?;
-    let messages = client.send_goal("act.demo", b"fly", None, Some(Duration::from_secs(30)))?;
-
-    for msg in &messages {
-        match msg.kind {
-            ActionKind::Feedback => println!("feedback: {:?}", msg.body),
-            ActionKind::Result => println!("result: {:?}", msg.body),
-            _ => {}
-        }
-    }
-
-    worker.stop();
+    executor.spin()?;
     Ok(())
 }
 ```
-
-Node：`create_action` / `connect_action_client` 同样使用 `NodeOptions` 里的 action endpoint。
 
 ---
 

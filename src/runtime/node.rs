@@ -13,6 +13,7 @@ use std::time::Duration;
 
 use prost::Message;
 
+use crate::action_bus::{ActionClient as BusActionClient, ActionMessage};
 use crate::errors::{BusError, Result};
 use crate::message_bus::Publisher as BusPublisher;
 use crate::runtime::callback_group::{CallbackGroup, CallbackGroupType};
@@ -21,9 +22,10 @@ use crate::runtime::executors::ExecutorHandle;
 use crate::runtime::queues::ActionMessageCallback;
 use crate::runtime::registrations::{ActionGoalHandler, MessageCallback, ServiceHandler};
 use crate::runtime::timers::{TimerCallback, TimerHandle};
+use crate::service_bus::ServiceClient as BusServiceClient;
 use crate::transports::{
     action_backend_endpoint, action_frontend_endpoint, message_xpub_endpoint,
-    message_xsub_endpoint, service_backend_endpoint,
+    message_xsub_endpoint, service_backend_endpoint, service_frontend_endpoint,
 };
 use crate::zmq_helpers::HighWaterMark;
 
@@ -37,6 +39,7 @@ pub struct NodeOptions {
     pub transport: String,
     pub message_xsub: Option<String>,
     pub message_xpub: Option<String>,
+    pub service_frontend: Option<String>,
     pub service_backend: Option<String>,
     pub action_backend: Option<String>,
     pub action_frontend: Option<String>,
@@ -49,6 +52,7 @@ impl Default for NodeOptions {
             transport: "tcp".into(),
             message_xsub: None,
             message_xpub: None,
+            service_frontend: None,
             service_backend: None,
             action_backend: None,
             action_frontend: None,
@@ -68,6 +72,15 @@ impl NodeOptions {
         match &self.message_xpub {
             Some(ep) => Ok(ep.clone()),
             None => message_xpub_endpoint(&self.host, &self.transport).map_err(BusError::Protocol),
+        }
+    }
+
+    pub fn service_frontend_endpoint(&self) -> Result<String> {
+        match &self.service_frontend {
+            Some(ep) => Ok(ep.clone()),
+            None => {
+                service_frontend_endpoint(&self.host, &self.transport).map_err(BusError::Protocol)
+            }
         }
     }
 
@@ -113,6 +126,81 @@ impl TopicPublisher {
 
     pub fn publish(&self, payload: &[u8]) -> Result<()> {
         self.inner.publish(&self.topic, payload)
+    }
+
+    pub fn high_water_mark(&self) -> Result<HighWaterMark> {
+        self.inner.high_water_mark()
+    }
+
+    pub fn set_high_water_mark(&self, hwm: HighWaterMark) -> Result<()> {
+        self.inner.set_high_water_mark(hwm)
+    }
+}
+
+/// Service-bound client returned by [`Node::create_client`] (ROS 2 style).
+pub struct NodeServiceClient {
+    inner: BusServiceClient,
+    service_name: String,
+}
+
+impl NodeServiceClient {
+    pub fn service_name(&self) -> &str {
+        &self.service_name
+    }
+
+    pub fn call(&self, body: &[u8], timeout: Option<Duration>) -> Result<Vec<u8>> {
+        self.inner
+            .call(&self.service_name, body, None, timeout)
+    }
+
+    pub fn call_with_id(
+        &self,
+        body: &[u8],
+        request_id: Option<&str>,
+        timeout: Option<Duration>,
+    ) -> Result<Vec<u8>> {
+        self.inner
+            .call(&self.service_name, body, request_id, timeout)
+    }
+
+    pub fn high_water_mark(&self) -> Result<HighWaterMark> {
+        self.inner.high_water_mark()
+    }
+
+    pub fn set_high_water_mark(&self, hwm: HighWaterMark) -> Result<()> {
+        self.inner.set_high_water_mark(hwm)
+    }
+}
+
+/// Action-bound client returned by [`Node::create_action_client`] (ROS 2 style).
+pub struct NodeActionClient {
+    inner: BusActionClient,
+    action_name: String,
+}
+
+impl NodeActionClient {
+    pub fn action_name(&self) -> &str {
+        &self.action_name
+    }
+
+    pub fn send_goal(
+        &self,
+        body: &[u8],
+        goal_id: Option<&str>,
+        timeout: Option<Duration>,
+    ) -> Result<Vec<ActionMessage>> {
+        self.inner
+            .send_goal(&self.action_name, body, goal_id, timeout)
+    }
+
+    pub fn cancel(
+        &self,
+        goal_id: &str,
+        body: &[u8],
+        timeout: Option<Duration>,
+    ) -> Result<ActionMessage> {
+        self.inner
+            .cancel(&self.action_name, goal_id, body, timeout)
     }
 
     pub fn high_water_mark(&self) -> Result<HighWaterMark> {
@@ -373,6 +461,36 @@ impl Node {
         )
     }
 
+    /// Create a service client (ROS 2 `create_client`).
+    ///
+    /// Returns a handle bound to `service_name`; call [`NodeServiceClient::call`] to invoke.
+    pub fn create_client(
+        &mut self,
+        service_name: impl Into<String>,
+    ) -> Result<NodeServiceClient> {
+        self.create_client_with_hwm(service_name, self.client_rpc_hwm())
+    }
+
+    /// Like [`create_client`](Self::create_client), with an explicit HWM.
+    pub fn create_client_with_hwm(
+        &mut self,
+        service_name: impl Into<String>,
+        hwm: HighWaterMark,
+    ) -> Result<NodeServiceClient> {
+        let endpoint = self.options.service_frontend_endpoint()?;
+        Ok(NodeServiceClient {
+            inner: BusServiceClient::with_hwm(Some(&endpoint), hwm)?,
+            service_name: service_name.into(),
+        })
+    }
+
+    fn client_rpc_hwm(&self) -> HighWaterMark {
+        match &self.executor {
+            Some(exec) => exec.lock().map(|e| e.rpc_hwm()).unwrap_or(HighWaterMark::RPC),
+            None => HighWaterMark::RPC,
+        }
+    }
+
     /// Register an action worker (ROS 2 `create_action_server` / action worker).
     pub fn create_action(
         &mut self,
@@ -394,12 +512,48 @@ impl Node {
         )
     }
 
+    /// Create an action client (ROS 2 `create_action_client`).
+    ///
+    /// Returns a handle bound to `action_name`; call [`NodeActionClient::send_goal`].
+    pub fn create_action_client(
+        &mut self,
+        action_name: impl Into<String>,
+    ) -> Result<NodeActionClient> {
+        self.create_action_client_with_hwm(action_name, self.client_action_hwm())
+    }
+
+    /// Like [`create_action_client`](Self::create_action_client), with an explicit HWM.
+    pub fn create_action_client_with_hwm(
+        &mut self,
+        action_name: impl Into<String>,
+        hwm: HighWaterMark,
+    ) -> Result<NodeActionClient> {
+        let endpoint = self.options.action_frontend_endpoint()?;
+        Ok(NodeActionClient {
+            inner: BusActionClient::with_hwm(Some(&endpoint), hwm)?,
+            action_name: action_name.into(),
+        })
+    }
+
+    fn client_action_hwm(&self) -> HighWaterMark {
+        match &self.executor {
+            Some(exec) => exec
+                .lock()
+                .map(|e| e.action_hwm())
+                .unwrap_or(HighWaterMark::ACTION),
+            None => HighWaterMark::ACTION,
+        }
+    }
+
+    /// Connect the executor-owned action client used by callback-style [`send_goal`](Self::send_goal).
     pub fn connect_action_client(&mut self) -> Result<()> {
         let endpoint = self.options.action_frontend_endpoint()?;
         self.lock_executor()?
             .connect_action_client(Some(&endpoint))
     }
 
+    /// Submit a goal via the executor (callback receives FEEDBACK / RESULT). Prefer
+    /// [`create_action_client`](Self::create_action_client) for a ROS 2–style sync handle.
     pub fn send_goal(
         &self,
         action_name: &str,

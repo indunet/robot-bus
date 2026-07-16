@@ -17,10 +17,12 @@ use crate::errors::BusError;
 use crate::message_bus::{Publisher as RustPublisher, Subscriber as RustSubscriber};
 use crate::runtime::{
     CallbackGroup, CallbackGroupType, MultiThreadedExecutor as RustMultiThreadedExecutor,
-    Node as RustNode, ShutdownHandle as RustShutdownHandle,
+    Node as RustNode, NodeActionClient as RustNodeActionClient,
+    NodeServiceClient as RustNodeServiceClient, ShutdownHandle as RustShutdownHandle,
     SingleThreadedExecutor as RustSingleThreadedExecutor, TimerHandle as RustTimerHandle,
     TopicPublisher as RustTopicPublisher,
 };
+use crate::action_bus::ActionKind;
 use crate::shutdown;
 use crate::transports;
 
@@ -34,6 +36,28 @@ fn anyhow_err(err: anyhow::Error) -> PyErr {
 
 fn map_endpoint_err(err: String) -> PyErr {
     PyRuntimeError::new_err(err)
+}
+
+fn py_node_options(
+    host: &str,
+    transport: &str,
+    message_xsub: Option<String>,
+    message_xpub: Option<String>,
+    service_frontend: Option<String>,
+    service_backend: Option<String>,
+    action_backend: Option<String>,
+    action_frontend: Option<String>,
+) -> crate::runtime::NodeOptions {
+    crate::runtime::NodeOptions {
+        host: host.into(),
+        transport: transport.into(),
+        message_xsub,
+        message_xpub,
+        service_frontend,
+        service_backend,
+        action_backend,
+        action_frontend,
+    }
 }
 
 #[pyfunction]
@@ -187,6 +211,106 @@ impl PyTopicPublisher {
     }
 }
 
+#[pyclass(name = "ServiceClient", unsendable)]
+struct PyNodeServiceClient {
+    inner: RustNodeServiceClient,
+}
+
+#[pymethods]
+impl PyNodeServiceClient {
+    #[getter]
+    fn service_name(&self) -> &str {
+        self.inner.service_name()
+    }
+
+    /// Call the bound service. `timeout` is seconds; `None` waits indefinitely.
+    #[pyo3(signature = (body, timeout=None))]
+    fn call(&self, body: &[u8], timeout: Option<f64>) -> PyResult<Vec<u8>> {
+        let timeout = timeout.map(Duration::from_secs_f64);
+        self.inner.call(body, timeout).map_err(bus_err)
+    }
+}
+
+#[pyclass(name = "ActionClient", unsendable)]
+struct PyNodeActionClient {
+    inner: RustNodeActionClient,
+}
+
+#[pymethods]
+impl PyNodeActionClient {
+    #[getter]
+    fn action_name(&self) -> &str {
+        self.inner.action_name()
+    }
+
+    /// Send a goal and collect FEEDBACK/RESULT messages.
+    ///
+    /// Returns `list[dict]` with keys `kind`, `body`, `goal_id`, `action_name`.
+    /// `timeout` is seconds.
+    #[pyo3(signature = (body, goal_id=None, timeout=None))]
+    fn send_goal(
+        &self,
+        py: Python<'_>,
+        body: &[u8],
+        goal_id: Option<&str>,
+        timeout: Option<f64>,
+    ) -> PyResult<PyObject> {
+        let timeout = timeout.map(Duration::from_secs_f64);
+        let messages = self
+            .inner
+            .send_goal(body, goal_id, timeout)
+            .map_err(bus_err)?;
+        let list = pyo3::types::PyList::empty(py);
+        for msg in messages {
+            let dict = pyo3::types::PyDict::new(py);
+            dict.set_item(
+                "kind",
+                match msg.kind {
+                    ActionKind::Goal => "GOAL",
+                    ActionKind::Feedback => "FEEDBACK",
+                    ActionKind::Result => "RESULT",
+                    ActionKind::Cancel => "CANCEL",
+                },
+            )?;
+            dict.set_item("body", PyBytes::new(py, &msg.body))?;
+            dict.set_item("goal_id", &msg.goal_id)?;
+            dict.set_item("action_name", &msg.action_name)?;
+            list.append(dict)?;
+        }
+        Ok(list.into())
+    }
+
+    /// Cancel a goal; returns the RESULT message dict. `timeout` is seconds.
+    #[pyo3(signature = (goal_id, body=None, timeout=None))]
+    fn cancel(
+        &self,
+        py: Python<'_>,
+        goal_id: &str,
+        body: Option<&[u8]>,
+        timeout: Option<f64>,
+    ) -> PyResult<PyObject> {
+        let timeout = timeout.map(Duration::from_secs_f64);
+        let msg = self
+            .inner
+            .cancel(goal_id, body.unwrap_or(b""), timeout)
+            .map_err(bus_err)?;
+        let dict = pyo3::types::PyDict::new(py);
+        dict.set_item(
+            "kind",
+            match msg.kind {
+                ActionKind::Goal => "GOAL",
+                ActionKind::Feedback => "FEEDBACK",
+                ActionKind::Result => "RESULT",
+                ActionKind::Cancel => "CANCEL",
+            },
+        )?;
+        dict.set_item("body", PyBytes::new(py, &msg.body))?;
+        dict.set_item("goal_id", &msg.goal_id)?;
+        dict.set_item("action_name", &msg.action_name)?;
+        Ok(dict.into())
+    }
+}
+
 #[pyclass(name = "SingleThreadedExecutor", unsendable)]
 struct PySingleThreadedExecutor {
     inner: RustSingleThreadedExecutor,
@@ -211,6 +335,7 @@ impl PySingleThreadedExecutor {
         transport="tcp",
         message_xsub=None,
         message_xpub=None,
+        service_frontend=None,
         service_backend=None,
         action_backend=None,
         action_frontend=None,
@@ -222,19 +347,21 @@ impl PySingleThreadedExecutor {
         transport: &str,
         message_xsub: Option<String>,
         message_xpub: Option<String>,
+        service_frontend: Option<String>,
         service_backend: Option<String>,
         action_backend: Option<String>,
         action_frontend: Option<String>,
     ) -> PyResult<PyNode> {
-        let options = crate::runtime::NodeOptions {
-            host: host.into(),
-            transport: transport.into(),
+        let options = py_node_options(
+            host,
+            transport,
             message_xsub,
             message_xpub,
+            service_frontend,
             service_backend,
             action_backend,
             action_frontend,
-        };
+        );
         Ok(PyNode {
             inner: self
                 .inner
@@ -289,6 +416,7 @@ impl PyMultiThreadedExecutor {
         transport="tcp",
         message_xsub=None,
         message_xpub=None,
+        service_frontend=None,
         service_backend=None,
         action_backend=None,
         action_frontend=None,
@@ -300,19 +428,21 @@ impl PyMultiThreadedExecutor {
         transport: &str,
         message_xsub: Option<String>,
         message_xpub: Option<String>,
+        service_frontend: Option<String>,
         service_backend: Option<String>,
         action_backend: Option<String>,
         action_frontend: Option<String>,
     ) -> PyResult<PyNode> {
-        let options = crate::runtime::NodeOptions {
-            host: host.into(),
-            transport: transport.into(),
+        let options = py_node_options(
+            host,
+            transport,
             message_xsub,
             message_xpub,
+            service_frontend,
             service_backend,
             action_backend,
             action_frontend,
-        };
+        );
         Ok(PyNode {
             inner: self
                 .inner
@@ -356,6 +486,7 @@ impl PyNode {
         transport="tcp",
         message_xsub=None,
         message_xpub=None,
+        service_frontend=None,
         service_backend=None,
         action_backend=None,
         action_frontend=None,
@@ -366,21 +497,25 @@ impl PyNode {
         transport: &str,
         message_xsub: Option<String>,
         message_xpub: Option<String>,
+        service_frontend: Option<String>,
         service_backend: Option<String>,
         action_backend: Option<String>,
         action_frontend: Option<String>,
     ) -> Self {
-        let options = crate::runtime::NodeOptions {
-            host: host.into(),
-            transport: transport.into(),
-            message_xsub,
-            message_xpub,
-            service_backend,
-            action_backend,
-            action_frontend,
-        };
         Self {
-            inner: RustNode::with_options(name, options),
+            inner: RustNode::with_options(
+                name,
+                py_node_options(
+                    host,
+                    transport,
+                    message_xsub,
+                    message_xpub,
+                    service_frontend,
+                    service_backend,
+                    action_backend,
+                    action_frontend,
+                ),
+            ),
         }
     }
 
@@ -489,6 +624,13 @@ impl PyNode {
             .map_err(bus_err)
     }
 
+    /// Create a service client bound to `service_name` (ROS 2 `create_client`).
+    fn create_client(&mut self, service_name: &str) -> PyResult<PyNodeServiceClient> {
+        Ok(PyNodeServiceClient {
+            inner: self.inner.create_client(service_name).map_err(bus_err)?,
+        })
+    }
+
     /// Register an action worker.
     ///
     /// `handler(client_id: bytes, goal_id: bytes, payload: bytes) -> list[tuple[str, bytes]]`
@@ -528,6 +670,16 @@ impl PyNode {
         self.inner
             .create_action(action_name, cb, identity, group)
             .map_err(bus_err)
+    }
+
+    /// Create an action client bound to `action_name` (ROS 2 `create_action_client`).
+    fn create_action_client(&mut self, action_name: &str) -> PyResult<PyNodeActionClient> {
+        Ok(PyNodeActionClient {
+            inner: self
+                .inner
+                .create_action_client(action_name)
+                .map_err(bus_err)?,
+        })
     }
 
     fn connect_action_client(&mut self) -> PyResult<()> {
@@ -859,6 +1011,8 @@ fn _native(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyMultiThreadedExecutor>()?;
     m.add_class::<PyNode>()?;
     m.add_class::<PyTopicPublisher>()?;
+    m.add_class::<PyNodeServiceClient>()?;
+    m.add_class::<PyNodeActionClient>()?;
     m.add_class::<PyShutdownHandle>()?;
     m.add_class::<PyTimerHandle>()?;
     m.add_class::<PyRobotBusBroker>()?;

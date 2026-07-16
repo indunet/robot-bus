@@ -88,6 +88,8 @@ node.create_action("navigate", on_goal, callback_group=group)
 
 ### Service / Action（Node）
 
+与 topic / timer 一样挂在 Node 上：worker 用 `create_service` / `create_action`，client 用 `create_client` / `create_action_client`。
+
 ```python
 def on_echo(client_id, request_id, body: bytes) -> bytes:
     return b"echo:" + body
@@ -99,18 +101,27 @@ def on_goal(client_id, goal_id, payload: bytes):
         ("RESULT", b"done:" + payload),
     ]
 
-node = robot_bus.Node("worker")
+server = robot_bus.Node("worker")
+client_node = robot_bus.Node("caller")
 executor = robot_bus.SingleThreadedExecutor()
-executor.add_node(node)
+executor.add_node(server)
 
-node.create_service("echo", on_echo)
-node.create_action("navigate", on_goal)
+server.create_service("echo", on_echo)
+server.create_action("navigate", on_goal)
+
+svc = client_node.create_client("echo")
+# reply = svc.call(b"ping", timeout=5.0)
+
+act = client_node.create_action_client("navigate")
+# messages = act.send_goal(b"go", timeout=10.0)
 # executor.spin()
 ```
 
-endpoint 默认本机 broker；也可用 `Node(..., service_backend=..., action_backend=...)` 覆盖。
+endpoint 默认本机 broker；也可用 `Node(..., service_frontend=..., service_backend=..., action_backend=..., action_frontend=...)` 覆盖。
 
 ### 定时器
+
+与 topic 一样挂在 Node 上：先 `executor.add_node(node)`，再 `node.create_timer`；回调由 `spin` / `spin_once` 驱动。
 
 ```python
 import robot_bus
@@ -199,16 +210,18 @@ print(robot_bus.__version__)
 
 | 符号 | 说明 |
 |------|------|
-| `Node(name, host=..., message_xsub=..., service_backend=..., …)` | 建节点（尚未挂到 executor） |
+| `Node(name, host=..., message_xsub=..., service_frontend=..., service_backend=..., …)` | 建节点（尚未挂到 executor） |
 | `SingleThreadedExecutor()` | 单线程执行器；`add_node` + `spin` |
 | `MultiThreadedExecutor(num_threads=4)` | service/action handler 可并行 |
 | `executor.add_node(node)` | 把节点挂到执行器（ROS 2 同款） |
 | `node.create_publisher(topic)` → `TopicPublisher` | 返回 publisher，再 `publish(bytes)` |
+| `node.create_timer(period, callback)` → `TimerHandle` | 定时器（与 topic 一样挂在 Node） |
 | `CallbackGroupType` / `create_callback_group` | `MutuallyExclusive` / `Reentrant` |
 | `create_subscription(..., callback_group=)` | 可选 callback group |
-| `create_service(name, handler, identity=None, callback_group=None)` | service worker；handler 返回 `bytes` |
-| `create_action(name, handler, identity=None, callback_group=None)` | action worker；handler 返回 `[(phase, bytes), ...]` |
-| `connect_action_client()` | 连接 action frontend（发 goal 前） |
+| `create_service(name, handler, …)` | service worker；handler 返回 `bytes` |
+| `create_client(name)` → `ServiceClient` | service client；`call(body, timeout=…)` |
+| `create_action(name, handler, …)` | action worker；handler 返回 `[(phase, bytes), ...]` |
+| `create_action_client(name)` → `ActionClient` | action client；`send_goal` / `cancel` |
 | `Publisher(endpoint=None)` | 低层连 XSUB（不经 Node） |
 | `RobotBusBroker.start()` | 进程内启动三个 bus + gRPC |
 | `run_broker()` | 阻塞 CLI 入口 |

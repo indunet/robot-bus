@@ -1,4 +1,9 @@
-# Robot Bus
+# *Robot Bus*
+
+[![CI](https://github.com/indunet/robot-bus/actions/workflows/ci.yml/badge.svg)](https://github.com/indunet/robot-bus/actions/workflows/ci.yml)
+[![crates.io](https://img.shields.io/crates/v/robot-bus.svg)](https://crates.io/crates/robot-bus)
+[![PyPI](https://img.shields.io/pypi/v/robot-bus.svg)](https://pypi.org/project/robot-bus/)
+[![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 
 轻量级、免环境配置的 ROS 2 风格通信库：基于 ZeroMQ，提供 topic / service / action，以及 `Executor` + `Node` + `spin` 回调模型。
 
@@ -151,6 +156,8 @@ executor.spin()?;
 - `SingleThreadedExecutor`：回调在 I/O / spin 线程串行（默认）
 - `MultiThreadedExecutor::new(n)`：最多 `n` 个 worker；`Reentrant` group 可并行，`MutuallyExclusive` 组内串行
 - Callback group：`MutuallyExclusive` / `Reentrant`（`create_callback_group`；默认互斥组）
+- Service / action：`create_service` / `create_client`、`create_action` / `create_action_client`（与 topic 一样挂在 Node）
+- Timer：`create_timer`（同样挂在 Node，由 `spin` 驱动）
 - Raw bytes：`create_subscription(topic, Arc::new(|topic, payload| { ... }), None)`
 - 底层 escape hatch：`Executor`（高级用法）
 
