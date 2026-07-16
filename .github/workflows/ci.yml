@@ -16,7 +16,7 @@ jobs:
           sudo apt-get install -y protobuf-compiler libzmq3-dev pkg-config
       - uses: dtolnay/rust-toolchain@stable
       - run: cargo test
-      - run: cargo test --features grpc
+      - run: cargo test --no-default-features
 
   python-msgs:
     runs-on: ubuntu-latest

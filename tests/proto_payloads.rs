@@ -3,16 +3,12 @@
 //! Body frames remain opaque to the bus; these tests encode/decode with
 //! `robot_bus::<pkg>::…` message types to verify end-to-end typed round-trips.
 
-use std::net::TcpListener;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 use std::thread;
 use std::time::Duration;
 
 use prost::Message;
 use robot_bus::action_bus::{ActionClient, ActionKind};
-use robot_bus::broker::action_bus::ActionBusConfig;
-use robot_bus::broker::message_bus::BusConfig;
-use robot_bus::broker::service_bus::ServiceBusConfig;
 use robot_bus::message_bus::{Publisher, Subscriber};
 use robot_bus::geometry_msgs::msg::v1::{
     Pose, Pose2D, PoseStamped, PoseWithCovariance, PoseWithCovarianceStamped, Twist, Vector3,
@@ -27,38 +23,24 @@ use robot_bus::std_srvs::srv::v1::{
 };
 use robot_bus::service_bus::ServiceClient;
 use robot_bus::worker_thread::WorkerThread;
-use robot_bus::{ActionBusBroker, MessageBusBroker, ServiceBusBroker};
+use robot_bus::RobotBusBroker;
 
-/// `bind_all` uses fixed inproc/ipc names — only one broker of each kind at a time.
-static BROKER_LOCK: Mutex<()> = Mutex::new(());
+mod support;
+use support::{ephemeral_robot_bus_config, lock_brokers};
 
-fn free_port() -> u16 {
-    TcpListener::bind("127.0.0.1:0")
-        .expect("bind ephemeral port")
-        .local_addr()
-        .expect("local addr")
-        .port()
-}
-
-fn lock_brokers() -> std::sync::MutexGuard<'static, ()> {
-    BROKER_LOCK
-        .lock()
-        .unwrap_or_else(|poisoned| poisoned.into_inner())
+fn start_bus() -> (std::sync::MutexGuard<'static, ()>, RobotBusBroker) {
+    let guard = lock_brokers();
+    let broker = RobotBusBroker::start(ephemeral_robot_bus_config()).expect("start RobotBusBroker");
+    (guard, broker)
 }
 
 #[test]
 fn message_bus_twist_pubsub() {
-    let _guard = lock_brokers();
-    let broker = MessageBusBroker::start(BusConfig {
-        xsub_bind: format!("tcp://127.0.0.1:{}", free_port()),
-        xpub_bind: format!("tcp://127.0.0.1:{}", free_port()),
-        ..BusConfig::default()
-    })
-    .expect("start message bus");
+    let (_guard, broker) = start_bus();
 
-    let publisher = Publisher::new(Some(&broker.xsub_bind)).expect("publisher");
+    let publisher = Publisher::new(Some(&broker.message.xsub_bind)).expect("publisher");
     thread::sleep(Duration::from_millis(50));
-    let subscriber = Subscriber::new(Some(&broker.xpub_bind)).expect("subscriber");
+    let subscriber = Subscriber::new(Some(&broker.message.xpub_bind)).expect("subscriber");
     subscriber.subscribe("cmd_vel").expect("subscribe");
     thread::sleep(Duration::from_millis(150));
 
@@ -90,17 +72,11 @@ fn message_bus_twist_pubsub() {
 
 #[test]
 fn message_bus_odometry_pubsub() {
-    let _guard = lock_brokers();
-    let broker = MessageBusBroker::start(BusConfig {
-        xsub_bind: format!("tcp://127.0.0.1:{}", free_port()),
-        xpub_bind: format!("tcp://127.0.0.1:{}", free_port()),
-        ..BusConfig::default()
-    })
-    .expect("start message bus");
+    let (_guard, broker) = start_bus();
 
-    let publisher = Publisher::new(Some(&broker.xsub_bind)).expect("publisher");
+    let publisher = Publisher::new(Some(&broker.message.xsub_bind)).expect("publisher");
     thread::sleep(Duration::from_millis(50));
-    let subscriber = Subscriber::new(Some(&broker.xpub_bind)).expect("subscriber");
+    let subscriber = Subscriber::new(Some(&broker.message.xpub_bind)).expect("subscriber");
     subscriber.subscribe("odom").expect("subscribe");
     thread::sleep(Duration::from_millis(150));
 
@@ -134,15 +110,7 @@ fn message_bus_odometry_pubsub() {
 
 #[test]
 fn service_bus_string_echo_proto() {
-    let _guard = lock_brokers();
-    let broker = ServiceBusBroker::start(ServiceBusConfig {
-        frontend_bind: format!("tcp://127.0.0.1:{}", free_port()),
-        backend_bind: format!("tcp://127.0.0.1:{}", free_port()),
-        heartbeat_interval_ms: 200,
-        heartbeat_timeout_ms: 600,
-        ..ServiceBusConfig::default()
-    })
-    .expect("start service bus");
+    let (_guard, broker) = start_bus();
 
     let handler: Arc<dyn Fn(&[u8], &[u8], &[u8]) -> Vec<u8> + Send + Sync> =
         Arc::new(|_client_id, _req_id, body| {
@@ -152,11 +120,11 @@ fn service_bus_string_echo_proto() {
             }
             .encode_to_vec()
         });
-    let worker = WorkerThread::spawn_service("svc.string_echo", handler, &broker.backend_bind)
+    let worker = WorkerThread::spawn_service("svc.string_echo", handler, &broker.service.backend_bind)
         .expect("worker");
     thread::sleep(Duration::from_millis(100));
 
-    let client = ServiceClient::new(Some(&broker.frontend_bind)).expect("client");
+    let client = ServiceClient::new(Some(&broker.service.frontend_bind)).expect("client");
     let req = ProtoString {
         data: "hello-proto".into(),
     };
@@ -177,15 +145,7 @@ fn service_bus_string_echo_proto() {
 
 #[test]
 fn service_bus_int32_add_proto() {
-    let _guard = lock_brokers();
-    let broker = ServiceBusBroker::start(ServiceBusConfig {
-        frontend_bind: format!("tcp://127.0.0.1:{}", free_port()),
-        backend_bind: format!("tcp://127.0.0.1:{}", free_port()),
-        heartbeat_interval_ms: 200,
-        heartbeat_timeout_ms: 600,
-        ..ServiceBusConfig::default()
-    })
-    .expect("start service bus");
+    let (_guard, broker) = start_bus();
 
     let handler: Arc<dyn Fn(&[u8], &[u8], &[u8]) -> Vec<u8> + Send + Sync> =
         Arc::new(|_client_id, _req_id, body| {
@@ -195,11 +155,11 @@ fn service_bus_int32_add_proto() {
             }
             .encode_to_vec()
         });
-    let worker = WorkerThread::spawn_service("svc.int_inc", handler, &broker.backend_bind)
+    let worker = WorkerThread::spawn_service("svc.int_inc", handler, &broker.service.backend_bind)
         .expect("worker");
     thread::sleep(Duration::from_millis(100));
 
-    let client = ServiceClient::new(Some(&broker.frontend_bind)).expect("client");
+    let client = ServiceClient::new(Some(&broker.service.frontend_bind)).expect("client");
     let reply_bytes = client
         .call(
             "svc.int_inc",
@@ -217,15 +177,7 @@ fn service_bus_int32_add_proto() {
 
 #[test]
 fn service_bus_std_srvs_trigger() {
-    let _guard = lock_brokers();
-    let broker = ServiceBusBroker::start(ServiceBusConfig {
-        frontend_bind: format!("tcp://127.0.0.1:{}", free_port()),
-        backend_bind: format!("tcp://127.0.0.1:{}", free_port()),
-        heartbeat_interval_ms: 200,
-        heartbeat_timeout_ms: 600,
-        ..ServiceBusConfig::default()
-    })
-    .expect("start service bus");
+    let (_guard, broker) = start_bus();
 
     let handler: Arc<dyn Fn(&[u8], &[u8], &[u8]) -> Vec<u8> + Send + Sync> =
         Arc::new(|_client_id, _req_id, body| {
@@ -236,11 +188,11 @@ fn service_bus_std_srvs_trigger() {
             }
             .encode_to_vec()
         });
-    let worker = WorkerThread::spawn_service("svc.trigger", handler, &broker.backend_bind)
+    let worker = WorkerThread::spawn_service("svc.trigger", handler, &broker.service.backend_bind)
         .expect("worker");
     thread::sleep(Duration::from_millis(100));
 
-    let client = ServiceClient::new(Some(&broker.frontend_bind)).expect("client");
+    let client = ServiceClient::new(Some(&broker.service.frontend_bind)).expect("client");
     let reply_bytes = client
         .call(
             "svc.trigger",
@@ -259,15 +211,7 @@ fn service_bus_std_srvs_trigger() {
 
 #[test]
 fn service_bus_std_srvs_set_bool() {
-    let _guard = lock_brokers();
-    let broker = ServiceBusBroker::start(ServiceBusConfig {
-        frontend_bind: format!("tcp://127.0.0.1:{}", free_port()),
-        backend_bind: format!("tcp://127.0.0.1:{}", free_port()),
-        heartbeat_interval_ms: 200,
-        heartbeat_timeout_ms: 600,
-        ..ServiceBusConfig::default()
-    })
-    .expect("start service bus");
+    let (_guard, broker) = start_bus();
 
     let handler: Arc<dyn Fn(&[u8], &[u8], &[u8]) -> Vec<u8> + Send + Sync> =
         Arc::new(|_client_id, _req_id, body| {
@@ -278,11 +222,11 @@ fn service_bus_std_srvs_set_bool() {
             }
             .encode_to_vec()
         });
-    let worker = WorkerThread::spawn_service("svc.set_bool", handler, &broker.backend_bind)
+    let worker = WorkerThread::spawn_service("svc.set_bool", handler, &broker.service.backend_bind)
         .expect("worker");
     thread::sleep(Duration::from_millis(100));
 
-    let client = ServiceClient::new(Some(&broker.frontend_bind)).expect("client");
+    let client = ServiceClient::new(Some(&broker.service.frontend_bind)).expect("client");
     let reply_bytes = client
         .call(
             "svc.set_bool",
@@ -301,15 +245,7 @@ fn service_bus_std_srvs_set_bool() {
 
 #[test]
 fn service_bus_nav_msgs_get_map() {
-    let _guard = lock_brokers();
-    let broker = ServiceBusBroker::start(ServiceBusConfig {
-        frontend_bind: format!("tcp://127.0.0.1:{}", free_port()),
-        backend_bind: format!("tcp://127.0.0.1:{}", free_port()),
-        heartbeat_interval_ms: 200,
-        heartbeat_timeout_ms: 600,
-        ..ServiceBusConfig::default()
-    })
-    .expect("start service bus");
+    let (_guard, broker) = start_bus();
 
     let handler: Arc<dyn Fn(&[u8], &[u8], &[u8]) -> Vec<u8> + Send + Sync> =
         Arc::new(|_client_id, _req_id, body| {
@@ -332,11 +268,11 @@ fn service_bus_nav_msgs_get_map() {
             }
             .encode_to_vec()
         });
-    let worker = WorkerThread::spawn_service("svc.get_map", handler, &broker.backend_bind)
+    let worker = WorkerThread::spawn_service("svc.get_map", handler, &broker.service.backend_bind)
         .expect("worker");
     thread::sleep(Duration::from_millis(100));
 
-    let client = ServiceClient::new(Some(&broker.frontend_bind)).expect("client");
+    let client = ServiceClient::new(Some(&broker.service.frontend_bind)).expect("client");
     let reply_bytes = client
         .call(
             "svc.get_map",
@@ -357,15 +293,7 @@ fn service_bus_nav_msgs_get_map() {
 
 #[test]
 fn service_bus_nav_msgs_set_map_and_get_plan() {
-    let _guard = lock_brokers();
-    let broker = ServiceBusBroker::start(ServiceBusConfig {
-        frontend_bind: format!("tcp://127.0.0.1:{}", free_port()),
-        backend_bind: format!("tcp://127.0.0.1:{}", free_port()),
-        heartbeat_interval_ms: 200,
-        heartbeat_timeout_ms: 600,
-        ..ServiceBusConfig::default()
-    })
-    .expect("start service bus");
+    let (_guard, broker) = start_bus();
 
     let set_map_handler: Arc<dyn Fn(&[u8], &[u8], &[u8]) -> Vec<u8> + Send + Sync> =
         Arc::new(|_client_id, _req_id, body| {
@@ -392,14 +320,14 @@ fn service_bus_nav_msgs_set_map_and_get_plan() {
         });
 
     let set_map_worker =
-        WorkerThread::spawn_service("svc.set_map", set_map_handler, &broker.backend_bind)
+        WorkerThread::spawn_service("svc.set_map", set_map_handler, &broker.service.backend_bind)
             .expect("set_map worker");
     let get_plan_worker =
-        WorkerThread::spawn_service("svc.get_plan", get_plan_handler, &broker.backend_bind)
+        WorkerThread::spawn_service("svc.get_plan", get_plan_handler, &broker.service.backend_bind)
             .expect("get_plan worker");
     thread::sleep(Duration::from_millis(100));
 
-    let client = ServiceClient::new(Some(&broker.frontend_bind)).expect("client");
+    let client = ServiceClient::new(Some(&broker.service.frontend_bind)).expect("client");
 
     let set_map_reply = client
         .call(
@@ -501,15 +429,7 @@ fn service_bus_nav_msgs_set_map_and_get_plan() {
 
 #[test]
 fn action_bus_pose2d_goal_proto() {
-    let _guard = lock_brokers();
-    let broker = ActionBusBroker::start(ActionBusConfig {
-        frontend_bind: format!("tcp://127.0.0.1:{}", free_port()),
-        backend_bind: format!("tcp://127.0.0.1:{}", free_port()),
-        heartbeat_interval_ms: 200,
-        heartbeat_timeout_ms: 600,
-        ..ActionBusConfig::default()
-    })
-    .expect("start action bus");
+    let (_guard, broker) = start_bus();
 
     let handler: Arc<dyn Fn(&[u8], &[u8], &[u8]) -> Vec<(String, Vec<u8>)> + Send + Sync> =
         Arc::new(|_client_id, _goal_id, body| {
@@ -526,11 +446,11 @@ fn action_bus_pose2d_goal_proto() {
                 ("RESULT".into(), result),
             ]
         });
-    let worker = WorkerThread::spawn_action("act.goto", handler, &broker.backend_bind)
+    let worker = WorkerThread::spawn_action("act.goto", handler, &broker.action.backend_bind)
         .expect("worker");
     thread::sleep(Duration::from_millis(100));
 
-    let client = ActionClient::new(Some(&broker.frontend_bind)).expect("client");
+    let client = ActionClient::new(Some(&broker.action.frontend_bind)).expect("client");
     let goal = Pose2D {
         x: 1.0,
         y: 2.0,

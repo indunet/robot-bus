@@ -1,5 +1,6 @@
 //! HTTP server: native gRPC + gRPC-Web on one port.
 
+use std::future::Future;
 use std::net::SocketAddr;
 
 use anyhow::{Context, Result};
@@ -42,13 +43,21 @@ impl Default for GatewayConfig {
 }
 
 pub async fn serve(config: GatewayConfig) -> Result<()> {
+    serve_with_shutdown(config, std::future::pending::<()>()).await
+}
+
+/// Serve until `shutdown` completes, then drain and exit.
+pub async fn serve_with_shutdown(
+    config: GatewayConfig,
+    shutdown: impl Future<Output = ()> + Send + 'static,
+) -> Result<()> {
     let message = MessageGatewayService::new(config.message_xpub.clone());
     let service = ServiceGatewayService::new(config.service_frontend.clone());
     let action = ActionGatewayService::new(config.action_frontend.clone());
     let cors = build_cors(&config.cors_origins)?;
 
     log::info!(
-        "robot_bus_grpc_gateway listening on http://{} (gRPC + gRPC-Web); \
+        "robot_bus gRPC gateway listening on http://{} (gRPC + gRPC-Web); \
          message XPUB {}; service frontend {}; action frontend {}",
         config.listen,
         config.message_xpub,
@@ -63,7 +72,7 @@ pub async fn serve(config: GatewayConfig) -> Result<()> {
         .add_service(MessageGatewayServer::new(message))
         .add_service(ServiceGatewayServer::new(service))
         .add_service(ActionGatewayServer::new(action))
-        .serve(config.listen)
+        .serve_with_shutdown(config.listen, shutdown)
         .await
         .context("gateway server")?;
     Ok(())

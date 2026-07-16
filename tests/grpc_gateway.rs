@@ -2,12 +2,9 @@
 
 mod support;
 
-use std::net::SocketAddr;
 use std::sync::Arc;
 use std::time::Duration;
 
-use robot_bus::broker::action_bus::ActionBusConfig;
-use robot_bus::broker::service_bus::ServiceBusConfig;
 use robot_bus::grpc::pb::action_gateway_client::ActionGatewayClient;
 use robot_bus::grpc::pb::message_gateway_client::MessageGatewayClient;
 use robot_bus::grpc::pb::service_gateway_client::ServiceGatewayClient;
@@ -15,40 +12,23 @@ use robot_bus::grpc::pb::{
     action_client_message, ActionClientMessage, ActionKind, CancelCommand, GoalCommand,
     ServiceCallRequest, SubscribeRequest,
 };
-use robot_bus::grpc::{serve, GatewayConfig};
 use robot_bus::worker_thread::WorkerThread;
-use robot_bus::{ActionBusBroker, Publisher, ServiceBusBroker};
-use support::{free_port, MessageProxy};
+use robot_bus::{Publisher, RobotBusBroker};
+use support::{ephemeral_robot_bus_config, lock_brokers};
 use tokio_stream::StreamExt;
 use tonic::Code;
 use tonic::Request;
 
-fn listen_addr() -> SocketAddr {
-    format!("127.0.0.1:{}", free_port()).parse().unwrap()
-}
-
-async fn spawn_gateway(config: GatewayConfig) -> SocketAddr {
-    let listen = config.listen;
-    tokio::spawn(async move {
-        serve(config).await.expect("gateway serve");
-    });
-    tokio::time::sleep(Duration::from_millis(150)).await;
-    listen
+fn start_bus() -> (std::sync::MutexGuard<'static, ()>, RobotBusBroker) {
+    let guard = lock_brokers();
+    let broker = RobotBusBroker::start(ephemeral_robot_bus_config()).expect("start RobotBusBroker");
+    (guard, broker)
 }
 
 #[tokio::test]
 async fn subscribe_receives_published_payload() {
-    let proxy = MessageProxy::spawn();
-    let listen = listen_addr();
-
-    let config = GatewayConfig {
-        listen,
-        message_xpub: proxy.xpub_endpoint.clone(),
-        service_frontend: "tcp://127.0.0.1:1".into(),
-        action_frontend: "tcp://127.0.0.1:1".into(),
-        cors_origins: Vec::new(),
-    };
-    let listen = spawn_gateway(config).await;
+    let (_guard, broker) = start_bus();
+    let listen = broker.grpc_listen();
 
     let mut client = MessageGatewayClient::connect(format!("http://{listen}"))
         .await
@@ -64,7 +44,7 @@ async fn subscribe_receives_published_payload() {
 
     tokio::time::sleep(Duration::from_millis(200)).await;
 
-    let pub_ = Publisher::new(Some(&proxy.xsub_endpoint)).expect("publisher");
+    let pub_ = Publisher::new(Some(&broker.message.xsub_bind)).expect("publisher");
     pub_.publish("grpc.test", b"hello-grpc").expect("publish");
 
     let msg = tokio::time::timeout(Duration::from_secs(3), stream.next())
@@ -75,32 +55,20 @@ async fn subscribe_receives_published_payload() {
 
     assert_eq!(msg.topic, "grpc.test");
     assert_eq!(msg.payload, b"hello-grpc");
+    broker.stop().expect("stop");
 }
 
 #[tokio::test]
 async fn service_call_echoes_payload() {
-    let broker = ServiceBusBroker::start(ServiceBusConfig {
-        frontend_bind: format!("tcp://127.0.0.1:{}", free_port()),
-        backend_bind: format!("tcp://127.0.0.1:{}", free_port()),
-        ..ServiceBusConfig::default()
-    })
-    .expect("start service bus");
+    let (_guard, broker) = start_bus();
+    let listen = broker.grpc_listen();
 
     let handler: Arc<dyn Fn(&[u8], &[u8], &[u8]) -> Vec<u8> + Send + Sync> =
         Arc::new(|_client_id, _req_id, body| [b"echo:", body].concat());
-    let worker = WorkerThread::spawn_service("svc.grpc_echo", handler, &broker.backend_bind)
-        .expect("worker");
+    let worker =
+        WorkerThread::spawn_service("svc.grpc_echo", handler, &broker.service.backend_bind)
+            .expect("worker");
     tokio::time::sleep(Duration::from_millis(100)).await;
-
-    let listen = listen_addr();
-    let config = GatewayConfig {
-        listen,
-        message_xpub: "tcp://127.0.0.1:1".into(),
-        service_frontend: broker.frontend_bind.clone(),
-        action_frontend: "tcp://127.0.0.1:1".into(),
-        cors_origins: Vec::new(),
-    };
-    let listen = spawn_gateway(config).await;
 
     let mut client = ServiceGatewayClient::connect(format!("http://{listen}"))
         .await
@@ -118,18 +86,13 @@ async fn service_call_echoes_payload() {
 
     assert_eq!(resp.response, b"echo:ping");
     worker.stop();
-    let _ = broker.stop();
+    broker.stop().expect("stop");
 }
 
 #[tokio::test]
 async fn action_run_streams_feedback_then_result() {
-    let broker = ActionBusBroker::start(ActionBusConfig {
-        frontend_bind: format!("tcp://127.0.0.1:{}", free_port()),
-        backend_bind: format!("tcp://127.0.0.1:{}", free_port()),
-        bind_all_transports: false,
-        ..ActionBusConfig::default()
-    })
-    .expect("start action bus");
+    let (_guard, broker) = start_bus();
+    let listen = broker.grpc_listen();
 
     let handler: Arc<dyn Fn(&[u8], &[u8], &[u8]) -> Vec<(String, Vec<u8>)> + Send + Sync> =
         Arc::new(|_client_id, _goal_id, body| {
@@ -139,19 +102,9 @@ async fn action_run_streams_feedback_then_result() {
                 ("RESULT".into(), [b"done:", body].concat()),
             ]
         });
-    let worker = WorkerThread::spawn_action("act.grpc_demo", handler, &broker.backend_bind)
+    let worker = WorkerThread::spawn_action("act.grpc_demo", handler, &broker.action.backend_bind)
         .expect("worker");
     tokio::time::sleep(Duration::from_millis(100)).await;
-
-    let listen = listen_addr();
-    let config = GatewayConfig {
-        listen,
-        message_xpub: "tcp://127.0.0.1:1".into(),
-        service_frontend: "tcp://127.0.0.1:1".into(),
-        action_frontend: broker.frontend_bind.clone(),
-        cors_origins: Vec::new(),
-    };
-    let listen = spawn_gateway(config).await;
 
     let mut client = ActionGatewayClient::connect(format!("http://{listen}"))
         .await
@@ -184,28 +137,13 @@ async fn action_run_streams_feedback_then_result() {
     assert_eq!(events[2].body, b"done:fly");
 
     worker.stop();
-    let _ = broker.stop();
+    broker.stop().expect("stop");
 }
 
 #[tokio::test]
 async fn action_run_cancel_unknown_goal_returns_not_found() {
-    let broker = ActionBusBroker::start(ActionBusConfig {
-        frontend_bind: format!("tcp://127.0.0.1:{}", free_port()),
-        backend_bind: format!("tcp://127.0.0.1:{}", free_port()),
-        bind_all_transports: false,
-        ..ActionBusConfig::default()
-    })
-    .expect("start action bus");
-
-    let listen = listen_addr();
-    let config = GatewayConfig {
-        listen,
-        message_xpub: "tcp://127.0.0.1:1".into(),
-        service_frontend: "tcp://127.0.0.1:1".into(),
-        action_frontend: broker.frontend_bind.clone(),
-        cors_origins: Vec::new(),
-    };
-    let listen = spawn_gateway(config).await;
+    let (_guard, broker) = start_bus();
+    let listen = broker.grpc_listen();
 
     let mut client = ActionGatewayClient::connect(format!("http://{listen}"))
         .await
@@ -229,5 +167,5 @@ async fn action_run_cancel_unknown_goal_returns_not_found() {
         .expect("expected stream item")
         .expect_err("expected not found");
     assert_eq!(err.code(), Code::NotFound);
-    let _ = broker.stop();
+    broker.stop().expect("stop");
 }

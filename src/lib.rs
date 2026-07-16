@@ -29,8 +29,11 @@ mod python_api;
 
 pub use action_bus::{ActionClient, ActionKind, ActionMessage, ActionWorker};
 pub use broker::{
-    ActionBusBroker, MessageBusBroker, RobotBusBroker, RobotBusConfig, ServiceBusBroker,
+    parse_robot_bus_config, robot_bus_broker_help, RobotBusBroker, RobotBusConfig,
 };
+
+#[cfg(feature = "grpc")]
+pub use broker::GrpcBrokerConfig;
 pub use errors::{parse_error_body, BusError, Result};
 pub use message_bus::{Publisher, Subscriber};
 pub use runtime::{

@@ -4,46 +4,37 @@
 //! client (REQ) and worker(s) (DEALER), then verifies end-to-end routing.
 
 use robot_bus::broker::service_bus::ServiceBusConfig;
-use robot_bus::ServiceBusBroker;
-use std::net::TcpListener;
+use robot_bus::RobotBusBroker;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, Mutex, MutexGuard};
+use std::sync::{Arc, MutexGuard};
 use std::thread;
 use std::time::Duration;
 use zmq::{Context as ZmqContext, SocketType};
 
-/// Serialize broker starts: `bind_all` uses fixed inproc/ipc channel names.
-static BROKER_LOCK: Mutex<()> = Mutex::new(());
+mod support;
+use support::{ephemeral_robot_bus_config, lock_brokers};
 
-fn free_port() -> u16 {
-    TcpListener::bind("127.0.0.1:0")
-        .expect("bind ephemeral port")
-        .local_addr()
-        .expect("local addr")
-        .port()
-}
-
-/// Spawn a broker via [`ServiceBusBroker::start`] on ephemeral TCP ports.
+/// Spawn all buses via [`RobotBusBroker::start`]; expose service endpoints.
 struct BrokerHandle {
     _guard: MutexGuard<'static, ()>,
     frontend_ep: String,
     backend_ep: String,
-    _broker: ServiceBusBroker,
+    _broker: RobotBusBroker,
 }
 
-fn spawn_broker(mut config: ServiceBusConfig) -> BrokerHandle {
-    let guard = BROKER_LOCK
-        .lock()
-        .unwrap_or_else(|poisoned| poisoned.into_inner());
-    config.frontend_bind = format!("tcp://127.0.0.1:{}", free_port());
-    config.backend_bind = format!("tcp://127.0.0.1:{}", free_port());
-    let frontend_ep = config.frontend_bind.clone();
-    let backend_ep = config.backend_bind.clone();
-    let broker = ServiceBusBroker::start(config).expect("start ServiceBusBroker");
+fn spawn_broker(service: ServiceBusConfig) -> BrokerHandle {
+    let guard = lock_brokers();
+    let mut config = ephemeral_robot_bus_config();
+    config.service = ServiceBusConfig {
+        frontend_bind: config.service.frontend_bind.clone(),
+        backend_bind: config.service.backend_bind.clone(),
+        ..service
+    };
+    let broker = RobotBusBroker::start(config).expect("start RobotBusBroker");
     BrokerHandle {
+        frontend_ep: broker.service.frontend_bind.clone(),
+        backend_ep: broker.service.backend_bind.clone(),
         _guard: guard,
-        frontend_ep,
-        backend_ep,
         _broker: broker,
     }
 }

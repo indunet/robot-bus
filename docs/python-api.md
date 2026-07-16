@@ -12,19 +12,26 @@ pip install robot-bus
 ```bash
 # 安装包后的 CLI
 robot-bus-broker
+robot-bus-broker --help
+robot-bus-broker --grpc-listen 0.0.0.0:15770 --tcp-only
 ```
 
-或进程内：
+或进程内（关键字参数覆盖默认 bind / HWM / 心跳 / gRPC）：
 
 ```python
 import robot_bus
 
-with robot_bus.RobotBusBroker.start() as broker:
-    # broker.message_xsub_bind / message_xpub_bind 等
+with robot_bus.RobotBusBroker.start(
+    message_xsub_bind="tcp://127.0.0.1:15560",
+    message_xpub_bind="tcp://127.0.0.1:15561",
+    grpc_listen="0.0.0.0:15770",
+    tcp_only=True,
+) as broker:
+    # broker.message_xsub_bind / message_xpub_bind / grpc_listen 等
     pass
 ```
 
-默认端口见 [rust-api.md](rust-api.md)「Broker 启动」。
+默认端口与完整 CLI 选项见 [rust-api.md](rust-api.md)「Broker 启动」。
 
 ---
 
@@ -203,7 +210,7 @@ print(robot_bus.__version__)
 | `create_action(name, handler, identity=None, callback_group=None)` | action worker；handler 返回 `[(phase, bytes), ...]` |
 | `connect_action_client()` | 连接 action frontend（发 goal 前） |
 | `Publisher(endpoint=None)` | 低层连 XSUB（不经 Node） |
-| `RobotBusBroker.start()` | 进程内启动三个 bus |
+| `RobotBusBroker.start()` | 进程内启动三个 bus + gRPC |
 | `run_broker()` | 阻塞 CLI 入口 |
 | `ShutdownHandle` / `TimerHandle` | spin 与定时器控制 |
 

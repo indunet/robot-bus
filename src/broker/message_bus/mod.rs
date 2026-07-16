@@ -22,6 +22,8 @@ pub struct BusConfig {
     pub xpub_bind: String,
     pub snd_hwm: i32,
     pub rcv_hwm: i32,
+    /// When true (default), also bind inproc + ipc aliases via [`bind_all`].
+    pub bind_all_transports: bool,
 }
 
 impl Default for BusConfig {
@@ -31,6 +33,7 @@ impl Default for BusConfig {
             xpub_bind: DEFAULT_XPUB_BIND.to_string(),
             snd_hwm: DEFAULT_SND_HWM,
             rcv_hwm: DEFAULT_RCV_HWM,
+            bind_all_transports: true,
         }
     }
 }
@@ -54,8 +57,18 @@ pub fn run_with_shutdown(config: BusConfig, shutdown: Arc<AtomicBool>) -> Result
     apply_low_latency_options(&xsub, config.snd_hwm, config.rcv_hwm)?;
     apply_low_latency_options(&xpub, config.snd_hwm, config.rcv_hwm)?;
 
-    let xsub_endpoints = bind_all(&xsub, &config.xsub_bind, ports::XSUB_CHANNEL)?;
-    let xpub_endpoints = bind_all(&xpub, &config.xpub_bind, ports::XPUB_CHANNEL)?;
+    let (xsub_endpoints, xpub_endpoints) = if config.bind_all_transports {
+        (
+            bind_all(&xsub, &config.xsub_bind, ports::XSUB_CHANNEL)?,
+            bind_all(&xpub, &config.xpub_bind, ports::XPUB_CHANNEL)?,
+        )
+    } else {
+        xsub.bind(&config.xsub_bind)
+            .with_context(|| format!("bind {}", config.xsub_bind))?;
+        xpub.bind(&config.xpub_bind)
+            .with_context(|| format!("bind {}", config.xpub_bind))?;
+        (vec![config.xsub_bind.clone()], vec![config.xpub_bind.clone()])
+    };
 
     control
         .bind(PROXY_CONTROL)
@@ -68,10 +81,15 @@ pub fn run_with_shutdown(config: BusConfig, shutdown: Arc<AtomicBool>) -> Result
         "message_bus_broker proxy started\n  \
          publishers (PUB) connect ->\n    {}\n  \
          subscribers (SUB) connect ->\n    {}\n  \
-         transports: tcp + inproc + ipc per socket\n  \
+         transports: {}\n  \
          forwarding: opaque multipart frames, no payload parsing",
         format_endpoints(&xsub_endpoints),
         format_endpoints(&xpub_endpoints),
+        if config.bind_all_transports {
+            "tcp + inproc + ipc per socket"
+        } else {
+            "tcp only"
+        },
     );
 
     let mut xsub = xsub;

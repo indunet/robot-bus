@@ -3,78 +3,72 @@
 `Cargo.toml`：
 
 ```toml
-robot-bus = "0.0.2"
+robot-bus = "0.0.3"
 # 本地：robot-bus = { path = "../robot-bus" }
-# gRPC 网关：robot-bus = { version = "0.0.2", features = ["grpc"] }
+# 默认已启用 gRPC；若需关闭：robot-bus = { version = "0.0.3", default-features = false }
 ```
 
 ## Broker 启动
 
-SDK 默认连本机 broker（`localhost` + `tcp`）。运行示例前需先启动对应路由进程；也可在应用内嵌 broker（见下文「进程内 broker」）。
+SDK 默认连本机 broker（`localhost` + `tcp`）。运行示例前需先启动 `robot_bus_broker`；也可在应用内嵌 broker（见下文「进程内 broker」）。
 
-| 总线 | 默认端口 | 二进制 | 说明 |
-|------|----------|--------|------|
-| message | 15560 (XSUB) / 15561 (XPUB) | `message_bus_broker` | PUB/SUB 透明代理 |
-| service | 15662 (frontend) / 15663 (backend) | `service_bus_broker` | REQ 客户端 ↔ DEALER worker |
-| action | 15664 (frontend) / 15665 (backend) | `action_bus_broker` | DEALER 客户端 ↔ DEALER worker |
+| 组件 | 默认端口 | 说明 |
+|------|----------|------|
+| message | 15560 (XSUB) / 15561 (XPUB) | PUB/SUB 透明代理 |
+| service | 15662 (frontend) / 15663 (backend) | REQ 客户端 ↔ DEALER worker |
+| action | 15664 (frontend) / 15665 (backend) | DEALER 客户端 ↔ DEALER worker |
+| gRPC | 15770 | gRPC + gRPC-Web（与总线同进程启动） |
 
-**一次启动三条总线（最常用）：**
+**启动（三条总线 + gRPC）：**
 
 ```bash
 cargo run --bin robot_bus_broker
 # Ctrl+C 停止
+# 查看全部参数：cargo run --bin robot_bus_broker -- --help
 ```
 
-**只启动某一条总线：**
+常用配置示例：
 
 ```bash
-cargo run --bin message_bus_broker
-cargo run --bin service_bus_broker
-cargo run --bin action_bus_broker
-# 各二进制支持 --help 查看 bind / HWM 等参数
-```
-
-**gRPC 网关**（feature `grpc`；需对应 broker 已运行）：
-
-```bash
-cargo run --bin robot_bus_broker
-cargo run --features grpc --bin robot_bus_grpc_gateway
-# 默认 http://0.0.0.0:15770
-# MessageGateway.Subscribe / ServiceGateway.Call / ActionGateway.Run
+cargo run --bin robot_bus_broker -- \
+  --message-xsub-bind tcp://0.0.0.0:15560 \
+  --message-xpub-bind tcp://0.0.0.0:15561 \
+  --service-frontend-bind tcp://0.0.0.0:15662 \
+  --service-backend-bind tcp://0.0.0.0:15663 \
+  --action-frontend-bind tcp://0.0.0.0:15664 \
+  --action-backend-bind tcp://0.0.0.0:15665 \
+  --grpc-listen 0.0.0.0:15770 \
+  --snd-hwm 8 --rcv-hwm 8 \
+  --tcp-only
 ```
 
 **进程内嵌入**（不必单独起二进制）：
 
-一次启动三条（最常用）：
-
 ```rust
-use robot_bus::broker::{RobotBusBroker, RobotBusConfig};
-
-let broker = RobotBusBroker::start(RobotBusConfig::default())?;
-// broker.message.xsub_bind / xpub_bind 等填入 NodeOptions
-broker.stop()?;
-```
-
-只启动某一条（与 CLI 单二进制对应）：
-
-```rust
-use robot_bus::broker::action_bus::ActionBusConfig;
 use robot_bus::broker::message_bus::BusConfig;
 use robot_bus::broker::service_bus::ServiceBusConfig;
-use robot_bus::broker::{ActionBusBroker, MessageBusBroker, ServiceBusBroker};
+use robot_bus::broker::{GrpcBrokerConfig, RobotBusBroker, RobotBusConfig};
 
-let message = MessageBusBroker::start(BusConfig::default())?;
-// message.xsub_bind / xpub_bind → NodeOptions
-
-let service = ServiceBusBroker::start(ServiceBusConfig::default())?;
-// service.frontend_bind / backend_bind
-
-let action = ActionBusBroker::start(ActionBusConfig::default())?;
-// action.frontend_bind / backend_bind
-
-message.stop()?;
-service.stop()?;
-action.stop()?;
+let broker = RobotBusBroker::start(RobotBusConfig {
+    message: BusConfig {
+        xsub_bind: "tcp://127.0.0.1:15560".into(),
+        xpub_bind: "tcp://127.0.0.1:15561".into(),
+        ..BusConfig::default()
+    },
+    service: ServiceBusConfig {
+        frontend_bind: "tcp://127.0.0.1:15662".into(),
+        backend_bind: "tcp://127.0.0.1:15663".into(),
+        ..ServiceBusConfig::default()
+    },
+    grpc: GrpcBrokerConfig {
+        listen: "0.0.0.0:15770".parse()?,
+        ..GrpcBrokerConfig::default()
+    },
+    ..RobotBusConfig::default()
+})?;
+// broker.message.xsub_bind / xpub_bind 等填入 NodeOptions
+// broker.grpc_listen() → gRPC 客户端连这个地址
+broker.stop()?;
 ```
 
 连接由 [`Node`](../src/runtime/node.rs) 的 `NodeOptions` 管理。典型流程：`Node::new` → `executor.add_node` → `create_*` → `executor.spin`。
@@ -318,9 +312,9 @@ Service 的 Request / Response 同理（如 `robot_bus::std_srvs::srv::v1::SetBo
 
 ---
 
-## gRPC / gRPC-Web 网关（feature `grpc`）
+## gRPC / gRPC-Web 网关
 
-独立进程，桥接 message / service / action bus（启动方式见上文「Broker 启动」）。
+由 `RobotBusBroker` / `robot_bus_broker` 一并启动（feature `grpc`，默认开启）。标准 gRPC 与 gRPC-Web **同端口**（默认 `0.0.0.0:15770`）。
 
 | RPC | 说明 |
 |-----|------|

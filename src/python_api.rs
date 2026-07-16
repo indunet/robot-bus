@@ -9,7 +9,10 @@ use pyo3::exceptions::PyRuntimeError;
 use pyo3::prelude::*;
 use pyo3::types::PyBytes;
 
-use crate::broker::{RobotBusBroker as RustRobotBusBroker, RobotBusConfig};
+use crate::broker::{
+    parse_robot_bus_config, robot_bus_broker_help, RobotBusBroker as RustRobotBusBroker,
+    RobotBusConfig,
+};
 use crate::errors::BusError;
 use crate::message_bus::{Publisher as RustPublisher, Subscriber as RustSubscriber};
 use crate::runtime::{
@@ -553,7 +556,7 @@ impl PyNode {
     }
 }
 
-/// In-process broker: message + service + action buses on background threads.
+/// In-process broker: message + service + action buses + gRPC on background threads.
 #[pyclass(name = "RobotBusBroker", unsendable)]
 struct PyRobotBusBroker {
     inner: Option<RustRobotBusBroker>,
@@ -561,16 +564,164 @@ struct PyRobotBusBroker {
 
 #[pymethods]
 impl PyRobotBusBroker {
-    /// Start all three buses with default binds (same as `robot_bus_broker`).
+    /// Start all buses (and gRPC). Keyword args override [`RobotBusConfig`] defaults.
     #[staticmethod]
-    fn start() -> PyResult<Self> {
-        let broker = RustRobotBusBroker::start(RobotBusConfig::default()).map_err(anyhow_err)?;
+    #[pyo3(signature = (
+        *,
+        message_xsub_bind = None,
+        message_xpub_bind = None,
+        message_snd_hwm = None,
+        message_rcv_hwm = None,
+        service_frontend_bind = None,
+        service_backend_bind = None,
+        service_snd_hwm = None,
+        service_rcv_hwm = None,
+        service_heartbeat_interval_ms = None,
+        service_heartbeat_timeout_ms = None,
+        action_frontend_bind = None,
+        action_backend_bind = None,
+        action_snd_hwm = None,
+        action_rcv_hwm = None,
+        action_heartbeat_interval_ms = None,
+        action_heartbeat_timeout_ms = None,
+        action_pending_timeout_ms = None,
+        snd_hwm = None,
+        rcv_hwm = None,
+        heartbeat_interval_ms = None,
+        heartbeat_timeout_ms = None,
+        tcp_only = false,
+        grpc_listen = None,
+        cors_origins = None,
+    ))]
+    fn start(
+        message_xsub_bind: Option<String>,
+        message_xpub_bind: Option<String>,
+        message_snd_hwm: Option<i32>,
+        message_rcv_hwm: Option<i32>,
+        service_frontend_bind: Option<String>,
+        service_backend_bind: Option<String>,
+        service_snd_hwm: Option<i32>,
+        service_rcv_hwm: Option<i32>,
+        service_heartbeat_interval_ms: Option<u64>,
+        service_heartbeat_timeout_ms: Option<u64>,
+        action_frontend_bind: Option<String>,
+        action_backend_bind: Option<String>,
+        action_snd_hwm: Option<i32>,
+        action_rcv_hwm: Option<i32>,
+        action_heartbeat_interval_ms: Option<u64>,
+        action_heartbeat_timeout_ms: Option<u64>,
+        action_pending_timeout_ms: Option<u64>,
+        snd_hwm: Option<i32>,
+        rcv_hwm: Option<i32>,
+        heartbeat_interval_ms: Option<u64>,
+        heartbeat_timeout_ms: Option<u64>,
+        tcp_only: bool,
+        grpc_listen: Option<String>,
+        cors_origins: Option<Vec<String>>,
+    ) -> PyResult<Self> {
+        let mut config = RobotBusConfig::default();
+
+        if let Some(v) = message_xsub_bind {
+            config.message.xsub_bind = normalize_bind(&v);
+        }
+        if let Some(v) = message_xpub_bind {
+            config.message.xpub_bind = normalize_bind(&v);
+        }
+        if let Some(v) = message_snd_hwm {
+            config.message.snd_hwm = v;
+        }
+        if let Some(v) = message_rcv_hwm {
+            config.message.rcv_hwm = v;
+        }
+
+        if let Some(v) = service_frontend_bind {
+            config.service.frontend_bind = normalize_bind(&v);
+        }
+        if let Some(v) = service_backend_bind {
+            config.service.backend_bind = normalize_bind(&v);
+        }
+        if let Some(v) = service_snd_hwm {
+            config.service.snd_hwm = v;
+        }
+        if let Some(v) = service_rcv_hwm {
+            config.service.rcv_hwm = v;
+        }
+        if let Some(v) = service_heartbeat_interval_ms {
+            config.service.heartbeat_interval_ms = v;
+        }
+        if let Some(v) = service_heartbeat_timeout_ms {
+            config.service.heartbeat_timeout_ms = v;
+        }
+
+        if let Some(v) = action_frontend_bind {
+            config.action.frontend_bind = normalize_bind(&v);
+        }
+        if let Some(v) = action_backend_bind {
+            config.action.backend_bind = normalize_bind(&v);
+        }
+        if let Some(v) = action_snd_hwm {
+            config.action.snd_hwm = v;
+        }
+        if let Some(v) = action_rcv_hwm {
+            config.action.rcv_hwm = v;
+        }
+        if let Some(v) = action_heartbeat_interval_ms {
+            config.action.heartbeat_interval_ms = v;
+        }
+        if let Some(v) = action_heartbeat_timeout_ms {
+            config.action.heartbeat_timeout_ms = v;
+        }
+        if let Some(v) = action_pending_timeout_ms {
+            config.action.pending_timeout_ms = v;
+        }
+
+        if let Some(v) = snd_hwm {
+            config.message.snd_hwm = v;
+            config.service.snd_hwm = v;
+            config.action.snd_hwm = v;
+        }
+        if let Some(v) = rcv_hwm {
+            config.message.rcv_hwm = v;
+            config.service.rcv_hwm = v;
+            config.action.rcv_hwm = v;
+        }
+        if let Some(v) = heartbeat_interval_ms {
+            config.service.heartbeat_interval_ms = v;
+            config.action.heartbeat_interval_ms = v;
+        }
+        if let Some(v) = heartbeat_timeout_ms {
+            config.service.heartbeat_timeout_ms = v;
+            config.action.heartbeat_timeout_ms = v;
+        }
+        if tcp_only {
+            config.message.bind_all_transports = false;
+            config.service.bind_all_transports = false;
+            config.action.bind_all_transports = false;
+        }
+
+        #[cfg(feature = "grpc")]
+        {
+            if let Some(v) = grpc_listen {
+                config.grpc.listen = v
+                    .parse()
+                    .map_err(|e| PyRuntimeError::new_err(format!("invalid grpc_listen: {e}")))?;
+            }
+            if let Some(v) = cors_origins {
+                config.grpc.cors_origins = v;
+            }
+        }
+        #[cfg(not(feature = "grpc"))]
+        {
+            let _ = (grpc_listen, cors_origins);
+        }
+
+        let broker = RustRobotBusBroker::start(config).map_err(anyhow_err)?;
         Ok(Self {
             inner: Some(broker),
         })
     }
 
-    /// Stop all buses and join their threads. Safe to call more than once.
+    /// Stop all buses (and gRPC) and join their threads. Safe to call more than once.
     fn stop(&mut self) -> PyResult<()> {
         if let Some(broker) = self.inner.take() {
             broker.stop().map_err(anyhow_err)?;
@@ -621,6 +772,20 @@ impl PyRobotBusBroker {
     fn action_backend_bind(&self) -> PyResult<String> {
         self.with_broker(|b| b.action.backend_bind.clone())
     }
+
+    #[cfg(feature = "grpc")]
+    #[getter]
+    fn grpc_listen(&self) -> PyResult<String> {
+        self.with_broker(|b| b.grpc_listen().to_string())
+    }
+}
+
+fn normalize_bind(addr: &str) -> String {
+    if addr.contains("://") {
+        addr.to_string()
+    } else {
+        format!("tcp://{addr}")
+    }
 }
 
 impl PyRobotBusBroker {
@@ -633,16 +798,7 @@ impl PyRobotBusBroker {
 }
 
 fn print_broker_help() {
-    println!(
-        "robot-bus-broker — start all ZeroMQ buses in one process\n\n\
-Usage:\n  robot-bus-broker\n\n\
-Starts with default ports and tcp + inproc + ipc on each socket:\n  \
-message_bus  15560 / 15561 (XSUB/XPUB proxy)\n  \
-service_bus  15662 / 15663 (REQ service broker)\n  \
-action_bus   15664 / 15665 (DEALER action broker)\n\n\
-Press Ctrl+C to stop all buses.\n\n\
-In Python: robot_bus.RobotBusBroker.start() / robot_bus.run_broker()\n"
-    );
+    print!("{}", robot_bus_broker_help());
 }
 
 /// Blocking CLI entry: start broker and wait for Ctrl+C (or Unix SIGTERM).
@@ -651,21 +807,27 @@ In Python: robot_bus.RobotBusBroker.start() / robot_bus.run_broker()\n"
 #[pyfunction]
 fn run_broker(py: Python<'_>) -> PyResult<()> {
     let args: Vec<String> = std::env::args().skip(1).collect();
-    if args.iter().any(|a| a == "--help" || a == "-h") {
-        print_broker_help();
-        return Ok(());
-    }
-    if !args.is_empty() {
-        return Err(PyRuntimeError::new_err(format!(
-            "unknown arguments: {args:?} (try --help)"
-        )));
-    }
+    let config = match parse_robot_bus_config(&args).map_err(anyhow_err)? {
+        None => {
+            print_broker_help();
+            return Ok(());
+        }
+        Some(config) => config,
+    };
 
     let flag = Arc::new(AtomicBool::new(false));
     shutdown::install(flag.clone());
 
-    println!("robot-bus-broker starting message + service + action buses…");
-    let mut broker = PyRobotBusBroker::start()?;
+    println!("robot-bus-broker starting message + service + action buses + gRPC…");
+    let broker = RustRobotBusBroker::start(config).map_err(anyhow_err)?;
+    let mut broker = PyRobotBusBroker {
+        inner: Some(broker),
+    };
+    #[cfg(feature = "grpc")]
+    println!(
+        "gRPC / gRPC-Web listening on http://{}",
+        broker.grpc_listen()?
+    );
 
     loop {
         if flag.load(Ordering::Acquire) {

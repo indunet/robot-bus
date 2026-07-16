@@ -17,7 +17,7 @@
 | `runtime::Executor` | 底层 poll loop（一般用下面两个包装） |
 | `runtime::SingleThreadedExecutor` / `MultiThreadedExecutor` | ROS 2 风格执行器；`add_node` + `spin` |
 | `runtime::Node` / `TopicPublisher` / `CallbackGroup` | 节点、publisher、callback group（互斥 / 可重入） |
-| `grpc::`（feature） | gRPC / gRPC-Web 网关（Subscribe / Call / Run） |
+| `grpc::`（默认 feature） | gRPC / gRPC-Web 网关（随 broker 一起启动） |
 | [`proto/`](proto/) | ROS 风格 Protobuf：`proto/<pkg>/{msg\|srv\|grpc}/v1/` → Rust/Python `robot_bus.<pkg>…` |
 
 ## 架构
@@ -70,8 +70,10 @@ pip install robot-bus
 本地开发（需 [maturin](https://www.maturin.rs/)）：
 
 ```bash
-maturin develop --features extension-module
+maturin develop --features extension-module,grpc
 ```
+
+（`grpc` 为默认 feature；显式写出可避免 `default-features = false` 的构建漏掉网关。）
 
 ```python
 import robot_bus
@@ -101,7 +103,7 @@ imu_pub.publish(
 
 ```toml
 robot-bus = { path = "../robot-bus" }
-# 或 crates.io：robot-bus = "0.0.2"
+# 或 crates.io：robot-bus = "0.0.3"
 ```
 
 语义接近 ROS 2：`Node::new` → `executor.add_node` → `create_publisher(topic)` → `spin`：
@@ -167,15 +169,11 @@ pub_.set_high_water_mark(HighWaterMark { snd: 10, rcv: 10 })?;
 
 | 二进制 | 说明 |
 |------|------|
-| `robot_bus_broker` | 一次启动三个 bus |
-| `message_bus_broker` | 仅 message bus |
-| `service_bus_broker` | 仅 service bus |
-| `action_bus_broker` | 仅 action bus |
-| `robot_bus_grpc_gateway` | gRPC / gRPC-Web 网关（需 `--features grpc`） |
+| `robot_bus_broker` | 一次启动三条总线 + gRPC / gRPC-Web 网关 |
 
 ## gRPC / gRPC-Web 网关
 
-独立进程，连已有 message / service / action bus；标准 gRPC 与 gRPC-Web **同端口**（默认 `0.0.0.0:15770`）。
+随 `robot_bus_broker` / `RobotBusBroker::start` 一起启动；标准 gRPC 与 gRPC-Web **同端口**（默认 `0.0.0.0:15770`）。
 
 | RPC | 语义 |
 |-----|------|
@@ -185,12 +183,23 @@ pub_.set_high_water_mark(HighWaterMark { snd: 10, rcv: 10 })?;
 
 ```bash
 cargo run --bin robot_bus_broker
-cargo run --features grpc --bin robot_bus_grpc_gateway
-# --listen 0.0.0.0:15770
-# --message-xpub tcp://127.0.0.1:15561
-# --service-frontend tcp://127.0.0.1:15662
-# --action-frontend tcp://127.0.0.1:15664
-# --cors-origin http://localhost:3000   # 可重复；默认允许任意 origin
+# 配置：cargo run --bin robot_bus_broker -- --help
+# gRPC: http://0.0.0.0:15770
+```
+
+进程内：
+
+```rust
+use robot_bus::{GrpcBrokerConfig, RobotBusBroker, RobotBusConfig};
+
+let broker = RobotBusBroker::start(RobotBusConfig {
+    grpc: GrpcBrokerConfig {
+        listen: "0.0.0.0:15770".parse()?,
+        ..Default::default()
+    },
+    ..RobotBusConfig::default()
+})?;
+let grpc = format!("http://{}", broker.grpc_listen());
 ```
 
 Proto（包名 `robot_bus.grpc.v1`，与 ROS `*.msg.v1` / `*.srv.v1` 区分）：
@@ -203,7 +212,6 @@ Proto（包名 `robot_bus.grpc.v1`，与 ROS `*.msg.v1` / `*.srv.v1` 区分）�
 
 ```bash
 cargo test
-cargo test --features grpc
 PYTHONPATH=python python3 tests/python/test_msgs_roundtrip.py
 ```
 
@@ -218,7 +226,7 @@ PYTHONPATH=python python3 tests/python/test_msgs_roundtrip.py
 
 - 传输层 body 仍是 opaque bytes；bus 不解析类型，业务侧自行 `encode` / `decode`（或用 `create_subscription_typed`）
 - **srv** 是一对 `*Request` / `*Response` message，不是 gRPC
-- **grpc**（`robot_bus`）是网关 RPC 契约，走 feature `grpc` + tonic
+- **grpc**（`robot_bus`）是网关 RPC 契约，随 broker 启动（默认 feature `grpc`）
 - 消息在 `robot_bus` 命名空间下，**不占用** ROS 顶层 `sensor_msgs` 包名；编码是 protobuf，与 ROS CDR 不互通
 - 改 proto 后跑：`python3 scripts/generate_python_msgs.py`（建议 protoc 28.x，与 CI 一致）
 
