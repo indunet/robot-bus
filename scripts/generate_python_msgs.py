@@ -11,10 +11,10 @@ Usage (from repo root)::
 
   python3 scripts/generate_python_msgs.py
 
-Match the installed ``protobuf`` pip package to the protoc major that
-generated the files (see each ``*_pb2.py`` header). CI historically uses
-protoc 28.x; local Homebrew may be newer — use a venv whose protobuf
-runtime is new enough for the chosen protoc.
+Pin ``protoc`` to ``EXPECTED_PROTOC_VERSION`` (same as CI). Match the
+installed ``protobuf`` pip package to that generator (``>=7.35,<8`` for
+protoc 35.x). Override the check with ``ROBOT_BUS_SKIP_PROTOC_VERSION_CHECK=1``
+only for local experiments.
 """
 
 from __future__ import annotations
@@ -31,6 +31,9 @@ ROOT = Path(__file__).resolve().parents[1]
 PROTO_ROOT = ROOT / "proto"
 OUT_ROOT = ROOT / "python" / "robot_bus"
 PROTOC = os.environ.get("PROTOC", "protoc")
+
+# Keep in sync with .github/workflows/ci.yml and publish-pypi.yml.
+EXPECTED_PROTOC_VERSION = "35.1"
 
 # Top-level packages that own message/service protos (not robot_bus.grpc).
 MSG_PACKAGES = (
@@ -64,6 +67,28 @@ MODULE_STR_RE = re.compile(
     + "|".join(re.escape(p) for p in MSG_PACKAGES)
     + r")(\.[^'\"]*_pb2)(['\"])"
 )
+
+PROTOC_VERSION_RE = re.compile(r"libprotoc\s+(\d+\.\d+(?:\.\d+)?)")
+
+
+def protoc_version(protoc: str) -> str:
+    out = subprocess.check_output([protoc, "--version"], text=True).strip()
+    match = PROTOC_VERSION_RE.search(out)
+    if not match:
+        raise RuntimeError(f"could not parse protoc version from {out!r}")
+    return match.group(1)
+
+
+def ensure_protoc_version(protoc: str) -> None:
+    if os.environ.get("ROBOT_BUS_SKIP_PROTOC_VERSION_CHECK") == "1":
+        return
+    version = protoc_version(protoc)
+    if version != EXPECTED_PROTOC_VERSION:
+        raise SystemExit(
+            f"error: protoc {version} != required {EXPECTED_PROTOC_VERSION}\n"
+            f"  Install https://github.com/protocolbuffers/protobuf/releases/tag/v{EXPECTED_PROTOC_VERSION}\n"
+            f"  or set PROTOC to that binary. Skip with ROBOT_BUS_SKIP_PROTOC_VERSION_CHECK=1."
+        )
 
 
 def collect_protos() -> list[Path]:
@@ -199,6 +224,8 @@ def main() -> int:
         print(f"error: protoc not found ({PROTOC!r})", file=sys.stderr)
         return 1
 
+    ensure_protoc_version(PROTOC)
+
     protos = collect_protos()
     if not protos:
         print("error: no proto files found", file=sys.stderr)
@@ -209,7 +236,7 @@ def main() -> int:
 
     with tempfile.TemporaryDirectory(prefix="robot-bus-py-msgs-") as tmp_name:
         tmp = Path(tmp_name)
-        print(f"{PROTOC} → {len(protos)} files …")
+        print(f"{PROTOC} ({protoc_version(PROTOC)}) → {len(protos)} files …")
         run_protoc(protos, tmp)
         copy_and_rewrite(tmp)
 

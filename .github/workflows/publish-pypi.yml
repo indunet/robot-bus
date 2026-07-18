@@ -39,10 +39,10 @@ jobs:
         platform:
           - runner: ubuntu-22.04
             target: x86_64
-            protoc_zip: protoc-28.3-linux-x86_64.zip
+            protoc_zip: protoc-35.1-linux-x86_64.zip
           - runner: ubuntu-24.04-arm
             target: aarch64
-            protoc_zip: protoc-28.3-linux-aarch_64.zip
+            protoc_zip: protoc-35.1-linux-aarch_64.zip
     steps:
       - uses: actions/checkout@v4
 
@@ -67,7 +67,7 @@ jobs:
               apt-get install -y cmake g++ make curl unzip
             fi
             curl -fsSL -o /tmp/protoc.zip \
-              "https://github.com/protocolbuffers/protobuf/releases/download/v28.3/${{ matrix.platform.protoc_zip }}"
+              "https://github.com/protocolbuffers/protobuf/releases/download/v35.1/${{ matrix.platform.protoc_zip }}"
             unzip -o /tmp/protoc.zip -d /usr/local
             protoc --version
 

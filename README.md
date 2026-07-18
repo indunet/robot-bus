@@ -256,6 +256,6 @@ PYTHONPATH=python python3 tests/python/test_typed_api.py
 - **srv** 是一对 `*Request` / `*Response` message，不是 gRPC
 - **grpc**（`robot_bus`）是网关 RPC 契约，随 broker 启动（默认 feature `grpc`）
 - 消息在 `robot_bus` 命名空间下，**不占用** ROS 顶层 `sensor_msgs` 包名；编码是 protobuf，与 ROS CDR 不互通
-- 改 proto 后跑：`python3 scripts/generate_python_msgs.py`（建议 protoc 28.x，与 CI 一致）
+- 改 proto 后跑：`python3 scripts/generate_python_msgs.py`（需 protoc 35.1，与 CI 一致）
 
 已覆盖：`builtin_interfaces`、`std_msgs`、`std_srvs`、`geometry_msgs`、`sensor_msgs`、`nav_msgs`、`tf2_msgs`、`trajectory_msgs`、`diagnostic_msgs`、`unique_identifier_msgs`、`shape_msgs`、`visualization_msgs`、`control_msgs`、`nav2_msgs`、`foxglove_msgs`（自 [Foxglove schemas](https://github.com/foxglove/foxglove-sdk) 迁入，包名为 `foxglove_msgs.msg.v1`）。

@@ -10,7 +10,7 @@ readme = "README.md"
 requires-python = ">=3.9"
 license = "Apache-2.0"
 authors = [{ name = "deng_ran", email = "deng_ran@aliyun.com" }]
-dependencies = ["protobuf>=5.28"]
+dependencies = ["protobuf>=7.35,<8"]
 classifiers = [
     "Programming Language :: Rust",
     "Programming Language :: Python :: Implementation :: CPython",
