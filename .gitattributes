@@ -1,8 +1,0 @@
-# Protobuf-generated bindings: keep them out of GitHub Linguist language stats
-# and collapse them by default in PR diffs.
-# See https://github.com/github-linguist/linguist/blob/main/docs/overrides.md
-
-bindings/typescript/generated/** linguist-generated
-
-bindings/python/robot_bus/**/*_pb2.py linguist-generated
-bindings/python/robot_bus/**/*_pb2.pyi linguist-generated
