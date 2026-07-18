@@ -97,9 +97,11 @@ target_link_libraries(my_app PRIVATE robot_bus::robot_bus robot_bus::msgs)
 ## Local development
 
 ```bash
-just gen-cpp          # regenerate bindings/cpp/generated (protoc 35.1)
+just gen-cpp          # write bindings/cpp/generated (gitignored; protoc 35.1)
+
 just cpp-dev          # cargo FFI + cmake msgs/tests
 just test-cpp         # msgs / timer / pub-sub / service / action
 ```
 
-Repo layout: generated sources live under `bindings/cpp/generated/robot_bus/`; install/public includes drop the `generated/` segment.
+Repo layout: generated sources (gitignored) live under `bindings/cpp/generated/robot_bus/` after `just gen-cpp`; install/public includes drop the `generated/` segment. Release packages ship the generated headers — consumers do not need `protoc`.
+

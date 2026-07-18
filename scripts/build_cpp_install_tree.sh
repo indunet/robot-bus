@@ -8,6 +8,10 @@ VERSION="${2:-0.0.6}"
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 CPP="$ROOT/bindings/cpp"
 
+# Protobuf stubs are gitignored; ensure they exist before cargo / cmake.
+python3 "$ROOT/scripts/generate_cpp_msgs.py"
+python3 "$ROOT/scripts/generate_rust_msgs.py"
+
 rm -rf "$DEST"
 mkdir -p "$DEST/usr/bin" "$DEST/usr/lib" "$DEST/usr/include" \
   "$DEST/usr/lib/pkgconfig" "$DEST/usr/lib/cmake/robot_bus"

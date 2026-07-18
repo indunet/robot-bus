@@ -50,6 +50,22 @@ jobs:
         with:
           python-version: "3.12"
 
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Install protobuf compiler (host codegen)
+        run: |
+          set -eux
+          curl -fsSL -o /tmp/protoc.zip \
+            "https://github.com/protocolbuffers/protobuf/releases/download/v35.1/${{ matrix.platform.protoc_zip }}"
+          sudo unzip -o /tmp/protoc.zip -d /usr/local
+          protoc --version
+
+      - name: Generate protobuf stubs (Python + Rust for maturin)
+        run: |
+          set -eux
+          python3 scripts/generate_python_msgs.py
+          python3 scripts/generate_rust_msgs.py
+
       - name: Build wheels
         uses: PyO3/maturin-action@v1
         with:
@@ -67,10 +83,7 @@ jobs:
               apt-get update
               apt-get install -y cmake g++ make curl unzip
             fi
-            curl -fsSL -o /tmp/protoc.zip \
-              "https://github.com/protocolbuffers/protobuf/releases/download/v35.1/${{ matrix.platform.protoc_zip }}"
-            unzip -o /tmp/protoc.zip -d /usr/local
-            protoc --version
+            # protoc not required at compile time (stubs pre-generated on host)
 
       - uses: actions/upload-artifact@v4
         with:
@@ -87,8 +100,16 @@ jobs:
         with:
           python-version: "3.12"
 
+      - uses: dtolnay/rust-toolchain@stable
+
       - name: Install build dependencies
         run: brew install cmake protobuf
+
+      - name: Generate protobuf stubs (Python + Rust for maturin)
+        run: |
+          set -eux
+          python3 scripts/generate_python_msgs.py
+          python3 scripts/generate_rust_msgs.py
 
       - name: Build wheels
         uses: PyO3/maturin-action@v1
@@ -112,8 +133,17 @@ jobs:
         with:
           python-version: "3.12"
 
+      - uses: dtolnay/rust-toolchain@stable
+
       - name: Install protobuf
         run: choco install protoc -y
+
+      - name: Generate protobuf stubs (Python + Rust for maturin)
+        shell: bash
+        run: |
+          set -eux
+          python3 scripts/generate_python_msgs.py
+          python3 scripts/generate_rust_msgs.py
 
       - name: Build wheels
         uses: PyO3/maturin-action@v1

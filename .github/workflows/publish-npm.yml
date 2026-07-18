@@ -87,6 +87,11 @@ jobs:
         working-directory: bindings/typescript
         run: npm ci
 
+      - name: Generate TypeScript + Rust protobuf stubs
+        run: |
+          python3 scripts/generate_typescript_msgs.py
+          python3 scripts/generate_rust_msgs.py
+
       - name: Build native addon
         working-directory: bindings/typescript
         run: npx napi build --platform --release --target ${{ matrix.target }} --manifest-path native/Cargo.toml --output-dir .
@@ -111,9 +116,20 @@ jobs:
           cache: npm
           cache-dependency-path: bindings/typescript/package-lock.json
 
+      - name: Install protobuf compiler (codegen)
+        run: |
+          set -eux
+          curl -fsSL -o /tmp/protoc.zip \
+            "https://github.com/protocolbuffers/protobuf/releases/download/v35.1/protoc-35.1-linux-x86_64.zip"
+          sudo unzip -o /tmp/protoc.zip -d /usr/local
+          protoc --version
+
       - name: Install npm deps
         working-directory: bindings/typescript
         run: npm ci
+
+      - name: Generate TypeScript protobuf stubs
+        run: python3 scripts/generate_typescript_msgs.py
 
       - name: Download native artifacts
         uses: actions/download-artifact@v4

@@ -303,16 +303,19 @@ just test-typescript
 
 [`proto/`](proto/) 按 ROS 包布局：`proto/<pkg>/{msg|srv|grpc}/v1/*.proto`。
 
+各语言 stub **不进 git**；本地改 proto 或跑测试前执行 `just gen-*`（需 protoc **35.1**）。CI / 发版流水线会生成并打进 wheel、crates.io crate、npm 包、DEB/MSI——**消费已发布包的用户不需要 protoc**。
+
 | 语言 | 路径 | 说明 |
 |------|------|------|
-| Rust | `robot_bus::<pkg>::{msg\|srv}::v1` | `build.rs` + prost；挂在 crate 命名空间下 |
-| Python | `robot_bus.<pkg>.{msg\|srv}.v1` | [`bindings/python`](bindings/python)；随 wheel 打包；`just gen-python` 生成 |
-| TypeScript | `robot-bus/<pkg>/{msg\|srv}/v1/…` | [`bindings/typescript`](bindings/typescript)；`just gen-typescript` 生成 |
+| Rust | `robot_bus::<pkg>::{msg\|srv}::v1` | `just gen-rust` → `src/msgs/generated/`（+ gRPC → `src/grpc/generated/`） |
+| Python | `robot_bus.<pkg>.{msg\|srv}.v1` | `just gen-python`；随 wheel 打包 |
+| TypeScript | `robot-bus/<pkg>/{msg\|srv}/v1/…` | `just gen-typescript`；随 npm 包打包 |
+| C++ | `#include <robot_bus/…>` | `just gen-cpp`；随 DEB/MSI 打包 |
 
 - 传输层 body 仍是 opaque bytes（含 gRPC 网关）；Rust Node SDK 在 create 时绑定类型并自动 encode/decode（`create_publisher::<M>` 等），也可用 `*_raw`；Python / TypeScript 传入 protobuf 类型即可 typed（薄封装），省略类型则为 raw bytes
 - **srv** 是一对 `*Request` / `*Response` message，不是 gRPC
 - **grpc**（`robot_bus`）是网关 RPC 契约，随 broker 启动（默认 feature `grpc`）
 - 消息在 `robot_bus` 命名空间下，**不占用** ROS 顶层 `sensor_msgs` 包名；编码是 protobuf，与 ROS CDR 不互通
-- 改 proto 后跑：`just gen-python` / `just gen-typescript`（需 protoc 35.1，与 CI 一致）
+- 一键：`just gen-all`
 
 已覆盖：`builtin_interfaces`、`std_msgs`、`std_srvs`、`geometry_msgs`、`sensor_msgs`、`nav_msgs`、`tf2_msgs`、`trajectory_msgs`、`diagnostic_msgs`、`unique_identifier_msgs`、`shape_msgs`、`visualization_msgs`、`control_msgs`、`nav2_msgs`、`foxglove_msgs`（自 [Foxglove schemas](https://github.com/foxglove/foxglove-sdk) 迁入，包名为 `foxglove_msgs.msg.v1`）。

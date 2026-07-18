@@ -68,10 +68,10 @@ jobs:
 
       - uses: dtolnay/rust-toolchain@stable
 
-      - name: Check generated C++ msgs are fresh
+      - name: Generate C++ + Rust protobuf stubs
         run: |
           python3 scripts/generate_cpp_msgs.py
-          git diff --exit-code -- bindings/cpp/generated
+          python3 scripts/generate_rust_msgs.py
 
       - name: Build install tree
         run: |
@@ -141,11 +141,18 @@ jobs:
           echo "C:/vcpkg/installed/x64-windows/bin" >> "$GITHUB_PATH"
           echo "C:/vcpkg/installed/x64-windows/lib" >> "$GITHUB_PATH"
 
-      - name: Build broker + FFI
+      - name: Generate C++ + Rust protobuf stubs
         shell: bash
         run: |
           set -eux
           export PROTOC="$(command -v protoc)"
+          python3 scripts/generate_cpp_msgs.py
+          python3 scripts/generate_rust_msgs.py
+
+      - name: Build broker + FFI
+        shell: bash
+        run: |
+          set -eux
           cargo build --release --bin robot_bus_broker
           cargo build --release --manifest-path bindings/cpp/native/Cargo.toml
 

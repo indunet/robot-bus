@@ -3,7 +3,9 @@
 
 Requires ``protoc`` on PATH (override with env ``PROTOC``) and
 ``@protobuf-ts/plugin`` installed under ``bindings/typescript``
-(``npm install`` there once).
+(``npm install`` there once). Outputs are gitignored; CI and npm publish
+run this before pack so the package embeds stubs. Consumers do not need
+protoc.
 
 Usage (from repo root)::
 

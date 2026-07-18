@@ -1,4 +1,4 @@
-//! Generate committed-on-disk (gitignored) prost / tonic stubs for robot-bus.
+//! Generate on-disk (gitignored) prost / tonic stubs for robot-bus.
 //!
 //! Run from repo root via `scripts/generate_rust_msgs.py` / `just gen-rust`.
 

@@ -15,10 +15,21 @@ jobs:
       - name: Install system dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y protobuf-compiler libzmq3-dev pkg-config
+          sudo apt-get install -y curl unzip libzmq3-dev pkg-config
+
+      - name: Install protobuf compiler (codegen)
+        run: |
+          set -eux
+          curl -fsSL -o /tmp/protoc.zip \
+            "https://github.com/protocolbuffers/protobuf/releases/download/v35.1/protoc-35.1-linux-x86_64.zip"
+          sudo unzip -o /tmp/protoc.zip -d /usr/local
+          protoc --version
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
+
+      - name: Generate Rust protobuf stubs
+        run: python3 scripts/generate_rust_msgs.py
 
       - name: Check tag matches Cargo.toml version
         if: github.event_name == 'push'

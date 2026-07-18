@@ -7,6 +7,17 @@ license = "Apache-2.0"
 authors = ["deng_ran <deng_ran@aliyun.com>"]
 repository = "https://github.com/indunet/robot-bus"
 readme = "README.md"
+# Force-include gitignored pre-generated prost/tonic stubs when present at
+# `cargo package` / publish time (run `just gen-rust` first).
+include = [
+    "/Cargo.toml",
+    "/LICENSE",
+    "/README.md",
+    "/build.rs",
+    "/src/**",
+    "/proto/**",
+    "/assets/**",
+]
 
 [lib]
 name = "robot_bus"
@@ -17,6 +28,7 @@ default = ["grpc", "console"]
 # Enable with maturin / `cargo build --features extension-module` for the Python module.
 extension-module = ["dep:pyo3", "pyo3/extension-module"]
 # gRPC / gRPC-Web gateway (started with RobotBusBroker; on by default).
+# Stubs are pre-generated (`just gen-rust`); no protoc at compile time.
 grpc = [
     "dep:tokio",
     "dep:tonic",
@@ -25,7 +37,6 @@ grpc = [
     "dep:tower-http",
     "dep:tokio-stream",
     "dep:http",
-    "dep:tonic-prost-build",
 ]
 # Embedded Web console HTTP server (default :15771).
 console = [
@@ -59,11 +70,6 @@ tonic-web = { version = "0.14", optional = true }
 tower-http = { version = "0.6", optional = true, features = ["cors"] }
 uuid = { version = "1", features = ["v4"] }
 zmq = "0.10"
-
-[build-dependencies]
-# Keep markdown cleanup on even without tonic-prost-build (no-default-features).
-prost-build = { version = "0.14", features = ["cleanup-markdown"] }
-tonic-prost-build = { version = "0.14", optional = true }
 
 [dev-dependencies]
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "sync", "time"] }

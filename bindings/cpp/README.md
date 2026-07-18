@@ -1,8 +1,9 @@
 # C++ binding
 
-C ABI (`native/`) + C++ RAII headers (`include/`) + pre-generated protobuf
-msgs (`generated/robot_bus/`). Distributed as GitHub Release **DEB / MSI**
-assets (see [docs/cpp-api.md](../../docs/cpp-api.md)).
+C ABI (`native/`) + C++ RAII headers (`include/`) + protobuf msgs under
+`generated/robot_bus/` (gitignored; run `just gen-cpp` before build).
+Distributed as GitHub Release **DEB / MSI** assets (see
+[docs/cpp-api.md](../../docs/cpp-api.md)).
 
 **C++ standard: C++17** (same minimum as ROS 2 Humble).
 
@@ -13,7 +14,7 @@ assets (see [docs/cpp-api.md](../../docs/cpp-api.md)).
 | `native/` | Rust cdylib `robot_bus_c` (installed as `librobot_bus`) |
 | `include/robot_bus.h` | C API |
 | `include/robot_bus/` | C++ wrappers (`Node.hpp`, …) |
-| `generated/robot_bus/` | `protoc --cpp_out` stubs (committed); built-in action at `robot_bus_interface/action/` |
+| `generated/robot_bus/` | `protoc --cpp_out` stubs (gitignored; `just gen-cpp`); built-in action at `robot_bus_interface/action/` |
 | `tests/` | C++ tests (pub-sub, service, action, timer, msgs) |
 | `packaging/` | DEB/MSI packaging (WiX `.wxs`, etc.; used only for C++ Releases) |
 | `CMakeLists.txt` | Build/install msgs + link FFI |

@@ -103,7 +103,7 @@ import { GrpcNode } from "robot-bus"; // Node 入口也导出 GrpcNode
 
 ## Protobuf 消息
 
-磁盘上生成代码在 `bindings/typescript/generated/`（`just gen-typescript`，protoc **35.1**）；对外导入路径与 Python / Rust 对齐（无 `generated` 段）：
+磁盘上生成代码在 `bindings/typescript/generated/`（`just gen-typescript`，protoc **35.1**；**gitignored**，随 npm 包发布）；对外导入路径与 Python / Rust 对齐（无 `generated` 段）：
 
 ```ts
 import { String$ } from "robot-bus/std_msgs/msg/v1/primitives.js";

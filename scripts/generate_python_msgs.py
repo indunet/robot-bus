@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """Generate Python protobuf modules under bindings/python/robot_bus/<pkg>/{msg|srv}/v1/.
 
-Requires ``protoc`` on PATH (override with env ``PROTOC``). Regenerates
-committed sources under ``bindings/python/robot_bus/``; run after changing ``proto/``.
+Requires ``protoc`` on PATH (override with env ``PROTOC``). Outputs are
+gitignored; CI and package workflows run this before test/publish so wheels
+embed the stubs. End users who ``pip install`` do not need protoc.
 
 The generated ``*_pb2.py`` files are rewritten so imports use the
 ``robot_bus.<pkg>…`` namespace (no top-level ``sensor_msgs`` install).

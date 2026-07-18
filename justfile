@@ -3,30 +3,37 @@
 
 set shell := ["bash", "-eu", "-o", "pipefail", "-c"]
 
-# Generate Python protobuf modules from proto/
+# Generate Python protobuf modules from proto/ (gitignored; needed before test/pack)
 proto:
 	python3 scripts/generate_python_msgs.py
 
 alias gen-python := proto
 
-# Generate TypeScript protobuf + gRPC stubs
+# Generate TypeScript protobuf + gRPC stubs (gitignored)
 gen-typescript:
 	python3 scripts/generate_typescript_msgs.py
 
-# Generate C++ protobuf stubs under bindings/cpp/generated/robot_bus/
+# Generate C++ protobuf stubs under bindings/cpp/generated/ (gitignored)
 gen-cpp:
 	python3 scripts/generate_cpp_msgs.py
 
+# Generate Rust prost/tonic stubs under src/msgs/generated + src/grpc/generated (gitignored)
+gen-rust:
+	python3 scripts/generate_rust_msgs.py
+
+# All language stubs (protoc 35.1)
+gen-all: gen-rust proto gen-typescript gen-cpp
+
 # Build and install the Python binding into the active venv
-python-dev:
+python-dev: gen-python gen-rust
 	cd bindings/python && maturin develop --features extension-module,grpc
 
 # Build TypeScript native addon + JS bundle
-ts-dev:
+ts-dev: gen-typescript gen-rust
 	cd bindings/typescript && npm install && npm run build:native && npm run build:ts
 
 # Build C++ FFI + msgs library + tests
-cpp-dev:
+cpp-dev: gen-cpp gen-rust
 	cargo build --release --manifest-path bindings/cpp/native/Cargo.toml
 	cmake -S bindings/cpp -B bindings/cpp/build -DCMAKE_BUILD_TYPE=Release
 	cmake --build bindings/cpp/build -j
@@ -46,27 +53,24 @@ console:
 	./scripts/sync_console_assets.sh
 
 # Rust tests (default features)
-test-rust:
+test-rust: gen-rust
 	cargo test
 
 # Rust tests without default features
-test-rust-minimal:
+test-rust-minimal: gen-rust
 	cargo test --no-default-features
 
 # Pure-Python message / typed-API smoke tests (no native extension required)
-test-python:
+test-python: gen-python
 	PYTHONPATH=bindings/python python3 bindings/python/tests/test_msgs_roundtrip.py
 	PYTHONPATH=bindings/python python3 bindings/python/tests/test_typed_api.py
 
 # TypeScript smoke tests (msgs + GrpcNode guards; no broker required)
-test-typescript:
+test-typescript: gen-typescript
 	cd bindings/typescript && npm test
 
-# Local checks aligned with CI (codegen freshness + rust + python/ts smoke)
-ci: proto gen-typescript gen-cpp
-	git diff --exit-code -- bindings/python/robot_bus
-	git diff --exit-code -- bindings/typescript/generated
-	git diff --exit-code -- bindings/cpp/generated
+# Local checks aligned with CI (codegen then rust + python/ts smoke)
+ci: gen-all
 	just test-rust
 	just test-rust-minimal
 	just test-python

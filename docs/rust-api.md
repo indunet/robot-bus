@@ -8,6 +8,8 @@ robot-bus = "0.0.6"
 # 默认已启用 gRPC；若需关闭：robot-bus = { version = "0.0.6", default-features = false }
 ```
 
+从 crates.io 安装的用户**不需要** `protoc`。从本仓库源码开发时，先跑 `just gen-rust`（生成 `src/msgs/generated/` 与 `src/grpc/generated/`，gitignored）；CI / `cargo publish` 会在打包前生成并打进 crate。
+
 ## Broker 启动
 
 SDK 默认连本机 broker（`localhost` + `tcp`）。运行示例前需先启动 `robot_bus_broker`；也可在应用内嵌 broker（见下文「进程内 broker」）。

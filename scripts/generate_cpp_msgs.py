@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """Generate C++ protobuf sources under bindings/cpp/generated/robot_bus/.
 
-Requires ``protoc`` on PATH (override with env ``PROTOC``). Regenerates
-committed sources; run after changing ``proto/``.
+Requires ``protoc`` on PATH (override with env ``PROTOC``). Outputs are
+gitignored; CI and package workflows run this before build/publish so DEB/MSI
+embed the stubs. End users who install the SDK do not need protoc.
 
 Generated files live under ``generated/robot_bus/<pkg>/…`` so user includes are:
 
