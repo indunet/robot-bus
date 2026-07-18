@@ -8,7 +8,7 @@ class SetBoolRequest(_message.Message):
     __slots__ = ("data",)
     DATA_FIELD_NUMBER: _ClassVar[int]
     data: bool
-    def __init__(self, data: bool = ...) -> None: ...
+    def __init__(self, data: _Optional[bool] = ...) -> None: ...
 
 class SetBoolResponse(_message.Message):
     __slots__ = ("success", "message")
@@ -16,4 +16,4 @@ class SetBoolResponse(_message.Message):
     MESSAGE_FIELD_NUMBER: _ClassVar[int]
     success: bool
     message: str
-    def __init__(self, success: bool = ..., message: _Optional[str] = ...) -> None: ...
+    def __init__(self, success: _Optional[bool] = ..., message: _Optional[str] = ...) -> None: ...

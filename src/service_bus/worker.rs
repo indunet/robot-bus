@@ -10,7 +10,7 @@ use crate::errors::{BusError, Result};
 use crate::transports;
 use crate::zmq_helpers::{apply_rpc_options_with, poll_readable, HighWaterMark};
 
-pub type ServiceHandler = Arc<dyn Fn(&[u8], &[u8], &[u8]) -> Vec<u8> + Send + Sync>;
+pub type ServiceHandler = Arc<dyn Fn(&[u8]) -> Vec<u8> + Send + Sync>;
 
 pub struct ServiceWorker {
     pub service_name: String,
@@ -147,7 +147,7 @@ impl ServiceWorker {
             return Ok(true);
         }
 
-        let reply_body = (self.handler)(client_id, req_id, body);
+        let reply_body = (self.handler)(body);
 
         if let Some(socket) = &self.socket {
             let _ = socket.send_multipart(

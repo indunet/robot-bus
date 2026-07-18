@@ -5,7 +5,8 @@ from google.protobuf.internal import containers as _containers
 from google.protobuf.internal import enum_type_wrapper as _enum_type_wrapper
 from google.protobuf import descriptor as _descriptor
 from google.protobuf import message as _message
-from typing import ClassVar as _ClassVar, Iterable as _Iterable, Mapping as _Mapping, Optional as _Optional, Union as _Union
+from collections.abc import Iterable as _Iterable, Mapping as _Mapping
+from typing import ClassVar as _ClassVar, Optional as _Optional, Union as _Union
 
 DESCRIPTOR: _descriptor.FileDescriptor
 
@@ -35,4 +36,4 @@ class LinePrimitive(_message.Message):
     color: _color_pb2.Color
     colors: _containers.RepeatedCompositeFieldContainer[_color_pb2.Color]
     indices: _containers.RepeatedScalarFieldContainer[int]
-    def __init__(self, type: _Optional[_Union[LinePrimitive.Type, str]] = ..., pose: _Optional[_Union[_pose_pb2.Pose, _Mapping]] = ..., thickness: _Optional[float] = ..., scale_invariant: bool = ..., points: _Optional[_Iterable[_Union[_point3_pb2.Point3, _Mapping]]] = ..., color: _Optional[_Union[_color_pb2.Color, _Mapping]] = ..., colors: _Optional[_Iterable[_Union[_color_pb2.Color, _Mapping]]] = ..., indices: _Optional[_Iterable[int]] = ...) -> None: ...
+    def __init__(self, type: _Optional[_Union[LinePrimitive.Type, str]] = ..., pose: _Optional[_Union[_pose_pb2.Pose, _Mapping]] = ..., thickness: _Optional[float] = ..., scale_invariant: _Optional[bool] = ..., points: _Optional[_Iterable[_Union[_point3_pb2.Point3, _Mapping]]] = ..., color: _Optional[_Union[_color_pb2.Color, _Mapping]] = ..., colors: _Optional[_Iterable[_Union[_color_pb2.Color, _Mapping]]] = ..., indices: _Optional[_Iterable[int]] = ...) -> None: ...

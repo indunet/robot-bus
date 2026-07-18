@@ -8,12 +8,13 @@
 //!
 //! Topic / service / action names are used as given (pass full paths yourself).
 
+use std::marker::PhantomData;
 use std::sync::{Arc, MutexGuard};
 use std::time::Duration;
 
 use prost::Message;
 
-use crate::action_bus::{ActionClient as BusActionClient, ActionMessage};
+use crate::action_bus::{ActionClient as BusActionClient, ActionKind, ActionMessage};
 use crate::errors::{BusError, Result};
 use crate::message_bus::Publisher as BusPublisher;
 use crate::runtime::callback_group::{CallbackGroup, CallbackGroupType};
@@ -27,6 +28,7 @@ use crate::transports::{
     action_backend_endpoint, action_frontend_endpoint, message_xpub_endpoint,
     message_xsub_endpoint, service_backend_endpoint, service_frontend_endpoint,
 };
+use crate::typed::{Action, ActionOutcome, Service};
 use crate::zmq_helpers::HighWaterMark;
 
 /// Broker connection settings owned by a [`Node`].
@@ -137,13 +139,25 @@ impl TopicPublisher {
     }
 }
 
-/// Service-bound client returned by [`Node::create_client`] (ROS 2 style).
-pub struct NodeServiceClient {
+/// Service server handle returned by [`Node::create_service`] / [`Node::create_service_raw`].
+#[derive(Clone, Debug)]
+pub struct NodeService {
+    service_name: String,
+}
+
+impl NodeService {
+    pub fn service_name(&self) -> &str {
+        &self.service_name
+    }
+}
+
+/// Raw (opaque bytes) service client from [`Node::create_client_raw`].
+pub struct NodeServiceClientRaw {
     inner: BusServiceClient,
     service_name: String,
 }
 
-impl NodeServiceClient {
+impl NodeServiceClientRaw {
     pub fn service_name(&self) -> &str {
         &self.service_name
     }
@@ -172,13 +186,60 @@ impl NodeServiceClient {
     }
 }
 
-/// Action-bound client returned by [`Node::create_action_client`] (ROS 2 style).
-pub struct NodeActionClient {
+/// Typed service client returned by [`Node::create_client`] (ROS 2 / rclrs style).
+pub struct NodeServiceClient<S: Service> {
+    inner: NodeServiceClientRaw,
+    _marker: PhantomData<S>,
+}
+
+impl<S: Service> NodeServiceClient<S> {
+    pub fn service_name(&self) -> &str {
+        self.inner.service_name()
+    }
+
+    pub fn call(
+        &self,
+        request: &S::Request,
+        timeout: Option<Duration>,
+    ) -> Result<S::Response> {
+        let reply = self.inner.call(&request.encode_to_vec(), timeout)?;
+        S::Response::decode(reply.as_slice()).map_err(|err| {
+            BusError::Protocol(format!(
+                "service '{}' response decode failed: {err}",
+                self.service_name()
+            ))
+        })
+    }
+
+    pub fn high_water_mark(&self) -> Result<HighWaterMark> {
+        self.inner.high_water_mark()
+    }
+
+    pub fn set_high_water_mark(&self, hwm: HighWaterMark) -> Result<()> {
+        self.inner.set_high_water_mark(hwm)
+    }
+}
+
+/// Action server handle returned by [`Node::create_action_server`] /
+/// [`Node::create_action_server_raw`].
+#[derive(Clone, Debug)]
+pub struct NodeActionServer {
+    action_name: String,
+}
+
+impl NodeActionServer {
+    pub fn action_name(&self) -> &str {
+        &self.action_name
+    }
+}
+
+/// Raw (opaque bytes) action client from [`Node::create_action_client_raw`].
+pub struct NodeActionClientRaw {
     inner: BusActionClient,
     action_name: String,
 }
 
-impl NodeActionClient {
+impl NodeActionClientRaw {
     pub fn action_name(&self) -> &str {
         &self.action_name
     }
@@ -201,6 +262,78 @@ impl NodeActionClient {
     ) -> Result<ActionMessage> {
         self.inner
             .cancel(&self.action_name, goal_id, body, timeout)
+    }
+
+    pub fn high_water_mark(&self) -> Result<HighWaterMark> {
+        self.inner.high_water_mark()
+    }
+
+    pub fn set_high_water_mark(&self, hwm: HighWaterMark) -> Result<()> {
+        self.inner.set_high_water_mark(hwm)
+    }
+}
+
+/// Typed action client returned by [`Node::create_action_client`] (ROS 2 style).
+pub struct NodeActionClient<A: Action> {
+    inner: NodeActionClientRaw,
+    _marker: PhantomData<A>,
+}
+
+impl<A: Action> NodeActionClient<A> {
+    pub fn action_name(&self) -> &str {
+        self.inner.action_name()
+    }
+
+    pub fn send_goal(
+        &self,
+        goal: &A::Goal,
+        goal_id: Option<&str>,
+        timeout: Option<Duration>,
+    ) -> Result<ActionOutcome<A>> {
+        let messages = self
+            .inner
+            .send_goal(&goal.encode_to_vec(), goal_id, timeout)?;
+        let mut feedbacks = Vec::new();
+        let mut result = None;
+        for msg in messages {
+            match msg.kind {
+                ActionKind::Feedback => {
+                    let fb = A::Feedback::decode(msg.body.as_slice()).map_err(|err| {
+                        BusError::Protocol(format!(
+                            "action '{}' feedback decode failed: {err}",
+                            self.action_name()
+                        ))
+                    })?;
+                    feedbacks.push(fb);
+                }
+                ActionKind::Result => {
+                    let res = A::Result::decode(msg.body.as_slice()).map_err(|err| {
+                        BusError::Protocol(format!(
+                            "action '{}' result decode failed: {err}",
+                            self.action_name()
+                        ))
+                    })?;
+                    result = Some(res);
+                }
+                ActionKind::Goal | ActionKind::Cancel => {}
+            }
+        }
+        let result = result.ok_or_else(|| {
+            BusError::Protocol(format!(
+                "action '{}' completed without RESULT",
+                self.action_name()
+            ))
+        })?;
+        Ok(ActionOutcome { feedbacks, result })
+    }
+
+    pub fn cancel(
+        &self,
+        goal_id: &str,
+        body: &[u8],
+        timeout: Option<Duration>,
+    ) -> Result<ActionMessage> {
+        self.inner.cancel(goal_id, body, timeout)
     }
 
     pub fn high_water_mark(&self) -> Result<HighWaterMark> {
@@ -440,14 +573,36 @@ impl Node {
         self.lock_executor()?.cancel_timer(handle)
     }
 
-    /// Register a service worker (ROS 2 `create_service`).
-    pub fn create_service(
+    /// Register a typed service server (ROS 2 / rclrs `create_service`).
+    ///
+    /// Decode failures log a warning and return an empty response body.
+    pub fn create_service<S, F>(
+        &mut self,
+        service_name: &str,
+        handler: F,
+        callback_group: Option<&CallbackGroup>,
+    ) -> Result<NodeService>
+    where
+        S: Service,
+        F: Fn(S::Request) -> S::Response + Send + Sync + 'static,
+    {
+        let cb: ServiceHandler = Arc::new(move |body| match S::Request::decode(body) {
+            Ok(req) => handler(req).encode_to_vec(),
+            Err(err) => {
+                log::warn!("typed service decode failed: {err}");
+                Vec::new()
+            }
+        });
+        self.create_service_raw(service_name, cb, callback_group)
+    }
+
+    /// Register a raw-bytes service server.
+    pub fn create_service_raw(
         &mut self,
         service_name: &str,
         handler: ServiceHandler,
-        identity: Option<&str>,
         callback_group: Option<&CallbackGroup>,
-    ) -> Result<()> {
+    ) -> Result<NodeService> {
         let endpoint = self.options.service_backend_endpoint()?;
         let group = callback_group
             .cloned()
@@ -457,28 +612,40 @@ impl Node {
             handler,
             group,
             Some(&endpoint),
-            identity,
-        )
+            None,
+        )?;
+        Ok(NodeService {
+            service_name: service_name.to_string(),
+        })
     }
 
-    /// Create a service client (ROS 2 `create_client`).
-    ///
-    /// Returns a handle bound to `service_name`; call [`NodeServiceClient::call`] to invoke.
-    pub fn create_client(
+    /// Create a typed service client (ROS 2 / rclrs `create_client`).
+    pub fn create_client<S: Service>(
         &mut self,
         service_name: impl Into<String>,
-    ) -> Result<NodeServiceClient> {
-        self.create_client_with_hwm(service_name, self.client_rpc_hwm())
+    ) -> Result<NodeServiceClient<S>> {
+        Ok(NodeServiceClient {
+            inner: self.create_client_raw(service_name)?,
+            _marker: PhantomData,
+        })
     }
 
-    /// Like [`create_client`](Self::create_client), with an explicit HWM.
-    pub fn create_client_with_hwm(
+    /// Create a raw-bytes service client bound to `service_name`.
+    pub fn create_client_raw(
+        &mut self,
+        service_name: impl Into<String>,
+    ) -> Result<NodeServiceClientRaw> {
+        self.create_client_raw_with_hwm(service_name, self.client_rpc_hwm())
+    }
+
+    /// Like [`create_client_raw`](Self::create_client_raw), with an explicit HWM.
+    pub fn create_client_raw_with_hwm(
         &mut self,
         service_name: impl Into<String>,
         hwm: HighWaterMark,
-    ) -> Result<NodeServiceClient> {
+    ) -> Result<NodeServiceClientRaw> {
         let endpoint = self.options.service_frontend_endpoint()?;
-        Ok(NodeServiceClient {
+        Ok(NodeServiceClientRaw {
             inner: BusServiceClient::with_hwm(Some(&endpoint), hwm)?,
             service_name: service_name.into(),
         })
@@ -491,14 +658,42 @@ impl Node {
         }
     }
 
-    /// Register an action worker (ROS 2 `create_action_server` / action worker).
-    pub fn create_action(
+    /// Register a typed action server (ROS 2–style `create_action_server`).
+    pub fn create_action_server<A, F>(
+        &mut self,
+        action_name: &str,
+        handler: F,
+        callback_group: Option<&CallbackGroup>,
+    ) -> Result<NodeActionServer>
+    where
+        A: Action,
+        F: Fn(A::Goal) -> ActionOutcome<A> + Send + Sync + 'static,
+    {
+        let cb: ActionGoalHandler = Arc::new(move |body| match A::Goal::decode(body) {
+            Ok(goal) => {
+                let outcome = handler(goal);
+                let mut replies = Vec::with_capacity(outcome.feedbacks.len() + 1);
+                for fb in outcome.feedbacks {
+                    replies.push(("FEEDBACK".into(), fb.encode_to_vec()));
+                }
+                replies.push(("RESULT".into(), outcome.result.encode_to_vec()));
+                replies
+            }
+            Err(err) => {
+                log::warn!("typed action goal decode failed: {err}");
+                vec![("RESULT".into(), Vec::new())]
+            }
+        });
+        self.create_action_server_raw(action_name, cb, callback_group)
+    }
+
+    /// Register a raw-bytes action server.
+    pub fn create_action_server_raw(
         &mut self,
         action_name: &str,
         handler: ActionGoalHandler,
-        identity: Option<&str>,
         callback_group: Option<&CallbackGroup>,
-    ) -> Result<()> {
+    ) -> Result<NodeActionServer> {
         let endpoint = self.options.action_backend_endpoint()?;
         let group = callback_group
             .cloned()
@@ -508,28 +703,40 @@ impl Node {
             handler,
             group,
             Some(&endpoint),
-            identity,
-        )
+            None,
+        )?;
+        Ok(NodeActionServer {
+            action_name: action_name.to_string(),
+        })
     }
 
-    /// Create an action client (ROS 2 `create_action_client`).
-    ///
-    /// Returns a handle bound to `action_name`; call [`NodeActionClient::send_goal`].
-    pub fn create_action_client(
+    /// Create a typed action client (ROS 2–style `create_action_client`).
+    pub fn create_action_client<A: Action>(
         &mut self,
         action_name: impl Into<String>,
-    ) -> Result<NodeActionClient> {
-        self.create_action_client_with_hwm(action_name, self.client_action_hwm())
+    ) -> Result<NodeActionClient<A>> {
+        Ok(NodeActionClient {
+            inner: self.create_action_client_raw(action_name)?,
+            _marker: PhantomData,
+        })
     }
 
-    /// Like [`create_action_client`](Self::create_action_client), with an explicit HWM.
-    pub fn create_action_client_with_hwm(
+    /// Create a raw-bytes action client bound to `action_name`.
+    pub fn create_action_client_raw(
+        &mut self,
+        action_name: impl Into<String>,
+    ) -> Result<NodeActionClientRaw> {
+        self.create_action_client_raw_with_hwm(action_name, self.client_action_hwm())
+    }
+
+    /// Like [`create_action_client_raw`](Self::create_action_client_raw), with an explicit HWM.
+    pub fn create_action_client_raw_with_hwm(
         &mut self,
         action_name: impl Into<String>,
         hwm: HighWaterMark,
-    ) -> Result<NodeActionClient> {
+    ) -> Result<NodeActionClientRaw> {
         let endpoint = self.options.action_frontend_endpoint()?;
-        Ok(NodeActionClient {
+        Ok(NodeActionClientRaw {
             inner: BusActionClient::with_hwm(Some(&endpoint), hwm)?,
             action_name: action_name.into(),
         })

@@ -14,7 +14,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut protos = Vec::new();
     collect_protos(&proto_root, &mut protos)?;
     // gRPC API protos (proto/robot_bus/grpc/) use tonic stubs, not plain prost.
-    protos.retain(|p| !path_is_under(p, "proto/robot_bus"));
+    // Other robot_bus packages (e.g. action/) still go through prost.
+    protos.retain(|p| !path_is_under(p, "proto/robot_bus/grpc"));
     protos.sort();
 
     for proto in &protos {

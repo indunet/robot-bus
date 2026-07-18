@@ -11,7 +11,7 @@ use crate::transports;
 use crate::zmq_helpers::{apply_action_options_with, poll_readable, HighWaterMark};
 
 pub type ActionGoalHandler =
-    Arc<dyn Fn(&[u8], &[u8], &[u8]) -> Vec<(String, Vec<u8>)> + Send + Sync>;
+    Arc<dyn Fn(&[u8]) -> Vec<(String, Vec<u8>)> + Send + Sync>;
 
 pub struct ActionWorker {
     pub action_name: String,
@@ -177,7 +177,7 @@ impl ActionWorker {
             } else {
                 kind.as_slice()
             };
-            let replies = (self.handler)(client_id, goal_id, payload);
+            let replies = (self.handler)(payload);
             for (phase, chunk) in replies {
                 let _ = self.reply(client_id, goal_id, phase.as_bytes(), &chunk);
             }

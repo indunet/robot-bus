@@ -156,7 +156,7 @@ executor.spin()?;
 - `SingleThreadedExecutor`：回调在 I/O / spin 线程串行（默认）
 - `MultiThreadedExecutor::new(n)`：最多 `n` 个 worker；`Reentrant` group 可并行，`MutuallyExclusive` 组内串行
 - Callback group：`MutuallyExclusive` / `Reentrant`（`create_callback_group`；默认互斥组）
-- Service / action：`create_service` / `create_client`、`create_action` / `create_action_client`（与 topic 一样挂在 Node）
+- Service / action：typed `create_service` / `create_client`、`create_action_server` / `create_action_client`（与 topic 一样挂在 Node；另有 `*_raw`）
 - Timer：`create_timer`（同样挂在 Node，由 `spin` 驱动）
 - Raw bytes：`create_subscription(topic, Arc::new(|topic, payload| { ... }), None)`
 - 底层 escape hatch：`Executor`（高级用法）

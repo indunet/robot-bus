@@ -8,7 +8,7 @@ class Bool(_message.Message):
     __slots__ = ("data",)
     DATA_FIELD_NUMBER: _ClassVar[int]
     data: bool
-    def __init__(self, data: bool = ...) -> None: ...
+    def __init__(self, data: _Optional[bool] = ...) -> None: ...
 
 class Int8(_message.Message):
     __slots__ = ("data",)

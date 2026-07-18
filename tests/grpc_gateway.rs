@@ -63,8 +63,8 @@ async fn service_call_echoes_payload() {
     let (_guard, broker) = start_bus();
     let listen = broker.grpc_listen();
 
-    let handler: Arc<dyn Fn(&[u8], &[u8], &[u8]) -> Vec<u8> + Send + Sync> =
-        Arc::new(|_client_id, _req_id, body| [b"echo:", body].concat());
+    let handler: Arc<dyn Fn(&[u8]) -> Vec<u8> + Send + Sync> =
+        Arc::new(|body| [b"echo:", body].concat());
     let worker =
         WorkerThread::spawn_service("svc.grpc_echo", handler, &broker.service.backend_bind)
             .expect("worker");
@@ -94,8 +94,8 @@ async fn action_run_streams_feedback_then_result() {
     let (_guard, broker) = start_bus();
     let listen = broker.grpc_listen();
 
-    let handler: Arc<dyn Fn(&[u8], &[u8], &[u8]) -> Vec<(String, Vec<u8>)> + Send + Sync> =
-        Arc::new(|_client_id, _goal_id, body| {
+    let handler: Arc<dyn Fn(&[u8]) -> Vec<(String, Vec<u8>)> + Send + Sync> =
+        Arc::new(|body| {
             vec![
                 ("FEEDBACK".into(), b"step-1".to_vec()),
                 ("FEEDBACK".into(), b"step-2".to_vec()),

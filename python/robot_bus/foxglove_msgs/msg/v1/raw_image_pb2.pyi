@@ -1,7 +1,10 @@
+import datetime
+
 from google.protobuf import timestamp_pb2 as _timestamp_pb2
 from google.protobuf import descriptor as _descriptor
 from google.protobuf import message as _message
-from typing import ClassVar as _ClassVar, Mapping as _Mapping, Optional as _Optional, Union as _Union
+from collections.abc import Mapping as _Mapping
+from typing import ClassVar as _ClassVar, Optional as _Optional, Union as _Union
 
 DESCRIPTOR: _descriptor.FileDescriptor
 
@@ -21,4 +24,4 @@ class RawImage(_message.Message):
     encoding: str
     step: int
     data: bytes
-    def __init__(self, timestamp: _Optional[_Union[_timestamp_pb2.Timestamp, _Mapping]] = ..., frame_id: _Optional[str] = ..., width: _Optional[int] = ..., height: _Optional[int] = ..., encoding: _Optional[str] = ..., step: _Optional[int] = ..., data: _Optional[bytes] = ...) -> None: ...
+    def __init__(self, timestamp: _Optional[_Union[datetime.datetime, _timestamp_pb2.Timestamp, _Mapping]] = ..., frame_id: _Optional[str] = ..., width: _Optional[int] = ..., height: _Optional[int] = ..., encoding: _Optional[str] = ..., step: _Optional[int] = ..., data: _Optional[bytes] = ...) -> None: ...

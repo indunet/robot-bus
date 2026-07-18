@@ -2,7 +2,8 @@ from robot_bus.foxglove_msgs.msg.v1 import color_pb2 as _color_pb2
 from robot_bus.foxglove_msgs.msg.v1 import pose_pb2 as _pose_pb2
 from google.protobuf import descriptor as _descriptor
 from google.protobuf import message as _message
-from typing import ClassVar as _ClassVar, Mapping as _Mapping, Optional as _Optional, Union as _Union
+from collections.abc import Mapping as _Mapping
+from typing import ClassVar as _ClassVar, Optional as _Optional, Union as _Union
 
 DESCRIPTOR: _descriptor.FileDescriptor
 

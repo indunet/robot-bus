@@ -112,8 +112,8 @@ fn message_bus_odometry_pubsub() {
 fn service_bus_string_echo_proto() {
     let (_guard, broker) = start_bus();
 
-    let handler: Arc<dyn Fn(&[u8], &[u8], &[u8]) -> Vec<u8> + Send + Sync> =
-        Arc::new(|_client_id, _req_id, body| {
+    let handler: Arc<dyn Fn(&[u8]) -> Vec<u8> + Send + Sync> =
+        Arc::new(|body| {
             let req = ProtoString::decode(body).expect("decode request");
             ProtoString {
                 data: format!("echo:{}", req.data),
@@ -147,8 +147,8 @@ fn service_bus_string_echo_proto() {
 fn service_bus_int32_add_proto() {
     let (_guard, broker) = start_bus();
 
-    let handler: Arc<dyn Fn(&[u8], &[u8], &[u8]) -> Vec<u8> + Send + Sync> =
-        Arc::new(|_client_id, _req_id, body| {
+    let handler: Arc<dyn Fn(&[u8]) -> Vec<u8> + Send + Sync> =
+        Arc::new(|body| {
             let req = Int32::decode(body).expect("decode Int32");
             Int32 {
                 data: req.data.saturating_add(1),
@@ -179,8 +179,8 @@ fn service_bus_int32_add_proto() {
 fn service_bus_std_srvs_trigger() {
     let (_guard, broker) = start_bus();
 
-    let handler: Arc<dyn Fn(&[u8], &[u8], &[u8]) -> Vec<u8> + Send + Sync> =
-        Arc::new(|_client_id, _req_id, body| {
+    let handler: Arc<dyn Fn(&[u8]) -> Vec<u8> + Send + Sync> =
+        Arc::new(|body| {
             let _req = TriggerRequest::decode(body).expect("decode TriggerRequest");
             TriggerResponse {
                 success: true,
@@ -213,8 +213,8 @@ fn service_bus_std_srvs_trigger() {
 fn service_bus_std_srvs_set_bool() {
     let (_guard, broker) = start_bus();
 
-    let handler: Arc<dyn Fn(&[u8], &[u8], &[u8]) -> Vec<u8> + Send + Sync> =
-        Arc::new(|_client_id, _req_id, body| {
+    let handler: Arc<dyn Fn(&[u8]) -> Vec<u8> + Send + Sync> =
+        Arc::new(|body| {
             let req = SetBoolRequest::decode(body).expect("decode SetBoolRequest");
             SetBoolResponse {
                 success: true,
@@ -247,8 +247,8 @@ fn service_bus_std_srvs_set_bool() {
 fn service_bus_nav_msgs_get_map() {
     let (_guard, broker) = start_bus();
 
-    let handler: Arc<dyn Fn(&[u8], &[u8], &[u8]) -> Vec<u8> + Send + Sync> =
-        Arc::new(|_client_id, _req_id, body| {
+    let handler: Arc<dyn Fn(&[u8]) -> Vec<u8> + Send + Sync> =
+        Arc::new(|body| {
             let _req = GetMapRequest::decode(body).expect("decode GetMapRequest");
             GetMapResponse {
                 map: Some(OccupancyGrid {
@@ -295,15 +295,15 @@ fn service_bus_nav_msgs_get_map() {
 fn service_bus_nav_msgs_set_map_and_get_plan() {
     let (_guard, broker) = start_bus();
 
-    let set_map_handler: Arc<dyn Fn(&[u8], &[u8], &[u8]) -> Vec<u8> + Send + Sync> =
-        Arc::new(|_client_id, _req_id, body| {
+    let set_map_handler: Arc<dyn Fn(&[u8]) -> Vec<u8> + Send + Sync> =
+        Arc::new(|body| {
             let req = SetMapRequest::decode(body).expect("decode SetMapRequest");
             assert!(req.map.is_some());
             assert!(req.initial_pose.is_some());
             SetMapResponse { success: true }.encode_to_vec()
         });
-    let get_plan_handler: Arc<dyn Fn(&[u8], &[u8], &[u8]) -> Vec<u8> + Send + Sync> =
-        Arc::new(|_client_id, _req_id, body| {
+    let get_plan_handler: Arc<dyn Fn(&[u8]) -> Vec<u8> + Send + Sync> =
+        Arc::new(|body| {
             let req = GetPlanRequest::decode(body).expect("decode GetPlanRequest");
             let start = req.start.expect("start");
             let goal = req.goal.expect("goal");
@@ -431,8 +431,8 @@ fn service_bus_nav_msgs_set_map_and_get_plan() {
 fn action_bus_pose2d_goal_proto() {
     let (_guard, broker) = start_bus();
 
-    let handler: Arc<dyn Fn(&[u8], &[u8], &[u8]) -> Vec<(String, Vec<u8>)> + Send + Sync> =
-        Arc::new(|_client_id, _goal_id, body| {
+    let handler: Arc<dyn Fn(&[u8]) -> Vec<(String, Vec<u8>)> + Send + Sync> =
+        Arc::new(|body| {
             let goal = Pose2D::decode(body).expect("decode Pose2D goal");
             let progress = Int32 { data: 50 }.encode_to_vec();
             let result = Pose2D {

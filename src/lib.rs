@@ -8,6 +8,7 @@ pub mod runtime;
 pub mod service_bus;
 pub mod shutdown;
 pub mod transports;
+pub mod typed;
 pub mod worker_thread;
 pub mod zmq_helpers;
 
@@ -16,10 +17,11 @@ pub mod zmq_helpers;
 mod msgs;
 
 pub use msgs::{
-    builtin_interfaces, control_msgs, diagnostic_msgs, foxglove_msgs, geometry_msgs, nav2_msgs,
-    nav_msgs, sensor_msgs, shape_msgs, std_msgs, std_srvs, tf2_msgs, trajectory_msgs,
+    action, builtin_interfaces, control_msgs, diagnostic_msgs, foxglove_msgs, geometry_msgs,
+    nav2_msgs, nav_msgs, sensor_msgs, shape_msgs, std_msgs, std_srvs, tf2_msgs, trajectory_msgs,
     unique_identifier_msgs, visualization_msgs,
 };
+pub use typed::{Action, ActionOutcome, Service};
 
 #[cfg(feature = "grpc")]
 pub mod grpc;
@@ -37,9 +39,11 @@ pub use broker::GrpcBrokerConfig;
 pub use errors::{parse_error_body, BusError, Result};
 pub use message_bus::{Publisher, Subscriber};
 pub use runtime::{
-    CallbackGroup, CallbackGroupType, Executor, ExecutorHandle, MessageCallback,
-    MultiThreadedExecutor, Node, NodeActionClient, NodeOptions, NodeServiceClient, ServiceHandler,
-    ShutdownHandle, SingleThreadedExecutor, TimerCallback, TimerHandle, TopicPublisher,
+    ActionGoalHandler, CallbackGroup, CallbackGroupType, Executor, ExecutorHandle,
+    MessageCallback, MultiThreadedExecutor, Node, NodeActionClient, NodeActionClientRaw,
+    NodeActionServer, NodeOptions, NodeService, NodeServiceClient, NodeServiceClientRaw,
+    ServiceHandler, ShutdownHandle, SingleThreadedExecutor, TimerCallback, TimerHandle,
+    TopicPublisher,
 };
 pub use service_bus::{ServiceClient, ServiceWorker};
 pub use transports::{

@@ -180,11 +180,11 @@ pub_.set_high_water_mark(HighWaterMark { snd: 10, rcv: 10 })?;
 
 ## Service bus
 
-与 topic 相同：`Node` → `executor.add_node` → `create_service` / `create_client` → `spin`（worker 侧）。
+与 topic 相同：`Node` → `executor.add_node` → typed `create_service` / `create_client` → `spin`（server 侧）。
 
 ```rust
-use std::sync::Arc;
 use std::time::Duration;
+use robot_bus::std_srvs::srv::v1::{SetBool, SetBoolRequest, SetBoolResponse};
 use robot_bus::{Node, SingleThreadedExecutor};
 
 fn main() -> robot_bus::Result<()> {
@@ -193,21 +193,23 @@ fn main() -> robot_bus::Result<()> {
     let executor = SingleThreadedExecutor::new();
     executor.add_node(&mut server)?;
 
-    server.create_service(
-        "echo",
-        Arc::new(|_client_id, _req_id, body| [b"echo:", body].concat()),
-        None,
+    server.create_service::<SetBool, _>(
+        "/set_bool",
+        |req: SetBoolRequest| SetBoolResponse {
+            success: true,
+            message: format!("set:{}", req.data),
+        },
         None,
     )?;
 
-    let client = client_node.create_client("echo")?;
+    let client = client_node.create_client::<SetBool>("/set_bool")?;
     let handle = executor.shutdown_handle()?;
     std::thread::spawn(move || {
         std::thread::sleep(Duration::from_millis(100));
-        let reply = client
-            .call(b"ping", Some(Duration::from_secs(5)))
+        let resp = client
+            .call(&SetBoolRequest { data: true }, Some(Duration::from_secs(5)))
             .expect("call");
-        assert_eq!(reply, b"echo:ping");
+        assert!(resp.success);
         handle.shutdown();
     });
 
@@ -216,19 +218,20 @@ fn main() -> robot_bus::Result<()> {
 }
 ```
 
-endpoint 取自 `NodeOptions`（`service_frontend` / `service_backend`）；也可用 `Node::with_options` 覆盖。
+Raw bytes：`create_service_raw` / `create_client_raw`。endpoint 取自 `NodeOptions`（`service_frontend` / `service_backend`）。
 
 ---
 
 ## Action bus
 
-同样挂在 Node 上：`create_action`（worker）/ `create_action_client`（client）。
+同样挂在 Node 上：typed `create_action_server` / `create_action_client`。
 
 ```rust
-use std::sync::Arc;
 use std::time::Duration;
-use robot_bus::action_bus::ActionKind;
-use robot_bus::{Node, SingleThreadedExecutor};
+use robot_bus::action::v1::{
+    Fibonacci, FibonacciFeedback, FibonacciGoal, FibonacciResult,
+};
+use robot_bus::{ActionOutcome, Node, SingleThreadedExecutor};
 
 fn main() -> robot_bus::Result<()> {
     let mut server = Node::new("act_server");
@@ -236,27 +239,36 @@ fn main() -> robot_bus::Result<()> {
     let executor = SingleThreadedExecutor::new();
     executor.add_node(&mut server)?;
 
-    server.create_action(
-        "demo",
-        Arc::new(|_client_id, _goal_id, body| {
-            vec![
-                ("FEEDBACK".into(), b"step-1".to_vec()),
-                ("RESULT".into(), [b"done:", body].concat()),
-            ]
-        }),
-        None,
+    server.create_action_server::<Fibonacci, _>(
+        "fibonacci",
+        |goal: FibonacciGoal| {
+            let order = goal.order.max(0) as usize;
+            let mut seq = Vec::with_capacity(order);
+            for i in 0..order {
+                if i < 2 {
+                    seq.push(i as i32);
+                } else {
+                    seq.push(seq[i - 1] + seq[i - 2]);
+                }
+            }
+            ActionOutcome {
+                feedbacks: vec![FibonacciFeedback {
+                    sequence: seq.clone(),
+                }],
+                result: FibonacciResult { sequence: seq },
+            }
+        },
         None,
     )?;
 
-    let client = client_node.create_action_client("demo")?;
+    let client = client_node.create_action_client::<Fibonacci>("fibonacci")?;
     let handle = executor.shutdown_handle()?;
     std::thread::spawn(move || {
         std::thread::sleep(Duration::from_millis(100));
-        let messages = client
-            .send_goal(b"fly", None, Some(Duration::from_secs(10)))
+        let outcome = client
+            .send_goal(&FibonacciGoal { order: 5 }, None, Some(Duration::from_secs(10)))
             .expect("goal");
-        assert_eq!(messages[0].kind, ActionKind::Feedback);
-        assert_eq!(messages.last().unwrap().kind, ActionKind::Result);
+        assert_eq!(outcome.result.sequence, vec![0, 1, 1, 2, 3]);
         handle.shutdown();
     });
 
@@ -264,6 +276,8 @@ fn main() -> robot_bus::Result<()> {
     Ok(())
 }
 ```
+
+Raw bytes：`create_action_server_raw` / `create_action_client_raw`。
 
 ---
 
@@ -317,7 +331,7 @@ let twist = Twist {
 node.publish("cmd_vel", &twist.encode_to_vec())?;
 ```
 
-Service 的 Request / Response 同理（如 `robot_bus::std_srvs::srv::v1::SetBoolRequest`）。
+Service 的 Request / Response 可用 typed API（如 `create_client::<SetBool>`），也可手动 `encode` / `decode`。Action 同理（如 `robot_bus::action::v1::Fibonacci`）。
 
 ---
 

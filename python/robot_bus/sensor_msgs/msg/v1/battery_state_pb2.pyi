@@ -2,7 +2,8 @@ from robot_bus.std_msgs.msg.v1 import header_pb2 as _header_pb2
 from google.protobuf.internal import containers as _containers
 from google.protobuf import descriptor as _descriptor
 from google.protobuf import message as _message
-from typing import ClassVar as _ClassVar, Iterable as _Iterable, Mapping as _Mapping, Optional as _Optional, Union as _Union
+from collections.abc import Iterable as _Iterable, Mapping as _Mapping
+from typing import ClassVar as _ClassVar, Optional as _Optional, Union as _Union
 
 DESCRIPTOR: _descriptor.FileDescriptor
 
@@ -40,4 +41,4 @@ class BatteryState(_message.Message):
     location: str
     serial_number: str
     temperature: float
-    def __init__(self, header: _Optional[_Union[_header_pb2.Header, _Mapping]] = ..., voltage: _Optional[float] = ..., current: _Optional[float] = ..., charge: _Optional[float] = ..., capacity: _Optional[float] = ..., design_capacity: _Optional[float] = ..., percentage: _Optional[float] = ..., power_supply_status: _Optional[int] = ..., power_supply_health: _Optional[int] = ..., power_supply_technology: _Optional[int] = ..., present: bool = ..., cell_voltage: _Optional[_Iterable[float]] = ..., cell_temperature: _Optional[_Iterable[float]] = ..., location: _Optional[str] = ..., serial_number: _Optional[str] = ..., temperature: _Optional[float] = ...) -> None: ...
+    def __init__(self, header: _Optional[_Union[_header_pb2.Header, _Mapping]] = ..., voltage: _Optional[float] = ..., current: _Optional[float] = ..., charge: _Optional[float] = ..., capacity: _Optional[float] = ..., design_capacity: _Optional[float] = ..., percentage: _Optional[float] = ..., power_supply_status: _Optional[int] = ..., power_supply_health: _Optional[int] = ..., power_supply_technology: _Optional[int] = ..., present: _Optional[bool] = ..., cell_voltage: _Optional[_Iterable[float]] = ..., cell_temperature: _Optional[_Iterable[float]] = ..., location: _Optional[str] = ..., serial_number: _Optional[str] = ..., temperature: _Optional[float] = ...) -> None: ...

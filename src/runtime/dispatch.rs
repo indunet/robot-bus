@@ -123,7 +123,7 @@ pub fn dispatch_service_request(
     let reply_tx = reply_tx.clone();
     let group = reg.callback_group.clone();
     group.run(worker_pool, move || {
-        let reply_body = handler(&client_id, &req_id, &body);
+        let reply_body = handler(&body);
         let _ = reply_tx.send(ReplyMessage::Service {
             service_name,
             reply: ServiceReply {
@@ -173,7 +173,7 @@ pub fn dispatch_action_message(
     let reply_tx = reply_tx.clone();
     let group = reg.callback_group.clone();
     group.run(worker_pool, move || {
-        let replies = handler(&client_id, &goal_id, &payload);
+        let replies = handler(&payload);
         for (phase, chunk) in replies {
             let _ = reply_tx.send(ReplyMessage::Action {
                 action_name: action_name.clone(),

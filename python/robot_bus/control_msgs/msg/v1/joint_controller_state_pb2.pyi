@@ -1,7 +1,8 @@
 from robot_bus.std_msgs.msg.v1 import header_pb2 as _header_pb2
 from google.protobuf import descriptor as _descriptor
 from google.protobuf import message as _message
-from typing import ClassVar as _ClassVar, Mapping as _Mapping, Optional as _Optional, Union as _Union
+from collections.abc import Mapping as _Mapping
+from typing import ClassVar as _ClassVar, Optional as _Optional, Union as _Union
 
 DESCRIPTOR: _descriptor.FileDescriptor
 
@@ -31,4 +32,4 @@ class JointControllerState(_message.Message):
     d: float
     i_clamp: float
     antiwindup: bool
-    def __init__(self, header: _Optional[_Union[_header_pb2.Header, _Mapping]] = ..., set_point: _Optional[float] = ..., process_value: _Optional[float] = ..., process_value_dot: _Optional[float] = ..., error: _Optional[float] = ..., time_step: _Optional[float] = ..., command: _Optional[float] = ..., p: _Optional[float] = ..., i: _Optional[float] = ..., d: _Optional[float] = ..., i_clamp: _Optional[float] = ..., antiwindup: bool = ...) -> None: ...
+    def __init__(self, header: _Optional[_Union[_header_pb2.Header, _Mapping]] = ..., set_point: _Optional[float] = ..., process_value: _Optional[float] = ..., process_value_dot: _Optional[float] = ..., error: _Optional[float] = ..., time_step: _Optional[float] = ..., command: _Optional[float] = ..., p: _Optional[float] = ..., i: _Optional[float] = ..., d: _Optional[float] = ..., i_clamp: _Optional[float] = ..., antiwindup: _Optional[bool] = ...) -> None: ...

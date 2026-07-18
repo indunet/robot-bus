@@ -2,7 +2,8 @@ from robot_bus.std_msgs.msg.v1 import header_pb2 as _header_pb2
 from google.protobuf.internal import containers as _containers
 from google.protobuf import descriptor as _descriptor
 from google.protobuf import message as _message
-from typing import ClassVar as _ClassVar, Iterable as _Iterable, Mapping as _Mapping, Optional as _Optional, Union as _Union
+from collections.abc import Iterable as _Iterable, Mapping as _Mapping
+from typing import ClassVar as _ClassVar, Optional as _Optional, Union as _Union
 
 DESCRIPTOR: _descriptor.FileDescriptor
 
@@ -38,4 +39,4 @@ class PointCloud2(_message.Message):
     row_step: int
     data: bytes
     is_dense: bool
-    def __init__(self, header: _Optional[_Union[_header_pb2.Header, _Mapping]] = ..., height: _Optional[int] = ..., width: _Optional[int] = ..., fields: _Optional[_Iterable[_Union[PointField, _Mapping]]] = ..., is_bigendian: bool = ..., point_step: _Optional[int] = ..., row_step: _Optional[int] = ..., data: _Optional[bytes] = ..., is_dense: bool = ...) -> None: ...
+    def __init__(self, header: _Optional[_Union[_header_pb2.Header, _Mapping]] = ..., height: _Optional[int] = ..., width: _Optional[int] = ..., fields: _Optional[_Iterable[_Union[PointField, _Mapping]]] = ..., is_bigendian: _Optional[bool] = ..., point_step: _Optional[int] = ..., row_step: _Optional[int] = ..., data: _Optional[bytes] = ..., is_dense: _Optional[bool] = ...) -> None: ...

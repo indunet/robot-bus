@@ -81,20 +81,20 @@ group = node.create_callback_group(robot_bus.CallbackGroupType.Reentrant)
 node.create_subscription("/robot1/imu", on_imu, callback_group=group)
 node.create_timer(0.1, on_tick, callback_group=group)
 node.create_service("echo", on_echo, callback_group=group)
-node.create_action("navigate", on_goal, callback_group=group)
+node.create_action_server("navigate", on_goal, callback_group=group)
 ```
 
 默认不传 `callback_group` 时使用节点自带的互斥组。`Reentrant` 需配合 `MultiThreadedExecutor` 才有实际并行。
 
 ### Service / Action（Node）
 
-与 topic / timer 一样挂在 Node 上：worker 用 `create_service` / `create_action`，client 用 `create_client` / `create_action_client`。
+与 topic / timer 一样挂在 Node 上：server 用 `create_service` / `create_action_server`，client 用 `create_client` / `create_action_client`。
 
 ```python
-def on_echo(client_id, request_id, body: bytes) -> bytes:
+def on_echo(body: bytes) -> bytes:
     return b"echo:" + body
 
-def on_goal(client_id, goal_id, payload: bytes):
+def on_goal(payload: bytes):
     # 返回 [(phase, body), ...]；phase 一般为 "FEEDBACK" / "RESULT"
     return [
         ("FEEDBACK", b"step-1"),
@@ -107,7 +107,7 @@ executor = robot_bus.SingleThreadedExecutor()
 executor.add_node(server)
 
 server.create_service("echo", on_echo)
-server.create_action("navigate", on_goal)
+server.create_action_server("navigate", on_goal)
 
 svc = client_node.create_client("echo")
 # reply = svc.call(b"ping", timeout=5.0)
@@ -218,9 +218,9 @@ print(robot_bus.__version__)
 | `node.create_timer(period, callback)` → `TimerHandle` | 定时器（与 topic 一样挂在 Node） |
 | `CallbackGroupType` / `create_callback_group` | `MutuallyExclusive` / `Reentrant` |
 | `create_subscription(..., callback_group=)` | 可选 callback group |
-| `create_service(name, handler, …)` | service worker；handler 返回 `bytes` |
+| `create_service(name, handler, …)` | service server；`handler(body) -> bytes` |
 | `create_client(name)` → `ServiceClient` | service client；`call(body, timeout=…)` |
-| `create_action(name, handler, …)` | action worker；handler 返回 `[(phase, bytes), ...]` |
+| `create_action_server(name, handler, …)` | action server；handler 返回 `[(phase, bytes), ...]` |
 | `create_action_client(name)` → `ActionClient` | action client；`send_goal` / `cancel` |
 | `Publisher(endpoint=None)` | 低层连 XSUB（不经 Node） |
 | `RobotBusBroker.start()` | 进程内启动三个 bus + gRPC |

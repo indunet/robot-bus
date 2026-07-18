@@ -2,13 +2,16 @@
 //!
 //! Internal layout mirrors ROS packages under this module so prost `super::…`
 //! paths resolve. Public API re-exports each package at the crate root:
-//! `robot_bus::<pkg>::{msg|srv}::v1::...`.
+//! `robot_bus::<pkg>::{msg|srv|action}::v1::...`.
 //!
 //! The bus still treats wire bodies as opaque bytes; these modules are for
 //! callers that want typed encode/decode of those payloads.
 //!
 //! Service (`.srv`) definitions are Request/Response message pairs (e.g.
 //! `std_srvs::srv::v1::SetBoolRequest`), not gRPC `service`/`rpc` stubs.
+//! Marker types (e.g. [`std_srvs::srv::v1::SetBool`]) implement [`crate::typed::Service`].
+//! Action markers (e.g. [`crate::action::v1::Fibonacci`]) implement
+//! [`crate::typed::Action`].
 
 pub mod builtin_interfaces {
     pub mod msg {
@@ -30,6 +33,29 @@ pub mod std_srvs {
     pub mod srv {
         pub mod v1 {
             include!(concat!(env!("OUT_DIR"), "/std_srvs.srv.v1.rs"));
+
+            use crate::typed::Service;
+
+            /// ROS 2 `std_srvs/srv/Empty` type marker.
+            pub struct Empty;
+            impl Service for Empty {
+                type Request = EmptyRequest;
+                type Response = EmptyResponse;
+            }
+
+            /// ROS 2 `std_srvs/srv/Trigger` type marker.
+            pub struct Trigger;
+            impl Service for Trigger {
+                type Request = TriggerRequest;
+                type Response = TriggerResponse;
+            }
+
+            /// ROS 2 `std_srvs/srv/SetBool` type marker.
+            pub struct SetBool;
+            impl Service for SetBool {
+                type Request = SetBoolRequest;
+                type Response = SetBoolResponse;
+            }
         }
     }
 }
@@ -59,6 +85,45 @@ pub mod nav_msgs {
     pub mod srv {
         pub mod v1 {
             include!(concat!(env!("OUT_DIR"), "/nav_msgs.srv.v1.rs"));
+
+            use crate::typed::Service;
+
+            /// ROS 2 `nav_msgs/srv/GetMap` type marker.
+            pub struct GetMap;
+            impl Service for GetMap {
+                type Request = GetMapRequest;
+                type Response = GetMapResponse;
+            }
+
+            /// ROS 2 `nav_msgs/srv/GetPlan` type marker.
+            pub struct GetPlan;
+            impl Service for GetPlan {
+                type Request = GetPlanRequest;
+                type Response = GetPlanResponse;
+            }
+
+            /// ROS 2 `nav_msgs/srv/SetMap` type marker.
+            pub struct SetMap;
+            impl Service for SetMap {
+                type Request = SetMapRequest;
+                type Response = SetMapResponse;
+            }
+        }
+    }
+}
+
+pub mod action {
+    pub mod v1 {
+        include!(concat!(env!("OUT_DIR"), "/robot_bus.action.v1.rs"));
+
+        use crate::typed::Action;
+
+        /// Demo action type marker (`robot_bus/action/Fibonacci`).
+        pub struct Fibonacci;
+        impl Action for Fibonacci {
+            type Goal = FibonacciGoal;
+            type Feedback = FibonacciFeedback;
+            type Result = FibonacciResult;
         }
     }
 }

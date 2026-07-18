@@ -7,7 +7,8 @@ from robot_bus.visualization_msgs.msg.v1 import menu_entry_pb2 as _menu_entry_pb
 from google.protobuf.internal import containers as _containers
 from google.protobuf import descriptor as _descriptor
 from google.protobuf import message as _message
-from typing import ClassVar as _ClassVar, Iterable as _Iterable, Mapping as _Mapping, Optional as _Optional, Union as _Union
+from collections.abc import Iterable as _Iterable, Mapping as _Mapping
+from typing import ClassVar as _ClassVar, Optional as _Optional, Union as _Union
 
 DESCRIPTOR: _descriptor.FileDescriptor
 
@@ -29,7 +30,7 @@ class InteractiveMarkerControl(_message.Message):
     markers: _containers.RepeatedCompositeFieldContainer[_marker_pb2.Marker]
     independent_marker_orientation: bool
     description: str
-    def __init__(self, name: _Optional[str] = ..., orientation: _Optional[_Union[_quaternion_pb2.Quaternion, _Mapping]] = ..., orientation_mode: _Optional[int] = ..., interaction_mode: _Optional[int] = ..., always_visible: bool = ..., markers: _Optional[_Iterable[_Union[_marker_pb2.Marker, _Mapping]]] = ..., independent_marker_orientation: bool = ..., description: _Optional[str] = ...) -> None: ...
+    def __init__(self, name: _Optional[str] = ..., orientation: _Optional[_Union[_quaternion_pb2.Quaternion, _Mapping]] = ..., orientation_mode: _Optional[int] = ..., interaction_mode: _Optional[int] = ..., always_visible: _Optional[bool] = ..., markers: _Optional[_Iterable[_Union[_marker_pb2.Marker, _Mapping]]] = ..., independent_marker_orientation: _Optional[bool] = ..., description: _Optional[str] = ...) -> None: ...
 
 class InteractiveMarker(_message.Message):
     __slots__ = ("header", "pose", "name", "description", "scale", "menu_entries", "controls")
@@ -105,4 +106,4 @@ class InteractiveMarkerFeedback(_message.Message):
     menu_entry_id: int
     mouse_point: _point_pb2.Point
     mouse_point_valid: bool
-    def __init__(self, header: _Optional[_Union[_header_pb2.Header, _Mapping]] = ..., client_id: _Optional[str] = ..., marker_name: _Optional[str] = ..., control_name: _Optional[str] = ..., event_type: _Optional[int] = ..., pose: _Optional[_Union[_pose_pb2.Pose, _Mapping]] = ..., menu_entry_id: _Optional[int] = ..., mouse_point: _Optional[_Union[_point_pb2.Point, _Mapping]] = ..., mouse_point_valid: bool = ...) -> None: ...
+    def __init__(self, header: _Optional[_Union[_header_pb2.Header, _Mapping]] = ..., client_id: _Optional[str] = ..., marker_name: _Optional[str] = ..., control_name: _Optional[str] = ..., event_type: _Optional[int] = ..., pose: _Optional[_Union[_pose_pb2.Pose, _Mapping]] = ..., menu_entry_id: _Optional[int] = ..., mouse_point: _Optional[_Union[_point_pb2.Point, _Mapping]] = ..., mouse_point_valid: _Optional[bool] = ...) -> None: ...

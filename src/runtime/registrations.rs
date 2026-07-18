@@ -13,9 +13,9 @@ use crate::zmq_helpers::{
 };
 
 pub type MessageCallback = Arc<dyn Fn(&str, &[u8]) + Send + Sync>;
-pub type ServiceHandler = Arc<dyn Fn(&[u8], &[u8], &[u8]) -> Vec<u8> + Send + Sync>;
+pub type ServiceHandler = Arc<dyn Fn(&[u8]) -> Vec<u8> + Send + Sync>;
 pub type ActionGoalHandler =
-    Arc<dyn Fn(&[u8], &[u8], &[u8]) -> Vec<(String, Vec<u8>)> + Send + Sync>;
+    Arc<dyn Fn(&[u8]) -> Vec<(String, Vec<u8>)> + Send + Sync>;
 
 pub enum RegistrationKind {
     Sub,

@@ -7,7 +7,11 @@ use std::thread;
 use std::time::Duration;
 
 use robot_bus::action_bus::ActionKind;
-use robot_bus::{Node, NodeOptions, RobotBusBroker, SingleThreadedExecutor};
+use robot_bus::action::v1::{
+    Fibonacci, FibonacciFeedback, FibonacciGoal, FibonacciResult,
+};
+use robot_bus::std_srvs::srv::v1::{SetBool, SetBoolRequest, SetBoolResponse};
+use robot_bus::{ActionOutcome, Node, NodeOptions, RobotBusBroker, SingleThreadedExecutor};
 use support::{ephemeral_robot_bus_config, lock_brokers};
 
 fn node_options_from_broker(broker: &RobotBusBroker) -> NodeOptions {
@@ -23,7 +27,7 @@ fn node_options_from_broker(broker: &RobotBusBroker) -> NodeOptions {
 }
 
 #[test]
-fn node_service_client_echo() {
+fn node_service_client_echo_raw() {
     let _guard = lock_brokers();
     let broker = RobotBusBroker::start(ephemeral_robot_bus_config()).expect("broker");
     let options = node_options_from_broker(&broker);
@@ -35,15 +39,16 @@ fn node_service_client_echo() {
         executor.add_node(&mut server).expect("add server");
 
         server
-            .create_service(
+            .create_service_raw(
                 "echo",
-                Arc::new(|_client_id, _req_id, body| [b"echo:", body].concat()),
-                None,
+                Arc::new(|body| [b"echo:", body].concat()),
                 None,
             )
-            .expect("create_service");
+            .expect("create_service_raw");
 
-        let client = client_node.create_client("echo").expect("create_client");
+        let client = client_node
+            .create_client_raw("echo")
+            .expect("create_client_raw");
         let handle = executor.shutdown_handle().expect("shutdown handle");
 
         thread::spawn(move || {
@@ -56,14 +61,60 @@ fn node_service_client_echo() {
         });
 
         executor.spin().expect("spin");
-        // Drop node/executor while broker is still up so worker DISCONNECT can send.
     }
 
     broker.stop().expect("stop broker");
 }
 
 #[test]
-fn node_action_client_goal() {
+fn node_service_client_set_bool_typed() {
+    let _guard = lock_brokers();
+    let broker = RobotBusBroker::start(ephemeral_robot_bus_config()).expect("broker");
+    let options = node_options_from_broker(&broker);
+
+    {
+        let mut server = Node::with_options("svc_server", options.clone());
+        let mut client_node = Node::with_options("svc_client", options);
+        let executor = SingleThreadedExecutor::new();
+        executor.add_node(&mut server).expect("add server");
+
+        server
+            .create_service::<SetBool, _>(
+                "/set_bool",
+                |req: SetBoolRequest| SetBoolResponse {
+                    success: true,
+                    message: format!("set:{}", req.data),
+                },
+                None,
+            )
+            .expect("create_service");
+
+        let client = client_node
+            .create_client::<SetBool>("/set_bool")
+            .expect("create_client");
+        let handle = executor.shutdown_handle().expect("shutdown handle");
+
+        thread::spawn(move || {
+            thread::sleep(Duration::from_millis(150));
+            let resp = client
+                .call(
+                    &SetBoolRequest { data: true },
+                    Some(Duration::from_secs(5)),
+                )
+                .expect("call");
+            assert!(resp.success);
+            assert_eq!(resp.message, "set:true");
+            handle.shutdown();
+        });
+
+        executor.spin().expect("spin");
+    }
+
+    broker.stop().expect("stop broker");
+}
+
+#[test]
+fn node_action_client_goal_raw() {
     let _guard = lock_brokers();
     let broker = RobotBusBroker::start(ephemeral_robot_bus_config()).expect("broker");
     let options = node_options_from_broker(&broker);
@@ -75,22 +126,21 @@ fn node_action_client_goal() {
         executor.add_node(&mut server).expect("add server");
 
         server
-            .create_action(
+            .create_action_server_raw(
                 "demo",
-                Arc::new(|_client_id, _goal_id, body| {
+                Arc::new(|body| {
                     vec![
                         ("FEEDBACK".into(), b"step-1".to_vec()),
                         ("RESULT".into(), [b"done:", body].concat()),
                     ]
                 }),
                 None,
-                None,
             )
-            .expect("create_action");
+            .expect("create_action_server_raw");
 
         let client = client_node
-            .create_action_client("demo")
-            .expect("create_action_client");
+            .create_action_client_raw("demo")
+            .expect("create_action_client_raw");
         let handle = executor.shutdown_handle().expect("shutdown handle");
 
         thread::spawn(move || {
@@ -103,6 +153,68 @@ fn node_action_client_goal() {
             assert_eq!(messages[0].body, b"step-1");
             assert_eq!(messages[1].kind, ActionKind::Result);
             assert_eq!(messages[1].body, b"done:fly");
+            handle.shutdown();
+        });
+
+        executor.spin().expect("spin");
+    }
+
+    broker.stop().expect("stop broker");
+}
+
+#[test]
+fn node_action_client_fibonacci_typed() {
+    let _guard = lock_brokers();
+    let broker = RobotBusBroker::start(ephemeral_robot_bus_config()).expect("broker");
+    let options = node_options_from_broker(&broker);
+
+    {
+        let mut server = Node::with_options("act_server", options.clone());
+        let mut client_node = Node::with_options("act_client", options);
+        let executor = SingleThreadedExecutor::new();
+        executor.add_node(&mut server).expect("add server");
+
+        server
+            .create_action_server::<Fibonacci, _>(
+                "fibonacci",
+                |goal: FibonacciGoal| {
+                    let order = goal.order.max(0) as usize;
+                    let mut seq = Vec::with_capacity(order);
+                    for i in 0..order {
+                        if i < 2 {
+                            seq.push(i as i32);
+                        } else {
+                            seq.push(seq[i - 1] + seq[i - 2]);
+                        }
+                    }
+                    let feedback_seq = if seq.len() > 1 {
+                        seq[..seq.len() - 1].to_vec()
+                    } else {
+                        seq.clone()
+                    };
+                    ActionOutcome {
+                        feedbacks: vec![FibonacciFeedback {
+                            sequence: feedback_seq,
+                        }],
+                        result: FibonacciResult { sequence: seq },
+                    }
+                },
+                None,
+            )
+            .expect("create_action_server");
+
+        let client = client_node
+            .create_action_client::<Fibonacci>("fibonacci")
+            .expect("create_action_client");
+        let handle = executor.shutdown_handle().expect("shutdown handle");
+
+        thread::spawn(move || {
+            thread::sleep(Duration::from_millis(150));
+            let outcome = client
+                .send_goal(&FibonacciGoal { order: 5 }, None, Some(Duration::from_secs(10)))
+                .expect("send_goal");
+            assert_eq!(outcome.result.sequence, vec![0, 1, 1, 2, 3]);
+            assert!(!outcome.feedbacks.is_empty());
             handle.shutdown();
         });
 

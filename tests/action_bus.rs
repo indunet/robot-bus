@@ -11,8 +11,8 @@ use support::BrokerProcess;
 #[test]
 fn action_goal_feedback_result() {
     let broker = BrokerProcess::spawn_action();
-    let handler: Arc<dyn Fn(&[u8], &[u8], &[u8]) -> Vec<(String, Vec<u8>)> + Send + Sync> =
-        Arc::new(|_client_id, _goal_id, body| {
+    let handler: Arc<dyn Fn(&[u8]) -> Vec<(String, Vec<u8>)> + Send + Sync> =
+        Arc::new(|body| {
             vec![
                 ("FEEDBACK".into(), b"step-1".to_vec()),
                 ("FEEDBACK".into(), b"step-2".to_vec()),

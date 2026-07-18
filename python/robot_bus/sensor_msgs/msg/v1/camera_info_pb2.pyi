@@ -2,7 +2,8 @@ from robot_bus.std_msgs.msg.v1 import header_pb2 as _header_pb2
 from google.protobuf.internal import containers as _containers
 from google.protobuf import descriptor as _descriptor
 from google.protobuf import message as _message
-from typing import ClassVar as _ClassVar, Iterable as _Iterable, Mapping as _Mapping, Optional as _Optional, Union as _Union
+from collections.abc import Iterable as _Iterable, Mapping as _Mapping
+from typing import ClassVar as _ClassVar, Optional as _Optional, Union as _Union
 
 DESCRIPTOR: _descriptor.FileDescriptor
 
@@ -18,7 +19,7 @@ class RegionOfInterest(_message.Message):
     height: int
     width: int
     do_rectify: bool
-    def __init__(self, x_offset: _Optional[int] = ..., y_offset: _Optional[int] = ..., height: _Optional[int] = ..., width: _Optional[int] = ..., do_rectify: bool = ...) -> None: ...
+    def __init__(self, x_offset: _Optional[int] = ..., y_offset: _Optional[int] = ..., height: _Optional[int] = ..., width: _Optional[int] = ..., do_rectify: _Optional[bool] = ...) -> None: ...
 
 class CameraInfo(_message.Message):
     __slots__ = ("header", "height", "width", "distortion_model", "d", "k", "r", "p", "binning_x", "binning_y", "roi")
