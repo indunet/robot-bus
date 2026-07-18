@@ -21,7 +21,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         println!("cargo:rerun-if-changed={}", proto.display());
     }
 
+    // Foxglove schemas use google.protobuf.Timestamp / Duration; map to prost-types.
     prost_build::Config::new()
+        .extern_path(".google.protobuf.Timestamp", "::prost_types::Timestamp")
+        .extern_path(".google.protobuf.Duration", "::prost_types::Duration")
         .compile_protos(&protos, &[proto_root.clone()])?;
 
     #[cfg(feature = "grpc")]

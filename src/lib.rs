@@ -16,9 +16,9 @@ pub mod zmq_helpers;
 mod msgs;
 
 pub use msgs::{
-    builtin_interfaces, control_msgs, diagnostic_msgs, geometry_msgs, nav2_msgs, nav_msgs,
-    sensor_msgs, shape_msgs, std_msgs, std_srvs, tf2_msgs, trajectory_msgs, unique_identifier_msgs,
-    visualization_msgs,
+    builtin_interfaces, control_msgs, diagnostic_msgs, foxglove_msgs, geometry_msgs, nav2_msgs,
+    nav_msgs, sensor_msgs, shape_msgs, std_msgs, std_srvs, tf2_msgs, trajectory_msgs,
+    unique_identifier_msgs, visualization_msgs,
 };
 
 #[cfg(feature = "grpc")]

@@ -1,0 +1,12 @@
+// Adapted from Foxglove schemas (https://github.com/foxglove/foxglove-sdk).
+// Official package is `foxglove`; here remapped to project layout.
+
+syntax = "proto3";
+
+package foxglove_msgs.msg.v1;
+
+// GeoJSON data for annotating maps
+message GeoJSON {
+  // GeoJSON data encoded as a UTF-8 string
+  string geojson = 1;
+}

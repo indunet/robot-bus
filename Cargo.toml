@@ -33,6 +33,7 @@ anyhow = "1"
 http = { version = "1", optional = true }
 log = "0.4"
 prost = "0.14"
+prost-types = "0.14"
 pyo3 = { version = "0.25", optional = true, features = ["abi3-py39"] }
 thiserror = "2"
 tokio = { version = "1", optional = true, features = ["rt-multi-thread", "macros", "net", "sync", "time", "signal"] }

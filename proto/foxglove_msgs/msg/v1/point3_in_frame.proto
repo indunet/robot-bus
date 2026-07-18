@@ -1,0 +1,21 @@
+// Adapted from Foxglove schemas (https://github.com/foxglove/foxglove-sdk).
+// Official package is `foxglove`; here remapped to project layout.
+
+syntax = "proto3";
+
+import "foxglove_msgs/msg/v1/point3.proto";
+import "google/protobuf/timestamp.proto";
+
+package foxglove_msgs.msg.v1;
+
+// A timestamped point for a position in 3D space
+message Point3InFrame {
+  // Timestamp of point
+  google.protobuf.Timestamp timestamp = 1;
+
+  // Frame of reference for point position
+  string frame_id = 2;
+
+  // Point in 3D space
+  foxglove_msgs.msg.v1.Point3 point = 3;
+}

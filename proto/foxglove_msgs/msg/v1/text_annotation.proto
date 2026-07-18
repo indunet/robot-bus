@@ -1,0 +1,36 @@
+// Adapted from Foxglove schemas (https://github.com/foxglove/foxglove-sdk).
+// Official package is `foxglove`; here remapped to project layout.
+
+syntax = "proto3";
+
+import "foxglove_msgs/msg/v1/color.proto";
+import "foxglove_msgs/msg/v1/key_value_pair.proto";
+import "foxglove_msgs/msg/v1/point2.proto";
+import "google/protobuf/timestamp.proto";
+
+package foxglove_msgs.msg.v1;
+
+// A text label on a 2D image
+message TextAnnotation {
+  // Timestamp of annotation
+  google.protobuf.Timestamp timestamp = 1;
+
+  // Bottom-left origin of the text label in 2D image coordinates (pixels).
+  // The coordinate uses the top-left corner of the top-left pixel of the image as the origin.
+  foxglove_msgs.msg.v1.Point2 position = 2;
+
+  // Text to display
+  string text = 3;
+
+  // Font size in pixels
+  double font_size = 4;
+
+  // Text color
+  foxglove_msgs.msg.v1.Color text_color = 5;
+
+  // Background fill color
+  foxglove_msgs.msg.v1.Color background_color = 6;
+
+  // Additional user-provided metadata associated with this annotation. Keys must be unique.
+  repeated foxglove_msgs.msg.v1.KeyValuePair metadata = 7;
+}

@@ -1,0 +1,36 @@
+// Adapted from Foxglove schemas (https://github.com/foxglove/foxglove-sdk).
+// Official package is `foxglove`; here remapped to project layout.
+
+syntax = "proto3";
+
+import "foxglove_msgs/msg/v1/color.proto";
+import "foxglove_msgs/msg/v1/key_value_pair.proto";
+import "foxglove_msgs/msg/v1/point2.proto";
+import "google/protobuf/timestamp.proto";
+
+package foxglove_msgs.msg.v1;
+
+// A circle annotation on a 2D image
+message CircleAnnotation {
+  // Timestamp of circle
+  google.protobuf.Timestamp timestamp = 1;
+
+  // Center of the circle in 2D image coordinates (pixels).
+  // The coordinate uses the top-left corner of the top-left pixel of the image as the origin.
+  foxglove_msgs.msg.v1.Point2 position = 2;
+
+  // Circle diameter in pixels
+  double diameter = 3;
+
+  // Line thickness in pixels
+  double thickness = 4;
+
+  // Fill color
+  foxglove_msgs.msg.v1.Color fill_color = 5;
+
+  // Outline color
+  foxglove_msgs.msg.v1.Color outline_color = 6;
+
+  // Additional user-provided metadata associated with this annotation. Keys must be unique.
+  repeated foxglove_msgs.msg.v1.KeyValuePair metadata = 7;
+}

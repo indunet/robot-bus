@@ -1,0 +1,18 @@
+// Adapted from Foxglove schemas (https://github.com/foxglove/foxglove-sdk).
+// Official package is `foxglove`; here remapped to project layout.
+
+syntax = "proto3";
+
+import "foxglove_msgs/msg/v1/scene_entity.proto";
+import "foxglove_msgs/msg/v1/scene_entity_deletion.proto";
+
+package foxglove_msgs.msg.v1;
+
+// An update to the entities displayed in a 3D scene
+message SceneUpdate {
+  // Scene entities to delete
+  repeated foxglove_msgs.msg.v1.SceneEntityDeletion deletions = 1;
+
+  // Scene entities to add or replace
+  repeated foxglove_msgs.msg.v1.SceneEntity entities = 2;
+}

@@ -1,0 +1,15 @@
+// Adapted from Foxglove schemas (https://github.com/foxglove/foxglove-sdk).
+// Official package is `foxglove`; here remapped to project layout.
+
+syntax = "proto3";
+
+package foxglove_msgs.msg.v1;
+
+// A point representing a position in 2D space
+message Point2 {
+  // x coordinate position
+  double x = 1;
+
+  // y coordinate position
+  double y = 2;
+}

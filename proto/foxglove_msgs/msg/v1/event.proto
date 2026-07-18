@@ -1,0 +1,21 @@
+// Adapted from Foxglove schemas (https://github.com/foxglove/foxglove-sdk).
+// Official package is `foxglove`; here remapped to project layout.
+
+syntax = "proto3";
+
+import "foxglove_msgs/msg/v1/key_value_pair.proto";
+import "google/protobuf/timestamp.proto";
+
+package foxglove_msgs.msg.v1;
+
+// A discrete event that occurred over a time range
+message Event {
+  // Event start time (inclusive)
+  google.protobuf.Timestamp start_time = 1;
+
+  // Event end time (inclusive)
+  google.protobuf.Timestamp end_time = 2;
+
+  // Additional key-value metadata. Keys must be unique.
+  repeated foxglove_msgs.msg.v1.KeyValuePair metadata = 3;
+}

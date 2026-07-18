@@ -1,0 +1,22 @@
+// Adapted from Foxglove schemas (https://github.com/foxglove/foxglove-sdk).
+// Official package is `foxglove`; here remapped to project layout.
+
+syntax = "proto3";
+
+import "foxglove_msgs/msg/v1/color.proto";
+import "foxglove_msgs/msg/v1/pose.proto";
+import "foxglove_msgs/msg/v1/vector3.proto";
+
+package foxglove_msgs.msg.v1;
+
+// A primitive representing a sphere or ellipsoid
+message SpherePrimitive {
+  // Position of the center of the sphere and orientation of the sphere
+  foxglove_msgs.msg.v1.Pose pose = 1;
+
+  // Size (diameter) of the sphere along each axis
+  foxglove_msgs.msg.v1.Vector3 size = 2;
+
+  // Color of the sphere
+  foxglove_msgs.msg.v1.Color color = 3;
+}

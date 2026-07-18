@@ -1,0 +1,30 @@
+// Adapted from Foxglove schemas (https://github.com/foxglove/foxglove-sdk).
+// Official package is `foxglove`; here remapped to project layout.
+
+syntax = "proto3";
+
+import "foxglove_msgs/msg/v1/circle_annotation.proto";
+import "foxglove_msgs/msg/v1/key_value_pair.proto";
+import "foxglove_msgs/msg/v1/points_annotation.proto";
+import "foxglove_msgs/msg/v1/text_annotation.proto";
+import "google/protobuf/timestamp.proto";
+
+package foxglove_msgs.msg.v1;
+
+// Array of annotations for a 2D image
+message ImageAnnotations {
+  // Timestamp of the image annotations. When set, individual annotation timestamps will be ignored.
+  optional google.protobuf.Timestamp timestamp = 5;
+
+  // Circle annotations
+  repeated foxglove_msgs.msg.v1.CircleAnnotation circles = 1;
+
+  // Points annotations
+  repeated foxglove_msgs.msg.v1.PointsAnnotation points = 2;
+
+  // Text annotations
+  repeated foxglove_msgs.msg.v1.TextAnnotation texts = 3;
+
+  // Additional user-provided metadata associated with the image annotations. Keys must be unique within this object. Per-annotation metadata takes precedence over these values.
+  repeated foxglove_msgs.msg.v1.KeyValuePair metadata = 4;
+}

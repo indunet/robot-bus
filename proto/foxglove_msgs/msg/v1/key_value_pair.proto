@@ -1,0 +1,15 @@
+// Adapted from Foxglove schemas (https://github.com/foxglove/foxglove-sdk).
+// Official package is `foxglove`; here remapped to project layout.
+
+syntax = "proto3";
+
+package foxglove_msgs.msg.v1;
+
+// A key with its associated value
+message KeyValuePair {
+  // Key
+  string key = 1;
+
+  // Value
+  string value = 2;
+}

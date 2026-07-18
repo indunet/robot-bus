@@ -1,0 +1,63 @@
+// Adapted from Foxglove schemas (https://github.com/foxglove/foxglove-sdk).
+// Official package is `foxglove`; here remapped to project layout.
+
+syntax = "proto3";
+
+import "foxglove_msgs/msg/v1/arrow_primitive.proto";
+import "foxglove_msgs/msg/v1/cube_primitive.proto";
+import "foxglove_msgs/msg/v1/cylinder_primitive.proto";
+import "foxglove_msgs/msg/v1/key_value_pair.proto";
+import "foxglove_msgs/msg/v1/line_primitive.proto";
+import "foxglove_msgs/msg/v1/model_primitive.proto";
+import "foxglove_msgs/msg/v1/sphere_primitive.proto";
+import "foxglove_msgs/msg/v1/text_primitive.proto";
+import "foxglove_msgs/msg/v1/triangle_list_primitive.proto";
+import "google/protobuf/duration.proto";
+import "google/protobuf/timestamp.proto";
+
+package foxglove_msgs.msg.v1;
+
+// A visual element in a 3D scene. An entity may be composed of multiple primitives which all share the same frame of reference.
+message SceneEntity {
+  // Timestamp of the entity
+  google.protobuf.Timestamp timestamp = 1;
+
+  // Frame of reference
+  string frame_id = 2;
+
+  // Identifier for the entity. A entity will replace any prior entity on the same topic with the same `id`.
+  string id = 3;
+
+  // Length of time (relative to `timestamp`) after which the entity should be automatically removed. Zero value indicates the entity should remain visible until it is replaced or deleted.
+  google.protobuf.Duration lifetime = 4;
+
+  // False indicates the entity should keep its location in the fixed frame until a new entity is published. True indicates the entity should follow the frame specified in `frame_id` as it moves relative to the fixed frame when new transform messages are received.
+  bool frame_locked = 5;
+
+  // Additional user-provided metadata associated with the entity. Keys must be unique.
+  repeated foxglove_msgs.msg.v1.KeyValuePair metadata = 6;
+
+  // Arrow primitives
+  repeated foxglove_msgs.msg.v1.ArrowPrimitive arrows = 7;
+
+  // Cube primitives
+  repeated foxglove_msgs.msg.v1.CubePrimitive cubes = 8;
+
+  // Sphere primitives
+  repeated foxglove_msgs.msg.v1.SpherePrimitive spheres = 9;
+
+  // Cylinder primitives
+  repeated foxglove_msgs.msg.v1.CylinderPrimitive cylinders = 10;
+
+  // Line primitives
+  repeated foxglove_msgs.msg.v1.LinePrimitive lines = 11;
+
+  // Triangle list primitives
+  repeated foxglove_msgs.msg.v1.TriangleListPrimitive triangles = 12;
+
+  // Text primitives
+  repeated foxglove_msgs.msg.v1.TextPrimitive texts = 13;
+
+  // Model primitives
+  repeated foxglove_msgs.msg.v1.ModelPrimitive models = 14;
+}

@@ -87,6 +87,14 @@ pub mod diagnostic_msgs {
     }
 }
 
+pub mod foxglove_msgs {
+    pub mod msg {
+        pub mod v1 {
+            include!(concat!(env!("OUT_DIR"), "/foxglove_msgs.msg.v1.rs"));
+        }
+    }
+}
+
 pub mod trajectory_msgs {
     pub mod msg {
         pub mod v1 {

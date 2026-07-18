@@ -1,0 +1,34 @@
+// Adapted from Foxglove schemas (https://github.com/foxglove/foxglove-sdk).
+// Official package is `foxglove`; here remapped to project layout.
+
+syntax = "proto3";
+
+import "foxglove_msgs/msg/v1/quaternion.proto";
+import "foxglove_msgs/msg/v1/vector3.proto";
+import "google/protobuf/timestamp.proto";
+
+package foxglove_msgs.msg.v1;
+
+// A transform between two reference frames in 3D space. The transform defines the position and orientation of a child frame within a parent frame. Translation moves the origin of the child frame relative to the parent origin. The rotation changes the orientation of the child frame around its origin.
+// 
+// Examples:
+// 
+// - With translation (x=1, y=0, z=0) and identity rotation (x=0, y=0, z=0, w=1), a point at (x=0, y=0, z=0) in the child frame maps to (x=1, y=0, z=0) in the parent frame.
+// 
+// - With translation (x=1, y=2, z=0) and a 90-degree rotation around the z-axis (x=0, y=0, z=0.707, w=0.707), a point at (x=1, y=0, z=0) in the child frame maps to (x=-1, y=3, z=0) in the parent frame.
+message FrameTransform {
+  // Timestamp of transform
+  google.protobuf.Timestamp timestamp = 1;
+
+  // Name of the parent frame
+  string parent_frame_id = 2;
+
+  // Name of the child frame
+  string child_frame_id = 3;
+
+  // Translation component of the transform, representing the position of the child frame's origin in the parent frame.
+  foxglove_msgs.msg.v1.Vector3 translation = 4;
+
+  // Rotation component of the transform, representing the orientation of the child frame in the parent frame
+  foxglove_msgs.msg.v1.Quaternion rotation = 5;
+}

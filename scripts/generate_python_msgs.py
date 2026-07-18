@@ -37,6 +37,7 @@ MSG_PACKAGES = (
     "builtin_interfaces",
     "control_msgs",
     "diagnostic_msgs",
+    "foxglove_msgs",
     "geometry_msgs",
     "nav2_msgs",
     "nav_msgs",

@@ -1,0 +1,14 @@
+// Adapted from Foxglove schemas (https://github.com/foxglove/foxglove-sdk).
+// Official package is `foxglove`; here remapped to project layout.
+
+syntax = "proto3";
+
+import "foxglove_msgs/msg/v1/location_fix.proto";
+
+package foxglove_msgs.msg.v1;
+
+// A group of LocationFix messages
+message LocationFixes {
+  // An array of location fixes
+  repeated foxglove_msgs.msg.v1.LocationFix fixes = 1;
+}

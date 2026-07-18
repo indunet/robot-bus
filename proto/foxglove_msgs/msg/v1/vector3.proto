@@ -1,0 +1,18 @@
+// Adapted from Foxglove schemas (https://github.com/foxglove/foxglove-sdk).
+// Official package is `foxglove`; here remapped to project layout.
+
+syntax = "proto3";
+
+package foxglove_msgs.msg.v1;
+
+// A vector in 3D space that represents a direction only
+message Vector3 {
+  // x component
+  double x = 1;
+
+  // y component
+  double y = 2;
+
+  // z component
+  double z = 3;
+}

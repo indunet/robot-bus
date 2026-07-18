@@ -1,0 +1,30 @@
+// Adapted from Foxglove schemas (https://github.com/foxglove/foxglove-sdk).
+// Official package is `foxglove`; here remapped to project layout.
+
+syntax = "proto3";
+
+import "foxglove_msgs/msg/v1/color.proto";
+import "foxglove_msgs/msg/v1/pose.proto";
+
+package foxglove_msgs.msg.v1;
+
+// A primitive representing an arrow
+message ArrowPrimitive {
+  // Position of the arrow's tail and orientation of the arrow. Identity orientation means the arrow points in the +x direction.
+  foxglove_msgs.msg.v1.Pose pose = 1;
+
+  // Length of the arrow shaft
+  double shaft_length = 2;
+
+  // Diameter of the arrow shaft
+  double shaft_diameter = 3;
+
+  // Length of the arrow head
+  double head_length = 4;
+
+  // Diameter of the arrow head
+  double head_diameter = 5;
+
+  // Color of the arrow
+  foxglove_msgs.msg.v1.Color color = 6;
+}
