@@ -31,3 +31,6 @@ Cargo.lock
 .venv/
 **/__pycache__/
 *.py[cod]
+
+# Local-only notes
+dev_note.md
