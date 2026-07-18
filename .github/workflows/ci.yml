@@ -107,7 +107,9 @@ jobs:
           cmake -S bindings/cpp -B bindings/cpp/build -DCMAKE_BUILD_TYPE=Release \
             -DCMAKE_PREFIX_PATH=/usr/local \
             -DROBOT_BUS_BUILD_TESTS=ON
-          cmake --build bindings/cpp/build --target robot_bus_msgs cpp_tests -j
+          # Cap jobs: bare `-j` is unlimited under GNU make and OOMs GHA when
+          # compiling ~130 protobuf .pb.cc units (exit 143 = SIGTERM).
+          cmake --build bindings/cpp/build --target robot_bus_msgs cpp_tests -j2
       - name: Run C++ binding tests
         run: |
           export LD_LIBRARY_PATH=/usr/local/lib:bindings/cpp/native/target/release:bindings/cpp/build:${LD_LIBRARY_PATH:-}

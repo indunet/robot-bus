@@ -42,7 +42,10 @@ cmake -S "$CPP" -B "$BUILD_DIR" \
   -DROBOT_BUS_BUILD_TESTS=OFF \
   -DCMAKE_INSTALL_PREFIX="$DEST/usr" \
   ${CMAKE_PREFIX_PATH:+-DCMAKE_PREFIX_PATH="$CMAKE_PREFIX_PATH"}
-cmake --build "$BUILD_DIR" --target robot_bus_msgs -j"$(nproc 2>/dev/null || sysctl -n hw.ncpu)"
+JOBS="$(nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 2)"
+# GitHub Actions runners OOM when compiling ~130 protobuf .pb.cc units in parallel.
+if [ "${CI:-}" = "true" ] && [ "$JOBS" -gt 2 ]; then JOBS=2; fi
+cmake --build "$BUILD_DIR" --target robot_bus_msgs -j"$JOBS"
 # Copy msgs lib from build dir
 find "$BUILD_DIR" -name 'librobot_bus_msgs*' -o -name 'robot_bus_msgs.*' | while read -r f; do
   case "$f" in
