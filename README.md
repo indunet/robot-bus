@@ -136,7 +136,7 @@ node.createSubscription("/robot1/imu", (_t, imu) => console.log(imu), Imu);
 
 ```toml
 robot-bus = { path = "../robot-bus" }
-# 或 crates.io：robot-bus = "0.0.5"
+# 或 crates.io：robot-bus = "0.0.6"
 ```
 
 语义接近 ROS 2：`Node::new` → typed `create_publisher` / `create_subscription` → `node.spin()`（自动挂 `SingleThreadedExecutor`）。
