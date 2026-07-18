@@ -85,23 +85,20 @@ import robot_bus
 from robot_bus.sensor_msgs.msg.v1 import Imu
 from robot_bus.geometry_msgs.msg.v1 import Vector3
 
-def on_imu(topic, payload):
-    imu = Imu()
-    imu.ParseFromString(payload)
+def on_imu(topic, imu: Imu):
     print(topic, imu.linear_acceleration)
 
 node = robot_bus.Node("pilot")
 executor = robot_bus.SingleThreadedExecutor()
 executor.add_node(node)
 
-imu_pub = node.create_publisher("/robot1/imu")
-node.create_subscription("/robot1/imu", on_imu)
-imu_pub.publish(
-    Imu(linear_acceleration=Vector3(x=0.0, y=0.0, z=9.8)).SerializeToString(),
-)
+imu_pub = node.create_publisher("/robot1/imu", Imu)
+node.create_subscription("/robot1/imu", on_imu, msg_type=Imu)
+imu_pub.publish(Imu(linear_acceleration=Vector3(x=0.0, y=0.0, z=9.8)))
 # executor.spin()  # 阻塞直到其它线程调用 executor.shutdown()
 ```
 
+（不传消息类型时仍为 raw bytes，自行 `SerializeToString` / `ParseFromString`。）
 ### 2. Rust（Executor + Node + spin）
 
 在 `Cargo.toml` 中添加依赖：
@@ -219,6 +216,7 @@ Proto（包名 `robot_bus.grpc.v1`，与 ROS `*.msg.v1` / `*.srv.v1` 区分）�
 ```bash
 cargo test
 PYTHONPATH=python python3 tests/python/test_msgs_roundtrip.py
+PYTHONPATH=python python3 tests/python/test_typed_api.py
 ```
 
 ## Protobuf 消息
@@ -230,7 +228,7 @@ PYTHONPATH=python python3 tests/python/test_msgs_roundtrip.py
 | Rust | `robot_bus::<pkg>::{msg\|srv}::v1` | `build.rs` + prost；挂在 crate 命名空间下 |
 | Python | `robot_bus.<pkg>.{msg\|srv}.v1` | 随 wheel 打包；`scripts/generate_python_msgs.py` 生成 |
 
-- 传输层 body 仍是 opaque bytes（含 gRPC 网关）；Node SDK 在 create 时绑定类型并自动 encode/decode（`create_publisher::<M>` / `create_subscription::<M, _>` 等），也可用 `*_raw` 自行处理
+- 传输层 body 仍是 opaque bytes（含 gRPC 网关）；Rust Node SDK 在 create 时绑定类型并自动 encode/decode（`create_publisher::<M>` 等），也可用 `*_raw`；Python 传入 protobuf 类即可 typed（纯 Python 薄封装），省略类型则为 raw bytes
 - **srv** 是一对 `*Request` / `*Response` message，不是 gRPC
 - **grpc**（`robot_bus`）是网关 RPC 契约，随 broker 启动（默认 feature `grpc`）
 - 消息在 `robot_bus` 命名空间下，**不占用** ROS 顶层 `sensor_msgs` 包名；编码是 protobuf，与 ROS CDR 不互通

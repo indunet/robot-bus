@@ -37,16 +37,16 @@ with robot_bus.RobotBusBroker.start(
 
 ## Message bus（Executor + Node + spin）
 
-接近 ROS 2：`Node(...)` → `executor.add_node(node)` → `create_publisher(topic)` → `publisher.publish(...)`。Python 侧为 raw bytes（自行 `SerializeToString` / `ParseFromString`）；Rust 侧主推 typed `create_publisher::<Imu>` / `create_subscription::<Imu, _>`。
+接近 ROS 2：`Node(...)` → `executor.add_node(node)` → `create_publisher` / `create_subscription` → `spin`。
+
+Python 主推 **typed**（创建时传入 protobuf 类，自动 `SerializeToString` / `ParseFromString`）；不传类型则仍为 raw bytes。底层与 Rust 一样走 opaque bytes（纯 Python 薄封装，因 PyO3 无法映射 Rust 泛型）。
 
 ```python
 import robot_bus
 from robot_bus.sensor_msgs.msg.v1 import Imu
 from robot_bus.geometry_msgs.msg.v1 import Vector3
 
-def on_imu(topic, payload):
-    imu = Imu()
-    imu.ParseFromString(payload)
+def on_imu(topic, imu: Imu):
     print(topic, imu.angular_velocity)
 
 node = robot_bus.Node("pilot")
@@ -54,17 +54,31 @@ node = robot_bus.Node("pilot")
 executor = robot_bus.SingleThreadedExecutor()
 executor.add_node(node)
 
-imu_pub = node.create_publisher("/robot1/imu")
-node.create_subscription("/robot1/imu", on_imu)
+imu_pub = node.create_publisher("/robot1/imu", Imu)
+node.create_subscription("/robot1/imu", on_imu, msg_type=Imu)
 
-imu = Imu(
-    angular_velocity=Vector3(x=0.0, y=0.0, z=0.1),
-    linear_acceleration=Vector3(x=0.0, y=0.0, z=9.8),
+imu_pub.publish(
+    Imu(
+        angular_velocity=Vector3(x=0.0, y=0.0, z=0.1),
+        linear_acceleration=Vector3(x=0.0, y=0.0, z=9.8),
+    )
 )
-imu_pub.publish(imu.SerializeToString())
 
 # 阻塞直到 executor.shutdown() 或 shutdown_handle().shutdown()
 # executor.spin()
+```
+
+Raw bytes（与旧用法兼容）：
+
+```python
+imu_pub = node.create_publisher("/robot1/imu")  # → TopicPublisher
+imu_pub.publish(imu.SerializeToString())
+
+def on_raw(topic, payload: bytes):
+    imu = Imu()
+    imu.ParseFromString(payload)
+
+node.create_subscription("/robot1/imu", on_raw)
 ```
 
 多线程 service/action handler：
@@ -88,17 +102,25 @@ node.create_action_server("navigate", on_goal, callback_group=group)
 
 ### Service / Action（Node）
 
-与 topic / timer 一样挂在 Node 上：server 用 `create_service` / `create_action_server`，client 用 `create_client` / `create_action_client`。
+与 topic / timer 一样挂在 Node 上。可传 protobuf 类型做自动编解码，或省略走 raw bytes。
 
 ```python
-def on_echo(body: bytes) -> bytes:
-    return b"echo:" + body
+from robot_bus.std_srvs.srv.v1 import SetBoolRequest, SetBoolResponse
+from robot_bus.action.v1 import (
+    FibonacciGoal,
+    FibonacciFeedback,
+    FibonacciResult,
+)
 
-def on_goal(payload: bytes):
-    # 返回 [(phase, body), ...]；phase 一般为 "FEEDBACK" / "RESULT"
+def on_set_bool(req: SetBoolRequest) -> SetBoolResponse:
+    return SetBoolResponse(success=True, message=f"set:{req.data}")
+
+def on_fibonacci(goal: FibonacciGoal):
+    # 返回 [(phase, Message), ...]；phase 一般为 "FEEDBACK" / "RESULT"
+    seq = list(range(goal.order))
     return [
-        ("FEEDBACK", b"step-1"),
-        ("RESULT", b"done:" + payload),
+        ("FEEDBACK", FibonacciFeedback(sequence=seq[:1])),
+        ("RESULT", FibonacciResult(sequence=seq)),
     ]
 
 server_node = robot_bus.Node("worker")
@@ -106,17 +128,34 @@ cli_node = robot_bus.Node("caller")
 executor = robot_bus.SingleThreadedExecutor()
 executor.add_node(server_node)
 
-server_node.create_service("echo", on_echo)
-server_node.create_action_server("navigate", on_goal)
+server_node.create_service(
+    "/set_bool", on_set_bool,
+    request_type=SetBoolRequest, response_type=SetBoolResponse,
+)
+server_node.create_action_server(
+    "/fibonacci", on_fibonacci,
+    goal_type=FibonacciGoal,
+    feedback_type=FibonacciFeedback,
+    result_type=FibonacciResult,
+)
 
-svc = cli_node.create_client("echo")
-# reply = svc.call(b"ping", timeout=5.0)
+svc = cli_node.create_client(
+    "/set_bool",
+    request_type=SetBoolRequest, response_type=SetBoolResponse,
+)
+# reply = svc.call(SetBoolRequest(data=True), timeout=5.0)
 
-act = cli_node.create_action_client("navigate")
-# messages = act.send_goal(b"go", timeout=10.0)
+act = cli_node.create_action_client(
+    "/fibonacci",
+    goal_type=FibonacciGoal,
+    feedback_type=FibonacciFeedback,
+    result_type=FibonacciResult,
+)
+# messages = act.send_goal(FibonacciGoal(order=5), timeout=10.0)
 # executor.spin()
 ```
 
+Raw：`handler(body: bytes) -> bytes` / `call(bytes)`；action 同理传 bytes。
 endpoint 默认本机 broker；也可用 `Node(..., service_frontend=..., service_backend=..., action_backend=..., action_frontend=...)` 覆盖。
 
 ### 定时器
@@ -214,14 +253,14 @@ print(robot_bus.__version__)
 | `SingleThreadedExecutor()` | 单线程执行器；`add_node` + `spin` |
 | `MultiThreadedExecutor(num_threads=4)` | service/action handler 可并行 |
 | `executor.add_node(node)` | 把节点挂到执行器（ROS 2 同款） |
-| `node.create_publisher(topic)` → `TopicPublisher` | raw publisher；`publish(bytes)` |
+| `node.create_publisher(topic, msg_type=None)` | typed → `TypedTopicPublisher.publish(Message)`；省略类型 → raw `TopicPublisher.publish(bytes)` |
 | `node.create_timer(period, callback)` → `TimerHandle` | 定时器（与 topic 一样挂在 Node） |
 | `CallbackGroupType` / `create_callback_group` | `MutuallyExclusive` / `Reentrant` |
-| `create_subscription(..., callback_group=)` | raw 订阅；`callback(topic, bytes)` |
-| `create_service(name, handler, …)` | service server；`handler(body) -> bytes` |
-| `create_client(name)` → `ServiceClient` | service client；`call(body, timeout=…)` |
-| `create_action_server(name, handler, …)` | action server；handler 返回 `[(phase, bytes), ...]` |
-| `create_action_client(name)` → `ActionClient` | action client；`send_goal` / `cancel` |
+| `create_subscription(..., msg_type=, callback_group=)` | typed：`callback(topic, Message)`；省略类型：`callback(topic, bytes)` |
+| `create_service(..., request_type=, response_type=)` | typed：`handler(Request) -> Response`；否则 raw bytes |
+| `create_client(..., request_type=, response_type=)` | typed → `TypedServiceClient`；否则 `ServiceClient` |
+| `create_action_server(..., goal_type=, feedback_type=, result_type=)` | typed：`[(phase, Message), ...]`；否则 bytes |
+| `create_action_client(..., goal_type=, feedback_type=, result_type=)` | typed → `TypedActionClient`；否则 `ActionClient` |
 | `Publisher(endpoint=None)` | 低层连 XSUB（不经 Node） |
 | `RobotBusBroker.start()` | 进程内启动三个 bus + gRPC |
 | `run_broker()` | 阻塞 CLI 入口 |

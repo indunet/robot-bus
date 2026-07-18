@@ -38,5 +38,7 @@ jobs:
         run: |
           python3 scripts/generate_python_msgs.py
           git diff --exit-code -- python/robot_bus
-      - name: Smoke test message round-trip
-        run: PYTHONPATH=python python3 tests/python/test_msgs_roundtrip.py
+      - name: Smoke test message round-trip and typed API
+        run: |
+          PYTHONPATH=python python3 tests/python/test_msgs_roundtrip.py
+          PYTHONPATH=python python3 tests/python/test_typed_api.py
