@@ -43,7 +43,19 @@ kotlin-dev:
 	cargo build --release --manifest-path bindings/cpp/native/Cargo.toml
 	cd bindings/kotlin && ./gradlew test --no-daemon
 
-# Kotlin smoke tests (native lib from cpp release build)
+# Cross-compile librobot_bus_c for Android ABIs into bindings/android jniLibs
+android-native:
+	./scripts/build_android_native.sh
+
+# Assemble Android AAR (run android-native first for jniLibs)
+android-dev: android-native
+	cd bindings/android && ./gradlew assembleRelease --no-daemon
+
+# Back-compat aliases
+kotlin-android-native: android-native
+kotlin-android: android-dev
+
+# Kotlin JVM smoke tests (native lib from cpp release build)
 test-kotlin:
 	cd bindings/kotlin && ./gradlew test --no-daemon
 

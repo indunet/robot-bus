@@ -32,8 +32,15 @@ bindings/cpp/build-*/
 
 # Kotlin / Gradle
 bindings/kotlin/.gradle/
+bindings/kotlin/.kotlin/
 bindings/kotlin/build/
 bindings/kotlin/local.properties
+bindings/android/.gradle/
+bindings/android/.kotlin/
+bindings/android/build/
+bindings/android/local.properties
+bindings/android/.android-native-deps/
+bindings/android/src/main/jniLibs/
 
 # Library crate: dependents use their own lockfile
 Cargo.lock

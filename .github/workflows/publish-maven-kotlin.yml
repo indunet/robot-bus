@@ -1,9 +1,9 @@
-# Publish Kotlin binding to Maven Central.
+# Publish Kotlin JVM JAR (org.indunet:robot-bus) to Maven Central.
 #
 # Disabled until GPG signing secrets are configured on this repo.
-# When ready: set `if: false` → remove it (or set true), and restore tag triggers.
+# When ready: remove `if: false` and optionally restore tag triggers.
 
-name: Publish to Maven Central
+name: Publish Kotlin to Maven Central
 
 on:
   workflow_dispatch:
@@ -47,12 +47,12 @@ jobs:
           distribution: temurin
           java-version: "17"
 
-      - name: Build C ABI (librobot_bus_c)
+      - name: Build C ABI (host)
         run: |
           python3 scripts/generate_rust_msgs.py
           cargo build --release --manifest-path bindings/cpp/native/Cargo.toml
 
-      - name: Publish to Maven Central
+      - name: Publish JVM JAR
         working-directory: bindings/kotlin
         env:
           ROBOT_BUS_NATIVE_DIR: ${{ github.workspace }}/bindings/cpp/native/target/release

@@ -1,0 +1,79 @@
+# Publish Android AAR (org.indunet:robot-bus-android) to Maven Central.
+#
+# Disabled until GPG signing secrets are configured on this repo.
+# When ready: remove `if: false` and optionally restore tag triggers.
+
+name: Publish Android to Maven Central
+
+on:
+  workflow_dispatch:
+  # push:
+  #   tags:
+  #     - "v*"
+
+jobs:
+  publish:
+    if: false
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Check tag matches versions
+        if: github.event_name == 'push'
+        run: |
+          TAG="${GITHUB_REF_NAME#v}"
+          CRATE_VERSION="$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -n1)"
+          NATIVE_VERSION="$(sed -n 's/^version = "\(.*\)"/\1/p' bindings/cpp/native/Cargo.toml | head -n1)"
+          KT_VERSION="$(sed -n 's/^VERSION_NAME=//p' bindings/kotlin/gradle.properties | head -n1)"
+          AND_VERSION="$(sed -n 's/^VERSION_NAME=//p' bindings/android/gradle.properties | head -n1)"
+          if [ "$TAG" != "$CRATE_VERSION" ] || [ "$TAG" != "$NATIVE_VERSION" ] || [ "$TAG" != "$KT_VERSION" ] || [ "$TAG" != "$AND_VERSION" ]; then
+            echo "Tag ($TAG) must match Cargo ($CRATE_VERSION), cpp native ($NATIVE_VERSION), kotlin ($KT_VERSION), android ($AND_VERSION)"
+            exit 1
+          fi
+
+      - name: Install build deps
+        run: |
+          set -eux
+          sudo apt-get update
+          sudo apt-get install -y cmake g++ make curl unzip pkg-config libzmq3-dev ninja-build
+          curl -fsSL -o /tmp/protoc.zip \
+            "https://github.com/protocolbuffers/protobuf/releases/download/v35.1/protoc-35.1-linux-x86_64.zip"
+          sudo unzip -o /tmp/protoc.zip -d /usr/local
+          protoc --version
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-linux-android,armv7-linux-androideabi,x86_64-linux-android
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Setup Android SDK / NDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install NDK 26
+        run: |
+          sdkmanager "ndk;26.3.11579264" "cmake;3.22.1"
+          echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/26.3.11579264" >> "$GITHUB_ENV"
+
+      - name: Install cargo-ndk
+        run: cargo install cargo-ndk --locked
+
+      - name: Generate Rust stubs (needed by native crate features)
+        run: python3 scripts/generate_rust_msgs.py
+
+      - name: Build Android jniLibs
+        run: ./scripts/build_android_native.sh
+        env:
+          ANDROID_API_LEVEL: "24"
+
+      - name: Publish Android AAR
+        working-directory: bindings/android
+        env:
+          ORG_GRADLE_PROJECT_mavenCentralUsername: ${{ secrets.MAVEN_CENTRAL_USERNAME }}
+          ORG_GRADLE_PROJECT_mavenCentralPassword: ${{ secrets.MAVEN_CENTRAL_PASSWORD }}
+          ORG_GRADLE_PROJECT_signingInMemoryKey: ${{ secrets.GPG_PRIVATE_KEY }}
+          ORG_GRADLE_PROJECT_signingInMemoryKeyPassword: ${{ secrets.GPG_PASSPHRASE }}
+        run: ./gradlew publishAndReleaseToMavenCentral --no-daemon

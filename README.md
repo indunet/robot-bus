@@ -27,13 +27,13 @@ Lightweight ROS 2–style messaging over ZeroMQ — topics, services & actions, 
 | `runtime::Node` / `TopicPublisher` / `CallbackGroup` | 节点、publisher、callback group（互斥 / 可重入） |
 | `grpc::`（默认 feature） | gRPC / gRPC-Web 网关（随 broker 一起启动） |
 | [`proto/`](proto/) | 契约源：ROS 风格 Protobuf → Rust / bindings 生成代码 |
-| [`bindings/`](bindings/) | 语言绑定（Python、TypeScript、C++、Kotlin） |
+| [`bindings/`](bindings/) | 语言绑定（Python、TypeScript、C++、Kotlin、Android） |
 | [`console/`](console/) | Web 监控控制台（产品 UI，嵌入 broker `:15771`；产物在 `assets/console/`） |
 
 ## 架构
 
 ```
-业务代码 (Rust / Python / TypeScript / C++ / Kotlin)
+业务代码 (Rust / Python / TypeScript / C++ / Kotlin / Android)
   └── robot-bus SDK
               │
               │ ZMQ (tcp / ipc / inproc) 或 gRPC / gRPC-Web
@@ -132,28 +132,27 @@ node.createSubscription("/robot1/imu", (_t, imu) => console.log(imu), Imu);
 
 浏览器 / 纯 gRPC：`Node.grpc("client")`（browser 入口的 `Node` 即为 gRPC-Web facade）。
 
-### Kotlin（Maven Central）
+### Kotlin / Android（Maven Central）
 
-坐标：`org.indunet:robot-bus`（包名 `org.indunet.robot.bus`）。发布 workflow 暂未启用（缺 GPG）。本地开发：
+| 产物 | 目录 | 坐标 |
+|------|------|------|
+| JVM JAR | [`bindings/kotlin/`](bindings/kotlin/) | `org.indunet:robot-bus` |
+| Android AAR | [`bindings/android/`](bindings/android/) | `org.indunet:robot-bus-android` |
+
+包名均为 `org.indunet.robot.bus`。发布 workflow 暂未启用（缺 GPG）。
 
 ```bash
-just kotlin-dev
-# 先编 bindings/cpp/native 的 librobot_bus_c，再跑 Gradle test
+just kotlin-dev     # JVM
+just android-dev    # AAR（需 Android SDK + NDK 26 + cargo-ndk）
 ```
 
 ```kotlin
-import org.indunet.robot.bus.Broker
+// Android
+RobotBusAndroid.init(this)
 import org.indunet.robot.bus.Node
-
-Broker().use { _ ->
-    Node.tcp("pilot").use { node ->
-        val pub = node.createPublisher("/imu")
-        pub.publish(byteArrayOf(1, 2, 3))
-    }
-}
 ```
 
-详见 [`bindings/kotlin/README.md`](bindings/kotlin/README.md)。载荷目前为 raw `ByteArray`（与 C++ 一致；Kotlin protobuf stubs 后续再补）。
+详见 [`bindings/kotlin/README.md`](bindings/kotlin/README.md) / [`bindings/android/README.md`](bindings/android/README.md)。载荷目前为 raw `ByteArray`。
 
 ### 2b. C++（DEB / MSI）
 
@@ -335,6 +334,7 @@ just test-typescript
 | TypeScript | `robot-bus/<pkg>/{msg\|srv}/v1/…` | `just gen-typescript`；随 npm 包打包 |
 | C++ | `#include <robot_bus/…>` | `just gen-cpp`；随 DEB/MSI 打包 |
 | Kotlin | raw `ByteArray`（protobuf stubs 待补） | `just kotlin-dev`；Maven `org.indunet:robot-bus` |
+| Android | 同上 API + jniLibs | `just android-dev`；Maven `org.indunet:robot-bus-android` |
 
 - 传输层 body 仍是 opaque bytes（含 gRPC 网关）；Rust Node SDK 在 create 时绑定类型并自动 encode/decode（`create_publisher::<M>` 等），也可用 `*_raw`；Python / TypeScript 传入 protobuf 类型即可 typed（薄封装），省略类型则为 raw bytes
 - **srv** 是一对 `*Request` / `*Response` message，不是 gRPC
