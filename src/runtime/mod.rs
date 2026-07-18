@@ -19,7 +19,7 @@ pub use executor::{Executor, ShutdownHandle};
 pub use executors::{ExecutorHandle, MultiThreadedExecutor, SingleThreadedExecutor};
 pub use node::{
     Node, NodeActionClient, NodeActionClientRaw, NodeActionServer, NodeOptions, NodeService,
-    NodeServiceClient, NodeServiceClientRaw, TopicPublisher,
+    NodeServiceClient, NodeServiceClientRaw, TopicPublisher, TopicPublisherRaw,
 };
 pub use queues::ActionMessageCallback;
 pub use registrations::{ActionGoalHandler, MessageCallback, ServiceHandler};

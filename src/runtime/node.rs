@@ -3,7 +3,7 @@
 //! Typical flow (matches ROS 2):
 //! 1. `let mut node = Node::new("pilot");`
 //! 2. `executor.add_node(&mut node)?;`
-//! 3. `let pub_ = node.create_publisher("/robot1/imu")?; pub_.publish(&bytes)?;`
+//! 3. `let pub_ = node.create_publisher::<Imu>("/robot1/imu")?; pub_.publish(&imu)?;`
 //! 4. `executor.spin()?;`
 //!
 //! Topic / service / action names are used as given (pass full paths yourself).
@@ -112,22 +112,47 @@ impl NodeOptions {
     }
 }
 
-/// Topic-bound publisher returned by [`Node::create_publisher`] (ROS 2 style).
+/// Raw (opaque bytes) publisher from [`Node::create_publisher_raw`].
 ///
 /// Shares one underlying bus PUB socket per node; each handle remembers its topic.
 #[derive(Clone)]
-pub struct TopicPublisher {
+pub struct TopicPublisherRaw {
     inner: Arc<BusPublisher>,
     topic: String,
 }
 
-impl TopicPublisher {
+impl TopicPublisherRaw {
     pub fn topic(&self) -> &str {
         &self.topic
     }
 
     pub fn publish(&self, payload: &[u8]) -> Result<()> {
         self.inner.publish(&self.topic, payload)
+    }
+
+    pub fn high_water_mark(&self) -> Result<HighWaterMark> {
+        self.inner.high_water_mark()
+    }
+
+    pub fn set_high_water_mark(&self, hwm: HighWaterMark) -> Result<()> {
+        self.inner.set_high_water_mark(hwm)
+    }
+}
+
+/// Typed topic publisher returned by [`Node::create_publisher`] (ROS 2 style).
+#[derive(Clone)]
+pub struct TopicPublisher<M: Message + Default> {
+    inner: TopicPublisherRaw,
+    _marker: PhantomData<M>,
+}
+
+impl<M: Message + Default> TopicPublisher<M> {
+    pub fn topic(&self) -> &str {
+        self.inner.topic()
+    }
+
+    pub fn publish(&self, msg: &M) -> Result<()> {
+        self.inner.publish(&msg.encode_to_vec())
     }
 
     pub fn high_water_mark(&self) -> Result<HighWaterMark> {
@@ -421,28 +446,50 @@ impl Node {
         self.executor.as_ref()
     }
 
-    /// Create a topic publisher (ROS 2 `create_publisher`).
+    /// Create a typed topic publisher (ROS 2 `create_publisher`).
     ///
-    /// Returns a handle; call [`TopicPublisher::publish`] to send. Multiple
-    /// publishers on the same node share one bus PUB socket.
-    pub fn create_publisher(&mut self, topic: impl Into<String>) -> Result<TopicPublisher> {
-        self.ensure_bus_publisher(None)?;
+    /// Multiple publishers on the same node share one bus PUB socket.
+    pub fn create_publisher<M: Message + Default>(
+        &mut self,
+        topic: impl Into<String>,
+    ) -> Result<TopicPublisher<M>> {
         Ok(TopicPublisher {
+            inner: self.create_publisher_raw(topic)?,
+            _marker: PhantomData,
+        })
+    }
+
+    /// Create a raw-bytes topic publisher.
+    pub fn create_publisher_raw(
+        &mut self,
+        topic: impl Into<String>,
+    ) -> Result<TopicPublisherRaw> {
+        self.create_publisher_raw_with_hwm(topic, None)
+    }
+
+    /// Like [`create_publisher_raw`](Self::create_publisher_raw), optionally setting HWM
+    /// on first socket connect.
+    pub fn create_publisher_raw_with_hwm(
+        &mut self,
+        topic: impl Into<String>,
+        hwm: Option<HighWaterMark>,
+    ) -> Result<TopicPublisherRaw> {
+        self.ensure_bus_publisher(hwm)?;
+        Ok(TopicPublisherRaw {
             inner: Arc::clone(self.publisher.as_ref().expect("publisher just ensured")),
             topic: topic.into(),
         })
     }
 
     /// Like [`create_publisher`](Self::create_publisher), setting HWM on first socket connect.
-    pub fn create_publisher_with_hwm(
+    pub fn create_publisher_with_hwm<M: Message + Default>(
         &mut self,
         topic: impl Into<String>,
         hwm: HighWaterMark,
-    ) -> Result<TopicPublisher> {
-        self.ensure_bus_publisher(Some(hwm))?;
+    ) -> Result<TopicPublisher<M>> {
         Ok(TopicPublisher {
-            inner: Arc::clone(self.publisher.as_ref().expect("publisher just ensured")),
-            topic: topic.into(),
+            inner: self.create_publisher_raw_with_hwm(topic, Some(hwm))?,
+            _marker: PhantomData,
         })
     }
 
@@ -507,25 +554,11 @@ impl Node {
         self.lock_executor()?.set_action_hwm(hwm)
     }
 
-    /// Subscribe with a raw-bytes callback (ROS 2 `create_subscription`).
+    /// Subscribe with a protobuf-typed callback (ROS 2 `create_subscription`).
     ///
-    /// Pass `callback_group` like ROS 2; `None` uses the node's default
-    /// mutually exclusive group.
-    pub fn create_subscription(
-        &mut self,
-        topic: &str,
-        callback: MessageCallback,
-        callback_group: Option<&CallbackGroup>,
-    ) -> Result<()> {
-        self.ensure_subscriber()?;
-        let group = callback_group
-            .cloned()
-            .unwrap_or_else(|| self.default_callback_group.clone());
-        self.lock_executor()?.subscribe(topic, callback, group)
-    }
-
-    /// Subscribe with a protobuf-typed callback. Decode failures are skipped.
-    pub fn create_subscription_typed<M, F>(
+    /// Decode failures are skipped (logged). `callback_group: None` uses the
+    /// node's default mutually exclusive group.
+    pub fn create_subscription<M, F>(
         &mut self,
         topic: &str,
         callback: F,
@@ -541,6 +574,20 @@ impl Node {
             .unwrap_or_else(|| self.default_callback_group.clone());
         self.lock_executor()?
             .subscribe_typed::<M, F>(topic, callback, group)
+    }
+
+    /// Subscribe with a raw-bytes callback.
+    pub fn create_subscription_raw(
+        &mut self,
+        topic: &str,
+        callback: MessageCallback,
+        callback_group: Option<&CallbackGroup>,
+    ) -> Result<()> {
+        self.ensure_subscriber()?;
+        let group = callback_group
+            .cloned()
+            .unwrap_or_else(|| self.default_callback_group.clone());
+        self.lock_executor()?.subscribe(topic, callback, group)
     }
 
     fn ensure_subscriber(&mut self) -> Result<()> {
@@ -836,7 +883,7 @@ mod tests {
         let executor = SingleThreadedExecutor::new();
         executor.add_node(&mut node).unwrap();
         assert_eq!(node.name(), "pilot");
-        let pub_ = node.create_publisher("/robot1/imu").unwrap();
+        let pub_ = node.create_publisher_raw("/robot1/imu").unwrap();
         assert_eq!(pub_.topic(), "/robot1/imu");
     }
 
@@ -844,7 +891,7 @@ mod tests {
     fn subscription_requires_add_node() {
         let mut node = Node::new("pilot");
         let err = node
-            .create_subscription("/imu", Arc::new(|_, _| {}), None)
+            .create_subscription_raw("/imu", Arc::new(|_, _| {}), None)
             .unwrap_err();
         assert!(err.to_string().contains("add_node"));
     }

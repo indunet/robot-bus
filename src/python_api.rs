@@ -20,7 +20,7 @@ use crate::runtime::{
     MultiThreadedExecutor as RustMultiThreadedExecutor, Node as RustNode,
     NodeActionClientRaw as RustNodeActionClient, NodeServiceClientRaw as RustNodeServiceClient,
     ShutdownHandle as RustShutdownHandle, SingleThreadedExecutor as RustSingleThreadedExecutor,
-    TimerHandle as RustTimerHandle, TopicPublisher as RustTopicPublisher,
+    TimerHandle as RustTimerHandle, TopicPublisherRaw as RustTopicPublisher,
 };
 use crate::action_bus::ActionKind;
 use crate::shutdown;
@@ -532,7 +532,7 @@ impl PyNode {
 
     fn create_publisher(&mut self, topic: &str) -> PyResult<PyTopicPublisher> {
         Ok(PyTopicPublisher {
-            inner: self.inner.create_publisher(topic).map_err(bus_err)?,
+            inner: self.inner.create_publisher_raw(topic).map_err(bus_err)?,
         })
     }
 
@@ -554,7 +554,7 @@ impl PyNode {
         });
         let group = callback_group.map(|g| &g.inner);
         self.inner
-            .create_subscription(topic, cb, group)
+            .create_subscription_raw(topic, cb, group)
             .map_err(bus_err)
     }
 

@@ -77,12 +77,11 @@ broker.stop()?;
 
 ## Message bus（Executor + Node + spin）
 
-接近 ROS 2：先 `Node::new`，再 `executor.add_node`，然后 `create_publisher(topic)` 得到 publisher 再 `publish`。推荐 typed 订阅；也可传 raw `&[u8]` 回调自行 decode。
+接近 ROS 2：先 `Node::new`，再 `executor.add_node`，然后 typed `create_publisher` / `create_subscription`（创建时绑定消息类型，自动 encode/decode）。底层与 gRPC 仍传 opaque bytes。
 
 ```rust
 use std::sync::Arc;
 use std::time::Duration;
-use prost::Message;
 use robot_bus::geometry_msgs::msg::v1::Vector3;
 use robot_bus::sensor_msgs::msg::v1::Imu;
 use robot_bus::{Node, SingleThreadedExecutor};
@@ -93,8 +92,8 @@ fn main() -> robot_bus::Result<()> {
     let executor = SingleThreadedExecutor::new();
     executor.add_node(&mut node)?;
 
-    let imu_pub = node.create_publisher("/robot1/imu")?;
-    node.create_subscription_typed::<Imu, _>(
+    let imu_pub = node.create_publisher::<Imu>("/robot1/imu")?;
+    node.create_subscription::<Imu, _>(
         "/robot1/imu",
         |topic, imu| {
             println!("{topic}: angular_z={:?}", imu.angular_velocity);
@@ -115,7 +114,7 @@ fn main() -> robot_bus::Result<()> {
         }),
         ..Default::default()
     };
-    imu_pub.publish(&imu.encode_to_vec())?;
+    imu_pub.publish(&imu)?;
 
     node.create_timer(
         Duration::from_millis(100),
@@ -136,7 +135,7 @@ fn main() -> robot_bus::Result<()> {
 }
 ```
 
-Raw bytes 回调：`node.create_subscription("/robot1/imu", Arc::new(|topic, payload| { ... }), None)?`。
+Raw bytes：`create_publisher_raw` / `create_subscription_raw`。
 
 topic / service / action 名按传入原样使用（请自行写全路径）。
 
@@ -154,7 +153,7 @@ let executor = MultiThreadedExecutor::new(4);
 executor.add_node(&mut node)?;
 
 let reentrant = node.create_callback_group(CallbackGroupType::Reentrant);
-node.create_subscription(
+node.create_subscription_raw(
     "/robot1/imu",
     Arc::new(|_topic, _payload| { /* 可与同组其它回调并行 */ }),
     Some(&reentrant),
@@ -188,12 +187,12 @@ use robot_bus::std_srvs::srv::v1::{SetBool, SetBoolRequest, SetBoolResponse};
 use robot_bus::{Node, SingleThreadedExecutor};
 
 fn main() -> robot_bus::Result<()> {
-    let mut server = Node::new("svc_server");
-    let mut client_node = Node::new("svc_client");
+    let mut server_node = Node::new("svc_server");
+    let mut cli_node = Node::new("svc_client");
     let executor = SingleThreadedExecutor::new();
-    executor.add_node(&mut server)?;
+    executor.add_node(&mut server_node)?;
 
-    server.create_service::<SetBool, _>(
+    server_node.create_service::<SetBool, _>(
         "/set_bool",
         |req: SetBoolRequest| SetBoolResponse {
             success: true,
@@ -202,7 +201,7 @@ fn main() -> robot_bus::Result<()> {
         None,
     )?;
 
-    let client = client_node.create_client::<SetBool>("/set_bool")?;
+    let client = cli_node.create_client::<SetBool>("/set_bool")?;
     let handle = executor.shutdown_handle()?;
     std::thread::spawn(move || {
         std::thread::sleep(Duration::from_millis(100));
@@ -234,12 +233,12 @@ use robot_bus::action::v1::{
 use robot_bus::{ActionOutcome, Node, SingleThreadedExecutor};
 
 fn main() -> robot_bus::Result<()> {
-    let mut server = Node::new("act_server");
-    let mut client_node = Node::new("act_client");
+    let mut server_node = Node::new("act_server");
+    let mut cli_node = Node::new("act_client");
     let executor = SingleThreadedExecutor::new();
-    executor.add_node(&mut server)?;
+    executor.add_node(&mut server_node)?;
 
-    server.create_action_server::<Fibonacci, _>(
+    server_node.create_action_server::<Fibonacci, _>(
         "fibonacci",
         |goal: FibonacciGoal| {
             let order = goal.order.max(0) as usize;
@@ -261,7 +260,7 @@ fn main() -> robot_bus::Result<()> {
         None,
     )?;
 
-    let client = client_node.create_action_client::<Fibonacci>("fibonacci")?;
+    let client = cli_node.create_action_client::<Fibonacci>("fibonacci")?;
     let handle = executor.shutdown_handle()?;
     std::thread::spawn(move || {
         std::thread::sleep(Duration::from_millis(100));
@@ -300,8 +299,8 @@ fn main() -> anyhow::Result<()> {
     let mut node = Node::with_options("demo", options);
     let executor = SingleThreadedExecutor::new();
     executor.add_node(&mut node)?;
-    let imu_pub = node.create_publisher("/robot1/imu")?;
-    node.create_subscription(
+    let imu_pub = node.create_publisher_raw("/robot1/imu")?;
+    node.create_subscription_raw(
         "/robot1/imu",
         Arc::new(|topic, payload| println!("{topic}: {} bytes", payload.len())),
         None,
@@ -318,20 +317,20 @@ fn main() -> anyhow::Result<()> {
 
 ## Protobuf 消息（`robot_bus::<pkg>`）
 
-总线仍传 opaque bytes。消息类型挂在 crate 命名空间下，例如 `robot_bus::sensor_msgs::msg::v1::Imu`（无中间 `msgs` 层）。`create_subscription_typed` 会自动 decode；raw 回调则自行 `Message::decode`。其它消息同理，例如 `geometry_msgs::msg::v1::Twist`：
+总线与 gRPC 网关仍传 opaque bytes（gRPC 侧通常拿不到业务 proto，保持二进制）。Node SDK 在 create 时绑定类型并自动 encode/decode，例如 `create_publisher::<Imu>` / `create_subscription::<Imu, _>`。消息类型挂在 crate 命名空间下：`robot_bus::sensor_msgs::msg::v1::Imu`。其它消息同理，例如：
 
 ```rust
-use prost::Message;
 use robot_bus::geometry_msgs::msg::v1::{Twist, Vector3};
 
 let twist = Twist {
     linear: Some(Vector3 { x: 1.0, y: 0.0, z: 0.0 }),
     angular: Some(Vector3::default()),
 };
-node.publish("cmd_vel", &twist.encode_to_vec())?;
+let pub_ = node.create_publisher::<Twist>("cmd_vel")?;
+pub_.publish(&twist)?;
 ```
 
-Service 的 Request / Response 可用 typed API（如 `create_client::<SetBool>`），也可手动 `encode` / `decode`。Action 同理（如 `robot_bus::action::v1::Fibonacci`）。
+Service / Action 同理（如 `create_client::<SetBool>`、`create_action_client::<Fibonacci>`）。
 
 ---
 

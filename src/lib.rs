@@ -43,7 +43,7 @@ pub use runtime::{
     MessageCallback, MultiThreadedExecutor, Node, NodeActionClient, NodeActionClientRaw,
     NodeActionServer, NodeOptions, NodeService, NodeServiceClient, NodeServiceClientRaw,
     ServiceHandler, ShutdownHandle, SingleThreadedExecutor, TimerCallback, TimerHandle,
-    TopicPublisher,
+    TopicPublisher, TopicPublisherRaw,
 };
 pub use service_bus::{ServiceClient, ServiceWorker};
 pub use transports::{

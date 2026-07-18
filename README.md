@@ -111,12 +111,11 @@ robot-bus = { path = "../robot-bus" }
 # 或 crates.io：robot-bus = "0.0.3"
 ```
 
-语义接近 ROS 2：`Node::new` → `executor.add_node` → `create_publisher(topic)` → `spin`：
+语义接近 ROS 2：`Node::new` → `executor.add_node` → typed `create_publisher` / `create_subscription` → `spin`：
 
 ```rust
 use std::sync::Arc;
 use std::time::Duration;
-use prost::Message;
 use robot_bus::geometry_msgs::msg::v1::Vector3;
 use robot_bus::sensor_msgs::msg::v1::Imu;
 use robot_bus::{Node, SingleThreadedExecutor};
@@ -125,8 +124,8 @@ let mut node = Node::new("pilot");
 let executor = SingleThreadedExecutor::new();
 executor.add_node(&mut node)?;
 
-let imu_pub = node.create_publisher("/robot1/imu")?;
-node.create_subscription_typed::<Imu, _>(
+let imu_pub = node.create_publisher::<Imu>("/robot1/imu")?;
+node.create_subscription::<Imu, _>(
     "/robot1/imu",
     |topic, imu| {
         println!("{topic}: {:?}", imu.linear_acceleration);
@@ -138,7 +137,7 @@ let imu = Imu {
     linear_acceleration: Some(Vector3 { x: 0.0, y: 0.0, z: 9.8 }),
     ..Default::default()
 };
-imu_pub.publish(&imu.encode_to_vec())?;
+imu_pub.publish(&imu)?;
 
 node.create_timer(
     Duration::from_millis(100),
@@ -158,7 +157,7 @@ executor.spin()?;
 - Callback group：`MutuallyExclusive` / `Reentrant`（`create_callback_group`；默认互斥组）
 - Service / action：typed `create_service` / `create_client`、`create_action_server` / `create_action_client`（与 topic 一样挂在 Node；另有 `*_raw`）
 - Timer：`create_timer`（同样挂在 Node，由 `spin` 驱动）
-- Raw bytes：`create_subscription(topic, Arc::new(|topic, payload| { ... }), None)`
+- Raw bytes：`create_publisher_raw` / `create_subscription_raw`
 - 底层 escape hatch：`Executor`（高级用法）
 
 发送 / 接收水位（ZMQ HWM，不是完整 QoS）可在创建时或运行中设置：
@@ -231,7 +230,7 @@ PYTHONPATH=python python3 tests/python/test_msgs_roundtrip.py
 | Rust | `robot_bus::<pkg>::{msg\|srv}::v1` | `build.rs` + prost；挂在 crate 命名空间下 |
 | Python | `robot_bus.<pkg>.{msg\|srv}.v1` | 随 wheel 打包；`scripts/generate_python_msgs.py` 生成 |
 
-- 传输层 body 仍是 opaque bytes；bus 不解析类型，业务侧自行 `encode` / `decode`（或用 `create_subscription_typed`）
+- 传输层 body 仍是 opaque bytes（含 gRPC 网关）；Node SDK 在 create 时绑定类型并自动 encode/decode（`create_publisher::<M>` / `create_subscription::<M, _>` 等），也可用 `*_raw` 自行处理
 - **srv** 是一对 `*Request` / `*Response` message，不是 gRPC
 - **grpc**（`robot_bus`）是网关 RPC 契约，随 broker 启动（默认 feature `grpc`）
 - 消息在 `robot_bus` 命名空间下，**不占用** ROS 顶层 `sensor_msgs` 包名；编码是 protobuf，与 ROS CDR 不互通

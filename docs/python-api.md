@@ -37,7 +37,7 @@ with robot_bus.RobotBusBroker.start(
 
 ## Message bus（Executor + Node + spin）
 
-接近 ROS 2：`Node(...)` → `executor.add_node(node)` → `create_publisher(topic)` → `publisher.publish(...)`。
+接近 ROS 2：`Node(...)` → `executor.add_node(node)` → `create_publisher(topic)` → `publisher.publish(...)`。Python 侧为 raw bytes（自行 `SerializeToString` / `ParseFromString`）；Rust 侧主推 typed `create_publisher::<Imu>` / `create_subscription::<Imu, _>`。
 
 ```python
 import robot_bus
@@ -101,18 +101,18 @@ def on_goal(payload: bytes):
         ("RESULT", b"done:" + payload),
     ]
 
-server = robot_bus.Node("worker")
-client_node = robot_bus.Node("caller")
+server_node = robot_bus.Node("worker")
+cli_node = robot_bus.Node("caller")
 executor = robot_bus.SingleThreadedExecutor()
-executor.add_node(server)
+executor.add_node(server_node)
 
-server.create_service("echo", on_echo)
-server.create_action_server("navigate", on_goal)
+server_node.create_service("echo", on_echo)
+server_node.create_action_server("navigate", on_goal)
 
-svc = client_node.create_client("echo")
+svc = cli_node.create_client("echo")
 # reply = svc.call(b"ping", timeout=5.0)
 
-act = client_node.create_action_client("navigate")
+act = cli_node.create_action_client("navigate")
 # messages = act.send_goal(b"go", timeout=10.0)
 # executor.spin()
 ```
@@ -214,10 +214,10 @@ print(robot_bus.__version__)
 | `SingleThreadedExecutor()` | 单线程执行器；`add_node` + `spin` |
 | `MultiThreadedExecutor(num_threads=4)` | service/action handler 可并行 |
 | `executor.add_node(node)` | 把节点挂到执行器（ROS 2 同款） |
-| `node.create_publisher(topic)` → `TopicPublisher` | 返回 publisher，再 `publish(bytes)` |
+| `node.create_publisher(topic)` → `TopicPublisher` | raw publisher；`publish(bytes)` |
 | `node.create_timer(period, callback)` → `TimerHandle` | 定时器（与 topic 一样挂在 Node） |
 | `CallbackGroupType` / `create_callback_group` | `MutuallyExclusive` / `Reentrant` |
-| `create_subscription(..., callback_group=)` | 可选 callback group |
+| `create_subscription(..., callback_group=)` | raw 订阅；`callback(topic, bytes)` |
 | `create_service(name, handler, …)` | service server；`handler(body) -> bytes` |
 | `create_client(name)` → `ServiceClient` | service client；`call(body, timeout=…)` |
 | `create_action_server(name, handler, …)` | action server；handler 返回 `[(phase, bytes), ...]` |

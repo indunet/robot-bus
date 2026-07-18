@@ -7,7 +7,6 @@ use std::sync::Arc;
 use std::thread;
 use std::time::Duration;
 
-use prost::Message;
 use robot_bus::message_bus::Publisher;
 use robot_bus::geometry_msgs::msg::v1::Vector3;
 use robot_bus::sensor_msgs::msg::v1::Imu;
@@ -220,8 +219,8 @@ fn node_subscription_uses_topic_as_given() {
     });
 
     let (executor, mut node) = node_with_proxy("pilot", &proxy);
-    node.create_subscription("/robot1/imu", callback, None)
-        .expect("create_subscription");
+    node.create_subscription_raw("/robot1/imu", callback, None)
+        .expect("create_subscription_raw");
     thread::sleep(Duration::from_millis(150));
 
     pub_.publish("/robot1/imu", b"hello").expect("publish");
@@ -249,7 +248,7 @@ fn node_publish_uses_topic_as_given() {
 
     let (executor, mut sub_node) = node_with_proxy("listener", &proxy);
     sub_node
-        .create_subscription(
+        .create_subscription_raw(
             "/robot1/cmd_vel",
             Arc::new(move |topic, payload| {
                 assert_eq!(topic, "/robot1/cmd_vel");
@@ -258,13 +257,13 @@ fn node_publish_uses_topic_as_given() {
             }),
             None,
         )
-        .expect("create_subscription");
+        .expect("create_subscription_raw");
     thread::sleep(Duration::from_millis(150));
 
     let (_pub_exec, mut pub_node) = node_with_proxy("pilot", &proxy);
     let publisher = pub_node
-        .create_publisher("/robot1/cmd_vel")
-        .expect("create_publisher");
+        .create_publisher_raw("/robot1/cmd_vel")
+        .expect("create_publisher_raw");
     publisher.publish(b"go").expect("publish");
 
     let deadline = std::time::Instant::now() + Duration::from_secs(2);
@@ -313,14 +312,13 @@ fn node_timer_via_spin_once() {
 #[test]
 fn node_subscription_typed_imu() {
     let proxy = MessageProxy::spawn();
-    let pub_ = Publisher::new(Some(&proxy.xsub_endpoint)).expect("publisher");
     thread::sleep(Duration::from_millis(50));
 
     let hits = Arc::new(AtomicUsize::new(0));
     let hits_cb = hits.clone();
 
     let (executor, mut node) = node_with_proxy("imu_node", &proxy);
-    node.create_subscription_typed::<Imu, _>(
+    node.create_subscription::<Imu, _>(
         "/robot1/imu",
         move |topic, imu| {
             assert_eq!(topic, "/robot1/imu");
@@ -331,7 +329,7 @@ fn node_subscription_typed_imu() {
         },
         None,
     )
-    .expect("create_subscription_typed");
+    .expect("create_subscription");
     thread::sleep(Duration::from_millis(150));
 
     let imu = Imu {
@@ -342,15 +340,17 @@ fn node_subscription_typed_imu() {
         }),
         ..Default::default()
     };
-    pub_
-        .publish("/robot1/imu", &imu.encode_to_vec())
-        .expect("publish");
+    let (_pub_exec, mut pub_node) = node_with_proxy("imu_pub", &proxy);
+    let imu_pub = pub_node
+        .create_publisher::<Imu>("/robot1/imu")
+        .expect("create_publisher");
+    imu_pub.publish(&imu).expect("publish");
     // Truncated/invalid protobuf varint — decode should fail and be skipped.
-    pub_
-        .publish(
-            "/robot1/imu",
-            &[0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x01],
-        )
+    let raw_pub = pub_node
+        .create_publisher_raw("/robot1/imu")
+        .expect("create_publisher_raw");
+    raw_pub
+        .publish(&[0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x01])
         .expect("publish bad");
 
     let deadline = std::time::Instant::now() + Duration::from_secs(2);
