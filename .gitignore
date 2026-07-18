@@ -30,11 +30,9 @@ bindings/cpp/native/Cargo.lock
 bindings/cpp/build/
 bindings/cpp/build-*/
 
-# Kotlin / Gradle
-bindings/kotlin/.gradle/
-bindings/kotlin/.kotlin/
-bindings/kotlin/build/
-bindings/kotlin/local.properties
+# Java (Maven) / Android (Gradle) / build trees
+bindings/java/target/
+bindings/java/local.properties
 bindings/android/.gradle/
 bindings/android/.kotlin/
 bindings/android/build/

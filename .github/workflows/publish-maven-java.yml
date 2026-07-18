@@ -1,0 +1,77 @@
+# Publish Java JVM JAR (org.indunet:robot-bus) to Maven Central via Maven.
+#
+# Disabled until GPG signing secrets are configured on this repo.
+# When ready: remove `if: false` and optionally restore tag triggers.
+#
+# Secrets / settings:
+#   MAVEN_CENTRAL_USERNAME / MAVEN_CENTRAL_PASSWORD → ~/.m2 server id `central`
+#   GPG_PRIVATE_KEY / GPG_PASSPHRASE → gpg signing in -Prelease
+
+name: Publish Java to Maven Central
+
+on:
+  workflow_dispatch:
+  # push:
+  #   tags:
+  #     - "v*"
+
+jobs:
+  publish:
+    if: false
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Check tag matches versions
+        if: github.event_name == 'push'
+        run: |
+          TAG="${GITHUB_REF_NAME#v}"
+          CRATE_VERSION="$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -n1)"
+          NATIVE_VERSION="$(sed -n 's/^version = "\(.*\)"/\1/p' bindings/cpp/native/Cargo.toml | head -n1)"
+          JAVA_VERSION="$(sed -n 's|^  <version>\(.*\)</version>|\1|p' bindings/java/pom.xml | head -n1)"
+          if [ "$TAG" != "$CRATE_VERSION" ] || [ "$TAG" != "$NATIVE_VERSION" ] || [ "$TAG" != "$JAVA_VERSION" ]; then
+            echo "Tag ($TAG) must match Cargo ($CRATE_VERSION), cpp native ($NATIVE_VERSION), java ($JAVA_VERSION)"
+            exit 1
+          fi
+
+      - name: Install build deps
+        run: |
+          set -eux
+          sudo apt-get update
+          sudo apt-get install -y cmake g++ make curl unzip pkg-config libzmq3-dev gnupg
+          curl -fsSL -o /tmp/protoc.zip \
+            "https://github.com/protocolbuffers/protobuf/releases/download/v35.1/protoc-35.1-linux-x86_64.zip"
+          sudo unzip -o /tmp/protoc.zip -d /usr/local
+          protoc --version
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: maven
+          cache-dependency-path: bindings/java/pom.xml
+          server-id: central
+          server-username: MAVEN_CENTRAL_USERNAME
+          server-password: MAVEN_CENTRAL_PASSWORD
+
+      - name: Import GPG key
+        run: |
+          echo "${{ secrets.GPG_PRIVATE_KEY }}" | gpg --batch --import
+          gpg --list-secret-keys --keyid-format LONG
+
+      - name: Build C ABI (host)
+        run: |
+          python3 scripts/generate_rust_msgs.py
+          cargo build --release --manifest-path bindings/cpp/native/Cargo.toml
+
+      - name: Deploy to Maven Central
+        working-directory: bindings/java
+        env:
+          MAVEN_CENTRAL_USERNAME: ${{ secrets.MAVEN_CENTRAL_USERNAME }}
+          MAVEN_CENTRAL_PASSWORD: ${{ secrets.MAVEN_CENTRAL_PASSWORD }}
+          ROBOT_BUS_NATIVE_DIR: ${{ github.workspace }}/bindings/cpp/native/target/release
+        run: |
+          mvn -B -Prelease clean deploy \
+            -Dgpg.passphrase="${{ secrets.GPG_PASSPHRASE }}"

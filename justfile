@@ -38,26 +38,33 @@ cpp-dev: gen-cpp gen-rust
 	cmake -S bindings/cpp -B bindings/cpp/build -DCMAKE_BUILD_TYPE=Release
 	cmake --build bindings/cpp/build -j
 
-# Build Kotlin JVM binding (needs librobot_bus_c from cpp native)
-kotlin-dev:
+# Build Java JVM binding with Maven (needs librobot_bus_c from cpp native)
+java-dev:
 	cargo build --release --manifest-path bindings/cpp/native/Cargo.toml
-	cd bindings/kotlin && ./gradlew test --no-daemon
+	cd bindings/java && mvn test
+
+# Install Java SDK into ~/.m2 (required before android-dev)
+java-install:
+	cd bindings/java && mvn -DskipTests install
 
 # Cross-compile librobot_bus_c for Android ABIs into bindings/android jniLibs
 android-native:
 	./scripts/build_android_native.sh
 
-# Assemble Android AAR (run android-native first for jniLibs)
-android-dev: android-native
+# Assemble Android AAR (needs java-install + android-native)
+android-dev: java-install android-native
 	cd bindings/android && ./gradlew assembleRelease --no-daemon
 
 # Back-compat aliases
+kotlin-dev: java-dev
 kotlin-android-native: android-native
 kotlin-android: android-dev
 
-# Kotlin JVM smoke tests (native lib from cpp release build)
-test-kotlin:
-	cd bindings/kotlin && ./gradlew test --no-daemon
+# Java JVM smoke tests
+test-java:
+	cd bindings/java && mvn test
+
+alias test-kotlin := test-java
 
 # Run C++ binding tests (ephemeral in-process brokers)
 test-cpp:

@@ -10,7 +10,7 @@ language-facing package, packaging metadata, and tests.
 | [`python/`](python/) | Python binding (maturin / PyO3) |
 | [`typescript/`](typescript/) | TypeScript hybrid npm SDK (napi-rs Node + gRPC-Web browser) |
 | [`cpp/`](cpp/) | C++ SDK (C ABI + RAII; DEB/MSI via GitHub Releases) |
-| [`kotlin/`](kotlin/) | Kotlin JVM JAR (`org.indunet:robot-bus`) |
+| [`java/`](java/) | Java JVM JAR via **Maven** (`org.indunet:robot-bus`, Java 11+) |
 | [`android/`](android/) | Android AAR (`org.indunet:robot-bus-android`; JNA + jniLibs) |
 
 `console/` is a product UI embedded into the broker, not an SDK binding.

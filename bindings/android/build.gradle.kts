@@ -1,6 +1,5 @@
 plugins {
     id("com.android.library")
-    id("org.jetbrains.kotlin.android")
     id("com.vanniktech.maven.publish")
 }
 
@@ -17,12 +16,8 @@ android {
     }
 
     compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_17
-        targetCompatibility = JavaVersion.VERSION_17
-    }
-
-    kotlinOptions {
-        jvmTarget = "17"
+        sourceCompatibility = JavaVersion.VERSION_11
+        targetCompatibility = JavaVersion.VERSION_11
     }
 
     sourceSets {
@@ -33,7 +28,8 @@ android {
 }
 
 dependencies {
-    api(project(":robot-bus")) {
+    // Install first: cd ../java && mvn -DskipTests install
+    api("org.indunet:robot-bus:0.0.6") {
         exclude(group = "net.java.dev.jna", module = "jna")
     }
     api("net.java.dev.jna:jna:5.16.0@aar")
@@ -66,6 +62,7 @@ mavenPublishing {
             developer {
                 id.set(providers.gradleProperty("POM_DEVELOPER_ID"))
                 name.set(providers.gradleProperty("POM_DEVELOPER_NAME"))
+                email.set(providers.gradleProperty("POM_DEVELOPER_EMAIL"))
                 url.set(providers.gradleProperty("POM_DEVELOPER_URL"))
             }
         }
