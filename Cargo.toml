@@ -61,7 +61,8 @@ uuid = { version = "1", features = ["v4"] }
 zmq = "0.10"
 
 [build-dependencies]
-prost-build = "0.14"
+# Keep markdown cleanup on even without tonic-prost-build (no-default-features).
+prost-build = { version = "0.14", features = ["cleanup-markdown"] }
 tonic-prost-build = { version = "0.14", optional = true }
 
 [dev-dependencies]
