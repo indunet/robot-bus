@@ -1,15 +1,21 @@
 # robot-bus console
 
-Web 监控控制台：查看 broker 状态、topic 流量、service / action 与事件日志。
+Web 监控控制台：查看 broker 状态、topic 流量与事件日志。
 
-当前为 UI 原型（[`lib/mock-data.ts`](lib/mock-data.ts)），尚未对接真实 broker API。不随 crates.io / PyPI 发布。
+对接 broker 同端口 API：
+
+- `GET /api/v1/status`
+- `GET /api/v1/topics`
+- `SSE /api/v1/events`
+
+Service / Action 统计尚未接入（表为空）。开发时用 `pnpm dev` 需自行把 `/api` 代理到 broker，或直接打开嵌入后的 `http://localhost:15771`。
 
 ## 开发
 
 ```bash
 pnpm install
 pnpm dev
-# http://localhost:3000
+# http://localhost:3000  （无 broker 时代理会失败；联调请用下方嵌入路径）
 ```
 
 ```bash

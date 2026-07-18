@@ -1,5 +1,7 @@
+mod metrics;
 mod ports;
 
+pub use metrics::{MessageMetrics, MessageMetricsSnapshot, TopicSnapshot};
 pub use ports::{
     DEFAULT_RCV_HWM, DEFAULT_SND_HWM, DEFAULT_XPUB_BIND, DEFAULT_XSUB_BIND, XPUB_CHANNEL,
     XPUB_PORT, XSUB_CHANNEL, XSUB_PORT,
@@ -15,6 +17,7 @@ use std::time::Duration;
 use zmq::{Context as ZmqContext, Socket, SocketType};
 
 const PROXY_CONTROL: &str = "inproc://robot_bus/message_bus/proxy-ctl";
+const PROXY_CAPTURE: &str = "inproc://robot_bus/message_bus/proxy-capture";
 
 #[derive(Clone, Debug)]
 pub struct BusConfig {
@@ -38,8 +41,20 @@ impl Default for BusConfig {
     }
 }
 
-/// Run a transparent ZeroMQ XSUB/XPUB proxy until `shutdown` is set.
-pub fn run_with_shutdown(config: BusConfig, shutdown: Arc<AtomicBool>) -> Result<()> {
+/// Run a ZeroMQ XSUB/XPUB proxy until `shutdown` is set.
+///
+/// Forwarding always uses libzmq [`zmq::proxy_steerable`] — the same data path as
+/// before monitoring. When `metrics` is set, a capture socket mirrors traffic to a
+/// **side thread** for counting; the forward path stays in C.
+///
+/// Metrics only see messages that actually flow (real subscribers present). No
+/// internal blanket SUB is attached — that would force every publish through the
+/// bus and hurt communication efficiency.
+pub fn run_with_shutdown(
+    config: BusConfig,
+    shutdown: Arc<AtomicBool>,
+    metrics: Option<Arc<MessageMetrics>>,
+) -> Result<()> {
     let context = ZmqContext::new();
     let xsub = context
         .socket(SocketType::XSUB)
@@ -82,7 +97,7 @@ pub fn run_with_shutdown(config: BusConfig, shutdown: Arc<AtomicBool>) -> Result
          publishers (PUB) connect ->\n    {}\n  \
          subscribers (SUB) connect ->\n    {}\n  \
          transports: {}\n  \
-         forwarding: opaque multipart frames, no payload parsing",
+         forwarding: opaque multipart frames (libzmq proxy_steerable{})",
         format_endpoints(&xsub_endpoints),
         format_endpoints(&xpub_endpoints),
         if config.bind_all_transports {
@@ -90,31 +105,106 @@ pub fn run_with_shutdown(config: BusConfig, shutdown: Arc<AtomicBool>) -> Result
         } else {
             "tcp only"
         },
+        if metrics.is_some() {
+            " + side-thread capture metrics"
+        } else {
+            ""
+        },
     );
 
     let mut xsub = xsub;
     let mut xpub = xpub;
     let mut control = control;
-    let proxy = thread::spawn(move || {
-        let _ = zmq::proxy_steerable(&mut xsub, &mut xpub, &mut control);
-    });
 
-    while !shutdown.load(Ordering::Acquire) {
-        thread::sleep(Duration::from_millis(50));
+    if let Some(metrics) = metrics {
+        // Capture mirrors traffic to a side thread. High HWM so metrics never
+        // back-pressure the C proxy (drops are OK — monitoring may under-count).
+        let mut capture = context
+            .socket(SocketType::PAIR)
+            .context("create proxy capture PAIR")?;
+        capture
+            .bind(PROXY_CAPTURE)
+            .context("bind proxy capture")?;
+        capture.set_sndhwm(10_000).context("capture sndhwm")?;
+        capture.set_linger(0).context("capture linger")?;
+
+        let reader = context
+            .socket(SocketType::PAIR)
+            .context("create capture reader")?;
+        reader
+            .connect(PROXY_CAPTURE)
+            .context("connect capture reader")?;
+        reader.set_rcvhwm(10_000).context("reader rcvhwm")?;
+        reader.set_linger(0).context("reader linger")?;
+
+        let stop = shutdown.clone();
+        let metrics_join = thread::spawn(move || capture_metrics_loop(reader, metrics, stop));
+        let proxy = thread::spawn(move || {
+            let _ = zmq::proxy_steerable_with_capture(
+                &mut xsub,
+                &mut xpub,
+                &mut capture,
+                &mut control,
+            );
+        });
+
+        wait_until_shutdown(&shutdown);
+        let _ = control_client.send(b"TERMINATE".as_ref(), 0);
+        proxy
+            .join()
+            .map_err(|e| anyhow::anyhow!("message bus proxy thread: {e:?}"))?;
+        let _ = metrics_join.join();
+    } else {
+        let proxy = thread::spawn(move || {
+            let _ = zmq::proxy_steerable(&mut xsub, &mut xpub, &mut control);
+        });
+
+        wait_until_shutdown(&shutdown);
+        let _ = control_client.send(b"TERMINATE".as_ref(), 0);
+        proxy
+            .join()
+            .map_err(|e| anyhow::anyhow!("message bus proxy thread: {e:?}"))?;
     }
 
-    let _ = control_client.send(b"TERMINATE".as_ref(), 0);
-    proxy
-        .join()
-        .map_err(|e| anyhow::anyhow!("message bus proxy thread: {e:?}"))?;
     Ok(())
 }
 
-/// Run a transparent ZeroMQ XSUB/XPUB proxy until interrupted.
+fn wait_until_shutdown(shutdown: &AtomicBool) {
+    while !shutdown.load(Ordering::Acquire) {
+        thread::sleep(Duration::from_millis(50));
+    }
+}
+
+/// Side thread: read capture copies and update counters. Never on the forward path.
+fn capture_metrics_loop(reader: Socket, metrics: Arc<MessageMetrics>, stop: Arc<AtomicBool>) {
+    while !stop.load(Ordering::Acquire) {
+        let mut items = [reader.as_poll_item(zmq::POLLIN)];
+        if zmq::poll(&mut items, 100).is_err() {
+            break;
+        }
+        if !items[0].is_readable() {
+            continue;
+        }
+        while let Ok(frames) = reader.recv_multipart(zmq::DONTWAIT) {
+            // Capture mirrors both directions. Payloads are `[topic][body…]`;
+            // subscription frames are typically a single 0/1-prefixed frame.
+            if frames.len() < 2 {
+                continue;
+            }
+            let Some(topic) = frames.first().and_then(|f| std::str::from_utf8(f).ok()) else {
+                continue;
+            };
+            let bytes: u64 = frames.iter().map(|f| f.len() as u64).sum();
+            metrics.record(topic, bytes);
+        }
+    }
+}
+
+/// Run until interrupted (installs process Ctrl+C handler).
 pub fn run(config: BusConfig) -> Result<()> {
     let shutdown = Arc::new(AtomicBool::new(false));
     shutdown::install(shutdown.clone());
-    run_with_shutdown(config, shutdown)
+    run_with_shutdown(config, shutdown, Some(MessageMetrics::new()))
 }
 
 fn apply_low_latency_options(socket: &Socket, snd_hwm: i32, rcv_hwm: i32) -> Result<()> {

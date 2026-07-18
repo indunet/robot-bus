@@ -196,7 +196,7 @@ cd console && pnpm build && cd .. && ./scripts/sync_console_assets.sh
 # 然后重新 cargo build
 ```
 
-当前页面数据仍为 mock；与 broker 的真实监控 API 对接仍在规划中。不随 crates.io / PyPI 的「源码树」单独发布前端工程，但构建产物会编进带 `console` feature（默认开启）的二进制。
+已对接 broker 同端口监控 API：`GET /api/v1/status`、`GET /api/v1/topics`、`SSE /api/v1/events`。Service / Action 统计尚未接入。不随 crates.io / PyPI 的「源码树」单独发布前端工程，但构建产物会编进带 `console` feature（默认开启）的二进制。
 
 ## gRPC / gRPC-Web 网关
 

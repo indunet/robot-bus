@@ -11,13 +11,13 @@ use std::thread::{self, JoinHandle};
 use std::time::Duration;
 
 use super::action_bus::{self, ActionBusConfig};
-use super::message_bus::{self, BusConfig};
+use super::message_bus::{self, BusConfig, MessageMetrics};
 use super::service_bus::{self, ServiceBusConfig};
 
 #[cfg(feature = "grpc")]
 use crate::grpc::{serve_with_shutdown, GatewayConfig};
 #[cfg(feature = "console")]
-use crate::console::serve_with_shutdown as serve_console_with_shutdown;
+use crate::console::{serve_with_shutdown as serve_console_with_shutdown, BrokerEndpoints, ConsoleState};
 #[cfg(any(feature = "grpc", feature = "console"))]
 use std::net::SocketAddr;
 
@@ -34,22 +34,33 @@ fn join_broker_thread(name: &str, handle: JoinHandle<Result<()>>) -> Result<()> 
 pub struct MessageBusBroker {
     pub xsub_bind: String,
     pub xpub_bind: String,
+    /// Per-topic counters updated by the proxy (shared with the console when enabled).
+    pub metrics: Arc<MessageMetrics>,
     shutdown: Arc<AtomicBool>,
     handle: Option<JoinHandle<Result<()>>>,
 }
 
 impl MessageBusBroker {
     /// Bind and run the message bus on a background thread.
-    pub(crate) fn start(config: BusConfig) -> Result<Self> {
+    ///
+    /// Pass `Some(metrics)` only when the console (or another observer) needs
+    /// topic counters — that enables libzmq capture. `None` keeps the forward
+    /// path as a plain `proxy_steerable` with no capture overhead.
+    pub(crate) fn start(config: BusConfig, metrics: Option<Arc<MessageMetrics>>) -> Result<Self> {
         let xsub_bind = config.xsub_bind.clone();
         let xpub_bind = config.xpub_bind.clone();
+        // Always keep an Arc for `self.metrics` (console may read zeros if unused).
+        let stored = metrics.clone().unwrap_or_else(MessageMetrics::new);
         let shutdown = Arc::new(AtomicBool::new(false));
         let shutdown_flag = shutdown.clone();
-        let handle = thread::spawn(move || message_bus::run_with_shutdown(config, shutdown_flag));
+        let handle = thread::spawn(move || {
+            message_bus::run_with_shutdown(config, shutdown_flag, metrics)
+        });
         thread::sleep(STARTUP_SETTLE);
         Ok(Self {
             xsub_bind,
             xpub_bind,
+            metrics: stored,
             shutdown,
             handle: Some(handle),
         })
@@ -295,7 +306,7 @@ struct ConsoleHttpHandle {
 
 #[cfg(feature = "console")]
 impl ConsoleHttpHandle {
-    fn start(listen: SocketAddr) -> Result<Self> {
+    fn start(listen: SocketAddr, state: Arc<ConsoleState>) -> Result<Self> {
         let (shutdown_tx, mut shutdown_rx) = tokio::sync::watch::channel(false);
         let handle = thread::spawn(move || {
             let rt = tokio::runtime::Builder::new_multi_thread()
@@ -310,7 +321,7 @@ impl ConsoleHttpHandle {
                         }
                     }
                 };
-                serve_console_with_shutdown(listen, shutdown).await
+                serve_console_with_shutdown(listen, state, shutdown).await
             })
         });
         thread::sleep(STARTUP_SETTLE);
@@ -369,7 +380,18 @@ pub struct RobotBusBroker {
 impl RobotBusBroker {
     /// Start message, service, and action buses (and gRPC / console when enabled) on background threads.
     pub fn start(config: RobotBusConfig) -> Result<Self> {
-        let message = MessageBusBroker::start(config.message)?;
+        // Capture metrics only when the console will read them — otherwise keep
+        // the message bus on a plain proxy_steerable with zero monitoring overhead.
+        #[cfg(feature = "console")]
+        let message_metrics = if config.console.enabled {
+            Some(MessageMetrics::new())
+        } else {
+            None
+        };
+        #[cfg(not(feature = "console"))]
+        let message_metrics = None;
+
+        let message = MessageBusBroker::start(config.message, message_metrics)?;
         let service = ServiceBusBroker::start(config.service)?;
         let action = ActionBusBroker::start(config.action)?;
 
@@ -387,7 +409,28 @@ impl RobotBusBroker {
 
         #[cfg(feature = "console")]
         let console = if config.console.enabled {
-            Some(ConsoleHttpHandle::start(config.console.listen)?)
+            let grpc_addr = {
+                #[cfg(feature = "grpc")]
+                {
+                    grpc.listen.to_string()
+                }
+                #[cfg(not(feature = "grpc"))]
+                {
+                    String::new()
+                }
+            };
+            let endpoints = BrokerEndpoints {
+                msg_xsub: message.xsub_bind.clone(),
+                msg_xpub: message.xpub_bind.clone(),
+                svc_fe: service.frontend_bind.clone(),
+                svc_be: service.backend_bind.clone(),
+                act_fe: action.frontend_bind.clone(),
+                act_be: action.backend_bind.clone(),
+                grpc: grpc_addr,
+                web: config.console.listen.to_string(),
+            };
+            let state = ConsoleState::new(endpoints, message.metrics.clone());
+            Some(ConsoleHttpHandle::start(config.console.listen, state)?)
         } else {
             None
         };

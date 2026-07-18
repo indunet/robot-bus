@@ -9,6 +9,8 @@ use std::time::Duration;
 use robot_bus::broker::action_bus::ActionBusConfig;
 use robot_bus::broker::message_bus::BusConfig;
 use robot_bus::broker::service_bus::ServiceBusConfig;
+#[cfg(feature = "console")]
+use robot_bus::ConsoleBrokerConfig;
 #[cfg(feature = "grpc")]
 use robot_bus::GrpcBrokerConfig;
 use robot_bus::{RobotBusBroker, RobotBusConfig};
@@ -59,6 +61,13 @@ pub fn ephemeral_robot_bus_config() -> RobotBusConfig {
                 .parse()
                 .expect("grpc listen"),
             cors_origins: Vec::new(),
+        },
+        #[cfg(feature = "console")]
+        console: ConsoleBrokerConfig {
+            enabled: false,
+            listen: format!("127.0.0.1:{}", free_port())
+                .parse()
+                .expect("console listen"),
         },
     }
 }

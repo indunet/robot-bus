@@ -1,16 +1,24 @@
-//! Embedded Web console: static assets served over HTTP (default `:15771`).
+//! Embedded Web console: static assets + monitoring API (default `:15771`).
+
+mod api;
+mod state;
+
+pub use state::{BrokerEndpoints, ConsoleState};
 
 use std::future::Future;
 use std::net::SocketAddr;
+use std::sync::Arc;
 
 use anyhow::{Context, Result};
 use axum::Router;
 use axum::body::Body;
-use axum::http::{StatusCode, Uri, header};
+use axum::http::{header, StatusCode, Uri};
 use axum::response::{IntoResponse, Response};
 use axum::routing::get;
 use rust_embed::Embed;
 use tokio::net::TcpListener;
+
+use api::{events, status, topics};
 
 /// Compile-time embedded `assets/console/` (Next.js static export).
 #[derive(Embed)]
@@ -20,9 +28,16 @@ struct Assets;
 /// Serve until `shutdown` completes.
 pub async fn serve_with_shutdown(
     listen: SocketAddr,
+    state: Arc<ConsoleState>,
     shutdown: impl Future<Output = ()> + Send + 'static,
 ) -> Result<()> {
-    let app = Router::new().fallback(get(static_handler));
+    let app = Router::new()
+        .route("/api/v1/status", get(status))
+        .route("/api/v1/topics", get(topics))
+        .route("/api/v1/events", get(events))
+        .fallback(get(static_handler))
+        .with_state(state);
+
     let listener = TcpListener::bind(listen)
         .await
         .with_context(|| format!("bind console HTTP on {listen}"))?;
@@ -41,6 +56,11 @@ async fn static_handler(uri: Uri) -> Response {
 
     if path.is_empty() {
         return asset_response("index.html");
+    }
+
+    // Do not SPA-fallback API paths.
+    if path.starts_with("api/") {
+        return (StatusCode::NOT_FOUND, "not found").into_response();
     }
 
     if let Some(resp) = try_asset(path) {
