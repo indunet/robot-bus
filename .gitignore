@@ -4,10 +4,10 @@ dist/
 *.whl
 *.egg-info/
 
-# Node / Next.js (console/)
+# Node / Next.js (console/) — committed embed lives in assets/console/
 node_modules/
 .next/
-out/
+console/out/
 *.tsbuildinfo
 pnpm-debug.log*
 npm-debug.log*

@@ -6,7 +6,7 @@ use anyhow::{bail, Context, Result};
 
 use super::RobotBusConfig;
 
-#[cfg(feature = "grpc")]
+#[cfg(any(feature = "grpc", feature = "console"))]
 use std::net::SocketAddr;
 
 fn normalize_tcp_bind(addr: &str) -> String {
@@ -181,6 +181,25 @@ pub fn parse_robot_bus_config(args: &[String]) -> Result<Option<RobotBusConfig>>
                 bail!("{arg} requires the `grpc` feature");
             }
 
+            // --- console ---
+            #[cfg(feature = "console")]
+            "--console-listen" => {
+                i += 1;
+                let value = require_arg(args, i, arg)?;
+                config.console.listen = value
+                    .parse::<SocketAddr>()
+                    .with_context(|| format!("invalid {arg} {value}"))?;
+                config.console.enabled = true;
+            }
+            #[cfg(feature = "console")]
+            "--no-console" => {
+                config.console.enabled = false;
+            }
+            #[cfg(not(feature = "console"))]
+            "--console-listen" | "--no-console" => {
+                bail!("{arg} requires the `console` feature");
+            }
+
             other => bail!("unknown argument: {other} (try --help)"),
         }
         i += 1;
@@ -191,13 +210,14 @@ pub fn parse_robot_bus_config(args: &[String]) -> Result<Option<RobotBusConfig>>
 
 /// Help text for `robot_bus_broker` / `robot-bus-broker`.
 pub fn robot_bus_broker_help() -> &'static str {
-    "robot_bus_broker — start all ZeroMQ buses + gRPC gateway in one process\n\n\
+    "robot_bus_broker — start all ZeroMQ buses + gRPC gateway + Web console in one process\n\n\
 Usage:\n  robot_bus_broker [options]\n\n\
 Defaults:\n  \
 message  XSUB 15560 / XPUB 15561\n  \
 service  frontend 15662 / backend 15663\n  \
 action   frontend 15664 / backend 15665\n  \
-gRPC     0.0.0.0:15770 (gRPC + gRPC-Web)\n\n\
+gRPC     0.0.0.0:15770 (gRPC + gRPC-Web)\n  \
+console  0.0.0.0:15771 (embedded Web UI)\n\n\
 Message options:\n  \
 --message-xsub-bind ADDR       Publisher bind (alias: --xsub-bind)\n  \
 --message-xpub-bind ADDR       Subscriber bind (alias: --xpub-bind)\n  \
@@ -224,6 +244,9 @@ Shared bus options:\n  \
 gRPC options (feature `grpc`, default on):\n  \
 --grpc-listen HOST:PORT        Listen address (alias: --listen)\n  \
 --cors-origin ORIGIN           Allowed browser origin (repeatable)\n\n\
+Console options (feature `console`, default on):\n  \
+--console-listen HOST:PORT     Embedded Web UI listen address\n  \
+--no-console                   Do not start the Web console\n\n\
 --help, -h                     Show this help\n\n\
 Embed in code: robot_bus::RobotBusBroker::start(RobotBusConfig { ... }).\n"
 }
@@ -282,5 +305,23 @@ mod tests {
             assert_eq!(config.grpc.listen.to_string(), "127.0.0.1:20070");
             assert_eq!(config.grpc.cors_origins, vec!["http://localhost:3000"]);
         }
+    }
+
+    #[cfg(feature = "console")]
+    #[test]
+    fn parses_console_flags() {
+        let config = parse_robot_bus_config(&args(&[
+            "--console-listen",
+            "127.0.0.1:25771",
+        ]))
+        .unwrap()
+        .expect("config");
+        assert!(config.console.enabled);
+        assert_eq!(config.console.listen.to_string(), "127.0.0.1:25771");
+
+        let config = parse_robot_bus_config(&args(&["--no-console"]))
+            .unwrap()
+            .expect("config");
+        assert!(!config.console.enabled);
     }
 }

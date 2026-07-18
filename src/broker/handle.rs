@@ -16,7 +16,9 @@ use super::service_bus::{self, ServiceBusConfig};
 
 #[cfg(feature = "grpc")]
 use crate::grpc::{serve_with_shutdown, GatewayConfig};
-#[cfg(feature = "grpc")]
+#[cfg(feature = "console")]
+use crate::console::serve_with_shutdown as serve_console_with_shutdown;
+#[cfg(any(feature = "grpc", feature = "console"))]
 use std::net::SocketAddr;
 
 const STARTUP_SETTLE: Duration = Duration::from_millis(50);
@@ -179,7 +181,26 @@ impl Default for GrpcBrokerConfig {
     }
 }
 
-/// Configuration for starting all buses (and gRPC) in one process.
+/// Embedded Web console HTTP options (feature `console`, enabled by default).
+#[cfg(feature = "console")]
+#[derive(Clone, Debug)]
+pub struct ConsoleBrokerConfig {
+    /// When false, the console HTTP server is not started.
+    pub enabled: bool,
+    pub listen: SocketAddr,
+}
+
+#[cfg(feature = "console")]
+impl Default for ConsoleBrokerConfig {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            listen: "0.0.0.0:15771".parse().expect("default console listen"),
+        }
+    }
+}
+
+/// Configuration for starting all buses (and gRPC / console) in one process.
 #[derive(Clone, Debug, Default)]
 pub struct RobotBusConfig {
     pub message: BusConfig,
@@ -187,6 +208,8 @@ pub struct RobotBusConfig {
     pub action: ActionBusConfig,
     #[cfg(feature = "grpc")]
     pub grpc: GrpcBrokerConfig,
+    #[cfg(feature = "console")]
+    pub console: ConsoleBrokerConfig,
 }
 
 #[cfg(feature = "grpc")]
@@ -263,6 +286,64 @@ impl Drop for GrpcGatewayHandle {
     }
 }
 
+#[cfg(feature = "console")]
+struct ConsoleHttpHandle {
+    pub listen: SocketAddr,
+    shutdown_tx: Option<tokio::sync::watch::Sender<bool>>,
+    handle: Option<JoinHandle<Result<()>>>,
+}
+
+#[cfg(feature = "console")]
+impl ConsoleHttpHandle {
+    fn start(listen: SocketAddr) -> Result<Self> {
+        let (shutdown_tx, mut shutdown_rx) = tokio::sync::watch::channel(false);
+        let handle = thread::spawn(move || {
+            let rt = tokio::runtime::Builder::new_multi_thread()
+                .enable_all()
+                .build()
+                .context("create tokio runtime for console HTTP")?;
+            rt.block_on(async move {
+                let shutdown = async move {
+                    while !*shutdown_rx.borrow() {
+                        if shutdown_rx.changed().await.is_err() {
+                            break;
+                        }
+                    }
+                };
+                serve_console_with_shutdown(listen, shutdown).await
+            })
+        });
+        thread::sleep(STARTUP_SETTLE);
+        Ok(Self {
+            listen,
+            shutdown_tx: Some(shutdown_tx),
+            handle: Some(handle),
+        })
+    }
+
+    fn stop(mut self) -> Result<()> {
+        if let Some(tx) = self.shutdown_tx.take() {
+            let _ = tx.send(true);
+        }
+        if let Some(handle) = self.handle.take() {
+            join_broker_thread("console_http", handle)?;
+        }
+        Ok(())
+    }
+}
+
+#[cfg(feature = "console")]
+impl Drop for ConsoleHttpHandle {
+    fn drop(&mut self) {
+        if let Some(tx) = self.shutdown_tx.take() {
+            let _ = tx.send(true);
+        }
+        if let Some(handle) = self.handle.take() {
+            let _ = handle.join();
+        }
+    }
+}
+
 /// Rewrite a bind address into a client connect endpoint (`0.0.0.0` / `*` → `127.0.0.1`).
 fn bind_to_connect(bind: &str) -> String {
     if let Some(rest) = bind.strip_prefix("tcp://0.0.0.0:") {
@@ -274,17 +355,19 @@ fn bind_to_connect(bind: &str) -> String {
     bind.to_string()
 }
 
-/// Background handle that owns message + service + action brokers (and gRPC when enabled).
+/// Background handle that owns message + service + action brokers (and gRPC / console when enabled).
 pub struct RobotBusBroker {
     pub message: MessageBusBroker,
     pub service: ServiceBusBroker,
     pub action: ActionBusBroker,
     #[cfg(feature = "grpc")]
     grpc: GrpcGatewayHandle,
+    #[cfg(feature = "console")]
+    console: Option<ConsoleHttpHandle>,
 }
 
 impl RobotBusBroker {
-    /// Start message, service, and action buses (and the gRPC gateway) on background threads.
+    /// Start message, service, and action buses (and gRPC / console when enabled) on background threads.
     pub fn start(config: RobotBusConfig) -> Result<Self> {
         let message = MessageBusBroker::start(config.message)?;
         let service = ServiceBusBroker::start(config.service)?;
@@ -302,12 +385,21 @@ impl RobotBusBroker {
             GrpcGatewayHandle::start(gateway)?
         };
 
+        #[cfg(feature = "console")]
+        let console = if config.console.enabled {
+            Some(ConsoleHttpHandle::start(config.console.listen)?)
+        } else {
+            None
+        };
+
         Ok(Self {
             message,
             service,
             action,
             #[cfg(feature = "grpc")]
             grpc,
+            #[cfg(feature = "console")]
+            console,
         })
     }
 
@@ -317,19 +409,39 @@ impl RobotBusBroker {
         self.grpc.listen
     }
 
-    /// Stop all buses (and gRPC) and join their threads.
+    /// Console HTTP listen address when the console server is running (feature `console`).
+    #[cfg(feature = "console")]
+    pub fn console_listen(&self) -> Option<SocketAddr> {
+        self.console.as_ref().map(|c| c.listen)
+    }
+
+    /// Stop all buses (and gRPC / console) and join their threads.
     pub fn stop(self) -> Result<()> {
         // Stop in reverse start order; collect first error.
+        #[cfg(feature = "console")]
+        let console = match self.console {
+            Some(c) => c.stop(),
+            None => Ok(()),
+        };
         #[cfg(feature = "grpc")]
         let grpc = self.grpc.stop();
         let action = self.action.stop();
         let service = self.service.stop();
         let message = self.message.stop();
-        #[cfg(feature = "grpc")]
+
+        #[cfg(all(feature = "grpc", feature = "console"))]
+        {
+            return console.and(grpc).and(action).and(service).and(message);
+        }
+        #[cfg(all(feature = "grpc", not(feature = "console")))]
         {
             return grpc.and(action).and(service).and(message);
         }
-        #[cfg(not(feature = "grpc"))]
+        #[cfg(all(feature = "console", not(feature = "grpc")))]
+        {
+            return console.and(action).and(service).and(message);
+        }
+        #[cfg(not(any(feature = "grpc", feature = "console")))]
         {
             action.and(service).and(message)
         }

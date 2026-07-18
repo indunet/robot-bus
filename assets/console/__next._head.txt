@@ -1,0 +1,6 @@
+1:"$Sreact.fragment"
+2:I[76779,["/_next/static/chunks/0jdah9p5of~i~.js"],"ViewportBoundary"]
+3:I[76779,["/_next/static/chunks/0jdah9p5of~i~.js"],"MetadataBoundary"]
+4:"$Sreact.suspense"
+5:I[6726,["/_next/static/chunks/0jdah9p5of~i~.js"],"IconMark"]
+0:{"rsc":["$","$1","h",{"children":[null,["$","$L2",null,{"children":[["$","meta","0",{"charSet":"utf-8"}],["$","meta","1",{"name":"viewport","content":"width=device-width, initial-scale=1"}],["$","meta","2",{"name":"theme-color","content":"#141618"}],["$","meta","3",{"name":"color-scheme","content":"dark"}]]}],["$","div",null,{"hidden":true,"children":["$","$L3",null,{"children":["$","$4",null,{"name":"Next.Metadata","children":[["$","title","0",{"children":"robot-bus | Web Console"}],["$","meta","1",{"name":"description","content":"robot-bus 总线监控控制台 — 实时查看 Broker 状态、Topic 流量与事件日志"}],["$","meta","2",{"name":"generator","content":"v0.app"}],["$","link","3",{"rel":"icon","href":"/icon.svg?icon.12yhgnaqmj4ba.svg","sizes":"any","type":"image/svg+xml"}],["$","$L5","4",{}]]}]}]}],["$","meta",null,{"name":"next-size-adjust","content":""}]]}],"isPartial":false,"staleTime":300,"varyParams":null,"buildId":"LdYEbYzZHM7_jUQxhwkmh"}

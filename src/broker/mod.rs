@@ -11,3 +11,6 @@ pub use parse_config::{parse_robot_bus_config, robot_bus_broker_help};
 
 #[cfg(feature = "grpc")]
 pub use handle::GrpcBrokerConfig;
+
+#[cfg(feature = "console")]
+pub use handle::ConsoleBrokerConfig;

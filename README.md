@@ -24,7 +24,7 @@
 | `runtime::Node` / `TopicPublisher` / `CallbackGroup` | 节点、publisher、callback group（互斥 / 可重入） |
 | `grpc::`（默认 feature） | gRPC / gRPC-Web 网关（随 broker 一起启动） |
 | [`proto/`](proto/) | ROS 风格 Protobuf：`proto/<pkg>/{msg\|srv\|grpc}/v1/` → Rust/Python `robot_bus.<pkg>…` |
-| [`console/`](console/) | Web 监控控制台（可选；独立前端，不随 crates.io / PyPI 发布） |
+| [`console/`](console/) | Web 监控控制台（默认编进 broker，`:15771`；源码在 `console/`，嵌入产物在 `assets/console/`） |
 
 ## 架构
 
@@ -173,16 +173,30 @@ pub_.set_high_water_mark(HighWaterMark { snd: 10, rcv: 10 })?;
 
 ## Web 控制台（`console/`）
 
-可选的监控前端：查看 broker 状态、topic 流量与事件日志。当前为 UI 原型（mock 数据），需本机安装 [pnpm](https://pnpm.io/)。
+可选的监控前端：查看 broker 状态、topic 流量与事件日志。默认随 broker 一起启动，监听 `0.0.0.0:15771`（嵌入静态资源，无需再跑 Next.js）。
+
+```bash
+cargo run --bin robot_bus_broker
+# 浏览器打开 http://localhost:15771
+# 关闭控制台：cargo run --bin robot_bus_broker -- --no-console
+```
+
+开发时单独跑前端（热更新）：
 
 ```bash
 cd console
-pnpm install
-pnpm dev
-# 浏览器打开 http://localhost:3000
+pnpm install   # 或 npm install
+pnpm dev       # http://localhost:3000
 ```
 
-不随 `robot-bus` 的 crates.io / PyPI 包发布；与 broker 的真实监控 API 对接仍在规划中。
+更新嵌入到 broker 的静态资源：
+
+```bash
+cd console && pnpm build && cd .. && ./scripts/sync_console_assets.sh
+# 然后重新 cargo build
+```
+
+当前页面数据仍为 mock；与 broker 的真实监控 API 对接仍在规划中。不随 crates.io / PyPI 的「源码树」单独发布前端工程，但构建产物会编进带 `console` feature（默认开启）的二进制。
 
 ## gRPC / gRPC-Web 网关
 

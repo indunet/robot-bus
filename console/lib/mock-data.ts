@@ -78,7 +78,7 @@ export const INITIAL_BROKER: BrokerInfo = {
   uptime: 284731,
   pid: 42839,
   grpcAddr: '0.0.0.0:15770',
-  webAddr: '0.0.0.0:15780',
+  webAddr: '0.0.0.0:15771',
   msgBusXSub: 'tcp://*:15551',
   msgBusXPub: 'tcp://*:15552',
   svcFE: 'tcp://*:15561',

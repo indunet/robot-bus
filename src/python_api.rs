@@ -771,6 +771,8 @@ impl PyRobotBusBroker {
         tcp_only = false,
         grpc_listen = None,
         cors_origins = None,
+        console_listen = None,
+        no_console = false,
     ))]
     fn start(
         message_xsub_bind: Option<String>,
@@ -797,6 +799,8 @@ impl PyRobotBusBroker {
         tcp_only: bool,
         grpc_listen: Option<String>,
         cors_origins: Option<Vec<String>>,
+        console_listen: Option<String>,
+        no_console: bool,
     ) -> PyResult<Self> {
         let mut config = RobotBusConfig::default();
 
@@ -894,6 +898,23 @@ impl PyRobotBusBroker {
             let _ = (grpc_listen, cors_origins);
         }
 
+        #[cfg(feature = "console")]
+        {
+            if no_console {
+                config.console.enabled = false;
+            }
+            if let Some(v) = console_listen {
+                config.console.listen = v
+                    .parse()
+                    .map_err(|e| PyRuntimeError::new_err(format!("invalid console_listen: {e}")))?;
+                config.console.enabled = true;
+            }
+        }
+        #[cfg(not(feature = "console"))]
+        {
+            let _ = (console_listen, no_console);
+        }
+
         let broker = RustRobotBusBroker::start(config).map_err(anyhow_err)?;
         Ok(Self {
             inner: Some(broker),
@@ -957,6 +978,12 @@ impl PyRobotBusBroker {
     fn grpc_listen(&self) -> PyResult<String> {
         self.with_broker(|b| b.grpc_listen().to_string())
     }
+
+    #[cfg(feature = "console")]
+    #[getter]
+    fn console_listen(&self) -> PyResult<Option<String>> {
+        self.with_broker(|b| b.console_listen().map(|a| a.to_string()))
+    }
 }
 
 fn normalize_bind(addr: &str) -> String {
@@ -997,7 +1024,7 @@ fn run_broker(py: Python<'_>) -> PyResult<()> {
     let flag = Arc::new(AtomicBool::new(false));
     shutdown::install(flag.clone());
 
-    println!("robot-bus-broker starting message + service + action buses + gRPC…");
+    println!("robot-bus-broker starting message + service + action buses + gRPC + console…");
     let broker = RustRobotBusBroker::start(config).map_err(anyhow_err)?;
     let mut broker = PyRobotBusBroker {
         inner: Some(broker),
@@ -1007,6 +1034,10 @@ fn run_broker(py: Python<'_>) -> PyResult<()> {
         "gRPC / gRPC-Web listening on http://{}",
         broker.grpc_listen()?
     );
+    #[cfg(feature = "console")]
+    if let Some(addr) = broker.console_listen()? {
+        println!("Web console listening on http://{addr}");
+    }
 
     loop {
         if flag.load(Ordering::Acquire) {

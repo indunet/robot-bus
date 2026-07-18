@@ -25,7 +25,7 @@ fn run(config: RobotBusConfig) -> Result<()> {
     let shutdown = Arc::new(AtomicBool::new(false));
     shutdown::install(shutdown.clone());
 
-    println!("robot_bus_broker starting message + service + action buses + gRPC…");
+    println!("robot_bus_broker starting message + service + action buses + gRPC + console…");
     let broker = RobotBusBroker::start(config)?;
 
     #[cfg(feature = "grpc")]
@@ -33,6 +33,11 @@ fn run(config: RobotBusConfig) -> Result<()> {
         "gRPC / gRPC-Web listening on http://{}",
         broker.grpc_listen()
     );
+
+    #[cfg(feature = "console")]
+    if let Some(addr) = broker.console_listen() {
+        println!("Web console listening on http://{addr}");
+    }
 
     while !shutdown.load(Ordering::Acquire) {
         thread::sleep(Duration::from_millis(50));

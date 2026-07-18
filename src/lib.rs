@@ -26,6 +26,9 @@ pub use typed::{Action, ActionOutcome, Service};
 #[cfg(feature = "grpc")]
 pub mod grpc;
 
+#[cfg(feature = "console")]
+pub mod console;
+
 #[cfg(feature = "extension-module")]
 mod python_api;
 
@@ -36,6 +39,9 @@ pub use broker::{
 
 #[cfg(feature = "grpc")]
 pub use broker::GrpcBrokerConfig;
+
+#[cfg(feature = "console")]
+pub use broker::ConsoleBrokerConfig;
 pub use errors::{parse_error_body, BusError, Result};
 pub use message_bus::{Publisher, Subscriber};
 pub use runtime::{
