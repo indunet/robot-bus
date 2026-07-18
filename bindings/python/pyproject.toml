@@ -6,7 +6,7 @@ build-backend = "maturin"
 name = "robot-bus"
 version = "0.0.5"
 description = "ZeroMQ message bus: broker routing and participant SDK"
-readme = "README.md"
+readme = "../../README.md"
 requires-python = ">=3.9"
 license = "Apache-2.0"
 authors = [{ name = "deng_ran", email = "deng_ran@aliyun.com" }]
@@ -27,6 +27,7 @@ urls = { Repository = "https://github.com/indunet/robot-bus" }
 robot-bus-broker = "robot_bus:run_broker"
 
 [tool.maturin]
-features = ["extension-module", "grpc"]
-python-source = "python"
+manifest-path = "../../Cargo.toml"
+python-source = "."
 module-name = "robot_bus._native"
+features = ["extension-module", "grpc"]

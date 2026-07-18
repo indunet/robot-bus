@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""Generate Python protobuf modules under python/robot_bus/<pkg>/{msg|srv}/v1/.
+"""Generate Python protobuf modules under bindings/python/robot_bus/<pkg>/{msg|srv}/v1/.
 
 Requires ``protoc`` on PATH (override with env ``PROTOC``). Regenerates
-committed sources under ``python/robot_bus/``; run after changing ``proto/``.
+committed sources under ``bindings/python/robot_bus/``; run after changing ``proto/``.
 
 The generated ``*_pb2.py`` files are rewritten so imports use the
 ``robot_bus.<pkg>…`` namespace (no top-level ``sensor_msgs`` install).
@@ -10,6 +10,7 @@ The generated ``*_pb2.py`` files are rewritten so imports use the
 Usage (from repo root)::
 
   python3 scripts/generate_python_msgs.py
+  # or: just gen-python
 
 Pin ``protoc`` to ``EXPECTED_PROTOC_VERSION`` (same as CI). Match the
 installed ``protobuf`` pip package to that generator (``>=7.35,<8`` for
@@ -29,7 +30,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 PROTO_ROOT = ROOT / "proto"
-OUT_ROOT = ROOT / "python" / "robot_bus"
+OUT_ROOT = ROOT / "bindings" / "python" / "robot_bus"
 PROTOC = os.environ.get("PROTOC", "protoc")
 
 # Keep in sync with .github/workflows/ci.yml and publish-pypi.yml.
@@ -124,7 +125,7 @@ def clear_generated_packages() -> None:
         target = OUT_ROOT / pkg
         if target.exists():
             shutil.rmtree(target)
-    # Built-in robot_bus.action lives at python/robot_bus/action/ (not a nested pkg).
+    # Built-in robot_bus.action lives at bindings/python/robot_bus/action/.
     action_dst = OUT_ROOT / "action"
     if action_dst.exists():
         shutil.rmtree(action_dst)
@@ -145,7 +146,7 @@ def copy_and_rewrite(tmp: Path) -> None:
             if rewritten != text:
                 py_file.write_text(rewritten, encoding="utf-8")
 
-    # robot_bus.action.v1 → python/robot_bus/action/v1 (import robot_bus.action.v1).
+    # robot_bus.action.v1 → bindings/python/robot_bus/action/v1.
     action_src = tmp / "robot_bus" / "action"
     if action_src.exists():
         action_dst = OUT_ROOT / "action"

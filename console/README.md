@@ -25,7 +25,10 @@ pnpm build   # 静态导出到 out/（供 broker 嵌入）
 同步到 Rust 嵌入目录并重新编译 broker：
 
 ```bash
-../scripts/sync_console_assets.sh
+# 从仓库根目录：
+just console && cargo run --bin robot_bus_broker
+# 或在 console/ 下：
+pnpm build && ../scripts/sync_console_assets.sh
 cd .. && cargo run --bin robot_bus_broker
 # http://localhost:15771
 ```

@@ -13,9 +13,9 @@ pnpm-debug.log*
 npm-debug.log*
 
 # Maturin / PyO3 native extension (built locally or in CI)
-python/robot_bus/_native*.so
-python/robot_bus/_native*.pyd
-python/robot_bus/_native*.dll
+bindings/python/robot_bus/_native*.so
+bindings/python/robot_bus/_native*.pyd
+bindings/python/robot_bus/_native*.dll
 
 # Library crate: dependents use their own lockfile
 Cargo.lock

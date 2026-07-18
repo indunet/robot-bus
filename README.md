@@ -23,8 +23,9 @@
 | `runtime::SingleThreadedExecutor` / `MultiThreadedExecutor` | 显式执行器（多节点 / 并行）；单节点可直接 `Node::spin` |
 | `runtime::Node` / `TopicPublisher` / `CallbackGroup` | 节点、publisher、callback group（互斥 / 可重入） |
 | `grpc::`（默认 feature） | gRPC / gRPC-Web 网关（随 broker 一起启动） |
-| [`proto/`](proto/) | ROS 风格 Protobuf：`proto/<pkg>/{msg\|srv\|grpc}/v1/` → Rust/Python `robot_bus.<pkg>…` |
-| [`console/`](console/) | Web 监控控制台（默认编进 broker，`:15771`；源码在 `console/`，嵌入产物在 `assets/console/`） |
+| [`proto/`](proto/) | 契约源：ROS 风格 Protobuf → Rust / bindings 生成代码 |
+| [`bindings/`](bindings/) | 语言绑定（Python 为首个；C++ / Kotlin / TypeScript SDK 规划中） |
+| [`console/`](console/) | Web 监控控制台（产品 UI，嵌入 broker `:15771`；产物在 `assets/console/`） |
 
 ## 架构
 
@@ -73,10 +74,11 @@ with robot_bus.RobotBusBroker.start() as broker:
 pip install robot-bus
 ```
 
-本地开发（需 [maturin](https://www.maturin.rs/)）：
+本地开发（需 [maturin](https://www.maturin.rs/)，可选 [just](https://github.com/casey/just)）：
 
 ```bash
-maturin develop --features extension-module,grpc
+just python-dev
+# 等价：cd bindings/python && maturin develop --features extension-module,grpc
 ```
 
 （`grpc` 为默认 feature；显式写出可避免 `default-features = false` 的构建漏掉网关。）
@@ -196,7 +198,8 @@ pnpm dev       # http://localhost:3000
 更新嵌入到 broker 的静态资源：
 
 ```bash
-cd console && pnpm build && cd .. && ./scripts/sync_console_assets.sh
+just console
+# 等价：cd console && pnpm build && cd .. && ./scripts/sync_console_assets.sh
 # 然后重新 cargo build
 ```
 
@@ -244,9 +247,12 @@ Proto（包名 `robot_bus.grpc.v1`，与 ROS `*.msg.v1` / `*.srv.v1` 区分）�
 ## 测试
 
 ```bash
-cargo test
-PYTHONPATH=python python3 tests/python/test_msgs_roundtrip.py
-PYTHONPATH=python python3 tests/python/test_typed_api.py
+just test-rust
+just test-python
+# 等价：
+# cargo test
+# PYTHONPATH=bindings/python python3 bindings/python/tests/test_msgs_roundtrip.py
+# PYTHONPATH=bindings/python python3 bindings/python/tests/test_typed_api.py
 ```
 
 ## Protobuf 消息
@@ -256,12 +262,12 @@ PYTHONPATH=python python3 tests/python/test_typed_api.py
 | 语言 | 路径 | 说明 |
 |------|------|------|
 | Rust | `robot_bus::<pkg>::{msg\|srv}::v1` | `build.rs` + prost；挂在 crate 命名空间下 |
-| Python | `robot_bus.<pkg>.{msg\|srv}.v1` | 随 wheel 打包；`scripts/generate_python_msgs.py` 生成 |
+| Python | `robot_bus.<pkg>.{msg\|srv}.v1` | [`bindings/python`](bindings/python)；随 wheel 打包；`just gen-python` 生成 |
 
 - 传输层 body 仍是 opaque bytes（含 gRPC 网关）；Rust Node SDK 在 create 时绑定类型并自动 encode/decode（`create_publisher::<M>` 等），也可用 `*_raw`；Python 传入 protobuf 类即可 typed（纯 Python 薄封装），省略类型则为 raw bytes
 - **srv** 是一对 `*Request` / `*Response` message，不是 gRPC
 - **grpc**（`robot_bus`）是网关 RPC 契约，随 broker 启动（默认 feature `grpc`）
 - 消息在 `robot_bus` 命名空间下，**不占用** ROS 顶层 `sensor_msgs` 包名；编码是 protobuf，与 ROS CDR 不互通
-- 改 proto 后跑：`python3 scripts/generate_python_msgs.py`（需 protoc 35.1，与 CI 一致）
+- 改 proto 后跑：`just gen-python`（或 `python3 scripts/generate_python_msgs.py`；需 protoc 35.1，与 CI 一致）
 
 已覆盖：`builtin_interfaces`、`std_msgs`、`std_srvs`、`geometry_msgs`、`sensor_msgs`、`nav_msgs`、`tf2_msgs`、`trajectory_msgs`、`diagnostic_msgs`、`unique_identifier_msgs`、`shape_msgs`、`visualization_msgs`、`control_msgs`、`nav2_msgs`、`foxglove_msgs`（自 [Foxglove schemas](https://github.com/foxglove/foxglove-sdk) 迁入，包名为 `foxglove_msgs.msg.v1`）。

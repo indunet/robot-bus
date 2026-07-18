@@ -17,9 +17,9 @@ jobs:
         run: |
           TAG="${GITHUB_REF_NAME#v}"
           CRATE_VERSION="$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -n1)"
-          PY_VERSION="$(sed -n 's/^version = "\(.*\)"/\1/p' pyproject.toml | head -n1)"
+          PY_VERSION="$(sed -n 's/^version = "\(.*\)"/\1/p' bindings/python/pyproject.toml | head -n1)"
           if [ "$TAG" != "$CRATE_VERSION" ] || [ "$TAG" != "$PY_VERSION" ]; then
-            echo "Tag ($TAG) must match Cargo.toml ($CRATE_VERSION) and pyproject.toml ($PY_VERSION)"
+            echo "Tag ($TAG) must match Cargo.toml ($CRATE_VERSION) and bindings/python/pyproject.toml ($PY_VERSION)"
             exit 1
           fi
 
@@ -27,8 +27,8 @@ jobs:
         if: github.event_name == 'workflow_dispatch'
         run: |
           CRATE_VERSION="$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -n1)"
-          PY_VERSION="$(sed -n 's/^version = "\(.*\)"/\1/p' pyproject.toml | head -n1)"
-          echo "Publishing Cargo.toml=$CRATE_VERSION pyproject.toml=$PY_VERSION from ref=$GITHUB_REF_NAME"
+          PY_VERSION="$(sed -n 's/^version = "\(.*\)"/\1/p' bindings/python/pyproject.toml | head -n1)"
+          echo "Publishing Cargo.toml=$CRATE_VERSION bindings/python/pyproject.toml=$PY_VERSION from ref=$GITHUB_REF_NAME"
 
   linux:
     needs: [version-check]
@@ -53,8 +53,9 @@ jobs:
       - name: Build wheels
         uses: PyO3/maturin-action@v1
         with:
+          working-directory: bindings/python
           target: ${{ matrix.platform.target }}
-          args: --release --out dist
+          args: --release --out ../../dist
           manylinux: auto
           before-script-linux: |
             set -eux
@@ -92,8 +93,9 @@ jobs:
       - name: Build wheels
         uses: PyO3/maturin-action@v1
         with:
+          working-directory: bindings/python
           target: aarch64
-          args: --release --out dist
+          args: --release --out ../../dist
 
       - uses: actions/upload-artifact@v4
         with:
@@ -116,8 +118,9 @@ jobs:
       - name: Build wheels
         uses: PyO3/maturin-action@v1
         with:
+          working-directory: bindings/python
           target: x64
-          args: --release --out dist
+          args: --release --out ../../dist
 
       - uses: actions/upload-artifact@v4
         with:

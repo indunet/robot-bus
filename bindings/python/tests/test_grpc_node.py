@@ -1,7 +1,8 @@
 """Integration tests for gRPC-mode Node (requires native extension + broker).
 
-Run after: maturin develop --features extension-module,grpc
-  .venv/bin/python tests/python/test_grpc_node.py
+Run after: just python-dev
+  (or: cd bindings/python && maturin develop --features extension-module,grpc)
+  .venv/bin/python bindings/python/tests/test_grpc_node.py
 """
 
 from __future__ import annotations

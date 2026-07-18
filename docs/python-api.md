@@ -2,7 +2,8 @@
 
 ```bash
 pip install robot-bus
-# 本地：maturin develop --features extension-module
+# 本地：just python-dev
+# 等价：cd bindings/python && maturin develop --features extension-module,grpc
 ```
 
 ## Broker 启动
