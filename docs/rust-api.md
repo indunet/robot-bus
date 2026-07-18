@@ -71,26 +71,24 @@ let broker = RobotBusBroker::start(RobotBusConfig {
 broker.stop()?;
 ```
 
-连接由 [`Node`](../src/runtime/node.rs) 的 `NodeOptions` 管理。典型流程：`Node::new` → `executor.add_node` → `create_*` → `executor.spin`。
+连接由 [`Node`](../src/runtime/node.rs) 的 `NodeOptions` 管理。典型流程：`Node::new` → `create_*` → `node.spin()`（自动 `SingleThreadedExecutor`）。多节点或需并行时再 `executor.add_node` + `executor.spin`。
 
 ---
 
-## Message bus（Executor + Node + spin）
+## Message bus（Node + spin）
 
-接近 ROS 2：先 `Node::new`，再 `executor.add_node`，然后 typed `create_publisher` / `create_subscription`（创建时绑定消息类型，自动 encode/decode）。底层与 gRPC 仍传 opaque bytes。
+接近 ROS 2：`Node::new` → typed `create_publisher` / `create_subscription`（创建时绑定消息类型，自动 encode/decode）→ `node.spin()`。底层与 gRPC 仍传 opaque bytes。
 
 ```rust
 use std::sync::Arc;
 use std::time::Duration;
 use robot_bus::geometry_msgs::msg::v1::Vector3;
 use robot_bus::sensor_msgs::msg::v1::Imu;
-use robot_bus::{Node, SingleThreadedExecutor};
+use robot_bus::Node;
 
 fn main() -> robot_bus::Result<()> {
     let mut node = Node::new("pilot");
     // 进程内 / 自定义地址：Node::with_options("pilot", NodeOptions { ... })
-    let executor = SingleThreadedExecutor::new();
-    executor.add_node(&mut node)?;
 
     let imu_pub = node.create_publisher::<Imu>("/robot1/imu")?;
     node.create_subscription::<Imu, _>(
@@ -124,13 +122,13 @@ fn main() -> robot_bus::Result<()> {
         None,
     )?;
 
-    let handle = executor.shutdown_handle()?;
+    let handle = node.shutdown_handle()?;
     std::thread::spawn(move || {
         std::thread::sleep(Duration::from_secs(5));
         handle.shutdown();
     });
 
-    executor.spin()?; // 阻塞
+    node.spin()?; // 阻塞
     Ok(())
 }
 ```
@@ -139,7 +137,20 @@ Raw bytes：`create_publisher_raw` / `create_subscription_raw`。
 
 topic / service / action 名按传入原样使用（请自行写全路径）。
 
-`MultiThreadedExecutor::new(n)`：最多 `n` 个 worker；配合 `Reentrant` callback group 时订阅 / timer / service / action 都可并行。`MutuallyExclusive` 组内仍串行。
+显式 Executor（多节点共享 / 多线程）：
+
+```rust
+use robot_bus::{MultiThreadedExecutor, Node, SingleThreadedExecutor};
+
+let mut node = Node::new("pilot");
+let executor = SingleThreadedExecutor::new();
+executor.add_node(&mut node)?;
+// 或 MultiThreadedExecutor::new(4) — 最多 n 个 worker；配合 Reentrant
+// callback group 时订阅 / timer / service / action 都可并行。
+executor.spin()?;
+```
+
+`MutuallyExclusive` 组内仍串行。
 
 ### Callback group
 
@@ -179,18 +190,16 @@ pub_.set_high_water_mark(HighWaterMark { snd: 10, rcv: 10 })?;
 
 ## Service bus
 
-与 topic 相同：`Node` → `executor.add_node` → typed `create_service` / `create_client` → `spin`（server 侧）。
+与 topic 相同：`Node` → typed `create_service` / `create_client` → `server_node.spin()`。
 
 ```rust
 use std::time::Duration;
 use robot_bus::std_srvs::srv::v1::{SetBool, SetBoolRequest, SetBoolResponse};
-use robot_bus::{Node, SingleThreadedExecutor};
+use robot_bus::Node;
 
 fn main() -> robot_bus::Result<()> {
     let mut server_node = Node::new("svc_server");
     let mut cli_node = Node::new("svc_client");
-    let executor = SingleThreadedExecutor::new();
-    executor.add_node(&mut server_node)?;
 
     server_node.create_service::<SetBool, _>(
         "/set_bool",
@@ -202,7 +211,7 @@ fn main() -> robot_bus::Result<()> {
     )?;
 
     let client = cli_node.create_client::<SetBool>("/set_bool")?;
-    let handle = executor.shutdown_handle()?;
+    let handle = server_node.shutdown_handle()?;
     std::thread::spawn(move || {
         std::thread::sleep(Duration::from_millis(100));
         let resp = client
@@ -212,7 +221,7 @@ fn main() -> robot_bus::Result<()> {
         handle.shutdown();
     });
 
-    executor.spin()?;
+    server_node.spin()?;
     Ok(())
 }
 ```
@@ -223,20 +232,18 @@ Raw bytes：`create_service_raw` / `create_client_raw`。endpoint 取自 `NodeOp
 
 ## Action bus
 
-同样挂在 Node 上：typed `create_action_server` / `create_action_client`。
+同样挂在 Node 上：typed `create_action_server` / `create_action_client` → `server_node.spin()`。
 
 ```rust
 use std::time::Duration;
 use robot_bus::action::v1::{
     Fibonacci, FibonacciFeedback, FibonacciGoal, FibonacciResult,
 };
-use robot_bus::{ActionOutcome, Node, SingleThreadedExecutor};
+use robot_bus::{ActionOutcome, Node};
 
 fn main() -> robot_bus::Result<()> {
     let mut server_node = Node::new("act_server");
     let mut cli_node = Node::new("act_client");
-    let executor = SingleThreadedExecutor::new();
-    executor.add_node(&mut server_node)?;
 
     server_node.create_action_server::<Fibonacci, _>(
         "fibonacci",
@@ -261,7 +268,7 @@ fn main() -> robot_bus::Result<()> {
     )?;
 
     let client = cli_node.create_action_client::<Fibonacci>("fibonacci")?;
-    let handle = executor.shutdown_handle()?;
+    let handle = server_node.shutdown_handle()?;
     std::thread::spawn(move || {
         std::thread::sleep(Duration::from_millis(100));
         let outcome = client
@@ -271,7 +278,7 @@ fn main() -> robot_bus::Result<()> {
         handle.shutdown();
     });
 
-    executor.spin()?;
+    server_node.spin()?;
     Ok(())
 }
 ```
@@ -286,7 +293,7 @@ Raw bytes：`create_action_server_raw` / `create_action_client_raw`。
 
 ```rust
 use std::sync::Arc;
-use robot_bus::{Node, NodeOptions, RobotBusBroker, RobotBusConfig, SingleThreadedExecutor};
+use robot_bus::{Node, NodeOptions, RobotBusBroker, RobotBusConfig};
 
 fn main() -> anyhow::Result<()> {
     let broker = RobotBusBroker::start(RobotBusConfig::default())?;
@@ -297,8 +304,6 @@ fn main() -> anyhow::Result<()> {
         ..NodeOptions::default()
     };
     let mut node = Node::with_options("demo", options);
-    let executor = SingleThreadedExecutor::new();
-    executor.add_node(&mut node)?;
     let imu_pub = node.create_publisher_raw("/robot1/imu")?;
     node.create_subscription_raw(
         "/robot1/imu",
@@ -306,7 +311,7 @@ fn main() -> anyhow::Result<()> {
         None,
     )?;
     imu_pub.publish(b"hello")?;
-    executor.spin_once(None)?;
+    node.spin_once(None)?;
 
     broker.stop()?;
     Ok(())

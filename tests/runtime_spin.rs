@@ -371,3 +371,45 @@ fn node_subscription_typed_imu() {
     }
     assert_eq!(hits.load(Ordering::SeqCst), 1);
 }
+
+#[test]
+fn node_spin_without_explicit_executor() {
+    let proxy = MessageProxy::spawn();
+    thread::sleep(Duration::from_millis(50));
+
+    let hits = Arc::new(AtomicUsize::new(0));
+    let hits_cb = hits.clone();
+
+    let options = NodeOptions {
+        message_xsub: Some(proxy.xsub_endpoint.clone()),
+        message_xpub: Some(proxy.xpub_endpoint.clone()),
+        ..NodeOptions::default()
+    };
+    let mut node = Node::with_options("auto_exec", options);
+    // No add_node — Node lazily owns a SingleThreadedExecutor.
+    node.create_subscription_raw(
+        "/auto/topic",
+        Arc::new(move |topic, payload| {
+            assert_eq!(topic, "/auto/topic");
+            assert_eq!(payload, b"ping");
+            hits_cb.fetch_add(1, Ordering::SeqCst);
+        }),
+        None,
+    )
+    .expect("create_subscription_raw");
+    thread::sleep(Duration::from_millis(150));
+
+    let pub_ = Publisher::new(Some(&proxy.xsub_endpoint)).expect("publisher");
+    pub_.publish("/auto/topic", b"ping").expect("publish");
+
+    let deadline = std::time::Instant::now() + Duration::from_secs(2);
+    while hits.load(Ordering::SeqCst) == 0 {
+        assert!(
+            deadline > std::time::Instant::now(),
+            "timed out waiting for auto-executor callback"
+        );
+        node.spin_once(Some(Duration::from_millis(100)))
+            .expect("spin_once");
+    }
+    assert_eq!(hits.load(Ordering::SeqCst), 1);
+}

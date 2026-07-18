@@ -677,24 +677,24 @@ impl PyNode {
         self.inner.connect_action_client().map_err(bus_err)
     }
 
-    fn shutdown_handle(&self) -> PyResult<PyShutdownHandle> {
+    fn shutdown_handle(&mut self) -> PyResult<PyShutdownHandle> {
         Ok(PyShutdownHandle {
             inner: self.inner.shutdown_handle().map_err(bus_err)?,
         })
     }
 
-    fn shutdown(&self) -> PyResult<()> {
+    fn shutdown(&mut self) -> PyResult<()> {
         self.inner.shutdown().map_err(bus_err)
     }
 
     /// Poll once. `timeout` is seconds; `None` uses the executor default.
     #[pyo3(signature = (timeout=None))]
-    fn spin_once(&self, timeout: Option<f64>) -> PyResult<bool> {
+    fn spin_once(&mut self, timeout: Option<f64>) -> PyResult<bool> {
         let timeout = timeout.map(Duration::from_secs_f64);
         self.inner.spin_once(timeout).map_err(bus_err)
     }
 
-    fn spin(&self) -> PyResult<()> {
+    fn spin(&mut self) -> PyResult<()> {
         self.inner.spin().map_err(bus_err)
     }
 }

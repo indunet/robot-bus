@@ -35,9 +35,9 @@ with robot_bus.RobotBusBroker.start(
 
 ---
 
-## Message bus（Executor + Node + spin）
+## Message bus（Node + spin）
 
-接近 ROS 2：`Node(...)` → `executor.add_node(node)` → `create_publisher` / `create_subscription` → `spin`。
+接近 ROS 2：`Node(...)` → `create_publisher` / `create_subscription` → `node.spin()`。单节点时无需手写 Executor（内部自动挂 `SingleThreadedExecutor`）。
 
 Python 主推 **typed**（创建时传入 protobuf 类，自动 `SerializeToString` / `ParseFromString`）；不传类型则仍为 raw bytes。底层与 Rust 一样走 opaque bytes（纯 Python 薄封装，因 PyO3 无法映射 Rust 泛型）。
 
@@ -51,8 +51,6 @@ def on_imu(topic, imu: Imu):
 
 node = robot_bus.Node("pilot")
 # 可选：Node(..., host=..., transport=..., message_xsub=..., message_xpub=...)
-executor = robot_bus.SingleThreadedExecutor()
-executor.add_node(node)
 
 imu_pub = node.create_publisher("/robot1/imu", Imu)
 node.create_subscription("/robot1/imu", on_imu, msg_type=Imu)
@@ -64,8 +62,8 @@ imu_pub.publish(
     )
 )
 
-# 阻塞直到 executor.shutdown() 或 shutdown_handle().shutdown()
-# executor.spin()
+# 阻塞直到 node.shutdown() 或 shutdown_handle().shutdown()
+# node.spin()
 ```
 
 Raw bytes（与旧用法兼容）：
@@ -81,11 +79,12 @@ def on_raw(topic, payload: bytes):
 node.create_subscription("/robot1/imu", on_raw)
 ```
 
-多线程 service/action handler：
+多节点共享或需多线程 service/action handler 时再显式用 Executor：
 
 ```python
 executor = robot_bus.MultiThreadedExecutor(num_threads=4)
 executor.add_node(node)
+# executor.spin()
 ```
 
 ### Callback group
@@ -125,8 +124,6 @@ def on_fibonacci(goal: FibonacciGoal):
 
 server_node = robot_bus.Node("worker")
 cli_node = robot_bus.Node("caller")
-executor = robot_bus.SingleThreadedExecutor()
-executor.add_node(server_node)
 
 server_node.create_service(
     "/set_bool", on_set_bool,
@@ -152,7 +149,7 @@ act = cli_node.create_action_client(
     result_type=FibonacciResult,
 )
 # messages = act.send_goal(FibonacciGoal(order=5), timeout=10.0)
-# executor.spin()
+# server_node.spin()
 ```
 
 Raw：`handler(body: bytes) -> bytes` / `call(bytes)`；action 同理传 bytes。
@@ -160,20 +157,18 @@ endpoint 默认本机 broker；也可用 `Node(..., service_frontend=..., servic
 
 ### 定时器
 
-与 topic 一样挂在 Node 上：先 `executor.add_node(node)`，再 `node.create_timer`；回调由 `spin` / `spin_once` 驱动。
+与 topic 一样挂在 Node 上；回调由 `spin` / `spin_once` 驱动。
 
 ```python
 import robot_bus
 
 node = robot_bus.Node("timer_demo")
-executor = robot_bus.SingleThreadedExecutor()
-executor.add_node(node)
 
 def on_tick():
     print("tick")
 
 handle = node.create_timer(0.1, on_tick)  # 秒
-# executor.spin()
+# node.spin()
 
 node.cancel_timer(handle)
 ```
@@ -184,16 +179,14 @@ node.cancel_timer(handle)
 import robot_bus
 
 node = robot_bus.Node("poller")
-executor = robot_bus.SingleThreadedExecutor()
-executor.add_node(node)
 node.create_subscription("/robot1/imu", lambda t, p: print(t))
 
 while True:
-    executor.spin_once(timeout=0.1)  # 秒
+    node.spin_once(timeout=0.1)  # 秒
     # 其它逻辑…
     break
 
-executor.shutdown()
+node.shutdown()
 ```
 
 ### 从其它线程停止 spin
@@ -204,16 +197,14 @@ import time
 import robot_bus
 
 node = robot_bus.Node("worker")
-executor = robot_bus.SingleThreadedExecutor()
-executor.add_node(node)
-handle = executor.shutdown_handle()
+handle = node.shutdown_handle()
 
 def stop_later():
     time.sleep(5)
     handle.shutdown()
 
 threading.Thread(target=stop_later, daemon=True).start()
-# executor.spin()
+# node.spin()
 ```
 
 ---
@@ -249,10 +240,11 @@ print(robot_bus.__version__)
 
 | 符号 | 说明 |
 |------|------|
-| `Node(name, host=..., message_xsub=..., service_frontend=..., service_backend=..., …)` | 建节点（尚未挂到 executor） |
-| `SingleThreadedExecutor()` | 单线程执行器；`add_node` + `spin` |
+| `Node(name, host=..., message_xsub=..., service_frontend=..., service_backend=..., …)` | 建节点；首次 `create_*` / `spin` 时自动挂 `SingleThreadedExecutor` |
+| `node.spin()` / `spin_once` / `shutdown` | 驱动回调（ROS 2 式简单路径） |
+| `SingleThreadedExecutor()` | 显式单线程执行器（多节点共享时用） |
 | `MultiThreadedExecutor(num_threads=4)` | service/action handler 可并行 |
-| `executor.add_node(node)` | 把节点挂到执行器（ROS 2 同款） |
+| `executor.add_node(node)` | 把节点挂到执行器（须在该节点尚未 auto-attach 之前） |
 | `node.create_publisher(topic, msg_type=None)` | typed → `TypedTopicPublisher.publish(Message)`；省略类型 → raw `TopicPublisher.publish(bytes)` |
 | `node.create_timer(period, callback)` → `TimerHandle` | 定时器（与 topic 一样挂在 Node） |
 | `CallbackGroupType` / `create_callback_group` | `MutuallyExclusive` / `Reentrant` |

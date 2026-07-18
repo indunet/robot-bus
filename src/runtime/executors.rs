@@ -1,6 +1,7 @@
 //! ROS 2–style executors: [`SingleThreadedExecutor`] and [`MultiThreadedExecutor`].
 //!
-//! Typical flow:
+//! Simple single-node path can skip these and call [`Node::spin`](crate::runtime::Node::spin)
+//! (auto SingleThreadedExecutor). Shared / multi-threaded flow:
 //! ```ignore
 //! let mut node = Node::new("pilot");
 //! let executor = SingleThreadedExecutor::new();

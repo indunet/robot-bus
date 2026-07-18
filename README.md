@@ -20,7 +20,7 @@
 | `broker::` | 路由进程（message / service / action） |
 | 顶层 API | Publisher / Subscriber / Client / Worker |
 | `runtime::Executor` | 底层 poll loop（一般用下面两个包装） |
-| `runtime::SingleThreadedExecutor` / `MultiThreadedExecutor` | ROS 2 风格执行器；`add_node` + `spin` |
+| `runtime::SingleThreadedExecutor` / `MultiThreadedExecutor` | 显式执行器（多节点 / 并行）；单节点可直接 `Node::spin` |
 | `runtime::Node` / `TopicPublisher` / `CallbackGroup` | 节点、publisher、callback group（互斥 / 可重入） |
 | `grpc::`（默认 feature） | gRPC / gRPC-Web 网关（随 broker 一起启动） |
 | [`proto/`](proto/) | ROS 风格 Protobuf：`proto/<pkg>/{msg\|srv\|grpc}/v1/` → Rust/Python `robot_bus.<pkg>…` |
@@ -89,17 +89,16 @@ def on_imu(topic, imu: Imu):
     print(topic, imu.linear_acceleration)
 
 node = robot_bus.Node("pilot")
-executor = robot_bus.SingleThreadedExecutor()
-executor.add_node(node)
 
 imu_pub = node.create_publisher("/robot1/imu", Imu)
 node.create_subscription("/robot1/imu", on_imu, msg_type=Imu)
 imu_pub.publish(Imu(linear_acceleration=Vector3(x=0.0, y=0.0, z=9.8)))
-# executor.spin()  # 阻塞直到其它线程调用 executor.shutdown()
+# node.spin()  # 阻塞；另线程调用 node.shutdown() / shutdown_handle().shutdown()
 ```
 
-（不传消息类型时仍为 raw bytes，自行 `SerializeToString` / `ParseFromString`。）
-### 2. Rust（Executor + Node + spin）
+（不传消息类型时仍为 raw bytes。多节点共享或需多线程 handler 时再用 `SingleThreadedExecutor` / `MultiThreadedExecutor` + `add_node`。）
+
+### 2. Rust（Node + spin）
 
 在 `Cargo.toml` 中添加依赖：
 
@@ -108,18 +107,16 @@ robot-bus = { path = "../robot-bus" }
 # 或 crates.io：robot-bus = "0.0.3"
 ```
 
-语义接近 ROS 2：`Node::new` → `executor.add_node` → typed `create_publisher` / `create_subscription` → `spin`：
+语义接近 ROS 2：`Node::new` → typed `create_publisher` / `create_subscription` → `node.spin()`（自动挂 `SingleThreadedExecutor`）：
 
 ```rust
 use std::sync::Arc;
 use std::time::Duration;
 use robot_bus::geometry_msgs::msg::v1::Vector3;
 use robot_bus::sensor_msgs::msg::v1::Imu;
-use robot_bus::{Node, SingleThreadedExecutor};
+use robot_bus::Node;
 
 let mut node = Node::new("pilot");
-let executor = SingleThreadedExecutor::new();
-executor.add_node(&mut node)?;
 
 let imu_pub = node.create_publisher::<Imu>("/robot1/imu")?;
 node.create_subscription::<Imu, _>(
@@ -144,19 +141,18 @@ node.create_timer(
     None,
 )?;
 
-let handle = executor.shutdown_handle()?;
+let handle = node.shutdown_handle()?;
 std::thread::spawn(move || { /* ... */ handle.shutdown(); });
-executor.spin()?;
+node.spin()?;
 ```
 
-- `SingleThreadedExecutor`：回调在 I/O / spin 线程串行（默认）
-- `MultiThreadedExecutor::new(n)`：最多 `n` 个 worker；`Reentrant` group 可并行，`MutuallyExclusive` 组内串行
+- 单节点默认：直接 `node.spin()`（内部 `SingleThreadedExecutor`）
+- `SingleThreadedExecutor` / `MultiThreadedExecutor` + `add_node`：多节点共享或并行 handler
 - Callback group：`MutuallyExclusive` / `Reentrant`（`create_callback_group`；默认互斥组）
 - Service / action：typed `create_service` / `create_client`、`create_action_server` / `create_action_client`（与 topic 一样挂在 Node；另有 `*_raw`）
 - Timer：`create_timer`（同样挂在 Node，由 `spin` 驱动）
 - Raw bytes：`create_publisher_raw` / `create_subscription_raw`
 - 底层 escape hatch：`Executor`（高级用法）
-
 发送 / 接收水位（ZMQ HWM，不是完整 QoS）可在创建时或运行中设置：
 
 ```rust

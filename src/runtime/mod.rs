@@ -1,8 +1,8 @@
 //! Unified poll loop runtime (ROS 2–style executor / node).
 //!
-//! Create a [`SingleThreadedExecutor`] or [`MultiThreadedExecutor`], attach
-//! nodes with `create_node`, register callbacks on the [`Node`], then drive
-//! them with `spin` / `spin_once` / `spin_some` on the executor.
+//! Simple path: [`Node::new`] → register callbacks → [`Node::spin`] (owns a
+//! [`SingleThreadedExecutor`] lazily). Shared / multi-threaded: attach nodes
+//! with `add_node` / `create_node`, then `spin` on the executor.
 
 mod executor;
 mod executors;

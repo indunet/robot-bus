@@ -1,10 +1,12 @@
-//! ROS 2–style [`Node`]: named participant, then attached to an executor.
+//! ROS 2–style [`Node`]: named participant with optional executor.
 //!
-//! Typical flow (matches ROS 2):
+//! Simple single-threaded flow (matches ROS 2 `spin(node)`):
 //! 1. `let mut node = Node::new("pilot");`
-//! 2. `executor.add_node(&mut node)?;`
-//! 3. `let pub_ = node.create_publisher::<Imu>("/robot1/imu")?; pub_.publish(&imu)?;`
-//! 4. `executor.spin()?;`
+//! 2. `let pub_ = node.create_publisher::<Imu>("/robot1/imu")?;`
+//! 3. `node.spin()?;` — lazily owns a [`SingleThreadedExecutor`]
+//!
+//! For shared / multi-threaded executors: `executor.add_node(&mut node)?` then
+//! `executor.spin()?`.
 //!
 //! Topic / service / action names are used as given (pass full paths yourself).
 
@@ -19,7 +21,7 @@ use crate::errors::{BusError, Result};
 use crate::message_bus::Publisher as BusPublisher;
 use crate::runtime::callback_group::{CallbackGroup, CallbackGroupType};
 use crate::runtime::executor::{Executor, ShutdownHandle};
-use crate::runtime::executors::ExecutorHandle;
+use crate::runtime::executors::{ExecutorHandle, SingleThreadedExecutor};
 use crate::runtime::queues::ActionMessageCallback;
 use crate::runtime::registrations::{ActionGoalHandler, MessageCallback, ServiceHandler};
 use crate::runtime::timers::{TimerCallback, TimerHandle};
@@ -372,12 +374,17 @@ impl<A: Action> NodeActionClient<A> {
 
 /// Named participant (simplified ROS 2 `Node`).
 ///
-/// Create with [`Node::new`], then [`crate::runtime::SingleThreadedExecutor::add_node`]
-/// (or the multi-threaded variant) before subscriptions / timers / services.
+/// Create with [`Node::new`], then `create_*` and [`spin`](Self::spin). A
+/// [`SingleThreadedExecutor`] is created automatically on first use. For a
+/// shared or multi-threaded executor, call
+/// [`SingleThreadedExecutor::add_node`](crate::runtime::SingleThreadedExecutor::add_node)
+/// (or the multi-threaded variant) before `create_*` / `spin`.
 pub struct Node {
     name: String,
     options: NodeOptions,
     executor: Option<ExecutorHandle>,
+    /// Keeps a lazily created [`SingleThreadedExecutor`] alive for the simple path.
+    owned_executor: Option<SingleThreadedExecutor>,
     publisher: Option<Arc<BusPublisher>>,
     subscriber_connected: bool,
     default_callback_group: CallbackGroup,
@@ -395,6 +402,7 @@ impl Node {
             name: name.into(),
             options,
             executor: None,
+            owned_executor: None,
             publisher: None,
             subscriber_connected: false,
             default_callback_group: CallbackGroup::mutually_exclusive(),
@@ -411,16 +419,19 @@ impl Node {
         Ok(())
     }
 
-    fn require_executor(&self) -> Result<&ExecutorHandle> {
-        self.executor.as_ref().ok_or_else(|| {
-            BusError::Protocol(
-                "call executor.add_node(&mut node) before subscriptions/timers/services".into(),
-            )
-        })
+    /// Return the attached executor, lazily creating a [`SingleThreadedExecutor`]
+    /// when none was provided via [`add_node`](crate::runtime::SingleThreadedExecutor::add_node).
+    fn ensure_executor(&mut self) -> Result<&ExecutorHandle> {
+        if self.executor.is_none() {
+            let exec = SingleThreadedExecutor::new();
+            self.attach_executor(exec.handle().clone())?;
+            self.owned_executor = Some(exec);
+        }
+        Ok(self.executor.as_ref().expect("executor attached above"))
     }
 
-    fn lock_executor(&self) -> Result<MutexGuard<'_, Executor>> {
-        self.require_executor()?.lock()
+    fn lock_executor(&mut self) -> Result<MutexGuard<'_, Executor>> {
+        self.ensure_executor()?.lock()
     }
 
     pub fn name(&self) -> &str {
@@ -530,27 +541,27 @@ impl Node {
         pub_.set_high_water_mark(hwm)
     }
 
-    pub fn stream_hwm(&self) -> Result<HighWaterMark> {
+    pub fn stream_hwm(&mut self) -> Result<HighWaterMark> {
         Ok(self.lock_executor()?.stream_hwm())
     }
 
-    pub fn set_stream_hwm(&self, hwm: HighWaterMark) -> Result<()> {
+    pub fn set_stream_hwm(&mut self, hwm: HighWaterMark) -> Result<()> {
         self.lock_executor()?.set_stream_hwm(hwm)
     }
 
-    pub fn rpc_hwm(&self) -> Result<HighWaterMark> {
+    pub fn rpc_hwm(&mut self) -> Result<HighWaterMark> {
         Ok(self.lock_executor()?.rpc_hwm())
     }
 
-    pub fn set_rpc_hwm(&self, hwm: HighWaterMark) -> Result<()> {
+    pub fn set_rpc_hwm(&mut self, hwm: HighWaterMark) -> Result<()> {
         self.lock_executor()?.set_rpc_hwm(hwm)
     }
 
-    pub fn action_hwm(&self) -> Result<HighWaterMark> {
+    pub fn action_hwm(&mut self) -> Result<HighWaterMark> {
         Ok(self.lock_executor()?.action_hwm())
     }
 
-    pub fn set_action_hwm(&self, hwm: HighWaterMark) -> Result<()> {
+    pub fn set_action_hwm(&mut self, hwm: HighWaterMark) -> Result<()> {
         self.lock_executor()?.set_action_hwm(hwm)
     }
 
@@ -809,7 +820,7 @@ impl Node {
     /// Submit a goal via the executor (callback receives FEEDBACK / RESULT). Prefer
     /// [`create_action_client`](Self::create_action_client) for a ROS 2–style sync handle.
     pub fn send_goal(
-        &self,
+        &mut self,
         action_name: &str,
         body: &[u8],
         callback: ActionMessageCallback,
@@ -819,42 +830,50 @@ impl Node {
             .send_goal(action_name, body, callback, goal_id)
     }
 
-    pub fn cancel_goal(&self, action_name: &str, goal_id: &str, body: &[u8]) -> Result<()> {
+    pub fn cancel_goal(
+        &mut self,
+        action_name: &str,
+        goal_id: &str,
+        body: &[u8],
+    ) -> Result<()> {
         self.lock_executor()?
             .cancel_goal(action_name, goal_id, body)
     }
 
-    pub fn shutdown_handle(&self) -> Result<ShutdownHandle> {
-        self.require_executor()?.shutdown_handle()
+    pub fn shutdown_handle(&mut self) -> Result<ShutdownHandle> {
+        self.ensure_executor()?.shutdown_handle()
     }
 
-    pub fn shutdown(&self) -> Result<()> {
-        self.require_executor()?.shutdown()
+    pub fn shutdown(&mut self) -> Result<()> {
+        self.ensure_executor()?.shutdown()
     }
 
-    /// Convenience: spin the attached executor (same as `executor.spin()`).
-    pub fn spin_once(&self, timeout: Option<Duration>) -> Result<bool> {
-        self.require_executor()?.spin_once(timeout)
+    /// Spin until [`shutdown`](Self::shutdown) (ROS 2–style `spin(node)`).
+    ///
+    /// Lazily creates a [`SingleThreadedExecutor`] when none was attached via
+    /// `add_node`. Same as `executor.spin()` on the attached / owned executor.
+    pub fn spin_once(&mut self, timeout: Option<Duration>) -> Result<bool> {
+        self.ensure_executor()?.spin_once(timeout)
     }
 
-    pub fn spin_some(&self, timeout: Option<Duration>) -> Result<()> {
-        self.require_executor()?.spin_some(timeout)
+    pub fn spin_some(&mut self, timeout: Option<Duration>) -> Result<()> {
+        self.ensure_executor()?.spin_some(timeout)
     }
 
-    pub fn spin(&self) -> Result<()> {
-        self.require_executor()?.spin()
+    pub fn spin(&mut self) -> Result<()> {
+        self.ensure_executor()?.spin()
     }
 
-    pub fn start(&self) -> Result<()> {
-        self.require_executor()?.start()
+    pub fn start(&mut self) -> Result<()> {
+        self.ensure_executor()?.start()
     }
 
-    pub fn stop(&self) -> Result<()> {
-        self.require_executor()?.stop()
+    pub fn stop(&mut self) -> Result<()> {
+        self.ensure_executor()?.stop()
     }
 
-    pub fn wait(&self) -> Result<()> {
-        self.require_executor()?.wait()
+    pub fn wait(&mut self) -> Result<()> {
+        self.ensure_executor()?.wait()
     }
 }
 
@@ -888,12 +907,31 @@ mod tests {
     }
 
     #[test]
-    fn subscription_requires_add_node() {
+    fn subscription_auto_attaches_single_threaded_executor() {
         let mut node = Node::new("pilot");
-        let err = node
-            .create_subscription_raw("/imu", Arc::new(|_, _| {}), None)
-            .unwrap_err();
-        assert!(err.to_string().contains("add_node"));
+        node.create_subscription_raw("/imu", Arc::new(|_, _| {}), None)
+            .unwrap();
+        assert!(node.executor_handle().is_some());
+        assert!(node.owned_executor.is_some());
+    }
+
+    #[test]
+    fn spin_path_owns_single_threaded_executor() {
+        let mut node = Node::new("pilot");
+        // shutdown_handle / spin ensure the same lazy SingleThreadedExecutor.
+        let _handle = node.shutdown_handle().unwrap();
+        assert!(node.executor_handle().is_some());
+        assert!(node.owned_executor.is_some());
+    }
+
+    #[test]
+    fn cannot_add_node_after_auto_attach() {
+        let mut node = Node::new("pilot");
+        node.create_subscription_raw("/imu", Arc::new(|_, _| {}), None)
+            .unwrap();
+        let executor = SingleThreadedExecutor::new();
+        let err = executor.add_node(&mut node).unwrap_err();
+        assert!(err.to_string().contains("already added"));
     }
 
     #[test]
