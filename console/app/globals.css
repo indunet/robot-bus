@@ -1,0 +1,135 @@
+@import 'tailwindcss';
+@import 'tw-animate-css';
+@import 'shadcn/tailwind.css';
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  /* ─── robot-bus 工业调色板 ─── */
+  --color-bus-bg:       #141618;   /* 深炭黑底 */
+  --color-bus-panel:    #1a1d20;   /* 面板背景 */
+  --color-bus-border:   #2a2f35;   /* 锐利边线 */
+  --color-bus-border2:  #323840;   /* 次级边线 */
+  --color-bus-cyan:     #00d4ff;   /* 冷青主色 */
+  --color-bus-cyan-dim: #007fa0;   /* 冷青暗色 */
+  --color-bus-amber:    #f59e0b;   /* 琥珀警告 */
+  --color-bus-red:      #ef4444;   /* 故障红 */
+  --color-bus-green:    #22c55e;   /* 正常绿 */
+  --color-bus-text:     #c8ced6;   /* 主文字 */
+  --color-bus-muted:    #5a6370;   /* 次文字 */
+  --color-bus-mono:     'JetBrains Mono', 'Fira Code', 'Cascadia Mono', ui-monospace, monospace;
+
+  /* shadcn 兼容 tokens */
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar: var(--sidebar);
+  --color-chart-5: var(--chart-5);
+  --color-chart-4: var(--chart-4);
+  --color-chart-3: var(--chart-3);
+  --color-chart-2: var(--chart-2);
+  --color-chart-1: var(--chart-1);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  --color-foreground: var(--foreground);
+  --color-background: var(--background);
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+  --radius-3xl: calc(var(--radius) * 2.2);
+  --radius-4xl: calc(var(--radius) * 2.6);
+}
+
+:root {
+  color-scheme: dark;
+  --background: #141618;
+  --foreground: #c8ced6;
+  --card: #1a1d20;
+  --card-foreground: #c8ced6;
+  --popover: #1a1d20;
+  --popover-foreground: #c8ced6;
+  --primary: #00d4ff;
+  --primary-foreground: #141618;
+  --secondary: #1f2428;
+  --secondary-foreground: #c8ced6;
+  --muted: #1f2428;
+  --muted-foreground: #5a6370;
+  --accent: #1f2428;
+  --accent-foreground: #c8ced6;
+  --destructive: #ef4444;
+  --border: #2a2f35;
+  --input: #2a2f35;
+  --ring: #00d4ff;
+  --chart-1: #00d4ff;
+  --chart-2: #f59e0b;
+  --chart-3: #22c55e;
+  --chart-4: #ef4444;
+  --chart-5: #8b5cf6;
+  --radius: 0.25rem;
+  --sidebar: #141618;
+  --sidebar-foreground: #c8ced6;
+  --sidebar-primary: #00d4ff;
+  --sidebar-primary-foreground: #141618;
+  --sidebar-accent: #1f2428;
+  --sidebar-accent-foreground: #c8ced6;
+  --sidebar-border: #2a2f35;
+  --sidebar-ring: #00d4ff;
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+    font-family: 'Inter', system-ui, sans-serif;
+  }
+}
+
+/* 等宽数字工具类 */
+.font-mono-num {
+  font-family: 'JetBrains Mono', 'Fira Code', 'Cascadia Mono', ui-monospace, monospace;
+  font-variant-numeric: tabular-nums;
+}
+
+/* 状态灯脉冲动画 */
+@keyframes status-pulse {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.4; }
+}
+.pulse-green { animation: status-pulse 2s ease-in-out infinite; }
+.pulse-amber { animation: status-pulse 1.2s ease-in-out infinite; }
+.pulse-red   { animation: status-pulse 0.8s ease-in-out infinite; }
+
+/* 数值跳动动画 */
+@keyframes value-pop {
+  0%   { color: #00d4ff; }
+  100% { color: inherit; }
+}
+.value-pop { animation: value-pop 0.4s ease-out; }
+
+/* 扫描线效果 */
+@keyframes scanline {
+  0%   { transform: translateY(-100%); }
+  100% { transform: translateY(100vh); }
+}

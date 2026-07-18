@@ -27,16 +27,21 @@ use crate::runtime::registrations::{ActionGoalHandler, MessageCallback, ServiceH
 use crate::runtime::timers::{TimerCallback, TimerHandle};
 use crate::service_bus::ServiceClient as BusServiceClient;
 use crate::transports::{
-    action_backend_endpoint, action_frontend_endpoint, message_xpub_endpoint,
-    message_xsub_endpoint, service_backend_endpoint, service_frontend_endpoint,
+    action_backend_endpoint, action_frontend_endpoint, inproc_endpoint_with_prefix,
+    ipc_endpoint_in, message_xpub_endpoint, message_xsub_endpoint, service_backend_endpoint,
+    service_frontend_endpoint, ACTION_BACKEND_CHANNEL, ACTION_FRONTEND_CHANNEL,
+    SERVICE_BACKEND_CHANNEL, SERVICE_FRONTEND_CHANNEL, XPUB_CHANNEL, XSUB_CHANNEL,
 };
 use crate::typed::{Action, ActionOutcome, Service};
 use crate::zmq_helpers::HighWaterMark;
 
 /// Broker connection settings owned by a [`Node`].
 ///
-/// Defaults: `host = "localhost"`, `transport = "tcp"`. Explicit endpoint
-/// fields override the derived `transports::*` addresses when set.
+/// Defaults: `host = "localhost"`, `transport = "tcp"`. Prefer the presets
+/// [`NodeOptions::tcp`] / [`NodeOptions::ipc`] / [`NodeOptions::inproc`]
+/// (or [`Node::tcp`] / [`Node::ipc`] / [`Node::inproc`]) instead of filling
+/// every endpoint by hand. Explicit endpoint fields still override derived
+/// `transports::*` addresses when set.
 #[derive(Debug, Clone)]
 pub struct NodeOptions {
     pub host: String,
@@ -51,9 +56,15 @@ pub struct NodeOptions {
 
 impl Default for NodeOptions {
     fn default() -> Self {
+        Self::tcp()
+    }
+}
+
+impl NodeOptions {
+    fn empty_endpoints(host: impl Into<String>, transport: impl Into<String>) -> Self {
         Self {
-            host: "localhost".into(),
-            transport: "tcp".into(),
+            host: host.into(),
+            transport: transport.into(),
             message_xsub: None,
             message_xpub: None,
             service_frontend: None,
@@ -62,9 +73,59 @@ impl Default for NodeOptions {
             action_frontend: None,
         }
     }
-}
 
-impl NodeOptions {
+    /// TCP to the local broker (`localhost` + default ports).
+    pub fn tcp() -> Self {
+        Self::empty_endpoints("localhost", "tcp")
+    }
+
+    /// TCP to a broker at `host` (default ports).
+    pub fn tcp_at(host: impl Into<String>) -> Self {
+        Self::empty_endpoints(host, "tcp")
+    }
+
+    /// IPC under the default directory (`/tmp/robot_bus`).
+    pub fn ipc() -> Self {
+        Self::empty_endpoints("localhost", "ipc")
+    }
+
+    /// IPC under a custom directory (must match the broker's ipc binds).
+    pub fn ipc_at(dir: impl AsRef<str>) -> Self {
+        let dir = dir.as_ref();
+        Self {
+            host: "localhost".into(),
+            transport: "ipc".into(),
+            message_xsub: Some(ipc_endpoint_in(dir, XSUB_CHANNEL)),
+            message_xpub: Some(ipc_endpoint_in(dir, XPUB_CHANNEL)),
+            service_frontend: Some(ipc_endpoint_in(dir, SERVICE_FRONTEND_CHANNEL)),
+            service_backend: Some(ipc_endpoint_in(dir, SERVICE_BACKEND_CHANNEL)),
+            action_backend: Some(ipc_endpoint_in(dir, ACTION_BACKEND_CHANNEL)),
+            action_frontend: Some(ipc_endpoint_in(dir, ACTION_FRONTEND_CHANNEL)),
+        }
+    }
+
+    /// Same-process `inproc://robot_bus/...` (default broker prefix).
+    pub fn inproc() -> Self {
+        Self::empty_endpoints("localhost", "inproc")
+    }
+
+    /// Same-process endpoints under a custom prefix (must match the broker).
+    ///
+    /// `prefix` may be `my_app` or `inproc://my_app`.
+    pub fn inproc_at(prefix: impl AsRef<str>) -> Self {
+        let prefix = prefix.as_ref();
+        Self {
+            host: "localhost".into(),
+            transport: "inproc".into(),
+            message_xsub: Some(inproc_endpoint_with_prefix(prefix, XSUB_CHANNEL)),
+            message_xpub: Some(inproc_endpoint_with_prefix(prefix, XPUB_CHANNEL)),
+            service_frontend: Some(inproc_endpoint_with_prefix(prefix, SERVICE_FRONTEND_CHANNEL)),
+            service_backend: Some(inproc_endpoint_with_prefix(prefix, SERVICE_BACKEND_CHANNEL)),
+            action_backend: Some(inproc_endpoint_with_prefix(prefix, ACTION_BACKEND_CHANNEL)),
+            action_frontend: Some(inproc_endpoint_with_prefix(prefix, ACTION_FRONTEND_CHANNEL)),
+        }
+    }
+
     pub fn message_xsub_endpoint(&self) -> Result<String> {
         match &self.message_xsub {
             Some(ep) => Ok(ep.clone()),
@@ -392,8 +453,40 @@ pub struct Node {
 
 impl Node {
     /// Create a node that is not yet attached to an executor.
+    ///
+    /// Equivalent to [`Node::tcp`] (connects to `localhost` over TCP).
     pub fn new(name: impl Into<String>) -> Self {
-        Self::with_options(name, NodeOptions::default())
+        Self::tcp(name)
+    }
+
+    /// TCP to the local broker (`localhost` + default ports).
+    pub fn tcp(name: impl Into<String>) -> Self {
+        Self::with_options(name, NodeOptions::tcp())
+    }
+
+    /// TCP to a broker at `host` (default ports).
+    pub fn tcp_at(name: impl Into<String>, host: impl Into<String>) -> Self {
+        Self::with_options(name, NodeOptions::tcp_at(host))
+    }
+
+    /// IPC under `/tmp/robot_bus` (default broker ipc binds).
+    pub fn ipc(name: impl Into<String>) -> Self {
+        Self::with_options(name, NodeOptions::ipc())
+    }
+
+    /// IPC under a custom directory (must match the broker).
+    pub fn ipc_at(name: impl Into<String>, dir: impl AsRef<str>) -> Self {
+        Self::with_options(name, NodeOptions::ipc_at(dir))
+    }
+
+    /// Same-process `inproc://robot_bus/...`.
+    pub fn inproc(name: impl Into<String>) -> Self {
+        Self::with_options(name, NodeOptions::inproc())
+    }
+
+    /// Same-process endpoints under a custom prefix (must match the broker).
+    pub fn inproc_at(name: impl Into<String>, prefix: impl AsRef<str>) -> Self {
+        Self::with_options(name, NodeOptions::inproc_at(prefix))
     }
 
     /// Create a node with explicit broker connection options.
@@ -894,6 +987,58 @@ mod tests {
             opts.message_xpub_endpoint().unwrap(),
             "tcp://127.0.0.1:9999"
         );
+    }
+
+    #[test]
+    fn tcp_preset_defaults_to_localhost() {
+        let opts = NodeOptions::tcp();
+        assert_eq!(opts.transport, "tcp");
+        assert_eq!(
+            opts.message_xsub_endpoint().unwrap(),
+            "tcp://localhost:15560"
+        );
+        let remote = NodeOptions::tcp_at("10.0.0.5");
+        assert_eq!(
+            remote.message_xpub_endpoint().unwrap(),
+            "tcp://10.0.0.5:15561"
+        );
+    }
+
+    #[test]
+    fn ipc_and_inproc_presets() {
+        let ipc = NodeOptions::ipc();
+        assert_eq!(ipc.transport, "ipc");
+        assert_eq!(
+            ipc.message_xsub_endpoint().unwrap(),
+            "ipc:///tmp/robot_bus/message_bus_xsub.ipc"
+        );
+
+        let ipc_custom = NodeOptions::ipc_at("/var/run/robot_bus");
+        assert_eq!(
+            ipc_custom.service_frontend_endpoint().unwrap(),
+            "ipc:///var/run/robot_bus/service_bus_frontend.ipc"
+        );
+
+        let inproc = NodeOptions::inproc();
+        assert_eq!(
+            inproc.message_xpub_endpoint().unwrap(),
+            "inproc://robot_bus/message_bus/xpub"
+        );
+
+        let inproc_custom = NodeOptions::inproc_at("my_app");
+        assert_eq!(
+            inproc_custom.action_frontend_endpoint().unwrap(),
+            "inproc://my_app/action_bus/frontend"
+        );
+    }
+
+    #[test]
+    fn node_transport_constructors() {
+        assert_eq!(Node::tcp("a").options().transport, "tcp");
+        assert_eq!(Node::tcp_at("a", "1.2.3.4").options().host, "1.2.3.4");
+        assert_eq!(Node::ipc("a").options().transport, "ipc");
+        assert_eq!(Node::inproc("a").options().transport, "inproc");
+        assert_eq!(Node::new("a").options().transport, "tcp");
     }
 
     #[test]

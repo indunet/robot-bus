@@ -22,17 +22,32 @@ pub const ACTION_BACKEND_CHANNEL: &str = "action_bus/backend";
 /// Directory for ipc endpoint files (`ipc:///tmp/robot_bus/*.ipc`).
 pub const IPC_DIR: &str = "/tmp/robot_bus";
 
-const INPROC_PREFIX: &str = "inproc://robot_bus";
-
 /// Stable in-process endpoint for a logical channel (e.g. `message_bus/xsub`).
 pub fn inproc_endpoint(channel: &str) -> String {
-    format!("{INPROC_PREFIX}/{channel}")
+    inproc_endpoint_with_prefix("robot_bus", channel)
+}
+
+/// In-process endpoint under a custom prefix (`my_app` or `inproc://my_app`).
+pub fn inproc_endpoint_with_prefix(prefix: &str, channel: &str) -> String {
+    let prefix = prefix.trim().trim_end_matches('/');
+    let base = if prefix.starts_with("inproc://") {
+        prefix.to_string()
+    } else {
+        format!("inproc://{prefix}")
+    };
+    format!("{base}/{channel}")
 }
 
 /// Stable local-machine endpoint for a logical channel.
 pub fn ipc_endpoint(channel: &str) -> String {
+    ipc_endpoint_in(IPC_DIR, channel)
+}
+
+/// IPC endpoint under a custom directory (e.g. `/var/run/robot_bus`).
+pub fn ipc_endpoint_in(dir: &str, channel: &str) -> String {
     let file = channel.replace('/', "_");
-    format!("ipc://{IPC_DIR}/{file}.ipc")
+    let dir = dir.trim().trim_end_matches('/');
+    format!("ipc://{dir}/{file}.ipc")
 }
 
 pub fn tcp_endpoint(host: &str, port: u16) -> String {
@@ -131,10 +146,30 @@ mod tests {
     }
 
     #[test]
+    fn inproc_custom_prefix() {
+        assert_eq!(
+            inproc_endpoint_with_prefix("my_app", "message_bus/xsub"),
+            "inproc://my_app/message_bus/xsub"
+        );
+        assert_eq!(
+            inproc_endpoint_with_prefix("inproc://my_app", "message_bus/xsub"),
+            "inproc://my_app/message_bus/xsub"
+        );
+    }
+
+    #[test]
     fn ipc_maps_channel_to_file() {
         assert_eq!(
             ipc_endpoint("service_bus/frontend"),
             "ipc:///tmp/robot_bus/service_bus_frontend.ipc"
+        );
+    }
+
+    #[test]
+    fn ipc_custom_dir() {
+        assert_eq!(
+            ipc_endpoint_in("/var/run/robot_bus", "message_bus/xsub"),
+            "ipc:///var/run/robot_bus/message_bus_xsub.ipc"
         );
     }
 }

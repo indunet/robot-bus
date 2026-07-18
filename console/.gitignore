@@ -1,0 +1,23 @@
+# Dependencies & build
+node_modules/
+.next/
+out/
+*.tsbuildinfo
+
+# Env / local
+.env
+.env.*
+!.env.example
+.DS_Store
+
+# Tooling
+.vercel/
+pnpm-debug.log*
+npm-debug.log*
+
+# Legacy v0 sandbox leftovers (if regenerated)
+__v0_runtime_loader.js
+__v0_devtools.tsx
+__v0_jsx-dev-runtime.ts
+.snowflake/
+.v0-trash/

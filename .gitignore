@@ -4,6 +4,14 @@ dist/
 *.whl
 *.egg-info/
 
+# Node / Next.js (console/)
+node_modules/
+.next/
+out/
+*.tsbuildinfo
+pnpm-debug.log*
+npm-debug.log*
+
 # Maturin / PyO3 native extension (built locally or in CI)
 python/robot_bus/_native*.so
 python/robot_bus/_native*.pyd

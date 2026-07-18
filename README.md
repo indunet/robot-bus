@@ -24,6 +24,7 @@
 | `runtime::Node` / `TopicPublisher` / `CallbackGroup` | 节点、publisher、callback group（互斥 / 可重入） |
 | `grpc::`（默认 feature） | gRPC / gRPC-Web 网关（随 broker 一起启动） |
 | [`proto/`](proto/) | ROS 风格 Protobuf：`proto/<pkg>/{msg\|srv\|grpc}/v1/` → Rust/Python `robot_bus.<pkg>…` |
+| [`console/`](console/) | Web 监控控制台（可选；独立前端，不随 crates.io / PyPI 发布） |
 
 ## 架构
 
@@ -169,6 +170,19 @@ pub_.set_high_water_mark(HighWaterMark { snd: 10, rcv: 10 })?;
 | 二进制 | 说明 |
 |------|------|
 | `robot_bus_broker` | 一次启动三条总线 + gRPC / gRPC-Web 网关 |
+
+## Web 控制台（`console/`）
+
+可选的监控前端：查看 broker 状态、topic 流量与事件日志。当前为 UI 原型（mock 数据），需本机安装 [pnpm](https://pnpm.io/)。
+
+```bash
+cd console
+pnpm install
+pnpm dev
+# 浏览器打开 http://localhost:3000
+```
+
+不随 `robot-bus` 的 crates.io / PyPI 包发布；与 broker 的真实监控 API 对接仍在规划中。
 
 ## gRPC / gRPC-Web 网关
 

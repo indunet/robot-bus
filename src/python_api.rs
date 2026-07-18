@@ -7,7 +7,7 @@ use std::time::Duration;
 
 use pyo3::exceptions::PyRuntimeError;
 use pyo3::prelude::*;
-use pyo3::types::PyBytes;
+use pyo3::types::{PyBytes, PyType};
 
 use crate::broker::{
     parse_robot_bus_config, robot_bus_broker_help, RobotBusBroker as RustRobotBusBroker,
@@ -18,9 +18,10 @@ use crate::message_bus::{Publisher as RustPublisher, Subscriber as RustSubscribe
 use crate::runtime::{
     ActionGoalHandler, CallbackGroup, CallbackGroupType,
     MultiThreadedExecutor as RustMultiThreadedExecutor, Node as RustNode,
-    NodeActionClientRaw as RustNodeActionClient, NodeServiceClientRaw as RustNodeServiceClient,
-    ShutdownHandle as RustShutdownHandle, SingleThreadedExecutor as RustSingleThreadedExecutor,
-    TimerHandle as RustTimerHandle, TopicPublisherRaw as RustTopicPublisher,
+    NodeActionClientRaw as RustNodeActionClient, NodeOptions as RustNodeOptions,
+    NodeServiceClientRaw as RustNodeServiceClient, ShutdownHandle as RustShutdownHandle,
+    SingleThreadedExecutor as RustSingleThreadedExecutor, TimerHandle as RustTimerHandle,
+    TopicPublisherRaw as RustTopicPublisher,
 };
 use crate::action_bus::ActionKind;
 use crate::shutdown;
@@ -516,6 +517,41 @@ impl PyNode {
                     action_frontend,
                 ),
             ),
+        }
+    }
+
+    /// TCP to the local broker (`localhost` + default ports).
+    #[classmethod]
+    #[pyo3(signature = (name, host="localhost"))]
+    fn tcp(_cls: &Bound<'_, PyType>, name: String, host: &str) -> Self {
+        Self {
+            inner: RustNode::with_options(name, RustNodeOptions::tcp_at(host)),
+        }
+    }
+
+    /// IPC under `/tmp/robot_bus` (or a custom directory).
+    #[classmethod]
+    #[pyo3(signature = (name, path=None))]
+    fn ipc(_cls: &Bound<'_, PyType>, name: String, path: Option<&str>) -> Self {
+        let options = match path {
+            Some(dir) => RustNodeOptions::ipc_at(dir),
+            None => RustNodeOptions::ipc(),
+        };
+        Self {
+            inner: RustNode::with_options(name, options),
+        }
+    }
+
+    /// Same-process inproc (default prefix `robot_bus`, or a custom prefix).
+    #[classmethod]
+    #[pyo3(signature = (name, prefix=None))]
+    fn inproc(_cls: &Bound<'_, PyType>, name: String, prefix: Option<&str>) -> Self {
+        let options = match prefix {
+            Some(p) => RustNodeOptions::inproc_at(p),
+            None => RustNodeOptions::inproc(),
+        };
+        Self {
+            inner: RustNode::with_options(name, options),
         }
     }
 
