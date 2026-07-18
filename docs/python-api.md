@@ -140,7 +140,7 @@ node.create_action_server("navigate", on_goal, callback_group=group)
 
 ```python
 from robot_bus.std_srvs.srv.v1 import SetBoolRequest, SetBoolResponse
-from robot_bus.action.v1 import (
+from robot_bus.robot_bus_interface.action.v1 import (
     FibonacciGoal,
     FibonacciFeedback,
     FibonacciResult,

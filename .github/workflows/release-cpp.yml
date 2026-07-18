@@ -1,0 +1,200 @@
+name: Release C++ packages
+
+# You write the Release notes and Publish on GitHub.
+# This workflow only builds MSI/DEB assets and uploads them — it never
+# creates or edits the Release body.
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag to upload to (e.g. v0.0.6)"
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+env:
+  PROTOC_VERSION: "35.1"
+
+jobs:
+  linux:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-22.04
+            arch: amd64
+            protoc_zip: protoc-35.1-linux-x86_64.zip
+          - runner: ubuntu-24.04-arm
+            arch: arm64
+            protoc_zip: protoc-35.1-linux-aarch_64.zip
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Resolve version / tag
+        id: meta
+        run: |
+          if [ "${{ github.event_name }}" = "release" ]; then
+            TAG="${{ github.event.release.tag_name }}"
+          else
+            TAG="${{ inputs.tag }}"
+          fi
+          VERSION="${TAG#v}"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            cmake g++ pkg-config libzmq3-dev \
+            curl unzip ninja-build
+
+      - name: Install pinned protoc + C++ runtime
+        run: |
+          set -eux
+          curl -fsSL -o /tmp/protoc.zip \
+            "https://github.com/protocolbuffers/protobuf/releases/download/v${PROTOC_VERSION}/${{ matrix.protoc_zip }}"
+          sudo unzip -o /tmp/protoc.zip -d /usr/local
+          sudo ./scripts/install_protobuf_cpp.sh /usr/local
+          sudo ldconfig
+          protoc --version
+          pkg-config --modversion protobuf
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Check generated C++ msgs are fresh
+        run: |
+          python3 scripts/generate_cpp_msgs.py
+          git diff --exit-code -- bindings/cpp/generated
+
+      - name: Build install tree
+        run: |
+          export PKG_CONFIG_PATH=/usr/local/lib/pkgconfig:${PKG_CONFIG_PATH:-}
+          export CMAKE_PREFIX_PATH=/usr/local
+          ./scripts/build_cpp_install_tree.sh /tmp/robot-bus-stage "${{ steps.meta.outputs.version }}"
+          # Bundle matching protobuf / abseil shared libs into the package
+          mkdir -p /tmp/robot-bus-stage/usr/lib
+          cp -a /usr/local/lib/libprotobuf.so* /tmp/robot-bus-stage/usr/lib/ || true
+          cp -a /usr/local/lib/libabsl*.so* /tmp/robot-bus-stage/usr/lib/ || true
+          # Also copy from lib64 if present
+          cp -a /usr/local/lib64/libprotobuf.so* /tmp/robot-bus-stage/usr/lib/ 2>/dev/null || true
+          cp -a /usr/local/lib64/libabsl*.so* /tmp/robot-bus-stage/usr/lib/ 2>/dev/null || true
+
+      - name: Package DEB
+        run: |
+          ./scripts/package_deb.sh \
+            "${{ steps.meta.outputs.version }}" \
+            "${{ matrix.arch }}" \
+            /tmp/robot-bus-stage \
+            "robot-bus_${{ steps.meta.outputs.version }}_${{ matrix.arch }}.deb"
+
+      - name: Upload to Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release upload "${{ steps.meta.outputs.tag }}" \
+            "robot-bus_${{ steps.meta.outputs.version }}_${{ matrix.arch }}.deb" \
+            --clobber
+
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Resolve version / tag
+        id: meta
+        shell: bash
+        run: |
+          if [ "${{ github.event_name }}" = "release" ]; then
+            TAG="${{ github.event.release.tag_name }}"
+          else
+            TAG="${{ inputs.tag }}"
+          fi
+          VERSION="${TAG#v}"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Install protobuf / WiX / vcpkg deps
+        shell: bash
+        run: |
+          set -eux
+          choco install protoc wixtoolset -y
+          # Prefer chocolatey protoc; verify version loosely
+          protoc --version || true
+
+      - name: Install libzmq (vcpkg)
+        shell: bash
+        run: |
+          set -eux
+          git clone --depth 1 https://github.com/Microsoft/vcpkg.git C:/vcpkg
+          C:/vcpkg/bootstrap-vcpkg.sh
+          C:/vcpkg/vcpkg install zeromq:x64-windows protobuf:x64-windows
+          echo "VCPKG_ROOT=C:/vcpkg" >> "$GITHUB_ENV"
+          echo "C:/vcpkg/installed/x64-windows/bin" >> "$GITHUB_PATH"
+          echo "C:/vcpkg/installed/x64-windows/lib" >> "$GITHUB_PATH"
+
+      - name: Build broker + FFI
+        shell: bash
+        run: |
+          set -eux
+          export PROTOC="$(command -v protoc)"
+          cargo build --release --bin robot_bus_broker
+          cargo build --release --manifest-path bindings/cpp/native/Cargo.toml
+
+      - name: Build msgs (CMake)
+        shell: bash
+        run: |
+          set -eux
+          cmake -S bindings/cpp -B bindings/cpp/build-win \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DROBOT_BUS_BUILD_TESTS=OFF \
+            -DCMAKE_TOOLCHAIN_FILE=C:/vcpkg/scripts/buildsystems/vcpkg.cmake \
+            -DVCPKG_TARGET_TRIPLET=x64-windows
+          cmake --build bindings/cpp/build-win --config Release --target robot_bus_msgs
+
+      - name: Stage install tree
+        shell: bash
+        run: |
+          set -eux
+          STAGE=/tmp/robot-bus-msi
+          rm -rf "$STAGE"
+          mkdir -p "$STAGE/bin" "$STAGE/lib" "$STAGE/include"
+          cp target/release/robot_bus_broker.exe "$STAGE/bin/"
+          cp bindings/cpp/native/target/release/robot_bus_c.dll "$STAGE/bin/robot_bus.dll"
+          # msgs dll
+          find bindings/cpp/build-win -name 'robot_bus_msgs.dll' -exec cp {} "$STAGE/bin/" \;
+          find bindings/cpp/build-win -name 'robot_bus_msgs.lib' -exec cp {} "$STAGE/lib/" \; || true
+          # Bundle runtime DLLs from vcpkg
+          cp C:/vcpkg/installed/x64-windows/bin/libzmq*.dll "$STAGE/bin/" || true
+          cp C:/vcpkg/installed/x64-windows/bin/libprotobuf*.dll "$STAGE/bin/" || true
+          cp C:/vcpkg/installed/x64-windows/bin/abseil*.dll "$STAGE/bin/" || true
+          cp -a bindings/cpp/include/. "$STAGE/include/"
+          cp -a bindings/cpp/generated/robot_bus "$STAGE/include/"
+
+      - name: Build MSI
+        shell: bash
+        run: |
+          set -eux
+          export PATH="/c/Program Files (x86)/WiX Toolset v3.14/bin:$PATH"
+          export PATH="/c/Program Files (x86)/WiX Toolset v3.11/bin:$PATH"
+          ./scripts/package_msi.sh \
+            "${{ steps.meta.outputs.version }}" \
+            /tmp/robot-bus-msi \
+            "robot-bus_${{ steps.meta.outputs.version }}_x64.msi"
+
+      - name: Upload to Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
+        run: |
+          gh release upload "${{ steps.meta.outputs.tag }}" \
+            "robot-bus_${{ steps.meta.outputs.version }}_x64.msi" \
+            --clobber

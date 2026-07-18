@@ -9,7 +9,7 @@ pub mod server;
 pub mod service;
 
 pub mod pb {
-    tonic::include_proto!("robot_bus.grpc.v1");
+    tonic::include_proto!("robot_bus_interface.grpc.v1");
 }
 
 pub use action::ActionGatewayService;

@@ -459,7 +459,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 ```
 
-Proto 包名：`robot_bus.grpc.v1`。见 `proto/robot_bus/grpc/v1/{message,service,action}_gateway.proto`。
+Proto 包名：`robot_bus_interface.grpc.v1`。见 `proto/robot_bus_interface/grpc/v1/{message,service,action}_gateway.proto`。
 
 ---
 

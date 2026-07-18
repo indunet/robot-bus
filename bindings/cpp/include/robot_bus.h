@@ -1,0 +1,227 @@
+#ifndef ROBOT_BUS_H
+#define ROBOT_BUS_H
+
+#include <stddef.h>
+#include <stdint.h>
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+#ifdef _WIN32
+#ifdef ROBOT_BUS_BUILD
+#define ROBOT_BUS_API __declspec(dllexport)
+#else
+#define ROBOT_BUS_API __declspec(dllimport)
+#endif
+#else
+#define ROBOT_BUS_API __attribute__((visibility("default")))
+#endif
+
+typedef struct RobotBusPublisher RobotBusPublisher;
+typedef struct RobotBusSubscriber RobotBusSubscriber;
+typedef struct RobotBusShutdownHandle RobotBusShutdownHandle;
+typedef struct RobotBusTimerHandle RobotBusTimerHandle;
+typedef struct RobotBusCallbackGroup RobotBusCallbackGroup;
+typedef struct RobotBusTopicPublisher RobotBusTopicPublisher;
+typedef struct RobotBusServiceClient RobotBusServiceClient;
+typedef struct RobotBusActionClient RobotBusActionClient;
+typedef struct RobotBusNode RobotBusNode;
+typedef struct RobotBusSingleThreadedExecutor RobotBusSingleThreadedExecutor;
+typedef struct RobotBusMultiThreadedExecutor RobotBusMultiThreadedExecutor;
+typedef struct RobotBusBroker RobotBusBroker;
+
+typedef struct RobotBusActionMessage {
+  char *kind;
+  uint8_t *body;
+  size_t body_len;
+  char *goal_id;
+  char *action_name;
+} RobotBusActionMessage;
+
+typedef struct RobotBusActionPhase {
+  char *phase;
+  uint8_t *body;
+  size_t body_len;
+} RobotBusActionPhase;
+
+typedef struct RobotBusNodeOptions {
+  const char *host;
+  const char *transport;
+  const char *grpc_url;
+  const char *message_xsub;
+  const char *message_xpub;
+  const char *service_frontend;
+  const char *service_backend;
+  const char *action_backend;
+  const char *action_frontend;
+} RobotBusNodeOptions;
+
+typedef struct RobotBusBrokerOptions {
+  const char *message_xsub_bind;
+  const char *message_xpub_bind;
+  const char *service_frontend_bind;
+  const char *service_backend_bind;
+  const char *action_frontend_bind;
+  const char *action_backend_bind;
+  const char *grpc_listen;
+  const char *console_listen;
+  int tcp_only;
+  int no_console;
+} RobotBusBrokerOptions;
+
+typedef void (*RobotBusMsgCallback)(const char *topic, const uint8_t *data, size_t len,
+                                    void *user);
+typedef void (*RobotBusTimerCallback)(void *user);
+typedef int (*RobotBusServiceHandler)(const uint8_t *data, size_t len, uint8_t **out_data,
+                                      size_t *out_len, void *user);
+typedef int (*RobotBusActionHandler)(const uint8_t *data, size_t len,
+                                     RobotBusActionPhase **out_phases, size_t *out_count,
+                                     void *user);
+
+ROBOT_BUS_API const char *robot_bus_last_error(void);
+ROBOT_BUS_API void robot_bus_free_string(char *s);
+ROBOT_BUS_API void robot_bus_free_bytes(uint8_t *data, size_t len);
+ROBOT_BUS_API uint8_t *robot_bus_alloc_bytes(size_t len);
+ROBOT_BUS_API char *robot_bus_dup_string(const char *s);
+ROBOT_BUS_API RobotBusActionPhase *robot_bus_alloc_action_phases(size_t count);
+ROBOT_BUS_API void robot_bus_action_messages_free(RobotBusActionMessage *msgs, size_t count);
+ROBOT_BUS_API void robot_bus_action_phases_free(RobotBusActionPhase *phases, size_t count);
+
+ROBOT_BUS_API int robot_bus_message_xsub_endpoint(const char *host, const char *transport,
+                                                  char **out);
+ROBOT_BUS_API int robot_bus_message_xpub_endpoint(const char *host, const char *transport,
+                                                  char **out);
+
+ROBOT_BUS_API RobotBusPublisher *robot_bus_publisher_new(const char *endpoint);
+ROBOT_BUS_API void robot_bus_publisher_free(RobotBusPublisher *p);
+ROBOT_BUS_API int robot_bus_publisher_publish(RobotBusPublisher *p, const char *topic,
+                                              const uint8_t *data, size_t len);
+ROBOT_BUS_API char *robot_bus_publisher_endpoint(const RobotBusPublisher *p);
+
+ROBOT_BUS_API RobotBusSubscriber *robot_bus_subscriber_new(const char *endpoint);
+ROBOT_BUS_API void robot_bus_subscriber_free(RobotBusSubscriber *s);
+ROBOT_BUS_API int robot_bus_subscriber_subscribe(RobotBusSubscriber *s, const char *topic);
+ROBOT_BUS_API int robot_bus_subscriber_unsubscribe(RobotBusSubscriber *s, const char *topic);
+ROBOT_BUS_API int robot_bus_subscriber_receive(RobotBusSubscriber *s, double timeout_secs,
+                                               char **out_topic, uint8_t **out_data,
+                                               size_t *out_len);
+ROBOT_BUS_API char *robot_bus_subscriber_endpoint(const RobotBusSubscriber *s);
+
+ROBOT_BUS_API void robot_bus_shutdown_handle_free(RobotBusShutdownHandle *h);
+ROBOT_BUS_API void robot_bus_shutdown_handle_shutdown(RobotBusShutdownHandle *h);
+ROBOT_BUS_API int robot_bus_shutdown_handle_is_running(const RobotBusShutdownHandle *h);
+ROBOT_BUS_API void robot_bus_timer_handle_free(RobotBusTimerHandle *h);
+ROBOT_BUS_API void robot_bus_callback_group_free(RobotBusCallbackGroup *g);
+ROBOT_BUS_API uint64_t robot_bus_callback_group_id(const RobotBusCallbackGroup *g);
+ROBOT_BUS_API int robot_bus_callback_group_kind(const RobotBusCallbackGroup *g);
+
+ROBOT_BUS_API void robot_bus_topic_publisher_free(RobotBusTopicPublisher *p);
+ROBOT_BUS_API char *robot_bus_topic_publisher_topic(const RobotBusTopicPublisher *p);
+ROBOT_BUS_API int robot_bus_topic_publisher_publish(RobotBusTopicPublisher *p, const uint8_t *data,
+                                                    size_t len);
+
+ROBOT_BUS_API void robot_bus_service_client_free(RobotBusServiceClient *c);
+ROBOT_BUS_API char *robot_bus_service_client_service_name(const RobotBusServiceClient *c);
+ROBOT_BUS_API int robot_bus_service_client_call(RobotBusServiceClient *c, const uint8_t *data,
+                                                size_t len, double timeout_secs,
+                                                uint8_t **out_data, size_t *out_len);
+
+ROBOT_BUS_API void robot_bus_action_client_free(RobotBusActionClient *c);
+ROBOT_BUS_API char *robot_bus_action_client_action_name(const RobotBusActionClient *c);
+ROBOT_BUS_API int robot_bus_action_client_send_goal(RobotBusActionClient *c, const uint8_t *data,
+                                                    size_t len, const char *goal_id,
+                                                    double timeout_secs,
+                                                    RobotBusActionMessage **out_msgs,
+                                                    size_t *out_count);
+ROBOT_BUS_API int robot_bus_action_client_cancel(RobotBusActionClient *c, const char *goal_id,
+                                                 const uint8_t *data, size_t len,
+                                                 double timeout_secs,
+                                                 RobotBusActionMessage *out_msg);
+
+ROBOT_BUS_API RobotBusNode *robot_bus_node_new(const char *name, const RobotBusNodeOptions *opts);
+ROBOT_BUS_API RobotBusNode *robot_bus_node_tcp(const char *name, const char *host);
+ROBOT_BUS_API RobotBusNode *robot_bus_node_ipc(const char *name, const char *path);
+ROBOT_BUS_API RobotBusNode *robot_bus_node_inproc(const char *name, const char *prefix);
+ROBOT_BUS_API RobotBusNode *robot_bus_node_grpc(const char *name);
+ROBOT_BUS_API RobotBusNode *robot_bus_node_grpc_at(const char *name, const char *url);
+ROBOT_BUS_API void robot_bus_node_free(RobotBusNode *n);
+ROBOT_BUS_API char *robot_bus_node_name(const RobotBusNode *n);
+ROBOT_BUS_API RobotBusCallbackGroup *robot_bus_node_create_callback_group(RobotBusNode *n,
+                                                                          int kind);
+ROBOT_BUS_API RobotBusTopicPublisher *robot_bus_node_create_publisher(RobotBusNode *n,
+                                                                      const char *topic);
+ROBOT_BUS_API int robot_bus_node_create_subscription(RobotBusNode *n, const char *topic,
+                                                     RobotBusMsgCallback callback, void *user,
+                                                     const RobotBusCallbackGroup *group);
+ROBOT_BUS_API RobotBusTimerHandle *robot_bus_node_create_timer(RobotBusNode *n, double period_secs,
+                                                               RobotBusTimerCallback callback,
+                                                               void *user,
+                                                               const RobotBusCallbackGroup *group);
+ROBOT_BUS_API int robot_bus_node_cancel_timer(RobotBusNode *n, const RobotBusTimerHandle *handle);
+ROBOT_BUS_API int robot_bus_node_create_service(RobotBusNode *n, const char *service_name,
+                                                RobotBusServiceHandler handler, void *user,
+                                                const RobotBusCallbackGroup *group);
+ROBOT_BUS_API RobotBusServiceClient *robot_bus_node_create_client(RobotBusNode *n,
+                                                                  const char *service_name);
+ROBOT_BUS_API int robot_bus_node_create_action_server(RobotBusNode *n, const char *action_name,
+                                                      RobotBusActionHandler handler, void *user,
+                                                      const RobotBusCallbackGroup *group);
+ROBOT_BUS_API RobotBusActionClient *robot_bus_node_create_action_client(RobotBusNode *n,
+                                                                        const char *action_name);
+ROBOT_BUS_API int robot_bus_node_connect_action_client(RobotBusNode *n);
+ROBOT_BUS_API RobotBusShutdownHandle *robot_bus_node_shutdown_handle(RobotBusNode *n);
+ROBOT_BUS_API int robot_bus_node_shutdown(RobotBusNode *n);
+ROBOT_BUS_API int robot_bus_node_spin_once(RobotBusNode *n, double timeout_secs);
+ROBOT_BUS_API int robot_bus_node_spin(RobotBusNode *n);
+ROBOT_BUS_API int robot_bus_node_start(RobotBusNode *n);
+ROBOT_BUS_API int robot_bus_node_stop(RobotBusNode *n);
+ROBOT_BUS_API int robot_bus_node_wait(RobotBusNode *n);
+
+ROBOT_BUS_API RobotBusSingleThreadedExecutor *robot_bus_single_threaded_executor_new(void);
+ROBOT_BUS_API void robot_bus_single_threaded_executor_free(RobotBusSingleThreadedExecutor *e);
+ROBOT_BUS_API int robot_bus_single_threaded_executor_add_node(RobotBusSingleThreadedExecutor *e,
+                                                              RobotBusNode *n);
+ROBOT_BUS_API RobotBusNode *robot_bus_single_threaded_executor_create_node(
+    RobotBusSingleThreadedExecutor *e, const char *name, const RobotBusNodeOptions *opts);
+ROBOT_BUS_API RobotBusShutdownHandle *robot_bus_single_threaded_executor_shutdown_handle(
+    RobotBusSingleThreadedExecutor *e);
+ROBOT_BUS_API int robot_bus_single_threaded_executor_shutdown(RobotBusSingleThreadedExecutor *e);
+ROBOT_BUS_API int robot_bus_single_threaded_executor_spin_once(RobotBusSingleThreadedExecutor *e,
+                                                               double timeout_secs);
+ROBOT_BUS_API int robot_bus_single_threaded_executor_spin(RobotBusSingleThreadedExecutor *e);
+ROBOT_BUS_API int robot_bus_single_threaded_executor_start(RobotBusSingleThreadedExecutor *e);
+ROBOT_BUS_API int robot_bus_single_threaded_executor_stop(RobotBusSingleThreadedExecutor *e);
+ROBOT_BUS_API int robot_bus_single_threaded_executor_wait(RobotBusSingleThreadedExecutor *e);
+
+ROBOT_BUS_API RobotBusMultiThreadedExecutor *robot_bus_multi_threaded_executor_new(
+    size_t num_threads);
+ROBOT_BUS_API void robot_bus_multi_threaded_executor_free(RobotBusMultiThreadedExecutor *e);
+ROBOT_BUS_API int robot_bus_multi_threaded_executor_add_node(RobotBusMultiThreadedExecutor *e,
+                                                             RobotBusNode *n);
+ROBOT_BUS_API RobotBusNode *robot_bus_multi_threaded_executor_create_node(
+    RobotBusMultiThreadedExecutor *e, const char *name, const RobotBusNodeOptions *opts);
+ROBOT_BUS_API RobotBusShutdownHandle *robot_bus_multi_threaded_executor_shutdown_handle(
+    RobotBusMultiThreadedExecutor *e);
+ROBOT_BUS_API int robot_bus_multi_threaded_executor_shutdown(RobotBusMultiThreadedExecutor *e);
+ROBOT_BUS_API int robot_bus_multi_threaded_executor_spin_once(RobotBusMultiThreadedExecutor *e,
+                                                              double timeout_secs);
+ROBOT_BUS_API int robot_bus_multi_threaded_executor_spin(RobotBusMultiThreadedExecutor *e);
+
+ROBOT_BUS_API RobotBusBroker *robot_bus_broker_start(const RobotBusBrokerOptions *opts);
+ROBOT_BUS_API void robot_bus_broker_free(RobotBusBroker *b);
+ROBOT_BUS_API int robot_bus_broker_stop(RobotBusBroker *b);
+ROBOT_BUS_API char *robot_bus_broker_message_xsub_bind(const RobotBusBroker *b);
+ROBOT_BUS_API char *robot_bus_broker_message_xpub_bind(const RobotBusBroker *b);
+ROBOT_BUS_API char *robot_bus_broker_service_frontend_bind(const RobotBusBroker *b);
+ROBOT_BUS_API char *robot_bus_broker_service_backend_bind(const RobotBusBroker *b);
+ROBOT_BUS_API char *robot_bus_broker_action_frontend_bind(const RobotBusBroker *b);
+ROBOT_BUS_API char *robot_bus_broker_action_backend_bind(const RobotBusBroker *b);
+ROBOT_BUS_API char *robot_bus_broker_grpc_listen(const RobotBusBroker *b);
+ROBOT_BUS_API char *robot_bus_broker_console_listen(const RobotBusBroker *b);
+
+#ifdef __cplusplus
+}
+#endif
+
+#endif /* ROBOT_BUS_H */

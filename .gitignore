@@ -24,6 +24,12 @@ bindings/typescript/dist/
 bindings/typescript/native/target/
 bindings/typescript/native/Cargo.lock
 
+# C++ FFI / CMake build trees
+bindings/cpp/native/target/
+bindings/cpp/native/Cargo.lock
+bindings/cpp/build/
+bindings/cpp/build-*/
+
 # Library crate: dependents use their own lockfile
 Cargo.lock
 

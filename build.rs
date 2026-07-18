@@ -13,9 +13,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let proto_root = PathBuf::from("proto");
     let mut protos = Vec::new();
     collect_protos(&proto_root, &mut protos)?;
-    // gRPC API protos (proto/robot_bus/grpc/) use tonic stubs, not plain prost.
-    // Other robot_bus packages (e.g. action/) still go through prost.
-    protos.retain(|p| !path_is_under(p, "proto/robot_bus/grpc"));
+    // gRPC API protos (proto/robot_bus_interface/grpc/) use tonic stubs, not plain prost.
+    // Other robot_bus_interface packages (e.g. action/) still go through prost.
+    protos.retain(|p| !path_is_under(p, "proto/robot_bus_interface/grpc"));
     protos.sort();
 
     for proto in &protos {
@@ -31,9 +31,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     #[cfg(feature = "grpc")]
     {
         let gateways = [
-            PathBuf::from("proto/robot_bus/grpc/v1/message_gateway.proto"),
-            PathBuf::from("proto/robot_bus/grpc/v1/service_gateway.proto"),
-            PathBuf::from("proto/robot_bus/grpc/v1/action_gateway.proto"),
+            PathBuf::from("proto/robot_bus_interface/grpc/v1/message_gateway.proto"),
+            PathBuf::from("proto/robot_bus_interface/grpc/v1/service_gateway.proto"),
+            PathBuf::from("proto/robot_bus_interface/grpc/v1/action_gateway.proto"),
         ];
         for gateway in &gateways {
             println!("cargo:rerun-if-changed={}", gateway.display());

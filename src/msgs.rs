@@ -114,11 +114,11 @@ pub mod nav_msgs {
 
 pub mod action {
     pub mod v1 {
-        include!(concat!(env!("OUT_DIR"), "/robot_bus.action.v1.rs"));
+        include!(concat!(env!("OUT_DIR"), "/robot_bus_interface.action.v1.rs"));
 
         use crate::typed::Action;
 
-        /// Demo action type marker (`robot_bus/action/Fibonacci`).
+        /// Demo action type marker (`robot_bus_interface/action/Fibonacci`).
         pub struct Fibonacci;
         impl Action for Fibonacci {
             type Goal = FibonacciGoal;

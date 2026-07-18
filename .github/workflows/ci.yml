@@ -69,3 +69,49 @@ jobs:
       - name: Smoke test TypeScript
         working-directory: bindings/typescript
         run: npm test
+
+  cpp:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v6
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake g++ pkg-config libzmq3-dev \
+            curl unzip ninja-build
+      - name: Install protobuf compiler + C++ runtime 35.1
+        run: |
+          set -eux
+          curl -fsSL -o /tmp/protoc.zip \
+            "https://github.com/protocolbuffers/protobuf/releases/download/v35.1/protoc-35.1-linux-x86_64.zip"
+          sudo unzip -o /tmp/protoc.zip -d /usr/local
+          sudo ./scripts/install_protobuf_cpp.sh /usr/local
+          sudo ldconfig
+          protoc --version
+          pkg-config --modversion protobuf
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Check generated C++ msgs are fresh
+        run: |
+          python3 scripts/generate_cpp_msgs.py
+          git diff --exit-code -- bindings/cpp/generated
+      - name: Build FFI + msgs + tests
+        run: |
+          export PKG_CONFIG_PATH=/usr/local/lib/pkgconfig:${PKG_CONFIG_PATH:-}
+          export LD_LIBRARY_PATH=/usr/local/lib:${LD_LIBRARY_PATH:-}
+          cargo build --release --manifest-path bindings/cpp/native/Cargo.toml
+          cmake -S bindings/cpp -B bindings/cpp/build -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_PREFIX_PATH=/usr/local \
+            -DROBOT_BUS_BUILD_TESTS=ON
+          cmake --build bindings/cpp/build --target robot_bus_msgs cpp_tests -j
+      - name: Run C++ binding tests
+        run: |
+          export LD_LIBRARY_PATH=/usr/local/lib:bindings/cpp/native/target/release:bindings/cpp/build:${LD_LIBRARY_PATH:-}
+          # Renamed FFI soname expected by linker; create local alias for smoke
+          ln -sfn "$(pwd)/bindings/cpp/native/target/release/librobot_bus_c.so" \
+            bindings/cpp/build/librobot_bus.so || true
+          export DYLD_LIBRARY_PATH="$(pwd)/bindings/cpp/native/target/release:$(pwd)/bindings/cpp/build:${DYLD_LIBRARY_PATH:-}"
+          ./bindings/cpp/build/msgs_roundtrip
+          ./bindings/cpp/build/timer_spin
+          ./bindings/cpp/build/pub_sub_imu
+          ./bindings/cpp/build/service_set_bool
+          ./bindings/cpp/build/action_fibonacci

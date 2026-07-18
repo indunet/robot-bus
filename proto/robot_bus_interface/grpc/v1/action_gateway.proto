@@ -1,0 +1,49 @@
+syntax = "proto3";
+
+// gRPC gateway API for the action bus. Opaque goal/feedback/result bytes;
+// wire kinds mirror ZMQ ActionKind (GOAL / FEEDBACK / RESULT / CANCEL).
+package robot_bus_interface.grpc.v1;
+
+enum ActionKind {
+  ACTION_KIND_UNSPECIFIED = 0;
+  ACTION_KIND_GOAL = 1;
+  ACTION_KIND_FEEDBACK = 2;
+  ACTION_KIND_RESULT = 3;
+  ACTION_KIND_CANCEL = 4;
+}
+
+service ActionGateway {
+  // Bidirectional stream: client sends GOAL / CANCEL; server streams
+  // FEEDBACK… / RESULT (and error status when the bus returns a failure).
+  rpc Run(stream ActionClientMessage) returns (stream ActionEvent);
+}
+
+message ActionClientMessage {
+  oneof msg {
+    GoalCommand goal = 1;
+    CancelCommand cancel = 2;
+  }
+}
+
+message GoalCommand {
+  string action_name = 1;
+  bytes goal = 2;
+  // Optional; empty → gateway generates a UUID.
+  string goal_id = 3;
+  // Applied to each ZMQ recv while this session is active; 0 → wait forever
+  // (session still polls with a short internal tick so CANCEL can arrive).
+  uint32 timeout_ms = 4;
+}
+
+message CancelCommand {
+  string action_name = 1;
+  string goal_id = 2;
+  bytes body = 3;
+}
+
+message ActionEvent {
+  string action_name = 1;
+  string goal_id = 2;
+  ActionKind kind = 3;
+  bytes body = 4;
+}

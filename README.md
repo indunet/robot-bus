@@ -6,9 +6,11 @@
 [![npm](https://img.shields.io/npm/v/robot-bus.svg?color=cb3837)](https://www.npmjs.com/package/robot-bus)
 [![License](https://img.shields.io/badge/License-Apache_2.0-green.svg)](https://opensource.org/licenses/Apache-2.0)
 
-轻量级、免环境配置的 ROS 2 风格通信库：基于 ZeroMQ，提供 topic / service / action，以及 `Executor` + `Node` + `spin` 回调模型。
+Lightweight ROS 2–style messaging over ZeroMQ — topics, services & actions, no ROS install. SDKs for Rust, Python, TypeScript, and C++.
 
-不依赖 ROS 发行版、不需要 `source setup.bash`、不搭 workspace。一个 broker 进程 + SDK（Rust / Python / TypeScript）即可。
+轻量级、免环境配置的 ROS 2 风格通信库：基于 ZeroMQ，提供 topic / service / action，以及 `Executor` + `Node` + `spin` 回调模型。多语言 SDK 覆盖 Rust / Python / TypeScript / C++。
+
+不依赖 ROS 发行版、不需要 `source setup.bash`、不搭 workspace。一个 broker 进程 + 任一语言的 SDK 即可。
 
 **设计原则**：API 会尽量贴近 ROS 2 的用法与命名（如 `Node`、`SingleThreadedExecutor` / `MultiThreadedExecutor`、`add_node`、`create_publisher` / `create_subscription`、`spin`），降低从 ROS 2 迁过来的心智负担；底层用 ZeroMQ 实现，不绑定某一 ROS 发行版。
 
@@ -25,13 +27,13 @@
 | `runtime::Node` / `TopicPublisher` / `CallbackGroup` | 节点、publisher、callback group（互斥 / 可重入） |
 | `grpc::`（默认 feature） | gRPC / gRPC-Web 网关（随 broker 一起启动） |
 | [`proto/`](proto/) | 契约源：ROS 风格 Protobuf → Rust / bindings 生成代码 |
-| [`bindings/`](bindings/) | 语言绑定（Python、TypeScript；C++ / Kotlin 规划中） |
+| [`bindings/`](bindings/) | 语言绑定（Python、TypeScript、C++；Kotlin 规划中） |
 | [`console/`](console/) | Web 监控控制台（产品 UI，嵌入 broker `:15771`；产物在 `assets/console/`） |
 
 ## 架构
 
 ```
-业务代码 (Rust / Python / TypeScript)
+业务代码 (Rust / Python / TypeScript / C++)
   └── robot-bus SDK
               │
               │ ZMQ (tcp / ipc / inproc) 或 gRPC / gRPC-Web
@@ -129,6 +131,19 @@ node.createSubscription("/robot1/imu", (_t, imu) => console.log(imu), Imu);
 ```
 
 浏览器 / 纯 gRPC：`Node.grpc("client")`（browser 入口的 `Node` 即为 gRPC-Web facade）。
+
+### 2b. C++（DEB / MSI）
+
+C++ 无中央库：从 [GitHub Releases](https://github.com/indunet/robot-bus/releases) 下载 `robot-bus_*.deb` / `robot-bus_*.msi`（你写 Release 说明并 Publish 后，CI 只挂附件）。详见 [`docs/cpp-api.md`](docs/cpp-api.md)。
+
+```cpp
+#include <robot_bus/Node.hpp>
+#include <robot_bus/sensor_msgs/msg/v1/imu.pb.h>
+
+robot_bus::Broker broker;
+robot_bus::Node node("pilot");
+auto pub = node.create_publisher("/imu");
+```
 
 ### 2. Rust（Node + spin）
 
@@ -265,11 +280,11 @@ let broker = RobotBusBroker::start(RobotBusConfig {
 let grpc = format!("http://{}", broker.grpc_listen());
 ```
 
-Proto（包名 `robot_bus.grpc.v1`，与 ROS `*.msg.v1` / `*.srv.v1` 区分）：
+Proto（包名 `robot_bus_interface.grpc.v1`，与 ROS `*.msg.v1` / `*.srv.v1` 区分）：
 
-- [`message_gateway.proto`](proto/robot_bus/grpc/v1/message_gateway.proto)
-- [`service_gateway.proto`](proto/robot_bus/grpc/v1/service_gateway.proto)
-- [`action_gateway.proto`](proto/robot_bus/grpc/v1/action_gateway.proto)
+- [`message_gateway.proto`](proto/robot_bus_interface/grpc/v1/message_gateway.proto)
+- [`service_gateway.proto`](proto/robot_bus_interface/grpc/v1/service_gateway.proto)
+- [`action_gateway.proto`](proto/robot_bus_interface/grpc/v1/action_gateway.proto)
 
 ## 测试
 

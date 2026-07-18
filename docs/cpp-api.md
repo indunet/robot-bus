@@ -1,0 +1,105 @@
+# C++ API
+
+C++ SDK is distributed via **GitHub Release attachments** (no central C++ registry):
+
+- Linux: `robot-bus_<version>_amd64.deb`, `robot-bus_<version>_arm64.deb`
+- Windows: `robot-bus_<version>_x64.msi`
+
+You write the Release notes on GitHub and Publish; CI only builds packages and uploads assets.
+
+## Language / toolchain
+
+| Requirement | Value |
+|-------------|--------|
+| **C++ standard** | **C++17** (aligned with [ROS 2 Humble](https://docs.ros.org/en/humble/How-To-Guides/Ament-CMake-Documentation.html)) |
+| Compilers | GCC / Clang / MSVC that support C++17 (Humble’s baseline) |
+
+CMake sets `CMAKE_CXX_STANDARD 17`. Building with a newer standard (e.g. `-DCMAKE_CXX_STANDARD=20`) is fine for your own app; the installed headers themselves only need C++17.
+
+## Install
+
+```bash
+# Debian / Ubuntu (amd64 example)
+sudo apt install ./robot-bus_0.0.6_amd64.deb
+# Depends: libzmq5, libprotobuf*
+
+# Or from source (dev)
+just gen-cpp
+just cpp-dev
+```
+
+Headers install under the `robot_bus/` prefix (no `generated/` segment):
+
+```cpp
+#include <robot_bus/Node.hpp>
+#include <robot_bus/sensor_msgs/msg/v1/imu.pb.h>
+```
+
+Link with `-lrobot_bus -lrobot_bus_msgs` (or CMake `robot_bus::robot_bus` + `robot_bus::msgs`).
+
+## Broker
+
+```bash
+robot_bus_broker
+# or in-process:
+```
+
+```cpp
+#include <robot_bus/Node.hpp>
+
+robot_bus::Broker broker;  // default binds
+// broker.message_xsub_bind() / grpc_listen() …
+```
+
+## Message bus (typed)
+
+Protobuf message types are **pre-generated** and shipped in the package — you do **not** need `protoc` on the machine that only consumes the SDK.
+
+```cpp
+#include <robot_bus/Node.hpp>
+#include <robot_bus/sensor_msgs/msg/v1/imu.pb.h>
+
+robot_bus::Broker broker;
+robot_bus::Node node("pilot");
+auto pub = node.create_publisher("/imu");
+
+node.create_subscription("/imu", [](std::string_view topic, robot_bus::BytesView payload) {
+  sensor_msgs::msg::v1::Imu imu;
+  imu.ParseFromArray(payload.data, static_cast<int>(payload.size));
+  // …
+});
+
+node.start();
+// allow subscription to propagate, then:
+sensor_msgs::msg::v1::Imu imu;
+imu.mutable_angular_velocity()->set_z(0.1);
+std::string bytes;
+imu.SerializeToString(&bytes);
+pub.publish(bytes);
+```
+
+Compare imports across languages:
+
+| Language | Path |
+|----------|------|
+| Python | `from robot_bus.sensor_msgs.msg.v1 import Imu` |
+| TypeScript | `import { Imu } from "robot-bus/sensor_msgs/msg/v1/imu.js"` |
+| C++ (ROS msgs) | `#include <robot_bus/sensor_msgs/msg/v1/imu.pb.h>` |
+| C++ (built-in action) | `#include <robot_bus/robot_bus_interface/action/v1/fibonacci.pb.h>` |
+
+## CMake
+
+```cmake
+find_package(robot_bus REQUIRED)
+target_link_libraries(my_app PRIVATE robot_bus::robot_bus robot_bus::msgs)
+```
+
+## Local development
+
+```bash
+just gen-cpp          # regenerate bindings/cpp/generated (protoc 35.1)
+just cpp-dev          # cargo FFI + cmake msgs/tests
+just test-cpp         # msgs / timer / pub-sub / service / action
+```
+
+Repo layout: generated sources live under `bindings/cpp/generated/robot_bus/`; install/public includes drop the `generated/` segment.

@@ -1,0 +1,11 @@
+prefix=@CMAKE_INSTALL_PREFIX@
+exec_prefix=${prefix}
+libdir=${prefix}/@CMAKE_INSTALL_LIBDIR@
+includedir=${prefix}/@CMAKE_INSTALL_INCLUDEDIR@
+
+Name: robot_bus
+Description: robot-bus C/C++ SDK (ZMQ + protobuf msgs)
+Version: @PROJECT_VERSION@
+Requires: protobuf
+Libs: -L${libdir} -lrobot_bus -lrobot_bus_msgs
+Cflags: -I${includedir}

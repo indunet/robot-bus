@@ -1,0 +1,467 @@
+#pragma once
+
+#include <robot_bus.h>
+
+#include <cstdint>
+#include <cstring>
+#include <functional>
+#include <memory>
+#include <stdexcept>
+#include <string>
+#include <string_view>
+#include <utility>
+#include <vector>
+
+namespace robot_bus {
+
+/// Non-owning view of bytes (C++17; avoids requiring C++20 std::span).
+struct BytesView {
+  const uint8_t *data = nullptr;
+  size_t size = 0;
+
+  BytesView() = default;
+  BytesView(const uint8_t *d, size_t n) : data(d), size(n) {}
+  BytesView(const std::vector<uint8_t> &v) : data(v.data()), size(v.size()) {}
+  BytesView(const std::string &s)
+      : data(reinterpret_cast<const uint8_t *>(s.data())), size(s.size()) {}
+  BytesView(std::string_view s)
+      : data(reinterpret_cast<const uint8_t *>(s.data())), size(s.size()) {}
+};
+
+inline std::string last_error() {
+  const char *e = robot_bus_last_error();
+  return e ? std::string(e) : std::string();
+}
+
+class Error : public std::runtime_error {
+ public:
+  explicit Error(std::string msg) : std::runtime_error(std::move(msg)) {}
+};
+
+inline void check(int rc, const char *what) {
+  if (rc < 0) {
+    auto err = last_error();
+    throw Error(std::string(what) + ": " + (err.empty() ? "unknown error" : err));
+  }
+}
+
+inline void *check_ptr(void *p, const char *what) {
+  if (!p) {
+    auto err = last_error();
+    throw Error(std::string(what) + ": " + (err.empty() ? "null" : err));
+  }
+  return p;
+}
+
+inline uint8_t *alloc_reply_bytes(BytesView payload) {
+  if (payload.size == 0) {
+    return nullptr;
+  }
+  uint8_t *buf = robot_bus_alloc_bytes(payload.size);
+  if (!buf) {
+    throw Error("robot_bus_alloc_bytes failed");
+  }
+  std::memcpy(buf, payload.data, payload.size);
+  return buf;
+}
+
+class OwnedString {
+ public:
+  explicit OwnedString(char *p) : p_(p) {}
+  ~OwnedString() { robot_bus_free_string(p_); }
+  OwnedString(const OwnedString &) = delete;
+  OwnedString &operator=(const OwnedString &) = delete;
+  OwnedString(OwnedString &&o) noexcept : p_(o.p_) { o.p_ = nullptr; }
+  std::string str() const { return p_ ? std::string(p_) : std::string(); }
+
+ private:
+  char *p_;
+};
+
+class TopicPublisher {
+ public:
+  explicit TopicPublisher(RobotBusTopicPublisher *p) : p_(p) {}
+  ~TopicPublisher() { robot_bus_topic_publisher_free(p_); }
+  TopicPublisher(const TopicPublisher &) = delete;
+  TopicPublisher &operator=(const TopicPublisher &) = delete;
+  TopicPublisher(TopicPublisher &&o) noexcept : p_(o.p_) { o.p_ = nullptr; }
+
+  std::string topic() const {
+    OwnedString s(robot_bus_topic_publisher_topic(p_));
+    return s.str();
+  }
+
+  void publish(BytesView payload) {
+    check(robot_bus_topic_publisher_publish(p_, payload.data, payload.size), "publish");
+  }
+
+ private:
+  RobotBusTopicPublisher *p_;
+};
+
+class ServiceClient {
+ public:
+  explicit ServiceClient(RobotBusServiceClient *c) : c_(c) {}
+  ~ServiceClient() { robot_bus_service_client_free(c_); }
+  ServiceClient(const ServiceClient &) = delete;
+  ServiceClient &operator=(const ServiceClient &) = delete;
+  ServiceClient(ServiceClient &&o) noexcept : c_(o.c_) { o.c_ = nullptr; }
+
+  std::string service_name() const {
+    OwnedString s(robot_bus_service_client_service_name(c_));
+    return s.str();
+  }
+
+  std::vector<uint8_t> call(BytesView body, double timeout_secs = -1.0) {
+    uint8_t *out = nullptr;
+    size_t len = 0;
+    check(robot_bus_service_client_call(c_, body.data, body.size, timeout_secs, &out, &len),
+          "service call");
+    std::vector<uint8_t> result(out, out + len);
+    robot_bus_free_bytes(out, len);
+    return result;
+  }
+
+ private:
+  RobotBusServiceClient *c_;
+};
+
+struct ActionMessage {
+  std::string kind;
+  std::vector<uint8_t> body;
+  std::string goal_id;
+  std::string action_name;
+};
+
+class ActionClient {
+ public:
+  explicit ActionClient(RobotBusActionClient *c) : c_(c) {}
+  ~ActionClient() { robot_bus_action_client_free(c_); }
+  ActionClient(const ActionClient &) = delete;
+  ActionClient &operator=(const ActionClient &) = delete;
+  ActionClient(ActionClient &&o) noexcept : c_(o.c_) { o.c_ = nullptr; }
+
+  std::string action_name() const {
+    OwnedString s(robot_bus_action_client_action_name(c_));
+    return s.str();
+  }
+
+  std::vector<ActionMessage> send_goal(BytesView body, const char *goal_id = nullptr,
+                                       double timeout_secs = -1.0) {
+    RobotBusActionMessage *msgs = nullptr;
+    size_t count = 0;
+    check(robot_bus_action_client_send_goal(c_, body.data, body.size, goal_id, timeout_secs,
+                                            &msgs, &count),
+          "send_goal");
+    std::vector<ActionMessage> out;
+    out.reserve(count);
+    for (size_t i = 0; i < count; ++i) {
+      ActionMessage m;
+      m.kind = msgs[i].kind ? msgs[i].kind : "";
+      m.body.assign(msgs[i].body, msgs[i].body + msgs[i].body_len);
+      m.goal_id = msgs[i].goal_id ? msgs[i].goal_id : "";
+      m.action_name = msgs[i].action_name ? msgs[i].action_name : "";
+      out.push_back(std::move(m));
+    }
+    robot_bus_action_messages_free(msgs, count);
+    return out;
+  }
+
+ private:
+  RobotBusActionClient *c_;
+};
+
+class ShutdownHandle {
+ public:
+  explicit ShutdownHandle(RobotBusShutdownHandle *h) : h_(h) {}
+  ~ShutdownHandle() { robot_bus_shutdown_handle_free(h_); }
+  ShutdownHandle(const ShutdownHandle &) = delete;
+  ShutdownHandle &operator=(const ShutdownHandle &) = delete;
+  ShutdownHandle(ShutdownHandle &&o) noexcept : h_(o.h_) { o.h_ = nullptr; }
+
+  void shutdown() { robot_bus_shutdown_handle_shutdown(h_); }
+  bool is_running() const { return robot_bus_shutdown_handle_is_running(h_) != 0; }
+
+ private:
+  RobotBusShutdownHandle *h_;
+};
+
+class CallbackGroup {
+ public:
+  explicit CallbackGroup(RobotBusCallbackGroup *g) : g_(g) {}
+  ~CallbackGroup() { robot_bus_callback_group_free(g_); }
+  CallbackGroup(const CallbackGroup &) = delete;
+  CallbackGroup &operator=(const CallbackGroup &) = delete;
+  CallbackGroup(CallbackGroup &&o) noexcept : g_(o.g_) { o.g_ = nullptr; }
+
+  uint64_t id() const { return robot_bus_callback_group_id(g_); }
+  int kind() const { return robot_bus_callback_group_kind(g_); }
+  const RobotBusCallbackGroup *raw() const { return g_; }
+
+ private:
+  RobotBusCallbackGroup *g_;
+};
+
+class TimerHandle {
+ public:
+  explicit TimerHandle(RobotBusTimerHandle *h) : h_(h) {}
+  ~TimerHandle() { robot_bus_timer_handle_free(h_); }
+  TimerHandle(const TimerHandle &) = delete;
+  TimerHandle &operator=(const TimerHandle &) = delete;
+  TimerHandle(TimerHandle &&o) noexcept : h_(o.h_) { o.h_ = nullptr; }
+  const RobotBusTimerHandle *raw() const { return h_; }
+
+ private:
+  RobotBusTimerHandle *h_;
+};
+
+class Node {
+ public:
+  using MsgCallback = std::function<void(std::string_view topic, BytesView payload)>;
+  using TimerCallback = std::function<void()>;
+  using ServiceHandler = std::function<std::vector<uint8_t>(BytesView body)>;
+  using ActionHandler =
+      std::function<std::vector<std::pair<std::string, std::vector<uint8_t>>>(BytesView body)>;
+
+  explicit Node(std::string name) {
+    n_ = static_cast<RobotBusNode *>(
+        check_ptr(robot_bus_node_new(name.c_str(), nullptr), "Node"));
+  }
+
+  /// `opts` pointers must remain valid for the duration of this call.
+  Node(std::string name, const RobotBusNodeOptions &opts) {
+    n_ = static_cast<RobotBusNode *>(
+        check_ptr(robot_bus_node_new(name.c_str(), &opts), "Node"));
+  }
+
+  Node(RobotBusNode *raw) : n_(raw) {}
+
+  static Node tcp(std::string name, const char *host = "localhost") {
+    return Node(static_cast<RobotBusNode *>(
+        check_ptr(robot_bus_node_tcp(name.c_str(), host), "Node::tcp")));
+  }
+
+  static Node grpc(std::string name) {
+    return Node(static_cast<RobotBusNode *>(
+        check_ptr(robot_bus_node_grpc(name.c_str()), "Node::grpc")));
+  }
+
+  static Node grpc_at(std::string name, const char *url) {
+    return Node(static_cast<RobotBusNode *>(
+        check_ptr(robot_bus_node_grpc_at(name.c_str(), url), "Node::grpc_at")));
+  }
+
+  ~Node() { robot_bus_node_free(n_); }
+  Node(const Node &) = delete;
+  Node &operator=(const Node &) = delete;
+  Node(Node &&o) noexcept
+      : n_(o.n_),
+        msg_cbs_(std::move(o.msg_cbs_)),
+        timer_cbs_(std::move(o.timer_cbs_)),
+        svc_cbs_(std::move(o.svc_cbs_)),
+        action_cbs_(std::move(o.action_cbs_)) {
+    o.n_ = nullptr;
+  }
+
+  std::string name() const {
+    OwnedString s(robot_bus_node_name(n_));
+    return s.str();
+  }
+
+  TopicPublisher create_publisher(const char *topic) {
+    return TopicPublisher(static_cast<RobotBusTopicPublisher *>(
+        check_ptr(robot_bus_node_create_publisher(n_, topic), "create_publisher")));
+  }
+
+  void create_subscription(const char *topic, MsgCallback cb,
+                           const CallbackGroup *group = nullptr) {
+    msg_cbs_.push_back(std::make_unique<MsgCallback>(std::move(cb)));
+    MsgCallback *held = msg_cbs_.back().get();
+    check(robot_bus_node_create_subscription(
+              n_, topic,
+              [](const char *t, const uint8_t *data, size_t len, void *user) {
+                auto *fn = static_cast<MsgCallback *>(user);
+                (*fn)(t ? std::string_view(t) : std::string_view(), BytesView(data, len));
+              },
+              held, group ? group->raw() : nullptr),
+          "create_subscription");
+  }
+
+  TimerHandle create_timer(double period_secs, TimerCallback cb,
+                           const CallbackGroup *group = nullptr) {
+    timer_cbs_.push_back(std::make_unique<TimerCallback>(std::move(cb)));
+    TimerCallback *held = timer_cbs_.back().get();
+    return TimerHandle(static_cast<RobotBusTimerHandle *>(check_ptr(
+        robot_bus_node_create_timer(
+            n_, period_secs, [](void *user) { (*static_cast<TimerCallback *>(user))(); }, held,
+            group ? group->raw() : nullptr),
+        "create_timer")));
+  }
+
+  void cancel_timer(const TimerHandle &handle) {
+    check(robot_bus_node_cancel_timer(n_, handle.raw()), "cancel_timer");
+  }
+
+  void create_service(const char *service_name, ServiceHandler handler,
+                      const CallbackGroup *group = nullptr) {
+    svc_cbs_.push_back(std::make_unique<ServiceHandler>(std::move(handler)));
+    ServiceHandler *held = svc_cbs_.back().get();
+    check(robot_bus_node_create_service(
+              n_, service_name,
+              [](const uint8_t *data, size_t len, uint8_t **out_data, size_t *out_len,
+                 void *user) -> int {
+                try {
+                  auto *fn = static_cast<ServiceHandler *>(user);
+                  auto reply = (*fn)(BytesView(data, len));
+                  *out_len = reply.size();
+                  *out_data = alloc_reply_bytes(reply);
+                  return 0;
+                } catch (...) {
+                  *out_data = nullptr;
+                  *out_len = 0;
+                  return -1;
+                }
+              },
+              held, group ? group->raw() : nullptr),
+          "create_service");
+  }
+
+  ServiceClient create_client(const char *service_name) {
+    return ServiceClient(static_cast<RobotBusServiceClient *>(
+        check_ptr(robot_bus_node_create_client(n_, service_name), "create_client")));
+  }
+
+  void create_action_server(const char *action_name, ActionHandler handler,
+                            const CallbackGroup *group = nullptr) {
+    action_cbs_.push_back(std::make_unique<ActionHandler>(std::move(handler)));
+    ActionHandler *held = action_cbs_.back().get();
+    check(robot_bus_node_create_action_server(
+              n_, action_name,
+              [](const uint8_t *data, size_t len, RobotBusActionPhase **out_phases,
+                 size_t *out_count, void *user) -> int {
+                try {
+                  auto *fn = static_cast<ActionHandler *>(user);
+                  auto phases = (*fn)(BytesView(data, len));
+                  *out_count = phases.size();
+                  if (phases.empty()) {
+                    *out_phases = nullptr;
+                    return 0;
+                  }
+                  RobotBusActionPhase *arr = robot_bus_alloc_action_phases(phases.size());
+                  if (!arr) {
+                    *out_phases = nullptr;
+                    *out_count = 0;
+                    return -1;
+                  }
+                  for (size_t i = 0; i < phases.size(); ++i) {
+                    arr[i].phase = robot_bus_dup_string(phases[i].first.c_str());
+                    arr[i].body_len = phases[i].second.size();
+                    arr[i].body = alloc_reply_bytes(phases[i].second);
+                  }
+                  *out_phases = arr;
+                  return 0;
+                } catch (...) {
+                  *out_phases = nullptr;
+                  *out_count = 0;
+                  return -1;
+                }
+              },
+              held, group ? group->raw() : nullptr),
+          "create_action_server");
+  }
+
+  ActionClient create_action_client(const char *action_name) {
+    return ActionClient(static_cast<RobotBusActionClient *>(check_ptr(
+        robot_bus_node_create_action_client(n_, action_name), "create_action_client")));
+  }
+
+  void connect_action_client() {
+    check(robot_bus_node_connect_action_client(n_), "connect_action_client");
+  }
+
+  CallbackGroup create_callback_group(int kind = 0) {
+    return CallbackGroup(static_cast<RobotBusCallbackGroup *>(
+        check_ptr(robot_bus_node_create_callback_group(n_, kind), "create_callback_group")));
+  }
+
+  ShutdownHandle shutdown_handle() {
+    return ShutdownHandle(static_cast<RobotBusShutdownHandle *>(
+        check_ptr(robot_bus_node_shutdown_handle(n_), "shutdown_handle")));
+  }
+
+  void shutdown() { check(robot_bus_node_shutdown(n_), "shutdown"); }
+
+  bool spin_once(double timeout_secs = -1.0) {
+    int rc = robot_bus_node_spin_once(n_, timeout_secs);
+    if (rc < 0) {
+      check(rc, "spin_once");
+    }
+    return rc == 1;
+  }
+
+  void spin() { check(robot_bus_node_spin(n_), "spin"); }
+  void start() { check(robot_bus_node_start(n_), "start"); }
+  void stop() { check(robot_bus_node_stop(n_), "stop"); }
+  void wait() { check(robot_bus_node_wait(n_), "wait"); }
+
+  RobotBusNode *raw() { return n_; }
+
+ private:
+  RobotBusNode *n_ = nullptr;
+  std::vector<std::unique_ptr<MsgCallback>> msg_cbs_;
+  std::vector<std::unique_ptr<TimerCallback>> timer_cbs_;
+  std::vector<std::unique_ptr<ServiceHandler>> svc_cbs_;
+  std::vector<std::unique_ptr<ActionHandler>> action_cbs_;
+};
+
+class Broker {
+ public:
+  Broker() {
+    b_ = static_cast<RobotBusBroker *>(check_ptr(robot_bus_broker_start(nullptr), "Broker"));
+  }
+
+  explicit Broker(const RobotBusBrokerOptions &opts) {
+    b_ = static_cast<RobotBusBroker *>(check_ptr(robot_bus_broker_start(&opts), "Broker"));
+  }
+
+  ~Broker() { robot_bus_broker_free(b_); }
+  Broker(const Broker &) = delete;
+  Broker &operator=(const Broker &) = delete;
+  Broker(Broker &&o) noexcept : b_(o.b_) { o.b_ = nullptr; }
+
+  void stop() { check(robot_bus_broker_stop(b_), "broker stop"); }
+
+  std::string message_xsub_bind() const {
+    OwnedString s(robot_bus_broker_message_xsub_bind(b_));
+    return s.str();
+  }
+  std::string message_xpub_bind() const {
+    OwnedString s(robot_bus_broker_message_xpub_bind(b_));
+    return s.str();
+  }
+  std::string service_frontend_bind() const {
+    OwnedString s(robot_bus_broker_service_frontend_bind(b_));
+    return s.str();
+  }
+  std::string service_backend_bind() const {
+    OwnedString s(robot_bus_broker_service_backend_bind(b_));
+    return s.str();
+  }
+  std::string action_frontend_bind() const {
+    OwnedString s(robot_bus_broker_action_frontend_bind(b_));
+    return s.str();
+  }
+  std::string action_backend_bind() const {
+    OwnedString s(robot_bus_broker_action_backend_bind(b_));
+    return s.str();
+  }
+  std::string grpc_listen() const {
+    OwnedString s(robot_bus_broker_grpc_listen(b_));
+    return s.str();
+  }
+
+ private:
+  RobotBusBroker *b_ = nullptr;
+};
+
+}  // namespace robot_bus

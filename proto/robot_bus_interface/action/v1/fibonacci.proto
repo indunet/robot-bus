@@ -1,0 +1,16 @@
+syntax = "proto3";
+
+package robot_bus_interface.action.v1;
+
+// Built-in demo action for typed `create_action_server` / `create_action_client`.
+message FibonacciGoal {
+  int32 order = 1;
+}
+
+message FibonacciFeedback {
+  repeated int32 sequence = 1;
+}
+
+message FibonacciResult {
+  repeated int32 sequence = 1;
+}

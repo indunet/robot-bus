@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
+  <Product Id="*" Name="robot-bus" Language="1033" Version="$(var.ProductVersion)"
+           Manufacturer="indunet" UpgradeCode="A1B2C3D4-E5F6-7890-ABCD-EF1234567890">
+    <Package InstallerVersion="500" Compressed="yes" InstallScope="perMachine"
+             Description="robot-bus C/C++ SDK and broker" />
+    <MajorUpgrade DowngradeErrorMessage="A newer version of robot-bus is already installed." />
+    <MediaTemplate EmbedCab="yes" />
+
+    <Feature Id="ProductFeature" Title="robot-bus" Level="1">
+      <ComponentGroupRef Id="ProductComponents" />
+    </Feature>
+
+    <Directory Id="TARGETDIR" Name="SourceDir">
+      <Directory Id="ProgramFiles64Folder">
+        <Directory Id="INSTALLFOLDER" Name="robot-bus">
+          <Directory Id="BINDIR" Name="bin" />
+          <Directory Id="LIBDIR" Name="lib" />
+          <Directory Id="INCLUDEDIR" Name="include" />
+        </Directory>
+      </Directory>
+    </Directory>
+
+    <ComponentGroup Id="ProductComponents" Directory="INSTALLFOLDER">
+      <Component Id="BrokerExe" Directory="BINDIR" Guid="*">
+        <File Id="robot_bus_broker" Source="$(var.StageDir)\bin\robot_bus_broker.exe" KeyPath="yes" />
+        <Environment Id="Path" Name="PATH" Value="[BINDIR]" Permanent="no" Part="last" Action="set" System="yes" />
+      </Component>
+      <Component Id="FfiDll" Directory="BINDIR" Guid="*">
+        <File Id="robot_bus_dll" Source="$(var.StageDir)\bin\robot_bus.dll" KeyPath="yes" />
+      </Component>
+      <Component Id="MsgsDll" Directory="BINDIR" Guid="*">
+        <File Id="robot_bus_msgs_dll" Source="$(var.StageDir)\bin\robot_bus_msgs.dll" KeyPath="yes" />
+      </Component>
+      <!-- Headers / lib / cmake are harvested by heat.exe in CI; this stub covers core binaries. -->
+    </ComponentGroup>
+  </Product>
+</Wix>

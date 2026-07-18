@@ -1,0 +1,19 @@
+[package]
+name = "robot-bus-cpp"
+version = "0.0.6"
+edition = "2024"
+publish = false
+license = "Apache-2.0"
+
+[lib]
+name = "robot_bus_c"
+crate-type = ["cdylib"]
+path = "src/lib.rs"
+
+[dependencies]
+anyhow = "1"
+robot-bus = { path = "../../..", default-features = false, features = ["grpc", "console"] }
+uuid = { version = "1", features = ["v4"] }
+
+[profile.release]
+lto = true

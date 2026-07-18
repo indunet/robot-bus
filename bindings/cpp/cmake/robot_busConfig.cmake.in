@@ -1,0 +1,27 @@
+@PACKAGE_INIT@
+
+include(CMakeFindDependencyMacro)
+find_dependency(Protobuf REQUIRED)
+
+if(EXISTS "${CMAKE_CURRENT_LIST_DIR}/robot_busTargets.cmake")
+  include("${CMAKE_CURRENT_LIST_DIR}/robot_busTargets.cmake")
+endif()
+
+if(NOT TARGET robot_bus::robot_bus)
+  add_library(robot_bus::robot_bus SHARED IMPORTED)
+  set_target_properties(robot_bus::robot_bus PROPERTIES
+    INTERFACE_INCLUDE_DIRECTORIES "${PACKAGE_PREFIX_DIR}/include")
+  if(WIN32)
+    set_target_properties(robot_bus::robot_bus PROPERTIES
+      IMPORTED_LOCATION "${PACKAGE_PREFIX_DIR}/bin/robot_bus.dll"
+      IMPORTED_IMPLIB "${PACKAGE_PREFIX_DIR}/lib/robot_bus.lib")
+  elseif(APPLE)
+    set_target_properties(robot_bus::robot_bus PROPERTIES
+      IMPORTED_LOCATION "${PACKAGE_PREFIX_DIR}/lib/librobot_bus.dylib")
+  else()
+    set_target_properties(robot_bus::robot_bus PROPERTIES
+      IMPORTED_LOCATION "${PACKAGE_PREFIX_DIR}/lib/librobot_bus.so")
+  endif()
+endif()
+
+check_required_components(robot_bus)

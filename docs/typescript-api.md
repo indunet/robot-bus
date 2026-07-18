@@ -116,7 +116,7 @@ import { Imu } from "robot-bus/sensor_msgs/msg/v1/imu.js";
 | Rust | `robot_bus::sensor_msgs::msg::v1::Imu` |
 | TypeScript | `import { Imu } from "robot-bus/sensor_msgs/msg/v1/imu.js"` |
 
-网关 stub：`robot-bus/robot_bus/grpc/v1/*.client.js`。
+网关 stub：`robot-bus/robot_bus_interface/grpc/v1/*.client.js`。
 
 改 `proto/` 后：
 

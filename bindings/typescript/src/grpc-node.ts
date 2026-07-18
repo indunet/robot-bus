@@ -7,13 +7,13 @@
 
 import { GrpcWebFetchTransport } from "@protobuf-ts/grpcweb-transport";
 import type { RpcOptions } from "@protobuf-ts/runtime-rpc";
-import { MessageGatewayClient } from "../generated/robot_bus/grpc/v1/message_gateway.client.js";
-import { ServiceGatewayClient } from "../generated/robot_bus/grpc/v1/service_gateway.client.js";
-import { ActionGatewayClient } from "../generated/robot_bus/grpc/v1/action_gateway.client.js";
+import { MessageGatewayClient } from "../generated/robot_bus_interface/grpc/v1/message_gateway.client.js";
+import { ServiceGatewayClient } from "../generated/robot_bus_interface/grpc/v1/service_gateway.client.js";
+import { ActionGatewayClient } from "../generated/robot_bus_interface/grpc/v1/action_gateway.client.js";
 import {
   ActionKind,
   type ActionEvent as PbActionEvent,
-} from "../generated/robot_bus/grpc/v1/action_gateway.js";
+} from "../generated/robot_bus_interface/grpc/v1/action_gateway.js";
 import { decode, encode, type MessageType } from "./typed.js";
 
 export const DEFAULT_GRPC_URL = "http://127.0.0.1:15770";
