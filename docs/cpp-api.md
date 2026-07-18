@@ -78,6 +78,24 @@ imu.SerializeToString(&bytes);
 pub.publish(bytes);
 ```
 
+### gRPC mode Node（客户端）
+
+`Node::grpc` / `Node::grpc_at` 经 broker gRPC 网关接入，不创建 ZMQ socket。
+
+| 支持 | 不支持 |
+|------|--------|
+| `create_subscription` | `create_publisher` |
+| `create_client` | `create_service` |
+| `create_action_client` | `create_action_server` |
+| `create_timer`、`spin` / `spin_once` / `shutdown` | — |
+
+```cpp
+auto node = robot_bus::Node::grpc("web-client");
+// 或 robot_bus::Node::grpc_at("web-client", "http://127.0.0.1:15770");
+```
+
+本地覆盖见 `bindings/cpp/tests/grpc_node.cpp`（`just test-cpp`）。
+
 Compare imports across languages:
 
 | Language | Path |

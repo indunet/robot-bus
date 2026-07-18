@@ -90,7 +90,12 @@ public class App extends Application {
 }
 ```
 
-之后与 JVM 相同：`new Node(...)`、typed `createPublisher` 等。消息类型同样来自 `org.indunet.robot.bus.sensor_msgs.msg.v1.Imu`（经 `robot-bus` 传递依赖带入）。
+之后与 JVM 相同：`new Node(...)`、`Node.grpc(...)`、typed `createPublisher` 等。消息类型同样来自 `org.indunet.robot.bus.sensor_msgs.msg.v1.Imu`（经 `robot-bus` 传递依赖带入）。
+
+| 测试 | 位置 |
+|------|------|
+| typed + gRPC（共享 API） | `bindings/java` → `TypedApiTest` / `GrpcNodeTest` |
+| `RobotBusAndroid.init`（无 jniLibs 时失败） | `bindings/android` → `./gradlew test` |
 
 ### gRPC 模式 Node（客户端）
 

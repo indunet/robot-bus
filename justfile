@@ -59,6 +59,10 @@ android-native:
 android-dev: java-install android-native
 	cd bindings/android && ./gradlew assembleRelease --no-daemon
 
+# Android host unit tests (RobotBusAndroid.init without jniLibs)
+test-android:
+	cd bindings/android && ./gradlew test --no-daemon
+
 # Back-compat aliases
 kotlin-dev: java-dev
 kotlin-android-native: android-native
@@ -78,6 +82,7 @@ test-cpp:
 	./bindings/cpp/build/pub_sub_imu
 	./bindings/cpp/build/service_set_bool
 	./bindings/cpp/build/action_fibonacci
+	./bindings/cpp/build/grpc_node
 
 # Build console and sync static assets into assets/console for rust-embed
 console:

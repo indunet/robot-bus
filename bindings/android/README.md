@@ -12,6 +12,10 @@ Android Library (AAR) that:
 
 API examples: [`docs/java-api.md`](../../docs/java-api.md).
 
+gRPC / typed protobuf tests for the shared Java API: `bindings/java` (`GrpcNodeTest`,
+`TypedApiTest`). This module’s host unit test only checks {@code RobotBusAndroid.init}
+fails without packaged jniLibs (`./gradlew test`).
+
 ## Local build
 
 Requires Android SDK + NDK 26, `cmake`, `cargo-ndk`, Rust Android targets, and a prior

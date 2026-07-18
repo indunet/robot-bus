@@ -120,6 +120,7 @@ jobs:
           ./bindings/cpp/build/pub_sub_imu
           ./bindings/cpp/build/service_set_bool
           ./bindings/cpp/build/action_fibonacci
+          ./bindings/cpp/build/grpc_node
 
   java-msgs:
     runs-on: ubuntu-latest

@@ -25,6 +25,10 @@ android {
             jniLibs.srcDirs("src/main/jniLibs")
         }
     }
+
+    testOptions {
+        unitTests.isReturnDefaultValues = true
+    }
 }
 
 dependencies {
@@ -33,6 +37,8 @@ dependencies {
         exclude(group = "net.java.dev.jna", module = "jna")
     }
     api("net.java.dev.jna:jna:5.16.0@aar")
+
+    testImplementation("junit:junit:4.13.2")
 }
 
 mavenPublishing {
