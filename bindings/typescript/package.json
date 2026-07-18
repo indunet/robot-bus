@@ -1,0 +1,89 @@
+{
+  "name": "robot-bus",
+  "version": "0.0.5",
+  "description": "robot-bus TypeScript SDK: Node (napi-rs / ZMQ) + browser (gRPC-Web client)",
+  "license": "Apache-2.0",
+  "author": "deng_ran <deng_ran@aliyun.com>",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/indunet/robot-bus.git",
+    "directory": "bindings/typescript"
+  },
+  "homepage": "https://github.com/indunet/robot-bus#readme",
+  "bugs": {
+    "url": "https://github.com/indunet/robot-bus/issues"
+  },
+  "type": "module",
+  "main": "./dist/index.node.js",
+  "module": "./dist/index.node.js",
+  "types": "./dist/index.node.d.ts",
+  "exports": {
+    ".": {
+      "browser": {
+        "types": "./dist/index.browser.d.ts",
+        "import": "./dist/index.browser.js",
+        "default": "./dist/index.browser.js"
+      },
+      "import": {
+        "types": "./dist/index.node.d.ts",
+        "default": "./dist/index.node.js"
+      },
+      "default": "./dist/index.node.js"
+    },
+    "./*": "./generated/*",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist",
+    "generated",
+    "README.md",
+    "*.node",
+    "robot-bus.*.node"
+  ],
+  "scripts": {
+    "build:native": "napi build --platform --release --manifest-path native/Cargo.toml --output-dir .",
+    "build:native:debug": "napi build --platform --manifest-path native/Cargo.toml --output-dir .",
+    "build:ts": "tsup",
+    "build": "npm run build:native && npm run build:ts",
+    "gen": "python3 ../../scripts/generate_typescript_msgs.py",
+    "test": "node --import tsx --test tests/*.test.ts",
+    "prepublishOnly": "npm run build:ts"
+  },
+  "napi": {
+    "binaryName": "robot-bus",
+    "packageName": "robot-bus",
+    "targets": [
+      "x86_64-unknown-linux-gnu",
+      "aarch64-unknown-linux-gnu",
+      "aarch64-apple-darwin",
+      "x86_64-pc-windows-msvc"
+    ]
+  },
+  "dependencies": {
+    "@protobuf-ts/grpcweb-transport": "^2.11.1",
+    "@protobuf-ts/runtime": "^2.11.1",
+    "@protobuf-ts/runtime-rpc": "^2.11.1"
+  },
+  "devDependencies": {
+    "@napi-rs/cli": "^3.4.1",
+    "@protobuf-ts/plugin": "^2.11.1",
+    "@types/node": "^22.15.0",
+    "tsup": "^8.5.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.8.0"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
+  },
+  "keywords": [
+    "robotics",
+    "zeromq",
+    "protobuf",
+    "grpc-web",
+    "ros"
+  ]
+}

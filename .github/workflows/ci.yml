@@ -42,3 +42,30 @@ jobs:
         run: |
           PYTHONPATH=bindings/python python3 bindings/python/tests/test_msgs_roundtrip.py
           PYTHONPATH=bindings/python python3 bindings/python/tests/test_typed_api.py
+
+  typescript-msgs:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: bindings/typescript/package-lock.json
+      - name: Install protobuf compiler (match codegen)
+        run: |
+          set -eux
+          curl -fsSL -o /tmp/protoc.zip \
+            "https://github.com/protocolbuffers/protobuf/releases/download/v35.1/protoc-35.1-linux-x86_64.zip"
+          sudo unzip -o /tmp/protoc.zip -d /usr/local
+          protoc --version
+      - name: Install npm deps
+        working-directory: bindings/typescript
+        run: npm ci
+      - name: Check generated TypeScript stubs are fresh
+        run: |
+          python3 scripts/generate_typescript_msgs.py
+          git diff --exit-code -- bindings/typescript/generated
+      - name: Smoke test TypeScript
+        working-directory: bindings/typescript
+        run: npm test

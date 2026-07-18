@@ -17,6 +17,13 @@ bindings/python/robot_bus/_native*.so
 bindings/python/robot_bus/_native*.pyd
 bindings/python/robot_bus/_native*.dll
 
+# napi-rs native addon (built locally or in CI; published from artifacts)
+bindings/typescript/*.node
+bindings/typescript/index.d.ts
+bindings/typescript/dist/
+bindings/typescript/native/target/
+bindings/typescript/native/Cargo.lock
+
 # Library crate: dependents use their own lockfile
 Cargo.lock
 

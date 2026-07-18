@@ -1,0 +1,139 @@
+name: Publish to npm
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+jobs:
+  version-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Check tag matches Cargo.toml / pyproject / package.json
+        if: github.event_name == 'push'
+        run: |
+          TAG="${GITHUB_REF_NAME#v}"
+          CRATE_VERSION="$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -n1)"
+          PY_VERSION="$(sed -n 's/^version = "\(.*\)"/\1/p' bindings/python/pyproject.toml | head -n1)"
+          NPM_VERSION="$(node -p "require('./bindings/typescript/package.json').version")"
+          NATIVE_VERSION="$(sed -n 's/^version = "\(.*\)"/\1/p' bindings/typescript/native/Cargo.toml | head -n1)"
+          if [ "$TAG" != "$CRATE_VERSION" ] || [ "$TAG" != "$PY_VERSION" ] || [ "$TAG" != "$NPM_VERSION" ] || [ "$TAG" != "$NATIVE_VERSION" ]; then
+            echo "Tag ($TAG) must match Cargo ($CRATE_VERSION), pyproject ($PY_VERSION), package.json ($NPM_VERSION), native ($NATIVE_VERSION)"
+            exit 1
+          fi
+
+      - name: Show versions (manual run)
+        if: github.event_name == 'workflow_dispatch'
+        run: |
+          echo "Cargo=$(sed -n 's/^version = \"\\(.*\\)\"/\\1/p' Cargo.toml | head -n1)"
+          echo "Py=$(sed -n 's/^version = \"\\(.*\\)\"/\\1/p' bindings/python/pyproject.toml | head -n1)"
+          echo "Npm=$(node -p "require('./bindings/typescript/package.json').version")"
+
+  build:
+    needs: [version-check]
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - host: ubuntu-22.04
+            target: x86_64-unknown-linux-gnu
+            protoc_zip: protoc-35.1-linux-x86_64.zip
+          - host: ubuntu-24.04-arm
+            target: aarch64-unknown-linux-gnu
+            protoc_zip: protoc-35.1-linux-aarch_64.zip
+          - host: macos-14
+            target: aarch64-apple-darwin
+            protoc_zip: null
+          - host: windows-latest
+            target: x86_64-pc-windows-msvc
+            protoc_zip: null
+    runs-on: ${{ matrix.host }}
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: bindings/typescript/package-lock.json
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Install protoc / build deps (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          set -eux
+          sudo apt-get update
+          sudo apt-get install -y cmake g++ make curl unzip pkg-config libzmq3-dev
+          curl -fsSL -o /tmp/protoc.zip \
+            "https://github.com/protocolbuffers/protobuf/releases/download/v35.1/${{ matrix.protoc_zip }}"
+          sudo unzip -o /tmp/protoc.zip -d /usr/local
+          protoc --version
+
+      - name: Install protoc / build deps (macOS)
+        if: runner.os == 'macOS'
+        run: brew install cmake protobuf zeromq
+
+      - name: Install protoc (Windows)
+        if: runner.os == 'Windows'
+        run: choco install protoc -y
+
+      - name: Install npm deps
+        working-directory: bindings/typescript
+        run: npm ci
+
+      - name: Build native addon
+        working-directory: bindings/typescript
+        run: npx napi build --platform --release --target ${{ matrix.target }} --manifest-path native/Cargo.toml --output-dir .
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: napi-${{ matrix.target }}
+          path: |
+            bindings/typescript/*.node
+          if-no-files-found: error
+
+  publish:
+    needs: [build]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          registry-url: https://registry.npmjs.org
+          cache: npm
+          cache-dependency-path: bindings/typescript/package-lock.json
+
+      - name: Install npm deps
+        working-directory: bindings/typescript
+        run: npm ci
+
+      - name: Download native artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: /tmp/napi-artifacts
+          pattern: napi-*
+          merge-multiple: true
+
+      - name: Place .node binaries
+        run: |
+          set -eux
+          cp -v /tmp/napi-artifacts/*.node bindings/typescript/ || true
+          ls -la bindings/typescript/*.node
+
+      - name: Build TypeScript
+        working-directory: bindings/typescript
+        run: npm run build:ts
+
+      - name: Publish to npm
+        working-directory: bindings/typescript
+        run: npm publish --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

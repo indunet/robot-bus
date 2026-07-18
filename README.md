@@ -3,11 +3,12 @@
 [![CI](https://github.com/indunet/robot-bus/actions/workflows/ci.yml/badge.svg)](https://github.com/indunet/robot-bus/actions/workflows/ci.yml)
 [![crates.io](https://img.shields.io/crates/v/robot-bus.svg?color=f74c00)](https://crates.io/crates/robot-bus)
 [![PyPI](https://img.shields.io/pypi/v/robot-bus.svg?color=3775a9)](https://pypi.org/project/robot-bus/)
+[![npm](https://img.shields.io/npm/v/robot-bus.svg?color=cb3837)](https://www.npmjs.com/package/robot-bus)
 [![License](https://img.shields.io/badge/License-Apache_2.0-green.svg)](https://opensource.org/licenses/Apache-2.0)
 
 轻量级、免环境配置的 ROS 2 风格通信库：基于 ZeroMQ，提供 topic / service / action，以及 `Executor` + `Node` + `spin` 回调模型。
 
-不依赖 ROS 发行版、不需要 `source setup.bash`、不搭 workspace。一个 broker 进程 + SDK（Rust / Python）即可。
+不依赖 ROS 发行版、不需要 `source setup.bash`、不搭 workspace。一个 broker 进程 + SDK（Rust / Python / TypeScript）即可。
 
 **设计原则**：API 会尽量贴近 ROS 2 的用法与命名（如 `Node`、`SingleThreadedExecutor` / `MultiThreadedExecutor`、`add_node`、`create_publisher` / `create_subscription`、`spin`），降低从 ROS 2 迁过来的心智负担；底层用 ZeroMQ 实现，不绑定某一 ROS 发行版。
 
@@ -24,16 +25,16 @@
 | `runtime::Node` / `TopicPublisher` / `CallbackGroup` | 节点、publisher、callback group（互斥 / 可重入） |
 | `grpc::`（默认 feature） | gRPC / gRPC-Web 网关（随 broker 一起启动） |
 | [`proto/`](proto/) | 契约源：ROS 风格 Protobuf → Rust / bindings 生成代码 |
-| [`bindings/`](bindings/) | 语言绑定（Python 为首个；C++ / Kotlin / TypeScript SDK 规划中） |
+| [`bindings/`](bindings/) | 语言绑定（Python、TypeScript；C++ / Kotlin 规划中） |
 | [`console/`](console/) | Web 监控控制台（产品 UI，嵌入 broker `:15771`；产物在 `assets/console/`） |
 
 ## 架构
 
 ```
-业务代码 (Rust / Python)
+业务代码 (Rust / Python / TypeScript)
   └── robot-bus SDK
               │
-              │ ZMQ (tcp / ipc / inproc)
+              │ ZMQ (tcp / ipc / inproc) 或 gRPC / gRPC-Web
               ▼
 robot_bus_broker 进程
 ```
@@ -102,6 +103,32 @@ imu_pub.publish(Imu(linear_acceleration=Vector3(x=0.0, y=0.0, z=9.8)))
 （不传消息类型时仍为 raw bytes。多节点共享或需多线程 handler 时再用 `SingleThreadedExecutor` / `MultiThreadedExecutor` + `add_node`。）
 
 仅走 gRPC 网关时：`Node.grpc("name")` / `Node.grpc_at("name", "http://…")`（客户端：订阅 / 调 service / action）。详见 [`docs/python-api.md`](docs/python-api.md)。
+
+### TypeScript
+
+```bash
+npm install robot-bus
+```
+
+本地开发：
+
+```bash
+just ts-dev
+# 等价：cd bindings/typescript && npm install && npm run build:native && npm run build:ts
+```
+
+单一 npm 包：Node.js 走 napi-rs（完整 ZMQ API）；浏览器走 gRPC-Web（仅客户端）。bundler 通过 `exports` 自动选入口。详见 [`docs/typescript-api.md`](docs/typescript-api.md)。
+
+```ts
+import { Node } from "robot-bus";
+import { Imu } from "robot-bus/sensor_msgs/msg/v1/imu.js";
+
+const node = new Node("pilot");
+const pub = node.createPublisher("/robot1/imu", Imu);
+node.createSubscription("/robot1/imu", (_t, imu) => console.log(imu), Imu);
+```
+
+浏览器 / 纯 gRPC：`Node.grpc("client")`（browser 入口的 `Node` 即为 gRPC-Web facade）。
 
 ### 2. Rust（Node + spin）
 
@@ -249,10 +276,12 @@ Proto（包名 `robot_bus.grpc.v1`，与 ROS `*.msg.v1` / `*.srv.v1` 区分）�
 ```bash
 just test-rust
 just test-python
+just test-typescript
 # 等价：
 # cargo test
 # PYTHONPATH=bindings/python python3 bindings/python/tests/test_msgs_roundtrip.py
 # PYTHONPATH=bindings/python python3 bindings/python/tests/test_typed_api.py
+# cd bindings/typescript && npm test
 ```
 
 ## Protobuf 消息
@@ -263,11 +292,12 @@ just test-python
 |------|------|------|
 | Rust | `robot_bus::<pkg>::{msg\|srv}::v1` | `build.rs` + prost；挂在 crate 命名空间下 |
 | Python | `robot_bus.<pkg>.{msg\|srv}.v1` | [`bindings/python`](bindings/python)；随 wheel 打包；`just gen-python` 生成 |
+| TypeScript | `robot-bus/<pkg>/{msg\|srv}/v1/…` | [`bindings/typescript`](bindings/typescript)；`just gen-typescript` 生成 |
 
-- 传输层 body 仍是 opaque bytes（含 gRPC 网关）；Rust Node SDK 在 create 时绑定类型并自动 encode/decode（`create_publisher::<M>` 等），也可用 `*_raw`；Python 传入 protobuf 类即可 typed（纯 Python 薄封装），省略类型则为 raw bytes
+- 传输层 body 仍是 opaque bytes（含 gRPC 网关）；Rust Node SDK 在 create 时绑定类型并自动 encode/decode（`create_publisher::<M>` 等），也可用 `*_raw`；Python / TypeScript 传入 protobuf 类型即可 typed（薄封装），省略类型则为 raw bytes
 - **srv** 是一对 `*Request` / `*Response` message，不是 gRPC
 - **grpc**（`robot_bus`）是网关 RPC 契约，随 broker 启动（默认 feature `grpc`）
 - 消息在 `robot_bus` 命名空间下，**不占用** ROS 顶层 `sensor_msgs` 包名；编码是 protobuf，与 ROS CDR 不互通
-- 改 proto 后跑：`just gen-python`（或 `python3 scripts/generate_python_msgs.py`；需 protoc 35.1，与 CI 一致）
+- 改 proto 后跑：`just gen-python` / `just gen-typescript`（需 protoc 35.1，与 CI 一致）
 
 已覆盖：`builtin_interfaces`、`std_msgs`、`std_srvs`、`geometry_msgs`、`sensor_msgs`、`nav_msgs`、`tf2_msgs`、`trajectory_msgs`、`diagnostic_msgs`、`unique_identifier_msgs`、`shape_msgs`、`visualization_msgs`、`control_msgs`、`nav2_msgs`、`foxglove_msgs`（自 [Foxglove schemas](https://github.com/foxglove/foxglove-sdk) 迁入，包名为 `foxglove_msgs.msg.v1`）。
