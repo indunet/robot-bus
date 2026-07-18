@@ -10,6 +10,6 @@ language-facing package, packaging metadata, and tests.
 | [`python/`](python/) | Python binding (maturin / PyO3) |
 | [`typescript/`](typescript/) | TypeScript hybrid npm SDK (napi-rs Node + gRPC-Web browser) |
 | [`cpp/`](cpp/) | C++ SDK (C ABI + RAII; DEB/MSI via GitHub Releases) |
-| `kotlin/` | Planned |
+| [`kotlin/`](kotlin/) | Kotlin JVM SDK (JNA over C ABI; Maven Central, publish gated) |
 
 `console/` is a product UI embedded into the broker, not an SDK binding.

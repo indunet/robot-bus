@@ -6,9 +6,9 @@
 [![npm](https://img.shields.io/npm/v/robot-bus.svg?color=cb3837)](https://www.npmjs.com/package/robot-bus)
 [![License](https://img.shields.io/badge/License-Apache_2.0-green.svg)](https://opensource.org/licenses/Apache-2.0)
 
-Lightweight ROS 2–style messaging over ZeroMQ — topics, services & actions, no ROS install. SDKs for Rust, Python, TypeScript, and C++.
+Lightweight ROS 2–style messaging over ZeroMQ — topics, services & actions, no ROS install. SDKs for Rust, Python, TypeScript, C++, and Kotlin.
 
-轻量级、免环境配置的 ROS 2 风格通信库：基于 ZeroMQ，提供 topic / service / action，以及 `Executor` + `Node` + `spin` 回调模型。多语言 SDK 覆盖 Rust / Python / TypeScript / C++。
+轻量级、免环境配置的 ROS 2 风格通信库：基于 ZeroMQ，提供 topic / service / action，以及 `Executor` + `Node` + `spin` 回调模型。多语言 SDK 覆盖 Rust / Python / TypeScript / C++ / Kotlin。
 
 不依赖 ROS 发行版、不需要 `source setup.bash`、不搭 workspace。一个 broker 进程 + 任一语言的 SDK 即可。
 
@@ -27,13 +27,13 @@ Lightweight ROS 2–style messaging over ZeroMQ — topics, services & actions, 
 | `runtime::Node` / `TopicPublisher` / `CallbackGroup` | 节点、publisher、callback group（互斥 / 可重入） |
 | `grpc::`（默认 feature） | gRPC / gRPC-Web 网关（随 broker 一起启动） |
 | [`proto/`](proto/) | 契约源：ROS 风格 Protobuf → Rust / bindings 生成代码 |
-| [`bindings/`](bindings/) | 语言绑定（Python、TypeScript、C++；Kotlin 规划中） |
+| [`bindings/`](bindings/) | 语言绑定（Python、TypeScript、C++、Kotlin） |
 | [`console/`](console/) | Web 监控控制台（产品 UI，嵌入 broker `:15771`；产物在 `assets/console/`） |
 
 ## 架构
 
 ```
-业务代码 (Rust / Python / TypeScript / C++)
+业务代码 (Rust / Python / TypeScript / C++ / Kotlin)
   └── robot-bus SDK
               │
               │ ZMQ (tcp / ipc / inproc) 或 gRPC / gRPC-Web
@@ -131,6 +131,29 @@ node.createSubscription("/robot1/imu", (_t, imu) => console.log(imu), Imu);
 ```
 
 浏览器 / 纯 gRPC：`Node.grpc("client")`（browser 入口的 `Node` 即为 gRPC-Web facade）。
+
+### Kotlin（Maven Central）
+
+坐标：`org.indunet:robot-bus`（包名 `org.indunet.robot.bus`）。发布 workflow 暂未启用（缺 GPG）。本地开发：
+
+```bash
+just kotlin-dev
+# 先编 bindings/cpp/native 的 librobot_bus_c，再跑 Gradle test
+```
+
+```kotlin
+import org.indunet.robot.bus.Broker
+import org.indunet.robot.bus.Node
+
+Broker().use { _ ->
+    Node.tcp("pilot").use { node ->
+        val pub = node.createPublisher("/imu")
+        pub.publish(byteArrayOf(1, 2, 3))
+    }
+}
+```
+
+详见 [`bindings/kotlin/README.md`](bindings/kotlin/README.md)。载荷目前为 raw `ByteArray`（与 C++ 一致；Kotlin protobuf stubs 后续再补）。
 
 ### 2b. C++（DEB / MSI）
 
@@ -311,6 +334,7 @@ just test-typescript
 | Python | `robot_bus.<pkg>.{msg\|srv}.v1` | `just gen-python`；随 wheel 打包 |
 | TypeScript | `robot-bus/<pkg>/{msg\|srv}/v1/…` | `just gen-typescript`；随 npm 包打包 |
 | C++ | `#include <robot_bus/…>` | `just gen-cpp`；随 DEB/MSI 打包 |
+| Kotlin | raw `ByteArray`（protobuf stubs 待补） | `just kotlin-dev`；Maven `org.indunet:robot-bus` |
 
 - 传输层 body 仍是 opaque bytes（含 gRPC 网关）；Rust Node SDK 在 create 时绑定类型并自动 encode/decode（`create_publisher::<M>` 等），也可用 `*_raw`；Python / TypeScript 传入 protobuf 类型即可 typed（薄封装），省略类型则为 raw bytes
 - **srv** 是一对 `*Request` / `*Response` message，不是 gRPC

@@ -30,6 +30,11 @@ bindings/cpp/native/Cargo.lock
 bindings/cpp/build/
 bindings/cpp/build-*/
 
+# Kotlin / Gradle
+bindings/kotlin/.gradle/
+bindings/kotlin/build/
+bindings/kotlin/local.properties
+
 # Library crate: dependents use their own lockfile
 Cargo.lock
 

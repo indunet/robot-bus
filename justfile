@@ -38,6 +38,15 @@ cpp-dev: gen-cpp gen-rust
 	cmake -S bindings/cpp -B bindings/cpp/build -DCMAKE_BUILD_TYPE=Release
 	cmake --build bindings/cpp/build -j
 
+# Build Kotlin JVM binding (needs librobot_bus_c from cpp native)
+kotlin-dev:
+	cargo build --release --manifest-path bindings/cpp/native/Cargo.toml
+	cd bindings/kotlin && ./gradlew test --no-daemon
+
+# Kotlin smoke tests (native lib from cpp release build)
+test-kotlin:
+	cd bindings/kotlin && ./gradlew test --no-daemon
+
 # Run C++ binding tests (ephemeral in-process brokers)
 test-cpp:
 	cmake --build bindings/cpp/build --target cpp_tests
