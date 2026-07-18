@@ -99,6 +99,8 @@ imu_pub.publish(Imu(linear_acceleration=Vector3(x=0.0, y=0.0, z=9.8)))
 
 （不传消息类型时仍为 raw bytes。多节点共享或需多线程 handler 时再用 `SingleThreadedExecutor` / `MultiThreadedExecutor` + `add_node`。）
 
+仅走 gRPC 网关时：`Node.grpc("name")` / `Node.grpc_at("name", "http://…")`（客户端：订阅 / 调 service / action）。详见 [`docs/python-api.md`](docs/python-api.md)。
+
 ### 2. Rust（Node + spin）
 
 在 `Cargo.toml` 中添加依赖：
@@ -108,7 +110,9 @@ robot-bus = { path = "../robot-bus" }
 # 或 crates.io：robot-bus = "0.0.5"
 ```
 
-语义接近 ROS 2：`Node::new` → typed `create_publisher` / `create_subscription` → `node.spin()`（自动挂 `SingleThreadedExecutor`）：
+语义接近 ROS 2：`Node::new` → typed `create_publisher` / `create_subscription` → `node.spin()`（自动挂 `SingleThreadedExecutor`）。
+
+仅走 gRPC 网关（不启 ZMQ）时用 `Node::grpc` / `Node::grpc_at`：可订阅、调 service / action，不能 publish 或当 server；详见 [`docs/rust-api.md`](docs/rust-api.md#grpc-模式-node客户端)。
 
 ```rust
 use std::sync::Arc;
@@ -201,6 +205,8 @@ cd console && pnpm build && cd .. && ./scripts/sync_console_assets.sh
 ## gRPC / gRPC-Web 网关
 
 随 `robot_bus_broker` / `RobotBusBroker::start` 一起启动；标准 gRPC 与 gRPC-Web **同端口**（默认 `0.0.0.0:15770`）。
+
+也可用 `Node::grpc` / `Node::grpc_at` 以 Node API 接入网关（客户端：订阅 / 调 service / 调 action，见 [`docs/rust-api.md`](docs/rust-api.md#grpc-模式-node客户端)）。
 
 | RPC | 语义 |
 |-----|------|

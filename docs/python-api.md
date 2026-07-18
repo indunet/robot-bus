@@ -39,6 +39,8 @@ with robot_bus.RobotBusBroker.start(
 
 接近 ROS 2：`Node(...)` → `create_publisher` / `create_subscription` → `node.spin()`。单节点时无需手写 Executor（内部自动挂 `SingleThreadedExecutor`）。
 
+仅走 gRPC 网关时用 `Node.grpc` / `Node.grpc_at`（或 `transport="grpc"`）：可订阅、调 service / action，不能 publish 或当 server；见下文「gRPC 模式 Node」。
+
 Python 主推 **typed**（创建时传入 protobuf 类，自动 `SerializeToString` / `ParseFromString`）；不传类型则仍为 raw bytes。底层与 Rust 一样走 opaque bytes（纯 Python 薄封装，因 PyO3 无法映射 Rust 泛型）。
 
 ```python
@@ -77,6 +79,38 @@ def on_raw(topic, payload: bytes):
     imu.ParseFromString(payload)
 
 node.create_subscription("/robot1/imu", on_raw)
+```
+
+### gRPC 模式 Node（客户端）
+
+`Node.grpc` / `Node.grpc_at`（或 `Node(..., transport="grpc", grpc_url=...)`）经 broker gRPC 网关接入，不创建 ZMQ socket。
+
+| 支持 | 不支持 |
+|------|--------|
+| `create_subscription` | `create_publisher` |
+| `create_client` | `create_service` |
+| `create_action_client` | `create_action_server` |
+| `create_timer`、`spin` / `shutdown` | 挂到 ZMQ Executor |
+
+```python
+import robot_bus
+
+node = robot_bus.Node.grpc("web-client")
+# 或 robot_bus.Node.grpc_at("web-client", "http://127.0.0.1:15770")
+
+def on_imu(topic, payload: bytes):
+    print(topic, len(payload))
+
+node.create_subscription("/robot1/imu", on_imu)
+
+client = node.create_client("svc.echo")
+reply = client.call(b"ping", timeout=2.0)
+
+action = node.create_action_client("act.navigate")
+events = action.send_goal(b"goal", timeout=10.0)
+
+# 订阅回调需要 spin；service/action 同步 call 不依赖 spin
+# node.spin()
 ```
 
 多节点共享或需多线程 service/action handler 时再显式用 Executor：
@@ -240,7 +274,8 @@ print(robot_bus.__version__)
 
 | 符号 | 说明 |
 |------|------|
-| `Node(name, host=..., message_xsub=..., service_frontend=..., service_backend=..., …)` | 建节点；首次 `create_*` / `spin` 时自动挂 `SingleThreadedExecutor` |
+| `Node(name, host=..., transport=..., grpc_url=..., message_xsub=..., …)` | 建节点；首次 `create_*` / `spin` 时自动挂 `SingleThreadedExecutor` |
+| `Node.tcp` / `Node.ipc` / `Node.inproc` / `Node.grpc` / `Node.grpc_at` | 传输预设（gRPC 为客户端模式） |
 | `node.spin()` / `spin_once` / `shutdown` | 驱动回调（ROS 2 式简单路径） |
 | `SingleThreadedExecutor()` | 显式单线程执行器（多节点共享时用） |
 | `MultiThreadedExecutor(num_threads=4)` | service/action handler 可并行 |
@@ -258,4 +293,4 @@ print(robot_bus.__version__)
 | `run_broker()` | 阻塞 CLI 入口 |
 | `ShutdownHandle` / `TimerHandle` | spin 与定时器控制 |
 
-gRPC 网关目前仅 Rust 侧提供；见 [rust-api.md](rust-api.md)。
+gRPC 模式 Node 见上一节；底层网关 RPC 也可直接用 Rust tonic 客户端（[rust-api.md](rust-api.md)）。

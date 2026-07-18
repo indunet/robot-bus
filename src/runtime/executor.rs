@@ -58,6 +58,10 @@ pub struct ShutdownHandle {
 }
 
 impl ShutdownHandle {
+    pub(crate) fn from_flag(running: Arc<AtomicBool>) -> Self {
+        Self { running }
+    }
+
     pub fn shutdown(&self) {
         self.running.store(false, Ordering::Release);
     }
@@ -137,9 +141,7 @@ impl Executor {
 
     /// Cloneable handle to stop [`spin`](Self::spin) / [`start`](Self::start).
     pub fn shutdown_handle(&self) -> ShutdownHandle {
-        ShutdownHandle {
-            running: self.running.clone(),
-        }
+        ShutdownHandle::from_flag(self.running.clone())
     }
 
     /// Defaults used for newly connected PUB/SUB sockets.

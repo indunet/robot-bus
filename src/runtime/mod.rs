@@ -8,6 +8,8 @@ mod executor;
 mod executors;
 mod callback_group;
 mod dispatch;
+#[cfg(feature = "grpc")]
+mod grpc_runtime;
 mod node;
 mod queues;
 mod registrations;

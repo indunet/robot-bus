@@ -31,6 +31,22 @@ fn bus_err(err: BusError) -> PyErr {
     PyRuntimeError::new_err(err.to_string())
 }
 
+/// Run blocking ZMQ/gRPC I/O without holding the GIL.
+///
+/// SAFETY: `f` must not touch Python objects; the pointed-to value must remain
+/// valid and unused by other threads for the duration of `f`.
+unsafe fn allow_threads_io<'py, T, R>(
+    py: Python<'py>,
+    value: &T,
+    f: impl FnOnce(&T) -> R + Send,
+) -> R
+where
+    R: Send,
+{
+    let ptr = value as *const T as usize;
+    py.allow_threads(move || f(unsafe { &*(ptr as *const T) }))
+}
+
 fn anyhow_err(err: anyhow::Error) -> PyErr {
     PyRuntimeError::new_err(err.to_string())
 }
@@ -42,23 +58,46 @@ fn map_endpoint_err(err: String) -> PyErr {
 fn py_node_options(
     host: &str,
     transport: &str,
+    grpc_url: Option<String>,
     message_xsub: Option<String>,
     message_xpub: Option<String>,
     service_frontend: Option<String>,
     service_backend: Option<String>,
     action_backend: Option<String>,
     action_frontend: Option<String>,
-) -> crate::runtime::NodeOptions {
-    crate::runtime::NodeOptions {
+) -> PyResult<crate::runtime::NodeOptions> {
+    if transport == "grpc" {
+        #[cfg(feature = "grpc")]
+        {
+            return Ok(match grpc_url {
+                Some(url) => RustNodeOptions::grpc_at(url),
+                None => RustNodeOptions::grpc(),
+            });
+        }
+        #[cfg(not(feature = "grpc"))]
+        {
+            let _ = grpc_url;
+            return Err(PyRuntimeError::new_err(
+                "transport=\"grpc\" requires the grpc feature",
+            ));
+        }
+    }
+    if grpc_url.is_some() {
+        return Err(PyRuntimeError::new_err(
+            "grpc_url is only valid when transport=\"grpc\"",
+        ));
+    }
+    Ok(crate::runtime::NodeOptions {
         host: host.into(),
         transport: transport.into(),
+        grpc_url: None,
         message_xsub,
         message_xpub,
         service_frontend,
         service_backend,
         action_backend,
         action_frontend,
-    }
+    })
 }
 
 #[pyfunction]
@@ -226,9 +265,10 @@ impl PyNodeServiceClient {
 
     /// Call the bound service. `timeout` is seconds; `None` waits indefinitely.
     #[pyo3(signature = (body, timeout=None))]
-    fn call(&self, body: &[u8], timeout: Option<f64>) -> PyResult<Vec<u8>> {
+    fn call(&self, py: Python<'_>, body: &[u8], timeout: Option<f64>) -> PyResult<Vec<u8>> {
         let timeout = timeout.map(Duration::from_secs_f64);
-        self.inner.call(body, timeout).map_err(bus_err)
+        // Release GIL so peer Node Python handlers can run on the spin thread.
+        unsafe { allow_threads_io(py, &self.inner, |inner| inner.call(body, timeout)).map_err(bus_err) }
     }
 }
 
@@ -257,10 +297,12 @@ impl PyNodeActionClient {
         timeout: Option<f64>,
     ) -> PyResult<PyObject> {
         let timeout = timeout.map(Duration::from_secs_f64);
-        let messages = self
-            .inner
-            .send_goal(body, goal_id, timeout)
-            .map_err(bus_err)?;
+        let messages = unsafe {
+            allow_threads_io(py, &self.inner, |inner| {
+                inner.send_goal(body, goal_id, timeout)
+            })
+        }
+        .map_err(bus_err)?;
         let list = pyo3::types::PyList::empty(py);
         for msg in messages {
             let dict = pyo3::types::PyDict::new(py);
@@ -291,10 +333,13 @@ impl PyNodeActionClient {
         timeout: Option<f64>,
     ) -> PyResult<PyObject> {
         let timeout = timeout.map(Duration::from_secs_f64);
-        let msg = self
-            .inner
-            .cancel(goal_id, body.unwrap_or(b""), timeout)
-            .map_err(bus_err)?;
+        let body = body.unwrap_or(b"");
+        let msg = unsafe {
+            allow_threads_io(py, &self.inner, |inner| {
+                inner.cancel(goal_id, body, timeout)
+            })
+        }
+        .map_err(bus_err)?;
         let dict = pyo3::types::PyDict::new(py);
         dict.set_item(
             "kind",
@@ -334,6 +379,7 @@ impl PySingleThreadedExecutor {
         name,
         host="localhost",
         transport="tcp",
+        grpc_url=None,
         message_xsub=None,
         message_xpub=None,
         service_frontend=None,
@@ -346,6 +392,7 @@ impl PySingleThreadedExecutor {
         name: String,
         host: &str,
         transport: &str,
+        grpc_url: Option<String>,
         message_xsub: Option<String>,
         message_xpub: Option<String>,
         service_frontend: Option<String>,
@@ -356,13 +403,14 @@ impl PySingleThreadedExecutor {
         let options = py_node_options(
             host,
             transport,
+            grpc_url,
             message_xsub,
             message_xpub,
             service_frontend,
             service_backend,
             action_backend,
             action_frontend,
-        );
+        )?;
         Ok(PyNode {
             inner: self
                 .inner
@@ -390,6 +438,18 @@ impl PySingleThreadedExecutor {
     fn spin(&self) -> PyResult<()> {
         self.inner.spin().map_err(bus_err)
     }
+
+    fn start(&self) -> PyResult<()> {
+        self.inner.start().map_err(bus_err)
+    }
+
+    fn stop(&self) -> PyResult<()> {
+        self.inner.stop().map_err(bus_err)
+    }
+
+    fn wait(&self) -> PyResult<()> {
+        self.inner.wait().map_err(bus_err)
+    }
 }
 
 #[pyclass(name = "MultiThreadedExecutor", unsendable)]
@@ -415,6 +475,7 @@ impl PyMultiThreadedExecutor {
         name,
         host="localhost",
         transport="tcp",
+        grpc_url=None,
         message_xsub=None,
         message_xpub=None,
         service_frontend=None,
@@ -427,6 +488,7 @@ impl PyMultiThreadedExecutor {
         name: String,
         host: &str,
         transport: &str,
+        grpc_url: Option<String>,
         message_xsub: Option<String>,
         message_xpub: Option<String>,
         service_frontend: Option<String>,
@@ -437,13 +499,14 @@ impl PyMultiThreadedExecutor {
         let options = py_node_options(
             host,
             transport,
+            grpc_url,
             message_xsub,
             message_xpub,
             service_frontend,
             service_backend,
             action_backend,
             action_frontend,
-        );
+        )?;
         Ok(PyNode {
             inner: self
                 .inner
@@ -485,6 +548,7 @@ impl PyNode {
         name,
         host="localhost",
         transport="tcp",
+        grpc_url=None,
         message_xsub=None,
         message_xpub=None,
         service_frontend=None,
@@ -496,28 +560,30 @@ impl PyNode {
         name: String,
         host: &str,
         transport: &str,
+        grpc_url: Option<String>,
         message_xsub: Option<String>,
         message_xpub: Option<String>,
         service_frontend: Option<String>,
         service_backend: Option<String>,
         action_backend: Option<String>,
         action_frontend: Option<String>,
-    ) -> Self {
-        Self {
+    ) -> PyResult<Self> {
+        Ok(Self {
             inner: RustNode::with_options(
                 name,
                 py_node_options(
                     host,
                     transport,
+                    grpc_url,
                     message_xsub,
                     message_xpub,
                     service_frontend,
                     service_backend,
                     action_backend,
                     action_frontend,
-                ),
+                )?,
             ),
-        }
+        })
     }
 
     /// TCP to the local broker (`localhost` + default ports).
@@ -552,6 +618,26 @@ impl PyNode {
         };
         Self {
             inner: RustNode::with_options(name, options),
+        }
+    }
+
+    /// gRPC client node talking to the local broker gateway (`http://127.0.0.1:15770`).
+    #[cfg(feature = "grpc")]
+    #[classmethod]
+    #[pyo3(signature = (name,))]
+    fn grpc(_cls: &Bound<'_, PyType>, name: String) -> Self {
+        Self {
+            inner: RustNode::grpc(name),
+        }
+    }
+
+    /// gRPC client node talking to `url` (e.g. `http://127.0.0.1:15770`).
+    #[cfg(feature = "grpc")]
+    #[classmethod]
+    #[pyo3(signature = (name, url))]
+    fn grpc_at(_cls: &Bound<'_, PyType>, name: String, url: &str) -> Self {
+        Self {
+            inner: RustNode::grpc_at(name, url),
         }
     }
 
@@ -732,6 +818,19 @@ impl PyNode {
 
     fn spin(&mut self) -> PyResult<()> {
         self.inner.spin().map_err(bus_err)
+    }
+
+    /// Drive the executor on a background thread (ZMQ nodes).
+    fn start(&mut self) -> PyResult<()> {
+        self.inner.start().map_err(bus_err)
+    }
+
+    fn stop(&mut self) -> PyResult<()> {
+        self.inner.stop().map_err(bus_err)
+    }
+
+    fn wait(&mut self) -> PyResult<()> {
+        self.inner.wait().map_err(bus_err)
     }
 }
 

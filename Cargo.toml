@@ -77,6 +77,11 @@ path = "tests/grpc_gateway.rs"
 required-features = ["grpc"]
 
 [[test]]
+name = "grpc_node"
+path = "tests/grpc_node.rs"
+required-features = ["grpc"]
+
+[[test]]
 name = "console_metrics_smoke"
 path = "tests/console_metrics_smoke.rs"
 required-features = ["console", "grpc"]

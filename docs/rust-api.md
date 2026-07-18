@@ -71,7 +71,7 @@ let broker = RobotBusBroker::start(RobotBusConfig {
 broker.stop()?;
 ```
 
-连接由 [`Node`](../src/runtime/node.rs) 的 `NodeOptions` 管理。典型流程：`Node::new` → `create_*` → `node.spin()`（自动 `SingleThreadedExecutor`）。多节点或需并行时再 `executor.add_node` + `executor.spin`。
+连接由 [`Node`](../src/runtime/node.rs) 的 `NodeOptions` 管理。典型流程：`Node::new` → `create_*` → `node.spin()`（自动 `SingleThreadedExecutor`）。多节点或需并行时再 `executor.add_node` + `executor.spin`。仅连 gRPC 网关时用 `Node::grpc` / `Node::grpc_at`（见下文「gRPC 模式 Node」）。
 
 ---
 
@@ -339,6 +339,47 @@ Service / Action 同理（如 `create_client::<SetBool>`、`create_action_client
 
 ---
 
+## gRPC 模式 Node（客户端）
+
+`Node::grpc` / `NodeOptions::grpc` 通过 broker 的 gRPC 网关接入总线，**不创建 ZMQ socket**。API 仍是 `create_subscription` / `create_client` / `create_action_client` + `spin`，对调用方透明。
+
+| 支持 | 不支持 |
+|------|--------|
+| `create_subscription` / `_raw` | `create_publisher` |
+| `create_client` / `_raw` | `create_service` / `_raw` |
+| `create_action_client` / `_raw` | `create_action_server` / `_raw` |
+| `create_timer`、`spin` / `shutdown` | 挂到 ZMQ `SingleThreadedExecutor` |
+
+```rust
+use std::sync::Arc;
+use std::time::Duration;
+use robot_bus::Node;
+
+let mut node = Node::grpc("web-client");
+// 或 Node::grpc_at("web-client", "http://127.0.0.1:15770");
+
+node.create_subscription_raw(
+    "/robot1/imu",
+    Arc::new(|topic, payload| {
+        println!("{topic}: {} bytes", payload.len());
+    }),
+    None,
+)?;
+
+let client = node.create_client_raw("svc.echo")?;
+let reply = client.call(b"ping", Some(Duration::from_secs(2)))?;
+
+let action = node.create_action_client_raw("act.navigate")?;
+let events = action.send_goal(b"goal", None, Some(Duration::from_secs(10)))?;
+
+// 订阅回调需要 spin；service/action 同步 call 不依赖 spin
+node.spin()?;
+```
+
+底层仍是网关 RPC（`MessageGateway.Subscribe` / `ServiceGateway.Call` / `ActionGateway.Run`）。需要更底层控制时，可直接用下一节的 tonic 客户端。
+
+---
+
 ## gRPC / gRPC-Web 网关
 
 由 `RobotBusBroker` / `robot_bus_broker` 一并启动（feature `grpc`，默认开启）。标准 gRPC 与 gRPC-Web **同端口**（默认 `0.0.0.0:15770`）。
@@ -433,7 +474,7 @@ use robot_bus::transports::{
     action_frontend_endpoint, action_backend_endpoint,
 };
 
-// transport: "tcp" | "ipc" | "inproc"
+// transport: "tcp" | "ipc" | "inproc"（gRPC 模式用 Node::grpc，不经这些端点）
 let ep = message_xpub_endpoint("localhost", "tcp")?;
 ```
 
