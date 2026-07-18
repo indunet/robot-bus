@@ -10,7 +10,6 @@ use crate::zmq_helpers::{
 
 pub struct Publisher {
     endpoint: String,
-    context: Context,
     socket: Socket,
 }
 
@@ -31,11 +30,7 @@ impl Publisher {
         socket.connect(&endpoint)?;
         wait_for_connection();
         log::info!("publisher connected to {endpoint}");
-        Ok(Self {
-            endpoint,
-            context,
-            socket,
-        })
+        Ok(Self { endpoint, socket })
     }
 
     pub fn endpoint(&self) -> &str {

@@ -11,7 +11,6 @@ use crate::zmq_helpers::{apply_rpc_options_with, poll_readable, HighWaterMark};
 
 pub struct ServiceClient {
     endpoint: String,
-    context: Context,
     socket: Socket,
 }
 
@@ -31,11 +30,7 @@ impl ServiceClient {
         apply_rpc_options_with(&socket, hwm)?;
         socket.connect(&endpoint)?;
         log::info!("service client connected to {endpoint}");
-        Ok(Self {
-            endpoint,
-            context,
-            socket,
-        })
+        Ok(Self { endpoint, socket })
     }
 
     pub fn endpoint(&self) -> &str {

@@ -19,7 +19,6 @@ pub struct ActionWorker {
     identity: Vec<u8>,
     heartbeat_interval: Duration,
     last_heartbeat: Instant,
-    context: Context,
     socket: Option<Socket>,
     handler: ActionGoalHandler,
 }
@@ -73,7 +72,6 @@ impl ActionWorker {
             identity: identity_bytes,
             heartbeat_interval,
             last_heartbeat: Instant::now(),
-            context,
             socket: Some(socket),
             handler,
         };

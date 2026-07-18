@@ -18,7 +18,6 @@ pub struct ServiceWorker {
     identity: Vec<u8>,
     heartbeat_interval: Duration,
     last_heartbeat: Instant,
-    context: Context,
     socket: Option<Socket>,
     handler: ServiceHandler,
 }
@@ -72,7 +71,6 @@ impl ServiceWorker {
             identity: identity_bytes,
             heartbeat_interval,
             last_heartbeat: Instant::now(),
-            context,
             socket: Some(socket),
             handler,
         };

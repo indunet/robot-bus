@@ -12,7 +12,6 @@ use crate::zmq_helpers::{
 
 pub struct Subscriber {
     endpoint: String,
-    context: Context,
     socket: Socket,
 }
 
@@ -33,11 +32,7 @@ impl Subscriber {
         socket.connect(&endpoint)?;
         wait_for_connection();
         log::info!("subscriber connected to {endpoint}");
-        Ok(Self {
-            endpoint,
-            context,
-            socket,
-        })
+        Ok(Self { endpoint, socket })
     }
 
     pub fn endpoint(&self) -> &str {

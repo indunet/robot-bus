@@ -9,9 +9,8 @@ const jetbrainsMono = JetBrains_Mono({
 })
 
 export const metadata: Metadata = {
-  title: 'robot-bus | Web Console',
+  title: 'robot bus',
   description: 'robot-bus 总线监控控制台 — 实时查看 Broker 状态、Topic 流量与事件日志',
-  generator: 'v0.app',
 }
 
 export const viewport: Viewport = {

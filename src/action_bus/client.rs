@@ -27,15 +27,6 @@ impl ActionKind {
             other => Err(BusError::Protocol(format!("unknown action kind: {other:?}"))),
         }
     }
-
-    fn as_str(self) -> &'static str {
-        match self {
-            Self::Goal => "GOAL",
-            Self::Feedback => "FEEDBACK",
-            Self::Result => "RESULT",
-            Self::Cancel => "CANCEL",
-        }
-    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -48,7 +39,6 @@ pub struct ActionMessage {
 
 pub struct ActionClient {
     endpoint: String,
-    context: Context,
     socket: Socket,
 }
 
@@ -68,11 +58,7 @@ impl ActionClient {
         apply_action_options_with(&socket, hwm)?;
         socket.connect(&endpoint)?;
         log::info!("action client connected to {endpoint}");
-        Ok(Self {
-            endpoint,
-            context,
-            socket,
-        })
+        Ok(Self { endpoint, socket })
     }
 
     pub fn endpoint(&self) -> &str {

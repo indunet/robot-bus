@@ -1,5 +1,7 @@
 //! Test helpers: inline message proxy and in-process robot bus broker.
 
+#![allow(dead_code)] // shared across integration tests; not every helper is used in every crate
+
 use std::net::TcpListener;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Mutex, MutexGuard};
