@@ -1,0 +1,9 @@
+[package]
+name = "robot-bus-gen-msgs"
+version = "0.0.0"
+edition = "2024"
+publish = false
+
+[dependencies]
+prost-build = { version = "0.14", features = ["cleanup-markdown"] }
+tonic-prost-build = "0.14"
