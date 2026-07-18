@@ -1,6 +1,8 @@
 package org.indunet.robot.bus;
 
+import com.google.protobuf.MessageLite;
 import com.sun.jna.Pointer;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
 
@@ -88,6 +90,14 @@ public final class Node implements AutoCloseable {
                         "create_publisher"));
     }
 
+    /** Typed publisher: {@code publish(Message)} with automatic protobuf encode. */
+    public <T extends MessageLite> TypedTopicPublisher<T> createPublisher(String topic, Class<T> msgType) {
+        ProtoCodec.requireMessageType(msgType, "msgType");
+        @SuppressWarnings("unchecked")
+        Class<T> typed = (Class<T>) msgType;
+        return new TypedTopicPublisher<>(createPublisher(topic), typed);
+    }
+
     public void createSubscription(String topic, MsgCallback callback) {
         createSubscription(topic, callback, null);
     }
@@ -104,6 +114,29 @@ public final class Node implements AutoCloseable {
                 RobotBusC.Holder.INSTANCE.robot_bus_node_create_subscription(
                         ptr, topic, cb, null, group != null ? group.raw() : null),
                 "create_subscription");
+    }
+
+    /** Typed subscription: callback receives a decoded protobuf message. */
+    public <T extends MessageLite> void createSubscription(
+            String topic, TypedMsgCallback<T> callback, Class<T> msgType) {
+        createSubscription(topic, callback, msgType, null);
+    }
+
+    public <T extends MessageLite> void createSubscription(
+            String topic, TypedMsgCallback<T> callback, Class<T> msgType, CallbackGroup group) {
+        ProtoCodec.requireMessageType(msgType, "msgType");
+        @SuppressWarnings("unchecked")
+        Class<T> typed = (Class<T>) msgType;
+        createSubscription(
+                topic,
+                (t, payload) -> {
+                    T msg = ProtoCodec.tryParse(typed, payload);
+                    if (msg == null) {
+                        return;
+                    }
+                    callback.onMessage(t, msg);
+                },
+                group);
     }
 
     public TimerHandle createTimer(double periodSecs, TimerCallback callback) {
@@ -154,11 +187,64 @@ public final class Node implements AutoCloseable {
                 "create_service");
     }
 
+    /** Typed service: handler receives / returns protobuf messages. */
+    public <Req extends MessageLite, Resp extends MessageLite> void createService(
+            String serviceName,
+            TypedServiceHandler<Req, Resp> handler,
+            Class<Req> requestType,
+            Class<Resp> responseType) {
+        createService(serviceName, handler, requestType, responseType, null);
+    }
+
+    public <Req extends MessageLite, Resp extends MessageLite> void createService(
+            String serviceName,
+            TypedServiceHandler<Req, Resp> handler,
+            Class<Req> requestType,
+            Class<Resp> responseType,
+            CallbackGroup group) {
+        ProtoCodec.requireMessageType(requestType, "requestType");
+        ProtoCodec.requireMessageType(responseType, "responseType");
+        @SuppressWarnings("unchecked")
+        Class<Req> reqT = (Class<Req>) requestType;
+        @SuppressWarnings("unchecked")
+        Class<Resp> respT = (Class<Resp>) responseType;
+        createService(
+                serviceName,
+                body -> {
+                    Req req = ProtoCodec.tryParse(reqT, body);
+                    if (req == null) {
+                        return new byte[0];
+                    }
+                    Resp resp = handler.handle(req);
+                    if (resp == null || !respT.isInstance(resp)) {
+                        throw new IllegalArgumentException(
+                                "service handler must return "
+                                        + respT.getSimpleName()
+                                        + ", got "
+                                        + (resp == null ? "null" : resp.getClass().getSimpleName()));
+                    }
+                    return ProtoCodec.encode(resp);
+                },
+                group);
+    }
+
     public ServiceClient createClient(String serviceName) {
         return new ServiceClient(
                 Errors.checkPtr(
                         RobotBusC.Holder.INSTANCE.robot_bus_node_create_client(ptr, serviceName),
                         "create_client"));
+    }
+
+    /** Typed service client: {@code call(Request) -> Response}. */
+    public <Req extends MessageLite, Resp extends MessageLite> TypedServiceClient<Req, Resp> createClient(
+            String serviceName, Class<Req> requestType, Class<Resp> responseType) {
+        ProtoCodec.requireMessageType(requestType, "requestType");
+        ProtoCodec.requireMessageType(responseType, "responseType");
+        @SuppressWarnings("unchecked")
+        Class<Req> reqT = (Class<Req>) requestType;
+        @SuppressWarnings("unchecked")
+        Class<Resp> respT = (Class<Resp>) responseType;
+        return new TypedServiceClient<>(createClient(serviceName), reqT, respT);
     }
 
     public void createActionServer(String actionName, ActionHandler handler) {
@@ -211,11 +297,90 @@ public final class Node implements AutoCloseable {
                 "create_action_server");
     }
 
+    /**
+     * Typed action server: handler receives a goal message and returns {@link TypedActionPhase}
+     * list (typically FEEDBACK / RESULT).
+     */
+    public <Goal extends MessageLite, Feedback extends MessageLite, Result extends MessageLite>
+            void createActionServer(
+                    String actionName,
+                    TypedActionHandler<Goal> handler,
+                    Class<Goal> goalType,
+                    Class<Feedback> feedbackType,
+                    Class<Result> resultType) {
+        createActionServer(actionName, handler, goalType, feedbackType, resultType, null);
+    }
+
+    public <Goal extends MessageLite, Feedback extends MessageLite, Result extends MessageLite>
+            void createActionServer(
+                    String actionName,
+                    TypedActionHandler<Goal> handler,
+                    Class<Goal> goalType,
+                    Class<Feedback> feedbackType,
+                    Class<Result> resultType,
+                    CallbackGroup group) {
+        ProtoCodec.requireMessageType(goalType, "goalType");
+        ProtoCodec.requireMessageType(feedbackType, "feedbackType");
+        ProtoCodec.requireMessageType(resultType, "resultType");
+        @SuppressWarnings("unchecked")
+        Class<Goal> goalT = (Class<Goal>) goalType;
+        createActionServer(
+                actionName,
+                payload -> {
+                    Goal goal = ProtoCodec.tryParse(goalT, payload);
+                    if (goal == null) {
+                        return List.of(new ActionPhase("RESULT", new byte[0]));
+                    }
+                    List<TypedActionPhase> replies = handler.handle(goal);
+                    List<ActionPhase> out = new ArrayList<>(replies.size());
+                    for (TypedActionPhase phase : replies) {
+                        String phaseU = phase.getPhase() != null ? phase.getPhase().toUpperCase() : "";
+                        MessageLite body = phase.getBody();
+                        if ("FEEDBACK".equals(phaseU) && !feedbackType.isInstance(body)) {
+                            throw new IllegalArgumentException(
+                                    "FEEDBACK must be "
+                                            + feedbackType.getSimpleName()
+                                            + ", got "
+                                            + body.getClass().getSimpleName());
+                        }
+                        if ("RESULT".equals(phaseU) && !resultType.isInstance(body)) {
+                            throw new IllegalArgumentException(
+                                    "RESULT must be "
+                                            + resultType.getSimpleName()
+                                            + ", got "
+                                            + body.getClass().getSimpleName());
+                        }
+                        out.add(new ActionPhase(phase.getPhase(), ProtoCodec.encode(body)));
+                    }
+                    return out;
+                },
+                group);
+    }
+
     public ActionClient createActionClient(String actionName) {
         return new ActionClient(
                 Errors.checkPtr(
                         RobotBusC.Holder.INSTANCE.robot_bus_node_create_action_client(ptr, actionName),
                         "create_action_client"));
+    }
+
+    /** Typed action client: encode goal / decode FEEDBACK and RESULT. */
+    public <Goal extends MessageLite, Feedback extends MessageLite, Result extends MessageLite>
+            TypedActionClient<Goal, Feedback, Result> createActionClient(
+                    String actionName,
+                    Class<Goal> goalType,
+                    Class<Feedback> feedbackType,
+                    Class<Result> resultType) {
+        ProtoCodec.requireMessageType(goalType, "goalType");
+        ProtoCodec.requireMessageType(feedbackType, "feedbackType");
+        ProtoCodec.requireMessageType(resultType, "resultType");
+        @SuppressWarnings("unchecked")
+        Class<Goal> goalT = (Class<Goal>) goalType;
+        @SuppressWarnings("unchecked")
+        Class<Feedback> fbT = (Class<Feedback>) feedbackType;
+        @SuppressWarnings("unchecked")
+        Class<Result> resT = (Class<Result>) resultType;
+        return new TypedActionClient<>(createActionClient(actionName), goalT, fbT, resT);
     }
 
     public void connectActionClient() {

@@ -150,9 +150,12 @@ just android-dev    # AAR（需 Android SDK + NDK 26 + cargo-ndk）
 // Android
 RobotBusAndroid.init(this);
 import org.indunet.robot.bus.Node;
+import org.indunet.robot.bus.sensor_msgs.msg.v1.Imu;
+
+TypedTopicPublisher<Imu> pub = node.createPublisher("/imu", Imu.class);
 ```
 
-详见 [`bindings/java/README.md`](bindings/java/README.md) / [`bindings/android/README.md`](bindings/android/README.md)。载荷目前为 raw `byte[]`。
+详见 [`docs/java-api.md`](docs/java-api.md)、[`bindings/java/README.md`](bindings/java/README.md) / [`bindings/android/README.md`](bindings/android/README.md)。
 
 ### 2b. C++（DEB / MSI）
 
@@ -325,18 +328,17 @@ just test-typescript
 
 [`proto/`](proto/) 按 ROS 包布局：`proto/<pkg>/{msg|srv|grpc}/v1/*.proto`。
 
-各语言 stub **不进 git**；本地改 proto 或跑测试前执行 `just gen-*`（需 protoc **35.1**）。CI / 发版流水线会生成并打进 wheel、crates.io crate、npm 包、DEB/MSI——**消费已发布包的用户不需要 protoc**。
+各语言 stub **不进 git**；本地改 proto 或跑测试前执行 `just gen-*`（需 protoc **35.1**）。CI / 发版流水线会生成并打进 wheel、crates.io crate、npm 包、DEB/MSI、Maven JAR/AAR——**消费已发布包的用户不需要 protoc**。
 
 | 语言 | 路径 | 说明 |
 |------|------|------|
 | Rust | `robot_bus::<pkg>::{msg\|srv}::v1` | `just gen-rust` → `src/msgs/generated/`（+ gRPC → `src/grpc/generated/`） |
 | Python | `robot_bus.<pkg>.{msg\|srv}.v1` | `just gen-python`；随 wheel 打包 |
 | TypeScript | `robot-bus/<pkg>/{msg\|srv}/v1/…` | `just gen-typescript`；随 npm 包打包 |
+| Java / Android | `org.indunet.robot.bus.<pkg>.{msg\|srv\|action}.v1` | `just gen-java`；随 JAR / AAR 打包 |
 | C++ | `#include <robot_bus/…>` | `just gen-cpp`；随 DEB/MSI 打包 |
-| Java | raw `byte[]`（protobuf stubs 待补） | `just java-dev`；Maven `org.indunet:robot-bus`（Java 11+） |
-| Android | 同上 API + jniLibs | `just android-dev`；Maven `org.indunet:robot-bus-android` |
 
-- 传输层 body 仍是 opaque bytes（含 gRPC 网关）；Rust Node SDK 在 create 时绑定类型并自动 encode/decode（`create_publisher::<M>` 等），也可用 `*_raw`；Python / TypeScript 传入 protobuf 类型即可 typed（薄封装），省略类型则为 raw bytes
+- 传输层 body 仍是 opaque bytes（含 gRPC 网关）；Rust Node SDK 在 create 时绑定类型并自动 encode/decode（`create_publisher::<M>` 等），也可用 `*_raw`；Python / TypeScript / **Java** 传入 protobuf 类型即可 typed（薄封装），省略类型则为 raw bytes
 - **srv** 是一对 `*Request` / `*Response` message，不是 gRPC
 - **grpc**（`robot_bus`）是网关 RPC 契约，随 broker 启动（默认 feature `grpc`）
 - 消息在 `robot_bus` 命名空间下，**不占用** ROS 顶层 `sensor_msgs` 包名；编码是 protobuf，与 ROS CDR 不互通

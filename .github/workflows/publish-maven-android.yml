@@ -66,6 +66,9 @@ jobs:
       - name: Generate Rust stubs (needed by native crate features)
         run: python3 scripts/generate_rust_msgs.py
 
+      - name: Generate Java protobuf stubs
+        run: python3 scripts/generate_java_msgs.py
+
       - name: Build Android jniLibs
         run: ./scripts/build_android_native.sh
         env:

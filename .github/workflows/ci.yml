@@ -120,3 +120,26 @@ jobs:
           ./bindings/cpp/build/pub_sub_imu
           ./bindings/cpp/build/service_set_bool
           ./bindings/cpp/build/action_fibonacci
+
+  java-msgs:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: maven
+          cache-dependency-path: bindings/java/pom.xml
+      - name: Install protobuf compiler (match codegen)
+        run: |
+          set -eux
+          curl -fsSL -o /tmp/protoc.zip \
+            "https://github.com/protocolbuffers/protobuf/releases/download/v35.1/protoc-35.1-linux-x86_64.zip"
+          sudo unzip -o /tmp/protoc.zip -d /usr/local
+          protoc --version
+      - name: Generate Java protobuf stubs
+        run: python3 scripts/generate_java_msgs.py
+      - name: Compile + msgs round-trip test
+        working-directory: bindings/java
+        run: mvn -B -Dtest=MsgsRoundtripTest test

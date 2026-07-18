@@ -64,6 +64,7 @@ jobs:
       - name: Build C ABI (host)
         run: |
           python3 scripts/generate_rust_msgs.py
+          python3 scripts/generate_java_msgs.py
           cargo build --release --manifest-path bindings/cpp/native/Cargo.toml
 
       - name: Deploy to Maven Central

@@ -17,12 +17,16 @@ gen-typescript:
 gen-cpp:
 	python3 scripts/generate_cpp_msgs.py
 
+# Generate Java protobuf stubs under bindings/java/generated/ (gitignored)
+gen-java:
+	python3 scripts/generate_java_msgs.py
+
 # Generate Rust prost/tonic stubs under src/msgs/generated + src/grpc/generated (gitignored)
 gen-rust:
 	python3 scripts/generate_rust_msgs.py
 
 # All language stubs (protoc 35.1)
-gen-all: gen-rust proto gen-typescript gen-cpp
+gen-all: gen-rust proto gen-typescript gen-cpp gen-java
 
 # Build and install the Python binding into the active venv
 python-dev: gen-python gen-rust
@@ -39,12 +43,12 @@ cpp-dev: gen-cpp gen-rust
 	cmake --build bindings/cpp/build -j
 
 # Build Java JVM binding with Maven (needs librobot_bus_c from cpp native)
-java-dev:
+java-dev: gen-java
 	cargo build --release --manifest-path bindings/cpp/native/Cargo.toml
 	cd bindings/java && mvn test
 
 # Install Java SDK into ~/.m2 (required before android-dev)
-java-install:
+java-install: gen-java
 	cd bindings/java && mvn -DskipTests install
 
 # Cross-compile librobot_bus_c for Android ABIs into bindings/android jniLibs

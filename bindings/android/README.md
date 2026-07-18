@@ -6,9 +6,11 @@ Package: `org.indunet.robot.bus` (same Java API as the JVM binding)
 
 Android Library (AAR) that:
 
-1. Depends on [`../java/`](../java/) Maven artifact `org.indunet:robot-bus` (via `mavenLocal()` after `mvn install`)
+1. Depends on [`../java/`](../java/) Maven artifact `org.indunet:robot-bus` (via `mavenLocal()` after `mvn install`) — **same API + protobuf stubs**
 2. Packages per-ABI `librobot_bus_c.so` under `src/main/jniLibs/`
 3. Exposes `RobotBusAndroid.init(context)` to load the native library
+
+API examples: [`docs/java-api.md`](../../docs/java-api.md).
 
 ## Local build
 

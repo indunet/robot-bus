@@ -65,6 +65,7 @@ src/grpc/generated/
 bindings/python/robot_bus/*/
 bindings/cpp/generated/
 bindings/typescript/generated/
+bindings/java/generated/
 
 # Codegen helper crate
 tools/gen-msgs/target/
