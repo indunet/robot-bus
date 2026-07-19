@@ -7,6 +7,7 @@ license = "Apache-2.0"
 authors = ["deng_ran <deng_ran@aliyun.com>"]
 repository = "https://github.com/indunet/robot-bus"
 readme = "README.md"
+autobenches = false
 # Force-include gitignored pre-generated prost/tonic stubs when present at
 # `cargo package` / publish time (run `just gen-rust` first).
 include = [
@@ -95,6 +96,11 @@ required-features = ["console", "grpc"]
 [[bin]]
 name = "robot_bus_broker"
 path = "src/bin/robot_bus_broker.rs"
+
+[[bin]]
+name = "robot_bus_perf"
+path = "benches/perf.rs"
+required-features = ["grpc"]
 
 [package.metadata.docs.rs]
 features = ["grpc", "console"]

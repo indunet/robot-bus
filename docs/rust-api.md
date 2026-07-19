@@ -8,72 +8,43 @@ robot-bus = "0.0.6"
 # 默认已启用 gRPC；若需关闭：robot-bus = { version = "0.0.6", default-features = false }
 ```
 
-从 crates.io 安装的用户**不需要** `protoc`。从本仓库源码开发时，先跑 `just gen-rust`（生成 `src/msgs/generated/` 与 `src/grpc/generated/`，gitignored）；CI / `cargo publish` 会在打包前生成并打进 crate。
-
 ## Broker 启动
 
-SDK 默认连本机 broker（`localhost` + `tcp`）。运行示例前需先启动 `robot_bus_broker`；也可在应用内嵌 broker（见下文「进程内 broker」）。
-
-| 组件 | 默认端口 | 说明 |
-|------|----------|------|
-| message | 15560 (XSUB) / 15561 (XPUB) | PUB/SUB 透明代理 |
-| service | 15662 (frontend) / 15663 (backend) | REQ 客户端 ↔ DEALER worker |
-| action | 15664 (frontend) / 15665 (backend) | DEALER 客户端 ↔ DEALER worker |
-| gRPC | 15770 | gRPC + gRPC-Web（与总线同进程启动） |
-
-**启动（三条总线 + gRPC）：**
+运行示例前先起 broker（也可进程内嵌入，见下文）。默认一次启动 **message / service / action** 三条总线，每个 socket 同时 bind **tcp + ipc + inproc**，并启动 **grpc / grpc-web** 与 **console http**（控制台）。
 
 ```bash
 cargo run --bin robot_bus_broker
-# Ctrl+C 停止
-# 查看全部参数：cargo run --bin robot_bus_broker -- --help
+# 查看参数：cargo run --bin robot_bus_broker -- --help
+# 只要 TCP：加 --tcp-only
 ```
 
-常用配置示例：
+**默认端点：**
 
-```bash
-cargo run --bin robot_bus_broker -- \
-  --message-xsub-bind tcp://0.0.0.0:15560 \
-  --message-xpub-bind tcp://0.0.0.0:15561 \
-  --service-frontend-bind tcp://0.0.0.0:15662 \
-  --service-backend-bind tcp://0.0.0.0:15663 \
-  --action-frontend-bind tcp://0.0.0.0:15664 \
-  --action-backend-bind tcp://0.0.0.0:15665 \
-  --grpc-listen 0.0.0.0:15770 \
-  --snd-hwm 8 --rcv-hwm 8 \
-  --tcp-only
-```
+| 角色 | tcp | ipc | inproc |
+|------|-----|-----|--------|
+| message XSUB | `tcp://0.0.0.0:15560` | `ipc:///tmp/robot_bus/message_bus_xsub.ipc` | `inproc://robot_bus/message_bus/xsub` |
+| message XPUB | `tcp://0.0.0.0:15561` | `ipc:///tmp/robot_bus/message_bus_xpub.ipc` | `inproc://robot_bus/message_bus/xpub` |
+| service frontend | `tcp://0.0.0.0:15662` | `ipc:///tmp/robot_bus/service_bus_frontend.ipc` | `inproc://robot_bus/service_bus/frontend` |
+| service backend | `tcp://0.0.0.0:15663` | `ipc:///tmp/robot_bus/service_bus_backend.ipc` | `inproc://robot_bus/service_bus/backend` |
+| action frontend | `tcp://0.0.0.0:15664` | `ipc:///tmp/robot_bus/action_bus_frontend.ipc` | `inproc://robot_bus/action_bus/frontend` |
+| action backend | `tcp://0.0.0.0:15665` | `ipc:///tmp/robot_bus/action_bus_backend.ipc` | `inproc://robot_bus/action_bus/backend` |
+| grpc | `0.0.0.0:15770` | — | — |
+| grpc-web | `0.0.0.0:15770` | — | — |
+| console http | `0.0.0.0:15771` | — | — |
+
+SDK 侧 `Node::new` 默认连本机 **tcp**（`localhost` + 上表端口）；`Node::ipc` / `Node::inproc` / `Node::grpc` 分别走对应传输。
 
 **进程内嵌入**（不必单独起二进制）：
 
 ```rust
-use robot_bus::broker::message_bus::BusConfig;
-use robot_bus::broker::service_bus::ServiceBusConfig;
-use robot_bus::broker::{GrpcBrokerConfig, RobotBusBroker, RobotBusConfig};
+use robot_bus::{RobotBusBroker, RobotBusConfig};
 
-let broker = RobotBusBroker::start(RobotBusConfig {
-    message: BusConfig {
-        xsub_bind: "tcp://127.0.0.1:15560".into(),
-        xpub_bind: "tcp://127.0.0.1:15561".into(),
-        ..BusConfig::default()
-    },
-    service: ServiceBusConfig {
-        frontend_bind: "tcp://127.0.0.1:15662".into(),
-        backend_bind: "tcp://127.0.0.1:15663".into(),
-        ..ServiceBusConfig::default()
-    },
-    grpc: GrpcBrokerConfig {
-        listen: "0.0.0.0:15770".parse()?,
-        ..GrpcBrokerConfig::default()
-    },
-    ..RobotBusConfig::default()
-})?;
-// broker.message.xsub_bind / xpub_bind 等填入 NodeOptions
-// broker.grpc_listen() → gRPC 客户端连这个地址
+let broker = RobotBusBroker::start(RobotBusConfig::default())?;
+// 默认端点同上；需要改端口 / 地址时再填 RobotBusConfig 字段
 broker.stop()?;
 ```
 
-连接由 [`Node`](../src/runtime/node.rs) 的 `NodeOptions` 管理。典型流程：`Node::new` → `create_*` → `node.spin()`（自动 `SingleThreadedExecutor`）。多节点或需并行时再 `executor.add_node` + `executor.spin`。仅连 gRPC 网关时用 `Node::grpc` / `Node::grpc_at`（见下文「gRPC 模式 Node」）。
+典型流程：`Node::new` → `create_*` → `node.spin()`。多节点或需并行时再 `executor.add_node` + `executor.spin`。仅连 gRPC 网关时用 `Node::grpc` / `Node::grpc_at`（见下文「gRPC 模式 Node」）。
 
 ---
 

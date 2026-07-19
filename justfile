@@ -112,3 +112,7 @@ ci: gen-all
 	just test-rust-minimal
 	just test-python
 	just test-typescript
+
+# Performance harness (release); writes docs/perf-report.md
+perf: gen-rust
+	cargo run --release --bin robot_bus_perf --features grpc
