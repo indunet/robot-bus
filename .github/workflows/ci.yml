@@ -108,7 +108,7 @@ jobs:
             -DCMAKE_PREFIX_PATH=/usr/local \
             -DROBOT_BUS_BUILD_TESTS=ON
           # Cap jobs: bare `-j` is unlimited under GNU make and OOMs GHA when
-          # compiling ~130 protobuf .pb.cpp units (exit 143 = SIGTERM).
+          # compiling ~130 protobuf .pb.cc units (exit 143 = SIGTERM).
           cmake --build bindings/cpp/build --target robot_bus_msgs cpp_tests -j2
       - name: Run C++ binding tests
         run: |
@@ -155,7 +155,7 @@ jobs:
         run: |
           set -eux
           sudo apt-get update
-          sudo apt-get install -y cmake g++ make curl unzip pkg-config ninja-build
+          sudo apt-get install -y cmake g++ make curl unzip pkg-config ninja-build libzmq3-dev
           curl -fsSL -o /tmp/protoc.zip \
             "https://github.com/protocolbuffers/protobuf/releases/download/v35.1/protoc-35.1-linux-x86_64.zip"
           sudo unzip -o /tmp/protoc.zip -d /usr/local
@@ -186,6 +186,12 @@ jobs:
         run: ./scripts/build_android_native.sh
         env:
           ANDROID_API_LEVEL: "24"
+      # Host JVM unit tests load desktop librobot_bus_c (see just test-android),
+      # not the Android ABI .so under jniLibs.
+      - name: Build host C ABI (for unit tests)
+        run: cargo build --release --manifest-path bindings/cpp/native/Cargo.toml
       - name: Assemble AAR + unit tests
         working-directory: bindings/android
+        env:
+          ROBOT_BUS_NATIVE_DIR: ${{ github.workspace }}/bindings/cpp/native/target/release
         run: ./gradlew assembleRelease test --no-daemon

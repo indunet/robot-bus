@@ -1,9 +1,9 @@
 // Pure protobuf serialize/parse (no broker) for generated C++ msgs.
 #include "harness.hpp"
 
-#include <robot_bus/robot_bus_interface/action/v1/fibonacci.pb.hpp>
-#include <robot_bus/sensor_msgs/msg/v1/imu.pb.hpp>
-#include <robot_bus/std_srvs/srv/v1/set_bool.pb.hpp>
+#include <robot_bus/robot_bus_interface/action/v1/fibonacci.pb.h>
+#include <robot_bus/sensor_msgs/msg/v1/imu.pb.h>
+#include <robot_bus/std_srvs/srv/v1/set_bool.pb.h>
 
 #include <iostream>
 #include <string>

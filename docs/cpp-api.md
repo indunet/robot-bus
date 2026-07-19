@@ -37,7 +37,7 @@ Headers install under the `robot_bus/` prefix (no `generated/` segment):
 
 ```cpp
 #include <robot_bus/Node.hpp>
-#include <robot_bus/sensor_msgs/msg/v1/imu.pb.hpp>
+#include <robot_bus/sensor_msgs/msg/v1/imu.pb.h>
 ```
 
 Link with `-lrobot_bus -lrobot_bus_msgs` (or CMake `robot_bus::robot_bus` + `robot_bus::msgs`).
@@ -86,7 +86,7 @@ Protobuf message types are **pre-generated** and shipped in the package — you 
 
 ```cpp
 #include <robot_bus/Node.hpp>
-#include <robot_bus/sensor_msgs/msg/v1/imu.pb.hpp>
+#include <robot_bus/sensor_msgs/msg/v1/imu.pb.h>
 
 robot_bus::Broker broker;
 robot_bus::Node node("pilot");
@@ -132,8 +132,8 @@ Compare imports across languages:
 | Python | `from robot_bus.sensor_msgs.msg.v1 import Imu` |
 | TypeScript | `import { Imu } from "robot-bus/sensor_msgs/msg/v1/imu.js"` |
 | Java / Android | `import org.indunet.robot.bus.sensor_msgs.msg.v1.Imu;` |
-| C++ (ROS msgs) | `#include <robot_bus/sensor_msgs/msg/v1/imu.pb.hpp>` |
-| C++ (built-in action) | `#include <robot_bus/robot_bus_interface/action/v1/fibonacci.pb.hpp>` |
+| C++ (ROS msgs) | `#include <robot_bus/sensor_msgs/msg/v1/imu.pb.h>` |
+| C++ (built-in action) | `#include <robot_bus/robot_bus_interface/action/v1/fibonacci.pb.h>` |
 
 ## CMake
 

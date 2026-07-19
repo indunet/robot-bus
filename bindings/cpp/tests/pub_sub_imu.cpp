@@ -1,7 +1,7 @@
 // Typed IMU pub/sub round-trip against an ephemeral in-process broker.
 #include "harness.hpp"
 
-#include <robot_bus/sensor_msgs/msg/v1/imu.pb.hpp>
+#include <robot_bus/sensor_msgs/msg/v1/imu.pb.h>
 
 #include <atomic>
 #include <iostream>

@@ -162,7 +162,7 @@ No central package registry for C++: download `robot-bus-cpp_*.deb` / `robot-bus
 
 ```cpp
 #include <robot_bus/Node.hpp>
-#include <robot_bus/sensor_msgs/msg/v1/imu.pb.hpp>
+#include <robot_bus/sensor_msgs/msg/v1/imu.pb.h>
 
 robot_bus::Broker broker;
 robot_bus::Node node("pilot");

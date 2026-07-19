@@ -23,7 +23,7 @@ Distributed as GitHub Release **DEB / MSI / PKG** assets (see
 
 ```cpp
 #include <robot_bus/Node.hpp>
-#include <robot_bus/sensor_msgs/msg/v1/imu.pb.hpp>
+#include <robot_bus/sensor_msgs/msg/v1/imu.pb.h>
 ```
 
 ## Regenerate msgs

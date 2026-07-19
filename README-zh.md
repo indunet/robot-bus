@@ -162,7 +162,7 @@ C++ 无中央库：从 [GitHub Releases](https://github.com/indunet/robot-bus/re
 
 ```cpp
 #include <robot_bus/Node.hpp>
-#include <robot_bus/sensor_msgs/msg/v1/imu.pb.hpp>
+#include <robot_bus/sensor_msgs/msg/v1/imu.pb.h>
 
 robot_bus::Broker broker;
 robot_bus::Node node("pilot");

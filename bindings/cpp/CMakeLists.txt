@@ -19,7 +19,7 @@ set(ROBOT_BUS_INCLUDE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/include")
 # --- msgs library from committed generated sources ---
 if(ROBOT_BUS_BUILD_MSGS)
   file(GLOB_RECURSE ROBOT_BUS_PB_SOURCES CONFIGURE_DEPENDS
-    "${ROBOT_BUS_GENERATED_ROOT}/robot_bus/*.pb.cpp")
+    "${ROBOT_BUS_GENERATED_ROOT}/robot_bus/*.pb.cc")
   add_library(robot_bus_msgs SHARED ${ROBOT_BUS_PB_SOURCES})
   add_library(robot_bus::msgs ALIAS robot_bus_msgs)
   target_include_directories(robot_bus_msgs

@@ -153,7 +153,7 @@ node.createSubscription("/robot1/imu", cb, Imu.class, group);
 | Java / Android | `import org.indunet.robot.bus.sensor_msgs.msg.v1.Imu;`（Android 见 [android-api.md](android-api.md)） |
 | Python | `from robot_bus.sensor_msgs.msg.v1 import Imu` |
 | TypeScript | `import { Imu } from "robot-bus/sensor_msgs/msg/v1/imu.js"` |
-| C++ | `#include <robot_bus/sensor_msgs/msg/v1/imu.pb.hpp>` |
+| C++ | `#include <robot_bus/sensor_msgs/msg/v1/imu.pb.h>` |
 
 本地改 proto 后：
 
