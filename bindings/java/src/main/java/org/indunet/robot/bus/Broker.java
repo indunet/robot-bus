@@ -16,6 +16,22 @@ public final class Broker implements AutoCloseable {
                         RobotBusC.Holder.INSTANCE.robot_bus_broker_start(options.toNative()), "Broker");
     }
 
+    /** Start broker sharing {@code context} (required for same-process inproc Nodes). */
+    public Broker(Context context) {
+        this.ptr =
+                Errors.checkPtr(
+                        RobotBusC.Holder.INSTANCE.robot_bus_broker_start_with_context(context.raw(), null),
+                        "Broker");
+    }
+
+    public Broker(Context context, BrokerOptions options) {
+        this.ptr =
+                Errors.checkPtr(
+                        RobotBusC.Holder.INSTANCE.robot_bus_broker_start_with_context(
+                                context.raw(), options != null ? options.toNative() : null),
+                        "Broker");
+    }
+
     public void stop() {
         Errors.check(RobotBusC.Holder.INSTANCE.robot_bus_broker_stop(ptr), "broker stop");
     }

@@ -1,7 +1,7 @@
 // Built-in Fibonacci action client round-trip.
 #include "harness.hpp"
 
-#include <robot_bus/robot_bus_interface/action/v1/fibonacci.pb.h>
+#include <robot_bus/robot_bus_interface/action/v1/fibonacci.pb.hpp>
 
 #include <iostream>
 #include <string>

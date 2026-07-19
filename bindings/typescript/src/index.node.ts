@@ -31,6 +31,7 @@ export const Publisher = native.Publisher;
 export const Subscriber = native.Subscriber;
 export const ShutdownHandle = native.ShutdownHandle;
 export const TimerHandle = native.TimerHandle;
+export const Context = native.Context;
 export const JsCallbackGroupType = native.JsCallbackGroupType;
 export const CallbackGroupType = native.JsCallbackGroupType;
 export const JsCallbackGroup = native.JsCallbackGroup;
@@ -183,6 +184,44 @@ export class Node {
 
   static inproc(name: string, prefix?: string): Node {
     return new Node(native.Node.inproc(name, prefix));
+  }
+
+  static inprocWithContext(
+    context: import("./native-types.js").Context,
+    name: string,
+    prefix?: string,
+  ): Node {
+    return new Node(native.Node.inprocWithContext(context, name, prefix));
+  }
+
+  static withContext(
+    context: import("./native-types.js").Context,
+    name: string,
+    host?: string,
+    transport?: string,
+    grpcUrl?: string,
+    messageXsub?: string,
+    messageXpub?: string,
+    serviceFrontend?: string,
+    serviceBackend?: string,
+    actionBackend?: string,
+    actionFrontend?: string,
+  ): Node {
+    return new Node(
+      native.Node.withContext(
+        context,
+        name,
+        host,
+        transport,
+        grpcUrl,
+        messageXsub,
+        messageXpub,
+        serviceFrontend,
+        serviceBackend,
+        actionBackend,
+        actionFrontend,
+      ),
+    );
   }
 
   static grpc(name: string): Node {

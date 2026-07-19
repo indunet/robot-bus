@@ -32,6 +32,15 @@ with robot_bus.RobotBusBroker.start(
     pass
 ```
 
+同进程 **inproc** 时必须共享 `Context`：
+
+```python
+ctx = robot_bus.Context()
+with robot_bus.RobotBusBroker.start(context=ctx) as broker:
+    node = robot_bus.Node.inproc_with_context(ctx, "pilot")
+```
+
+tcp / ipc / gRPC 不要求共享 Context。
 默认端口与完整 CLI 选项见 [rust-api.md](rust-api.md)「Broker 启动」。
 
 ---
@@ -276,10 +285,11 @@ print(robot_bus.__version__)
 | 符号 | 说明 |
 |------|------|
 | `Node(name, host=..., transport=..., grpc_url=..., message_xsub=..., …)` | 建节点；首次 `create_*` / `spin` 时自动挂 `SingleThreadedExecutor` |
-| `Node.tcp` / `Node.ipc` / `Node.inproc` / `Node.grpc` / `Node.grpc_at` | 传输预设（gRPC 为客户端模式） |
+| `Node.tcp` / `Node.ipc` / `Node.inproc` / `Node.inproc_with_context` / `Node.grpc` / `Node.grpc_at` | 传输预设（gRPC 为客户端模式；同进程 inproc 用 `inproc_with_context`） |
 | `node.spin()` / `spin_once` / `shutdown` | 驱动回调（ROS 2 式简单路径） |
-| `SingleThreadedExecutor()` | 显式单线程执行器（多节点共享时用） |
-| `MultiThreadedExecutor(num_threads=4)` | service/action handler 可并行 |
+| `Context()` | 共享 ZMQ context（同进程 inproc 必需） |
+| `SingleThreadedExecutor(context=None)` | 显式单线程执行器（多节点共享时用） |
+| `MultiThreadedExecutor(num_threads=4, context=None)` | service/action handler 可并行 |
 | `executor.add_node(node)` | 把节点挂到执行器（须在该节点尚未 auto-attach 之前） |
 | `node.create_publisher(topic, msg_type=None)` | typed → `TypedTopicPublisher.publish(Message)`；省略类型 → raw `TopicPublisher.publish(bytes)` |
 | `node.create_timer(period, callback)` → `TimerHandle` | 定时器（与 topic 一样挂在 Node） |
@@ -290,7 +300,7 @@ print(robot_bus.__version__)
 | `create_action_server(..., goal_type=, feedback_type=, result_type=)` | typed：`[(phase, Message), ...]`；否则 bytes |
 | `create_action_client(..., goal_type=, feedback_type=, result_type=)` | typed → `TypedActionClient`；否则 `ActionClient` |
 | `Publisher(endpoint=None)` | 低层连 XSUB（不经 Node） |
-| `RobotBusBroker.start()` | 进程内启动三个 bus + gRPC |
+| `RobotBusBroker.start(..., context=None)` | 进程内启动三个 bus + gRPC；同进程 inproc 传 `context` |
 | `run_broker()` | 阻塞 CLI 入口 |
 | `ShutdownHandle` / `TimerHandle` | spin 与定时器控制 |
 

@@ -16,7 +16,7 @@ use crate::broker::{
 use crate::errors::BusError;
 use crate::message_bus::{Publisher as RustPublisher, Subscriber as RustSubscriber};
 use crate::runtime::{
-    ActionGoalHandler, CallbackGroup, CallbackGroupType,
+    ActionGoalHandler, CallbackGroup, CallbackGroupType, Context as RustContext,
     MultiThreadedExecutor as RustMultiThreadedExecutor, Node as RustNode,
     NodeActionClientRaw as RustNodeActionClient, NodeOptions as RustNodeOptions,
     NodeServiceClientRaw as RustNodeServiceClient, ShutdownHandle as RustShutdownHandle,
@@ -357,6 +357,22 @@ impl PyNodeActionClient {
     }
 }
 
+#[pyclass(name = "Context")]
+#[derive(Clone)]
+struct PyContext {
+    inner: RustContext,
+}
+
+#[pymethods]
+impl PyContext {
+    #[new]
+    fn new() -> Self {
+        Self {
+            inner: RustContext::new(),
+        }
+    }
+}
+
 #[pyclass(name = "SingleThreadedExecutor", unsendable)]
 struct PySingleThreadedExecutor {
     inner: RustSingleThreadedExecutor,
@@ -365,9 +381,13 @@ struct PySingleThreadedExecutor {
 #[pymethods]
 impl PySingleThreadedExecutor {
     #[new]
-    fn new() -> Self {
+    #[pyo3(signature = (context=None))]
+    fn new(context: Option<&PyContext>) -> Self {
         Self {
-            inner: RustSingleThreadedExecutor::new(),
+            inner: match context {
+                Some(c) => RustSingleThreadedExecutor::with_context(c.inner.clone()),
+                None => RustSingleThreadedExecutor::new(),
+            },
         }
     }
 
@@ -460,10 +480,13 @@ struct PyMultiThreadedExecutor {
 #[pymethods]
 impl PyMultiThreadedExecutor {
     #[new]
-    #[pyo3(signature = (num_threads=4))]
-    fn new(num_threads: usize) -> Self {
+    #[pyo3(signature = (num_threads=4, context=None))]
+    fn new(num_threads: usize, context: Option<&PyContext>) -> Self {
         Self {
-            inner: RustMultiThreadedExecutor::new(num_threads),
+            inner: match context {
+                Some(c) => RustMultiThreadedExecutor::with_context(c.inner.clone(), num_threads),
+                None => RustMultiThreadedExecutor::new(num_threads),
+            },
         }
     }
 
@@ -609,6 +632,8 @@ impl PyNode {
     }
 
     /// Same-process inproc (default prefix `robot_bus`, or a custom prefix).
+    ///
+    /// Without a shared [`Context`], inproc cannot see an embedded broker in this process.
     #[classmethod]
     #[pyo3(signature = (name, prefix=None))]
     fn inproc(_cls: &Bound<'_, PyType>, name: String, prefix: Option<&str>) -> Self {
@@ -618,6 +643,23 @@ impl PyNode {
         };
         Self {
             inner: RustNode::with_options(name, options),
+        }
+    }
+
+    /// Same-process inproc sharing `context` with an embedded broker.
+    #[classmethod]
+    #[pyo3(signature = (context, name, prefix=None))]
+    fn inproc_with_context(
+        _cls: &Bound<'_, PyType>,
+        context: &PyContext,
+        name: String,
+        prefix: Option<&str>,
+    ) -> Self {
+        Self {
+            inner: match prefix {
+                Some(p) => RustNode::inproc_at_with_context(context.inner.clone(), name, p),
+                None => RustNode::inproc_with_context(context.inner.clone(), name),
+            },
         }
     }
 
@@ -846,6 +888,7 @@ impl PyRobotBusBroker {
     #[staticmethod]
     #[pyo3(signature = (
         *,
+        context = None,
         message_xsub_bind = None,
         message_xpub_bind = None,
         message_snd_hwm = None,
@@ -874,6 +917,7 @@ impl PyRobotBusBroker {
         no_console = false,
     ))]
     fn start(
+        context: Option<&PyContext>,
         message_xsub_bind: Option<String>,
         message_xpub_bind: Option<String>,
         message_snd_hwm: Option<i32>,
@@ -1014,7 +1058,11 @@ impl PyRobotBusBroker {
             let _ = (console_listen, no_console);
         }
 
-        let broker = RustRobotBusBroker::start(config).map_err(anyhow_err)?;
+        let broker = match context {
+            Some(c) => RustRobotBusBroker::start_with_context(c.inner.clone(), config),
+            None => RustRobotBusBroker::start(config),
+        }
+        .map_err(anyhow_err)?;
         Ok(Self {
             inner: Some(broker),
         })
@@ -1162,6 +1210,7 @@ fn run_broker(py: Python<'_>) -> PyResult<()> {
 fn _native(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyPublisher>()?;
     m.add_class::<PySubscriber>()?;
+    m.add_class::<PyContext>()?;
     m.add_class::<PyCallbackGroupType>()?;
     m.add_class::<PyCallbackGroup>()?;
     m.add_class::<PySingleThreadedExecutor>()?;

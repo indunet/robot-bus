@@ -62,6 +62,10 @@ export declare class ActionClient {
   cancel(goalId: string, body?: Buffer, timeout?: number): ActionEvent;
 }
 
+export declare class Context {
+  constructor();
+}
+
 export declare class Node {
   constructor(
     name: string,
@@ -78,6 +82,20 @@ export declare class Node {
   static tcp(name: string, host?: string): Node;
   static ipc(name: string, path?: string): Node;
   static inproc(name: string, prefix?: string): Node;
+  static inprocWithContext(context: Context, name: string, prefix?: string): Node;
+  static withContext(
+    context: Context,
+    name: string,
+    host?: string,
+    transport?: string,
+    grpcUrl?: string,
+    messageXsub?: string,
+    messageXpub?: string,
+    serviceFrontend?: string,
+    serviceBackend?: string,
+    actionBackend?: string,
+    actionFrontend?: string,
+  ): Node;
   static grpc(name: string): Node;
   static grpcAt(name: string, url: string): Node;
   readonly name: string;
@@ -117,7 +135,7 @@ export declare class Node {
 }
 
 export declare class SingleThreadedExecutor {
-  constructor();
+  constructor(context?: Context);
   addNode(node: Node): void;
   createNode(
     name: string,
@@ -141,7 +159,7 @@ export declare class SingleThreadedExecutor {
 }
 
 export declare class MultiThreadedExecutor {
-  constructor(numThreads?: number);
+  constructor(numThreads?: number, context?: Context);
   addNode(node: Node): void;
   createNode(
     name: string,
@@ -191,7 +209,7 @@ export interface BrokerStartOptions {
 }
 
 export declare class RobotBusBroker {
-  static start(options?: BrokerStartOptions): RobotBusBroker;
+  static start(options?: BrokerStartOptions, context?: Context): RobotBusBroker;
   stop(): void;
   readonly messageXsubBind: string;
   readonly messageXpubBind: string;

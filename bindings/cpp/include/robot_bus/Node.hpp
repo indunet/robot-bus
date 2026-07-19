@@ -53,6 +53,50 @@ inline void *check_ptr(void *p, const char *what) {
   return p;
 }
 
+/// Shared ZeroMQ runtime context (required for same-process inproc).
+class Context {
+ public:
+  Context() {
+    c_ = static_cast<RobotBusContext *>(check_ptr(robot_bus_context_new(), "Context"));
+  }
+
+  explicit Context(RobotBusContext *raw) : c_(raw) {}
+
+  ~Context() { robot_bus_context_free(c_); }
+
+  Context(const Context &o) {
+    c_ = static_cast<RobotBusContext *>(
+        check_ptr(robot_bus_context_clone(o.c_), "Context::clone"));
+  }
+
+  Context &operator=(const Context &o) {
+    if (this != &o) {
+      RobotBusContext *next = static_cast<RobotBusContext *>(
+          check_ptr(robot_bus_context_clone(o.c_), "Context::clone"));
+      robot_bus_context_free(c_);
+      c_ = next;
+    }
+    return *this;
+  }
+
+  Context(Context &&o) noexcept : c_(o.c_) { o.c_ = nullptr; }
+
+  Context &operator=(Context &&o) noexcept {
+    if (this != &o) {
+      robot_bus_context_free(c_);
+      c_ = o.c_;
+      o.c_ = nullptr;
+    }
+    return *this;
+  }
+
+  RobotBusContext *raw() { return c_; }
+  const RobotBusContext *raw() const { return c_; }
+
+ private:
+  RobotBusContext *c_ = nullptr;
+};
+
 inline uint8_t *alloc_reply_bytes(BytesView payload) {
   if (payload.size == 0) {
     return nullptr;
@@ -241,6 +285,31 @@ class Node {
         check_ptr(robot_bus_node_tcp(name.c_str(), host), "Node::tcp")));
   }
 
+  static Node ipc(std::string name, const char *path = nullptr) {
+    return Node(static_cast<RobotBusNode *>(
+        check_ptr(robot_bus_node_ipc(name.c_str(), path), "Node::ipc")));
+  }
+
+  static Node inproc(std::string name, const char *prefix = nullptr) {
+    return Node(static_cast<RobotBusNode *>(
+        check_ptr(robot_bus_node_inproc(name.c_str(), prefix), "Node::inproc")));
+  }
+
+  /// Same-process inproc sharing `ctx` with an embedded broker.
+  static Node inproc_with_context(Context &ctx, std::string name,
+                                  const char *prefix = nullptr) {
+    return Node(static_cast<RobotBusNode *>(check_ptr(
+        robot_bus_node_inproc_with_context(ctx.raw(), name.c_str(), prefix),
+        "Node::inproc_with_context")));
+  }
+
+  static Node with_context(Context &ctx, std::string name,
+                           const RobotBusNodeOptions *opts = nullptr) {
+    return Node(static_cast<RobotBusNode *>(check_ptr(
+        robot_bus_node_new_with_context(ctx.raw(), name.c_str(), opts),
+        "Node::with_context")));
+  }
+
   static Node grpc(std::string name) {
     return Node(static_cast<RobotBusNode *>(
         check_ptr(robot_bus_node_grpc(name.c_str()), "Node::grpc")));
@@ -422,6 +491,17 @@ class Broker {
 
   explicit Broker(const RobotBusBrokerOptions &opts) {
     b_ = static_cast<RobotBusBroker *>(check_ptr(robot_bus_broker_start(&opts), "Broker"));
+  }
+
+  /// Start broker sharing `ctx` (required for same-process inproc Nodes).
+  explicit Broker(Context &ctx) {
+    b_ = static_cast<RobotBusBroker *>(
+        check_ptr(robot_bus_broker_start_with_context(ctx.raw(), nullptr), "Broker"));
+  }
+
+  Broker(Context &ctx, const RobotBusBrokerOptions &opts) {
+    b_ = static_cast<RobotBusBroker *>(
+        check_ptr(robot_bus_broker_start_with_context(ctx.raw(), &opts), "Broker"));
   }
 
   ~Broker() { robot_bus_broker_free(b_); }

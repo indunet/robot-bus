@@ -18,7 +18,7 @@ use robot_bus::broker::{
 use robot_bus::errors::BusError;
 use robot_bus::message_bus::{Publisher as RustPublisher, Subscriber as RustSubscriber};
 use robot_bus::runtime::{
-    ActionGoalHandler, CallbackGroup, CallbackGroupType,
+    ActionGoalHandler, CallbackGroup, CallbackGroupType, Context as RustContext,
     MultiThreadedExecutor as RustMultiThreadedExecutor, Node as RustNode,
     NodeActionClientRaw as RustNodeActionClient, NodeOptions as RustNodeOptions,
     NodeServiceClientRaw as RustNodeServiceClient, ServiceHandler,
@@ -354,10 +354,26 @@ impl ActionClient {
     }
 }
 
-type MsgTsfn = ThreadsafeFunction<(String, Vec<u8>), ErrorStrategy::CalleeHandled>;
-type VoidTsfn = ThreadsafeFunction<(), ErrorStrategy::CalleeHandled>;
+type MsgTsfn = ThreadsafeFunction<(String, Vec<u8>), ErrorStrategy::Fatal>;
+type VoidTsfn = ThreadsafeFunction<(), ErrorStrategy::Fatal>;
 type ServiceTsfn = ThreadsafeFunction<Vec<u8>, ErrorStrategy::CalleeHandled>;
 type ActionTsfn = ThreadsafeFunction<Vec<u8>, ErrorStrategy::CalleeHandled>;
+
+/// Shared ZeroMQ runtime context (required for same-process inproc).
+#[napi]
+pub struct Context {
+    inner: RustContext,
+}
+
+#[napi]
+impl Context {
+    #[napi(constructor)]
+    pub fn new() -> Self {
+        Self {
+            inner: RustContext::new(),
+        }
+    }
+}
 
 #[napi]
 pub struct Node {
@@ -429,6 +445,58 @@ impl Node {
         }
     }
 
+    /// Same-process inproc sharing `context` with an embedded broker.
+    #[napi(factory)]
+    pub fn inproc_with_context(
+        context: &Context,
+        name: String,
+        prefix: Option<String>,
+    ) -> Self {
+        match prefix.as_deref() {
+            Some(p) => Self {
+                inner: RustNode::inproc_at_with_context(context.inner.clone(), name, p),
+            },
+            None => Self {
+                inner: RustNode::inproc_with_context(context.inner.clone(), name),
+            },
+        }
+    }
+
+    #[napi(factory)]
+    pub fn with_context(
+        context: &Context,
+        name: String,
+        host: Option<String>,
+        transport: Option<String>,
+        grpc_url: Option<String>,
+        message_xsub: Option<String>,
+        message_xpub: Option<String>,
+        service_frontend: Option<String>,
+        service_backend: Option<String>,
+        action_backend: Option<String>,
+        action_frontend: Option<String>,
+    ) -> Result<Self> {
+        let host = host.unwrap_or_else(|| "localhost".into());
+        let transport = transport.unwrap_or_else(|| "tcp".into());
+        Ok(Self {
+            inner: RustNode::with_context(
+                context.inner.clone(),
+                name,
+                node_options(
+                    &host,
+                    &transport,
+                    grpc_url,
+                    message_xsub,
+                    message_xpub,
+                    service_frontend,
+                    service_backend,
+                    action_backend,
+                    action_frontend,
+                )?,
+            ),
+        })
+    }
+
     #[napi(factory)]
     pub fn grpc(name: String) -> Self {
         Self {
@@ -472,14 +540,15 @@ impl Node {
     ) -> Result<()> {
         let tsfn: MsgTsfn = callback.create_threadsafe_function(0, |ctx| {
             let (topic, payload) = ctx.value;
-            let topic = ctx.env.create_string_from_std(topic)?;
-            let payload = ctx.env.create_buffer_with_data(payload)?;
-            Ok(vec![topic.into_unknown(), payload.into_unknown()])
+            Ok(vec![
+                ctx.env.create_string_from_std(topic)?.into_unknown(),
+                ctx.env.create_buffer_with_data(payload)?.into_unknown(),
+            ])
         })?;
         let tsfn = Arc::new(tsfn);
         let cb: robot_bus::runtime::MessageCallback = Arc::new(move |topic, payload| {
             let _ = tsfn.call(
-                Ok((topic.to_string(), payload.to_vec())),
+                (topic.to_string(), payload.to_vec()),
                 ThreadsafeFunctionCallMode::NonBlocking,
             );
         });
@@ -501,7 +570,7 @@ impl Node {
             callback.create_threadsafe_function(0, |_ctx| Ok(Vec::<Unknown>::new()))?;
         let tsfn = Arc::new(tsfn);
         let cb: TimerCallback = Arc::new(move || {
-            let _ = tsfn.call(Ok(()), ThreadsafeFunctionCallMode::NonBlocking);
+            let _ = tsfn.call((), ThreadsafeFunctionCallMode::NonBlocking);
         });
         let group = callback_group.map(|g| &g.inner);
         let handle = self
@@ -657,9 +726,12 @@ pub struct SingleThreadedExecutor {
 #[napi]
 impl SingleThreadedExecutor {
     #[napi(constructor)]
-    pub fn new() -> Self {
+    pub fn new(context: Option<&Context>) -> Self {
         Self {
-            inner: RustSingleThreadedExecutor::new(),
+            inner: match context {
+                Some(c) => RustSingleThreadedExecutor::with_context(c.inner.clone()),
+                None => RustSingleThreadedExecutor::new(),
+            },
         }
     }
 
@@ -750,9 +822,13 @@ pub struct MultiThreadedExecutor {
 #[napi]
 impl MultiThreadedExecutor {
     #[napi(constructor)]
-    pub fn new(num_threads: Option<u32>) -> Self {
+    pub fn new(num_threads: Option<u32>, context: Option<&Context>) -> Self {
+        let n = num_threads.unwrap_or(4) as usize;
         Self {
-            inner: RustMultiThreadedExecutor::new(num_threads.unwrap_or(4) as usize),
+            inner: match context {
+                Some(c) => RustMultiThreadedExecutor::with_context(c.inner.clone(), n),
+                None => RustMultiThreadedExecutor::new(n),
+            },
         }
     }
 
@@ -858,7 +934,10 @@ pub struct RobotBusBroker {
 #[napi]
 impl RobotBusBroker {
     #[napi(factory)]
-    pub fn start(options: Option<BrokerStartOptions>) -> Result<Self> {
+    pub fn start(
+        options: Option<BrokerStartOptions>,
+        context: Option<&Context>,
+    ) -> Result<Self> {
         let mut config = RobotBusConfig::default();
         if let Some(o) = options {
             if let Some(v) = o.message_xsub_bind {
@@ -954,7 +1033,11 @@ impl RobotBusBroker {
             }
         }
 
-        let broker = RustRobotBusBroker::start(config).map_err(anyhow_err)?;
+        let broker = match context {
+            Some(c) => RustRobotBusBroker::start_with_context(c.inner.clone(), config),
+            None => RustRobotBusBroker::start(config),
+        }
+        .map_err(anyhow_err)?;
         Ok(Self {
             inner: Some(broker),
         })

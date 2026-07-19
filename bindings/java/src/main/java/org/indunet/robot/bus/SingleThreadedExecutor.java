@@ -13,6 +13,14 @@ public final class SingleThreadedExecutor implements AutoCloseable {
                         "SingleThreadedExecutor");
     }
 
+    public SingleThreadedExecutor(Context context) {
+        this.ptr =
+                Errors.checkPtr(
+                        RobotBusC.Holder.INSTANCE.robot_bus_single_threaded_executor_new_with_context(
+                                context.raw()),
+                        "SingleThreadedExecutor");
+    }
+
     public void addNode(Node node) {
         Errors.check(
                 RobotBusC.Holder.INSTANCE.robot_bus_single_threaded_executor_add_node(ptr, node.raw()),

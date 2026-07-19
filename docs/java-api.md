@@ -173,7 +173,7 @@ node.createSubscription("/robot1/imu", cb, Imu.class, group);
 | Java / Android | `import org.indunet.robot.bus.sensor_msgs.msg.v1.Imu;` |
 | Python | `from robot_bus.sensor_msgs.msg.v1 import Imu` |
 | TypeScript | `import { Imu } from "robot-bus/sensor_msgs/msg/v1/imu.js"` |
-| C++ | `#include <robot_bus/sensor_msgs/msg/v1/imu.pb.h>` |
+| C++ | `#include <robot_bus/sensor_msgs/msg/v1/imu.pb.hpp>` |
 
 本地改 proto 后：
 
@@ -198,14 +198,15 @@ just android-dev       # 需 ANDROID_HOME + NDK 26 + cargo-ndk
 | 符号 | 说明 |
 |------|------|
 | `Node(name)` / `Node(name, NodeOptions)` | 建节点 |
-| `Node.tcp` / `ipc` / `inproc` / `grpc` / `grpcAt` | 传输预设 |
+| `Node.tcp` / `ipc` / `inproc` / `inproc(Context, …)` / `withContext` / `grpc` / `grpcAt` | 传输预设；同进程 inproc 须共享 `Context` |
 | `node.spin()` / `spinOnce` / `shutdown` | 驱动回调 |
 | `createPublisher(topic)` / `createPublisher(topic, Class<T>)` | raw → `TopicPublisher`；typed → `TypedTopicPublisher` |
 | `createSubscription(..., MsgCallback)` / `(..., TypedMsgCallback, Class)` | raw `byte[]` 或 typed `Message` |
 | `createService` / `createClient` | raw 或 typed（`Request`/`Response` Class） |
 | `createActionServer` / `createActionClient` | raw 或 typed（goal/feedback/result Class） |
-| `Broker` | 进程内 broker |
-| `SingleThreadedExecutor` / `MultiThreadedExecutor` | 显式执行器 |
-| `RobotBusAndroid.init(Context)` | Android 加载 native（仅 AAR） |
+| `Context` | 共享 ZMQ context（同进程 inproc 必需） |
+| `Broker` / `Broker(Context, …)` | 进程内 broker |
+| `SingleThreadedExecutor` / `MultiThreadedExecutor`（可传 `Context`） | 显式执行器 |
+| `RobotBusAndroid.init(Context)` | Android 加载 native（仅 AAR；与 ZMQ `Context` 无关） |
 
 gRPC 模式见上一节；底层 C ABI 与 C++ 共用 `librobot_bus_c`。

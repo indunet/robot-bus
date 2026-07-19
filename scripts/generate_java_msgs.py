@@ -20,7 +20,7 @@ Imports mirror other languages::
 
   import org.indunet.robot.bus.sensor_msgs.msg.v1.Imu;
   // ↔ from robot_bus.sensor_msgs.msg.v1 import Imu
-  // ↔ #include <robot_bus/sensor_msgs/msg/v1/imu.pb.h>
+  // ↔ #include <robot_bus/sensor_msgs/msg/v1/imu.pb.hpp>
 
 Usage (from repo root)::
 

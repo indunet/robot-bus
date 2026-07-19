@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Generate Rust prost/tonic stubs under src/msgs/generated and src/grpc/generated.
+"""Generate Rust prost/tonic stubs under src/generated/<pkg>/{msg|srv|action}/v1/<stem>.rs.
 
 Requires ``protoc`` on PATH (override with env ``PROTOC``). Outputs are
 gitignored; CI and package workflows run this before build/publish so artifacts

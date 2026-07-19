@@ -17,6 +17,18 @@ public final class MultiThreadedExecutor implements AutoCloseable {
                         "MultiThreadedExecutor");
     }
 
+    public MultiThreadedExecutor(Context context) {
+        this(context, 0);
+    }
+
+    public MultiThreadedExecutor(Context context, int numThreads) {
+        this.ptr =
+                Errors.checkPtr(
+                        RobotBusC.Holder.INSTANCE.robot_bus_multi_threaded_executor_new_with_context(
+                                context.raw(), numThreads),
+                        "MultiThreadedExecutor");
+    }
+
     public void addNode(Node node) {
         Errors.check(
                 RobotBusC.Holder.INSTANCE.robot_bus_multi_threaded_executor_add_node(ptr, node.raw()),

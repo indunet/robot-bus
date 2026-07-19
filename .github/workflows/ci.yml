@@ -108,7 +108,7 @@ jobs:
             -DCMAKE_PREFIX_PATH=/usr/local \
             -DROBOT_BUS_BUILD_TESTS=ON
           # Cap jobs: bare `-j` is unlimited under GNU make and OOMs GHA when
-          # compiling ~130 protobuf .pb.cc units (exit 143 = SIGTERM).
+          # compiling ~130 protobuf .pb.cpp units (exit 143 = SIGTERM).
           cmake --build bindings/cpp/build --target robot_bus_msgs cpp_tests -j2
       - name: Run C++ binding tests
         run: |

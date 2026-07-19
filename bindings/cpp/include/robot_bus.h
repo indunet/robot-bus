@@ -30,6 +30,7 @@ typedef struct RobotBusNode RobotBusNode;
 typedef struct RobotBusSingleThreadedExecutor RobotBusSingleThreadedExecutor;
 typedef struct RobotBusMultiThreadedExecutor RobotBusMultiThreadedExecutor;
 typedef struct RobotBusBroker RobotBusBroker;
+typedef struct RobotBusContext RobotBusContext;
 
 typedef struct RobotBusActionMessage {
   char *kind;
@@ -139,10 +140,18 @@ ROBOT_BUS_API int robot_bus_action_client_cancel(RobotBusActionClient *c, const 
                                                  double timeout_secs,
                                                  RobotBusActionMessage *out_msg);
 
+ROBOT_BUS_API RobotBusContext *robot_bus_context_new(void);
+ROBOT_BUS_API void robot_bus_context_free(RobotBusContext *c);
+ROBOT_BUS_API RobotBusContext *robot_bus_context_clone(const RobotBusContext *c);
+
 ROBOT_BUS_API RobotBusNode *robot_bus_node_new(const char *name, const RobotBusNodeOptions *opts);
+ROBOT_BUS_API RobotBusNode *robot_bus_node_new_with_context(RobotBusContext *ctx, const char *name,
+                                                            const RobotBusNodeOptions *opts);
 ROBOT_BUS_API RobotBusNode *robot_bus_node_tcp(const char *name, const char *host);
 ROBOT_BUS_API RobotBusNode *robot_bus_node_ipc(const char *name, const char *path);
 ROBOT_BUS_API RobotBusNode *robot_bus_node_inproc(const char *name, const char *prefix);
+ROBOT_BUS_API RobotBusNode *robot_bus_node_inproc_with_context(RobotBusContext *ctx, const char *name,
+                                                              const char *prefix);
 ROBOT_BUS_API RobotBusNode *robot_bus_node_grpc(const char *name);
 ROBOT_BUS_API RobotBusNode *robot_bus_node_grpc_at(const char *name, const char *url);
 ROBOT_BUS_API void robot_bus_node_free(RobotBusNode *n);
@@ -179,6 +188,8 @@ ROBOT_BUS_API int robot_bus_node_stop(RobotBusNode *n);
 ROBOT_BUS_API int robot_bus_node_wait(RobotBusNode *n);
 
 ROBOT_BUS_API RobotBusSingleThreadedExecutor *robot_bus_single_threaded_executor_new(void);
+ROBOT_BUS_API RobotBusSingleThreadedExecutor *robot_bus_single_threaded_executor_new_with_context(
+    RobotBusContext *ctx);
 ROBOT_BUS_API void robot_bus_single_threaded_executor_free(RobotBusSingleThreadedExecutor *e);
 ROBOT_BUS_API int robot_bus_single_threaded_executor_add_node(RobotBusSingleThreadedExecutor *e,
                                                               RobotBusNode *n);
@@ -196,6 +207,8 @@ ROBOT_BUS_API int robot_bus_single_threaded_executor_wait(RobotBusSingleThreaded
 
 ROBOT_BUS_API RobotBusMultiThreadedExecutor *robot_bus_multi_threaded_executor_new(
     size_t num_threads);
+ROBOT_BUS_API RobotBusMultiThreadedExecutor *robot_bus_multi_threaded_executor_new_with_context(
+    RobotBusContext *ctx, size_t num_threads);
 ROBOT_BUS_API void robot_bus_multi_threaded_executor_free(RobotBusMultiThreadedExecutor *e);
 ROBOT_BUS_API int robot_bus_multi_threaded_executor_add_node(RobotBusMultiThreadedExecutor *e,
                                                              RobotBusNode *n);
@@ -209,6 +222,8 @@ ROBOT_BUS_API int robot_bus_multi_threaded_executor_spin_once(RobotBusMultiThrea
 ROBOT_BUS_API int robot_bus_multi_threaded_executor_spin(RobotBusMultiThreadedExecutor *e);
 
 ROBOT_BUS_API RobotBusBroker *robot_bus_broker_start(const RobotBusBrokerOptions *opts);
+ROBOT_BUS_API RobotBusBroker *robot_bus_broker_start_with_context(RobotBusContext *ctx,
+                                                                  const RobotBusBrokerOptions *opts);
 ROBOT_BUS_API void robot_bus_broker_free(RobotBusBroker *b);
 ROBOT_BUS_API int robot_bus_broker_stop(RobotBusBroker *b);
 ROBOT_BUS_API char *robot_bus_broker_message_xsub_bind(const RobotBusBroker *b);

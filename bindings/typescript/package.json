@@ -46,7 +46,7 @@
     "build:ts": "tsup",
     "build": "npm run build:native && npm run build:ts",
     "gen": "python3 ../../scripts/generate_typescript_msgs.py",
-    "test": "node --import tsx --test tests/*.test.ts",
+    "test": "node --import tsx --test --test-force-exit tests/*.test.ts",
     "prepublishOnly": "npm run build:ts"
   },
   "napi": {

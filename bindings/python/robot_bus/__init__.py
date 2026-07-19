@@ -19,6 +19,7 @@ try:
         ActionClient,
         CallbackGroup,
         CallbackGroupType,
+        Context,
         MultiThreadedExecutor,
         Node,
         Publisher,
@@ -38,6 +39,7 @@ except ImportError:  # pragma: no cover - msgs-only / docs import without extens
     ActionClient = None  # type: ignore[misc, assignment]
     CallbackGroup = None  # type: ignore[misc, assignment]
     CallbackGroupType = None  # type: ignore[misc, assignment]
+    Context = None  # type: ignore[misc, assignment]
     MultiThreadedExecutor = None  # type: ignore[misc, assignment]
     Node = None  # type: ignore[misc, assignment]
     Publisher = None  # type: ignore[misc, assignment]
@@ -67,6 +69,7 @@ __all__ = [
     "ActionClient",
     "CallbackGroup",
     "CallbackGroupType",
+    "Context",
     "MultiThreadedExecutor",
     "Node",
     "Publisher",

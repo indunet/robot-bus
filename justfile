@@ -21,7 +21,7 @@ gen-cpp:
 gen-java:
 	python3 scripts/generate_java_msgs.py
 
-# Generate Rust prost/tonic stubs under src/msgs/generated + src/grpc/generated (gitignored)
+# Generate Rust prost/tonic stubs under src/generated/<pkg>/…/v1/<stem>.rs (gitignored)
 gen-rust:
 	python3 scripts/generate_rust_msgs.py
 
@@ -83,6 +83,7 @@ test-cpp:
 	./bindings/cpp/build/service_set_bool
 	./bindings/cpp/build/action_fibonacci
 	./bindings/cpp/build/grpc_node
+	./bindings/cpp/build/inproc_context
 
 # Build console and sync static assets into assets/console for rust-embed
 console:
@@ -102,7 +103,12 @@ test-python: gen-python
 	PYTHONPATH=bindings/python python3 bindings/python/tests/test_msgs_roundtrip.py
 	PYTHONPATH=bindings/python python3 bindings/python/tests/test_typed_api.py
 
-# TypeScript smoke tests (msgs + GrpcNode guards; no broker required)
+# Native Python integration (needs `just python-dev` first; skips if extension missing)
+test-python-native:
+	python3 bindings/python/tests/test_grpc_node.py
+	python3 bindings/python/tests/test_inproc_context.py
+
+# TypeScript smoke tests (msgs + GrpcNode guards; inproc skips without native addon)
 test-typescript: gen-typescript
 	cd bindings/typescript && npm test
 

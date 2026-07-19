@@ -137,7 +137,7 @@ EOF
   (
     cd "$NATIVE_CRATE"
     # Ensure Rust msgs exist for dependent crate features
-    if [[ ! -d "$ROOT/src/msgs/generated" ]]; then
+    if [[ ! -f "$ROOT/src/generated/sensor_msgs/msg/v1/imu.rs" ]]; then
       python3 "$ROOT/scripts/generate_rust_msgs.py"
     fi
     cargo ndk -t "$abi" -P "$API_LEVEL" --link-libcxx-shared -o "$JNI_OUT" build --release

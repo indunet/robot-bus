@@ -1,13 +1,10 @@
 //! Generated ROS 2–style protobuf message and service types from [`proto/`](../../proto).
 //!
-//! Internal layout mirrors ROS packages under this module so prost `super::…`
-//! paths resolve. Public API re-exports each package at the crate root:
-//! `robot_bus::<pkg>::{msg|srv|action}::v1::...`.
+//! On-disk stubs mirror C++/Python: `generated/<pkg>/{msg|srv|action}/v1/<stem>.rs`
+//! (gitignored; one file per `.proto`). Run `just gen-rust` before building.
 //!
-//! Stubs live under [`generated/`](generated/) (gitignored). Run
-//! `just gen-rust` / `scripts/generate_rust_msgs.py` before building; CI and
-//! publish workflows generate them into the package so crates.io consumers do
-//! not need `protoc`.
+//! Public API re-exports each package at the crate root:
+//! `robot_bus::<pkg>::{msg|srv|action}::v1::...`.
 //!
 //! The bus still treats wire bodies as opaque bytes; these modules are for
 //! callers that want typed encode/decode of those payloads.
@@ -21,7 +18,7 @@
 pub mod builtin_interfaces {
     pub mod msg {
         pub mod v1 {
-            include!("generated/builtin_interfaces.msg.v1.rs");
+            include!("builtin_interfaces/msg/v1/_includes.rs");
         }
     }
 }
@@ -29,7 +26,7 @@ pub mod builtin_interfaces {
 pub mod std_msgs {
     pub mod msg {
         pub mod v1 {
-            include!("generated/std_msgs.msg.v1.rs");
+            include!("std_msgs/msg/v1/_includes.rs");
         }
     }
 }
@@ -37,7 +34,7 @@ pub mod std_msgs {
 pub mod std_srvs {
     pub mod srv {
         pub mod v1 {
-            include!("generated/std_srvs.srv.v1.rs");
+            include!("std_srvs/srv/v1/_includes.rs");
 
             use crate::typed::Service;
 
@@ -68,7 +65,7 @@ pub mod std_srvs {
 pub mod geometry_msgs {
     pub mod msg {
         pub mod v1 {
-            include!("generated/geometry_msgs.msg.v1.rs");
+            include!("geometry_msgs/msg/v1/_includes.rs");
         }
     }
 }
@@ -76,7 +73,7 @@ pub mod geometry_msgs {
 pub mod sensor_msgs {
     pub mod msg {
         pub mod v1 {
-            include!("generated/sensor_msgs.msg.v1.rs");
+            include!("sensor_msgs/msg/v1/_includes.rs");
         }
     }
 }
@@ -84,12 +81,12 @@ pub mod sensor_msgs {
 pub mod nav_msgs {
     pub mod msg {
         pub mod v1 {
-            include!("generated/nav_msgs.msg.v1.rs");
+            include!("nav_msgs/msg/v1/_includes.rs");
         }
     }
     pub mod srv {
         pub mod v1 {
-            include!("generated/nav_msgs.srv.v1.rs");
+            include!("nav_msgs/srv/v1/_includes.rs");
 
             use crate::typed::Service;
 
@@ -119,7 +116,7 @@ pub mod nav_msgs {
 
 pub mod action {
     pub mod v1 {
-        include!("generated/robot_bus_interface.action.v1.rs");
+        include!("robot_bus_interface/action/v1/_includes.rs");
 
         use crate::typed::Action;
 
@@ -136,7 +133,7 @@ pub mod action {
 pub mod tf2_msgs {
     pub mod msg {
         pub mod v1 {
-            include!("generated/tf2_msgs.msg.v1.rs");
+            include!("tf2_msgs/msg/v1/_includes.rs");
         }
     }
 }
@@ -144,7 +141,7 @@ pub mod tf2_msgs {
 pub mod unique_identifier_msgs {
     pub mod msg {
         pub mod v1 {
-            include!("generated/unique_identifier_msgs.msg.v1.rs");
+            include!("unique_identifier_msgs/msg/v1/_includes.rs");
         }
     }
 }
@@ -152,7 +149,7 @@ pub mod unique_identifier_msgs {
 pub mod diagnostic_msgs {
     pub mod msg {
         pub mod v1 {
-            include!("generated/diagnostic_msgs.msg.v1.rs");
+            include!("diagnostic_msgs/msg/v1/_includes.rs");
         }
     }
 }
@@ -160,7 +157,7 @@ pub mod diagnostic_msgs {
 pub mod foxglove_msgs {
     pub mod msg {
         pub mod v1 {
-            include!("generated/foxglove_msgs.msg.v1.rs");
+            include!("foxglove_msgs/msg/v1/_includes.rs");
         }
     }
 }
@@ -168,7 +165,7 @@ pub mod foxglove_msgs {
 pub mod trajectory_msgs {
     pub mod msg {
         pub mod v1 {
-            include!("generated/trajectory_msgs.msg.v1.rs");
+            include!("trajectory_msgs/msg/v1/_includes.rs");
         }
     }
 }
@@ -176,7 +173,7 @@ pub mod trajectory_msgs {
 pub mod shape_msgs {
     pub mod msg {
         pub mod v1 {
-            include!("generated/shape_msgs.msg.v1.rs");
+            include!("shape_msgs/msg/v1/_includes.rs");
         }
     }
 }
@@ -184,7 +181,7 @@ pub mod shape_msgs {
 pub mod visualization_msgs {
     pub mod msg {
         pub mod v1 {
-            include!("generated/visualization_msgs.msg.v1.rs");
+            include!("visualization_msgs/msg/v1/_includes.rs");
         }
     }
 }
@@ -192,7 +189,7 @@ pub mod visualization_msgs {
 pub mod control_msgs {
     pub mod msg {
         pub mod v1 {
-            include!("generated/control_msgs.msg.v1.rs");
+            include!("control_msgs/msg/v1/_includes.rs");
         }
     }
 }
@@ -200,7 +197,7 @@ pub mod control_msgs {
 pub mod nav2_msgs {
     pub mod msg {
         pub mod v1 {
-            include!("generated/nav2_msgs.msg.v1.rs");
+            include!("nav2_msgs/msg/v1/_includes.rs");
         }
     }
 }

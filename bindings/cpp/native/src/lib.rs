@@ -15,7 +15,7 @@ use robot_bus::broker::{
 use robot_bus::errors::BusError;
 use robot_bus::message_bus::{Publisher as RustPublisher, Subscriber as RustSubscriber};
 use robot_bus::runtime::{
-    ActionGoalHandler, CallbackGroup, CallbackGroupType,
+    ActionGoalHandler, CallbackGroup, CallbackGroupType, Context as RustContext,
     MultiThreadedExecutor as RustMultiThreadedExecutor, Node as RustNode,
     NodeActionClientRaw as RustNodeActionClient, NodeOptions as RustNodeOptions,
     NodeServiceClientRaw as RustNodeServiceClient, ServiceHandler,
@@ -800,6 +800,49 @@ pub extern "C" fn robot_bus_action_phases_free(phases: *mut RobotBusActionPhase,
     }
 }
 
+// --- Context ----------------------------------------------------------------
+
+pub struct RobotBusContext {
+    inner: RustContext,
+}
+
+fn context_ref(ctx: *mut RobotBusContext) -> Result<&'static RustContext, c_int> {
+    if ctx.is_null() {
+        Err(err("null context"))
+    } else {
+        Ok(&unsafe { &*ctx }.inner)
+    }
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn robot_bus_context_new() -> *mut RobotBusContext {
+    clear_error();
+    Box::into_raw(Box::new(RobotBusContext {
+        inner: RustContext::new(),
+    }))
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn robot_bus_context_free(c: *mut RobotBusContext) {
+    if !c.is_null() {
+        unsafe {
+            drop(Box::from_raw(c));
+        }
+    }
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn robot_bus_context_clone(c: *const RobotBusContext) -> *mut RobotBusContext {
+    if c.is_null() {
+        set_error("null context");
+        return ptr::null_mut();
+    }
+    clear_error();
+    Box::into_raw(Box::new(RobotBusContext {
+        inner: unsafe { &*c }.inner.clone(),
+    }))
+}
+
 // --- Node -------------------------------------------------------------------
 
 pub struct RobotBusNode {
@@ -859,6 +902,30 @@ pub extern "C" fn robot_bus_node_new(
 }
 
 #[unsafe(no_mangle)]
+pub extern "C" fn robot_bus_node_new_with_context(
+    ctx: *mut RobotBusContext,
+    name: *const c_char,
+    opts: *const RobotBusNodeOptions,
+) -> *mut RobotBusNode {
+    clear_error();
+    let context = match context_ref(ctx) {
+        Ok(c) => c.clone(),
+        Err(_) => return ptr::null_mut(),
+    };
+    let name = match cstr_req(name) {
+        Ok(n) => n.to_string(),
+        Err(_) => return ptr::null_mut(),
+    };
+    let options = match parse_node_options(opts) {
+        Ok(o) => o,
+        Err(_) => return ptr::null_mut(),
+    };
+    Box::into_raw(Box::new(RobotBusNode {
+        inner: RustNode::with_context(context, name, options),
+    }))
+}
+
+#[unsafe(no_mangle)]
 pub extern "C" fn robot_bus_node_tcp(name: *const c_char, host: *const c_char) -> *mut RobotBusNode {
     clear_error();
     let name = match cstr_req(name) {
@@ -904,6 +971,28 @@ pub extern "C" fn robot_bus_node_inproc(
     Box::into_raw(Box::new(RobotBusNode {
         inner: RustNode::with_options(name, options),
     }))
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn robot_bus_node_inproc_with_context(
+    ctx: *mut RobotBusContext,
+    name: *const c_char,
+    prefix: *const c_char,
+) -> *mut RobotBusNode {
+    clear_error();
+    let context = match context_ref(ctx) {
+        Ok(c) => c.clone(),
+        Err(_) => return ptr::null_mut(),
+    };
+    let name = match cstr_req(name) {
+        Ok(n) => n.to_string(),
+        Err(_) => return ptr::null_mut(),
+    };
+    let node = match cstr_opt(prefix) {
+        Some(p) => RustNode::inproc_at_with_context(context, name, p),
+        None => RustNode::inproc_with_context(context, name),
+    };
+    Box::into_raw(Box::new(RobotBusNode { inner: node }))
 }
 
 #[unsafe(no_mangle)]
@@ -1401,6 +1490,20 @@ pub extern "C" fn robot_bus_single_threaded_executor_new() -> *mut RobotBusSingl
 }
 
 #[unsafe(no_mangle)]
+pub extern "C" fn robot_bus_single_threaded_executor_new_with_context(
+    ctx: *mut RobotBusContext,
+) -> *mut RobotBusSingleThreadedExecutor {
+    clear_error();
+    let context = match context_ref(ctx) {
+        Ok(c) => c.clone(),
+        Err(_) => return ptr::null_mut(),
+    };
+    Box::into_raw(Box::new(RobotBusSingleThreadedExecutor {
+        inner: RustSingleThreadedExecutor::with_context(context),
+    }))
+}
+
+#[unsafe(no_mangle)]
 pub extern "C" fn robot_bus_single_threaded_executor_free(e: *mut RobotBusSingleThreadedExecutor) {
     if !e.is_null() {
         unsafe {
@@ -1576,6 +1679,22 @@ pub extern "C" fn robot_bus_multi_threaded_executor_new(
 }
 
 #[unsafe(no_mangle)]
+pub extern "C" fn robot_bus_multi_threaded_executor_new_with_context(
+    ctx: *mut RobotBusContext,
+    num_threads: usize,
+) -> *mut RobotBusMultiThreadedExecutor {
+    clear_error();
+    let context = match context_ref(ctx) {
+        Ok(c) => c.clone(),
+        Err(_) => return ptr::null_mut(),
+    };
+    let n = if num_threads == 0 { 4 } else { num_threads };
+    Box::into_raw(Box::new(RobotBusMultiThreadedExecutor {
+        inner: RustMultiThreadedExecutor::with_context(context, n),
+    }))
+}
+
+#[unsafe(no_mangle)]
 pub extern "C" fn robot_bus_multi_threaded_executor_free(e: *mut RobotBusMultiThreadedExecutor) {
     if !e.is_null() {
         unsafe {
@@ -1724,59 +1843,84 @@ pub struct RobotBusBrokerOptions {
 pub extern "C" fn robot_bus_broker_start(
     opts: *const RobotBusBrokerOptions,
 ) -> *mut RobotBusBroker {
-    clear_error();
+    robot_bus_broker_start_with_context(ptr::null_mut(), opts)
+}
+
+fn parse_broker_config(opts: *const RobotBusBrokerOptions) -> Result<RobotBusConfig, ()> {
     let mut config = RobotBusConfig::default();
-    if !opts.is_null() {
-        let o = unsafe { &*opts };
-        if let Some(v) = cstr_opt(o.message_xsub_bind) {
-            config.message.xsub_bind = normalize_bind(v);
-        }
-        if let Some(v) = cstr_opt(o.message_xpub_bind) {
-            config.message.xpub_bind = normalize_bind(v);
-        }
-        if let Some(v) = cstr_opt(o.service_frontend_bind) {
-            config.service.frontend_bind = normalize_bind(v);
-        }
-        if let Some(v) = cstr_opt(o.service_backend_bind) {
-            config.service.backend_bind = normalize_bind(v);
-        }
-        if let Some(v) = cstr_opt(o.action_frontend_bind) {
-            config.action.frontend_bind = normalize_bind(v);
-        }
-        if let Some(v) = cstr_opt(o.action_backend_bind) {
-            config.action.backend_bind = normalize_bind(v);
-        }
-        if o.tcp_only != 0 {
-            config.message.bind_all_transports = false;
-            config.service.bind_all_transports = false;
-            config.action.bind_all_transports = false;
-        }
-        if let Some(v) = cstr_opt(o.grpc_listen) {
-            match v.parse() {
-                Ok(addr) => config.grpc.listen = addr,
-                Err(e) => {
-                    set_error(format!("invalid grpc_listen: {e}"));
-                    return ptr::null_mut();
-                }
-            }
-        }
-        if o.no_console != 0 {
-            config.console.enabled = false;
-        }
-        if let Some(v) = cstr_opt(o.console_listen) {
-            match v.parse() {
-                Ok(addr) => {
-                    config.console.listen = addr;
-                    config.console.enabled = true;
-                }
-                Err(e) => {
-                    set_error(format!("invalid console_listen: {e}"));
-                    return ptr::null_mut();
-                }
+    if opts.is_null() {
+        return Ok(config);
+    }
+    let o = unsafe { &*opts };
+    if let Some(v) = cstr_opt(o.message_xsub_bind) {
+        config.message.xsub_bind = normalize_bind(v);
+    }
+    if let Some(v) = cstr_opt(o.message_xpub_bind) {
+        config.message.xpub_bind = normalize_bind(v);
+    }
+    if let Some(v) = cstr_opt(o.service_frontend_bind) {
+        config.service.frontend_bind = normalize_bind(v);
+    }
+    if let Some(v) = cstr_opt(o.service_backend_bind) {
+        config.service.backend_bind = normalize_bind(v);
+    }
+    if let Some(v) = cstr_opt(o.action_frontend_bind) {
+        config.action.frontend_bind = normalize_bind(v);
+    }
+    if let Some(v) = cstr_opt(o.action_backend_bind) {
+        config.action.backend_bind = normalize_bind(v);
+    }
+    if o.tcp_only != 0 {
+        config.message.bind_all_transports = false;
+        config.service.bind_all_transports = false;
+        config.action.bind_all_transports = false;
+    }
+    if let Some(v) = cstr_opt(o.grpc_listen) {
+        match v.parse() {
+            Ok(addr) => config.grpc.listen = addr,
+            Err(e) => {
+                set_error(format!("invalid grpc_listen: {e}"));
+                return Err(());
             }
         }
     }
-    match RustRobotBusBroker::start(config) {
+    if o.no_console != 0 {
+        config.console.enabled = false;
+    }
+    if let Some(v) = cstr_opt(o.console_listen) {
+        match v.parse() {
+            Ok(addr) => {
+                config.console.listen = addr;
+                config.console.enabled = true;
+            }
+            Err(e) => {
+                set_error(format!("invalid console_listen: {e}"));
+                return Err(());
+            }
+        }
+    }
+    Ok(config)
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn robot_bus_broker_start_with_context(
+    ctx: *mut RobotBusContext,
+    opts: *const RobotBusBrokerOptions,
+) -> *mut RobotBusBroker {
+    clear_error();
+    let config = match parse_broker_config(opts) {
+        Ok(c) => c,
+        Err(()) => return ptr::null_mut(),
+    };
+    let started = if ctx.is_null() {
+        RustRobotBusBroker::start(config)
+    } else {
+        match context_ref(ctx) {
+            Ok(c) => RustRobotBusBroker::start_with_context(c.clone(), config),
+            Err(_) => return ptr::null_mut(),
+        }
+    };
+    match started {
         Ok(inner) => Box::into_raw(Box::new(RobotBusBroker {
             inner: Some(inner),
         })),

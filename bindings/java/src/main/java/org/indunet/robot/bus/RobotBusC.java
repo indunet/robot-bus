@@ -114,13 +114,23 @@ interface RobotBusC extends Library {
             double timeoutSecs,
             ActionMessageStruct outMsg);
 
+    Pointer robot_bus_context_new();
+
+    void robot_bus_context_free(Pointer c);
+
+    Pointer robot_bus_context_clone(Pointer c);
+
     Pointer robot_bus_node_new(String name, NodeOptions opts);
+
+    Pointer robot_bus_node_new_with_context(Pointer ctx, String name, NodeOptions opts);
 
     Pointer robot_bus_node_tcp(String name, String host);
 
     Pointer robot_bus_node_ipc(String name, String path);
 
     Pointer robot_bus_node_inproc(String name, String prefix);
+
+    Pointer robot_bus_node_inproc_with_context(Pointer ctx, String name, String prefix);
 
     Pointer robot_bus_node_grpc(String name);
 
@@ -170,6 +180,8 @@ interface RobotBusC extends Library {
 
     Pointer robot_bus_single_threaded_executor_new();
 
+    Pointer robot_bus_single_threaded_executor_new_with_context(Pointer ctx);
+
     void robot_bus_single_threaded_executor_free(Pointer e);
 
     int robot_bus_single_threaded_executor_add_node(Pointer e, Pointer n);
@@ -192,6 +204,8 @@ interface RobotBusC extends Library {
 
     Pointer robot_bus_multi_threaded_executor_new(long numThreads);
 
+    Pointer robot_bus_multi_threaded_executor_new_with_context(Pointer ctx, long numThreads);
+
     void robot_bus_multi_threaded_executor_free(Pointer e);
 
     int robot_bus_multi_threaded_executor_add_node(Pointer e, Pointer n);
@@ -207,6 +221,8 @@ interface RobotBusC extends Library {
     int robot_bus_multi_threaded_executor_spin(Pointer e);
 
     Pointer robot_bus_broker_start(BrokerOptions opts);
+
+    Pointer robot_bus_broker_start_with_context(Pointer ctx, BrokerOptions opts);
 
     void robot_bus_broker_free(Pointer b);
 

@@ -1,7 +1,7 @@
 // std_srvs/SetBool service client round-trip.
 #include "harness.hpp"
 
-#include <robot_bus/std_srvs/srv/v1/set_bool.pb.h>
+#include <robot_bus/std_srvs/srv/v1/set_bool.pb.hpp>
 
 #include <iostream>
 #include <string>

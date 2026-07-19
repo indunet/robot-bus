@@ -38,6 +38,18 @@ const broker = RobotBusBroker.start({
 broker.stop();
 ```
 
+同进程 **inproc** 须共享 `Context`：
+
+```ts
+import { Context, Node, RobotBusBroker } from "robot-bus";
+
+const ctx = new Context();
+const broker = RobotBusBroker.start({ noConsole: true }, ctx);
+const node = Node.inprocWithContext(ctx, "pilot");
+```
+
+tcp / ipc / gRPC 不要求共享 Context。
+
 ## Node.js（完整 API）
 
 ```ts

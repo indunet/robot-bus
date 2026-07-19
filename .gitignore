@@ -60,8 +60,8 @@ dev_note.md
 
 # Protobuf stubs — regenerate with `just gen-*` (CI / package builds); not tracked.
 # Published wheels / crates / npm / DEB·MSI embed these after codegen.
-src/msgs/generated/
-src/grpc/generated/
+src/generated/**
+!src/generated/mod.rs
 bindings/python/robot_bus/*/
 bindings/cpp/generated/
 bindings/typescript/generated/

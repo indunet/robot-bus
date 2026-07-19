@@ -37,7 +37,7 @@ Headers install under the `robot_bus/` prefix (no `generated/` segment):
 
 ```cpp
 #include <robot_bus/Node.hpp>
-#include <robot_bus/sensor_msgs/msg/v1/imu.pb.h>
+#include <robot_bus/sensor_msgs/msg/v1/imu.pb.hpp>
 ```
 
 Link with `-lrobot_bus -lrobot_bus_msgs` (or CMake `robot_bus::robot_bus` + `robot_bus::msgs`).
@@ -56,13 +56,22 @@ robot_bus::Broker broker;  // default binds
 // broker.message_xsub_bind() / grpc_listen() …
 ```
 
+Same-process **inproc** must share a `Context` with the embedded broker:
+
+```cpp
+robot_bus::Context ctx;
+robot_bus::Broker broker(ctx);
+auto node = robot_bus::Node::inproc_with_context(ctx, "pilot");
+```
+
+tcp / ipc / gRPC do not require a shared context.
 ## Message bus (typed)
 
 Protobuf message types are **pre-generated** and shipped in the package — you do **not** need `protoc` on the machine that only consumes the SDK.
 
 ```cpp
 #include <robot_bus/Node.hpp>
-#include <robot_bus/sensor_msgs/msg/v1/imu.pb.h>
+#include <robot_bus/sensor_msgs/msg/v1/imu.pb.hpp>
 
 robot_bus::Broker broker;
 robot_bus::Node node("pilot");
@@ -108,8 +117,8 @@ Compare imports across languages:
 | Python | `from robot_bus.sensor_msgs.msg.v1 import Imu` |
 | TypeScript | `import { Imu } from "robot-bus/sensor_msgs/msg/v1/imu.js"` |
 | Java / Android | `import org.indunet.robot.bus.sensor_msgs.msg.v1.Imu;` |
-| C++ (ROS msgs) | `#include <robot_bus/sensor_msgs/msg/v1/imu.pb.h>` |
-| C++ (built-in action) | `#include <robot_bus/robot_bus_interface/action/v1/fibonacci.pb.h>` |
+| C++ (ROS msgs) | `#include <robot_bus/sensor_msgs/msg/v1/imu.pb.hpp>` |
+| C++ (built-in action) | `#include <robot_bus/robot_bus_interface/action/v1/fibonacci.pb.hpp>` |
 
 ## CMake
 

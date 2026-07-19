@@ -5,10 +5,11 @@ Requires ``protoc`` on PATH (override with env ``PROTOC``). Outputs are
 gitignored; CI and package workflows run this before build/publish so DEB/MSI
 embed the stubs. End users who install the SDK do not need protoc.
 
-Generated files live under ``generated/robot_bus/<pkg>/…`` so user includes are:
+``protoc --cpp_out`` emits Google-style ``*.pb.h`` / ``*.pb.cc``; we rename to
+``*.pb.hpp`` / ``*.pb.cpp`` after generation. Public includes:
 
-  #include <robot_bus/sensor_msgs/msg/v1/imu.pb.h>
-  #include <robot_bus/robot_bus_interface/action/v1/fibonacci.pb.h>
+  #include <robot_bus/sensor_msgs/msg/v1/imu.pb.hpp>
+  #include <robot_bus/robot_bus_interface/action/v1/fibonacci.pb.hpp>
 
 The outer ``robot_bus/`` is the SDK include prefix. Built-in protos under
 ``proto/robot_bus_interface/…`` keep that path segment.
@@ -66,6 +67,9 @@ INCLUDE_RE = re.compile(
     + r')(/[^">]+)([>"])'
 )
 
+# protoc emits .pb.h; rewrite include paths to our .pb.hpp names.
+PB_HEADER_RE = re.compile(r"(\.pb)\.h([>\"]|\s)")
+
 
 def protoc_version(protoc: str) -> str:
     out = subprocess.check_output([protoc, "--version"], text=True).strip()
@@ -116,7 +120,18 @@ def rewrite_includes(text: str) -> str:
             return f"{directive}<robot_bus/robot_bus_interface{rest}>"
         return f"{directive}<robot_bus/{pkg}{rest}>"
 
-    return INCLUDE_RE.sub(repl, text)
+    text = INCLUDE_RE.sub(repl, text)
+    # imu.pb.h → imu.pb.hpp (protoc still wrote .pb.h inside the sources)
+    text = PB_HEADER_RE.sub(r"\1.hpp\2", text)
+    return text
+
+
+def rename_pb_extensions(root: Path) -> None:
+    """protoc → *.pb.h / *.pb.cc; rename to *.pb.hpp / *.pb.cpp."""
+    for path in list(root.rglob("*.pb.h")):
+        path.rename(path.with_name(path.name[: -len(".pb.h")] + ".pb.hpp"))
+    for path in list(root.rglob("*.pb.cc")):
+        path.rename(path.with_name(path.name[: -len(".pb.cc")] + ".pb.cpp"))
 
 
 def clear_output() -> None:
@@ -144,8 +159,10 @@ def copy_and_rewrite(tmp: Path) -> None:
                 shutil.rmtree(dst)
             shutil.copytree(child, dst)
 
+    rename_pb_extensions(OUT_ROOT)
+
     for path in OUT_ROOT.rglob("*"):
-        if path.suffix not in {".h", ".cc", ".hpp", ".cpp"}:
+        if not path.name.endswith((".pb.hpp", ".pb.cpp")):
             continue
         text = path.read_text(encoding="utf-8")
         rewritten = rewrite_includes(text)
@@ -160,10 +177,10 @@ def write_readme() -> None:
         "Do not edit by hand; re-run after changing `proto/`.\n\n"
         "Public includes use the `robot_bus/` prefix (no `generated/` segment):\n\n"
         "```cpp\n"
-        "#include <robot_bus/sensor_msgs/msg/v1/imu.pb.h>\n"
-        "// → bindings/cpp/generated/robot_bus/sensor_msgs/msg/v1/imu.pb.h\n"
+        "#include <robot_bus/sensor_msgs/msg/v1/imu.pb.hpp>\n"
+        "// → bindings/cpp/generated/robot_bus/sensor_msgs/msg/v1/imu.pb.hpp\n"
         "\n"
-        "#include <robot_bus/robot_bus_interface/action/v1/fibonacci.pb.h>\n"
+        "#include <robot_bus/robot_bus_interface/action/v1/fibonacci.pb.hpp>\n"
         "// → proto/robot_bus_interface/action/v1/fibonacci.proto\n"
         "```\n",
         encoding="utf-8",

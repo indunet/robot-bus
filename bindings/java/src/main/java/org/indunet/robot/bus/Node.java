@@ -55,6 +55,31 @@ public final class Node implements AutoCloseable {
                 Errors.checkPtr(RobotBusC.Holder.INSTANCE.robot_bus_node_inproc(name, prefix), "Node.inproc"));
     }
 
+    /** Same-process inproc sharing {@code context} with an embedded broker. */
+    public static Node inproc(Context context, String name) {
+        return inproc(context, name, null);
+    }
+
+    public static Node inproc(Context context, String name, String prefix) {
+        return new Node(
+                Errors.checkPtr(
+                        RobotBusC.Holder.INSTANCE.robot_bus_node_inproc_with_context(
+                                context.raw(), name, prefix),
+                        "Node.inproc"));
+    }
+
+    public static Node withContext(Context context, String name) {
+        return withContext(context, name, null);
+    }
+
+    public static Node withContext(Context context, String name, NodeOptions options) {
+        return new Node(
+                Errors.checkPtr(
+                        RobotBusC.Holder.INSTANCE.robot_bus_node_new_with_context(
+                                context.raw(), name, options != null ? options.toNative() : null),
+                        "Node.withContext"));
+    }
+
     public static Node grpc(String name) {
         return new Node(Errors.checkPtr(RobotBusC.Holder.INSTANCE.robot_bus_node_grpc(name), "Node.grpc"));
     }

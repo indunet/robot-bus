@@ -166,7 +166,7 @@ C++ 无中央库：从 [GitHub Releases](https://github.com/indunet/robot-bus/re
 
 ```cpp
 #include <robot_bus/Node.hpp>
-#include <robot_bus/sensor_msgs/msg/v1/imu.pb.h>
+#include <robot_bus/sensor_msgs/msg/v1/imu.pb.hpp>
 
 robot_bus::Broker broker;
 robot_bus::Node node("pilot");
@@ -336,7 +336,7 @@ just test-typescript
 
 | 语言 | 路径 | 说明 |
 |------|------|------|
-| Rust | `robot_bus::<pkg>::{msg\|srv}::v1` | `just gen-rust` → `src/msgs/generated/`（+ gRPC → `src/grpc/generated/`） |
+| Rust | `robot_bus::<pkg>::{msg\|srv}::v1` | `just gen-rust` → `src/generated/<pkg>/{msg\|srv}/v1/<stem>.rs` |
 | Python | `robot_bus.<pkg>.{msg\|srv}.v1` | `just gen-python`；随 wheel 打包 |
 | TypeScript | `robot-bus/<pkg>/{msg\|srv}/v1/…` | `just gen-typescript`；随 npm 包打包 |
 | Java / Android | `org.indunet.robot.bus.<pkg>.{msg\|srv\|action}.v1` | `just gen-java`；随 JAR / AAR 打包 |

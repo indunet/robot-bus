@@ -166,7 +166,7 @@ No central package registry for C++: download `robot-bus-cpp_*.deb` / `robot-bus
 
 ```cpp
 #include <robot_bus/Node.hpp>
-#include <robot_bus/sensor_msgs/msg/v1/imu.pb.h>
+#include <robot_bus/sensor_msgs/msg/v1/imu.pb.hpp>
 
 robot_bus::Broker broker;
 robot_bus::Node node("pilot");
@@ -336,7 +336,7 @@ Generated stubs are **not checked into git**; run `just gen-*` after changing pr
 
 | Language | Path | Notes |
 |------|------|------|
-| Rust | `robot_bus::<pkg>::{msg\|srv}::v1` | `just gen-rust` → `src/msgs/generated/` (+ gRPC → `src/grpc/generated/`) |
+| Rust | `robot_bus::<pkg>::{msg\|srv}::v1` | `just gen-rust` → `src/generated/<pkg>/{msg\|srv}/v1/<stem>.rs` |
 | Python | `robot_bus.<pkg>.{msg\|srv}.v1` | `just gen-python`; packed into the wheel |
 | TypeScript | `robot-bus/<pkg>/{msg\|srv}/v1/…` | `just gen-typescript`; packed into the npm package |
 | Java / Android | `org.indunet.robot.bus.<pkg>.{msg\|srv\|action}.v1` | `just gen-java`; packed into JAR / AAR |

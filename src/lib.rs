@@ -14,9 +14,9 @@ pub mod zmq_helpers;
 
 // Keep packages under a private module so prost `super::…` paths resolve;
 // re-export at crate root as `robot_bus::sensor_msgs::…`.
-mod msgs;
+mod generated;
 
-pub use msgs::{
+pub use generated::{
     action, builtin_interfaces, control_msgs, diagnostic_msgs, foxglove_msgs, geometry_msgs,
     nav2_msgs, nav_msgs, sensor_msgs, shape_msgs, std_msgs, std_srvs, tf2_msgs, trajectory_msgs,
     unique_identifier_msgs, visualization_msgs,
