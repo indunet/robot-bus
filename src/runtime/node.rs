@@ -32,6 +32,7 @@ use crate::runtime::executor::{Executor, ShutdownHandle};
 use crate::runtime::executors::{ExecutorHandle, SingleThreadedExecutor};
 #[cfg(feature = "grpc")]
 use crate::runtime::grpc_runtime::{GrpcClientContext, GrpcRuntime};
+use crate::runtime::parameters::{Parameter, ParameterStore, ParameterValue};
 use crate::runtime::queues::ActionMessageCallback;
 use crate::runtime::registrations::{ActionGoalHandler, MessageCallback, ServiceHandler};
 use crate::runtime::timers::{TimerCallback, TimerHandle};
@@ -591,6 +592,7 @@ pub struct Node {
     publisher: Option<Arc<BusPublisher>>,
     subscriber_connected: bool,
     default_callback_group: CallbackGroup,
+    parameters: ParameterStore,
 }
 
 impl Node {
@@ -682,6 +684,7 @@ impl Node {
             publisher: None,
             subscriber_connected: false,
             default_callback_group: CallbackGroup::mutually_exclusive(),
+            parameters: ParameterStore::new(),
         }
     }
 
@@ -760,6 +763,51 @@ impl Node {
     /// Shared executor handle after [`add_node`](crate::runtime::SingleThreadedExecutor::add_node).
     pub fn executor_handle(&self) -> Option<&ExecutorHandle> {
         self.executor.as_ref()
+    }
+
+    /// Declare a local parameter with a default value (must not already exist).
+    pub fn declare_parameter(
+        &mut self,
+        name: impl Into<String>,
+        value: ParameterValue,
+    ) -> Result<()> {
+        self.parameters.declare(name, value)
+    }
+
+    /// Read a previously declared parameter.
+    pub fn get_parameter(&self, name: &str) -> Result<ParameterValue> {
+        self.parameters.get(name)
+    }
+
+    /// Update a declared parameter (type must match the declared variant).
+    pub fn set_parameter(&mut self, name: &str, value: ParameterValue) -> Result<()> {
+        self.parameters.set(name, value)
+    }
+
+    /// Whether `name` has been declared.
+    pub fn has_parameter(&self, name: &str) -> bool {
+        self.parameters.has(name)
+    }
+
+    /// All declared parameters, sorted by name.
+    pub fn list_parameters(&self) -> Vec<Parameter> {
+        self.parameters.list()
+    }
+
+    /// Load parameters from a YAML string (declare missing, set existing).
+    ///
+    /// Accepts a flat scalar map, or ROS 2–style `ros__parameters` /
+    /// `"/**": { ros__parameters: … }`.
+    pub fn load_parameters_from_yaml_str(&mut self, yaml: &str) -> Result<()> {
+        self.parameters.load_from_yaml_str(yaml)
+    }
+
+    /// Load parameters from a YAML file.
+    pub fn load_parameters_from_yaml_file(
+        &mut self,
+        path: impl AsRef<std::path::Path>,
+    ) -> Result<()> {
+        self.parameters.load_from_yaml_file(path)
     }
 
     /// Create a typed topic publisher (ROS 2 `create_publisher`).
@@ -1317,6 +1365,54 @@ mod tests {
 
     use super::*;
     use crate::runtime::SingleThreadedExecutor;
+
+    #[test]
+    fn node_local_parameters() {
+        let mut node = Node::new("pilot");
+        node.declare_parameter("max_speed", ParameterValue::Double(1.5))
+            .unwrap();
+        node.declare_parameter("enabled", ParameterValue::Bool(true))
+            .unwrap();
+        assert_eq!(
+            node.get_parameter("max_speed").unwrap(),
+            ParameterValue::Double(1.5)
+        );
+        node.set_parameter("max_speed", ParameterValue::Double(2.0))
+            .unwrap();
+        assert!(node.has_parameter("enabled"));
+        assert_eq!(node.list_parameters().len(), 2);
+        assert!(matches!(
+            node.declare_parameter("enabled", ParameterValue::Bool(false)),
+            Err(BusError::ParameterAlreadyDeclared { .. })
+        ));
+        assert!(matches!(
+            node.set_parameter("enabled", ParameterValue::Integer(1)),
+            Err(BusError::ParameterTypeMismatch { .. })
+        ));
+    }
+
+    #[test]
+    fn node_load_parameters_from_yaml() {
+        let mut node = Node::new("pilot");
+        node.load_parameters_from_yaml_str(
+            r#"
+ros__parameters:
+  max_speed: 1.25
+  frame_id: base_link
+"#,
+        )
+        .unwrap();
+        assert_eq!(
+            node.get_parameter("max_speed").unwrap(),
+            ParameterValue::Double(1.25)
+        );
+        node.load_parameters_from_yaml_str("max_speed: 3.0\n")
+            .unwrap();
+        assert_eq!(
+            node.get_parameter("max_speed").unwrap(),
+            ParameterValue::Double(3.0)
+        );
+    }
 
     #[test]
     fn options_override_endpoints() {

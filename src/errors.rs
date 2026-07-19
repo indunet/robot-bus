@@ -23,6 +23,22 @@ pub enum BusError {
     #[error("Executor is closed")]
     Closed,
 
+    #[error("parameter '{name}' is already declared")]
+    ParameterAlreadyDeclared { name: String },
+
+    #[error("parameter '{name}' is not declared")]
+    ParameterNotDeclared { name: String },
+
+    #[error("parameter '{name}' type mismatch: expected {expected}, got {got}")]
+    ParameterTypeMismatch {
+        name: String,
+        expected: &'static str,
+        got: &'static str,
+    },
+
+    #[error("parameter yaml: {0}")]
+    ParameterYaml(String),
+
     #[error("zmq error: {0}")]
     Zmq(#[from] zmq::Error),
 }

@@ -199,7 +199,9 @@ just android-dev       # 需 ANDROID_HOME + NDK 26 + cargo-ndk
 |------|------|
 | `Node(name)` / `Node(name, NodeOptions)` | 建节点 |
 | `Node.tcp` / `ipc` / `inproc` / `inproc(Context, …)` / `withContext` / `grpc` / `grpcAt` | 传输预设；同进程 inproc 须共享 `Context` |
-| `node.spin()` / `spinOnce` / `shutdown` | 驱动回调 |
+| `declareParameter` / `getParameter` / `setParameter` / `hasParameter` / `listParameters` | 本节点本地参数（Boolean / Long / Double / String） |
+| `loadParametersFromYaml` / `loadParametersFromYamlStr` | 从 YAML 文件或字符串加载参数 |
+| `Parameter` | `listParameters` 返回的 name/value || `node.spin()` / `spinOnce` / `shutdown` | 驱动回调 |
 | `createPublisher(topic)` / `createPublisher(topic, Class<T>)` | raw → `TopicPublisher`；typed → `TypedTopicPublisher` |
 | `createSubscription(..., MsgCallback)` / `(..., TypedMsgCallback, Class)` | raw `byte[]` 或 typed `Message` |
 | `createService` / `createClient` | raw 或 typed（`Request`/`Response` Class） |

@@ -62,6 +62,47 @@ broker.stop()?;
 
 ---
 
+## 本地参数（Node）
+
+ROS 2 风格的本节点参数表（不经总线；无远程参数服务 / CLI `-p`）。标量类型：`bool` / `i64` / `f64` / `String`；须先 `declare` 再 `get` / `set`，`set` 时类型必须与声明一致。
+
+可用 YAML 启动加载（未声明则 declare，已声明则 set）：
+
+- 扁平：`max_speed: 1.5`
+- ROS 2 风格：`ros__parameters: { … }`
+- 通配：`"/**": { ros__parameters: { … } }`
+
+```rust
+use robot_bus::{Node, ParameterValue};
+
+fn main() -> robot_bus::Result<()> {
+    let mut node = Node::new("pilot");
+    node.declare_parameter("max_speed", ParameterValue::Double(1.5))?;
+    node.declare_parameter("frame_id", ParameterValue::String("base_link".into()))?;
+
+    if let ParameterValue::Double(v) = node.get_parameter("max_speed")? {
+        println!("max_speed={v}");
+    }
+    node.set_parameter("max_speed", ParameterValue::Double(2.0))?;
+    assert!(node.has_parameter("frame_id"));
+    for p in node.list_parameters() {
+        println!("{} = {:?}", p.name, p.value);
+    }
+
+    node.load_parameters_from_yaml_str(
+        r#"
+ros__parameters:
+  max_speed: 3.0
+  enabled: true
+"#,
+    )?;
+    node.load_parameters_from_yaml_file("config/pilot.yaml")?;
+    Ok(())
+}
+```
+
+---
+
 ## Message bus（Node + spin）
 
 接近 ROS 2：`Node::new` → typed `create_publisher` / `create_subscription`（创建时绑定消息类型，自动 encode/decode）→ `node.spin()`。底层与 gRPC 仍传 opaque bytes。

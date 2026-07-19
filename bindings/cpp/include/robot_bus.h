@@ -71,6 +71,32 @@ typedef struct RobotBusBrokerOptions {
   int no_console;
 } RobotBusBrokerOptions;
 
+/** Parameter scalar type: 0=bool, 1=integer, 2=double, 3=string. */
+typedef enum RobotBusParameterType {
+  ROBOT_BUS_PARAM_BOOL = 0,
+  ROBOT_BUS_PARAM_INTEGER = 1,
+  ROBOT_BUS_PARAM_DOUBLE = 2,
+  ROBOT_BUS_PARAM_STRING = 3
+} RobotBusParameterType;
+
+/**
+ * Parameter value.
+ * For declare/set: string_value is borrowed (not freed by the library).
+ * For get/list: string_value is owned when type==STRING (free with robot_bus_free_string).
+ */
+typedef struct RobotBusParameterValue {
+  int type;
+  int bool_value;
+  int64_t integer_value;
+  double double_value;
+  char *string_value;
+} RobotBusParameterValue;
+
+typedef struct RobotBusParameter {
+  char *name;
+  RobotBusParameterValue value;
+} RobotBusParameter;
+
 typedef void (*RobotBusMsgCallback)(const char *topic, const uint8_t *data, size_t len,
                                     void *user);
 typedef void (*RobotBusTimerCallback)(void *user);
@@ -186,6 +212,19 @@ ROBOT_BUS_API int robot_bus_node_spin(RobotBusNode *n);
 ROBOT_BUS_API int robot_bus_node_start(RobotBusNode *n);
 ROBOT_BUS_API int robot_bus_node_stop(RobotBusNode *n);
 ROBOT_BUS_API int robot_bus_node_wait(RobotBusNode *n);
+
+ROBOT_BUS_API int robot_bus_node_declare_parameter(RobotBusNode *n, const char *name,
+                                                   const RobotBusParameterValue *value);
+ROBOT_BUS_API int robot_bus_node_set_parameter(RobotBusNode *n, const char *name,
+                                               const RobotBusParameterValue *value);
+ROBOT_BUS_API int robot_bus_node_get_parameter(RobotBusNode *n, const char *name,
+                                               RobotBusParameterValue *out);
+ROBOT_BUS_API int robot_bus_node_has_parameter(const RobotBusNode *n, const char *name);
+ROBOT_BUS_API int robot_bus_node_list_parameters(RobotBusNode *n, RobotBusParameter **out,
+                                                size_t *out_count);
+ROBOT_BUS_API void robot_bus_parameters_free(RobotBusParameter *params, size_t count);
+ROBOT_BUS_API int robot_bus_node_load_parameters_from_yaml(RobotBusNode *n, const char *path);
+ROBOT_BUS_API int robot_bus_node_load_parameters_from_yaml_str(RobotBusNode *n, const char *yaml);
 
 ROBOT_BUS_API RobotBusSingleThreadedExecutor *robot_bus_single_threaded_executor_new(void);
 ROBOT_BUS_API RobotBusSingleThreadedExecutor *robot_bus_single_threaded_executor_new_with_context(

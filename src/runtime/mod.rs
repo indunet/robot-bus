@@ -12,6 +12,7 @@ mod dispatch;
 #[cfg(feature = "grpc")]
 mod grpc_runtime;
 mod node;
+mod parameters;
 mod queues;
 mod registrations;
 mod timers;
@@ -25,6 +26,7 @@ pub use node::{
     Node, NodeActionClient, NodeActionClientRaw, NodeActionServer, NodeOptions, NodeService,
     NodeServiceClient, NodeServiceClientRaw, TopicPublisher, TopicPublisherRaw,
 };
+pub use parameters::{Parameter, ParameterValue};
 pub use queues::ActionMessageCallback;
 pub use registrations::{ActionGoalHandler, MessageCallback, ServiceHandler};
 pub use timers::{TimerCallback, TimerHandle};

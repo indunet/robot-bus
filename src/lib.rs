@@ -48,8 +48,8 @@ pub use runtime::{
     ActionGoalHandler, CallbackGroup, CallbackGroupType, Context, Executor, ExecutorHandle,
     MessageCallback, MultiThreadedExecutor, Node, NodeActionClient, NodeActionClientRaw,
     NodeActionServer, NodeOptions, NodeService, NodeServiceClient, NodeServiceClientRaw,
-    ServiceHandler, ShutdownHandle, SingleThreadedExecutor, TimerCallback, TimerHandle,
-    TopicPublisher, TopicPublisherRaw,
+    Parameter, ParameterValue, ServiceHandler, ShutdownHandle, SingleThreadedExecutor,
+    TimerCallback, TimerHandle, TopicPublisher, TopicPublisherRaw,
 };
 pub use service_bus::{ServiceClient, ServiceWorker};
 pub use transports::{

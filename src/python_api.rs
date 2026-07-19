@@ -19,7 +19,7 @@ use crate::runtime::{
     ActionGoalHandler, CallbackGroup, CallbackGroupType, Context as RustContext,
     MultiThreadedExecutor as RustMultiThreadedExecutor, Node as RustNode,
     NodeActionClientRaw as RustNodeActionClient, NodeOptions as RustNodeOptions,
-    NodeServiceClientRaw as RustNodeServiceClient, ShutdownHandle as RustShutdownHandle,
+    NodeServiceClientRaw as RustNodeServiceClient, ParameterValue, ShutdownHandle as RustShutdownHandle,
     SingleThreadedExecutor as RustSingleThreadedExecutor, TimerHandle as RustTimerHandle,
     TopicPublisherRaw as RustTopicPublisher,
 };
@@ -29,6 +29,34 @@ use crate::transports;
 
 fn bus_err(err: BusError) -> PyErr {
     PyRuntimeError::new_err(err.to_string())
+}
+
+fn parameter_value_from_py(value: &Bound<'_, PyAny>) -> PyResult<ParameterValue> {
+    if let Ok(v) = value.extract::<bool>() {
+        return Ok(ParameterValue::Bool(v));
+    }
+    if let Ok(v) = value.extract::<i64>() {
+        return Ok(ParameterValue::Integer(v));
+    }
+    if let Ok(v) = value.extract::<f64>() {
+        return Ok(ParameterValue::Double(v));
+    }
+    if let Ok(v) = value.extract::<String>() {
+        return Ok(ParameterValue::String(v));
+    }
+    Err(PyRuntimeError::new_err(
+        "parameter value must be bool, int, float, or str",
+    ))
+}
+
+fn parameter_value_to_py(py: Python<'_>, value: ParameterValue) -> PyResult<PyObject> {
+    use pyo3::IntoPyObjectExt;
+    match value {
+        ParameterValue::Bool(v) => v.into_py_any(py),
+        ParameterValue::Integer(v) => v.into_py_any(py),
+        ParameterValue::Double(v) => v.into_py_any(py),
+        ParameterValue::String(v) => v.into_py_any(py),
+    }
 }
 
 /// Run blocking ZMQ/gRPC I/O without holding the GIL.
@@ -686,6 +714,56 @@ impl PyNode {
     #[getter]
     fn name(&self) -> &str {
         self.inner.name()
+    }
+
+    /// Declare a local parameter (`bool` / `int` / `float` / `str`).
+    fn declare_parameter(&mut self, name: &str, value: &Bound<'_, PyAny>) -> PyResult<()> {
+        self.inner
+            .declare_parameter(name, parameter_value_from_py(value)?)
+            .map_err(bus_err)
+    }
+
+    /// Read a previously declared parameter (returns `bool` / `int` / `float` / `str`).
+    fn get_parameter(&self, py: Python<'_>, name: &str) -> PyResult<PyObject> {
+        let value = self.inner.get_parameter(name).map_err(bus_err)?;
+        parameter_value_to_py(py, value)
+    }
+
+    /// Update a declared parameter (type must match).
+    fn set_parameter(&mut self, name: &str, value: &Bound<'_, PyAny>) -> PyResult<()> {
+        self.inner
+            .set_parameter(name, parameter_value_from_py(value)?)
+            .map_err(bus_err)
+    }
+
+    fn has_parameter(&self, name: &str) -> bool {
+        self.inner.has_parameter(name)
+    }
+
+    /// All declared parameters as `list[dict]` with keys `name`, `value`.
+    fn list_parameters(&self, py: Python<'_>) -> PyResult<PyObject> {
+        let list = pyo3::types::PyList::empty(py);
+        for param in self.inner.list_parameters() {
+            let dict = pyo3::types::PyDict::new(py);
+            dict.set_item("name", &param.name)?;
+            dict.set_item("value", parameter_value_to_py(py, param.value)?)?;
+            list.append(dict)?;
+        }
+        Ok(list.into())
+    }
+
+    /// Load parameters from a YAML string (declare missing, set existing).
+    fn load_parameters_from_yaml_str(&mut self, yaml: &str) -> PyResult<()> {
+        self.inner
+            .load_parameters_from_yaml_str(yaml)
+            .map_err(bus_err)
+    }
+
+    /// Load parameters from a YAML file path.
+    fn load_parameters_from_yaml_file(&mut self, path: &str) -> PyResult<()> {
+        self.inner
+            .load_parameters_from_yaml_file(path)
+            .map_err(bus_err)
     }
 
     fn create_callback_group(&self, kind: PyCallbackGroupType) -> PyCallbackGroup {

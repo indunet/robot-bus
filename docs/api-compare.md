@@ -9,6 +9,7 @@
 | 消息 | `.msg` / `.srv` / `.action` 生成类型 | crate 内 protobuf（如 `sensor_msgs::msg::v1::Imu`） |
 | QoS | `QOS_PROFILE_DEFAULT` 等 | 无 ROS QoS；可用 HWM |
 | 回调组 | Worker / callback group（较新 API） | `CallbackGroupType::MutuallyExclusive` / `Reentrant` |
+| 参数 | `declare_parameter` / `get_parameter`（可远程 / YAML / CLI） | Node 本地 `declare` / `get` / `set` / `list` + YAML 加载（标量；无远程 / CLI） |
 
 ---
 

@@ -178,6 +178,22 @@ interface RobotBusC extends Library {
 
     int robot_bus_node_wait(Pointer n);
 
+    int robot_bus_node_declare_parameter(Pointer n, String name, ParameterValueStruct value);
+
+    int robot_bus_node_set_parameter(Pointer n, String name, ParameterValueStruct value);
+
+    int robot_bus_node_get_parameter(Pointer n, String name, ParameterValueStruct out);
+
+    int robot_bus_node_has_parameter(Pointer n, String name);
+
+    int robot_bus_node_list_parameters(Pointer n, PointerByReference out, LongByReference outCount);
+
+    void robot_bus_parameters_free(Pointer params, long count);
+
+    int robot_bus_node_load_parameters_from_yaml(Pointer n, String path);
+
+    int robot_bus_node_load_parameters_from_yaml_str(Pointer n, String yaml);
+
     Pointer robot_bus_single_threaded_executor_new();
 
     Pointer robot_bus_single_threaded_executor_new_with_context(Pointer ctx);
@@ -268,6 +284,46 @@ interface RobotBusC extends Library {
                 PointerByReference outPhases,
                 LongByReference outCount,
                 Pointer user);
+    }
+
+    @Structure.FieldOrder({"type", "boolValue", "integerValue", "doubleValue", "stringValue"})
+    class ParameterValueStruct extends Structure {
+        public static final int TYPE_BOOL = 0;
+        public static final int TYPE_INTEGER = 1;
+        public static final int TYPE_DOUBLE = 2;
+        public static final int TYPE_STRING = 3;
+
+        public int type;
+        public int boolValue;
+        public long integerValue;
+        public double doubleValue;
+        public Pointer stringValue;
+
+        public ParameterValueStruct() {
+            super();
+        }
+
+        public ParameterValueStruct(Pointer p) {
+            super(p);
+            read();
+        }
+    }
+
+    @Structure.FieldOrder({"name", "value"})
+    class ParameterStruct extends Structure {
+        public Pointer name;
+        public ParameterValueStruct value;
+
+        public ParameterStruct() {
+            super();
+            value = new ParameterValueStruct();
+        }
+
+        public ParameterStruct(Pointer p) {
+            super(p);
+            value = new ParameterValueStruct();
+            read();
+        }
     }
 
     @Structure.FieldOrder({

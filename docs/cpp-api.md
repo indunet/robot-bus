@@ -65,6 +65,21 @@ auto node = robot_bus::Node::inproc_with_context(ctx, "pilot");
 ```
 
 tcp / ipc / gRPC do not require a shared context.
+
+## Local parameters
+
+```cpp
+robot_bus::Node node("pilot");
+node.declare_parameter("max_speed", 1.5);
+node.declare_parameter("frame_id", "base_link");
+node.set_parameter("max_speed", 2.0);
+auto v = std::get<double>(node.get_parameter("max_speed"));
+node.load_parameters_from_yaml_str("ros__parameters:\n  max_speed: 3.0\n");
+// node.load_parameters_from_yaml("config/pilot.yaml");
+```
+
+Scalars: `bool` / `int64_t` / `double` / `string`. YAML supports flat maps or `ros__parameters` / `"/**"`.
+
 ## Message bus (typed)
 
 Protobuf message types are **pre-generated** and shipped in the package — you do **not** need `protoc` on the machine that only consumes the SDK.

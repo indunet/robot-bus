@@ -21,7 +21,7 @@ use robot_bus::runtime::{
     ActionGoalHandler, CallbackGroup, CallbackGroupType, Context as RustContext,
     MultiThreadedExecutor as RustMultiThreadedExecutor, Node as RustNode,
     NodeActionClientRaw as RustNodeActionClient, NodeOptions as RustNodeOptions,
-    NodeServiceClientRaw as RustNodeServiceClient, ServiceHandler,
+    NodeServiceClientRaw as RustNodeServiceClient, ParameterValue, ServiceHandler,
     ShutdownHandle as RustShutdownHandle, SingleThreadedExecutor as RustSingleThreadedExecutor,
     TimerCallback, TimerHandle as RustTimerHandle, TopicPublisherRaw as RustTopicPublisher,
 };
@@ -37,6 +37,35 @@ fn anyhow_err(err: anyhow::Error) -> Error {
 
 fn map_endpoint_err(err: String) -> Error {
     Error::from_reason(err)
+}
+
+fn parameter_value_from_js(value: Unknown) -> Result<ParameterValue> {
+    match value.get_type()? {
+        ValueType::Boolean => Ok(ParameterValue::Bool(value.coerce_to_bool()?.get_value()?)),
+        ValueType::Number => {
+            let n = value.coerce_to_number()?.get_double()?;
+            if n.fract() == 0.0 && n >= i64::MIN as f64 && n <= i64::MAX as f64 {
+                Ok(ParameterValue::Integer(n as i64))
+            } else {
+                Ok(ParameterValue::Double(n))
+            }
+        }
+        ValueType::String => Ok(ParameterValue::String(
+            value.coerce_to_string()?.into_utf8()?.into_owned()?,
+        )),
+        other => Err(Error::from_reason(format!(
+            "parameter value must be bool, number, or string; got {other:?}"
+        ))),
+    }
+}
+
+fn parameter_value_to_js(env: &Env, value: ParameterValue) -> Result<Unknown> {
+    Ok(match value {
+        ParameterValue::Bool(v) => env.get_boolean(v)?.into_unknown(),
+        ParameterValue::Integer(v) => env.create_int64(v)?.into_unknown(),
+        ParameterValue::Double(v) => env.create_double(v)?.into_unknown(),
+        ParameterValue::String(v) => env.create_string(&v)?.into_unknown(),
+    })
 }
 
 fn node_options(
@@ -514,6 +543,57 @@ impl Node {
     #[napi(getter)]
     pub fn name(&self) -> String {
         self.inner.name().to_string()
+    }
+
+    #[napi]
+    pub fn declare_parameter(&mut self, name: String, value: Unknown) -> Result<()> {
+        self.inner
+            .declare_parameter(name, parameter_value_from_js(value)?)
+            .map_err(bus_err)
+    }
+
+    #[napi]
+    pub fn get_parameter(&self, env: Env, name: String) -> Result<Unknown> {
+        let value = self.inner.get_parameter(&name).map_err(bus_err)?;
+        parameter_value_to_js(&env, value)
+    }
+
+    #[napi]
+    pub fn set_parameter(&mut self, name: String, value: Unknown) -> Result<()> {
+        self.inner
+            .set_parameter(&name, parameter_value_from_js(value)?)
+            .map_err(bus_err)
+    }
+
+    #[napi]
+    pub fn has_parameter(&self, name: String) -> bool {
+        self.inner.has_parameter(&name)
+    }
+
+    #[napi]
+    pub fn list_parameters(&self, env: Env) -> Result<Vec<Unknown>> {
+        let mut out = Vec::new();
+        for param in self.inner.list_parameters() {
+            let mut obj = env.create_object()?;
+            obj.set_named_property("name", env.create_string(&param.name)?)?;
+            obj.set_named_property("value", parameter_value_to_js(&env, param.value)?)?;
+            out.push(obj.into_unknown());
+        }
+        Ok(out)
+    }
+
+    #[napi]
+    pub fn load_parameters_from_yaml_str(&mut self, yaml: String) -> Result<()> {
+        self.inner
+            .load_parameters_from_yaml_str(&yaml)
+            .map_err(bus_err)
+    }
+
+    #[napi]
+    pub fn load_parameters_from_yaml_file(&mut self, path: String) -> Result<()> {
+        self.inner
+            .load_parameters_from_yaml_file(&path)
+            .map_err(bus_err)
     }
 
     #[napi]

@@ -10,6 +10,7 @@
 #include <string>
 #include <string_view>
 #include <utility>
+#include <variant>
 #include <vector>
 
 namespace robot_bus {
@@ -51,6 +52,37 @@ inline void *check_ptr(void *p, const char *what) {
     throw Error(std::string(what) + ": " + (err.empty() ? "null" : err));
   }
   return p;
+}
+
+/// Local node parameter value (bool / int64 / double / string).
+using ParameterValue = std::variant<bool, int64_t, double, std::string>;
+
+struct Parameter {
+  std::string name;
+  ParameterValue value;
+};
+
+inline ParameterValue parameter_value_from_c(RobotBusParameterValue &v) {
+  ParameterValue out;
+  switch (v.type) {
+    case ROBOT_BUS_PARAM_BOOL:
+      out = v.bool_value != 0;
+      break;
+    case ROBOT_BUS_PARAM_INTEGER:
+      out = v.integer_value;
+      break;
+    case ROBOT_BUS_PARAM_DOUBLE:
+      out = v.double_value;
+      break;
+    case ROBOT_BUS_PARAM_STRING:
+      out = v.string_value ? std::string(v.string_value) : std::string();
+      robot_bus_free_string(v.string_value);
+      v.string_value = nullptr;
+      break;
+    default:
+      throw Error("unknown parameter type");
+  }
+  return out;
 }
 
 /// Shared ZeroMQ runtime context (required for same-process inproc).
@@ -472,6 +504,106 @@ class Node {
   void start() { check(robot_bus_node_start(n_), "start"); }
   void stop() { check(robot_bus_node_stop(n_), "stop"); }
   void wait() { check(robot_bus_node_wait(n_), "wait"); }
+
+  void declare_parameter(const char *name, bool value) {
+    RobotBusParameterValue v{};
+    v.type = ROBOT_BUS_PARAM_BOOL;
+    v.bool_value = value ? 1 : 0;
+    check(robot_bus_node_declare_parameter(n_, name, &v), "declare_parameter");
+  }
+  void declare_parameter(const char *name, int64_t value) {
+    RobotBusParameterValue v{};
+    v.type = ROBOT_BUS_PARAM_INTEGER;
+    v.integer_value = value;
+    check(robot_bus_node_declare_parameter(n_, name, &v), "declare_parameter");
+  }
+  void declare_parameter(const char *name, double value) {
+    RobotBusParameterValue v{};
+    v.type = ROBOT_BUS_PARAM_DOUBLE;
+    v.double_value = value;
+    check(robot_bus_node_declare_parameter(n_, name, &v), "declare_parameter");
+  }
+  void declare_parameter(const char *name, const char *value) {
+    RobotBusParameterValue v{};
+    v.type = ROBOT_BUS_PARAM_STRING;
+    v.string_value = const_cast<char *>(value);
+    check(robot_bus_node_declare_parameter(n_, name, &v), "declare_parameter");
+  }
+  void declare_parameter(const char *name, const std::string &value) {
+    declare_parameter(name, value.c_str());
+  }
+
+  void set_parameter(const char *name, bool value) {
+    RobotBusParameterValue v{};
+    v.type = ROBOT_BUS_PARAM_BOOL;
+    v.bool_value = value ? 1 : 0;
+    check(robot_bus_node_set_parameter(n_, name, &v), "set_parameter");
+  }
+  void set_parameter(const char *name, int64_t value) {
+    RobotBusParameterValue v{};
+    v.type = ROBOT_BUS_PARAM_INTEGER;
+    v.integer_value = value;
+    check(robot_bus_node_set_parameter(n_, name, &v), "set_parameter");
+  }
+  void set_parameter(const char *name, double value) {
+    RobotBusParameterValue v{};
+    v.type = ROBOT_BUS_PARAM_DOUBLE;
+    v.double_value = value;
+    check(robot_bus_node_set_parameter(n_, name, &v), "set_parameter");
+  }
+  void set_parameter(const char *name, const char *value) {
+    RobotBusParameterValue v{};
+    v.type = ROBOT_BUS_PARAM_STRING;
+    v.string_value = const_cast<char *>(value);
+    check(robot_bus_node_set_parameter(n_, name, &v), "set_parameter");
+  }
+  void set_parameter(const char *name, const std::string &value) {
+    set_parameter(name, value.c_str());
+  }
+
+  RobotBusParameterValue get_parameter_raw(const char *name) {
+    RobotBusParameterValue out{};
+    check(robot_bus_node_get_parameter(n_, name, &out), "get_parameter");
+    return out;
+  }
+
+  ParameterValue get_parameter(const char *name) {
+    RobotBusParameterValue raw = get_parameter_raw(name);
+    return parameter_value_from_c(raw);
+  }
+
+  bool has_parameter(const char *name) const {
+    int rc = robot_bus_node_has_parameter(n_, name);
+    if (rc < 0) {
+      check(rc, "has_parameter");
+    }
+    return rc == 1;
+  }
+
+  std::vector<Parameter> list_parameters() {
+    RobotBusParameter *raw = nullptr;
+    size_t count = 0;
+    check(robot_bus_node_list_parameters(n_, &raw, &count), "list_parameters");
+    std::vector<Parameter> out;
+    out.reserve(count);
+    for (size_t i = 0; i < count; ++i) {
+      Parameter p;
+      p.name = raw[i].name ? std::string(raw[i].name) : std::string();
+      p.value = parameter_value_from_c(raw[i].value);
+      out.push_back(std::move(p));
+    }
+    robot_bus_parameters_free(raw, count);
+    return out;
+  }
+
+  void load_parameters_from_yaml(const char *path) {
+    check(robot_bus_node_load_parameters_from_yaml(n_, path), "load_parameters_from_yaml");
+  }
+
+  void load_parameters_from_yaml_str(const char *yaml) {
+    check(robot_bus_node_load_parameters_from_yaml_str(n_, yaml),
+          "load_parameters_from_yaml_str");
+  }
 
   RobotBusNode *raw() { return n_; }
 

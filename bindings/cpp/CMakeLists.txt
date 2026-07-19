@@ -78,7 +78,8 @@ if(ROBOT_BUS_BUILD_TESTS)
     timer_spin
     msgs_roundtrip
     grpc_node
-    inproc_context)
+    inproc_context
+    node_parameters)
   set(ROBOT_BUS_TEST_TARGETS)
   foreach(t ${ROBOT_BUS_TEST_SOURCES})
     add_executable(${t} tests/${t}.cpp)

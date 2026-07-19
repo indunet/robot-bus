@@ -50,6 +50,18 @@ const node = Node.inprocWithContext(ctx, "pilot");
 
 tcp / ipc / gRPC 不要求共享 Context。
 
+## 本地参数（Node.js）
+
+```ts
+const node = new Node("pilot");
+node.declareParameter("max_speed", 1.5);
+node.declareParameter("frame_id", "base_link");
+node.setParameter("max_speed", 2.0);
+console.log(node.getParameter("max_speed"));
+node.loadParametersFromYamlStr("ros__parameters:\n  max_speed: 3.0\n");
+// node.loadParametersFromYamlFile("config/pilot.yaml");
+```
+
 ## Node.js（完整 API）
 
 ```ts

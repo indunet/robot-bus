@@ -45,6 +45,32 @@ tcp / ipc / gRPC 不要求共享 Context。
 
 ---
 
+## 本地参数（Node）
+
+本节点参数表（不经总线）。值类型为 Python `bool` / `int` / `float` / `str`；须先 `declare`，`set` 时类型须与声明一致。支持 YAML 启动加载（扁平或 `ros__parameters` / `"/**"` 通配）。
+
+```python
+import robot_bus
+
+node = robot_bus.Node("pilot")
+node.declare_parameter("max_speed", 1.5)
+node.declare_parameter("frame_id", "base_link")
+
+print(node.get_parameter("max_speed"))  # 1.5
+node.set_parameter("max_speed", 2.0)
+assert node.has_parameter("frame_id")
+print(node.list_parameters())  # [{"name": "...", "value": ...}, ...]
+
+node.load_parameters_from_yaml_str("""
+ros__parameters:
+  max_speed: 3.0
+  enabled: true
+""")
+node.load_parameters_from_yaml_file("config/pilot.yaml")
+```
+
+---
+
 ## Message bus（Node + spin）
 
 接近 ROS 2：`Node(...)` → `create_publisher` / `create_subscription` → `node.spin()`。单节点时无需手写 Executor（内部自动挂 `SingleThreadedExecutor`）。
@@ -286,6 +312,8 @@ print(robot_bus.__version__)
 |------|------|
 | `Node(name, host=..., transport=..., grpc_url=..., message_xsub=..., …)` | 建节点；首次 `create_*` / `spin` 时自动挂 `SingleThreadedExecutor` |
 | `Node.tcp` / `Node.ipc` / `Node.inproc` / `Node.inproc_with_context` / `Node.grpc` / `Node.grpc_at` | 传输预设（gRPC 为客户端模式；同进程 inproc 用 `inproc_with_context`） |
+| `Node.declare_parameter` / `get_parameter` / `set_parameter` / `has_parameter` / `list_parameters` | 本节点本地参数（`bool` / `int` / `float` / `str`） |
+| `Node.load_parameters_from_yaml_str` / `load_parameters_from_yaml_file` | 从 YAML 加载 / 覆盖参数 |
 | `node.spin()` / `spin_once` / `shutdown` | 驱动回调（ROS 2 式简单路径） |
 | `Context()` | 共享 ZMQ context（同进程 inproc 必需） |
 | `SingleThreadedExecutor(context=None)` | 显式单线程执行器（多节点共享时用） |

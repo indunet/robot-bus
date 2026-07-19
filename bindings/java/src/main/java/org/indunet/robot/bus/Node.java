@@ -2,6 +2,9 @@ package org.indunet.robot.bus;
 
 import com.google.protobuf.MessageLite;
 import com.sun.jna.Pointer;
+import com.sun.jna.Structure;
+import com.sun.jna.ptr.LongByReference;
+import com.sun.jna.ptr.PointerByReference;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
@@ -455,6 +458,132 @@ public final class Node implements AutoCloseable {
 
     public void waitForShutdown() {
         Errors.check(RobotBusC.Holder.INSTANCE.robot_bus_node_wait(ptr), "wait");
+    }
+
+    public void declareParameter(String name, Object value) {
+        Pointer owned = null;
+        try {
+            RobotBusC.ParameterValueStruct nativeValue = toNativeParameter(value);
+            owned = nativeValue.stringValue;
+            Errors.check(
+                    RobotBusC.Holder.INSTANCE.robot_bus_node_declare_parameter(ptr, name, nativeValue),
+                    "declare_parameter");
+        } finally {
+            if (owned != null) {
+                RobotBusC.Holder.INSTANCE.robot_bus_free_string(owned);
+            }
+        }
+    }
+
+    public void setParameter(String name, Object value) {
+        Pointer owned = null;
+        try {
+            RobotBusC.ParameterValueStruct nativeValue = toNativeParameter(value);
+            owned = nativeValue.stringValue;
+            Errors.check(
+                    RobotBusC.Holder.INSTANCE.robot_bus_node_set_parameter(ptr, name, nativeValue),
+                    "set_parameter");
+        } finally {
+            if (owned != null) {
+                RobotBusC.Holder.INSTANCE.robot_bus_free_string(owned);
+            }
+        }
+    }
+
+    public Object getParameter(String name) {
+        RobotBusC.ParameterValueStruct out = new RobotBusC.ParameterValueStruct();
+        Errors.check(
+                RobotBusC.Holder.INSTANCE.robot_bus_node_get_parameter(ptr, name, out),
+                "get_parameter");
+        return fromNativeParameter(out, true);
+    }
+
+    public boolean hasParameter(String name) {
+        int rc = RobotBusC.Holder.INSTANCE.robot_bus_node_has_parameter(ptr, name);
+        if (rc < 0) {
+            Errors.check(rc, "has_parameter");
+        }
+        return rc == 1;
+    }
+
+    public List<Parameter> listParameters() {
+        PointerByReference out = new PointerByReference();
+        LongByReference countRef = new LongByReference();
+        Errors.check(
+                RobotBusC.Holder.INSTANCE.robot_bus_node_list_parameters(ptr, out, countRef),
+                "list_parameters");
+        long count = countRef.getValue();
+        Pointer base = out.getValue();
+        List<Parameter> result = new ArrayList<>((int) count);
+        if (base != null && count > 0) {
+            RobotBusC.ParameterStruct first = new RobotBusC.ParameterStruct(base);
+            Structure[] arr = first.toArray((int) count);
+            for (Structure s : arr) {
+                RobotBusC.ParameterStruct p = (RobotBusC.ParameterStruct) s;
+                String pname = p.name != null ? p.name.getString(0) : "";
+                Object value = fromNativeParameter(p.value, false);
+                result.add(new Parameter(pname, value));
+            }
+            RobotBusC.Holder.INSTANCE.robot_bus_parameters_free(base, count);
+        }
+        return result;
+    }
+
+    public void loadParametersFromYaml(String path) {
+        Errors.check(
+                RobotBusC.Holder.INSTANCE.robot_bus_node_load_parameters_from_yaml(ptr, path),
+                "load_parameters_from_yaml");
+    }
+
+    public void loadParametersFromYamlStr(String yaml) {
+        Errors.check(
+                RobotBusC.Holder.INSTANCE.robot_bus_node_load_parameters_from_yaml_str(ptr, yaml),
+                "load_parameters_from_yaml_str");
+    }
+
+    private static RobotBusC.ParameterValueStruct toNativeParameter(Object value) {
+        RobotBusC.ParameterValueStruct v = new RobotBusC.ParameterValueStruct();
+        if (value instanceof Boolean) {
+            v.type = RobotBusC.ParameterValueStruct.TYPE_BOOL;
+            v.boolValue = Boolean.TRUE.equals(value) ? 1 : 0;
+        } else if (value instanceof Integer) {
+            v.type = RobotBusC.ParameterValueStruct.TYPE_INTEGER;
+            v.integerValue = ((Integer) value).longValue();
+        } else if (value instanceof Long) {
+            v.type = RobotBusC.ParameterValueStruct.TYPE_INTEGER;
+            v.integerValue = (Long) value;
+        } else if (value instanceof Float) {
+            v.type = RobotBusC.ParameterValueStruct.TYPE_DOUBLE;
+            v.doubleValue = ((Float) value).doubleValue();
+        } else if (value instanceof Double) {
+            v.type = RobotBusC.ParameterValueStruct.TYPE_DOUBLE;
+            v.doubleValue = (Double) value;
+        } else if (value instanceof String) {
+            v.type = RobotBusC.ParameterValueStruct.TYPE_STRING;
+            v.stringValue = RobotBusC.Holder.INSTANCE.robot_bus_dup_string((String) value);
+        } else {
+            throw new IllegalArgumentException(
+                    "parameter value must be boolean, int/long, float/double, or String");
+        }
+        return v;
+    }
+
+    private static Object fromNativeParameter(RobotBusC.ParameterValueStruct v, boolean takeString) {
+        switch (v.type) {
+            case RobotBusC.ParameterValueStruct.TYPE_BOOL:
+                return v.boolValue != 0;
+            case RobotBusC.ParameterValueStruct.TYPE_INTEGER:
+                return v.integerValue;
+            case RobotBusC.ParameterValueStruct.TYPE_DOUBLE:
+                return v.doubleValue;
+            case RobotBusC.ParameterValueStruct.TYPE_STRING:
+                if (takeString) {
+                    return NativeUtils.takeCString(v.stringValue);
+                }
+                return v.stringValue != null ? v.stringValue.getString(0) : "";
+            default:
+                throw new RobotBusException("unknown parameter type: " + v.type);
+        }
     }
 
     Pointer raw() {

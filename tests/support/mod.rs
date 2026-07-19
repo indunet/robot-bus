@@ -29,6 +29,9 @@ pub fn lock_brokers() -> MutexGuard<'static, ()> {
         .unwrap_or_else(|poisoned| poisoned.into_inner())
 }
 
+/// Probe an unused TCP port. **TOCTOU**: the port is released when this returns,
+/// so a later bind can still fail under contention. Prefer binding `…:0` and
+/// reading [`zmq::Socket::get_last_endpoint`] when the bind is under our control.
 pub fn free_port() -> u16 {
     TcpListener::bind("127.0.0.1:0")
         .expect("bind ephemeral port")
@@ -37,29 +40,55 @@ pub fn free_port() -> u16 {
         .port()
 }
 
+fn last_endpoint(sock: &Socket) -> String {
+    match sock.get_last_endpoint().expect("last_endpoint") {
+        Ok(s) => s,
+        Err(_) => panic!("endpoint not utf8"),
+    }
+}
+
+/// Distinct ephemeral TCP ports for one config snapshot.
+///
+/// Still subject to TOCTOU vs other processes after the listeners are dropped;
+/// broker tests serialize with [`lock_brokers`]. Prefer ZMQ `…:0` bind when possible.
+fn free_ports(n: usize) -> Vec<u16> {
+    let listeners: Vec<TcpListener> = (0..n)
+        .map(|_| TcpListener::bind("127.0.0.1:0").expect("bind ephemeral port"))
+        .collect();
+    listeners
+        .iter()
+        .map(|l| l.local_addr().expect("local addr").port())
+        .collect()
+    // listeners dropped here — ports free for the subsequent ZMQ/TCP binds
+}
+
 pub fn ephemeral_robot_bus_config() -> RobotBusConfig {
+    // Hold all listeners together so this config never picks the same port twice
+    // (sequential free_port() can return duplicates and flake on the second bind).
+    let mut ports = free_ports(8).into_iter();
+    let mut next = || ports.next().expect("ephemeral port");
     RobotBusConfig {
         message: BusConfig {
-            xsub_bind: format!("tcp://127.0.0.1:{}", free_port()),
-            xpub_bind: format!("tcp://127.0.0.1:{}", free_port()),
+            xsub_bind: format!("tcp://127.0.0.1:{}", next()),
+            xpub_bind: format!("tcp://127.0.0.1:{}", next()),
             bind_all_transports: false,
             ..BusConfig::default()
         },
         service: ServiceBusConfig {
-            frontend_bind: format!("tcp://127.0.0.1:{}", free_port()),
-            backend_bind: format!("tcp://127.0.0.1:{}", free_port()),
+            frontend_bind: format!("tcp://127.0.0.1:{}", next()),
+            backend_bind: format!("tcp://127.0.0.1:{}", next()),
             bind_all_transports: false,
             ..ServiceBusConfig::default()
         },
         action: ActionBusConfig {
-            frontend_bind: format!("tcp://127.0.0.1:{}", free_port()),
-            backend_bind: format!("tcp://127.0.0.1:{}", free_port()),
+            frontend_bind: format!("tcp://127.0.0.1:{}", next()),
+            backend_bind: format!("tcp://127.0.0.1:{}", next()),
             bind_all_transports: false,
             ..ActionBusConfig::default()
         },
         #[cfg(feature = "grpc")]
         grpc: GrpcBrokerConfig {
-            listen: format!("127.0.0.1:{}", free_port())
+            listen: format!("127.0.0.1:{}", next())
                 .parse()
                 .expect("grpc listen"),
             cors_origins: Vec::new(),
@@ -67,7 +96,7 @@ pub fn ephemeral_robot_bus_config() -> RobotBusConfig {
         #[cfg(feature = "console")]
         console: ConsoleBrokerConfig {
             enabled: false,
-            listen: format!("127.0.0.1:{}", free_port())
+            listen: format!("127.0.0.1:{}", next())
                 .parse()
                 .expect("console listen"),
         },
@@ -90,12 +119,12 @@ impl MessageProxy {
         let mut xpub = context.socket(SocketType::XPUB).expect("xpub");
         let mut control = context.socket(SocketType::PAIR).expect("control");
         let control_client = context.socket(SocketType::PAIR).expect("control client");
-        let xsub_port = free_port();
-        let xpub_port = free_port();
-        let xsub_endpoint = format!("tcp://127.0.0.1:{xsub_port}");
-        let xpub_endpoint = format!("tcp://127.0.0.1:{xpub_port}");
-        xsub.bind(&xsub_endpoint).expect("bind xsub");
-        xpub.bind(&xpub_endpoint).expect("bind xpub");
+        // Bind `:0` then read the real endpoint — avoids free_port() TOCTOU where
+        // another test (or the sibling xpub bind) can steal the probed port.
+        xsub.bind("tcp://127.0.0.1:0").expect("bind xsub");
+        xpub.bind("tcp://127.0.0.1:0").expect("bind xpub");
+        let xsub_endpoint = last_endpoint(&xsub);
+        let xpub_endpoint = last_endpoint(&xpub);
         xsub.set_linger(0).expect("linger");
         xpub.set_linger(0).expect("linger");
 
