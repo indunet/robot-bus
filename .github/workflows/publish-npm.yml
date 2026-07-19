@@ -1,9 +1,11 @@
+# You write the Release notes and Publish on GitHub.
+# This workflow publishes the npm package when that Release is published.
+
 name: Publish to npm
 
 on:
-  push:
-    tags:
-      - "v*"
+  release:
+    types: [published]
   workflow_dispatch:
 
 jobs:
@@ -12,16 +14,17 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
-      - name: Check tag matches Cargo.toml / pyproject / package.json
-        if: github.event_name == 'push'
+      - name: Check release tag matches Cargo.toml / pyproject / package.json
+        if: github.event_name == 'release'
         run: |
-          TAG="${GITHUB_REF_NAME#v}"
+          TAG="${{ github.event.release.tag_name }}"
+          TAG="${TAG#v}"
           CRATE_VERSION="$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -n1)"
           PY_VERSION="$(sed -n 's/^version = "\(.*\)"/\1/p' bindings/python/pyproject.toml | head -n1)"
           NPM_VERSION="$(node -p "require('./bindings/typescript/package.json').version")"
           NATIVE_VERSION="$(sed -n 's/^version = "\(.*\)"/\1/p' bindings/typescript/native/Cargo.toml | head -n1)"
           if [ "$TAG" != "$CRATE_VERSION" ] || [ "$TAG" != "$PY_VERSION" ] || [ "$TAG" != "$NPM_VERSION" ] || [ "$TAG" != "$NATIVE_VERSION" ]; then
-            echo "Tag ($TAG) must match Cargo ($CRATE_VERSION), pyproject ($PY_VERSION), package.json ($NPM_VERSION), native ($NATIVE_VERSION)"
+            echo "Release tag ($TAG) must match Cargo ($CRATE_VERSION), pyproject ($PY_VERSION), package.json ($NPM_VERSION), native ($NATIVE_VERSION)"
             exit 1
           fi
 

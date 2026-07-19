@@ -51,4 +51,4 @@ cd bindings/java
 mvn -Prelease clean deploy
 ```
 
-CI: `.github/workflows/publish-maven-java.yml` (`v*` tag or `workflow_dispatch`).
+CI: `.github/workflows/publish-maven-java.yml` (GitHub Release `published` or `workflow_dispatch`).

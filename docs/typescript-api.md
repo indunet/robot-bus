@@ -135,4 +135,4 @@ just test-typescript
 
 ## 发布
 
-打 `v*` tag（版本须与 `Cargo.toml`、`bindings/python/pyproject.toml`、`bindings/typescript/package.json` 一致）后，[`.github/workflows/publish-npm.yml`](../.github/workflows/publish-npm.yml) 用 `secrets.NPM_TOKEN` 发布到 npm。
+在 GitHub 上写 Release 说明并 Publish（tag 版本须与 `Cargo.toml`、`bindings/python/pyproject.toml`、`bindings/typescript/package.json` 一致）后，[`.github/workflows/publish-npm.yml`](../.github/workflows/publish-npm.yml) 用 `secrets.NPM_TOKEN` 发布到 npm。

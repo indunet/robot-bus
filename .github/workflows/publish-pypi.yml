@@ -1,9 +1,11 @@
+# You write the Release notes and Publish on GitHub.
+# This workflow publishes wheels to PyPI when that Release is published.
+
 name: Publish to PyPI
 
 on:
-  push:
-    tags:
-      - "v*"
+  release:
+    types: [published]
   workflow_dispatch:
 
 jobs:
@@ -12,14 +14,15 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
-      - name: Check tag matches Cargo.toml and pyproject.toml
-        if: github.event_name == 'push'
+      - name: Check release tag matches Cargo.toml and pyproject.toml
+        if: github.event_name == 'release'
         run: |
-          TAG="${GITHUB_REF_NAME#v}"
+          TAG="${{ github.event.release.tag_name }}"
+          TAG="${TAG#v}"
           CRATE_VERSION="$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -n1)"
           PY_VERSION="$(sed -n 's/^version = "\(.*\)"/\1/p' bindings/python/pyproject.toml | head -n1)"
           if [ "$TAG" != "$CRATE_VERSION" ] || [ "$TAG" != "$PY_VERSION" ]; then
-            echo "Tag ($TAG) must match Cargo.toml ($CRATE_VERSION) and bindings/python/pyproject.toml ($PY_VERSION)"
+            echo "Release tag ($TAG) must match Cargo.toml ($CRATE_VERSION) and bindings/python/pyproject.toml ($PY_VERSION)"
             exit 1
           fi
 

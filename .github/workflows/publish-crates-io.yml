@@ -1,9 +1,11 @@
+# You write the Release notes and Publish on GitHub.
+# This workflow publishes the Rust crate when that Release is published.
+
 name: Publish to crates.io
 
 on:
-  push:
-    tags:
-      - "v*"
+  release:
+    types: [published]
   workflow_dispatch:
 
 jobs:
@@ -31,13 +33,14 @@ jobs:
       - name: Generate Rust protobuf stubs
         run: python3 scripts/generate_rust_msgs.py
 
-      - name: Check tag matches Cargo.toml version
-        if: github.event_name == 'push'
+      - name: Check release tag matches Cargo.toml version
+        if: github.event_name == 'release'
         run: |
-          TAG="${GITHUB_REF_NAME#v}"
+          TAG="${{ github.event.release.tag_name }}"
+          TAG="${TAG#v}"
           CRATE_VERSION="$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -n1)"
           if [ "$TAG" != "$CRATE_VERSION" ]; then
-            echo "Tag version ($TAG) does not match Cargo.toml version ($CRATE_VERSION)"
+            echo "Release tag ($TAG) does not match Cargo.toml version ($CRATE_VERSION)"
             exit 1
           fi
 

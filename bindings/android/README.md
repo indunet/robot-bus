@@ -52,6 +52,6 @@ public class App extends Application {
 
 ## Maven Central
 
-Published by `.github/workflows/publish-maven-android.yml` (`v*` tag or
-`workflow_dispatch`). JVM JAR uses a separate workflow:
+Published by `.github/workflows/publish-maven-android.yml` (GitHub Release
+`published` or `workflow_dispatch`). JVM JAR uses a separate workflow:
 `publish-maven-java.yml`.
