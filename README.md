@@ -1,9 +1,12 @@
 # *Robot Bus*
 
 [![CI](https://github.com/indunet/robot-bus/actions/workflows/ci.yml/badge.svg)](https://github.com/indunet/robot-bus/actions/workflows/ci.yml)
+[![Code Quality](https://img.shields.io/github/actions/workflow/status/indunet/robot-bus/dynamic%2Fgithub-code-scanning%2Fcodeql?label=Code%20Quality)](https://github.com/indunet/robot-bus/security/code-scanning)
 [![crates.io](https://img.shields.io/crates/v/robot-bus.svg?color=f74c00)](https://crates.io/crates/robot-bus)
 [![PyPI](https://img.shields.io/pypi/v/robot-bus.svg?color=3775a9)](https://pypi.org/project/robot-bus/)
 [![npm](https://img.shields.io/npm/v/robot-bus.svg?color=cb3837)](https://www.npmjs.com/package/robot-bus)
+[![Maven Central](https://img.shields.io/maven-central/v/org.indunet/robot-bus.svg?label=Maven%20Central&color=007396)](https://central.sonatype.com/artifact/org.indunet/robot-bus)
+[![Maven Central (Android)](https://img.shields.io/maven-central/v/org.indunet/robot-bus-android.svg?label=Maven%20Central%20(Android)&color=3ddc84)](https://central.sonatype.com/artifact/org.indunet/robot-bus-android)
 [![License](https://img.shields.io/badge/License-Apache_2.0-green.svg)](https://opensource.org/licenses/Apache-2.0)
 
 Lightweight ROS 2–style messaging over ZeroMQ — topics, services & actions, no ROS install. SDKs for Rust, Python, TypeScript, C++, Java, and Android.
@@ -159,7 +162,7 @@ TypedTopicPublisher<Imu> pub = node.createPublisher("/imu", Imu.class);
 
 ### 2b. C++（DEB / MSI）
 
-C++ 无中央库：从 [GitHub Releases](https://github.com/indunet/robot-bus/releases) 下载 `robot-bus_*.deb` / `robot-bus_*.msi`（你写 Release 说明并 Publish 后，CI 只挂附件）。详见 [`docs/cpp-api.md`](docs/cpp-api.md)。
+C++ 无中央库：从 [GitHub Releases](https://github.com/indunet/robot-bus/releases) 下载 `robot-bus-cpp_*.deb` / `robot-bus-cpp_*.msi` / `robot-bus-cpp_*_darwin-arm64.pkg`（你写 Release 说明并 Publish 后，CI 只挂附件）。详见 [`docs/cpp-api.md`](docs/cpp-api.md)。
 
 ```cpp
 #include <robot_bus/Node.hpp>

@@ -2,8 +2,9 @@
 
 C++ SDK is distributed via **GitHub Release attachments** (no central C++ registry):
 
-- Linux: `robot-bus_<version>_amd64.deb`, `robot-bus_<version>_arm64.deb`
-- Windows: `robot-bus_<version>_x64.msi`
+- Linux: `robot-bus-cpp_<version>_amd64.deb`, `robot-bus-cpp_<version>_arm64.deb`
+- Windows: `robot-bus-cpp_<version>_x64.msi`
+- macOS (Apple Silicon): `robot-bus-cpp_<version>_darwin-arm64.pkg`
 
 You write the Release notes on GitHub and Publish; CI only builds packages and uploads assets.
 
@@ -20,8 +21,12 @@ CMake sets `CMAKE_CXX_STANDARD 17`. Building with a newer standard (e.g. `-DCMAK
 
 ```bash
 # Debian / Ubuntu (amd64 example)
-sudo apt install ./robot-bus_0.0.6_amd64.deb
+sudo apt install ./robot-bus-cpp_0.0.6_amd64.deb
 # Depends: libzmq5, libprotobuf*
+
+# macOS Apple Silicon
+sudo installer -pkg robot-bus-cpp_0.0.6_darwin-arm64.pkg -target /
+# Installs under /usr/local ({bin,lib,include})
 
 # Or from source (dev)
 just gen-cpp

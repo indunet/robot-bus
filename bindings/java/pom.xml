@@ -169,7 +169,8 @@
             <configuration>
               <publishingServerId>central</publishingServerId>
               <autoPublish>true</autoPublish>
-              <waitUntil>published</waitUntil>
+              <!-- validated = Sonatype 校验通过即可；published 要等 Central CDN 同步，常卡 10–30+ 分钟 -->
+              <waitUntil>validated</waitUntil>
             </configuration>
           </plugin>
         </plugins>

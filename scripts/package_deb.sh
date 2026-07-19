@@ -18,7 +18,7 @@ mkdir -p "$PKG_ROOT/DEBIAN"
 cp -a "$STAGING/." "$PKG_ROOT/"
 
 cat >"$PKG_ROOT/DEBIAN/control" <<EOF
-Package: robot-bus
+Package: robot-bus-cpp
 Version: ${VERSION}
 Section: libs
 Priority: optional

@@ -1,7 +1,7 @@
 name: Release C++ packages
 
 # You write the Release notes and Publish on GitHub.
-# This workflow only builds MSI/DEB assets and uploads them — it never
+# This workflow only builds MSI/DEB/PKG assets and uploads them — it never
 # creates or edits the Release body.
 
 on:
@@ -92,14 +92,14 @@ jobs:
             "${{ steps.meta.outputs.version }}" \
             "${{ matrix.arch }}" \
             /tmp/robot-bus-stage \
-            "robot-bus_${{ steps.meta.outputs.version }}_${{ matrix.arch }}.deb"
+            "robot-bus-cpp_${{ steps.meta.outputs.version }}_${{ matrix.arch }}.deb"
 
       - name: Upload to Release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           gh release upload "${{ steps.meta.outputs.tag }}" \
-            "robot-bus_${{ steps.meta.outputs.version }}_${{ matrix.arch }}.deb" \
+            "robot-bus-cpp_${{ steps.meta.outputs.version }}_${{ matrix.arch }}.deb" \
             --clobber
 
   windows:
@@ -134,12 +134,26 @@ jobs:
         shell: bash
         run: |
           set -eux
-          git clone --depth 1 https://github.com/Microsoft/vcpkg.git C:/vcpkg
-          C:/vcpkg/bootstrap-vcpkg.sh
-          C:/vcpkg/vcpkg install zeromq:x64-windows protobuf:x64-windows
-          echo "VCPKG_ROOT=C:/vcpkg" >> "$GITHUB_ENV"
-          echo "C:/vcpkg/installed/x64-windows/bin" >> "$GITHUB_PATH"
-          echo "C:/vcpkg/installed/x64-windows/lib" >> "$GITHUB_PATH"
+          # windows-latest often already has vcpkg at VCPKG_INSTALLATION_ROOT / C:/vcpkg
+          if [ -n "${VCPKG_INSTALLATION_ROOT:-}" ] && [ -d "$VCPKG_INSTALLATION_ROOT" ]; then
+            VCPKG_ROOT="$VCPKG_INSTALLATION_ROOT"
+          elif [ -d "C:/vcpkg" ]; then
+            VCPKG_ROOT="C:/vcpkg"
+          else
+            git clone --depth 1 https://github.com/Microsoft/vcpkg.git C:/vcpkg
+            VCPKG_ROOT="C:/vcpkg"
+          fi
+          if [ ! -x "$VCPKG_ROOT/vcpkg.exe" ] && [ ! -x "$VCPKG_ROOT/vcpkg" ]; then
+            if [ -f "$VCPKG_ROOT/bootstrap-vcpkg.bat" ]; then
+              cmd.exe //c "cd /d ${VCPKG_ROOT} && bootstrap-vcpkg.bat"
+            else
+              "$VCPKG_ROOT/bootstrap-vcpkg.sh"
+            fi
+          fi
+          "$VCPKG_ROOT/vcpkg" install zeromq:x64-windows protobuf:x64-windows
+          echo "VCPKG_ROOT=$VCPKG_ROOT" >> "$GITHUB_ENV"
+          echo "$VCPKG_ROOT/installed/x64-windows/bin" >> "$GITHUB_PATH"
+          echo "$VCPKG_ROOT/installed/x64-windows/lib" >> "$GITHUB_PATH"
 
       - name: Generate C++ + Rust protobuf stubs
         shell: bash
@@ -163,7 +177,7 @@ jobs:
           cmake -S bindings/cpp -B bindings/cpp/build-win \
             -DCMAKE_BUILD_TYPE=Release \
             -DROBOT_BUS_BUILD_TESTS=OFF \
-            -DCMAKE_TOOLCHAIN_FILE=C:/vcpkg/scripts/buildsystems/vcpkg.cmake \
+            -DCMAKE_TOOLCHAIN_FILE=${VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake \
             -DVCPKG_TARGET_TRIPLET=x64-windows
           cmake --build bindings/cpp/build-win --config Release --target robot_bus_msgs
 
@@ -180,9 +194,9 @@ jobs:
           find bindings/cpp/build-win -name 'robot_bus_msgs.dll' -exec cp {} "$STAGE/bin/" \;
           find bindings/cpp/build-win -name 'robot_bus_msgs.lib' -exec cp {} "$STAGE/lib/" \; || true
           # Bundle runtime DLLs from vcpkg
-          cp C:/vcpkg/installed/x64-windows/bin/libzmq*.dll "$STAGE/bin/" || true
-          cp C:/vcpkg/installed/x64-windows/bin/libprotobuf*.dll "$STAGE/bin/" || true
-          cp C:/vcpkg/installed/x64-windows/bin/abseil*.dll "$STAGE/bin/" || true
+          cp "$VCPKG_ROOT"/installed/x64-windows/bin/libzmq*.dll "$STAGE/bin/" || true
+          cp "$VCPKG_ROOT"/installed/x64-windows/bin/libprotobuf*.dll "$STAGE/bin/" || true
+          cp "$VCPKG_ROOT"/installed/x64-windows/bin/abseil*.dll "$STAGE/bin/" || true
           cp -a bindings/cpp/include/. "$STAGE/include/"
           cp -a bindings/cpp/generated/robot_bus "$STAGE/include/"
 
@@ -195,7 +209,7 @@ jobs:
           ./scripts/package_msi.sh \
             "${{ steps.meta.outputs.version }}" \
             /tmp/robot-bus-msi \
-            "robot-bus_${{ steps.meta.outputs.version }}_x64.msi"
+            "robot-bus-cpp_${{ steps.meta.outputs.version }}_x64.msi"
 
       - name: Upload to Release
         env:
@@ -203,5 +217,79 @@ jobs:
         shell: bash
         run: |
           gh release upload "${{ steps.meta.outputs.tag }}" \
-            "robot-bus_${{ steps.meta.outputs.version }}_x64.msi" \
+            "robot-bus-cpp_${{ steps.meta.outputs.version }}_x64.msi" \
+            --clobber
+
+  macos:
+    # Apple Silicon only (M-series / darwin-arm64).
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Resolve version / tag
+        id: meta
+        run: |
+          if [ "${{ github.event_name }}" = "release" ]; then
+            TAG="${{ github.event.release.tag_name }}"
+          else
+            TAG="${{ inputs.tag }}"
+          fi
+          VERSION="${TAG#v}"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Install system dependencies
+        run: |
+          brew install cmake pkg-config zeromq ninja
+          brew unlink protobuf 2>/dev/null || true
+
+      - name: Install pinned protoc + C++ runtime
+        run: |
+          set -eux
+          curl -fsSL -o /tmp/protoc.zip \
+            "https://github.com/protocolbuffers/protobuf/releases/download/v${PROTOC_VERSION}/protoc-${PROTOC_VERSION}-osx-aarch_64.zip"
+          sudo unzip -o /tmp/protoc.zip -d /usr/local
+          sudo ./scripts/install_protobuf_cpp.sh /usr/local
+          export PATH="/usr/local/bin:$PATH"
+          protoc --version
+          pkg-config --modversion protobuf
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Generate C++ + Rust protobuf stubs
+        run: |
+          export PATH="/usr/local/bin:$PATH"
+          python3 scripts/generate_cpp_msgs.py
+          python3 scripts/generate_rust_msgs.py
+
+      - name: Build install tree
+        run: |
+          set -eux
+          export PATH="/usr/local/bin:/opt/homebrew/bin:$PATH"
+          export PKG_CONFIG_PATH="/usr/local/lib/pkgconfig:/opt/homebrew/lib/pkgconfig:${PKG_CONFIG_PATH:-}"
+          export CMAKE_PREFIX_PATH="/usr/local;/opt/homebrew"
+          export LIBRARY_PATH="/usr/local/lib:/opt/homebrew/lib:${LIBRARY_PATH:-}"
+          export DYLD_LIBRARY_PATH="/usr/local/lib:/opt/homebrew/lib:${DYLD_LIBRARY_PATH:-}"
+          ./scripts/build_cpp_install_tree.sh /tmp/robot-bus-stage "${{ steps.meta.outputs.version }}"
+          # Bundle protobuf / abseil / zeromq dylibs into the package
+          mkdir -p /tmp/robot-bus-stage/usr/lib
+          for dir in /usr/local/lib /opt/homebrew/lib; do
+            cp -a "$dir"/libprotobuf*.dylib /tmp/robot-bus-stage/usr/lib/ 2>/dev/null || true
+            cp -a "$dir"/libabsl*.dylib /tmp/robot-bus-stage/usr/lib/ 2>/dev/null || true
+            cp -a "$dir"/libzmq*.dylib /tmp/robot-bus-stage/usr/lib/ 2>/dev/null || true
+          done
+
+      - name: Package PKG
+        run: |
+          ./scripts/package_pkg.sh \
+            "${{ steps.meta.outputs.version }}" \
+            /tmp/robot-bus-stage \
+            "robot-bus-cpp_${{ steps.meta.outputs.version }}_darwin-arm64.pkg"
+
+      - name: Upload to Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release upload "${{ steps.meta.outputs.tag }}" \
+            "robot-bus-cpp_${{ steps.meta.outputs.version }}_darwin-arm64.pkg" \
             --clobber
