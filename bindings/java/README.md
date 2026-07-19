@@ -51,4 +51,4 @@ cd bindings/java
 mvn -Prelease clean deploy
 ```
 
-CI: `.github/workflows/publish-maven-java.yml` (currently disabled until GPG secrets are set).
+CI: `.github/workflows/publish-maven-java.yml` (`v*` tag or `workflow_dispatch`).

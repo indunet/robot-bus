@@ -139,7 +139,7 @@ node.createSubscription("/robot1/imu", (_t, imu) => console.log(imu), Imu);
 | JVM JAR（Java 11+，Maven） | [`bindings/java/`](bindings/java/) | `org.indunet:robot-bus` |
 | Android AAR（minSdk 24） | [`bindings/android/`](bindings/android/) | `org.indunet:robot-bus-android` |
 
-包名均为 `org.indunet.robot.bus`。面向 Java 用户；发布 workflow 暂未启用（缺 GPG）。
+包名均为 `org.indunet.robot.bus`。面向 Java 用户；打 `v*` tag 或手动跑 Actions 可发到 Maven Central。
 
 ```bash
 just java-dev       # JVM

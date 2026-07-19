@@ -1,8 +1,5 @@
 # Publish Java JVM JAR (org.indunet:robot-bus) to Maven Central via Maven.
 #
-# Disabled until GPG signing secrets are configured on this repo.
-# When ready: remove `if: false` and optionally restore tag triggers.
-#
 # Secrets / settings:
 #   MAVEN_CENTRAL_USERNAME / MAVEN_CENTRAL_PASSWORD → ~/.m2 server id `central`
 #   GPG_PRIVATE_KEY / GPG_PASSPHRASE → gpg signing in -Prelease
@@ -10,14 +7,13 @@
 name: Publish Java to Maven Central
 
 on:
+  push:
+    tags:
+      - "v*"
   workflow_dispatch:
-  # push:
-  #   tags:
-  #     - "v*"
 
 jobs:
   publish:
-    if: false
     runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v6

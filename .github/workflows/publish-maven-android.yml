@@ -1,19 +1,19 @@
 # Publish Android AAR (org.indunet:robot-bus-android) to Maven Central.
 #
-# Disabled until GPG signing secrets are configured on this repo.
-# When ready: remove `if: false` and optionally restore tag triggers.
+# Secrets / settings:
+#   MAVEN_CENTRAL_USERNAME / MAVEN_CENTRAL_PASSWORD
+#   GPG_PRIVATE_KEY / GPG_PASSPHRASE → Gradle in-memory signing
 
 name: Publish Android to Maven Central
 
 on:
+  push:
+    tags:
+      - "v*"
   workflow_dispatch:
-  # push:
-  #   tags:
-  #     - "v*"
 
 jobs:
   publish:
-    if: false
     runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v6
