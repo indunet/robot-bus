@@ -180,14 +180,12 @@ jobs:
       - name: Generate Rust + Java protobuf stubs
         run: |
           python3 scripts/generate_rust_msgs.py
-          python3 scripts/generate_java_msgs.py
+          # Android embeds stubs under bindings/android/generated (gitignored).
+          ROBOT_BUS_JAVA_OUT=bindings/android/generated python3 scripts/generate_java_msgs.py
       - name: Build Android jniLibs
         run: ./scripts/build_android_native.sh
         env:
           ANDROID_API_LEVEL: "24"
-      - name: Install Java SDK to mavenLocal
-        working-directory: bindings/java
-        run: mvn -B -DskipTests install
       - name: Assemble AAR + unit tests
         working-directory: bindings/android
         run: ./gradlew assembleRelease test --no-daemon

@@ -68,7 +68,9 @@ INCLUDE_RE = re.compile(
 )
 
 # protoc emits .pb.h; rewrite include paths to our .pb.hpp names.
+# Do NOT rewrite google/protobuf/*.pb.h — those come from libprotobuf as .pb.h.
 PB_HEADER_RE = re.compile(r"(\.pb)\.h([>\"]|\s)")
+GOOGLE_PROTOBUF_INCLUDE = "google/protobuf/"
 
 
 def protoc_version(protoc: str) -> str:
@@ -121,9 +123,14 @@ def rewrite_includes(text: str) -> str:
         return f"{directive}<robot_bus/{pkg}{rest}>"
 
     text = INCLUDE_RE.sub(repl, text)
-    # imu.pb.h → imu.pb.hpp (protoc still wrote .pb.h inside the sources)
-    text = PB_HEADER_RE.sub(r"\1.hpp\2", text)
-    return text
+    # imu.pb.h → imu.pb.hpp for our stubs only; keep well-known types as .pb.h
+    out: list[str] = []
+    for line in text.splitlines(keepends=True):
+        if GOOGLE_PROTOBUF_INCLUDE in line:
+            out.append(line)
+        else:
+            out.append(PB_HEADER_RE.sub(r"\1.hpp\2", line))
+    return "".join(out)
 
 
 def rename_pb_extensions(root: Path) -> None:
