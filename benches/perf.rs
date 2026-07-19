@@ -21,12 +21,12 @@ const PAYLOAD_LEN: usize = 64;
 const WARMUP: usize = 50;
 
 // Same iteration counts for tcp / ipc / inproc / grpc so results are comparable.
-// Message: firehose 1万条，收到 1万条即结束（不等待逐条 ACK）。
-const MSG_ITERS: usize = 10_000;
-const SVC_ITERS: usize = 5_000;
-const ACT_ITERS: usize = 1_000;
-/// Deep queues so a 10k firehose is less likely to drop before the subscriber drains.
-const MSG_HWM: i32 = 100_000;
+// Message: firehose 20万条，收到满额即结束（不等待逐条 ACK）。
+const MSG_ITERS: usize = 200_000;
+const SVC_ITERS: usize = 20_000;
+const ACT_ITERS: usize = 20_000;
+/// Deep queues so a firehose burst is less likely to drop before the subscriber drains.
+const MSG_HWM: i32 = 500_000;
 
 fn main() {
     let _guard = lock_broker();
@@ -56,7 +56,7 @@ fn main() {
             println!("[{}/{}] SKIP: {note}", r.transport, r.scenario);
         } else {
             println!(
-                "[{}/{}] n={} got={} {:.0}/s p50={:.1}µs p99={:.1}µs",
+                "[{}/{}] n={} got={} {:.0}/s p50={:.0}µs p99={:.0}µs",
                 r.transport,
                 r.scenario,
                 r.iterations,
@@ -178,7 +178,7 @@ fn bench_pubsub(transport: &str, n: usize) -> ScenarioResult {
         let wait = if transport_pub == "inproc" {
             Duration::from_secs(3)
         } else {
-            Duration::from_secs(120)
+            Duration::from_secs(600)
         };
         let ok = wait_until(&count_pub, n, wait);
         let elapsed = t0.elapsed();
@@ -472,7 +472,7 @@ fn bench_grpc_subscribe(broker: &RobotBusBroker, url: &str, n: usize) -> Scenari
     });
 
     let t0 = Instant::now();
-    let deadline = Instant::now() + Duration::from_secs(120);
+    let deadline = Instant::now() + Duration::from_secs(600);
     while count.load(Ordering::Relaxed) < n && Instant::now() < deadline {
         let _ = node.spin_once(Some(Duration::from_millis(5)));
     }

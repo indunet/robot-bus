@@ -21,8 +21,8 @@ pub fn lock_broker() -> MutexGuard<'static, ()> {
 pub fn perf_broker_config() -> RobotBusConfig {
     let mut config = RobotBusConfig::default();
     // Deep message queues for firehose pub/sub (service/action stay moderate).
-    config.message.snd_hwm = 100_000;
-    config.message.rcv_hwm = 100_000;
+    config.message.snd_hwm = 500_000;
+    config.message.rcv_hwm = 500_000;
     config.service.snd_hwm = 1000;
     config.service.rcv_hwm = 1000;
     config.action.snd_hwm = 1000;
@@ -167,15 +167,15 @@ pub fn write_report(results: &[ScenarioResult], env_lines: &[String]) -> std::io
 
     md.push_str("## 方法\n\n");
     md.push_str("- 进程内 `RobotBusBroker`，`bind_all_transports = true`（tcp + ipc + inproc + grpc）。\n");
-    md.push_str("- Console HTTP 关闭；message/service/action HWM=1000。\n");
-    md.push_str("- 各传输迭代次数相同：message 10000（狂发） / service 5000 / action 1000（便于横比）。\n");
+    md.push_str("- Console HTTP 关闭；message HWM=500000，service/action HWM=1000。\n");
+    md.push_str("- 各传输迭代次数相同：message 200000（狂发） / service 20000 / action 20000（便于横比）。\n");
     md.push_str("- Payload：64 字节 raw（前 8 字节为发送端 Unix 纳秒时间戳，用于延迟）。\n");
-    md.push_str("- Message：发布端尽快连发 N 条（不等待 ACK），订阅端收满 N 条即结束；message HWM=100000。\n");
+    md.push_str("- Message：发布端尽快连发 N 条（不等待 ACK），订阅端收满 N 条即结束；message HWM=500000。\n");
     md.push_str("- ZMQ：`Node::tcp` / `Node::ipc` / `Node::inproc`；gRPC：`Node::grpc_at`。\n");
     md.push_str("- 指标为单机本机回环，机器相关，不作为 CI 门槛。\n\n");
 
     md.push_str("## 横比\n\n");
-    md.push_str("单元格为 **吞吐/s · p50(µs)**。gRPC Node **不支持 publish**，对应格为 —。\n");
+    md.push_str("单元格为 **吞吐（次/秒）**。gRPC Node **不支持 publish**，对应格为 —。\n");
     md.push_str("ZMQ（tcp / ipc）下 message 发布与订阅测的是同一条 pub→sub 端到端路径；gRPC 仅测 Subscribe。\n\n");
     md.push_str("| 场景 | tcp | ipc | inproc | grpc |\n");
     md.push_str("|------|-----|-----|--------|------|\n");
@@ -209,7 +209,7 @@ pub fn write_report(results: &[ScenarioResult], env_lines: &[String]) -> std::io
                 ));
             } else {
                 md.push_str(&format!(
-                    "| {} | {} | {} | {:.3}s | {:.0}/s | {:.1} | {:.1} | {:.1} | {:.1} | |\n",
+                    "| {} | {} | {} | {:.3}s | {:.0}/s | {:.0} | {:.0} | {:.0} | {:.0} | |\n",
                     r.scenario,
                     r.iterations,
                     r.received,
@@ -238,25 +238,13 @@ fn cell(results: &[ScenarioResult], transport: &str, scenario: &str) -> String {
         .find(|r| r.transport == transport && r.scenario == scenario)
     {
         Some(r) if r.note.is_some() => "—".into(),
-        Some(r) => format!("{:.0}/s · {:.0}", r.throughput_per_s, r.latency.p50_us),
+        Some(r) => format!("{:.0}/s", r.throughput_per_s),
         None => "—".into(),
     }
 }
 
 pub fn env_summary() -> Vec<String> {
-    let mut lines = vec![
-        format!("robot-bus: {}", env!("CARGO_PKG_VERSION")),
-        format!("构建: release (`cargo run --release`)"),
-    ];
-
-    if let Ok(out) = std::process::Command::new("hostname").output() {
-        if out.status.success() {
-            let h = String::from_utf8_lossy(&out.stdout).trim().to_string();
-            if !h.is_empty() {
-                lines.push(format!("主机名: {h}"));
-            }
-        }
-    }
+    let mut lines = vec![format!("robot-bus: {}", env!("CARGO_PKG_VERSION"))];
 
     if let Ok(out) = std::process::Command::new("sw_vers").output() {
         if out.status.success() {
@@ -294,20 +282,7 @@ pub fn env_summary() -> Vec<String> {
             bytes as f64 / (1024.0 * 1024.0 * 1024.0)
         ));
     }
-    push_sysctl(&mut lines, "机型", "hw.model");
 
-    if let Ok(out) = std::process::Command::new("rustc").args(["-V"]).output() {
-        if out.status.success() {
-            let v = String::from_utf8_lossy(&out.stdout).trim().to_string();
-            if !v.is_empty() {
-                lines.push(format!("rustc: {v}"));
-            }
-        }
-    }
-
-    lines.push(
-        "负载说明: 本机回环单进程 broker + SDK；非跨机、非多订阅者压测".into(),
-    );
     lines
 }
 
