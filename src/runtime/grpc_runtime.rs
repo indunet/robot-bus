@@ -28,6 +28,7 @@ use crate::runtime::registrations::MessageCallback;
 use crate::runtime::timers::{
     effective_poll_timeout_ms, tick_timers, Timer, TimerCallback, TimerHandle,
 };
+use tonic::transport::Channel;
 
 const DEFAULT_GRPC_URL: &str = "http://127.0.0.1:15770";
 const DEFAULT_SPIN_TIMEOUT_MS: i64 = 250;
@@ -39,9 +40,12 @@ struct TopicEvent {
 }
 
 /// Shared handle used by gRPC service / action clients (keeps the runtime alive).
+///
+/// Reuses one multiplexed [`Channel`] for all RPCs — connecting per call exhausts
+/// ephemeral ports under load (seen as mid-run failures / `transport error`).
 #[derive(Clone)]
 pub(crate) struct GrpcClientContext {
-    url: String,
+    channel: Channel,
     runtime: Arc<tokio::runtime::Runtime>,
 }
 
@@ -53,16 +57,14 @@ impl GrpcClientContext {
         request_id: Option<&str>,
         timeout: Option<Duration>,
     ) -> Result<Vec<u8>> {
-        let url = self.url.clone();
+        let channel = self.channel.clone();
         let service_name = service_name.to_string();
         let body = body.to_vec();
         let request_id = request_id.map(str::to_string).unwrap_or_default();
         let timeout_ms = timeout_ms_u32(timeout);
 
         self.runtime.block_on(async move {
-            let mut client = ServiceGatewayClient::connect(url)
-                .await
-                .map_err(|err| BusError::Protocol(format!("gRPC connect failed: {err}")))?;
+            let mut client = ServiceGatewayClient::new(channel);
             let resp = client
                 .call(Request::new(ServiceCallRequest {
                     service_name,
@@ -83,7 +85,7 @@ impl GrpcClientContext {
         goal_id: Option<&str>,
         timeout: Option<Duration>,
     ) -> Result<Vec<ActionMessage>> {
-        let url = self.url.clone();
+        let channel = self.channel.clone();
         let action_name = action_name.to_string();
         let body = body.to_vec();
         let goal_id = goal_id
@@ -92,9 +94,7 @@ impl GrpcClientContext {
         let timeout_ms = timeout_ms_u32(timeout);
 
         self.runtime.block_on(async move {
-            let mut client = ActionGatewayClient::connect(url)
-                .await
-                .map_err(|err| BusError::Protocol(format!("gRPC connect failed: {err}")))?;
+            let mut client = ActionGatewayClient::new(channel);
             let outbound = tokio_stream::once(ActionClientMessage {
                 msg: Some(action_client_message::Msg::Goal(GoalCommand {
                     action_name: action_name.clone(),
@@ -140,15 +140,13 @@ impl GrpcClientContext {
         body: &[u8],
         _timeout: Option<Duration>,
     ) -> Result<ActionMessage> {
-        let url = self.url.clone();
+        let channel = self.channel.clone();
         let action_name = action_name.to_string();
         let goal_id = goal_id.to_string();
         let body = body.to_vec();
 
         self.runtime.block_on(async move {
-            let mut client = ActionGatewayClient::connect(url)
-                .await
-                .map_err(|err| BusError::Protocol(format!("gRPC connect failed: {err}")))?;
+            let mut client = ActionGatewayClient::new(channel);
             let outbound = tokio_stream::once(ActionClientMessage {
                 msg: Some(action_client_message::Msg::Cancel(CancelCommand {
                     action_name: action_name.clone(),
@@ -191,6 +189,8 @@ struct GrpcState {
 /// Owns a tokio runtime and dispatches gRPC subscription / timer callbacks.
 pub struct GrpcRuntime {
     url: String,
+    /// Shared HTTP/2 channel for service / action RPCs (cloned per client handle).
+    channel: Channel,
     runtime: Arc<tokio::runtime::Runtime>,
     running: Arc<AtomicBool>,
     inbound_tx: Sender<TopicEvent>,
@@ -206,10 +206,21 @@ impl GrpcRuntime {
             .thread_name("robot-bus-grpc")
             .build()
             .map_err(|err| BusError::Protocol(format!("tokio runtime: {err}")))?;
+        let runtime = Arc::new(runtime);
+        // Connect once on this runtime and reuse the multiplexed channel for all RPCs.
+        // Per-call `Client::connect` exhausts ephemeral ports under load.
+        let channel = {
+            let endpoint = tonic::transport::Endpoint::from_shared(url.clone())
+                .map_err(|err| BusError::Protocol(format!("invalid gRPC url '{url}': {err}")))?;
+            runtime
+                .block_on(endpoint.connect())
+                .map_err(|err| BusError::Protocol(format!("gRPC connect failed: {err}")))?
+        };
         let (inbound_tx, inbound_rx) = mpsc::channel();
         Ok(Self {
             url,
-            runtime: Arc::new(runtime),
+            channel,
+            runtime,
             running: Arc::new(AtomicBool::new(false)),
             inbound_tx,
             inbound_rx: Mutex::new(inbound_rx),
@@ -228,7 +239,7 @@ impl GrpcRuntime {
 
     pub fn client_context(&self) -> GrpcClientContext {
         GrpcClientContext {
-            url: self.url.clone(),
+            channel: self.channel.clone(),
             runtime: Arc::clone(&self.runtime),
         }
     }

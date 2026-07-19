@@ -1,6 +1,6 @@
 {
   "name": "robot-bus",
-  "version": "0.0.6",
+  "version": "0.0.7",
   "description": "robot-bus TypeScript SDK: Node (napi-rs / ZMQ) + browser (gRPC-Web client)",
   "license": "Apache-2.0",
   "author": "deng_ran <deng_ran@aliyun.com>",

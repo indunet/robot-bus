@@ -9,10 +9,12 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::thread::{self, JoinHandle};
 use std::time::Duration;
+use zmq::Context as ZmqContext;
 
 use super::action_bus::{self, ActionBusConfig};
 use super::message_bus::{self, BusConfig, MessageMetrics};
 use super::service_bus::{self, ServiceBusConfig};
+use crate::runtime::Context as BusContext;
 
 #[cfg(feature = "grpc")]
 use crate::grpc::{serve_with_shutdown, GatewayConfig};
@@ -22,6 +24,17 @@ use crate::console::{serve_with_shutdown as serve_console_with_shutdown, BrokerE
 use std::net::SocketAddr;
 
 const STARTUP_SETTLE: Duration = Duration::from_millis(50);
+
+#[cfg(feature = "grpc")]
+fn connect_url_for_listen(listen: SocketAddr) -> String {
+    let host = match listen.ip() {
+        std::net::IpAddr::V4(ip) if ip.is_unspecified() => "127.0.0.1".to_string(),
+        std::net::IpAddr::V6(ip) if ip.is_unspecified() => "[::1]".to_string(),
+        std::net::IpAddr::V6(ip) => format!("[{ip}]"),
+        ip => ip.to_string(),
+    };
+    format!("http://{host}:{}", listen.port())
+}
 
 fn join_broker_thread(name: &str, handle: JoinHandle<Result<()>>) -> Result<()> {
     handle
@@ -46,7 +59,11 @@ impl MessageBusBroker {
     /// Pass `Some(metrics)` only when the console (or another observer) needs
     /// topic counters — that enables libzmq capture. `None` keeps the forward
     /// path as a plain `proxy_steerable` with no capture overhead.
-    pub(crate) fn start(config: BusConfig, metrics: Option<Arc<MessageMetrics>>) -> Result<Self> {
+    pub(crate) fn start_with_zmq(
+        zmq: ZmqContext,
+        config: BusConfig,
+        metrics: Option<Arc<MessageMetrics>>,
+    ) -> Result<Self> {
         let xsub_bind = config.xsub_bind.clone();
         let xpub_bind = config.xpub_bind.clone();
         // Always keep an Arc for `self.metrics` (console may read zeros if unused).
@@ -54,7 +71,7 @@ impl MessageBusBroker {
         let shutdown = Arc::new(AtomicBool::new(false));
         let shutdown_flag = shutdown.clone();
         let handle = thread::spawn(move || {
-            message_bus::run_with_shutdown(config, shutdown_flag, metrics)
+            message_bus::run_with_shutdown_ctx(zmq, config, shutdown_flag, metrics)
         });
         thread::sleep(STARTUP_SETTLE);
         Ok(Self {
@@ -95,12 +112,14 @@ pub struct ServiceBusBroker {
 
 impl ServiceBusBroker {
     /// Bind and run the service bus on a background thread.
-    pub(crate) fn start(config: ServiceBusConfig) -> Result<Self> {
+    pub(crate) fn start_with_zmq(zmq: ZmqContext, config: ServiceBusConfig) -> Result<Self> {
         let frontend_bind = config.frontend_bind.clone();
         let backend_bind = config.backend_bind.clone();
         let shutdown = Arc::new(AtomicBool::new(false));
         let shutdown_flag = shutdown.clone();
-        let handle = thread::spawn(move || service_bus::run_with_shutdown(config, shutdown_flag));
+        let handle = thread::spawn(move || {
+            service_bus::run_with_shutdown_ctx(zmq, config, shutdown_flag)
+        });
         thread::sleep(STARTUP_SETTLE);
         Ok(Self {
             frontend_bind,
@@ -139,12 +158,14 @@ pub struct ActionBusBroker {
 
 impl ActionBusBroker {
     /// Bind and run the action bus on a background thread.
-    pub(crate) fn start(config: ActionBusConfig) -> Result<Self> {
+    pub(crate) fn start_with_zmq(zmq: ZmqContext, config: ActionBusConfig) -> Result<Self> {
         let frontend_bind = config.frontend_bind.clone();
         let backend_bind = config.backend_bind.clone();
         let shutdown = Arc::new(AtomicBool::new(false));
         let shutdown_flag = shutdown.clone();
-        let handle = thread::spawn(move || action_bus::run_with_shutdown(config, shutdown_flag));
+        let handle = thread::spawn(move || {
+            action_bus::run_with_shutdown_ctx(zmq, config, shutdown_flag)
+        });
         thread::sleep(STARTUP_SETTLE);
         Ok(Self {
             frontend_bind,
@@ -379,7 +400,16 @@ pub struct RobotBusBroker {
 
 impl RobotBusBroker {
     /// Start message, service, and action buses (and gRPC / console when enabled) on background threads.
+    ///
+    /// Creates a private ZeroMQ context. For same-process `inproc://`, use
+    /// [`start_with_context`](Self::start_with_context) and share that context with Nodes.
     pub fn start(config: RobotBusConfig) -> Result<Self> {
+        Self::start_with_context(BusContext::new(), config)
+    }
+
+    /// Start buses using a shared [`crate::Context`] (required for inproc with SDK Nodes).
+    pub fn start_with_context(context: BusContext, config: RobotBusConfig) -> Result<Self> {
+        let zmq = context.clone_zmq();
         // Capture metrics only when the console will read them — otherwise keep
         // the message bus on a plain proxy_steerable with zero monitoring overhead.
         #[cfg(feature = "console")]
@@ -391,9 +421,10 @@ impl RobotBusBroker {
         #[cfg(not(feature = "console"))]
         let message_metrics = None;
 
-        let message = MessageBusBroker::start(config.message, message_metrics)?;
-        let service = ServiceBusBroker::start(config.service)?;
-        let action = ActionBusBroker::start(config.action)?;
+        let message =
+            MessageBusBroker::start_with_zmq(zmq.clone(), config.message, message_metrics)?;
+        let service = ServiceBusBroker::start_with_zmq(zmq.clone(), config.service)?;
+        let action = ActionBusBroker::start_with_zmq(zmq, config.action)?;
 
         #[cfg(feature = "grpc")]
         let grpc = {
@@ -450,6 +481,12 @@ impl RobotBusBroker {
     #[cfg(feature = "grpc")]
     pub fn grpc_listen(&self) -> SocketAddr {
         self.grpc.listen
+    }
+
+    /// Base URL for gRPC clients (`http://127.0.0.1:port` when the broker binds `0.0.0.0`).
+    #[cfg(feature = "grpc")]
+    pub fn grpc_url(&self) -> String {
+        connect_url_for_listen(self.grpc.listen)
     }
 
     /// Console HTTP listen address when the console server is running (feature `console`).

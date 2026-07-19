@@ -5,45 +5,48 @@
 #[path = "support.rs"]
 mod support;
 
-use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::{Duration, Instant};
 
 use robot_bus::worker_thread::WorkerThread;
-use robot_bus::{HighWaterMark, Node, Publisher, RobotBusBroker};
+use robot_bus::{Context, HighWaterMark, Node, Publisher, RobotBusBroker};
 use support::{
-    env_summary, lock_broker, now_ns, options_for, perf_broker_config, write_report, LatencyStats,
-    ScenarioResult,
+    env_summary, lock_broker, node_for, now_ns, options_for, perf_broker_config, write_report,
+    LatencyStats, ScenarioResult,
 };
 
 const PAYLOAD_LEN: usize = 64;
 const WARMUP: usize = 50;
+/// Paced one-way samples for message latency (firehose backlog is not latency).
+const MSG_LATENCY_SAMPLES: usize = 5_000;
 
 // Same iteration counts for tcp / ipc / inproc / grpc so results are comparable.
-// Message: firehose 20万条，收到满额即结束（不等待逐条 ACK）。
-const MSG_ITERS: usize = 200_000;
-const SVC_ITERS: usize = 20_000;
-const ACT_ITERS: usize = 20_000;
+const MSG_ITERS: usize = 100_000;
+const SVC_ITERS: usize = 100_000;
+const ACT_ITERS: usize = 100_000;
 /// Deep queues so a firehose burst is less likely to drop before the subscriber drains.
 const MSG_HWM: i32 = 500_000;
 
 fn main() {
     let _guard = lock_broker();
     println!("starting RobotBusBroker (bind_all + grpc)…");
-    let broker = RobotBusBroker::start(perf_broker_config()).expect("start broker");
+    let ctx = Context::new();
+    let broker =
+        RobotBusBroker::start_with_context(ctx.clone(), perf_broker_config()).expect("start broker");
     thread::sleep(Duration::from_millis(300));
 
     let mut results: Vec<ScenarioResult> = Vec::new();
 
     for transport in ["tcp", "ipc", "inproc"] {
         println!("=== {transport} ===");
-        results.push(bench_pubsub(transport, MSG_ITERS));
-        results.push(bench_service(transport, SVC_ITERS));
-        results.push(bench_action(transport, ACT_ITERS));
+        results.push(bench_pubsub(&ctx, transport, MSG_ITERS));
+        results.push(bench_service(&ctx, transport, SVC_ITERS));
+        results.push(bench_action(&ctx, transport, ACT_ITERS));
     }
 
-    let grpc_url = format!("http://{}", broker.grpc_listen());
+    let grpc_url = broker.grpc_url();
     println!("=== grpc ({grpc_url}) ===");
     results.push(bench_grpc_subscribe(&broker, &grpc_url, MSG_ITERS));
     results.push(bench_grpc_service(&broker, &grpc_url, SVC_ITERS));
@@ -98,7 +101,7 @@ fn wait_until(count: &AtomicUsize, target: usize, timeout: Duration) -> bool {
     true
 }
 
-fn bench_pubsub(transport: &str, n: usize) -> ScenarioResult {
+fn bench_pubsub(ctx: &Context, transport: &str, n: usize) -> ScenarioResult {
     let scenario = "message pub/sub";
     let transport = transport.to_string();
     let options = options_for(&transport);
@@ -111,19 +114,23 @@ fn bench_pubsub(transport: &str, n: usize) -> ScenarioResult {
         }
     };
 
-    let latencies = Arc::new(Mutex::new(Vec::<u64>::with_capacity(n)));
+    let latencies = Arc::new(Mutex::new(Vec::<u64>::with_capacity(MSG_LATENCY_SAMPLES)));
     let count = Arc::new(AtomicUsize::new(0));
+    let record_latency = Arc::new(AtomicBool::new(true));
 
-    let mut sub = Node::with_options(format!("perf-sub-{transport}"), options);
+    let mut sub = node_for(ctx, format!("perf-sub-{transport}"), &transport);
     let lat_cb = Arc::clone(&latencies);
     let cnt_cb = Arc::clone(&count);
+    let rec_cb = Arc::clone(&record_latency);
     if let Err(err) = sub.create_subscription_raw(
         &topic,
         Arc::new(move |_topic, payload| {
-            if let Some(sent) = read_ts(payload) {
-                let now = now_ns();
-                if now >= sent {
-                    lat_cb.lock().unwrap().push(now - sent);
+            if rec_cb.load(Ordering::Relaxed) {
+                if let Some(sent) = read_ts(payload) {
+                    let now = now_ns();
+                    if now >= sent {
+                        lat_cb.lock().unwrap().push(now - sent);
+                    }
                 }
             }
             cnt_cb.fetch_add(1, Ordering::Relaxed);
@@ -144,7 +151,7 @@ fn bench_pubsub(transport: &str, n: usize) -> ScenarioResult {
         snd: MSG_HWM,
         rcv: MSG_HWM,
     };
-    let publisher = match Publisher::with_hwm(Some(&xsub), hwm) {
+    let publisher = match Publisher::with_shared_context(ctx, Some(&xsub), hwm) {
         Ok(p) => p,
         Err(err) => {
             return ScenarioResult::skipped(&transport, scenario, format!("publisher failed: {err}"))
@@ -153,6 +160,7 @@ fn bench_pubsub(transport: &str, n: usize) -> ScenarioResult {
 
     let count_pub = Arc::clone(&count);
     let lat_pub = Arc::clone(&latencies);
+    let rec_pub = Arc::clone(&record_latency);
     let topic_pub = topic.clone();
     let transport_pub = transport.clone();
     let worker = thread::spawn(move || {
@@ -160,11 +168,36 @@ fn bench_pubsub(transport: &str, n: usize) -> ScenarioResult {
         for _ in 0..WARMUP {
             let _ = publisher.publish(&topic_pub, &make_payload(now_ns()));
         }
-        thread::sleep(Duration::from_millis(100));
+        if !wait_until(&count_pub, WARMUP, Duration::from_secs(5)) {
+            // Warmup may drop; continue anyway after a short settle.
+            thread::sleep(Duration::from_millis(100));
+        }
         count_pub.store(0, Ordering::Relaxed);
         lat_pub.lock().unwrap().clear();
 
-        // Firehose: blast all N publishes, then wait until the subscriber has N.
+        // Phase 1: paced one-way latency (send → wait for that receive).
+        rec_pub.store(true, Ordering::Relaxed);
+        for _ in 0..MSG_LATENCY_SAMPLES {
+            let before = count_pub.load(Ordering::Relaxed);
+            if publisher
+                .publish(&topic_pub, &make_payload(now_ns()))
+                .is_err()
+            {
+                shutdown.shutdown();
+                return Err("publish failed (latency phase)".to_string());
+            }
+            if !wait_until(&count_pub, before + 1, Duration::from_secs(2)) {
+                shutdown.shutdown();
+                return Err("latency sample timed out".to_string());
+            }
+        }
+        let latency = LatencyStats::from_ns(lat_pub.lock().unwrap().clone());
+
+        // Phase 2: firehose throughput (do not mix queueing delay into latency).
+        rec_pub.store(false, Ordering::Relaxed);
+        count_pub.store(0, Ordering::Relaxed);
+        lat_pub.lock().unwrap().clear();
+
         let t0 = Instant::now();
         for _ in 0..n {
             if publisher
@@ -175,25 +208,17 @@ fn bench_pubsub(transport: &str, n: usize) -> ScenarioResult {
                 return Err("publish failed".to_string());
             }
         }
-        let wait = if transport_pub == "inproc" {
-            Duration::from_secs(3)
-        } else {
-            Duration::from_secs(600)
-        };
-        let ok = wait_until(&count_pub, n, wait);
+        let ok = wait_until(&count_pub, n, Duration::from_secs(600));
         let elapsed = t0.elapsed();
         let received = count_pub.load(Ordering::Relaxed);
-        let samples = lat_pub.lock().unwrap().clone();
         shutdown.shutdown();
 
         if !ok && received == 0 {
-            let note = if transport_pub == "inproc" {
-                "no messages received (ZMQ inproc is context-local; SDK nodes use separate contexts from the broker)"
-                    .to_string()
-            } else {
-                "timed out with 0 messages".to_string()
-            };
-            return Ok(ScenarioResult::skipped(&transport_pub, scenario, note));
+            return Ok(ScenarioResult::skipped(
+                &transport_pub,
+                scenario,
+                "timed out with 0 messages",
+            ));
         }
 
         Ok(ScenarioResult::ok(
@@ -202,7 +227,7 @@ fn bench_pubsub(transport: &str, n: usize) -> ScenarioResult {
             n,
             received,
             elapsed,
-            LatencyStats::from_ns(samples),
+            latency,
         ))
     });
 
@@ -213,13 +238,12 @@ fn bench_pubsub(transport: &str, n: usize) -> ScenarioResult {
     }
 }
 
-fn bench_service(transport: &str, n: usize) -> ScenarioResult {
+fn bench_service(ctx: &Context, transport: &str, n: usize) -> ScenarioResult {
     let scenario = "service call";
     let transport = transport.to_string();
-    let options = options_for(&transport);
     let name = format!("perf.{transport}.echo");
 
-    let mut server = Node::with_options(format!("perf-svc-srv-{transport}"), options.clone());
+    let mut server = node_for(ctx, format!("perf-svc-srv-{transport}"), &transport);
     if let Err(err) = server.create_service_raw(&name, Arc::new(|body| body.to_vec()), None) {
         return ScenarioResult::skipped(&transport, scenario, format!("create_service: {err}"));
     }
@@ -232,10 +256,11 @@ fn bench_service(transport: &str, n: usize) -> ScenarioResult {
     };
 
     let transport_cli = transport.clone();
+    let ctx_cli = ctx.clone();
     let worker = thread::spawn(move || {
         thread::sleep(Duration::from_millis(200));
         let mut client_node =
-            Node::with_options(format!("perf-svc-cli-{transport_cli}"), options);
+            node_for(&ctx_cli, format!("perf-svc-cli-{transport_cli}"), &transport_cli);
         let client = match client_node.create_client_raw(&name) {
             Ok(c) => c,
             Err(err) => {
@@ -249,15 +274,14 @@ fn bench_service(transport: &str, n: usize) -> ScenarioResult {
         };
 
         let payload = make_payload(0);
-        // Fail fast: one probe before full warmup (avoids stacking timeouts on inproc).
+        // Fail fast: one probe before full warmup.
         if let Err(err) = client.call(&payload, Some(Duration::from_millis(500))) {
             shutdown.shutdown();
-            let note = if transport_cli == "inproc" {
-                format!("call failed (likely inproc context isolation): {err}")
-            } else {
-                format!("call failed: {err}")
-            };
-            return ScenarioResult::skipped(&transport_cli, scenario, note);
+            return ScenarioResult::skipped(
+                &transport_cli,
+                scenario,
+                format!("call failed: {err}"),
+            );
         }
         for _ in 1..WARMUP {
             let _ = client.call(&payload, Some(Duration::from_secs(2)));
@@ -307,13 +331,12 @@ fn bench_service(transport: &str, n: usize) -> ScenarioResult {
     worker.join().expect("service client thread")
 }
 
-fn bench_action(transport: &str, n: usize) -> ScenarioResult {
+fn bench_action(ctx: &Context, transport: &str, n: usize) -> ScenarioResult {
     let scenario = "action send_goal";
     let transport = transport.to_string();
-    let options = options_for(&transport);
     let name = format!("perf.{transport}.act");
 
-    let mut server = Node::with_options(format!("perf-act-srv-{transport}"), options.clone());
+    let mut server = node_for(ctx, format!("perf-act-srv-{transport}"), &transport);
     if let Err(err) = server.create_action_server_raw(
         &name,
         Arc::new(|body| {
@@ -339,10 +362,11 @@ fn bench_action(transport: &str, n: usize) -> ScenarioResult {
     };
 
     let transport_cli = transport.clone();
+    let ctx_cli = ctx.clone();
     let worker = thread::spawn(move || {
         thread::sleep(Duration::from_millis(200));
         let mut client_node =
-            Node::with_options(format!("perf-act-cli-{transport_cli}"), options);
+            node_for(&ctx_cli, format!("perf-act-cli-{transport_cli}"), &transport_cli);
         let client = match client_node.create_action_client_raw(&name) {
             Ok(c) => c,
             Err(err) => {
@@ -358,12 +382,11 @@ fn bench_action(transport: &str, n: usize) -> ScenarioResult {
         let payload = make_payload(0);
         if let Err(err) = client.send_goal(&payload, None, Some(Duration::from_millis(800))) {
             shutdown.shutdown();
-            let note = if transport_cli == "inproc" {
-                format!("send_goal failed (likely inproc context isolation): {err}")
-            } else {
-                format!("send_goal failed: {err}")
-            };
-            return ScenarioResult::skipped(&transport_cli, scenario, note);
+            return ScenarioResult::skipped(
+                &transport_cli,
+                scenario,
+                format!("send_goal failed: {err}"),
+            );
         }
         for _ in 1..WARMUP.min(10) {
             let _ = client.send_goal(&payload, None, Some(Duration::from_secs(2)));
@@ -418,8 +441,9 @@ fn bench_grpc_subscribe(broker: &RobotBusBroker, url: &str, n: usize) -> Scenari
     let scenario = "message Subscribe";
     let topic = "perf/grpc/msg";
 
-    let latencies = Arc::new(Mutex::new(Vec::<u64>::with_capacity(n)));
+    let latencies = Arc::new(Mutex::new(Vec::<u64>::with_capacity(MSG_LATENCY_SAMPLES)));
     let count = Arc::new(AtomicUsize::new(0));
+    let record_latency = Arc::new(AtomicBool::new(true));
 
     let mut node = Node::grpc_at("perf-grpc-sub", url);
     if let Err(err) = node.create_subscription_raw(
@@ -427,11 +451,14 @@ fn bench_grpc_subscribe(broker: &RobotBusBroker, url: &str, n: usize) -> Scenari
         Arc::new({
             let latencies = Arc::clone(&latencies);
             let count = Arc::clone(&count);
+            let record_latency = Arc::clone(&record_latency);
             move |_t, payload| {
-                if let Some(sent) = read_ts(payload) {
-                    let now = now_ns();
-                    if now >= sent {
-                        latencies.lock().unwrap().push(now - sent);
+                if record_latency.load(Ordering::Relaxed) {
+                    if let Some(sent) = read_ts(payload) {
+                        let now = now_ns();
+                        if now >= sent {
+                            latencies.lock().unwrap().push(now - sent);
+                        }
                     }
                 }
                 count.fetch_add(1, Ordering::Relaxed);
@@ -463,7 +490,26 @@ fn bench_grpc_subscribe(broker: &RobotBusBroker, url: &str, n: usize) -> Scenari
     count.store(0, Ordering::Relaxed);
     latencies.lock().unwrap().clear();
 
-    // Firehose on a side thread; this thread only spins until N arrivals.
+    // Phase 1: paced one-way latency.
+    record_latency.store(true, Ordering::Relaxed);
+    for _ in 0..MSG_LATENCY_SAMPLES {
+        let before = count.load(Ordering::Relaxed);
+        let _ = publisher.publish(topic, &make_payload(now_ns()));
+        let deadline = Instant::now() + Duration::from_secs(2);
+        while count.load(Ordering::Relaxed) <= before && Instant::now() < deadline {
+            let _ = node.spin_once(Some(Duration::from_millis(1)));
+        }
+        if count.load(Ordering::Relaxed) <= before {
+            return ScenarioResult::skipped(transport, scenario, "latency sample timed out");
+        }
+    }
+    let latency = LatencyStats::from_ns(latencies.lock().unwrap().clone());
+
+    // Phase 2: firehose throughput.
+    record_latency.store(false, Ordering::Relaxed);
+    count.store(0, Ordering::Relaxed);
+    latencies.lock().unwrap().clear();
+
     let topic_pub = topic.to_string();
     let publisher_thread = thread::spawn(move || {
         for _ in 0..n {
@@ -479,7 +525,6 @@ fn bench_grpc_subscribe(broker: &RobotBusBroker, url: &str, n: usize) -> Scenari
     let elapsed = t0.elapsed();
     let _ = publisher_thread.join();
     let received = count.load(Ordering::Relaxed);
-    let samples = latencies.lock().unwrap().clone();
 
     if received == 0 {
         return ScenarioResult::skipped(transport, scenario, "timed out with 0 messages");
@@ -491,7 +536,7 @@ fn bench_grpc_subscribe(broker: &RobotBusBroker, url: &str, n: usize) -> Scenari
         n,
         received,
         elapsed,
-        LatencyStats::from_ns(samples),
+        latency,
     )
 }
 

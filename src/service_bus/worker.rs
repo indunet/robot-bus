@@ -48,6 +48,27 @@ impl ServiceWorker {
         heartbeat_interval_ms: u64,
         hwm: HighWaterMark,
     ) -> Result<Self> {
+        Self::with_context_hwm(
+            &Context::new(),
+            service_name,
+            handler,
+            endpoint,
+            identity,
+            heartbeat_interval_ms,
+            hwm,
+        )
+    }
+
+    /// Create a worker using a shared ZeroMQ context (required for inproc).
+    pub fn with_context_hwm(
+        context: &Context,
+        service_name: impl Into<String>,
+        handler: ServiceHandler,
+        endpoint: Option<&str>,
+        identity: Option<&str>,
+        heartbeat_interval_ms: u64,
+        hwm: HighWaterMark,
+    ) -> Result<Self> {
         let service_name = service_name.into();
         let endpoint = match endpoint {
             Some(ep) => ep.to_string(),
@@ -60,7 +81,6 @@ impl ServiceWorker {
         let identity_bytes = identity.into_bytes();
         let heartbeat_interval = Duration::from_millis(heartbeat_interval_ms);
 
-        let context = Context::new();
         let socket = context.socket(SocketType::DEALER)?;
         apply_rpc_options_with(&socket, hwm)?;
         socket.set_identity(&identity_bytes)?;

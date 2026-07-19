@@ -1,6 +1,6 @@
 [package]
 name = "robot-bus"
-version = "0.0.6"
+version = "0.0.7"
 edition = "2024"
 description = "ZeroMQ message bus: broker routing and participant SDK"
 license = "Apache-2.0"

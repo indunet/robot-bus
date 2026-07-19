@@ -48,12 +48,20 @@ impl ActionClient {
     }
 
     pub fn with_hwm(endpoint: Option<&str>, hwm: HighWaterMark) -> Result<Self> {
+        Self::with_context_hwm(&Context::new(), endpoint, hwm)
+    }
+
+    /// Create a client using a shared ZeroMQ context (required for inproc).
+    pub fn with_context_hwm(
+        context: &Context,
+        endpoint: Option<&str>,
+        hwm: HighWaterMark,
+    ) -> Result<Self> {
         let endpoint = match endpoint {
             Some(ep) => ep.to_string(),
             None => transports::action_frontend_endpoint("localhost", "tcp")
                 .map_err(|e| BusError::Protocol(e))?,
         };
-        let context = Context::new();
         let socket = context.socket(SocketType::DEALER)?;
         apply_action_options_with(&socket, hwm)?;
         socket.connect(&endpoint)?;

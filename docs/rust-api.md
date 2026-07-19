@@ -3,9 +3,9 @@
 `Cargo.toml`：
 
 ```toml
-robot-bus = "0.0.6"
+robot-bus = "0.0.7"
 # 本地：robot-bus = { path = "../robot-bus" }
-# 默认已启用 gRPC；若需关闭：robot-bus = { version = "0.0.6", default-features = false }
+# 默认已启用 gRPC；若需关闭：robot-bus = { version = "0.0.7", default-features = false }
 ```
 
 ## Broker 启动
@@ -33,6 +33,20 @@ cargo run --bin robot_bus_broker
 | console http | `0.0.0.0:15771` | — | — |
 
 SDK 侧 `Node::new` 默认连本机 **tcp**（`localhost` + 上表端口）；`Node::ipc` / `Node::inproc` / `Node::grpc` 分别走对应传输。
+
+**同进程 inproc：** ZeroMQ 的 `inproc://` 是 context-local。嵌入式 broker 与 Node 必须共用同一个 [`Context`](../src/runtime/context.rs)：
+
+```rust
+use robot_bus::{Context, Node, RobotBusBroker, RobotBusConfig};
+
+let ctx = Context::new();
+let broker = RobotBusBroker::start_with_context(ctx.clone(), RobotBusConfig::default())?;
+let mut node = Node::inproc_with_context(ctx, "pilot");
+// …
+broker.stop()?;
+```
+
+`RobotBusBroker::start(config)` 仍可用（内部自建 Context）；跨进程 tcp/ipc 不要求共享。
 
 **进程内嵌入**（不必单独起二进制）：
 

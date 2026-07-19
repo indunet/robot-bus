@@ -45,7 +45,7 @@ pub use broker::ConsoleBrokerConfig;
 pub use errors::{parse_error_body, BusError, Result};
 pub use message_bus::{Publisher, Subscriber};
 pub use runtime::{
-    ActionGoalHandler, CallbackGroup, CallbackGroupType, Executor, ExecutorHandle,
+    ActionGoalHandler, CallbackGroup, CallbackGroupType, Context, Executor, ExecutorHandle,
     MessageCallback, MultiThreadedExecutor, Node, NodeActionClient, NodeActionClientRaw,
     NodeActionServer, NodeOptions, NodeService, NodeServiceClient, NodeServiceClientRaw,
     ServiceHandler, ShutdownHandle, SingleThreadedExecutor, TimerCallback, TimerHandle,

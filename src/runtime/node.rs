@@ -8,6 +8,9 @@
 //! For shared / multi-threaded executors: `executor.add_node(&mut node)?` then
 //! `executor.spin()?`.
 //!
+//! Same-process **inproc** needs a shared [`crate::Context`] with the embedded
+//! broker: `RobotBusBroker::start_with_context` + [`Node::inproc_with_context`].
+//!
 //! gRPC client mode (feature `grpc`): [`Node::grpc`] connects to the broker
 //! gateway only (subscribe / call service / call action). No ZMQ sockets;
 //! publisher and server APIs return an error.
@@ -24,6 +27,7 @@ use crate::action_bus::{ActionClient as BusActionClient, ActionKind, ActionMessa
 use crate::errors::{BusError, Result};
 use crate::message_bus::Publisher as BusPublisher;
 use crate::runtime::callback_group::{CallbackGroup, CallbackGroupType};
+use crate::runtime::context::Context;
 use crate::runtime::executor::{Executor, ShutdownHandle};
 use crate::runtime::executors::{ExecutorHandle, SingleThreadedExecutor};
 #[cfg(feature = "grpc")]
@@ -578,6 +582,7 @@ impl<A: Action> NodeActionClient<A> {
 pub struct Node {
     name: String,
     options: NodeOptions,
+    context: Context,
     executor: Option<ExecutorHandle>,
     /// Keeps a lazily created [`SingleThreadedExecutor`] alive for the simple path.
     owned_executor: Option<SingleThreadedExecutor>,
@@ -617,6 +622,9 @@ impl Node {
     }
 
     /// Same-process `inproc://robot_bus/...`.
+    ///
+    /// For inproc to work, share a [`Context`] with the embedded broker via
+    /// [`Node::inproc_with_context`] / [`Node::with_context`].
     pub fn inproc(name: impl Into<String>) -> Self {
         Self::with_options(name, NodeOptions::inproc())
     }
@@ -624,6 +632,20 @@ impl Node {
     /// Same-process endpoints under a custom prefix (must match the broker).
     pub fn inproc_at(name: impl Into<String>, prefix: impl AsRef<str>) -> Self {
         Self::with_options(name, NodeOptions::inproc_at(prefix))
+    }
+
+    /// Same-process inproc using a shared [`Context`] (with the embedded broker).
+    pub fn inproc_with_context(context: Context, name: impl Into<String>) -> Self {
+        Self::with_context(context, name, NodeOptions::inproc())
+    }
+
+    /// Same-process inproc under a custom prefix, sharing `context`.
+    pub fn inproc_at_with_context(
+        context: Context,
+        name: impl Into<String>,
+        prefix: impl AsRef<str>,
+    ) -> Self {
+        Self::with_context(context, name, NodeOptions::inproc_at(prefix))
     }
 
     /// gRPC client node talking to the local broker gateway (`http://127.0.0.1:15770`).
@@ -638,11 +660,21 @@ impl Node {
         Self::with_options(name, NodeOptions::grpc_at(url))
     }
 
-    /// Create a node with explicit broker connection options.
+    /// Create a node with explicit broker connection options (private ZMQ context).
     pub fn with_options(name: impl Into<String>, options: NodeOptions) -> Self {
+        Self::with_context(Context::new(), name, options)
+    }
+
+    /// Create a node that shares `context` for all ZMQ sockets (required for inproc).
+    pub fn with_context(
+        context: Context,
+        name: impl Into<String>,
+        options: NodeOptions,
+    ) -> Self {
         Self {
             name: name.into(),
             options,
+            context,
             executor: None,
             owned_executor: None,
             #[cfg(feature = "grpc")]
@@ -651,6 +683,11 @@ impl Node {
             subscriber_connected: false,
             default_callback_group: CallbackGroup::mutually_exclusive(),
         }
+    }
+
+    /// Shared runtime context used for ZMQ sockets.
+    pub fn context(&self) -> &Context {
+        &self.context
     }
 
     pub(crate) fn attach_executor(&mut self, handle: ExecutorHandle) -> Result<()> {
@@ -677,7 +714,7 @@ impl Node {
             ));
         }
         if self.executor.is_none() {
-            let exec = SingleThreadedExecutor::new();
+            let exec = SingleThreadedExecutor::with_context(self.context.clone());
             self.attach_executor(exec.handle().clone())?;
             self.owned_executor = Some(exec);
         }
@@ -790,7 +827,11 @@ impl Node {
             },
         };
         let endpoint = self.options.message_xsub_endpoint()?;
-        self.publisher = Some(Arc::new(BusPublisher::with_hwm(Some(&endpoint), hwm)?));
+        self.publisher = Some(Arc::new(BusPublisher::with_context_hwm(
+            self.context.zmq(),
+            Some(&endpoint),
+            hwm,
+        )?));
         Ok(())
     }
 
@@ -1029,7 +1070,11 @@ impl Node {
         }
         let endpoint = self.options.service_frontend_endpoint()?;
         Ok(NodeServiceClientRaw {
-            inner: ServiceClientInner::Zmq(BusServiceClient::with_hwm(Some(&endpoint), hwm)?),
+            inner: ServiceClientInner::Zmq(BusServiceClient::with_context_hwm(
+                self.context.zmq(),
+                Some(&endpoint),
+                hwm,
+            )?),
             service_name: service_name.into(),
         })
     }
@@ -1131,7 +1176,11 @@ impl Node {
         }
         let endpoint = self.options.action_frontend_endpoint()?;
         Ok(NodeActionClientRaw {
-            inner: ActionClientInner::Zmq(BusActionClient::with_hwm(Some(&endpoint), hwm)?),
+            inner: ActionClientInner::Zmq(BusActionClient::with_context_hwm(
+                self.context.zmq(),
+                Some(&endpoint),
+                hwm,
+            )?),
             action_name: action_name.into(),
         })
     }

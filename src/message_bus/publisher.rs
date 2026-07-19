@@ -1,8 +1,9 @@
 //! PUB socket that connects to the message bus XSUB side.
 
-use zmq::{Context, Socket, SocketType};
+use zmq::{Context as ZmqContext, Socket, SocketType};
 
 use crate::errors::Result;
+use crate::runtime::Context;
 use crate::transports;
 use crate::zmq_helpers::{
     apply_publisher_options_with, wait_for_connection, HighWaterMark,
@@ -19,12 +20,36 @@ impl Publisher {
     }
 
     pub fn with_hwm(endpoint: Option<&str>, hwm: HighWaterMark) -> Result<Self> {
+        Self::with_zmq_hwm(&ZmqContext::new(), endpoint, hwm)
+    }
+
+    /// Create a publisher using a shared [`Context`] (required for inproc).
+    pub fn with_shared_context(
+        context: &Context,
+        endpoint: Option<&str>,
+        hwm: HighWaterMark,
+    ) -> Result<Self> {
+        Self::with_zmq_hwm(context.zmq(), endpoint, hwm)
+    }
+
+    pub(crate) fn with_context_hwm(
+        context: &ZmqContext,
+        endpoint: Option<&str>,
+        hwm: HighWaterMark,
+    ) -> Result<Self> {
+        Self::with_zmq_hwm(context, endpoint, hwm)
+    }
+
+    fn with_zmq_hwm(
+        context: &ZmqContext,
+        endpoint: Option<&str>,
+        hwm: HighWaterMark,
+    ) -> Result<Self> {
         let endpoint = match endpoint {
             Some(ep) => ep.to_string(),
             None => transports::message_xsub_endpoint("localhost", "tcp")
                 .map_err(|e| crate::errors::BusError::Protocol(e))?,
         };
-        let context = Context::new();
         let socket = context.socket(SocketType::PUB)?;
         apply_publisher_options_with(&socket, hwm)?;
         socket.connect(&endpoint)?;

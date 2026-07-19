@@ -55,7 +55,17 @@ pub fn run_with_shutdown(
     shutdown: Arc<AtomicBool>,
     metrics: Option<Arc<MessageMetrics>>,
 ) -> Result<()> {
-    let context = ZmqContext::new();
+    run_with_shutdown_ctx(ZmqContext::new(), config, shutdown, metrics)
+}
+
+/// Like [`run_with_shutdown`], but sockets are created from the given context
+/// (required for same-process `inproc://` with SDK participants).
+pub fn run_with_shutdown_ctx(
+    context: ZmqContext,
+    config: BusConfig,
+    shutdown: Arc<AtomicBool>,
+    metrics: Option<Arc<MessageMetrics>>,
+) -> Result<()> {
     let xsub = context
         .socket(SocketType::XSUB)
         .context("create XSUB socket")?;

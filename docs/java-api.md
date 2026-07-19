@@ -2,8 +2,8 @@
 
 ```bash
 # Maven Central (when published)
-# implementation("org.indunet:robot-bus:0.0.6")           // JVM
-# implementation("org.indunet:robot-bus-android:0.0.6")   // Android AAR
+# implementation("org.indunet:robot-bus:0.0.7")           // JVM
+# implementation("org.indunet:robot-bus-android:0.0.7")   // Android AAR
 
 # 本地：
 just java-dev       # gen-java + cargo FFI + mvn test

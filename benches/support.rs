@@ -7,7 +7,7 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 #[cfg(feature = "console")]
 use robot_bus::ConsoleBrokerConfig;
-use robot_bus::{NodeOptions, RobotBusConfig};
+use robot_bus::{NodeOptions, RobotBusConfig, Context, Node};
 
 /// Only one bind_all broker at a time (fixed ipc / inproc names).
 static BROKER_LOCK: Mutex<()> = Mutex::new(());
@@ -44,6 +44,11 @@ pub fn options_for(transport: &str) -> NodeOptions {
         "inproc" => NodeOptions::inproc(),
         other => panic!("unknown transport: {other}"),
     }
+}
+
+/// Node sharing `context` (required for inproc with the embedded broker).
+pub fn node_for(context: &Context, name: impl Into<String>, transport: &str) -> Node {
+    Node::with_context(context.clone(), name, options_for(transport))
 }
 
 pub fn now_ns() -> u64 {
@@ -168,10 +173,13 @@ pub fn write_report(results: &[ScenarioResult], env_lines: &[String]) -> std::io
     md.push_str("## 方法\n\n");
     md.push_str("- 进程内 `RobotBusBroker`，`bind_all_transports = true`（tcp + ipc + inproc + grpc）。\n");
     md.push_str("- Console HTTP 关闭；message HWM=500000，service/action HWM=1000。\n");
-    md.push_str("- 各传输迭代次数相同：message 200000（狂发） / service 20000 / action 20000（便于横比）。\n");
+    md.push_str("- 各传输迭代次数相同：message / service / action 均为 100000（便于横比）。\n");
     md.push_str("- Payload：64 字节 raw（前 8 字节为发送端 Unix 纳秒时间戳，用于延迟）。\n");
-    md.push_str("- Message：发布端尽快连发 N 条（不等待 ACK），订阅端收满 N 条即结束；message HWM=500000。\n");
-    md.push_str("- ZMQ：`Node::tcp` / `Node::ipc` / `Node::inproc`；gRPC：`Node::grpc_at`。\n");
+    md.push_str("- Message **吞吐**：发布端尽快连发 N 条（不等待 ACK），订阅端收满 N 条即结束。\n");
+    md.push_str("- Message **延迟**：另做 5000 次限速抽样（发一条等收到再发下一条），测单程时延；不用狂发排队时间冒充延迟。\n");
+    md.push_str("- Service / action 延迟：每次 call / send_goal 的本地计时。\n");
+    md.push_str("- ZMQ：共享 `Context` + `Node::tcp` / `ipc` / `inproc`；gRPC：`Node::grpc_at`。\n");
+    md.push_str("- inproc 与嵌入式 broker 必须共用同一 `Context`（ZeroMQ inproc 是 context-local）。\n");
     md.push_str("- 指标为单机本机回环，机器相关，不作为 CI 门槛。\n\n");
 
     md.push_str("## 横比\n\n");
@@ -196,20 +204,20 @@ pub fn write_report(results: &[ScenarioResult], env_lines: &[String]) -> std::io
     for group in ["tcp", "ipc", "inproc", "grpc"] {
         md.push_str(&format!("## {group}\n\n"));
         md.push_str(
-            "| 场景 | 目标次数 | 完成 | 耗时 | 吞吐 | p50 (µs) | p95 (µs) | p99 (µs) | mean (µs) | 备注 |\n",
+            "| 场景 | 目标次数 | 完成 | 耗时 | 吞吐 | p50 (µs) | p95 (µs) | p99 (µs) | mean (µs) |\n",
         );
         md.push_str(
-            "|------|----------|------|------|------|----------|----------|----------|-----------|------|\n",
+            "|------|----------|------|------|------|----------|----------|----------|-----------|\n",
         );
         for r in results.iter().filter(|r| r.transport == group) {
-            if let Some(note) = &r.note {
+            if r.note.is_some() {
                 md.push_str(&format!(
-                    "| {} | — | — | — | — | — | — | — | — | {} |\n",
-                    r.scenario, note
+                    "| {} | — | — | — | — | — | — | — | — |\n",
+                    r.scenario
                 ));
             } else {
                 md.push_str(&format!(
-                    "| {} | {} | {} | {:.3}s | {:.0}/s | {:.0} | {:.0} | {:.0} | {:.0} | |\n",
+                    "| {} | {} | {} | {:.3}s | {:.0}/s | {:.0} | {:.0} | {:.0} | {:.0} |\n",
                     r.scenario,
                     r.iterations,
                     r.received,

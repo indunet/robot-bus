@@ -33,7 +33,7 @@ android {
 
 dependencies {
     // Install first: cd ../java && mvn -DskipTests install
-    api("org.indunet:robot-bus:0.0.6") {
+    api("org.indunet:robot-bus:0.0.7") {
         exclude(group = "net.java.dev.jna", module = "jna")
     }
     api("net.java.dev.jna:jna:5.16.0@aar")

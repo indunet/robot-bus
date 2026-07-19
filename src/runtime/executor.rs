@@ -23,7 +23,9 @@ use std::time::{Duration, Instant};
 
 use prost::Message;
 use uuid::Uuid;
-use zmq::{Context, SocketType};
+use zmq::SocketType;
+
+use crate::runtime::Context;
 
 use crate::errors::{BusError, Result};
 use crate::runtime::callback_group::{CallbackGroup, SubscriptionCallback};
@@ -98,7 +100,12 @@ pub struct Executor {
 impl Executor {
     /// Single-threaded executor: all callbacks run on the spin/I/O thread.
     pub fn new() -> Self {
-        Self::with_options(DEFAULT_HEARTBEAT_INTERVAL_MS, None)
+        Self::with_context(Context::new())
+    }
+
+    /// Executor whose sockets share `context` (required for inproc with broker/Nodes).
+    pub fn with_context(context: Context) -> Self {
+        Self::with_options(context, DEFAULT_HEARTBEAT_INTERVAL_MS, None)
     }
 
     /// Offload service/action handlers to at most `max_workers` threads.
@@ -106,16 +113,35 @@ impl Executor {
     /// If the pool is saturated, handlers fall back to inline execution.
     pub fn with_worker_pool(max_workers: usize) -> Self {
         Self::with_options(
+            Context::new(),
             DEFAULT_HEARTBEAT_INTERVAL_MS,
             Some(WorkerPool::new(max_workers)),
         )
     }
 
-    fn with_options(heartbeat_interval_ms: u64, worker_pool: Option<WorkerPool>) -> Self {
+    /// Like [`with_worker_pool`](Self::with_worker_pool), sharing `context`.
+    pub fn with_context_and_worker_pool(context: Context, max_workers: usize) -> Self {
+        Self::with_options(
+            context,
+            DEFAULT_HEARTBEAT_INTERVAL_MS,
+            Some(WorkerPool::new(max_workers)),
+        )
+    }
+
+    /// Shared runtime context used for ZMQ sockets.
+    pub fn context(&self) -> &Context {
+        &self.context
+    }
+
+    fn with_options(
+        context: Context,
+        heartbeat_interval_ms: u64,
+        worker_pool: Option<WorkerPool>,
+    ) -> Self {
         let (outbound_tx, outbound_rx) = mpsc::channel();
         let (reply_tx, reply_rx) = mpsc::channel();
         Self {
-            context: Context::new(),
+            context,
             heartbeat_interval_ms,
             stream_hwm: HighWaterMark::STREAM,
             rpc_hwm: HighWaterMark::RPC,
@@ -210,7 +236,7 @@ impl Executor {
             Some(ep) => ep.to_string(),
             None => message_xpub_endpoint("localhost", "tcp").map_err(BusError::Protocol)?,
         };
-        let socket = self.context.socket(SocketType::SUB)?;
+        let socket = self.context.zmq().socket(SocketType::SUB)?;
         apply_subscriber_options_with(&socket, self.stream_hwm)?;
         socket.connect(&endpoint)?;
         wait_for_connection();
@@ -321,7 +347,7 @@ impl Executor {
             Some(ep) => ep.to_string(),
             None => action_frontend_endpoint("localhost", "tcp").map_err(BusError::Protocol)?,
         };
-        let reg = ActionClientRegistration::create(&self.context, &endpoint, self.action_hwm)?;
+        let reg = ActionClientRegistration::create(self.context.zmq(), &endpoint, self.action_hwm)?;
         log::info!("action client connected to {endpoint}");
         self.action_client_registration = Some(reg);
         self.sync_action_client_registration();
@@ -385,7 +411,7 @@ impl Executor {
             None => service_backend_endpoint("localhost", "tcp").map_err(BusError::Protocol)?,
         };
         let reg = ServiceRegistration::create(
-            &self.context,
+            self.context.zmq(),
             service_name,
             handler,
             callback_group,
@@ -417,7 +443,7 @@ impl Executor {
             None => action_backend_endpoint("localhost", "tcp").map_err(BusError::Protocol)?,
         };
         let reg = ActionRegistration::create(
-            &self.context,
+            self.context.zmq(),
             action_name,
             handler,
             callback_group,

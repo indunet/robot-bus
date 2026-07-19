@@ -4,7 +4,7 @@
 set -euo pipefail
 
 DEST="${1:?dest}"
-VERSION="${2:-0.0.6}"
+VERSION="${2:-0.0.7}"
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 CPP="$ROOT/bindings/cpp"
 

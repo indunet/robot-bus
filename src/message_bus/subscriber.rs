@@ -21,12 +21,20 @@ impl Subscriber {
     }
 
     pub fn with_hwm(endpoint: Option<&str>, hwm: HighWaterMark) -> Result<Self> {
+        Self::with_context_hwm(&Context::new(), endpoint, hwm)
+    }
+
+    /// Create a subscriber using a shared ZeroMQ context (required for inproc).
+    pub fn with_context_hwm(
+        context: &Context,
+        endpoint: Option<&str>,
+        hwm: HighWaterMark,
+    ) -> Result<Self> {
         let endpoint = match endpoint {
             Some(ep) => ep.to_string(),
             None => transports::message_xpub_endpoint("localhost", "tcp")
                 .map_err(|e| BusError::Protocol(e))?,
         };
-        let context = Context::new();
         let socket = context.socket(SocketType::SUB)?;
         apply_subscriber_options_with(&socket, hwm)?;
         socket.connect(&endpoint)?;

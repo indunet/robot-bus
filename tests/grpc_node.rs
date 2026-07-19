@@ -17,7 +17,7 @@ fn start_bus() -> (std::sync::MutexGuard<'static, ()>, RobotBusBroker) {
 }
 
 fn grpc_url(broker: &RobotBusBroker) -> String {
-    format!("http://{}", broker.grpc_listen())
+    broker.grpc_url()
 }
 
 #[test]

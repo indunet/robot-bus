@@ -13,6 +13,7 @@ use std::sync::{Arc, Mutex, MutexGuard};
 use std::time::Duration;
 
 use crate::errors::{BusError, Result};
+use crate::runtime::context::Context;
 use crate::runtime::executor::{Executor, ShutdownHandle};
 use crate::runtime::node::{Node, NodeOptions};
 
@@ -51,7 +52,20 @@ impl ExecutorHandle {
         name: impl Into<String>,
         options: NodeOptions,
     ) -> Result<Node> {
-        let mut node = Node::with_options(name, options);
+        let context = self.lock()?.context().clone();
+        let mut node = Node::with_context(context, name, options);
+        self.add_node(&mut node)?;
+        Ok(node)
+    }
+
+    /// Convenience: shared-context node + [`add_node`](Self::add_node).
+    pub fn create_node_with_context(
+        &self,
+        context: Context,
+        name: impl Into<String>,
+        options: NodeOptions,
+    ) -> Result<Node> {
+        let mut node = Node::with_context(context, name, options);
         self.add_node(&mut node)?;
         Ok(node)
     }
@@ -111,6 +125,13 @@ impl SingleThreadedExecutor {
         }
     }
 
+    /// Executor whose sockets share `context` (required for inproc with broker/Nodes).
+    pub fn with_context(context: Context) -> Self {
+        Self {
+            handle: ExecutorHandle::new(Executor::with_context(context)),
+        }
+    }
+
     pub fn handle(&self) -> &ExecutorHandle {
         &self.handle
     }
@@ -129,6 +150,16 @@ impl SingleThreadedExecutor {
         options: NodeOptions,
     ) -> Result<Node> {
         self.handle.create_node_with_options(name, options)
+    }
+
+    pub fn create_node_with_context(
+        &self,
+        context: Context,
+        name: impl Into<String>,
+        options: NodeOptions,
+    ) -> Result<Node> {
+        self.handle
+            .create_node_with_context(context, name, options)
     }
 
     pub fn shutdown_handle(&self) -> Result<ShutdownHandle> {
@@ -180,6 +211,16 @@ impl MultiThreadedExecutor {
         }
     }
 
+    /// Like [`new`](Self::new), sharing `context` for ZMQ sockets.
+    pub fn with_context(context: Context, num_threads: usize) -> Self {
+        Self {
+            handle: ExecutorHandle::new(Executor::with_context_and_worker_pool(
+                context,
+                num_threads,
+            )),
+        }
+    }
+
     pub fn handle(&self) -> &ExecutorHandle {
         &self.handle
     }
@@ -198,6 +239,16 @@ impl MultiThreadedExecutor {
         options: NodeOptions,
     ) -> Result<Node> {
         self.handle.create_node_with_options(name, options)
+    }
+
+    pub fn create_node_with_context(
+        &self,
+        context: Context,
+        name: impl Into<String>,
+        options: NodeOptions,
+    ) -> Result<Node> {
+        self.handle
+            .create_node_with_context(context, name, options)
     }
 
     pub fn shutdown_handle(&self) -> Result<ShutdownHandle> {

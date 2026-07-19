@@ -4,6 +4,7 @@
 //! [`SingleThreadedExecutor`] lazily). Shared / multi-threaded: attach nodes
 //! with `add_node` / `create_node`, then `spin` on the executor.
 
+mod context;
 mod executor;
 mod executors;
 mod callback_group;
@@ -17,6 +18,7 @@ mod timers;
 mod worker_pool;
 
 pub use callback_group::{CallbackGroup, CallbackGroupType};
+pub use context::Context;
 pub use executor::{Executor, ShutdownHandle};
 pub use executors::{ExecutorHandle, MultiThreadedExecutor, SingleThreadedExecutor};
 pub use node::{

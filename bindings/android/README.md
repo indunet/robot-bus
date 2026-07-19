@@ -39,7 +39,7 @@ public class App extends Application {
   }
 }
 
-// implementation("org.indunet:robot-bus-android:0.0.6")
+// implementation("org.indunet:robot-bus-android:0.0.7")
 ```
 
 ## Layout

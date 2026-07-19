@@ -51,7 +51,16 @@ impl Default for ActionBusConfig {
 
 /// Run the dual-ROUTER action bus broker until `shutdown` is set.
 pub fn run_with_shutdown(config: ActionBusConfig, shutdown: Arc<AtomicBool>) -> Result<()> {
-    let context = ZmqContext::new();
+    run_with_shutdown_ctx(ZmqContext::new(), config, shutdown)
+}
+
+/// Like [`run_with_shutdown`], but sockets are created from the given context
+/// (required for same-process `inproc://` with SDK participants).
+pub fn run_with_shutdown_ctx(
+    context: ZmqContext,
+    config: ActionBusConfig,
+    shutdown: Arc<AtomicBool>,
+) -> Result<()> {
     let frontend = context
         .socket(SocketType::ROUTER)
         .context("create frontend ROUTER")?;

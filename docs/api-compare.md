@@ -5,7 +5,7 @@
 | 概念 | ROS 2 Humble（rclrs） | robot-bus |
 |------|------------------------|-----------|
 | 运行时 | DDS（需 `ros2` / daemon） | 先起 `robot_bus_broker`（或进程内嵌入） |
-| 入口 | `Context` → `Node` → `rclrs::spin` | `Node::new` → `node.spin()` |
+| 入口 | `Context` → `Node` → `rclrs::spin` | `Context` → `Node` / `RobotBusBroker::start_with_context`（tcp/ipc 仍可用无 Context 的 `Node::new`） |
 | 消息 | `.msg` / `.srv` / `.action` 生成类型 | crate 内 protobuf（如 `sensor_msgs::msg::v1::Imu`） |
 | QoS | `QOS_PROFILE_DEFAULT` 等 | 无 ROS QoS；可用 HWM |
 | 回调组 | Worker / callback group（较新 API） | `CallbackGroupType::MutuallyExclusive` / `Reentrant` |
@@ -30,12 +30,29 @@ fn main() -> Result<(), rclrs::RclrsError> {
 **robot-bus**
 
 ```rust
-use robot_bus::Node;
+use robot_bus::{Context, Node};
 
 fn main() -> robot_bus::Result<()> {
+    // tcp/ipc: Node::new is fine (private context).
     let mut node = Node::new("pilot");
     // create_* ...
     node.spin()?; // 内部用 SingleThreadedExecutor
+    Ok(())
+}
+```
+
+同进程 **inproc** 时必须共享 Context：
+
+```rust
+use robot_bus::{Context, Node, RobotBusBroker, RobotBusConfig};
+
+fn main() -> anyhow::Result<()> {
+    let ctx = Context::new();
+    let broker = RobotBusBroker::start_with_context(ctx.clone(), RobotBusConfig::default())?;
+    let mut node = Node::inproc_with_context(ctx, "pilot");
+    // create_* ...
+    node.spin()?;
+    broker.stop()?;
     Ok(())
 }
 ```
