@@ -21,15 +21,19 @@ gen-cpp:
 gen-java:
 	python3 scripts/generate_java_msgs.py
 
+# Generate protobuf stubs for Android SDK under bindings/android/generated/
+gen-android:
+	ROBOT_BUS_JAVA_OUT=bindings/android/generated python3 scripts/generate_java_msgs.py
+
 # Generate Rust prost/tonic stubs under src/generated/<pkg>/…/v1/<stem>.rs (gitignored)
 gen-rust:
 	python3 scripts/generate_rust_msgs.py
 
 # All language stubs (protoc 35.1)
-gen-all: gen-rust proto gen-typescript gen-cpp gen-java
+gen-all: gen-rust proto gen-typescript gen-cpp gen-java gen-android
 
 # Build and install the Python binding into the active venv
-python-dev: gen-python gen-rust
+python-dev: proto gen-rust
 	cd bindings/python && maturin develop --features extension-module,grpc
 
 # Build TypeScript native addon + JS bundle
@@ -47,7 +51,7 @@ java-dev: gen-java
 	cargo build --release --manifest-path bindings/cpp/native/Cargo.toml
 	cd bindings/java && mvn test
 
-# Install Java SDK into ~/.m2 (required before android-dev)
+# Install Java SDK into ~/.m2 (JVM consumers / local experiments)
 java-install: gen-java
 	cd bindings/java && mvn -DskipTests install
 
@@ -55,13 +59,14 @@ java-install: gen-java
 android-native:
 	./scripts/build_android_native.sh
 
-# Assemble Android AAR (needs java-install + android-native)
-android-dev: java-install android-native
+# Assemble Android AAR (self-contained Kotlin SDK; no java-install)
+android-dev: gen-android android-native
 	cd bindings/android && ./gradlew assembleRelease --no-daemon
 
-# Android host unit tests (RobotBusAndroid.init without jniLibs)
-test-android:
-	cd bindings/android && ./gradlew test --no-daemon
+# Android host unit tests (needs desktop librobot_bus_c for API tests)
+test-android: gen-android
+	cargo build --release --manifest-path bindings/cpp/native/Cargo.toml
+	cd bindings/android && ROBOT_BUS_NATIVE_DIR="$$(pwd)/../cpp/native/target/release" ./gradlew test --no-daemon
 
 # Back-compat aliases
 kotlin-dev: java-dev
@@ -71,8 +76,6 @@ kotlin-android: android-dev
 # Java JVM smoke tests
 test-java:
 	cd bindings/java && mvn test
-
-alias test-kotlin := test-java
 
 # Run C++ binding tests (ephemeral in-process brokers)
 test-cpp:
@@ -100,7 +103,7 @@ test-rust-minimal: gen-rust
 	cargo test --no-default-features
 
 # Pure-Python message / typed-API smoke tests (no native extension required)
-test-python: gen-python
+test-python: proto
 	PYTHONPATH=bindings/python python3 bindings/python/tests/test_msgs_roundtrip.py
 	PYTHONPATH=bindings/python python3 bindings/python/tests/test_typed_api.py
 

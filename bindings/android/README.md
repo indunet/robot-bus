@@ -1,41 +1,37 @@
 # Android binding
 
 Maven: `org.indunet:robot-bus-android`  
-Package: `org.indunet.robot.bus` (same Java API as the JVM binding)  
-**minSdk 24**, Java 11 language level
+Package: `org.indunet.robot.bus`  
+**minSdk 24**, JVM target 11 · **standalone Kotlin SDK** (no dependency on `org.indunet:robot-bus`)
 
 Android Library (AAR) that:
 
-1. Depends on [`../java/`](../java/) Maven artifact `org.indunet:robot-bus` (via `mavenLocal()` after `mvn install`) — **same API + protobuf stubs**
-2. Packages per-ABI `librobot_bus_c.so` under `src/main/jniLibs/`
-3. Exposes `RobotBusAndroid.init(context)` to load the native library
+1. Ships a full Kotlin API (`Node`, `Broker`, parameters, typed protobuf, …) over JNA + C ABI
+2. Embeds generated protobuf stubs under `generated/` (via `just gen-android`)
+3. Packages per-ABI `librobot_bus_c.so` under `src/main/jniLibs/`
+4. Exposes `RobotBusAndroid.init(context)` to `System.loadLibrary("robot_bus_c")`
 
-API examples: [`docs/java-api.md`](../../docs/java-api.md).
-
-gRPC / typed protobuf tests for the shared Java API: `bindings/java` (`GrpcNodeTest`,
-`TypedApiTest`). This module’s host unit test only checks {@code RobotBusAndroid.init}
-fails without packaged jniLibs (`./gradlew test`).
+Docs: [`docs/android-api.md`](../../docs/android-api.md). JVM Java binding (separate artifact): [`../java/`](../java/).
 
 ## Local build
 
-Requires Android SDK + NDK 26, `cmake`, `cargo-ndk`, Rust Android targets, and a prior
-`mvn install` of the Java SDK.
+Requires Android SDK + NDK 26, `cmake`, `cargo-ndk`, Rust Android targets, and `protoc` 35.1.
 
 ```bash
 export ANDROID_HOME=$HOME/Library/Android/sdk
 just android-dev
-# = mvn -DskipTests install (bindings/java)
+# = gen-android
 # + ./scripts/build_android_native.sh
 # + cd bindings/android && ./gradlew assembleRelease
 ```
 
 App usage:
 
-```java
-public class App extends Application {
-  @Override public void onCreate() {
-    super.onCreate();
-    RobotBusAndroid.init(this);
+```kotlin
+class App : Application() {
+  override fun onCreate() {
+    super.onCreate()
+    RobotBusAndroid.init(this)
   }
 }
 
@@ -46,12 +42,19 @@ public class App extends Application {
 
 | Path | Role |
 |------|------|
-| `src/main/java/.../RobotBusAndroid.java` | `System.loadLibrary("robot_bus_c")` |
+| `src/main/kotlin/.../` | Kotlin SDK (Node, Broker, JNA, …) |
+| `src/test/kotlin/.../` | Host unit tests |
+| `generated/` | Protobuf Java stubs (`just gen-android`, gitignored) |
 | `src/main/jniLibs/<abi>/` | Built by `scripts/build_android_native.sh` (gitignored) |
-| `../java/` | Shared JVM API (`org.indunet:robot-bus` via mavenLocal) |
+
+## Tests
+
+```bash
+just test-android
+# builds desktop librobot_bus_c, then Gradle unit tests
+```
 
 ## Maven Central
 
 Published by `.github/workflows/publish-maven-android.yml` (GitHub Release
-`published` or `workflow_dispatch`). JVM JAR uses a separate workflow:
-`publish-maven-java.yml`.
+`published` or `workflow_dispatch`). Does **not** require installing the Java JAR.

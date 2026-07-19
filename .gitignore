@@ -66,6 +66,7 @@ bindings/python/robot_bus/*/
 bindings/cpp/generated/
 bindings/typescript/generated/
 bindings/java/generated/
+bindings/android/generated/
 
 # Codegen helper crate
 tools/gen-msgs/target/

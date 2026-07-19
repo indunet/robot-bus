@@ -11,6 +11,6 @@ language-facing package, packaging metadata, and tests.
 | [`typescript/`](typescript/) | TypeScript hybrid npm SDK (napi-rs Node + gRPC-Web browser) |
 | [`cpp/`](cpp/) | C++ SDK (C ABI + RAII; DEB/MSI/PKG via GitHub Releases) |
 | [`java/`](java/) | Java JVM JAR via **Maven** (`org.indunet:robot-bus`, Java 11+) |
-| [`android/`](android/) | Android AAR (`org.indunet:robot-bus-android`; JNA + jniLibs) |
+| [`android/`](android/) | Standalone Android Kotlin AAR (`org.indunet:robot-bus-android`; no Java JAR dep) |
 
 `console/` is a product UI embedded into the broker, not an SDK binding.

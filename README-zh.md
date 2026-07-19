@@ -140,25 +140,22 @@ node.createSubscription("/robot1/imu", (_t, imu) => console.log(imu), Imu);
 | 产物 | 目录 | 坐标 |
 |------|------|------|
 | JVM JAR（Java 11+，Maven） | [`bindings/java/`](bindings/java/) | `org.indunet:robot-bus` |
-| Android AAR（minSdk 24） | [`bindings/android/`](bindings/android/) | `org.indunet:robot-bus-android` |
+| Android AAR（minSdk 24，Kotlin SDK） | [`bindings/android/`](bindings/android/) | `org.indunet:robot-bus-android` |
 
-包名均为 `org.indunet.robot.bus`。面向 Java 用户；在 GitHub 上写 Release 说明并 Publish 后，CI 会发到 Maven Central（也可手动跑 Actions）。
+包名均为 `org.indunet.robot.bus`。Android 是**独立** Kotlin SDK（不依赖 Java JAR）。在 GitHub 上写 Release 说明并 Publish 后，CI 会发到 Maven Central（也可手动跑 Actions）。
 
 ```bash
 just java-dev       # JVM
 just android-dev    # AAR（需 Android SDK + NDK 26 + cargo-ndk）
 ```
 
-```java
-// Android
-RobotBusAndroid.init(this);
-import org.indunet.robot.bus.Node;
-import org.indunet.robot.bus.sensor_msgs.msg.v1.Imu;
-
-TypedTopicPublisher<Imu> pub = node.createPublisher("/imu", Imu.class);
+```kotlin
+// Android（Kotlin）
+RobotBusAndroid.init(this)
+val pub = node.createPublisher("/imu", Imu::class.java)
 ```
 
-详见 [`docs/java-api.md`](docs/java-api.md)、[`bindings/java/README.md`](bindings/java/README.md) / [`bindings/android/README.md`](bindings/android/README.md)。
+详见 [`docs/java-api.md`](docs/java-api.md) / [`docs/android-api.md`](docs/android-api.md)、[`bindings/java/README.md`](bindings/java/README.md) / [`bindings/android/README.md`](bindings/android/README.md)。
 
 ### C++（DEB / MSI）
 

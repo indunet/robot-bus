@@ -25,10 +25,9 @@ jobs:
           TAG="${TAG#v}"
           CRATE_VERSION="$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -n1)"
           NATIVE_VERSION="$(sed -n 's/^version = "\(.*\)"/\1/p' bindings/cpp/native/Cargo.toml | head -n1)"
-          JAVA_VERSION="$(sed -n 's|^  <version>\(.*\)</version>|\1|p' bindings/java/pom.xml | head -n1)"
           AND_VERSION="$(sed -n 's/^VERSION_NAME=//p' bindings/android/gradle.properties | head -n1)"
-          if [ "$TAG" != "$CRATE_VERSION" ] || [ "$TAG" != "$NATIVE_VERSION" ] || [ "$TAG" != "$JAVA_VERSION" ] || [ "$TAG" != "$AND_VERSION" ]; then
-            echo "Release tag ($TAG) must match Cargo ($CRATE_VERSION), cpp native ($NATIVE_VERSION), java ($JAVA_VERSION), android ($AND_VERSION)"
+          if [ "$TAG" != "$CRATE_VERSION" ] || [ "$TAG" != "$NATIVE_VERSION" ] || [ "$TAG" != "$AND_VERSION" ]; then
+            echo "Release tag ($TAG) must match Cargo ($CRATE_VERSION), cpp native ($NATIVE_VERSION), android ($AND_VERSION)"
             exit 1
           fi
 
@@ -50,8 +49,6 @@ jobs:
         with:
           distribution: temurin
           java-version: "17"
-          cache: maven
-          cache-dependency-path: bindings/java/pom.xml
 
       - name: Setup Android SDK / NDK
         uses: android-actions/setup-android@v3
@@ -67,17 +64,13 @@ jobs:
       - name: Generate Rust stubs (needed by native crate features)
         run: python3 scripts/generate_rust_msgs.py
 
-      - name: Generate Java protobuf stubs
-        run: python3 scripts/generate_java_msgs.py
+      - name: Generate Android protobuf stubs
+        run: ROBOT_BUS_JAVA_OUT=bindings/android/generated python3 scripts/generate_java_msgs.py
 
       - name: Build Android jniLibs
         run: ./scripts/build_android_native.sh
         env:
           ANDROID_API_LEVEL: "24"
-
-      - name: Install Java SDK to mavenLocal
-        working-directory: bindings/java
-        run: mvn -B -DskipTests install
 
       - name: Publish Android AAR
         working-directory: bindings/android

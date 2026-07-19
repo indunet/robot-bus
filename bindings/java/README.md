@@ -7,8 +7,8 @@ Package: `org.indunet.robot.bus`
 JNA wrappers over the C ABI (`bindings/cpp/native` → `librobot_bus_c`), plus
 **pre-generated protobuf stubs** (same `proto/` as Python / C++ / TypeScript).
 
-Android AAR: [`../android/`](../android/) (depends on this artifact via `mavenLocal()` /
-Maven Central).
+Android AAR: [`../android/`](../android/) — **standalone Kotlin SDK** (does not depend on this
+JAR). See [`docs/android-api.md`](../../docs/android-api.md).
 
 API examples: [`docs/java-api.md`](../../docs/java-api.md).
 

@@ -45,7 +45,13 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 PROTO_ROOT = ROOT / "proto"
-OUT_ROOT = ROOT / "bindings" / "java" / "generated"
+# Override with ROBOT_BUS_JAVA_OUT for Android: bindings/android/generated
+OUT_ROOT = Path(
+    os.environ.get(
+        "ROBOT_BUS_JAVA_OUT",
+        str(ROOT / "bindings" / "java" / "generated"),
+    )
+)
 PROTOC = os.environ.get("PROTOC", "protoc")
 
 EXPECTED_PROTOC_VERSION = "35.1"

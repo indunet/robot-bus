@@ -1,5 +1,6 @@
 plugins {
     id("com.android.library")
+    id("org.jetbrains.kotlin.android")
     id("com.vanniktech.maven.publish")
 }
 
@@ -20,24 +21,35 @@ android {
         targetCompatibility = JavaVersion.VERSION_11
     }
 
+    kotlinOptions {
+        jvmTarget = "11"
+    }
+
     sourceSets {
         getByName("main") {
             jniLibs.srcDirs("src/main/jniLibs")
+            java.srcDir("generated")
         }
     }
 
     testOptions {
         unitTests.isReturnDefaultValues = true
+        unitTests.all {
+            it.environment(
+                "ROBOT_BUS_NATIVE_DIR",
+                System.getenv("ROBOT_BUS_NATIVE_DIR")
+                    ?: "${project.projectDir}/../cpp/native/target/release",
+            )
+        }
     }
 }
 
 dependencies {
-    // Install first: cd ../java && mvn -DskipTests install
-    api("org.indunet:robot-bus:0.0.7") {
-        exclude(group = "net.java.dev.jna", module = "jna")
-    }
+    // Device: JNA Android AAR. Host unit tests also need the platform JAR (jnidispatch).
     api("net.java.dev.jna:jna:5.16.0@aar")
+    api("com.google.protobuf:protobuf-java:4.35.1")
 
+    testImplementation("net.java.dev.jna:jna:5.16.0")
     testImplementation("junit:junit:4.13.2")
 }
 
@@ -53,7 +65,7 @@ mavenPublishing {
     pom {
         name.set("robot-bus-android")
         description.set(
-            "Android AAR for robot-bus (JNA + librobot_bus_c jniLibs; topics, services, actions)",
+            "Standalone Android Kotlin SDK for robot-bus (JNA + librobot_bus_c jniLibs)",
         )
         inceptionYear.set(providers.gradleProperty("POM_INCEPTION_YEAR"))
         url.set(providers.gradleProperty("POM_URL"))

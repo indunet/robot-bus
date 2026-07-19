@@ -140,25 +140,22 @@ Browser / gRPC-only: `Node.grpc("client")` (the browser entry's `Node` is the gR
 | Artifact | Directory | Coordinates |
 |------|------|------|
 | JVM JAR (Java 11+, Maven) | [`bindings/java/`](bindings/java/) | `org.indunet:robot-bus` |
-| Android AAR (minSdk 24) | [`bindings/android/`](bindings/android/) | `org.indunet:robot-bus-android` |
+| Android AAR (minSdk 24, Kotlin SDK) | [`bindings/android/`](bindings/android/) | `org.indunet:robot-bus-android` |
 
-Package name is `org.indunet.robot.bus` for both. After you write release notes and Publish on GitHub, CI publishes to Maven Central (or run the Actions workflows manually).
+Package name is `org.indunet.robot.bus` for both. Android is a **standalone** Kotlin SDK (does not depend on the Java JAR). After you write release notes and Publish on GitHub, CI publishes to Maven Central (or run the Actions workflows manually).
 
 ```bash
 just java-dev       # JVM
 just android-dev    # AAR (needs Android SDK + NDK 26 + cargo-ndk)
 ```
 
-```java
-// Android
-RobotBusAndroid.init(this);
-import org.indunet.robot.bus.Node;
-import org.indunet.robot.bus.sensor_msgs.msg.v1.Imu;
-
-TypedTopicPublisher<Imu> pub = node.createPublisher("/imu", Imu.class);
+```kotlin
+// Android (Kotlin)
+RobotBusAndroid.init(this)
+val pub = node.createPublisher("/imu", Imu::class.java)
 ```
 
-See [`docs/java-api.md`](docs/java-api.md), [`bindings/java/README.md`](bindings/java/README.md) / [`bindings/android/README.md`](bindings/android/README.md).
+See [`docs/java-api.md`](docs/java-api.md) / [`docs/android-api.md`](docs/android-api.md), [`bindings/java/README.md`](bindings/java/README.md) / [`bindings/android/README.md`](bindings/android/README.md).
 
 ### C++ (DEB / MSI)
 

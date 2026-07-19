@@ -1,22 +1,18 @@
-# Java / Android API
+# Java API
 
 ```bash
 # Maven Central (when published)
 # implementation("org.indunet:robot-bus:0.0.7")           // JVM
-# implementation("org.indunet:robot-bus-android:0.0.7")   // Android AAR
 
 # 本地：
 just java-dev       # gen-java + cargo FFI + mvn test
-just android-dev    # java-install + NDK .so + assembleRelease
 ```
 
 | 产物 | 坐标 | 说明 |
 |------|------|------|
 | JVM JAR | `org.indunet:robot-bus` | Java 11+，JNA + protobuf stubs |
-| Android AAR | `org.indunet:robot-bus-android` | 依赖上表 JAR + `jniLibs`；`RobotBusAndroid.init` |
 
-包名均为 `org.indunet.robot.bus`。Android 与 JVM **同一套 Java API**（含 typed protobuf）；AAR 额外打进各 ABI 的 `librobot_bus_c.so`。
-
+包名 `org.indunet.robot.bus`。Android AAR 是**独立** Kotlin SDK（不依赖本 JAR），见 [`docs/android-api.md`](android-api.md)。
 ## Broker 启动
 
 与其他语言相同：先起 broker，再跑业务。
@@ -80,25 +76,9 @@ node.createSubscription("/robot1/imu", (topic, payload) -> {
 
 ### Android
 
-```java
-public class App extends Application {
-  @Override
-  public void onCreate() {
-    super.onCreate();
-    RobotBusAndroid.init(this); // System.loadLibrary("robot_bus_c")
-  }
-}
-```
-
-之后与 JVM 相同：`new Node(...)`、`Node.grpc(...)`、typed `createPublisher` 等。消息类型同样来自 `org.indunet.robot.bus.sensor_msgs.msg.v1.Imu`（经 `robot-bus` 传递依赖带入）。
-
-| 测试 | 位置 |
-|------|------|
-| typed + gRPC（共享 API） | `bindings/java` → `TypedApiTest` / `GrpcNodeTest` |
-| `RobotBusAndroid.init`（无 jniLibs 时失败） | `bindings/android` → `./gradlew test` |
+见 [`docs/android-api.md`](android-api.md)（独立 Kotlin SDK；`RobotBusAndroid.init`、Node、参数等）。
 
 ### gRPC 模式 Node（客户端）
-
 `Node.grpc` / `Node.grpcAt` 经 broker gRPC 网关接入，不创建 ZMQ socket。
 
 | 支持 | 不支持 |
@@ -170,7 +150,7 @@ node.createSubscription("/robot1/imu", cb, Imu.class, group);
 
 | 语言 | 路径 |
 |------|------|
-| Java / Android | `import org.indunet.robot.bus.sensor_msgs.msg.v1.Imu;` |
+| Java / Android | `import org.indunet.robot.bus.sensor_msgs.msg.v1.Imu;`（Android 见 [android-api.md](android-api.md)） |
 | Python | `from robot_bus.sensor_msgs.msg.v1 import Imu` |
 | TypeScript | `import { Imu } from "robot-bus/sensor_msgs/msg/v1/imu.js"` |
 | C++ | `#include <robot_bus/sensor_msgs/msg/v1/imu.pb.hpp>` |
@@ -189,8 +169,7 @@ just java-dev
 ```bash
 just gen-java
 just java-dev          # 含 MsgsRoundtripTest + EndpointSmokeTest
-just java-install      # ~/.m2，供 android-dev
-just android-dev       # 需 ANDROID_HOME + NDK 26 + cargo-ndk
+just java-install      # ~/.m2（仅 JVM；Android 不再需要）
 ```
 
 ## 当前 Java API 一览
@@ -201,7 +180,8 @@ just android-dev       # 需 ANDROID_HOME + NDK 26 + cargo-ndk
 | `Node.tcp` / `ipc` / `inproc` / `inproc(Context, …)` / `withContext` / `grpc` / `grpcAt` | 传输预设；同进程 inproc 须共享 `Context` |
 | `declareParameter` / `getParameter` / `setParameter` / `hasParameter` / `listParameters` | 本节点本地参数（Boolean / Long / Double / String） |
 | `loadParametersFromYaml` / `loadParametersFromYamlStr` | 从 YAML 文件或字符串加载参数 |
-| `Parameter` | `listParameters` 返回的 name/value || `node.spin()` / `spinOnce` / `shutdown` | 驱动回调 |
+| `Parameter` | `listParameters` 返回的 name/value |
+| `node.spin()` / `spinOnce` / `shutdown` | 驱动回调 |
 | `createPublisher(topic)` / `createPublisher(topic, Class<T>)` | raw → `TopicPublisher`；typed → `TypedTopicPublisher` |
 | `createSubscription(..., MsgCallback)` / `(..., TypedMsgCallback, Class)` | raw `byte[]` 或 typed `Message` |
 | `createService` / `createClient` | raw 或 typed（`Request`/`Response` Class） |
@@ -209,6 +189,5 @@ just android-dev       # 需 ANDROID_HOME + NDK 26 + cargo-ndk
 | `Context` | 共享 ZMQ context（同进程 inproc 必需） |
 | `Broker` / `Broker(Context, …)` | 进程内 broker |
 | `SingleThreadedExecutor` / `MultiThreadedExecutor`（可传 `Context`） | 显式执行器 |
-| `RobotBusAndroid.init(Context)` | Android 加载 native（仅 AAR；与 ZMQ `Context` 无关） |
 
-gRPC 模式见上一节；底层 C ABI 与 C++ 共用 `librobot_bus_c`。
+gRPC 模式见上一节；底层 C ABI 与 C++ 共用 `librobot_bus_c`。Android 入口见 [`android-api.md`](android-api.md)。
