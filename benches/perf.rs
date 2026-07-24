@@ -21,17 +21,28 @@ const PAYLOAD_LEN: usize = 64;
 const WARMUP: usize = 50;
 /// Paced one-way samples for message latency (firehose backlog is not latency).
 const MSG_LATENCY_SAMPLES: usize = 5_000;
-
-// Same iteration counts for tcp / ipc / inproc / grpc so results are comparable.
+/// Deep-queue throughput: send this many; end stats when subscriber reaches MSG_RECV_TARGET.
 const MSG_ITERS: usize = 100_000;
+/// Early-complete threshold for throughput (best-effort may not deliver every send).
+const MSG_RECV_TARGET: usize = 80_000;
 const SVC_ITERS: usize = 100_000;
 const ACT_ITERS: usize = 100_000;
-/// Deep queues so a firehose burst is less likely to drop before the subscriber drains.
-const MSG_HWM: i32 = 500_000;
+/// Bench-only depth (≥ MSG_ITERS) so firehose is not dominated by HWM drops.
+const MSG_HWM: i32 = 100_000;
 
 fn main() {
     let _guard = lock_broker();
+    let only_message = matches!(
+        std::env::var("ROBOT_BUS_PERF_ONLY")
+            .unwrap_or_default()
+            .to_ascii_lowercase()
+            .as_str(),
+        "message" | "msg" | "pubsub" | "pub/sub"
+    );
     println!("starting RobotBusBroker (bind_all + grpc)…");
+    if only_message {
+        println!("ROBOT_BUS_PERF_ONLY=message — skipping service/action");
+    }
     let ctx = Context::new();
     let broker =
         RobotBusBroker::start_with_context(ctx.clone(), perf_broker_config()).expect("start broker");
@@ -41,30 +52,47 @@ fn main() {
 
     for transport in ["tcp", "ipc", "inproc"] {
         println!("=== {transport} ===");
-        results.push(bench_pubsub(&ctx, transport, MSG_ITERS));
-        results.push(bench_service(&ctx, transport, SVC_ITERS));
-        results.push(bench_action(&ctx, transport, ACT_ITERS));
+        results.push(bench_pubsub(&ctx, transport));
+        if !only_message {
+            results.push(bench_service(&ctx, transport, SVC_ITERS));
+            results.push(bench_action(&ctx, transport, ACT_ITERS));
+        }
     }
 
     let grpc_url = broker.grpc_url();
     println!("=== grpc ({grpc_url}) ===");
-    results.push(bench_grpc_subscribe(&broker, &grpc_url, MSG_ITERS));
-    results.push(bench_grpc_service(&broker, &grpc_url, SVC_ITERS));
-    results.push(bench_grpc_action(&broker, &grpc_url, ACT_ITERS));
+    results.push(bench_grpc_subscribe(&broker, &grpc_url));
+    if !only_message {
+        results.push(bench_grpc_service(&broker, &grpc_url, SVC_ITERS));
+        results.push(bench_grpc_action(&broker, &grpc_url, ACT_ITERS));
+    }
 
     broker.stop().expect("stop broker");
 
     for r in &results {
         if let Some(note) = &r.note {
             println!("[{}/{}] SKIP: {note}", r.transport, r.scenario);
+        } else if r.kind == support::ScenarioKind::Message {
+            println!(
+                "[{}/{}] sent={} recv={} pub={:.0}/s sub={:.0}/s delivery={:.1}% p50={:.0}µs p99={:.0}µs",
+                r.transport,
+                r.scenario,
+                r.sent,
+                r.received,
+                r.publish_per_s,
+                r.subscribe_per_s,
+                r.delivery_pct,
+                r.latency.p50_us,
+                r.latency.p99_us,
+            );
         } else {
             println!(
                 "[{}/{}] n={} got={} {:.0}/s p50={:.0}µs p99={:.0}µs",
                 r.transport,
                 r.scenario,
-                r.iterations,
+                r.sent,
                 r.received,
-                r.throughput_per_s,
+                r.subscribe_per_s,
                 r.latency.p50_us,
                 r.latency.p99_us,
             );
@@ -101,7 +129,7 @@ fn wait_until(count: &AtomicUsize, target: usize, timeout: Duration) -> bool {
     true
 }
 
-fn bench_pubsub(ctx: &Context, transport: &str, n: usize) -> ScenarioResult {
+fn bench_pubsub(ctx: &Context, transport: &str) -> ScenarioResult {
     let scenario = "message pub/sub";
     let transport = transport.to_string();
     let options = options_for(&transport);
@@ -119,6 +147,13 @@ fn bench_pubsub(ctx: &Context, transport: &str, n: usize) -> ScenarioResult {
     let record_latency = Arc::new(AtomicBool::new(true));
 
     let mut sub = node_for(ctx, format!("perf-sub-{transport}"), &transport);
+    let hwm = HighWaterMark {
+        snd: MSG_HWM,
+        rcv: MSG_HWM,
+    };
+    if let Err(err) = sub.set_stream_hwm(hwm) {
+        return ScenarioResult::skipped(&transport, scenario, format!("set_stream_hwm: {err}"));
+    }
     let lat_cb = Arc::clone(&latencies);
     let cnt_cb = Arc::clone(&count);
     let rec_cb = Arc::clone(&record_latency);
@@ -147,10 +182,6 @@ fn bench_pubsub(ctx: &Context, transport: &str, n: usize) -> ScenarioResult {
         }
     };
 
-    let hwm = HighWaterMark {
-        snd: MSG_HWM,
-        rcv: MSG_HWM,
-    };
     let publisher = match Publisher::with_shared_context(ctx, Some(&xsub), hwm) {
         Ok(p) => p,
         Err(err) => {
@@ -168,10 +199,8 @@ fn bench_pubsub(ctx: &Context, transport: &str, n: usize) -> ScenarioResult {
         for _ in 0..WARMUP {
             let _ = publisher.publish(&topic_pub, &make_payload(now_ns()));
         }
-        if !wait_until(&count_pub, WARMUP, Duration::from_secs(5)) {
-            // Warmup may drop; continue anyway after a short settle.
-            thread::sleep(Duration::from_millis(100));
-        }
+        // Warmup may drop under modest HWM; do not require full receive.
+        thread::sleep(Duration::from_millis(100));
         count_pub.store(0, Ordering::Relaxed);
         lat_pub.lock().unwrap().clear();
 
@@ -193,38 +222,47 @@ fn bench_pubsub(ctx: &Context, transport: &str, n: usize) -> ScenarioResult {
         }
         let latency = LatencyStats::from_ns(lat_pub.lock().unwrap().clone());
 
-        // Phase 2: firehose throughput (do not mix queueing delay into latency).
+        // Phase 2: deep-queue throughput — send MSG_ITERS, end when recv >= MSG_RECV_TARGET.
         rec_pub.store(false, Ordering::Relaxed);
         count_pub.store(0, Ordering::Relaxed);
         lat_pub.lock().unwrap().clear();
 
+        println!(
+            "  … {transport_pub} throughput: send {MSG_ITERS}, end at recv>={MSG_RECV_TARGET} (HWM={MSG_HWM})"
+        );
         let t0 = Instant::now();
-        for _ in 0..n {
+        let mut sent = 0usize;
+        for _ in 0..MSG_ITERS {
             if publisher
                 .publish(&topic_pub, &make_payload(now_ns()))
                 .is_err()
             {
-                shutdown.shutdown();
-                return Err("publish failed".to_string());
+                break;
             }
+            sent += 1;
         }
-        let ok = wait_until(&count_pub, n, Duration::from_secs(600));
+        let ok = wait_until(&count_pub, MSG_RECV_TARGET, Duration::from_secs(120));
         let elapsed = t0.elapsed();
         let received = count_pub.load(Ordering::Relaxed);
         shutdown.shutdown();
 
-        if !ok && received == 0 {
+        if received == 0 {
             return Ok(ScenarioResult::skipped(
                 &transport_pub,
                 scenario,
                 "timed out with 0 messages",
             ));
         }
+        if !ok {
+            println!(
+                "  … {transport_pub} incomplete: recv={received}/{MSG_RECV_TARGET} sent={sent}"
+            );
+        }
 
-        Ok(ScenarioResult::ok(
+        Ok(ScenarioResult::ok_message(
             &transport_pub,
             scenario,
-            n,
+            sent,
             received,
             elapsed,
             latency,
@@ -317,7 +355,7 @@ fn bench_service(ctx: &Context, transport: &str, n: usize) -> ScenarioResult {
             return ScenarioResult::skipped(&transport_cli, scenario, "0 successful calls");
         }
 
-        ScenarioResult::ok(
+        ScenarioResult::ok_rpc(
             &transport_cli,
             scenario,
             n,
@@ -422,7 +460,7 @@ fn bench_action(ctx: &Context, transport: &str, n: usize) -> ScenarioResult {
             return ScenarioResult::skipped(&transport_cli, scenario, "0 successful goals");
         }
 
-        ScenarioResult::ok(
+        ScenarioResult::ok_rpc(
             &transport_cli,
             scenario,
             n,
@@ -436,7 +474,7 @@ fn bench_action(ctx: &Context, transport: &str, n: usize) -> ScenarioResult {
     worker.join().expect("action client thread")
 }
 
-fn bench_grpc_subscribe(broker: &RobotBusBroker, url: &str, n: usize) -> ScenarioResult {
+fn bench_grpc_subscribe(broker: &RobotBusBroker, url: &str) -> ScenarioResult {
     let transport = "grpc";
     let scenario = "message Subscribe";
     let topic = "perf/grpc/msg";
@@ -505,35 +543,51 @@ fn bench_grpc_subscribe(broker: &RobotBusBroker, url: &str, n: usize) -> Scenari
     }
     let latency = LatencyStats::from_ns(latencies.lock().unwrap().clone());
 
-    // Phase 2: firehose throughput.
+    // Phase 2: deep-queue throughput — send N, spin until recv N.
     record_latency.store(false, Ordering::Relaxed);
     count.store(0, Ordering::Relaxed);
     latencies.lock().unwrap().clear();
 
     let topic_pub = topic.to_string();
     let publisher_thread = thread::spawn(move || {
-        for _ in 0..n {
-            let _ = publisher.publish(&topic_pub, &make_payload(now_ns()));
+        let mut sent = 0usize;
+        for _ in 0..MSG_ITERS {
+            if publisher
+                .publish(&topic_pub, &make_payload(now_ns()))
+                .is_err()
+            {
+                break;
+            }
+            sent += 1;
         }
+        sent
     });
 
+    println!(
+        "  … grpc throughput: send {MSG_ITERS}, end at recv>={MSG_RECV_TARGET} (HWM={MSG_HWM})"
+    );
     let t0 = Instant::now();
-    let deadline = Instant::now() + Duration::from_secs(600);
-    while count.load(Ordering::Relaxed) < n && Instant::now() < deadline {
-        let _ = node.spin_once(Some(Duration::from_millis(5)));
+    let deadline = t0 + Duration::from_secs(120);
+    while count.load(Ordering::Relaxed) < MSG_RECV_TARGET && Instant::now() < deadline {
+        let _ = node.spin_once(Some(Duration::from_millis(1)));
     }
     let elapsed = t0.elapsed();
-    let _ = publisher_thread.join();
+    let sent_n = publisher_thread.join().unwrap_or(0);
     let received = count.load(Ordering::Relaxed);
 
     if received == 0 {
         return ScenarioResult::skipped(transport, scenario, "timed out with 0 messages");
     }
+    if received < MSG_RECV_TARGET {
+        println!(
+            "  … grpc incomplete: recv={received}/{MSG_RECV_TARGET} sent={sent_n}"
+        );
+    }
 
-    ScenarioResult::ok(
+    ScenarioResult::ok_message(
         transport,
         scenario,
-        n,
+        sent_n,
         received,
         elapsed,
         latency,
@@ -594,7 +648,7 @@ fn bench_grpc_service(broker: &RobotBusBroker, url: &str, n: usize) -> ScenarioR
     let elapsed = t0.elapsed();
     worker.stop();
 
-    ScenarioResult::ok(
+    ScenarioResult::ok_rpc(
         transport,
         scenario,
         n,
@@ -667,7 +721,7 @@ fn bench_grpc_action(broker: &RobotBusBroker, url: &str, n: usize) -> ScenarioRe
     let elapsed = t0.elapsed();
     worker.stop();
 
-    ScenarioResult::ok(
+    ScenarioResult::ok_rpc(
         transport,
         scenario,
         n,

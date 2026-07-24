@@ -98,6 +98,10 @@ name = "robot_bus_broker"
 path = "src/bin/robot_bus_broker.rs"
 
 [[bin]]
+name = "robot_bus_interop"
+path = "src/bin/robot_bus_interop.rs"
+
+[[bin]]
 name = "robot_bus_perf"
 path = "benches/perf.rs"
 required-features = ["grpc"]

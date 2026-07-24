@@ -7,7 +7,7 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 #[cfg(feature = "console")]
 use robot_bus::ConsoleBrokerConfig;
-use robot_bus::{NodeOptions, RobotBusConfig, Context, Node};
+use robot_bus::{Context, Node, NodeOptions, RobotBusConfig};
 
 /// Only one bind_all broker at a time (fixed ipc / inproc names).
 static BROKER_LOCK: Mutex<()> = Mutex::new(());
@@ -20,13 +20,14 @@ pub fn lock_broker() -> MutexGuard<'static, ()> {
 
 pub fn perf_broker_config() -> RobotBusConfig {
     let mut config = RobotBusConfig::default();
-    // Deep message queues for firehose pub/sub (service/action stay moderate).
-    config.message.snd_hwm = 500_000;
-    config.message.rcv_hwm = 500_000;
-    config.service.snd_hwm = 1000;
-    config.service.rcv_hwm = 1000;
-    config.action.snd_hwm = 1000;
-    config.action.rcv_hwm = 1000;
+    // Message depth ≥ MSG_ITERS so deep-queue throughput is not HWM-drop dominated.
+    // Not a production default (STREAM default remains 2).
+    config.message.snd_hwm = 100_000;
+    config.message.rcv_hwm = 100_000;
+    config.service.snd_hwm = 64;
+    config.service.rcv_hwm = 64;
+    config.action.snd_hwm = 64;
+    config.action.rcv_hwm = 64;
     #[cfg(feature = "console")]
     {
         config.console = ConsoleBrokerConfig {
@@ -104,19 +105,34 @@ fn percentile_us(sorted_ns: &[u64], p: f64) -> f64 {
 pub struct ScenarioResult {
     pub transport: String,
     pub scenario: String,
-    pub iterations: usize,
+    /// Messages / calls issued.
+    pub sent: usize,
+    /// Messages / replies observed.
     pub received: usize,
     pub elapsed: Duration,
-    pub throughput_per_s: f64,
+    /// Issue rate (publish or call/s).
+    pub publish_per_s: f64,
+    /// Delivery / completion rate (subscribe or successful reply/s).
+    pub subscribe_per_s: f64,
+    /// `100 * received / sent` (message bus may be < 100% under HWM drops).
+    pub delivery_pct: f64,
     pub latency: LatencyStats,
     pub note: Option<String>,
+    pub kind: ScenarioKind,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ScenarioKind {
+    Message,
+    Rpc,
 }
 
 impl ScenarioResult {
-    pub fn ok(
+    /// Unreliable pub/sub: timed firehose; do not require received == sent.
+    pub fn ok_message(
         transport: &str,
         scenario: &str,
-        iterations: usize,
+        sent: usize,
         received: usize,
         elapsed: Duration,
         latency: LatencyStats,
@@ -125,12 +141,49 @@ impl ScenarioResult {
         Self {
             transport: transport.into(),
             scenario: scenario.into(),
-            iterations,
+            sent,
             received,
             elapsed,
-            throughput_per_s: received as f64 / secs,
+            publish_per_s: sent as f64 / secs,
+            subscribe_per_s: received as f64 / secs,
+            delivery_pct: if sent == 0 {
+                0.0
+            } else {
+                100.0 * received as f64 / sent as f64
+            },
             latency,
             note: None,
+            kind: ScenarioKind::Message,
+        }
+    }
+
+    /// Reliable RPC-style (service / action): one reply per call.
+    pub fn ok_rpc(
+        transport: &str,
+        scenario: &str,
+        n: usize,
+        received: usize,
+        elapsed: Duration,
+        latency: LatencyStats,
+    ) -> Self {
+        let secs = elapsed.as_secs_f64().max(1e-9);
+        let rate = received as f64 / secs;
+        Self {
+            transport: transport.into(),
+            scenario: scenario.into(),
+            sent: n,
+            received,
+            elapsed,
+            publish_per_s: rate,
+            subscribe_per_s: rate,
+            delivery_pct: if n == 0 {
+                0.0
+            } else {
+                100.0 * received as f64 / n as f64
+            },
+            latency,
+            note: None,
+            kind: ScenarioKind::Rpc,
         }
     }
 
@@ -138,12 +191,15 @@ impl ScenarioResult {
         Self {
             transport: transport.into(),
             scenario: scenario.into(),
-            iterations: 0,
+            sent: 0,
             received: 0,
             elapsed: Duration::ZERO,
-            throughput_per_s: 0.0,
+            publish_per_s: 0.0,
+            subscribe_per_s: 0.0,
+            delivery_pct: 0.0,
             latency: LatencyStats::from_ns(Vec::new()),
             note: Some(note.into()),
+            kind: ScenarioKind::Rpc,
         }
     }
 }
@@ -172,57 +228,71 @@ pub fn write_report(results: &[ScenarioResult], env_lines: &[String]) -> std::io
 
     md.push_str("## 方法\n\n");
     md.push_str("- 进程内 `RobotBusBroker`，`bind_all_transports = true`（tcp + ipc + inproc + grpc）。\n");
-    md.push_str("- Console HTTP 关闭；message HWM=500000，service/action HWM=1000。\n");
-    md.push_str("- 各传输迭代次数相同：message / service / action 均为 100000（便于横比）。\n");
+    md.push_str("- Console HTTP 关闭；**message HWM=100000**（仅 bench，≥ 吞吐目标条数）；service/action HWM=64。\n");
     md.push_str("- Payload：64 字节 raw（前 8 字节为发送端 Unix 纳秒时间戳，用于延迟）。\n");
-    md.push_str("- Message **吞吐**：发布端尽快连发 N 条（不等待 ACK），订阅端收满 N 条即结束。\n");
-    md.push_str("- Message **延迟**：另做 5000 次限速抽样（发一条等收到再发下一条），测单程时延；不用狂发排队时间冒充延迟。\n");
-    md.push_str("- Service / action 延迟：每次 call / send_goal 的本地计时。\n");
+    md.push_str("- Message **吞吐**（深队列横比）：尽快发送 N=100000（HWM=100000），**订阅端收到 ≥80000 即结束统计**；ZMQ PUB / ROS2 均为 best-effort。\n");
+    md.push_str("- Message **延迟**：另做 5000 次限速抽样（发一条等收到再发），测单程时延。\n");
+    md.push_str("- Service / action：各 100000 次；延迟为每次 call / send_goal 本地计时。\n");
     md.push_str("- ZMQ：共享 `Context` + `Node::tcp` / `ipc` / `inproc`；gRPC：`Node::grpc_at`。\n");
     md.push_str("- inproc 与嵌入式 broker 必须共用同一 `Context`（ZeroMQ inproc 是 context-local）。\n");
     md.push_str("- 指标为单机本机回环，机器相关，不作为 CI 门槛。\n\n");
 
     md.push_str("## 横比\n\n");
-    md.push_str("单元格为 **吞吐（次/秒）**。gRPC Node **不支持 publish**，对应格为 —。\n");
-    md.push_str("ZMQ（tcp / ipc）下 message 发布与订阅测的是同一条 pub→sub 端到端路径；gRPC 仅测 Subscribe。\n\n");
+    md.push_str("message 单元格为 **订阅速率（投递率）**；service/action 为完成速率。gRPC Node **不支持 publish**，发布格为 —。\n\n");
     md.push_str("| 场景 | tcp | ipc | inproc | grpc |\n");
     md.push_str("|------|-----|-----|--------|------|\n");
     md.push_str(&format!(
         "| message 发布 | {} | {} | {} | — |\n",
-        cell(results, "tcp", "message pub/sub"),
-        cell(results, "ipc", "message pub/sub"),
-        cell(results, "inproc", "message pub/sub"),
+        cell_pub(results, "tcp", "message pub/sub"),
+        cell_pub(results, "ipc", "message pub/sub"),
+        cell_pub(results, "inproc", "message pub/sub"),
     ));
     md.push_str(&format!(
-        "| message 订阅 | {} | {} | {} | {} |\n\n",
-        cell(results, "tcp", "message pub/sub"),
-        cell(results, "ipc", "message pub/sub"),
-        cell(results, "inproc", "message pub/sub"),
-        cell(results, "grpc", "message Subscribe"),
+        "| message 订阅 | {} | {} | {} | {} |\n",
+        cell_sub(results, "tcp", "message pub/sub"),
+        cell_sub(results, "ipc", "message pub/sub"),
+        cell_sub(results, "inproc", "message pub/sub"),
+        cell_sub(results, "grpc", "message Subscribe"),
+    ));
+    md.push_str(&format!(
+        "| service call | {} | {} | {} | {} |\n",
+        cell_rpc(results, "tcp", "service call"),
+        cell_rpc(results, "ipc", "service call"),
+        cell_rpc(results, "inproc", "service call"),
+        cell_rpc(results, "grpc", "service Call"),
+    ));
+    md.push_str(&format!(
+        "| action send_goal | {} | {} | {} | {} |\n\n",
+        cell_rpc(results, "tcp", "action send_goal"),
+        cell_rpc(results, "ipc", "action send_goal"),
+        cell_rpc(results, "inproc", "action send_goal"),
+        cell_rpc(results, "grpc", "action Run"),
     ));
 
     for group in ["tcp", "ipc", "inproc", "grpc"] {
         md.push_str(&format!("## {group}\n\n"));
         md.push_str(
-            "| 场景 | 目标次数 | 完成 | 耗时 | 吞吐 | p50 (µs) | p95 (µs) | p99 (µs) | mean (µs) |\n",
+            "| 场景 | 发送 | 接收 | 耗时 | 发布/s | 订阅/s | 投递% | p50 (µs) | p95 (µs) | p99 (µs) | mean (µs) |\n",
         );
         md.push_str(
-            "|------|----------|------|------|------|----------|----------|----------|-----------|\n",
+            "|------|------|------|------|--------|--------|-------|----------|----------|----------|-----------|\n",
         );
         for r in results.iter().filter(|r| r.transport == group) {
             if r.note.is_some() {
                 md.push_str(&format!(
-                    "| {} | — | — | — | — | — | — | — | — |\n",
+                    "| {} | — | — | — | — | — | — | — | — | — | — |\n",
                     r.scenario
                 ));
             } else {
                 md.push_str(&format!(
-                    "| {} | {} | {} | {:.3}s | {:.0}/s | {:.0} | {:.0} | {:.0} | {:.0} |\n",
+                    "| {} | {} | {} | {:.3}s | {:.0} | {:.0} | {:.1} | {:.0} | {:.0} | {:.0} | {:.0} |\n",
                     r.scenario,
-                    r.iterations,
+                    r.sent,
                     r.received,
                     r.elapsed.as_secs_f64(),
-                    r.throughput_per_s,
+                    r.publish_per_s,
+                    r.subscribe_per_s,
+                    r.delivery_pct,
                     r.latency.p50_us,
                     r.latency.p95_us,
                     r.latency.p99_us,
@@ -234,19 +304,40 @@ pub fn write_report(results: &[ScenarioResult], env_lines: &[String]) -> std::io
     }
 
     md.push_str("## 复现\n\n");
-    md.push_str("```bash\njust perf\n# 或\ncargo run --release --bin robot_bus_perf\n```\n");
+    md.push_str("```bash\njust perf\n# 或\ncargo run --release --bin robot_bus_perf\n");
+    md.push_str("# 仅 message：ROBOT_BUS_PERF_ONLY=message cargo run --release --bin robot_bus_perf --features grpc\n");
+    md.push_str("```\n");
 
     fs::write(&path, md)?;
     Ok(path)
 }
 
-fn cell(results: &[ScenarioResult], transport: &str, scenario: &str) -> String {
-    match results
+fn find<'a>(results: &'a [ScenarioResult], transport: &str, scenario: &str) -> Option<&'a ScenarioResult> {
+    results
         .iter()
         .find(|r| r.transport == transport && r.scenario == scenario)
-    {
+}
+
+fn cell_pub(results: &[ScenarioResult], transport: &str, scenario: &str) -> String {
+    match find(results, transport, scenario) {
         Some(r) if r.note.is_some() => "—".into(),
-        Some(r) => format!("{:.0}/s", r.throughput_per_s),
+        Some(r) => format!("{:.0}/s", r.publish_per_s),
+        None => "—".into(),
+    }
+}
+
+fn cell_sub(results: &[ScenarioResult], transport: &str, scenario: &str) -> String {
+    match find(results, transport, scenario) {
+        Some(r) if r.note.is_some() => "—".into(),
+        Some(r) => format!("{:.0}/s ({:.0}%)", r.subscribe_per_s, r.delivery_pct),
+        None => "—".into(),
+    }
+}
+
+fn cell_rpc(results: &[ScenarioResult], transport: &str, scenario: &str) -> String {
+    match find(results, transport, scenario) {
+        Some(r) if r.note.is_some() => "—".into(),
+        Some(r) => format!("{:.0}/s", r.subscribe_per_s),
         None => "—".into(),
     }
 }

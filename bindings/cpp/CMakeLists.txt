@@ -79,7 +79,9 @@ if(ROBOT_BUS_BUILD_TESTS)
     msgs_roundtrip
     grpc_node
     inproc_context
-    node_parameters)
+    node_parameters
+    interop_peer)
+
   set(ROBOT_BUS_TEST_TARGETS)
   foreach(t ${ROBOT_BUS_TEST_SOURCES})
     add_executable(${t} tests/${t}.cpp)

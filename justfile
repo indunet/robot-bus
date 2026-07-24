@@ -112,6 +112,23 @@ test-python-native:
 	python3 bindings/python/tests/test_grpc_node.py
 	python3 bindings/python/tests/test_inproc_context.py
 
+# Cross-language interop matrix (6 language-pair scenarios; skips missing peers)
+# Needs `just python-dev`; optionally java-dev / ts-dev / cpp-dev for full coverage.
+test-interop: gen-rust
+	#!/usr/bin/env bash
+	set -euo pipefail
+	cargo build --quiet --bin robot_bus_interop
+	# Best-effort peer builds (failures here only cause scenario skips).
+	if [[ -d bindings/cpp/build ]]; then
+		cmake -S bindings/cpp -B bindings/cpp/build >/dev/null
+		cmake --build bindings/cpp/build --target interop_peer >/dev/null || true
+	fi
+	if [[ -f bindings/java/pom.xml ]]; then
+		(cd bindings/java && mvn -q test-compile dependency:build-classpath -Dmdep.outputFile=target/interop-classpath.txt) || true
+	fi
+	if [[ -x .venv/bin/python ]]; then PY=.venv/bin/python; else PY=python3; fi
+	"$PY" tests/interop/run.py
+
 # TypeScript smoke tests (msgs + GrpcNode guards; inproc skips without native addon)
 test-typescript: gen-typescript
 	cd bindings/typescript && npm test
@@ -126,3 +143,7 @@ ci: gen-all
 # Performance harness (release); writes docs/perf-report.md
 perf: gen-rust
 	cargo run --release --bin robot_bus_perf --features grpc
+
+# ROS 2 comparison benches (Docker container `ros2`); writes docs/ros2-perf-report.md
+perf-ros2:
+	./benches/ros2_perf/run.sh
