@@ -103,7 +103,7 @@ path = "src/bin/robot_bus_interop.rs"
 
 [[bin]]
 name = "robot_bus_perf"
-path = "benches/perf.rs"
+path = "benches/robot_bus_perf/main.rs"
 required-features = ["grpc"]
 
 [package.metadata.docs.rs]

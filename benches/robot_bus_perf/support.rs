@@ -1,4 +1,4 @@
-//! Shared helpers for `robot_bus_perf`.
+//! Shared helpers for `benches/robot_bus_perf`.
 
 use std::fs;
 use std::path::PathBuf;
@@ -20,10 +20,10 @@ pub fn lock_broker() -> MutexGuard<'static, ()> {
 
 pub fn perf_broker_config() -> RobotBusConfig {
     let mut config = RobotBusConfig::default();
-    // Message depth ≥ MSG_ITERS so deep-queue throughput is not HWM-drop dominated.
+    // Deep enough that paced goodput trials are not HWM-drop dominated.
     // Not a production default (STREAM default remains 2).
-    config.message.snd_hwm = 100_000;
-    config.message.rcv_hwm = 100_000;
+    config.message.snd_hwm = 2_048;
+    config.message.rcv_hwm = 2_048;
     config.service.snd_hwm = 64;
     config.service.rcv_hwm = 64;
     config.action.snd_hwm = 64;
@@ -128,7 +128,7 @@ pub enum ScenarioKind {
 }
 
 impl ScenarioResult {
-    /// Unreliable pub/sub: timed firehose; do not require received == sent.
+    /// Pub/sub max-goodput trial (paced rate with loss ≤ threshold).
     pub fn ok_message(
         transport: &str,
         scenario: &str,
@@ -228,17 +228,24 @@ pub fn write_report(results: &[ScenarioResult], env_lines: &[String]) -> std::io
 
     md.push_str("## 方法\n\n");
     md.push_str("- 进程内 `RobotBusBroker`，`bind_all_transports = true`（tcp + ipc + inproc + grpc）。\n");
-    md.push_str("- Console HTTP 关闭；**message HWM=100000**（仅 bench，≥ 吞吐目标条数）；service/action HWM=64。\n");
+    md.push_str("- Console HTTP 关闭；message HWM=2048（仅 bench）；service/action HWM=64。\n");
     md.push_str("- Payload：64 字节 raw（前 8 字节为发送端 Unix 纳秒时间戳，用于延迟）。\n");
-    md.push_str("- Message **吞吐**（深队列横比）：尽快发送 N=100000（HWM=100000），**订阅端收到 ≥80000 即结束统计**；ZMQ PUB / ROS2 均为 best-effort。\n");
-    md.push_str("- Message **延迟**：另做 5000 次限速抽样（发一条等收到再发），测单程时延。\n");
+    md.push_str(&format!(
+        "- Message **吞吐（主指标）**：在目标速率下限速发送，**二分搜索**丢包率 ≤ {:.1}% 的最大可持续速率（max goodput）；每档约 {:.1}s（可用 `ROBOT_BUS_PERF_GOODPUT_TRIAL_MSGS` 覆盖条数）。\n",
+        env_f64("ROBOT_BUS_PERF_MAX_LOSS_PCT", 1.0),
+        env_f64("ROBOT_BUS_PERF_GOODPUT_TRIAL_SECS", 1.0),
+    ));
+    md.push_str(&format!(
+        "- Message **延迟**：另做 {} 次限速抽样（发一条等收到再发），测单程时延。\n",
+        env_usize("ROBOT_BUS_PERF_MSG_LATENCY_SAMPLES", 5_000),
+    ));
     md.push_str("- Service / action：各 100000 次；延迟为每次 call / send_goal 本地计时。\n");
     md.push_str("- ZMQ：共享 `Context` + `Node::tcp` / `ipc` / `inproc`；gRPC：`Node::grpc_at`。\n");
     md.push_str("- inproc 与嵌入式 broker 必须共用同一 `Context`（ZeroMQ inproc 是 context-local）。\n");
     md.push_str("- 指标为单机本机回环，机器相关，不作为 CI 门槛。\n\n");
 
     md.push_str("## 横比\n\n");
-    md.push_str("message 单元格为 **订阅速率（投递率）**；service/action 为完成速率。gRPC Node **不支持 publish**，发布格为 —。\n\n");
+    md.push_str("message 为 **max goodput**（丢包阈值内的最大可持续订阅速率）；括号为该档实测投递率。service/action 为完成速率。gRPC Node **不支持 publish**，发布格为 —。\n\n");
     md.push_str("| 场景 | tcp | ipc | inproc | grpc |\n");
     md.push_str("|------|-----|-----|--------|------|\n");
     md.push_str(&format!(
@@ -248,7 +255,7 @@ pub fn write_report(results: &[ScenarioResult], env_lines: &[String]) -> std::io
         cell_pub(results, "inproc", "message pub/sub"),
     ));
     md.push_str(&format!(
-        "| message 订阅 | {} | {} | {} | {} |\n",
+        "| message max goodput | {} | {} | {} | {} |\n",
         cell_sub(results, "tcp", "message pub/sub"),
         cell_sub(results, "ipc", "message pub/sub"),
         cell_sub(results, "inproc", "message pub/sub"),
@@ -329,9 +336,26 @@ fn cell_pub(results: &[ScenarioResult], transport: &str, scenario: &str) -> Stri
 fn cell_sub(results: &[ScenarioResult], transport: &str, scenario: &str) -> String {
     match find(results, transport, scenario) {
         Some(r) if r.note.is_some() => "—".into(),
+        Some(r) if r.kind == ScenarioKind::Message => {
+            format!("{:.0}/s ({:.1}% delivered)", r.subscribe_per_s, r.delivery_pct)
+        }
         Some(r) => format!("{:.0}/s ({:.0}%)", r.subscribe_per_s, r.delivery_pct),
         None => "—".into(),
     }
+}
+
+pub fn env_usize(name: &str, default: usize) -> usize {
+    std::env::var(name)
+        .ok()
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(default)
+}
+
+pub fn env_f64(name: &str, default: f64) -> f64 {
+    std::env::var(name)
+        .ok()
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(default)
 }
 
 fn cell_rpc(results: &[ScenarioResult], transport: &str, scenario: &str) -> String {

@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8" ?>
 <!--
-  Fast DDS: prefer Shared Memory, keep UDPv4 as fallback.
+  Fast DDS: Shared Memory only (no UDPv4).
   segment_size must fit in container /dev/shm (Docker default often 64MiB).
 -->
 <profiles xmlns="http://www.eprosima.com/XMLSchemas/fastRTPS_Profiles">
@@ -11,17 +11,12 @@
       <segment_size>16777216</segment_size>
       <maxMessageSize>65536</maxMessageSize>
     </transport_descriptor>
-    <transport_descriptor>
-      <transport_id>udp_transport</transport_id>
-      <type>UDPv4</type>
-    </transport_descriptor>
   </transport_descriptors>
 
   <participant profile_name="ros2_perf_shm" is_default_profile="true">
     <rtps>
       <userTransports>
         <transport_id>shm_transport</transport_id>
-        <transport_id>udp_transport</transport_id>
       </userTransports>
       <useBuiltinTransports>false</useBuiltinTransports>
     </rtps>

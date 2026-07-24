@@ -4,10 +4,13 @@ ROS 2（Humble）性能对比小项目：在 Docker 容器里测 **pub/sub / ser
 
 | 模式 | 含义 |
 |------|------|
-| `shm` | Shared Memory only（`config/fastdds_shm.xml`） |
+| `shm` | Shared Memory **only**（`config/fastdds_shm.xml`，无 UDP） |
 | `udp` | UDPv4 only，无 SHM（`config/fastdds_udp.xml`） |
 
-方法对齐仓库根目录的 `docs/perf-report.md`（64 字节 payload、限速测延迟 + firehose 测吞吐、各 10 万次迭代）。
+方法对齐仓库根目录的 `docs/perf-report.md`：
+
+- **延迟**：限速抽样（发一条等收到再发）
+- **吞吐（主指标）**：在目标速率下限速发送，**二分搜索**丢包 ≤ 1% 的最大可持续速率（max goodput）；默认搜索上限 **500000 Hz**（可用 `ROS2_PERF_GOODPUT_RATE_HI` 覆盖）
 
 ## 结构
 
@@ -36,10 +39,15 @@ cd /path/to/benches/ros2_perf
 ./run.sh --local
 ```
 
-冒烟（减少迭代）：
+冒烟（缩小搜索与试验）：
 
 ```bash
-ROS2_PERF_MSG_ITERS=1000 ROS2_PERF_SVC_ITERS=1000 ROS2_PERF_ACT_ITERS=1000 ./benches/ros2_perf/run.sh
+ROS2_PERF_MSG_LATENCY_SAMPLES=200 \
+ROS2_PERF_GOODPUT_TRIAL_MSGS=1000 \
+ROS2_PERF_GOODPUT_RATE_LO=500 \
+ROS2_PERF_GOODPUT_RATE_HI=5000 \
+ROS2_PERF_SVC_ITERS=1000 ROS2_PERF_ACT_ITERS=1000 \
+./benches/ros2_perf/run.sh
 ```
 
 只跑一种模式：
@@ -52,4 +60,7 @@ ROS2_PERF_MSG_ITERS=1000 ROS2_PERF_SVC_ITERS=1000 ROS2_PERF_ACT_ITERS=1000 ./ben
 
 - RMW 固定 `rmw_fastrtps_cpp`；`ROS_LOCALHOST_ONLY=1`。
 - 单进程多 Node + `MultiThreadedExecutor`，与 robot-bus 本机回环场景同级，不是跨机 DDS。
+- Message QoS：`KeepLast(2048)` + **best_effort**。
+- 小 payload（64B）+ 同容器本机回环时，**UDP loopback 有时会高于 SHM**：SHM 管理段/同步有固定开销，优势更常体现在大消息或跨进程；且 Docker Desktop 的 `/dev/shm` 常受限。上次结果里 SHM 延迟更低、吞吐更低，符合这一画像。
 - Apple 宿主机不直接跑 ROS 2；数字来自 Linux 容器（Docker Desktop VM），和 macOS 上的 `just perf` 不在同一 OS，横比时注意环境差异。
+- 若报告里 max goodput 顶到 `RATE_HI`，把 `ROS2_PERF_GOODPUT_RATE_HI` 再调高后重跑。

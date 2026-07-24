@@ -32,9 +32,13 @@ constexpr size_t kPayloadLen = 64;
 constexpr size_t kWarmup = 50;
 constexpr size_t kDefaultMsgLatencySamples = 5000;
 constexpr size_t kDefaultIters = 100000;
-constexpr size_t kDefaultMsgIters = 100000;
-constexpr size_t kDefaultMsgRecvTarget = 80000;
-constexpr size_t kMsgHistory = 100000;
+constexpr size_t kDefaultGoodputTrialMsgs = 0;  // 0 → duration × rate
+constexpr double kDefaultGoodputTrialSecs = 1.0;
+constexpr size_t kDefaultGoodputRateLo = 500;
+constexpr size_t kDefaultGoodputRateHi = 500000;
+constexpr size_t kDefaultGoodputSettleMs = 100;
+constexpr double kDefaultMaxLossPct = 1.0;
+constexpr size_t kMsgHistory = 2048;
 
 struct LatencyStats {
   size_t count = 0;
@@ -170,7 +174,7 @@ ScenarioResult make_skip(
 
 rclcpp::QoS msg_qos()
 {
-  // Deep history (≥ N) + best effort — align with robot-bus ZMQ PUB drop semantics.
+  // Deep enough for paced goodput; best effort aligns with ZMQ PUB drop semantics.
   return rclcpp::QoS(rclcpp::KeepLast(kMsgHistory)).best_effort().durability_volatile();
 }
 
@@ -194,6 +198,37 @@ size_t env_size(const char * name, size_t fallback)
     return fallback;
   }
   return static_cast<size_t>(std::strtoull(v, nullptr, 10));
+}
+
+double env_double(const char * name, double fallback)
+{
+  const char * v = std::getenv(name);
+  if (!v || !*v) {
+    return fallback;
+  }
+  return std::strtod(v, nullptr);
+}
+
+double loss_pct(size_t sent, size_t received)
+{
+  if (sent == 0) {
+    return 100.0;
+  }
+  if (received >= sent) {
+    return 0.0;
+  }
+  return 100.0 * static_cast<double>(sent - received) / static_cast<double>(sent);
+}
+
+size_t trial_msg_count(size_t rate_hz)
+{
+  const size_t fixed = env_size("ROS2_PERF_GOODPUT_TRIAL_MSGS", kDefaultGoodputTrialMsgs);
+  if (fixed > 0) {
+    return fixed;
+  }
+  const double secs = env_double("ROS2_PERF_GOODPUT_TRIAL_SECS", kDefaultGoodputTrialSecs);
+  const size_t n = static_cast<size_t>(std::llround(static_cast<double>(rate_hz) * secs));
+  return std::clamp(n, static_cast<size_t>(1000), static_cast<size_t>(50000));
 }
 
 class PubSubBench
@@ -227,7 +262,7 @@ public:
 
   std::vector<rclcpp::Node::SharedPtr> nodes() const { return {sub_node_, pub_node_}; }
 
-  ScenarioResult run(size_t n)
+  ScenarioResult run()
   {
     const std::string scenario = "message pub/sub";
     if (!wait_until(
@@ -265,37 +300,91 @@ public:
       latency = from_ns(latencies_);
     }
 
-    // Phase 2: deep-queue throughput — send n, end when recv >= recv_target.
+    // Phase 2: binary-search max goodput at loss ≤ threshold.
     record_latency_.store(false);
-    count_.store(0);
-    {
-      std::lock_guard<std::mutex> lock(mu_);
-      latencies_.clear();
+    const double max_loss = env_double("ROS2_PERF_MAX_LOSS_PCT", kDefaultMaxLossPct);
+    const size_t settle_ms = env_size("ROS2_PERF_GOODPUT_SETTLE_MS", kDefaultGoodputSettleMs);
+    size_t lo = env_size("ROS2_PERF_GOODPUT_RATE_LO", kDefaultGoodputRateLo);
+    size_t hi = env_size("ROS2_PERF_GOODPUT_RATE_HI", kDefaultGoodputRateHi);
+    if (hi < lo) {
+      hi = lo;
     }
 
-    const size_t recv_target = env_size("ROS2_PERF_MSG_RECV_TARGET", kDefaultMsgRecvTarget);
-    std::cout << "  … throughput: send " << n << ", end at recv>=" << recv_target
-              << " (KeepLast=" << kMsgHistory << ", best_effort)" << std::endl;
-    const auto t0 = std::chrono::steady_clock::now();
-    size_t sent = 0;
-    for (size_t i = 0; i < n; ++i) {
-      publish_one(now_ns());
-      ++sent;
-    }
-    const bool ok = wait_until(
-      [this, recv_target] { return count_.load() >= recv_target; }, 120s);
-    const double elapsed =
-      std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count();
-    const size_t received = count_.load();
+    std::cout << "  … max goodput: binary search " << lo << "..=" << hi
+              << " Hz, loss≤" << std::fixed << std::setprecision(1) << max_loss
+              << "%, trial≈" << env_double("ROS2_PERF_GOODPUT_TRIAL_SECS", kDefaultGoodputTrialSecs)
+              << "s (KeepLast=" << kMsgHistory
+              << ", best_effort)" << std::endl;
 
-    if (received == 0) {
-      return make_skip(transport_, scenario, "timed out with 0 messages");
+    bool have_best = false;
+    size_t best_sent = 0;
+    size_t best_recv = 0;
+    double best_elapsed = 0;
+    size_t best_target = 0;
+
+    while (lo <= hi) {
+      const size_t mid = lo + (hi - lo) / 2;
+      count_.store(0);
+      const size_t trial_msgs = trial_msg_count(mid);
+      const double interval_s = 1.0 / static_cast<double>(std::max<size_t>(mid, 1));
+      const auto t0 = std::chrono::steady_clock::now();
+      auto next = t0;
+      size_t sent = 0;
+      for (size_t i = 0; i < trial_msgs; ++i) {
+        publish_one(now_ns());
+        ++sent;
+        next += std::chrono::duration_cast<std::chrono::steady_clock::duration>(
+          std::chrono::duration<double>(interval_s));
+        // Coarse sleep + busy-wait (sleep alone is too coarse for multi-kHz).
+        for (;;) {
+          const auto now = std::chrono::steady_clock::now();
+          if (now >= next) {
+            break;
+          }
+          const auto remain = next - now;
+          if (remain > 2ms) {
+            std::this_thread::sleep_for(remain - 1ms);
+          }
+        }
+      }
+      const auto t_send_end = std::chrono::steady_clock::now();
+      std::this_thread::sleep_for(std::chrono::milliseconds(settle_ms));
+      const double elapsed =
+        std::max(std::chrono::duration<double>(t_send_end - t0).count(), 1e-9);
+      const size_t received = count_.load();
+      const double loss = loss_pct(sent, received);
+      const double actual_pub = sent / elapsed;
+      const bool sustained = actual_pub >= 0.90 * static_cast<double>(mid);
+      std::cout << "  …   try " << mid << " Hz (" << trial_msgs << " msgs) → sent=" << sent
+                << " recv=" << received
+                << " loss=" << std::setprecision(2) << loss << "% pub="
+                << std::setprecision(0) << actual_pub
+                << "/s sub=" << (received / elapsed) << "/s sustained="
+                << (sustained ? "true" : "false") << std::endl;
+
+      if (received > 0 && loss <= max_loss && sustained) {
+        have_best = true;
+        best_sent = sent;
+        best_recv = received;
+        best_elapsed = elapsed;
+        best_target = mid;
+        lo = mid + 1;
+      } else if (mid == 0) {
+        break;
+      } else {
+        hi = mid - 1;
+      }
     }
-    if (!ok) {
-      std::cout << "  … incomplete: recv=" << received << "/" << recv_target
-                << " sent=" << sent << std::endl;
+
+    if (!have_best) {
+      return make_skip(
+        transport_, scenario,
+        "no rate met loss≤" + std::to_string(static_cast<int>(max_loss)) + "%");
     }
-    return make_ok_message(transport_, scenario, sent, received, elapsed, latency);
+
+    std::cout << "  … max goodput ≈ " << best_target << " Hz target (loss≤"
+              << std::setprecision(1) << max_loss << "%)" << std::endl;
+    return make_ok_message(transport_, scenario, best_sent, best_recv, best_elapsed, latency);
   }
 
 private:
@@ -559,10 +648,12 @@ std::string env_summary()
     os << "- Fast DDS profile: `" << profiles << "`\n";
   }
   os << "- Payload: 64 bytes\n";
-  os << "- Message iters / recv target / history: "
-     << env_size("ROS2_PERF_MSG_ITERS", kDefaultMsgIters) << " / "
-     << env_size("ROS2_PERF_MSG_RECV_TARGET", kDefaultMsgRecvTarget)
-     << " / KeepLast(" << kMsgHistory << ") best_effort\n";
+  os << "- Message max loss / trial / rate range: "
+     << env_double("ROS2_PERF_MAX_LOSS_PCT", kDefaultMaxLossPct) << "% / ~"
+     << env_double("ROS2_PERF_GOODPUT_TRIAL_SECS", kDefaultGoodputTrialSecs) << "s / "
+     << env_size("ROS2_PERF_GOODPUT_RATE_LO", kDefaultGoodputRateLo) << ".."
+     << env_size("ROS2_PERF_GOODPUT_RATE_HI", kDefaultGoodputRateHi)
+     << " Hz (KeepLast(" << kMsgHistory << ") best_effort)\n";
   os << "- Message latency samples: "
      << env_size("ROS2_PERF_MSG_LATENCY_SAMPLES", kDefaultMsgLatencySamples)
      << " (paced)\n";
@@ -604,7 +695,7 @@ std::string cell_sub(const std::vector<ScenarioResult> & results,
       std::ostringstream os;
       if (r.is_message) {
         os << std::fixed << std::setprecision(0) << r.subscribe_per_s << "/s ("
-           << std::setprecision(0) << r.delivery_pct << "%)";
+           << std::setprecision(1) << r.delivery_pct << "% delivered)";
       } else {
         os << std::fixed << std::setprecision(0) << r.subscribe_per_s << "/s";
       }
@@ -671,19 +762,22 @@ void write_report(const std::vector<ScenarioResult> & results, const std::string
   md << "## 方法\n\n";
   md << "- RMW: `rmw_fastrtps_cpp`；传输由 Fast DDS XML 固定为 **SHM** 或 **UDPv4**。\n";
   md << "- 单进程多 Node + `MultiThreadedExecutor`（本机回环，非跨机）。\n";
-  md << "- Payload：64 字节；QoS `KeepLast(100000)` **best_effort**（对齐 ZMQ PUB 不可靠语义）。\n";
-  md << "- Message **吞吐**：尽快发送 N=100000（KeepLast=100000 best_effort），**订阅端收到 ≥80000 即结束统计**。\n";
+  md << "- Payload：64 字节；QoS `KeepLast(" << kMsgHistory << ")` **best_effort**（对齐 ZMQ PUB 不可靠语义）。\n";
+  md << "- Message **吞吐（主指标）**：在目标速率下限速发送，**二分搜索**丢包率 ≤ "
+     << env_double("ROS2_PERF_MAX_LOSS_PCT", kDefaultMaxLossPct)
+     << "% 的最大可持续速率（max goodput）；每档约 "
+     << env_double("ROS2_PERF_GOODPUT_TRIAL_SECS", kDefaultGoodputTrialSecs) << "s。\n";
   md << "- Message **延迟**：另做限速抽样（默认 " << kDefaultMsgLatencySamples << "）。\n";
   md << "- Service / action 延迟：每次 call / send_goal 本地计时。\n";
   md << "- 指标机器相关，不作为 CI 门槛。\n\n";
 
   md << "## 横比\n\n";
-  md << "message 单元格为 **订阅速率（投递率）**；另附发布速率行。\n\n";
+  md << "message 为 **max goodput**（丢包阈值内的最大可持续订阅速率）；括号为该档实测投递率。另附发布速率行。\n\n";
   md << "| 场景 | shm | udp |\n";
   md << "|------|-----|-----|\n";
   md << "| message 发布 | " << cell_pub(results, "shm", "message pub/sub")
      << " | " << cell_pub(results, "udp", "message pub/sub") << " |\n";
-  md << "| message 订阅 | " << cell_sub(results, "shm", "message pub/sub")
+  md << "| message max goodput | " << cell_sub(results, "shm", "message pub/sub")
      << " | " << cell_sub(results, "udp", "message pub/sub") << " |\n";
   md << "| service call | " << cell_sub(results, "shm", "service call")
      << " | " << cell_sub(results, "udp", "service call") << " |\n";
@@ -725,7 +819,6 @@ int main(int argc, char ** argv)
     }
     return s == "message" || s == "msg" || s == "pubsub";
   }();
-  const size_t msg_iters = env_size("ROS2_PERF_MSG_ITERS", kDefaultMsgIters);
   const size_t svc_iters = env_size("ROS2_PERF_SVC_ITERS", kDefaultIters);
   const size_t act_iters = env_size("ROS2_PERF_ACT_ITERS", kDefaultIters);
   const char * report_path_env = std::getenv("ROS2_PERF_REPORT");
@@ -733,7 +826,7 @@ int main(int argc, char ** argv)
     report_path_env ? report_path_env : "docs/ros2-perf-report.md";
 
   std::cout << "=== ROS2 perf mode=" << mode
-            << " msg=" << msg_iters
+            << " goodput loss≤" << env_double("ROS2_PERF_MAX_LOSS_PCT", kDefaultMaxLossPct) << "%"
             << " svc=" << svc_iters << " act=" << act_iters
             << (only_message ? " (message only)" : "")
             << " ===\n";
@@ -746,7 +839,7 @@ int main(int argc, char ** argv)
     SpinExecutor spin;
     spin.add(bench.nodes());
     spin.start();
-    auto r = bench.run(msg_iters);
+    auto r = bench.run();
     spin.stop();
     print_result(r);
     results.push_back(std::move(r));

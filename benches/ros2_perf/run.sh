@@ -15,12 +15,17 @@ WS_IN_CONTAINER="${ROS2_PERF_WS:-/tmp/ros2_perf_ws}"
 REPORT_HOST="${ROOT}/docs/ros2-perf-report.md"
 
 # Optional overrides (useful for smoke tests):
-#   ROS2_PERF_MSG_ITERS / ROS2_PERF_SVC_ITERS / ROS2_PERF_ACT_ITERS
-MSG_ITERS="${ROS2_PERF_MSG_ITERS:-100000}"
+#   ROS2_PERF_GOODPUT_TRIAL_MSGS / ROS2_PERF_GOODPUT_RATE_LO / ROS2_PERF_GOODPUT_RATE_HI
+#   ROS2_PERF_MAX_LOSS_PCT / ROS2_PERF_MSG_LATENCY_SAMPLES
+#   ROS2_PERF_SVC_ITERS / ROS2_PERF_ACT_ITERS
 SVC_ITERS="${ROS2_PERF_SVC_ITERS:-100000}"
 ACT_ITERS="${ROS2_PERF_ACT_ITERS:-100000}"
 MSG_LATENCY_SAMPLES="${ROS2_PERF_MSG_LATENCY_SAMPLES:-5000}"
-MSG_SECS="${ROS2_PERF_MSG_SECS:-3}"
+GOODPUT_TRIAL_MSGS="${ROS2_PERF_GOODPUT_TRIAL_MSGS:-}"
+GOODPUT_TRIAL_SECS="${ROS2_PERF_GOODPUT_TRIAL_SECS:-1.0}"
+GOODPUT_RATE_LO="${ROS2_PERF_GOODPUT_RATE_LO:-500}"
+GOODPUT_RATE_HI="${ROS2_PERF_GOODPUT_RATE_HI:-500000}"
+MAX_LOSS_PCT="${ROS2_PERF_MAX_LOSS_PCT:-1.0}"
 ONLY="${ROS2_PERF_ONLY:-}"
 
 usage() {
@@ -103,7 +108,7 @@ def cell_msg_pub(rows):
 
 def cell_msg_sub(rows):
     r = rows.get("message pub/sub")
-    return "—" if not r else f"{r['sub']}/s ({r['delivery']}%)"
+    return "—" if not r else f"{r['sub']}/s ({r['delivery']}% delivered)"
 
 def cell_rpc(rows, scenario):
     r = rows.get(scenario)
@@ -121,17 +126,17 @@ lines.append("- Modes: **shm** (Fast DDS Shared Memory) + **udp** (Fast DDS UDPv
 lines.append("## 方法\n")
 lines.append("- RMW: `rmw_fastrtps_cpp`；传输由 Fast DDS XML 固定为 **SHM** 或 **UDPv4**。")
 lines.append("- 单进程多 Node + `MultiThreadedExecutor`（本机回环，非跨机）。")
-lines.append("- Payload：64 字节；QoS `KeepLast(100000)` best_effort。")
-lines.append("- Message **吞吐**：尽快发送 N=100000（KeepLast=100000 best_effort），订阅端收到 ≥80000 即结束统计。")
+lines.append("- Payload：64 字节；QoS `KeepLast(2048)` best_effort。")
+lines.append("- Message **吞吐（主指标）**：在目标速率下限速发送，**二分搜索**丢包率 ≤ 1% 的最大可持续速率（max goodput）；每档约 1s。")
 lines.append("- Message **延迟**：另做限速抽样（发一条等收到再发）。")
 lines.append("- Service / action 延迟：每次 call / send_goal 本地计时。")
 lines.append("- 指标机器相关，不作为 CI 门槛。\n")
 lines.append("## 横比\n")
-lines.append("message 为 **订阅速率（投递率）**；另附发布速率。\n")
+lines.append("message 为 **max goodput**（丢包阈值内的最大可持续订阅速率）；括号为该档实测投递率。\n")
 lines.append("| 场景 | shm | udp |")
 lines.append("|------|-----|-----|")
 lines.append(f"| message 发布 | {cell_msg_pub(rows_s)} | {cell_msg_pub(rows_u)} |")
-lines.append(f"| message 订阅 | {cell_msg_sub(rows_s)} | {cell_msg_sub(rows_u)} |")
+lines.append(f"| message max goodput | {cell_msg_sub(rows_s)} | {cell_msg_sub(rows_u)} |")
 lines.append(f"| service call | {cell_rpc(rows_s, 'service call')} | {cell_rpc(rows_u, 'service call')} |")
 lines.append(f"| action send_goal | {cell_rpc(rows_s, 'action send_goal')} | {cell_rpc(rows_u, 'action send_goal')} |")
 lines.append("")
@@ -157,11 +162,14 @@ run_bench_local() {
   export RMW_IMPLEMENTATION=rmw_fastrtps_cpp
   export ROS_LOCALHOST_ONLY=1
   export ROS2_PERF_MODE="${mode}"
-  export ROS2_PERF_MSG_ITERS="${MSG_ITERS}"
   export ROS2_PERF_SVC_ITERS="${SVC_ITERS}"
   export ROS2_PERF_ACT_ITERS="${ACT_ITERS}"
   export ROS2_PERF_MSG_LATENCY_SAMPLES="${MSG_LATENCY_SAMPLES}"
-  export ROS2_PERF_MSG_SECS="${MSG_SECS}"
+  export ROS2_PERF_GOODPUT_TRIAL_MSGS="${GOODPUT_TRIAL_MSGS}"
+  export ROS2_PERF_GOODPUT_TRIAL_SECS="${GOODPUT_TRIAL_SECS}"
+  export ROS2_PERF_GOODPUT_RATE_LO="${GOODPUT_RATE_LO}"
+  export ROS2_PERF_GOODPUT_RATE_HI="${GOODPUT_RATE_HI}"
+  export ROS2_PERF_MAX_LOSS_PCT="${MAX_LOSS_PCT}"
   if [[ -n "${ONLY}" ]]; then
     export ROS2_PERF_ONLY="${ONLY}"
   fi
@@ -260,11 +268,14 @@ if [[ "${BUILD_ONLY}" -eq 1 ]]; then
 fi
 # Pass args safely into the container shell.
 docker exec \
-  -e ROS2_PERF_MSG_ITERS="${MSG_ITERS}" \
   -e ROS2_PERF_SVC_ITERS="${SVC_ITERS}" \
   -e ROS2_PERF_ACT_ITERS="${ACT_ITERS}" \
   -e ROS2_PERF_MSG_LATENCY_SAMPLES="${MSG_LATENCY_SAMPLES}" \
-  -e ROS2_PERF_MSG_SECS="${MSG_SECS}" \
+  -e ROS2_PERF_GOODPUT_TRIAL_MSGS="${GOODPUT_TRIAL_MSGS}" \
+  -e ROS2_PERF_GOODPUT_TRIAL_SECS="${GOODPUT_TRIAL_SECS}" \
+  -e ROS2_PERF_GOODPUT_RATE_LO="${GOODPUT_RATE_LO}" \
+  -e ROS2_PERF_GOODPUT_RATE_HI="${GOODPUT_RATE_HI}" \
+  -e ROS2_PERF_MAX_LOSS_PCT="${MAX_LOSS_PCT}" \
   -e ROS2_PERF_ONLY="${ONLY}" \
   -w "${WS_IN_CONTAINER}/ros2_perf" \
   "${CONTAINER}" \

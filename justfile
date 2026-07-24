@@ -1,5 +1,8 @@
 # Lightweight task runner — does not replace cargo / maturin / pnpm.
 # Install: https://github.com/casey/just
+#
+# Layout: Rust core at repo root; language SDKs under bindings/;
+# benches/robot_bus_perf + benches/ros2_perf; tests/ for interop; console/ is product UI.
 
 set shell := ["bash", "-eu", "-o", "pipefail", "-c"]
 

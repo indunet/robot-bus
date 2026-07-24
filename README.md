@@ -20,6 +20,8 @@ No ROS distro, no `source setup.bash`, no workspace. One broker process plus an 
 
 More API examples live under [`docs/`](docs/).
 
+### Crate API
+
 | Module | Role |
 |------|------|
 | `broker::` | Routing process (message / service / action) |
@@ -28,9 +30,21 @@ More API examples live under [`docs/`](docs/).
 | `runtime::SingleThreadedExecutor` / `MultiThreadedExecutor` | Explicit executors (multi-node / parallel); a single node can `Node::spin` directly |
 | `runtime::Node` / `TopicPublisher` / `CallbackGroup` | Nodes, publishers, callback groups (mutually exclusive / reentrant) |
 | `grpc::` (default feature) | gRPC / gRPC-Web gateway (started with the broker) |
+
+### Repository layout
+
+Rust core stays at the repo root (`Cargo.toml` + `src/`). Language SDKs live under `bindings/`; do not flatten them to peer top-level folders.
+
+| Path | Role |
+|------|------|
+| [`src/`](src/), `Cargo.toml` | Rust core (crates.io / maturin entry) |
 | [`proto/`](proto/) | Contract source: ROS-style Protobuf → generated code for Rust / bindings |
-| [`bindings/`](bindings/) | Language bindings (Python, TypeScript, C++, Java, Android) |
-| [`console/`](console/) | Web monitoring console (product UI, embedded in broker on `:15771`; build output in `assets/console/`) |
+| [`bindings/`](bindings/) | Language SDKs (Python, TypeScript, C++, Java, Android) |
+| [`console/`](console/) | Web monitoring console (product UI; embed output in `assets/console/`) |
+| [`benches/`](benches/) | Perf harnesses: [`robot_bus_perf/`](benches/robot_bus_perf/) (`just perf`), [`ros2_perf/`](benches/ros2_perf/) (`just perf-ros2`) |
+| [`tests/`](tests/) | Rust integration tests + cross-language interop (`just test-interop`) |
+| [`docs/`](docs/) | API guides and generated perf reports |
+| [`scripts/`](scripts/), [`tools/`](tools/), `justfile` | Codegen, packaging, and task orchestration |
 
 ## Architecture
 
@@ -317,6 +331,9 @@ Proto (package `robot_bus_interface.grpc.v1`, distinct from ROS `*.msg.v1` / `*.
 just test-rust
 just test-python
 just test-typescript
+just test-interop   # cross-language matrix under tests/interop/
+just perf           # robot-bus → docs/perf-report.md (benches/robot_bus_perf/)
+just perf-ros2      # ROS 2 comparison under benches/ros2_perf/
 # equivalent:
 # cargo test
 # PYTHONPATH=bindings/python python3 bindings/python/tests/test_msgs_roundtrip.py

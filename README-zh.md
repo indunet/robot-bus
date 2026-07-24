@@ -20,6 +20,8 @@
 
 更多 API 示例见 [`docs/`](docs/)。
 
+### Crate API
+
 | 模块 | 职责 |
 |------|------|
 | `broker::` | 路由进程（message / service / action） |
@@ -28,9 +30,21 @@
 | `runtime::SingleThreadedExecutor` / `MultiThreadedExecutor` | 显式执行器（多节点 / 并行）；单节点可直接 `Node::spin` |
 | `runtime::Node` / `TopicPublisher` / `CallbackGroup` | 节点、publisher、callback group（互斥 / 可重入） |
 | `grpc::`（默认 feature） | gRPC / gRPC-Web 网关（随 broker 一起启动） |
+
+### 仓库布局
+
+Rust 核心留在仓库根目录（`Cargo.toml` + `src/`）。各语言 SDK 放在 `bindings/` 下，不要拆成与 Rust 同级的顶层目录。
+
+| 路径 | 职责 |
+|------|------|
+| [`src/`](src/)、`Cargo.toml` | Rust 核心（crates.io / maturin 入口） |
 | [`proto/`](proto/) | 契约源：ROS 风格 Protobuf → Rust / bindings 生成代码 |
-| [`bindings/`](bindings/) | 语言绑定（Python、TypeScript、C++、Java、Android） |
-| [`console/`](console/) | Web 监控控制台（产品 UI，嵌入 broker `:15771`；产物在 `assets/console/`） |
+| [`bindings/`](bindings/) | 语言 SDK（Python、TypeScript、C++、Java、Android） |
+| [`console/`](console/) | Web 监控控制台（产品 UI；嵌入产物在 `assets/console/`） |
+| [`benches/`](benches/) | 性能压测：[`robot_bus_perf/`](benches/robot_bus_perf/)（`just perf`）、[`ros2_perf/`](benches/ros2_perf/)（`just perf-ros2`） |
+| [`tests/`](tests/) | Rust 集成测试 + 跨语言互通（`just test-interop`） |
+| [`docs/`](docs/) | API 文档与生成的性能报告 |
+| [`scripts/`](scripts/)、[`tools/`](tools/)、`justfile` | 代码生成、打包与任务编排 |
 
 ## 架构
 
@@ -317,6 +331,9 @@ Proto（包名 `robot_bus_interface.grpc.v1`，与 ROS `*.msg.v1` / `*.srv.v1` �
 just test-rust
 just test-python
 just test-typescript
+just test-interop   # 跨语言矩阵，见 tests/interop/
+just perf           # robot-bus → docs/perf-report.md（benches/robot_bus_perf/）
+just perf-ros2      # ROS 2 对标，见 benches/ros2_perf/
 # 等价：
 # cargo test
 # PYTHONPATH=bindings/python python3 bindings/python/tests/test_msgs_roundtrip.py
