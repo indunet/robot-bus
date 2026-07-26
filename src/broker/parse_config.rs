@@ -4,6 +4,7 @@
 
 use anyhow::{bail, Context, Result};
 
+use super::message_bus::MessagePeer;
 use super::RobotBusConfig;
 
 #[cfg(any(feature = "grpc", feature = "console"))]
@@ -64,6 +65,20 @@ pub fn parse_robot_bus_config(args: &[String]) -> Result<Option<RobotBusConfig>>
             "--message-rcv-hwm" => {
                 i += 1;
                 config.message.rcv_hwm = parse_i32(arg, require_arg(args, i, arg)?)?;
+            }
+            "--broker-id" => {
+                i += 1;
+                config.message.broker_id = require_arg(args, i, arg)?.to_string();
+            }
+            "--message-peer" => {
+                i += 1;
+                let value = require_arg(args, i, arg)?;
+                config
+                    .message
+                    .peers
+                    .push(MessagePeer::from_xpub(value).with_context(|| {
+                        format!("invalid --message-peer {value}")
+                    })?);
             }
 
             // --- service bus ---
@@ -222,7 +237,9 @@ Message options:\n  \
 --message-xsub-bind ADDR       Publisher bind (alias: --xsub-bind)\n  \
 --message-xpub-bind ADDR       Subscriber bind (alias: --xpub-bind)\n  \
 --message-snd-hwm N            Message send HWM\n  \
---message-rcv-hwm N            Message receive HWM\n\n\
+--message-rcv-hwm N            Message receive HWM\n  \
+--broker-id ID                 Hop-path id for topic federation (default: random UUID)\n  \
+--message-peer tcp://HOST:XPUB Peer broker XPUB (repeatable; XSUB = XPUB port - 1)\n\n\
 Service options:\n  \
 --service-frontend-bind ADDR   Client (REQ) bind\n  \
 --service-backend-bind ADDR    Worker (DEALER) bind\n  \
@@ -323,5 +340,25 @@ mod tests {
             .unwrap()
             .expect("config");
         assert!(!config.console.enabled);
+    }
+
+    #[test]
+    fn parses_broker_id_and_message_peers() {
+        let config = parse_robot_bus_config(&args(&[
+            "--broker-id",
+            "broker-a",
+            "--message-peer",
+            "tcp://127.0.0.1:16561",
+            "--message-peer",
+            "10.0.0.2:17561",
+        ]))
+        .unwrap()
+        .expect("config");
+        assert_eq!(config.message.broker_id, "broker-a");
+        assert_eq!(config.message.peers.len(), 2);
+        assert_eq!(config.message.peers[0].xpub, "tcp://127.0.0.1:16561");
+        assert_eq!(config.message.peers[0].xsub, "tcp://127.0.0.1:16560");
+        assert_eq!(config.message.peers[1].xpub, "tcp://10.0.0.2:17561");
+        assert_eq!(config.message.peers[1].xsub, "tcp://10.0.0.2:17560");
     }
 }

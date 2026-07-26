@@ -1,7 +1,10 @@
+mod bridge;
 mod metrics;
+mod peer;
 mod ports;
 
 pub use metrics::{MessageMetrics, MessageMetricsSnapshot, TopicSnapshot};
+pub use peer::MessagePeer;
 pub use ports::{
     DEFAULT_RCV_HWM, DEFAULT_SND_HWM, DEFAULT_XPUB_BIND, DEFAULT_XSUB_BIND, XPUB_CHANNEL,
     XPUB_PORT, XSUB_CHANNEL, XSUB_PORT,
@@ -27,6 +30,10 @@ pub struct BusConfig {
     pub rcv_hwm: i32,
     /// When true (default), also bind inproc + ipc aliases via [`bind_all`].
     pub bind_all_transports: bool,
+    /// Stable id for hop-path loop prevention. Empty → random UUID at start.
+    pub broker_id: String,
+    /// Static peers for topic federation (empty → plain `proxy_steerable`).
+    pub peers: Vec<MessagePeer>,
 }
 
 impl Default for BusConfig {
@@ -37,6 +44,8 @@ impl Default for BusConfig {
             snd_hwm: DEFAULT_SND_HWM,
             rcv_hwm: DEFAULT_RCV_HWM,
             bind_all_transports: true,
+            broker_id: String::new(),
+            peers: Vec::new(),
         }
     }
 }
@@ -50,6 +59,9 @@ impl Default for BusConfig {
 /// Metrics only see messages that actually flow (real subscribers present). No
 /// internal blanket SUB is attached — that would force every publish through the
 /// bus and hurt communication efficiency.
+///
+/// When [`BusConfig::peers`] is non-empty, a custom federated forwarder is used
+/// instead (hop-path anti-loop + on-demand topic push).
 pub fn run_with_shutdown(
     config: BusConfig,
     shutdown: Arc<AtomicBool>,
@@ -72,12 +84,6 @@ pub fn run_with_shutdown_ctx(
     let xpub = context
         .socket(SocketType::XPUB)
         .context("create XPUB socket")?;
-    let control = context
-        .socket(SocketType::PAIR)
-        .context("create proxy control PAIR")?;
-    let control_client = context
-        .socket(SocketType::PAIR)
-        .context("create proxy control client")?;
 
     apply_low_latency_options(&xsub, config.snd_hwm, config.rcv_hwm)?;
     apply_low_latency_options(&xpub, config.snd_hwm, config.rcv_hwm)?;
@@ -95,19 +101,13 @@ pub fn run_with_shutdown_ctx(
         (vec![config.xsub_bind.clone()], vec![config.xpub_bind.clone()])
     };
 
-    control
-        .bind(PROXY_CONTROL)
-        .context("bind proxy control")?;
-    control_client
-        .connect(PROXY_CONTROL)
-        .context("connect proxy control")?;
-
+    let federated = !config.peers.is_empty();
     println!(
         "message_bus_broker proxy started\n  \
          publishers (PUB) connect ->\n    {}\n  \
          subscribers (SUB) connect ->\n    {}\n  \
          transports: {}\n  \
-         forwarding: opaque multipart frames (libzmq proxy_steerable{})",
+         forwarding: {}",
         format_endpoints(&xsub_endpoints),
         format_endpoints(&xpub_endpoints),
         if config.bind_all_transports {
@@ -115,12 +115,32 @@ pub fn run_with_shutdown_ctx(
         } else {
             "tcp only"
         },
-        if metrics.is_some() {
-            " + side-thread capture metrics"
+        if federated {
+            "federated forwarder (opaque multipart + hop-path peers)"
+        } else if metrics.is_some() {
+            "opaque multipart frames (libzmq proxy_steerable + side-thread capture metrics)"
         } else {
-            ""
+            "opaque multipart frames (libzmq proxy_steerable)"
         },
     );
+
+    if federated {
+        return bridge::run_federated(&context, xsub, xpub, &config, &shutdown, metrics);
+    }
+
+    let control = context
+        .socket(SocketType::PAIR)
+        .context("create proxy control PAIR")?;
+    let control_client = context
+        .socket(SocketType::PAIR)
+        .context("create proxy control client")?;
+
+    control
+        .bind(PROXY_CONTROL)
+        .context("bind proxy control")?;
+    control_client
+        .connect(PROXY_CONTROL)
+        .context("connect proxy control")?;
 
     let mut xsub = xsub;
     let mut xpub = xpub;
