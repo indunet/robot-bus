@@ -12,8 +12,8 @@ use napi::threadsafe_function::{
 use napi_derive::napi;
 use robot_bus::action_bus::ActionKind;
 use robot_bus::broker::{
-    parse_robot_bus_config, robot_bus_broker_help, RobotBusBroker as RustRobotBusBroker,
-    RobotBusConfig,
+    apply_federation_opts, parse_robot_bus_config, robot_bus_broker_help,
+    RobotBusBroker as RustRobotBusBroker, RobotBusConfig,
 };
 use robot_bus::errors::BusError;
 use robot_bus::message_bus::{Publisher as RustPublisher, Subscriber as RustSubscriber};
@@ -1004,6 +1004,10 @@ pub struct BrokerStartOptions {
     pub cors_origins: Option<Vec<String>>,
     pub console_listen: Option<String>,
     pub no_console: Option<bool>,
+    pub broker_id: Option<String>,
+    pub message_peers: Option<Vec<String>>,
+    pub service_peers: Option<Vec<String>>,
+    pub action_peers: Option<Vec<String>>,
 }
 
 #[napi]
@@ -1111,6 +1115,14 @@ impl RobotBusBroker {
                     .map_err(|e| Error::from_reason(format!("invalid console_listen: {e}")))?;
                 config.console.enabled = true;
             }
+            apply_federation_opts(
+                &mut config,
+                o.broker_id.as_deref(),
+                o.message_peers.as_deref().unwrap_or(&[]),
+                o.service_peers.as_deref().unwrap_or(&[]),
+                o.action_peers.as_deref().unwrap_or(&[]),
+            )
+            .map_err(anyhow_err)?;
         }
 
         let broker = match context {

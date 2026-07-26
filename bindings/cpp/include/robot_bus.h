@@ -69,6 +69,17 @@ typedef struct RobotBusBrokerOptions {
   const char *console_listen;
   int tcp_only;
   int no_console;
+  /** Hop-path id for federation (NULL / empty → random UUID at start). */
+  const char *broker_id;
+  /** Peer XPUB endpoints; XSUB derived as port - 1. Length: message_peer_count. */
+  const char *const *message_peers;
+  size_t message_peer_count;
+  /** Peer service backends (`[id=]tcp://host:port`). Length: service_peer_count. */
+  const char *const *service_peers;
+  size_t service_peer_count;
+  /** Peer action backends (`[id=]tcp://host:port`). Length: action_peer_count. */
+  const char *const *action_peers;
+  size_t action_peer_count;
 } RobotBusBrokerOptions;
 
 /** Parameter scalar type: 0=bool, 1=integer, 2=double, 3=string. */

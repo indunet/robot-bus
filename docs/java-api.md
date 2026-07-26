@@ -32,6 +32,34 @@ try (Broker broker = new Broker()) {
 }
 ```
 
+跨 broker（federation）与 CLI 同款字符串约定：
+
+```java
+import java.util.List;
+import org.indunet.robot.bus.Broker;
+import org.indunet.robot.bus.BrokerOptions;
+
+BrokerOptions opts =
+    new BrokerOptions(
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        true,
+        true,
+        "broker-a",
+        List.of("tcp://10.0.0.2:15561"),
+        List.of("broker-b=tcp://10.0.0.2:15663"),
+        List.of("broker-b=tcp://10.0.0.2:15665"));
+try (Broker broker = new Broker(opts)) {
+  // …
+}
+```
+
 ## Message bus（Node + spin）
 
 接近 ROS 2：`Node` → `createPublisher` / `createSubscription` → `spin()`。

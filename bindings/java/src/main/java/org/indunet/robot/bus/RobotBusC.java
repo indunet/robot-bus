@@ -359,7 +359,14 @@ interface RobotBusC extends Library {
         "grpcListen",
         "consoleListen",
         "tcpOnly",
-        "noConsole"
+        "noConsole",
+        "brokerId",
+        "messagePeers",
+        "messagePeerCount",
+        "servicePeers",
+        "servicePeerCount",
+        "actionPeers",
+        "actionPeerCount"
     })
     class BrokerOptions extends Structure {
         public String messageXsubBind;
@@ -372,6 +379,13 @@ interface RobotBusC extends Library {
         public String consoleListen;
         public int tcpOnly;
         public int noConsole;
+        public String brokerId;
+        public Pointer messagePeers;
+        public long messagePeerCount;
+        public Pointer servicePeers;
+        public long servicePeerCount;
+        public Pointer actionPeers;
+        public long actionPeerCount;
     }
 
     @Structure.FieldOrder({"kind", "body", "bodyLen", "goalId", "actionName"})

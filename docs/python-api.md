@@ -32,6 +32,20 @@ with robot_bus.RobotBusBroker.start(
     pass
 ```
 
+跨 broker（federation）与 CLI 同款字符串约定：
+
+```python
+with robot_bus.RobotBusBroker.start(
+    broker_id="broker-a",
+    message_peers=["tcp://10.0.0.2:15561"],          # peer XPUB；XSUB = 端口 - 1
+    service_peers=["broker-b=tcp://10.0.0.2:15663"],  # 可选 id=
+    action_peers=["broker-b=tcp://10.0.0.2:15665"],
+    tcp_only=True,
+    no_console=True,
+) as broker:
+    pass
+```
+
 同进程 **inproc** 时必须共享 `Context`：
 
 ```python
@@ -328,7 +342,7 @@ print(robot_bus.__version__)
 | `create_action_server(..., goal_type=, feedback_type=, result_type=)` | typed：`[(phase, Message), ...]`；否则 bytes |
 | `create_action_client(..., goal_type=, feedback_type=, result_type=)` | typed → `TypedActionClient`；否则 `ActionClient` |
 | `Publisher(endpoint=None)` | 低层连 XSUB（不经 Node） |
-| `RobotBusBroker.start(..., context=None)` | 进程内启动三个 bus + gRPC；同进程 inproc 传 `context` |
+| `RobotBusBroker.start(..., context=None, broker_id=..., message_peers=..., service_peers=..., action_peers=...)` | 进程内启动三个 bus + gRPC；同进程 inproc 传 `context`；peers 为 CLI 同款字符串列表 |
 | `run_broker()` | 阻塞 CLI 入口 |
 | `ShutdownHandle` / `TimerHandle` | spin 与定时器控制 |
 

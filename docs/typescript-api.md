@@ -38,6 +38,20 @@ const broker = RobotBusBroker.start({
 broker.stop();
 ```
 
+跨 broker（federation）与 CLI 同款字符串约定：
+
+```ts
+const broker = RobotBusBroker.start({
+  brokerId: "broker-a",
+  messagePeers: ["tcp://10.0.0.2:15561"],
+  servicePeers: ["broker-b=tcp://10.0.0.2:15663"],
+  actionPeers: ["broker-b=tcp://10.0.0.2:15665"],
+  tcpOnly: true,
+  noConsole: true,
+});
+broker.stop();
+```
+
 同进程 **inproc** 须共享 `Context`：
 
 ```ts

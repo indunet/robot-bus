@@ -79,6 +79,7 @@ if(ROBOT_BUS_BUILD_TESTS)
     msgs_roundtrip
     grpc_node
     inproc_context
+    federation_opts
     node_parameters
     interop_peer)
 

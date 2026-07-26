@@ -165,8 +165,26 @@ internal interface RobotBusC : Library {
     }
     @Structure.FieldOrder("host","transport","grpcUrl","messageXsub","messageXpub","serviceFrontend","serviceBackend","actionBackend","actionFrontend")
     class NodeOptions : Structure() { @JvmField var host:String?=null; @JvmField var transport:String?=null; @JvmField var grpcUrl:String?=null; @JvmField var messageXsub:String?=null; @JvmField var messageXpub:String?=null; @JvmField var serviceFrontend:String?=null; @JvmField var serviceBackend:String?=null; @JvmField var actionBackend:String?=null; @JvmField var actionFrontend:String?=null }
-    @Structure.FieldOrder("messageXsubBind","messageXpubBind","serviceFrontendBind","serviceBackendBind","actionFrontendBind","actionBackendBind","grpcListen","consoleListen","tcpOnly","noConsole")
-    class BrokerOptions : Structure() { @JvmField var messageXsubBind:String?=null; @JvmField var messageXpubBind:String?=null; @JvmField var serviceFrontendBind:String?=null; @JvmField var serviceBackendBind:String?=null; @JvmField var actionFrontendBind:String?=null; @JvmField var actionBackendBind:String?=null; @JvmField var grpcListen:String?=null; @JvmField var consoleListen:String?=null; @JvmField var tcpOnly=0; @JvmField var noConsole=0 }
+    @Structure.FieldOrder("messageXsubBind","messageXpubBind","serviceFrontendBind","serviceBackendBind","actionFrontendBind","actionBackendBind","grpcListen","consoleListen","tcpOnly","noConsole","brokerId","messagePeers","messagePeerCount","servicePeers","servicePeerCount","actionPeers","actionPeerCount")
+    class BrokerOptions : Structure() {
+        @JvmField var messageXsubBind: String? = null
+        @JvmField var messageXpubBind: String? = null
+        @JvmField var serviceFrontendBind: String? = null
+        @JvmField var serviceBackendBind: String? = null
+        @JvmField var actionFrontendBind: String? = null
+        @JvmField var actionBackendBind: String? = null
+        @JvmField var grpcListen: String? = null
+        @JvmField var consoleListen: String? = null
+        @JvmField var tcpOnly = 0
+        @JvmField var noConsole = 0
+        @JvmField var brokerId: String? = null
+        @JvmField var messagePeers: Pointer? = null
+        @JvmField var messagePeerCount = 0L
+        @JvmField var servicePeers: Pointer? = null
+        @JvmField var servicePeerCount = 0L
+        @JvmField var actionPeers: Pointer? = null
+        @JvmField var actionPeerCount = 0L
+    }
     @Structure.FieldOrder("kind","body","bodyLen","goalId","actionName")
     class ActionMessageStruct : Structure { @JvmField var kind:Pointer?=null; @JvmField var body:Pointer?=null; @JvmField var bodyLen=0L; @JvmField var goalId:Pointer?=null; @JvmField var actionName:Pointer?=null; constructor():super(); constructor(p:Pointer):super(p){read()} }
     @Structure.FieldOrder("phase","body","bodyLen")

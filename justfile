@@ -90,6 +90,7 @@ test-cpp:
 	./bindings/cpp/build/action_fibonacci
 	./bindings/cpp/build/grpc_node
 	./bindings/cpp/build/inproc_context
+	./bindings/cpp/build/federation_opts
 	./bindings/cpp/build/node_parameters
 
 # Build console and sync static assets into assets/console for rust-embed

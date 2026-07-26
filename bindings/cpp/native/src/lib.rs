@@ -10,7 +10,7 @@ use std::time::Duration;
 
 use robot_bus::action_bus::ActionKind;
 use robot_bus::broker::{
-    RobotBusBroker as RustRobotBusBroker, RobotBusConfig,
+    apply_federation_opts, RobotBusBroker as RustRobotBusBroker, RobotBusConfig,
 };
 use robot_bus::errors::BusError;
 use robot_bus::message_bus::{Publisher as RustPublisher, Subscriber as RustSubscriber};
@@ -2095,6 +2095,17 @@ pub struct RobotBusBrokerOptions {
     pub console_listen: *const c_char,
     pub tcp_only: c_int,
     pub no_console: c_int,
+    /// Hop-path id for federation (nullable / empty → random UUID at start).
+    pub broker_id: *const c_char,
+    /// Peer XPUB endpoints (`MessagePeer::from_xpub`); length `message_peer_count`.
+    pub message_peers: *const *const c_char,
+    pub message_peer_count: usize,
+    /// Peer service backends (`ServicePeer::from_backend`); length `service_peer_count`.
+    pub service_peers: *const *const c_char,
+    pub service_peer_count: usize,
+    /// Peer action backends (`ActionPeer::from_backend`); length `action_peer_count`.
+    pub action_peers: *const *const c_char,
+    pub action_peer_count: usize,
 }
 
 #[unsafe(no_mangle)]
@@ -2102,6 +2113,24 @@ pub extern "C" fn robot_bus_broker_start(
     opts: *const RobotBusBrokerOptions,
 ) -> *mut RobotBusBroker {
     robot_bus_broker_start_with_context(ptr::null_mut(), opts)
+}
+
+fn cstr_array(ptrs: *const *const c_char, count: usize) -> Result<Vec<String>, ()> {
+    if count == 0 || ptrs.is_null() {
+        return Ok(Vec::new());
+    }
+    let mut out = Vec::with_capacity(count);
+    for i in 0..count {
+        let p = unsafe { *ptrs.add(i) };
+        match cstr_opt(p) {
+            Some(s) => out.push(s.to_string()),
+            None => {
+                set_error("null peer string");
+                return Err(());
+            }
+        }
+    }
+    Ok(out)
 }
 
 fn parse_broker_config(opts: *const RobotBusBrokerOptions) -> Result<RobotBusConfig, ()> {
@@ -2156,6 +2185,20 @@ fn parse_broker_config(opts: *const RobotBusBrokerOptions) -> Result<RobotBusCon
                 return Err(());
             }
         }
+    }
+
+    let message_peers = cstr_array(o.message_peers, o.message_peer_count)?;
+    let service_peers = cstr_array(o.service_peers, o.service_peer_count)?;
+    let action_peers = cstr_array(o.action_peers, o.action_peer_count)?;
+    if let Err(e) = apply_federation_opts(
+        &mut config,
+        cstr_opt(o.broker_id),
+        &message_peers,
+        &service_peers,
+        &action_peers,
+    ) {
+        set_error(e.to_string());
+        return Err(());
     }
     Ok(config)
 }

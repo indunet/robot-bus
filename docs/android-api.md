@@ -68,6 +68,23 @@ Broker().use { _ ->
 }
 ```
 
+跨 broker（federation）：
+
+```kotlin
+Broker(
+  BrokerOptions(
+    brokerId = "broker-a",
+    messagePeers = listOf("tcp://10.0.0.2:15561"),
+    servicePeers = listOf("broker-b=tcp://10.0.0.2:15663"),
+    actionPeers = listOf("broker-b=tcp://10.0.0.2:15665"),
+    tcpOnly = true,
+    noConsole = true,
+  ),
+).use { _ ->
+  // …
+}
+```
+
 ## 本地参数（Kotlin）
 
 ```kotlin

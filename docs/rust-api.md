@@ -48,6 +48,8 @@ broker.stop()?;
 
 `RobotBusBroker::start(config)` 仍可用（内部自建 Context）；跨进程 tcp/ipc 不要求共享。
 
+跨 broker（federation）：在 `RobotBusConfig` 的 message/service/action 上设置 `broker_id` 与 `peers`（`MessagePeer` / `ServicePeer` / `ActionPeer`），或 CLI `--broker-id` / `--message-peer` / `--service-peer` / `--action-peer`。各语言嵌入式 start API 使用同款字符串约定（见对应 `*-api.md`）。
+
 **进程内嵌入**（不必单独起二进制）：
 
 ```rust

@@ -56,6 +56,27 @@ robot_bus::Broker broker;  // default binds
 // broker.message_xsub_bind() / grpc_listen() …
 ```
 
+跨 broker（federation）通过 `RobotBusBrokerOptions`（与 CLI 同款字符串）：
+
+```cpp
+const char *message_peers[] = {"tcp://10.0.0.2:15561"};
+const char *service_peers[] = {"broker-b=tcp://10.0.0.2:15663"};
+const char *action_peers[] = {"broker-b=tcp://10.0.0.2:15665"};
+
+RobotBusBrokerOptions opts{};
+opts.broker_id = "broker-a";
+opts.message_peers = message_peers;
+opts.message_peer_count = 1;
+opts.service_peers = service_peers;
+opts.service_peer_count = 1;
+opts.action_peers = action_peers;
+opts.action_peer_count = 1;
+opts.tcp_only = 1;
+opts.no_console = 1;
+
+robot_bus::Broker broker(opts);
+```
+
 Same-process **inproc** must share a `Context` with the embedded broker:
 
 ```cpp

@@ -206,6 +206,10 @@ export interface BrokerStartOptions {
   corsOrigins?: string[];
   consoleListen?: string;
   noConsole?: boolean;
+  brokerId?: string;
+  messagePeers?: string[];
+  servicePeers?: string[];
+  actionPeers?: string[];
 }
 
 export declare class RobotBusBroker {

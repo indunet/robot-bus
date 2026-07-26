@@ -10,8 +10,8 @@ use pyo3::prelude::*;
 use pyo3::types::{PyBytes, PyType};
 
 use crate::broker::{
-    parse_robot_bus_config, robot_bus_broker_help, RobotBusBroker as RustRobotBusBroker,
-    RobotBusConfig,
+    apply_federation_opts, parse_robot_bus_config, robot_bus_broker_help,
+    RobotBusBroker as RustRobotBusBroker, RobotBusConfig,
 };
 use crate::errors::BusError;
 use crate::message_bus::{Publisher as RustPublisher, Subscriber as RustSubscriber};
@@ -993,6 +993,10 @@ impl PyRobotBusBroker {
         cors_origins = None,
         console_listen = None,
         no_console = false,
+        broker_id = None,
+        message_peers = None,
+        service_peers = None,
+        action_peers = None,
     ))]
     fn start(
         context: Option<&PyContext>,
@@ -1022,6 +1026,10 @@ impl PyRobotBusBroker {
         cors_origins: Option<Vec<String>>,
         console_listen: Option<String>,
         no_console: bool,
+        broker_id: Option<String>,
+        message_peers: Option<Vec<String>>,
+        service_peers: Option<Vec<String>>,
+        action_peers: Option<Vec<String>>,
     ) -> PyResult<Self> {
         let mut config = RobotBusConfig::default();
 
@@ -1135,6 +1143,15 @@ impl PyRobotBusBroker {
         {
             let _ = (console_listen, no_console);
         }
+
+        apply_federation_opts(
+            &mut config,
+            broker_id.as_deref(),
+            message_peers.as_deref().unwrap_or(&[]),
+            service_peers.as_deref().unwrap_or(&[]),
+            action_peers.as_deref().unwrap_or(&[]),
+        )
+        .map_err(anyhow_err)?;
 
         let broker = match context {
             Some(c) => RustRobotBusBroker::start_with_context(c.inner.clone(), config),

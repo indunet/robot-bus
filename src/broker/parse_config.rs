@@ -293,6 +293,48 @@ Console options (feature `console`, default on):\n  \
 Embed in code: robot_bus::RobotBusBroker::start(RobotBusConfig { ... }).\n"
 }
 
+/// Apply federation options shared by language bindings (CLI-compatible string forms).
+///
+/// - `broker_id`: hop-path id for message/service/action (empty → leave defaults)
+/// - `message_peers`: peer XPUB endpoints (`MessagePeer::from_xpub`)
+/// - `service_peers`: peer backends (`ServicePeer::from_backend`, optional `id=`)
+/// - `action_peers`: peer backends (`ActionPeer::from_backend`, optional `id=`)
+pub fn apply_federation_opts(
+    config: &mut RobotBusConfig,
+    broker_id: Option<&str>,
+    message_peers: &[String],
+    service_peers: &[String],
+    action_peers: &[String],
+) -> Result<()> {
+    if let Some(id) = broker_id {
+        if !id.is_empty() {
+            config.message.broker_id = id.to_string();
+            config.service.broker_id = id.to_string();
+            config.action.broker_id = id.to_string();
+        }
+    }
+
+    for value in message_peers {
+        config.message.peers.push(
+            MessagePeer::from_xpub(value)
+                .with_context(|| format!("invalid message peer {value}"))?,
+        );
+    }
+    for value in service_peers {
+        config.service.peers.push(
+            ServicePeer::from_backend(value)
+                .with_context(|| format!("invalid service peer {value}"))?,
+        );
+    }
+    for value in action_peers {
+        config.action.peers.push(
+            ActionPeer::from_backend(value)
+                .with_context(|| format!("invalid action peer {value}"))?,
+        );
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -427,5 +469,40 @@ mod tests {
         assert!(config.action.peers[0].broker_id.is_empty());
         assert_eq!(config.action.peers[1].backend, "tcp://10.0.0.2:15665");
         assert_eq!(config.action.peers[1].broker_id, "broker-c");
+    }
+
+    #[test]
+    fn apply_federation_opts_sets_id_and_peers() {
+        let mut config = RobotBusConfig::default();
+        apply_federation_opts(
+            &mut config,
+            Some("broker-a"),
+            &["tcp://10.0.0.2:15561".to_string()],
+            &["broker-b=tcp://10.0.0.2:15663".to_string()],
+            &["broker-b=tcp://10.0.0.2:15665".to_string()],
+        )
+        .unwrap();
+        assert_eq!(config.message.broker_id, "broker-a");
+        assert_eq!(config.service.broker_id, "broker-a");
+        assert_eq!(config.action.broker_id, "broker-a");
+        assert_eq!(config.message.peers.len(), 1);
+        assert_eq!(config.message.peers[0].xpub, "tcp://10.0.0.2:15561");
+        assert_eq!(config.message.peers[0].xsub, "tcp://10.0.0.2:15560");
+        assert_eq!(config.service.peers[0].broker_id, "broker-b");
+        assert_eq!(config.action.peers[0].broker_id, "broker-b");
+    }
+
+    #[test]
+    fn apply_federation_opts_rejects_bad_message_peer() {
+        let mut config = RobotBusConfig::default();
+        let err = apply_federation_opts(
+            &mut config,
+            None,
+            &["tcp://127.0.0.1:0".to_string()],
+            &[],
+            &[],
+        )
+        .unwrap_err();
+        assert!(err.to_string().contains("invalid message peer"));
     }
 }
