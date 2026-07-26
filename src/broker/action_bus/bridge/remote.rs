@@ -58,12 +58,19 @@ impl RemoteActions {
         }
     }
 
-    pub(super) fn heartbeat_peer(&mut self, peer_idx: usize, action: &str, now: Instant) {
+    /// Refresh heartbeats for `peer_idx`/`action`. Returns `true` if a route
+    /// already existed (and was refreshed); `false` if the peer has no route
+    /// for this action yet (caller may bootstrap from a direct HEARTBEAT).
+    pub(super) fn heartbeat_peer(&mut self, peer_idx: usize, action: &str, now: Instant) -> bool {
         if let Some(list) = self.by_action.get_mut(action) {
+            let mut found = false;
             for r in list.iter_mut().filter(|r| r.peer_idx == peer_idx) {
                 r.last_heartbeat = now;
+                found = true;
             }
+            return found;
         }
+        false
     }
 
     pub(super) fn remove_action_peer(&mut self, peer_idx: usize, action: &str) {

@@ -71,10 +71,14 @@ fn sync_peer_advertisement(
         .cloned()
         .collect();
     for act in stale {
-        let _ = link
+        // Retry DISCONNECT on EAGAIN (peer DEALER not connected yet).
+        if link
             .dealer
-            .send_multipart([CMD_DISCONNECT, act.as_bytes()], zmq::DONTWAIT);
-        link.advertised.remove(&act);
+            .send_multipart([CMD_DISCONNECT, act.as_bytes()], zmq::DONTWAIT)
+            .is_ok()
+        {
+            link.advertised.remove(&act);
+        }
     }
 
     for (act, (origin, hop)) in &desired {
@@ -83,17 +87,24 @@ fn sync_peer_advertisement(
             _ => true,
         };
         if need {
-            let _ = link.dealer.send_multipart(
-                [
-                    CMD_READY_FED,
-                    act.as_bytes(),
-                    origin.as_bytes(),
-                    hop.as_bytes(),
-                ],
-                zmq::DONTWAIT,
-            );
-            link.advertised
-                .insert(act.clone(), (origin.clone(), hop.clone()));
+            // Cache only after accept; ZMQ_IMMEDIATE drops otherwise and
+            // caching would permanently suppress READY_FED retries.
+            if link
+                .dealer
+                .send_multipart(
+                    [
+                        CMD_READY_FED,
+                        act.as_bytes(),
+                        origin.as_bytes(),
+                        hop.as_bytes(),
+                    ],
+                    zmq::DONTWAIT,
+                )
+                .is_ok()
+            {
+                link.advertised
+                    .insert(act.clone(), (origin.clone(), hop.clone()));
+            }
         }
     }
     Ok(())

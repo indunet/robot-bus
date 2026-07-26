@@ -382,7 +382,11 @@ fn handle_fed_backend_message(
                 return Ok(());
             };
             if cmd == CMD_HEARTBEAT {
-                remote.heartbeat_peer(peer_idx, &action, now);
+                // Bootstrap a direct route if READY_FED never arrived.
+                if !remote.heartbeat_peer(peer_idx, &action, now) {
+                    remote.upsert(action, peer_idx, via.clone(), via, now);
+                    sync_all_advertisements(peers, registry, remote, broker_id)?;
+                }
             } else if cmd == CMD_READY {
                 remote.upsert(action, peer_idx, via.clone(), via, now);
                 sync_all_advertisements(peers, registry, remote, broker_id)?;
