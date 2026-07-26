@@ -1,10 +1,13 @@
+mod bridge;
 mod broker;
+mod peer;
 mod ports;
 
 pub use broker::{
     build_client_reply, build_error_body, build_worker_cancel, build_worker_goal, run_loop,
     WorkerRegistry,
 };
+pub use peer::ActionPeer;
 pub use ports::{
     BACKEND_PORT, DEFAULT_BACKEND_BIND, DEFAULT_FRONTEND_BIND, DEFAULT_HEARTBEAT_INTERVAL_MS,
     DEFAULT_HEARTBEAT_TIMEOUT_MS, DEFAULT_PENDING_TIMEOUT_MS, DEFAULT_RCV_HWM, DEFAULT_SND_HWM,
@@ -32,6 +35,10 @@ pub struct ActionBusConfig {
     /// Tests that spawn many brokers on ephemeral TCP ports should set this
     /// false so they do not fight over the fixed `/tmp/robot_bus/*.ipc` paths.
     pub bind_all_transports: bool,
+    /// Stable id for hop-path loop prevention. Empty → random UUID at start.
+    pub broker_id: String,
+    /// Static peers for action federation (empty → plain dual-ROUTER loop).
+    pub peers: Vec<ActionPeer>,
 }
 
 impl Default for ActionBusConfig {
@@ -45,6 +52,8 @@ impl Default for ActionBusConfig {
             heartbeat_timeout_ms: DEFAULT_HEARTBEAT_TIMEOUT_MS,
             pending_timeout_ms: DEFAULT_PENDING_TIMEOUT_MS,
             bind_all_transports: true,
+            broker_id: String::new(),
+            peers: Vec::new(),
         }
     }
 }
@@ -94,7 +103,7 @@ pub fn run_with_shutdown_ctx(
          clients (DEALER) connect ->\n    {}\n  \
          workers (DEALER) connect ->\n    {}\n  \
          transports: {}\n  \
-         routing: by action_name frame, goal_id tracked, body opaque",
+         routing: by action_name frame, goal_id tracked, body opaque{}",
         format_endpoints(&frontend_endpoints),
         format_endpoints(&backend_endpoints),
         if config.bind_all_transports {
@@ -102,9 +111,19 @@ pub fn run_with_shutdown_ctx(
         } else {
             "tcp only"
         },
+        if config.peers.is_empty() {
+            String::new()
+        } else {
+            format!("\n  federation: {} peer(s)", config.peers.len())
+        },
     );
 
-    broker::run_loop(&frontend, &backend, &config, &shutdown).context("broker loop")?;
+    if config.peers.is_empty() {
+        broker::run_loop(&frontend, &backend, &config, &shutdown).context("broker loop")?;
+    } else {
+        bridge::run_federated(&context, frontend, backend, &config, &shutdown)
+            .context("federated action broker loop")?;
+    }
     Ok(())
 }
 

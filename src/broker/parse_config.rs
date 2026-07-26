@@ -4,6 +4,7 @@
 
 use anyhow::{bail, Context, Result};
 
+use super::action_bus::ActionPeer;
 use super::message_bus::MessagePeer;
 use super::service_bus::ServicePeer;
 use super::RobotBusConfig;
@@ -71,7 +72,8 @@ pub fn parse_robot_bus_config(args: &[String]) -> Result<Option<RobotBusConfig>>
                 i += 1;
                 let id = require_arg(args, i, arg)?.to_string();
                 config.message.broker_id = id.clone();
-                config.service.broker_id = id;
+                config.service.broker_id = id.clone();
+                config.action.broker_id = id;
             }
             "--message-peer" => {
                 i += 1;
@@ -152,6 +154,14 @@ pub fn parse_robot_bus_config(args: &[String]) -> Result<Option<RobotBusConfig>>
             "--action-pending-timeout-ms" => {
                 i += 1;
                 config.action.pending_timeout_ms = parse_u64(arg, require_arg(args, i, arg)?)?;
+            }
+            "--action-peer" => {
+                i += 1;
+                let value = require_arg(args, i, arg)?;
+                config.action.peers.push(
+                    ActionPeer::from_backend(value)
+                        .with_context(|| format!("invalid --action-peer {value}"))?,
+                );
             }
 
             // --- shared bus options ---
@@ -251,7 +261,7 @@ Message options:\n  \
 --message-xpub-bind ADDR       Subscriber bind (alias: --xpub-bind)\n  \
 --message-snd-hwm N            Message send HWM\n  \
 --message-rcv-hwm N            Message receive HWM\n  \
---broker-id ID                 Hop-path id for message/service federation (default: random UUID)\n  \
+--broker-id ID                 Hop-path id for message/service/action federation (default: random UUID)\n  \
 --message-peer tcp://HOST:XPUB Peer broker XPUB (repeatable; XSUB = XPUB port - 1)\n\n\
 Service options:\n  \
 --service-frontend-bind ADDR   Client (REQ) bind\n  \
@@ -266,7 +276,8 @@ Action options:\n  \
 --action-snd-hwm / --action-rcv-hwm N\n  \
 --action-heartbeat-interval-ms N\n  \
 --action-heartbeat-timeout-ms N\n  \
---action-pending-timeout-ms N  NO_WORKER timeout for queued goals\n\n\
+--action-pending-timeout-ms N  NO_WORKER timeout for queued goals\n  \
+--action-peer [ID=]tcp://HOST:BE  Peer action backend (repeatable; optional ID= for hop-path)\n\n\
 Shared bus options:\n  \
 --snd-hwm / --rcv-hwm N        Apply HWM to message + service + action\n  \
 --heartbeat-interval-ms N      Apply to service + action\n  \
@@ -370,6 +381,7 @@ mod tests {
         .expect("config");
         assert_eq!(config.message.broker_id, "broker-a");
         assert_eq!(config.service.broker_id, "broker-a");
+        assert_eq!(config.action.broker_id, "broker-a");
         assert_eq!(config.message.peers.len(), 2);
         assert_eq!(config.message.peers[0].xpub, "tcp://127.0.0.1:16561");
         assert_eq!(config.message.peers[0].xsub, "tcp://127.0.0.1:16560");
@@ -395,5 +407,25 @@ mod tests {
         assert!(config.service.peers[0].broker_id.is_empty());
         assert_eq!(config.service.peers[1].backend, "tcp://10.0.0.2:15663");
         assert_eq!(config.service.peers[1].broker_id, "broker-c");
+    }
+
+    #[test]
+    fn parses_action_peers() {
+        let config = parse_robot_bus_config(&args(&[
+            "--broker-id",
+            "broker-a",
+            "--action-peer",
+            "tcp://127.0.0.1:16665",
+            "--action-peer",
+            "broker-c=10.0.0.2:15665",
+        ]))
+        .unwrap()
+        .expect("config");
+        assert_eq!(config.action.broker_id, "broker-a");
+        assert_eq!(config.action.peers.len(), 2);
+        assert_eq!(config.action.peers[0].backend, "tcp://127.0.0.1:16665");
+        assert!(config.action.peers[0].broker_id.is_empty());
+        assert_eq!(config.action.peers[1].backend, "tcp://10.0.0.2:15665");
+        assert_eq!(config.action.peers[1].broker_id, "broker-c");
     }
 }

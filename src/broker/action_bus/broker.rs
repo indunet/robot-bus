@@ -156,6 +156,11 @@ impl WorkerRegistry {
         self.workers.get(action).map(Vec::len).unwrap_or(0)
     }
 
+    /// Snapshot of action names with at least one local worker.
+    pub fn action_names(&self) -> Vec<String> {
+        self.workers.keys().cloned().collect()
+    }
+
     /// Whether a worker identity is currently registered.
     pub fn is_alive(&self, identity: &[u8]) -> bool {
         self.by_identity.contains_key(identity)
@@ -177,6 +182,19 @@ pub(crate) struct GoalEntry {
     pub(crate) worker_identity: Vec<u8>,
     pub(crate) action: Vec<u8>,
     pub(crate) goal_id: Vec<u8>,
+    /// Where FEEDBACK/RESULT should be delivered (federation).
+    pub(crate) reply: GoalReply,
+    /// If the goal was forwarded to a remote peer, its PeerLink index.
+    pub(crate) via_peer: Option<usize>,
+}
+
+/// Where goal replies are delivered.
+#[derive(Clone, Debug)]
+pub(crate) enum GoalReply {
+    /// Local frontend client.
+    Frontend,
+    /// Federated peer identity on our backend ROUTER (inbound goal from that peer).
+    FedBackend { identity: Vec<u8> },
 }
 
 /// goal_id -> GoalEntry. Drives CANCEL routing and worker-death recovery.
@@ -198,6 +216,25 @@ impl GoalTable {
         worker_identity: Vec<u8>,
         action: Vec<u8>,
     ) {
+        self.insert_full(
+            goal_id,
+            client_identity,
+            worker_identity,
+            action,
+            GoalReply::Frontend,
+            None,
+        );
+    }
+
+    pub(crate) fn insert_full(
+        &mut self,
+        goal_id: Vec<u8>,
+        client_identity: Vec<u8>,
+        worker_identity: Vec<u8>,
+        action: Vec<u8>,
+        reply: GoalReply,
+        via_peer: Option<usize>,
+    ) {
         self.goals.insert(
             goal_id.clone(),
             GoalEntry {
@@ -205,6 +242,8 @@ impl GoalTable {
                 worker_identity,
                 action,
                 goal_id,
+                reply,
+                via_peer,
             },
         );
     }
@@ -220,14 +259,24 @@ impl GoalTable {
     /// Drop all goals owned by `worker_identity`, returning them so the broker
     /// can synthesize WORKER_DIED results back to each client.
     pub fn evict_worker(&mut self, worker_identity: &[u8]) -> Vec<GoalEntry> {
-        let goal_ids: Vec<Vec<u8>> = self
+        self.drain_if(|e| e.worker_identity == worker_identity)
+    }
+
+    /// Drop all goals forwarded via `peer_idx`.
+    pub(crate) fn evict_peer(&mut self, peer_idx: usize) -> Vec<GoalEntry> {
+        self.drain_if(|e| e.via_peer == Some(peer_idx))
+    }
+
+    /// Drop goals matching `pred`, returning them for reclaim.
+    pub(crate) fn drain_if(&mut self, mut pred: impl FnMut(&GoalEntry) -> bool) -> Vec<GoalEntry> {
+        let ids: Vec<Vec<u8>> = self
             .goals
             .iter()
-            .filter(|(_, e)| e.worker_identity == worker_identity)
+            .filter(|(_, e)| pred(e))
             .map(|(k, _)| k.clone())
             .collect();
-        let mut dropped = Vec::with_capacity(goal_ids.len());
-        for gid in goal_ids {
+        let mut dropped = Vec::with_capacity(ids.len());
+        for gid in ids {
             if let Some(e) = self.goals.remove(&gid) {
                 dropped.push(e);
             }
@@ -238,6 +287,23 @@ impl GoalTable {
     #[allow(dead_code)]
     pub fn len(&self) -> usize {
         self.goals.len()
+    }
+}
+
+pub(crate) const HOP_SEP: char = ',';
+
+pub(crate) fn hop_contains(hops: &str, broker_id: &str) -> bool {
+    if broker_id.is_empty() {
+        return false;
+    }
+    hops.split(HOP_SEP).any(|h| h == broker_id)
+}
+
+pub(crate) fn extend_hops(hops: &str, broker_id: &str) -> String {
+    if hops.is_empty() {
+        broker_id.to_string()
+    } else {
+        format!("{hops}{HOP_SEP}{broker_id}")
     }
 }
 
