@@ -371,14 +371,15 @@ Service / Action 同理（如 `create_client::<SetBool>`、`create_action_client
 
 ## gRPC 模式 Node（客户端）
 
-`Node::grpc` / `NodeOptions::grpc` 通过 broker 的 gRPC 网关接入总线，**不创建 ZMQ socket**。API 仍是 `create_subscription` / `create_client` / `create_action_client` + `spin`，对调用方透明。
+`Node::grpc` / `NodeOptions::grpc` 通过 broker 的 gRPC 网关接入总线，**不创建 ZMQ socket**。API 仍是 `create_subscription` / `create_publisher` / `create_client` / `create_action_client` + `spin`，对调用方透明。
 
 | 支持 | 不支持 |
 |------|--------|
-| `create_subscription` / `_raw` | `create_publisher` |
-| `create_client` / `_raw` | `create_service` / `_raw` |
-| `create_action_client` / `_raw` | `create_action_server` / `_raw` |
-| `create_timer`、`spin` / `shutdown` | 挂到 ZMQ `SingleThreadedExecutor` |
+| `create_subscription` / `_raw` | `create_service` / `_raw` |
+| `create_publisher` / `_raw` | `create_action_server` / `_raw` |
+| `create_client` / `_raw` | 挂到 ZMQ `SingleThreadedExecutor` |
+| `create_action_client` / `_raw` | |
+| `create_timer`、`spin` / `shutdown` | |
 
 ```rust
 use std::sync::Arc;
@@ -387,6 +388,9 @@ use robot_bus::Node;
 
 let mut node = Node::grpc("web-client");
 // 或 Node::grpc_at("web-client", "http://127.0.0.1:15770");
+
+let pub_ = node.create_publisher_raw("/robot1/cmd")?;
+pub_.publish(b"go")?;
 
 node.create_subscription_raw(
     "/robot1/imu",
@@ -402,11 +406,11 @@ let reply = client.call(b"ping", Some(Duration::from_secs(2)))?;
 let action = node.create_action_client_raw("act.navigate")?;
 let events = action.send_goal(b"goal", None, Some(Duration::from_secs(10)))?;
 
-// 订阅回调需要 spin；service/action 同步 call 不依赖 spin
+// 订阅回调需要 spin；publish / service/action 同步 call 不依赖 spin
 node.spin()?;
 ```
 
-底层仍是网关 RPC（`MessageGateway.Subscribe` / `ServiceGateway.Call` / `ActionGateway.Run`）。需要更底层控制时，可直接用下一节的 tonic 客户端。
+底层仍是网关 RPC（`MessageGateway.Subscribe` / `MessageGateway.Publish` / `ServiceGateway.Call` / `ActionGateway.Run`）。需要更底层控制时，可直接用下一节的 tonic 客户端。
 
 ---
 
@@ -417,6 +421,7 @@ node.spin()?;
 | RPC | 说明 |
 |-----|------|
 | `MessageGateway.Subscribe` | server stream：topic 前缀 → `TopicMessage` |
+| `MessageGateway.Publish` | 一元：`TopicMessage` → 写入 message bus XSUB |
 | `ServiceGateway.Call` | 一元：`service_name` + request bytes → response bytes |
 | `ActionGateway.Run` | 双向流：客户端 `GoalCommand` / `CancelCommand` ↔ 服务端 `ActionEvent` |
 
@@ -442,6 +447,26 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         let msg = msg?;
         println!("{}: {} bytes", msg.topic, msg.payload.len());
     }
+    Ok(())
+}
+```
+
+Publish 示例：
+
+```rust
+use robot_bus::grpc::pb::message_gateway_client::MessageGatewayClient;
+use robot_bus::grpc::pb::TopicMessage;
+use tonic::Request;
+
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let mut client = MessageGatewayClient::connect("http://127.0.0.1:15770").await?;
+    client
+        .publish(Request::new(TopicMessage {
+            topic: "imu".into(),
+            payload: b"hello".to_vec(),
+        }))
+        .await?;
     Ok(())
 }
 ```

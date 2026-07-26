@@ -121,9 +121,31 @@ fn grpc_node_action_client_streams_feedback_then_result() {
 }
 
 #[test]
-fn grpc_node_rejects_publisher_and_service_server() {
+fn grpc_node_publish_reaches_zmq_subscriber() {
+    let (_guard, broker) = start_bus();
+    let url = grpc_url(&broker);
+
+    let sub = robot_bus::Subscriber::new(Some(&broker.message.xpub_bind)).expect("subscriber");
+    sub.subscribe("grpc.node.pub").expect("subscribe");
+    thread::sleep(Duration::from_millis(200));
+
+    let mut node = Node::grpc_at("grpc-pub", &url);
+    let pub_ = node
+        .create_publisher_raw("grpc.node.pub")
+        .expect("create_publisher");
+    pub_.publish(b"hello-from-grpc-node").expect("publish");
+
+    let (topic, payload) = sub
+        .receive(Some(Duration::from_secs(3)))
+        .expect("receive");
+    assert_eq!(topic, "grpc.node.pub");
+    assert_eq!(payload, b"hello-from-grpc-node");
+    broker.stop().expect("stop");
+}
+
+#[test]
+fn grpc_node_rejects_service_and_action_server() {
     let mut node = Node::grpc("grpc-only");
-    assert!(node.create_publisher_raw("/t").is_err());
     assert!(node
         .create_service_raw("/svc", Arc::new(|_| Vec::new()), None)
         .is_err());

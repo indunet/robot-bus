@@ -10,7 +10,7 @@ use robot_bus::grpc::pb::message_gateway_client::MessageGatewayClient;
 use robot_bus::grpc::pb::service_gateway_client::ServiceGatewayClient;
 use robot_bus::grpc::pb::{
     action_client_message, ActionClientMessage, ActionKind, CancelCommand, GoalCommand,
-    ServiceCallRequest, SubscribeRequest,
+    ServiceCallRequest, SubscribeRequest, TopicMessage,
 };
 use robot_bus::worker_thread::WorkerThread;
 use robot_bus::{Publisher, RobotBusBroker};
@@ -55,6 +55,57 @@ async fn subscribe_receives_published_payload() {
 
     assert_eq!(msg.topic, "grpc.test");
     assert_eq!(msg.payload, b"hello-grpc");
+    broker.stop().expect("stop");
+}
+
+#[tokio::test]
+async fn publish_reaches_zmq_subscriber() {
+    let (_guard, broker) = start_bus();
+    let listen = broker.grpc_listen();
+
+    let sub = robot_bus::Subscriber::new(Some(&broker.message.xpub_bind)).expect("subscriber");
+    sub.subscribe("grpc.pub").expect("subscribe");
+    tokio::time::sleep(Duration::from_millis(200)).await;
+
+    let mut client = MessageGatewayClient::connect(format!("http://{listen}"))
+        .await
+        .expect("connect gateway");
+    client
+        .publish(Request::new(TopicMessage {
+            topic: "grpc.pub".into(),
+            payload: b"from-grpc".to_vec(),
+        }))
+        .await
+        .expect("publish");
+
+    let (topic, payload) = tokio::task::spawn_blocking(move || {
+        sub.receive(Some(Duration::from_secs(3)))
+            .expect("receive published message")
+    })
+    .await
+    .expect("join");
+
+    assert_eq!(topic, "grpc.pub");
+    assert_eq!(payload, b"from-grpc");
+    broker.stop().expect("stop");
+}
+
+#[tokio::test]
+async fn publish_empty_topic_is_invalid_argument() {
+    let (_guard, broker) = start_bus();
+    let listen = broker.grpc_listen();
+
+    let mut client = MessageGatewayClient::connect(format!("http://{listen}"))
+        .await
+        .expect("connect gateway");
+    let err = client
+        .publish(Request::new(TopicMessage {
+            topic: String::new(),
+            payload: b"x".to_vec(),
+        }))
+        .await
+        .expect_err("empty topic");
+    assert_eq!(err.code(), Code::InvalidArgument);
     broker.stop().expect("stop");
 }
 

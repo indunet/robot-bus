@@ -120,7 +120,7 @@ imu_pub.publish(Imu(linear_acceleration=Vector3(x=0.0, y=0.0, z=9.8)))
 
 （不传消息类型时仍为 raw bytes。多节点共享或需多线程 handler 时再用 `SingleThreadedExecutor` / `MultiThreadedExecutor` + `add_node`。）
 
-仅走 gRPC 网关时：`Node.grpc("name")` / `Node.grpc_at("name", "http://…")`（客户端：订阅 / 调 service / action）。详见 [`docs/python-api.md`](docs/python-api.md)。
+仅走 gRPC 网关时：`Node.grpc("name")` / `Node.grpc_at("name", "http://…")`（客户端：订阅 / publish / 调 service / action）。详见 [`docs/python-api.md`](docs/python-api.md)。
 
 ### TypeScript
 
@@ -135,7 +135,7 @@ just ts-dev
 # 等价：cd bindings/typescript && npm install && npm run build:native && npm run build:ts
 ```
 
-单一 npm 包：Node.js 走 napi-rs（完整 ZMQ API）；浏览器走 gRPC-Web（仅客户端）。bundler 通过 `exports` 自动选入口。详见 [`docs/typescript-api.md`](docs/typescript-api.md)。
+单一 npm 包：Node.js 走 napi-rs（完整 ZMQ API）；浏览器走 gRPC-Web（订阅 / publish / service / action）。bundler 通过 `exports` 自动选入口。详见 [`docs/typescript-api.md`](docs/typescript-api.md)。
 
 ```ts
 import { Node } from "robot-bus";
@@ -194,7 +194,7 @@ robot-bus = { path = "../robot-bus" }
 
 语义接近 ROS 2：`Node::new` → typed `create_publisher` / `create_subscription` → `node.spin()`（自动挂 `SingleThreadedExecutor`）。
 
-仅走 gRPC 网关（不启 ZMQ）时用 `Node::grpc` / `Node::grpc_at`：可订阅、调 service / action，不能 publish 或当 server；详见 [`docs/rust-api.md`](docs/rust-api.md#grpc-模式-node客户端)。
+仅走 gRPC 网关（不启 ZMQ）时用 `Node::grpc` / `Node::grpc_at`：可订阅、publish、调 service / action，不能当 server；详见 [`docs/rust-api.md`](docs/rust-api.md#grpc-模式-node客户端)。
 
 ```rust
 use std::sync::Arc;
@@ -290,11 +290,12 @@ just console
 
 随 `robot_bus_broker` / `RobotBusBroker::start` 一起启动；标准 gRPC 与 gRPC-Web **同端口**（默认 `0.0.0.0:15770`）。
 
-也可用 `Node::grpc` / `Node::grpc_at` 以 Node API 接入网关（客户端：订阅 / 调 service / 调 action，见 [`docs/rust-api.md`](docs/rust-api.md#grpc-模式-node客户端)）。
+也可用 `Node::grpc` / `Node::grpc_at` 以 Node API 接入网关（客户端：订阅 / publish / 调 service / 调 action，见 [`docs/rust-api.md`](docs/rust-api.md#grpc-模式-node客户端)）。
 
 | RPC | 语义 |
 |-----|------|
 | `MessageGateway.Subscribe` | 按 topic 前缀订阅，服务端流式返回二进制 payload |
+| `MessageGateway.Publish` | 一元发布：topic + 二进制 payload 写入 message bus |
 | `ServiceGateway.Call` | 一元：`service_name` + request bytes → response bytes |
 | `ActionGateway.Run` | 双向流：客户端发 GOAL / CANCEL，服务端推 `ActionEvent`（`kind` 区分 FEEDBACK / RESULT） |
 

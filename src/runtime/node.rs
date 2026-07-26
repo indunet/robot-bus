@@ -252,17 +252,25 @@ impl NodeOptions {
 
 fn grpc_mode_unsupported(op: &str) -> BusError {
     BusError::Protocol(format!(
-        "{op} is not supported in gRPC node mode (client-only: subscribe / call service / call action)"
+        "{op} is not supported in gRPC node mode (client: subscribe / publish / call service / call action; no servers)"
     ))
 }
 
 /// Raw (opaque bytes) publisher from [`Node::create_publisher_raw`].
 ///
-/// Shares one underlying bus PUB socket per node; each handle remembers its topic.
+/// ZMQ mode shares one underlying bus PUB socket per node; gRPC mode issues
+/// unary `MessageGateway.Publish` RPCs. Each handle remembers its topic.
 #[derive(Clone)]
 pub struct TopicPublisherRaw {
-    inner: Arc<BusPublisher>,
+    backend: TopicPublisherBackend,
     topic: String,
+}
+
+#[derive(Clone)]
+enum TopicPublisherBackend {
+    Zmq(Arc<BusPublisher>),
+    #[cfg(feature = "grpc")]
+    Grpc(GrpcClientContext),
 }
 
 impl TopicPublisherRaw {
@@ -271,15 +279,29 @@ impl TopicPublisherRaw {
     }
 
     pub fn publish(&self, payload: &[u8]) -> Result<()> {
-        self.inner.publish(&self.topic, payload)
+        match &self.backend {
+            TopicPublisherBackend::Zmq(inner) => inner.publish(&self.topic, payload),
+            #[cfg(feature = "grpc")]
+            TopicPublisherBackend::Grpc(ctx) => ctx.publish(&self.topic, payload),
+        }
     }
 
     pub fn high_water_mark(&self) -> Result<HighWaterMark> {
-        self.inner.high_water_mark()
+        match &self.backend {
+            TopicPublisherBackend::Zmq(inner) => inner.high_water_mark(),
+            #[cfg(feature = "grpc")]
+            TopicPublisherBackend::Grpc(_) => Ok(HighWaterMark::STREAM),
+        }
     }
 
     pub fn set_high_water_mark(&self, hwm: HighWaterMark) -> Result<()> {
-        self.inner.set_high_water_mark(hwm)
+        match &self.backend {
+            TopicPublisherBackend::Zmq(inner) => inner.set_high_water_mark(hwm),
+            #[cfg(feature = "grpc")]
+            TopicPublisherBackend::Grpc(_) => Err(BusError::Protocol(
+                "set_high_water_mark is not available for gRPC publishers".into(),
+            )),
+        }
     }
 }
 
@@ -838,12 +860,20 @@ impl Node {
         topic: impl Into<String>,
         hwm: Option<HighWaterMark>,
     ) -> Result<TopicPublisherRaw> {
+        #[cfg(feature = "grpc")]
         if self.options.is_grpc() {
-            return Err(grpc_mode_unsupported("create_publisher"));
+            let _ = hwm; // gRPC publish has no local ZMQ HWM
+            let grpc = self.ensure_grpc()?;
+            return Ok(TopicPublisherRaw {
+                backend: TopicPublisherBackend::Grpc(grpc.client_context()),
+                topic: topic.into(),
+            });
         }
         self.ensure_bus_publisher(hwm)?;
         Ok(TopicPublisherRaw {
-            inner: Arc::clone(self.publisher.as_ref().expect("publisher just ensured")),
+            backend: TopicPublisherBackend::Zmq(Arc::clone(
+                self.publisher.as_ref().expect("publisher just ensured"),
+            )),
             topic: topic.into(),
         })
     }

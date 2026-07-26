@@ -89,7 +89,7 @@ node.load_parameters_from_yaml_file("config/pilot.yaml")
 
 接近 ROS 2：`Node(...)` → `create_publisher` / `create_subscription` → `node.spin()`。单节点时无需手写 Executor（内部自动挂 `SingleThreadedExecutor`）。
 
-仅走 gRPC 网关时用 `Node.grpc` / `Node.grpc_at`（或 `transport="grpc"`）：可订阅、调 service / action，不能 publish 或当 server；见下文「gRPC 模式 Node」。
+仅走 gRPC 网关时用 `Node.grpc` / `Node.grpc_at`（或 `transport="grpc"`）：可订阅、publish、调 service / action，不能当 server；见下文「gRPC 模式 Node」。
 
 Python 主推 **typed**（创建时传入 protobuf 类，自动 `SerializeToString` / `ParseFromString`）；不传类型则仍为 raw bytes。底层与 Rust 一样走 opaque bytes（纯 Python 薄封装，因 PyO3 无法映射 Rust 泛型）。
 
@@ -137,16 +137,20 @@ node.create_subscription("/robot1/imu", on_raw)
 
 | 支持 | 不支持 |
 |------|--------|
-| `create_subscription` | `create_publisher` |
-| `create_client` | `create_service` |
-| `create_action_client` | `create_action_server` |
-| `create_timer`、`spin` / `shutdown` | 挂到 ZMQ Executor |
+| `create_subscription` | `create_service` |
+| `create_publisher` | `create_action_server` |
+| `create_client` | 挂到 ZMQ Executor |
+| `create_action_client` | |
+| `create_timer`、`spin` / `shutdown` | |
 
 ```python
 import robot_bus
 
 node = robot_bus.Node.grpc("web-client")
 # 或 robot_bus.Node.grpc_at("web-client", "http://127.0.0.1:15770")
+
+pub = node.create_publisher("/robot1/cmd")
+pub.publish(b"go")
 
 def on_imu(topic, payload: bytes):
     print(topic, len(payload))
@@ -159,7 +163,7 @@ reply = client.call(b"ping", timeout=2.0)
 action = node.create_action_client("act.navigate")
 events = action.send_goal(b"goal", timeout=10.0)
 
-# 订阅回调需要 spin；service/action 同步 call 不依赖 spin
+# 订阅回调需要 spin；publish / service/action 同步 call 不依赖 spin
 # node.spin()
 ```
 

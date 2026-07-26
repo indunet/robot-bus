@@ -1,4 +1,4 @@
-//! gRPC-mode runtime for [`super::Node`]: client-side subscribe / service / action.
+//! gRPC-mode runtime for [`super::Node`]: client-side subscribe / publish / service / action.
 //!
 //! Does not use the ZMQ [`super::Executor`] poll loop. Messages arrive via the
 //! broker gRPC gateway and are dispatched on the `spin` thread.
@@ -20,7 +20,7 @@ use crate::grpc::pb::message_gateway_client::MessageGatewayClient;
 use crate::grpc::pb::service_gateway_client::ServiceGatewayClient;
 use crate::grpc::pb::{
     action_client_message, ActionClientMessage, ActionKind as PbActionKind, CancelCommand,
-    GoalCommand, ServiceCallRequest, SubscribeRequest,
+    GoalCommand, ServiceCallRequest, SubscribeRequest, TopicMessage,
 };
 use crate::runtime::callback_group::{CallbackGroup, SubscriptionCallback};
 use crate::runtime::executor::ShutdownHandle;
@@ -50,6 +50,21 @@ pub(crate) struct GrpcClientContext {
 }
 
 impl GrpcClientContext {
+    pub(crate) fn publish(&self, topic: &str, payload: &[u8]) -> Result<()> {
+        let channel = self.channel.clone();
+        let topic = topic.to_string();
+        let payload = payload.to_vec();
+
+        self.runtime.block_on(async move {
+            let mut client = MessageGatewayClient::new(channel);
+            client
+                .publish(Request::new(TopicMessage { topic, payload }))
+                .await
+                .map_err(map_tonic_status)?;
+            Ok(())
+        })
+    }
+
     pub(crate) fn call_service(
         &self,
         service_name: &str,

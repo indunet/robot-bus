@@ -11,7 +11,7 @@ npm install robot-bus
 | 环境 | 入口 | 能力 |
 |------|------|------|
 | Node.js | napi-rs 原生扩展 | 完整 ZMQ Node（publish、service/action server、本地 broker） |
-| 浏览器 | gRPC-Web 客户端 | 仅订阅 / 调 service / action |
+| 浏览器 | gRPC-Web 客户端 | 订阅 / publish / 调 service / action（无 server） |
 
 `console/` Web UI **不是**本 SDK。
 
@@ -113,10 +113,11 @@ const node = Node.grpc("web-client");
 
 | 支持 | 不支持（gRPC 模式） |
 |------|---------------------|
-| `createSubscription` | `createPublisher` |
-| `createClient` | `createService` |
-| `createActionClient` | `createActionServer` |
-| `createTimer`、`spin` / `shutdown` | — |
+| `createSubscription` | `createService` |
+| `createPublisher` | `createActionServer` |
+| `createClient` | — |
+| `createActionClient` | |
+| `createTimer`、`spin` / `shutdown` | |
 
 ## 浏览器（gRPC-Web）
 
@@ -125,13 +126,15 @@ import { Node } from "robot-bus";
 // bundler 自动解析到 browser 入口
 
 const node = Node.grpc("browser-client");
+const pub = node.createPublisher("/robot1/cmd");
+await pub.publish(new TextEncoder().encode("go"));
 node.createSubscription("/robot1/imu", (topic, payload) => {
   console.log(topic, payload);
 });
 node.start(); // 或 node.spin()
 ```
 
-浏览器下 `createPublisher` / `createService` / `createActionServer` 会抛错。
+浏览器下 `createService` / `createActionServer` 会抛错。
 
 也可显式使用：
 

@@ -120,7 +120,7 @@ imu_pub.publish(Imu(linear_acceleration=Vector3(x=0.0, y=0.0, z=9.8)))
 
 (Omit the message type for raw bytes. Use `SingleThreadedExecutor` / `MultiThreadedExecutor` + `add_node` when sharing nodes or needing multi-threaded handlers.)
 
-gRPC-only gateway clients: `Node.grpc("name")` / `Node.grpc_at("name", "http://…")` (subscribe / call service / action). See [`docs/python-api.md`](docs/python-api.md).
+gRPC-only gateway clients: `Node.grpc("name")` / `Node.grpc_at("name", "http://…")` (subscribe / publish / call service / action). See [`docs/python-api.md`](docs/python-api.md).
 
 ### TypeScript
 
@@ -135,7 +135,7 @@ just ts-dev
 # equivalent: cd bindings/typescript && npm install && npm run build:native && npm run build:ts
 ```
 
-One npm package: Node.js uses napi-rs (full ZMQ API); browsers use gRPC-Web (client only). Bundlers pick the entry via `exports`. See [`docs/typescript-api.md`](docs/typescript-api.md).
+One npm package: Node.js uses napi-rs (full ZMQ API); browsers use gRPC-Web (subscribe / publish / service / action client). Bundlers pick the entry via `exports`. See [`docs/typescript-api.md`](docs/typescript-api.md).
 
 ```ts
 import { Node } from "robot-bus";
@@ -194,7 +194,7 @@ robot-bus = { path = "../robot-bus" }
 
 Semantics mirror ROS 2: `Node::new` → typed `create_publisher` / `create_subscription` → `node.spin()` (auto-attaches a `SingleThreadedExecutor`).
 
-gRPC-only (no ZMQ): `Node::grpc` / `Node::grpc_at` — subscribe and call service / action, but cannot publish or act as a server; see [`docs/rust-api.md`](docs/rust-api.md#grpc-模式-node客户端).
+gRPC-only (no ZMQ): `Node::grpc` / `Node::grpc_at` — subscribe, publish, and call service / action, but cannot act as a server; see [`docs/rust-api.md`](docs/rust-api.md#grpc-模式-node客户端).
 
 ```rust
 use std::sync::Arc;
@@ -290,11 +290,12 @@ Wired to the broker's same-port monitoring API: `GET /api/v1/status`, `GET /api/
 
 Started with `robot_bus_broker` / `RobotBusBroker::start`. Standard gRPC and gRPC-Web share the **same port** (default `0.0.0.0:15770`).
 
-You can also attach via the Node API with `Node::grpc` / `Node::grpc_at` (client: subscribe / call service / call action; see [`docs/rust-api.md`](docs/rust-api.md#grpc-模式-node客户端)).
+You can also attach via the Node API with `Node::grpc` / `Node::grpc_at` (client: subscribe / publish / call service / call action; see [`docs/rust-api.md`](docs/rust-api.md#grpc-模式-node客户端)).
 
 | RPC | Semantics |
 |-----|------|
 | `MessageGateway.Subscribe` | Subscribe by topic prefix; server streams binary payloads |
+| `MessageGateway.Publish` | Unary publish: topic + binary payload onto the message bus |
 | `ServiceGateway.Call` | Unary: `service_name` + request bytes → response bytes |
 | `ActionGateway.Run` | Bidirectional stream: client sends GOAL / CANCEL; server pushes `ActionEvent` (`kind` distinguishes FEEDBACK / RESULT) |
 

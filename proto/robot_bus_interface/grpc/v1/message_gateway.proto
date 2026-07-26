@@ -8,6 +8,8 @@ package robot_bus_interface.grpc.v1;
 service MessageGateway {
   // Subscribe by ZMQ topic prefix; stream matching messages as opaque bytes.
   rpc Subscribe(SubscribeRequest) returns (stream TopicMessage);
+  // Publish one message onto the message bus (fire-and-forget; ack = accepted by XSUB).
+  rpc Publish(TopicMessage) returns (PublishResponse);
 }
 
 message SubscribeRequest {
@@ -19,3 +21,5 @@ message TopicMessage {
   string topic = 1;
   bytes payload = 2;
 }
+
+message PublishResponse {}

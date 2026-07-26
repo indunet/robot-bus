@@ -45,17 +45,10 @@ def test_grpc_constructors() -> None:
     assert node3.name == "web3"
 
 
-def test_grpc_node_rejects_publisher_and_servers() -> None:
+def test_grpc_node_rejects_servers() -> None:
     import robot_bus
 
     node = robot_bus.Node.grpc("only-client")
-    try:
-        node.create_publisher("/t")
-    except RuntimeError as err:
-        assert "not supported" in str(err)
-    else:
-        raise AssertionError("expected create_publisher to fail")
-
     try:
         node.create_service("/svc", lambda _body: b"")
     except RuntimeError as err:
@@ -63,6 +56,23 @@ def test_grpc_node_rejects_publisher_and_servers() -> None:
     else:
         raise AssertionError("expected create_service to fail")
 
+
+def test_grpc_node_publish() -> None:
+    import robot_bus
+
+    with robot_bus.RobotBusBroker.start(**_ephemeral_binds()) as broker:
+        grpc_url = f"http://{broker.grpc_listen}"
+        sub = robot_bus.Subscriber(broker.message_xpub_bind)
+        sub.subscribe("py.grpc.pub")
+        time.sleep(0.2)
+
+        node = robot_bus.Node.grpc_at("grpc_pub", grpc_url)
+        pub = node.create_publisher("py.grpc.pub")
+        pub.publish(b"from-py-grpc")
+
+        topic, payload = sub.receive(timeout=3.0)
+        assert topic == "py.grpc.pub"
+        assert bytes(payload) == b"from-py-grpc"
 
 def test_grpc_node_subscribe_and_service() -> None:
     import robot_bus
@@ -159,7 +169,8 @@ def main() -> int:
         return 0
 
     test_grpc_constructors()
-    test_grpc_node_rejects_publisher_and_servers()
+    test_grpc_node_rejects_servers()
+    test_grpc_node_publish()
     test_grpc_node_subscribe_and_service()
     test_grpc_node_action_client()
     print("ok")

@@ -1,7 +1,7 @@
 //! gRPC / gRPC-Web gateway over the ZeroMQ buses.
 //!
-//! Enabled with `--features grpc`. Covers message Subscribe, service Call,
-//! and action bidirectional Run (GOAL / CANCEL ↔ FEEDBACK / RESULT).
+//! Enabled with `--features grpc`. Covers message Subscribe / Publish, service
+//! Call, and action bidirectional Run (GOAL / CANCEL ↔ FEEDBACK / RESULT).
 
 pub mod action;
 pub mod message;

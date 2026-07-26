@@ -431,6 +431,7 @@ impl RobotBusBroker {
             let gateway = GatewayConfig {
                 listen: config.grpc.listen,
                 message_xpub: bind_to_connect(&message.xpub_bind),
+                message_xsub: bind_to_connect(&message.xsub_bind),
                 service_frontend: bind_to_connect(&service.frontend_bind),
                 action_frontend: bind_to_connect(&action.frontend_bind),
                 cors_origins: config.grpc.cors_origins,

@@ -21,6 +21,7 @@ use super::service::ServiceGatewayService;
 pub struct GatewayConfig {
     pub listen: SocketAddr,
     pub message_xpub: String,
+    pub message_xsub: String,
     pub service_frontend: String,
     pub action_frontend: String,
     /// When empty, allow any origin (local-dev default).
@@ -33,6 +34,8 @@ impl Default for GatewayConfig {
             listen: "0.0.0.0:15770".parse().expect("default listen"),
             message_xpub: crate::transports::message_xpub_endpoint("127.0.0.1", "tcp")
                 .unwrap_or_else(|_| "tcp://127.0.0.1:15561".to_string()),
+            message_xsub: crate::transports::message_xsub_endpoint("127.0.0.1", "tcp")
+                .unwrap_or_else(|_| "tcp://127.0.0.1:15560".to_string()),
             service_frontend: crate::transports::service_frontend_endpoint("127.0.0.1", "tcp")
                 .unwrap_or_else(|_| "tcp://127.0.0.1:15662".to_string()),
             action_frontend: crate::transports::action_frontend_endpoint("127.0.0.1", "tcp")
@@ -51,16 +54,20 @@ pub async fn serve_with_shutdown(
     config: GatewayConfig,
     shutdown: impl Future<Output = ()> + Send + 'static,
 ) -> Result<()> {
-    let message = MessageGatewayService::new(config.message_xpub.clone());
+    let message = MessageGatewayService::new(
+        config.message_xpub.clone(),
+        config.message_xsub.clone(),
+    );
     let service = ServiceGatewayService::new(config.service_frontend.clone());
     let action = ActionGatewayService::new(config.action_frontend.clone());
     let cors = build_cors(&config.cors_origins)?;
 
     log::info!(
         "robot_bus gRPC gateway listening on http://{} (gRPC + gRPC-Web); \
-         message XPUB {}; service frontend {}; action frontend {}",
+         message XPUB {}; message XSUB {}; service frontend {}; action frontend {}",
         config.listen,
         config.message_xpub,
+        config.message_xsub,
         config.service_frontend,
         config.action_frontend
     );
