@@ -41,12 +41,8 @@ class GrpcNodeTest {
     }
 
     @Test
-    void grpcNodeRejectsPublisherAndServers() {
+    void grpcNodeRejectsServers() {
         try (Node node = Node.grpc("only-client")) {
-            RobotBusException pub =
-                    assertThrows(RobotBusException.class, () -> node.createPublisher("/t"));
-            assertTrue(pub.getMessage().toLowerCase().contains("not supported"));
-
             RobotBusException svc =
                     assertThrows(
                             RobotBusException.class,
@@ -58,6 +54,23 @@ class GrpcNodeTest {
                             RobotBusException.class,
                             () -> node.createActionServer("/act", body -> List.of()));
             assertTrue(act.getMessage().toLowerCase().contains("not supported"));
+        }
+    }
+
+    @Test
+    void grpcNodePublish() throws Exception {
+        try (TestBus bus = TestBus.start();
+                Subscriber sub = new Subscriber(bus.messageXpub);
+                Node client = Node.grpcAt("grpc_pub", bus.grpcUrl())) {
+            sub.subscribe("java.grpc.pub");
+            Thread.sleep(200);
+
+            TopicPublisher pub = client.createPublisher("java.grpc.pub");
+            pub.publish("from-java-grpc".getBytes(StandardCharsets.UTF_8));
+
+            TopicMessage msg = sub.receive(3.0);
+            assertEquals("java.grpc.pub", msg.getTopic());
+            assertEquals("from-java-grpc", new String(msg.getPayload(), StandardCharsets.UTF_8));
         }
     }
 

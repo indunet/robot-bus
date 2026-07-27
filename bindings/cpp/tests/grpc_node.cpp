@@ -55,10 +55,9 @@ int main() {
     ROBOT_BUS_CHECK(node.name() == "web2");
   }
 
-  // --- capability guards ---
+  // --- capability guards (servers only; publish is supported) ---
   {
     auto node = robot_bus::Node::grpc("only-client");
-    expect_not_supported("create_publisher", [&] { (void)node.create_publisher("/t"); });
     expect_not_supported("create_service", [&] {
       node.create_service("/svc", [](robot_bus::BytesView) { return std::vector<uint8_t>{}; });
     });
@@ -67,6 +66,38 @@ int main() {
         return std::vector<std::pair<std::string, std::vector<uint8_t>>>{};
       });
     });
+  }
+
+  // --- publish via gRPC reaches ZMQ subscriber ---
+  {
+    auto bus = TestBus::start();
+    const std::string grpc_url = "http://" + bus.grpc_listen;
+
+    auto sub_node = bus.make_node("cpp_grpc_zmq_sub");
+    std::atomic<bool> got{false};
+    std::string got_topic;
+    std::vector<uint8_t> got_payload;
+    sub_node.create_subscription("cpp.grpc.pub", [&](std::string_view topic, robot_bus::BytesView payload) {
+      got_topic = std::string(topic);
+      got_payload.assign(payload.data, payload.data + payload.size);
+      got = true;
+    });
+    sub_node.start();
+    sleep_ms(200);
+
+    auto client = robot_bus::Node::grpc_at("grpc_pub", grpc_url.c_str());
+    auto pub = client.create_publisher("cpp.grpc.pub");
+    const std::string hello = "hello-from-cpp-grpc";
+    pub.publish(hello);
+
+    ROBOT_BUS_CHECK(wait_until([&] { return got.load(); }));
+    ROBOT_BUS_CHECK(got_topic == "cpp.grpc.pub");
+    ROBOT_BUS_CHECK(std::string(got_payload.begin(), got_payload.end()) == hello);
+
+    sub_node.shutdown();
+    sub_node.stop();
+    sub_node.wait();
+    bus.stop();
   }
 
   // --- subscribe + service via gRPC ---
