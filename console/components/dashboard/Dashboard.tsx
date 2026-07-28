@@ -17,13 +17,23 @@ import {
 import StatusBar from './StatusBar'
 import Sidebar from './Sidebar'
 import BrokerOverview from './BrokerOverview'
+import OverviewStats from './OverviewStats'
 import TopicTable from './TopicTable'
 import ServiceActionTable from './ServiceActionTable'
 import EventStream from './EventStream'
-import ThroughputChart, { generateThroughputHistory } from './ThroughputChart'
+import ThroughputChart, {
+  ServiceRateChart,
+  ActionRateChart,
+  generateRateHistory,
+  type RatePoint,
+} from './ThroughputChart'
 import { useI18n } from '@/lib/i18n'
 
 type Tab = 'overview' | 'topics' | 'services' | 'actions' | 'logs'
+
+function appendRatePoint(prev: RatePoint[], label: string, value: number): RatePoint[] {
+  return [...prev.slice(1), { t: label, value }]
+}
 
 export default function Dashboard() {
   const { dateLocale } = useI18n()
@@ -32,7 +42,9 @@ export default function Dashboard() {
   const [services, setServices] = useState<ServiceInfo[]>([])
   const [actions, setActions] = useState<ActionInfo[]>([])
   const [logs, setLogs] = useState<LogEntry[]>([])
-  const [throughput, setThroughput] = useState(() => generateThroughputHistory(0))
+  const [throughput, setThroughput] = useState(() => generateRateHistory(0))
+  const [svcRate, setSvcRate] = useState(() => generateRateHistory(0))
+  const [actRate, setActRate] = useState(() => generateRateHistory(0))
   const [activeTab, setActiveTab] = useState<Tab>('overview')
   const seenLogIds = useRef(new Set<string>())
 
@@ -48,15 +60,15 @@ export default function Dashboard() {
       setTopics((prev) => mergeTopics(prev, topicList))
       setServices(serviceList)
       setActions(actionList)
-      setThroughput((prev) => {
-        const now = new Date()
-        const label = now.toLocaleTimeString(dateLocale, {
-          minute: '2-digit',
-          second: '2-digit',
-          hour12: false,
-        })
-        return [...prev.slice(1), { t: label, msgs: status.msgPerSec, bytes: status.bytesPerSec }]
+      const now = new Date()
+      const label = now.toLocaleTimeString(dateLocale, {
+        minute: '2-digit',
+        second: '2-digit',
+        hour12: false,
       })
+      setThroughput((prev) => appendRatePoint(prev, label, status.msgPerSec))
+      setSvcRate((prev) => appendRatePoint(prev, label, status.svcCallsPerSec ?? 0))
+      setActRate((prev) => appendRatePoint(prev, label, status.actRunsPerSec ?? 0))
     } catch {
       setBroker((prev) => ({ ...prev, status: 'OFFLINE' }))
     }
@@ -102,6 +114,8 @@ export default function Dashboard() {
               actions={actions}
               logs={logs}
               throughput={throughput}
+              svcRate={svcRate}
+              actRate={actRate}
             />
           )}
           {activeTab === 'topics' && <TopicTable topics={topics} />}
@@ -129,25 +143,62 @@ function OverviewLayout({
   actions,
   logs,
   throughput,
+  svcRate,
+  actRate,
 }: {
   broker: BrokerInfo
   topics: TopicInfo[]
   services: ServiceInfo[]
   actions: ActionInfo[]
   logs: LogEntry[]
-  throughput: ReturnType<typeof generateThroughputHistory>
+  throughput: RatePoint[]
+  svcRate: RatePoint[]
+  actRate: RatePoint[]
 }) {
+  const listMax = '14rem'
+
   return (
     <div className="flex flex-col gap-3">
-      <div className="grid grid-cols-1 lg:grid-cols-[1fr_1.2fr] gap-3">
+      {/* Row 1: Broker endpoints | snapshot metrics */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 items-stretch">
         <BrokerOverview broker={broker} />
+        <OverviewStats
+          broker={broker}
+          topics={topics}
+          services={services}
+          actions={actions}
+        />
+      </div>
+
+      {/* Row 2: Topics | topic throughput */}
+      <div className="grid grid-cols-1 lg:grid-cols-[1.15fr_0.85fr] gap-3 items-stretch" style={{ minHeight: '16rem' }}>
+        <TopicTable topics={topics} maxBodyHeight={listMax} />
         <ThroughputChart data={throughput} />
       </div>
 
-      <TopicTable topics={topics} />
+      {/* Row 3: Services | service call rate */}
+      <div className="grid grid-cols-1 lg:grid-cols-[1.15fr_0.85fr] gap-3 items-stretch" style={{ minHeight: '16rem' }}>
+        <ServiceActionTable
+          services={services}
+          actions={actions}
+          mode="services"
+          maxBodyHeight={listMax}
+        />
+        <ServiceRateChart data={svcRate} />
+      </div>
 
-      <ServiceActionTable services={services} actions={actions} />
+      {/* Row 4: Actions | action run rate */}
+      <div className="grid grid-cols-1 lg:grid-cols-[1.15fr_0.85fr] gap-3 items-stretch" style={{ minHeight: '16rem' }}>
+        <ServiceActionTable
+          services={services}
+          actions={actions}
+          mode="actions"
+          maxBodyHeight={listMax}
+        />
+        <ActionRateChart data={actRate} />
+      </div>
 
+      {/* Row 5: Events */}
       <div style={{ height: '260px' }}>
         <EventStream logs={logs} />
       </div>

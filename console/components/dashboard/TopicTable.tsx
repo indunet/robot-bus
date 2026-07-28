@@ -8,11 +8,13 @@ import { fmtAgeLocalized, useI18n } from '@/lib/i18n'
 
 interface Props {
   topics: TopicInfo[]
+  /** Cap list height (overview split with chart). */
+  maxBodyHeight?: string
 }
 
 const COLS = 'grid-cols-[1fr_80px_96px_80px_56px_56px_96px]'
 
-export default function TopicTable({ topics }: Props) {
+export default function TopicTable({ topics, maxBodyHeight }: Props) {
   const { t } = useI18n()
   const sorted = [...topics].sort((a, b) => b.msgPerSec - a.msgPerSec)
   const headers = [
@@ -26,16 +28,16 @@ export default function TopicTable({ topics }: Props) {
   ]
 
   return (
-    <section className="border border-bus-border bg-bus-panel rounded-sm flex flex-col min-h-0">
+    <section className="border border-bus-border bg-bus-panel rounded-sm flex flex-col min-h-0 h-full">
       <PanelHeader
         icon={<Radio size={14} />}
         title={t('topicsTitle')}
         sub={t('topicsActive', { n: topics.length })}
       />
 
-      <div className="overflow-x-auto">
-        <div className="min-w-[720px]">
-          <div className={`grid ${COLS} items-center px-3 h-8 border-b border-bus-border bg-bus-bg`}>
+      <div className="overflow-x-auto flex-1 min-h-0">
+        <div className="min-w-[720px] h-full flex flex-col">
+          <div className={`grid ${COLS} items-center px-3 h-8 border-b border-bus-border bg-bus-bg shrink-0`}>
             {headers.map((h, i) => (
               <span
                 key={h}
@@ -46,10 +48,17 @@ export default function TopicTable({ topics }: Props) {
             ))}
           </div>
 
-          <div className="flex-1 overflow-y-auto">
-            {sorted.map((topic) => (
-              <TopicRow key={topic.name} topic={topic} />
-            ))}
+          <div
+            className="overflow-y-auto"
+            style={maxBodyHeight ? { maxHeight: maxBodyHeight } : undefined}
+          >
+            {sorted.length === 0 ? (
+              <div className="flex items-center justify-center h-14 text-bus-muted font-mono text-xs">
+                —
+              </div>
+            ) : (
+              sorted.map((topic) => <TopicRow key={topic.name} topic={topic} />)
+            )}
           </div>
         </div>
       </div>

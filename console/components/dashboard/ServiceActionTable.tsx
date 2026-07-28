@@ -10,109 +10,139 @@ interface Props {
   actions: ActionInfo[]
   /** When set, only render that side (for dedicated tabs). */
   mode?: 'both' | 'services' | 'actions'
+  maxBodyHeight?: string
 }
 
-export default function ServiceActionTable({ services, actions, mode = 'both' }: Props) {
+export default function ServiceActionTable({
+  services,
+  actions,
+  mode = 'both',
+  maxBodyHeight,
+}: Props) {
   const showServices = mode === 'both' || mode === 'services'
   const showActions = mode === 'both' || mode === 'actions'
 
   if (mode === 'services') {
-    return <ServicesPanel services={services} />
+    return <ServicesPanel services={services} maxBodyHeight={maxBodyHeight} />
   }
   if (mode === 'actions') {
-    return <ActionsPanel actions={actions} />
+    return <ActionsPanel actions={actions} maxBodyHeight={maxBodyHeight} />
   }
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-      {showServices && <ServicesPanel services={services} />}
-      {showActions && <ActionsPanel actions={actions} />}
+      {showServices && <ServicesPanel services={services} maxBodyHeight={maxBodyHeight} />}
+      {showActions && <ActionsPanel actions={actions} maxBodyHeight={maxBodyHeight} />}
     </div>
   )
 }
 
-function ServicesPanel({ services }: { services: ServiceInfo[] }) {
+function ServicesPanel({
+  services,
+  maxBodyHeight,
+}: {
+  services: ServiceInfo[]
+  maxBodyHeight?: string
+}) {
   const { t } = useI18n()
-  const sorted = [...services].sort((a, b) => b.calls - a.calls)
+  const sorted = [...services].sort((a, b) => b.callsPerSec - a.callsPerSec || b.calls - a.calls)
+  const grid = 'grid-cols-[1fr_56px_64px_64px_44px_64px_72px]'
 
   return (
-    <section className="border border-bus-border bg-bus-panel rounded-sm">
+    <section className="border border-bus-border bg-bus-panel rounded-sm h-full flex flex-col min-h-0">
       <PanelHeader
         icon={<Cpu size={14} />}
         title={t('servicesTitle')}
         sub={t('servicesKnown', { n: services.length })}
       />
       <ColHeader
-        cols={[t('colService'), t('colCalls'), t('colWorkers'), t('colErr'), t('colP99'), t('colLast')]}
-        widths="grid-cols-[1fr_56px_64px_44px_64px_72px]"
+        cols={[t('colService'), t('colCallsS'), t('colCalls'), t('colWorkers'), t('colErr'), t('colP99'), t('colLast')]}
+        widths={grid}
       />
-      {sorted.length === 0 ? (
-        <EmptyRow text={t('servicesEmpty')} />
-      ) : (
-        sorted.map((s) => (
-          <div
-            key={s.name}
-            className="grid grid-cols-[1fr_56px_64px_44px_64px_72px] items-center px-3 h-9 border-b border-[#1f2428] hover:bg-[#1f2428] transition-colors cursor-default"
-          >
-            <span className="font-mono text-[13px] text-bus-text truncate">{s.name}</span>
-            <span className="font-mono text-[13px] text-bus-muted tabular-nums text-right">{fmtNum(s.calls)}</span>
-            <span className="font-mono text-[13px] text-bus-muted tabular-nums text-right">{s.workers}</span>
-            <span className={`font-mono text-[13px] tabular-nums text-right ${s.errors + s.timeouts > 0 ? 'text-bus-red' : 'text-bus-muted'}`}>
-              {s.errors + s.timeouts > 0 ? s.errors + s.timeouts : '—'}
-            </span>
-            <span className="font-mono text-[13px] text-bus-cyan tabular-nums text-right">
-              {s.calls > 0 ? s.avgLatencyMs : '—'}
-            </span>
-            <span className="font-mono text-[13px] text-bus-muted tabular-nums text-right">
-              <LastSeen ts={s.lastCallAt} />
-            </span>
-          </div>
-        ))
-      )}
+      <div className="overflow-y-auto" style={maxBodyHeight ? { maxHeight: maxBodyHeight } : undefined}>
+        {sorted.length === 0 ? (
+          <EmptyRow text={t('servicesEmpty')} />
+        ) : (
+          sorted.map((s) => (
+            <div
+              key={s.name}
+              className={`grid ${grid} items-center px-3 h-9 border-b border-[#1f2428] hover:bg-[#1f2428] transition-colors cursor-default`}
+            >
+              <span className="font-mono text-[13px] text-bus-text truncate">{s.name}</span>
+              <span className={`font-mono text-[13px] tabular-nums text-right ${s.callsPerSec > 0 ? 'text-bus-amber' : 'text-bus-muted'}`}>
+                {s.callsPerSec > 0 ? fmtNum(s.callsPerSec) : '—'}
+              </span>
+              <span className="font-mono text-[13px] text-bus-muted tabular-nums text-right">{fmtNum(s.calls)}</span>
+              <span className="font-mono text-[13px] text-bus-muted tabular-nums text-right">{s.workers}</span>
+              <span className={`font-mono text-[13px] tabular-nums text-right ${s.errors + s.timeouts > 0 ? 'text-bus-red' : 'text-bus-muted'}`}>
+                {s.errors + s.timeouts > 0 ? s.errors + s.timeouts : '—'}
+              </span>
+              <span className="font-mono text-[13px] text-bus-cyan tabular-nums text-right">
+                {s.calls > 0 ? s.avgLatencyMs : '—'}
+              </span>
+              <span className="font-mono text-[13px] text-bus-muted tabular-nums text-right">
+                <LastSeen ts={s.lastCallAt} />
+              </span>
+            </div>
+          ))
+        )}
+      </div>
     </section>
   )
 }
 
-function ActionsPanel({ actions }: { actions: ActionInfo[] }) {
+function ActionsPanel({
+  actions,
+  maxBodyHeight,
+}: {
+  actions: ActionInfo[]
+  maxBodyHeight?: string
+}) {
   const { t } = useI18n()
-  const sorted = [...actions].sort((a, b) => b.runs - a.runs)
+  const sorted = [...actions].sort((a, b) => b.runsPerSec - a.runsPerSec || b.runs - a.runs)
+  const grid = 'grid-cols-[1fr_56px_56px_64px_44px_64px_72px]'
 
   return (
-    <section className="border border-bus-border bg-bus-panel rounded-sm">
+    <section className="border border-bus-border bg-bus-panel rounded-sm h-full flex flex-col min-h-0">
       <PanelHeader
         icon={<GitBranch size={14} />}
         title={t('actionsTitle')}
         sub={t('actionsKnown', { n: actions.length })}
       />
       <ColHeader
-        cols={[t('colAction'), t('colRuns'), t('colActive'), t('colErr'), t('colAvgDur'), t('colLast')]}
-        widths="grid-cols-[1fr_56px_64px_44px_64px_72px]"
+        cols={[t('colAction'), t('colRunsS'), t('colRuns'), t('colActive'), t('colErr'), t('colAvgDur'), t('colLast')]}
+        widths={grid}
       />
-      {sorted.length === 0 ? (
-        <EmptyRow text={t('actionsEmpty')} />
-      ) : (
-        sorted.map((a) => (
-          <div
-            key={a.name}
-            className="grid grid-cols-[1fr_56px_64px_44px_64px_72px] items-center px-3 h-9 border-b border-[#1f2428] hover:bg-[#1f2428] transition-colors cursor-default"
-          >
-            <span className="font-mono text-[13px] text-bus-text truncate">{a.name}</span>
-            <span className="font-mono text-[13px] text-bus-muted tabular-nums text-right">{fmtNum(a.runs)}</span>
-            <span className={`font-mono text-[13px] tabular-nums text-right ${a.active > 0 ? 'text-bus-green' : 'text-bus-muted'}`}>
-              {a.active > 0 ? a.active : '—'}
-            </span>
-            <span className={`font-mono text-[13px] tabular-nums text-right ${a.errors > 0 ? 'text-bus-red' : 'text-bus-muted'}`}>
-              {a.errors > 0 ? a.errors : '—'}
-            </span>
-            <span className="font-mono text-[13px] text-bus-cyan tabular-nums text-right">
-              {a.runs > 0 ? a.avgDurationMs : '—'}
-            </span>
-            <span className="font-mono text-[13px] text-bus-muted tabular-nums text-right">
-              <LastSeen ts={a.lastRunAt} />
-            </span>
-          </div>
-        ))
-      )}
+      <div className="overflow-y-auto" style={maxBodyHeight ? { maxHeight: maxBodyHeight } : undefined}>
+        {sorted.length === 0 ? (
+          <EmptyRow text={t('actionsEmpty')} />
+        ) : (
+          sorted.map((a) => (
+            <div
+              key={a.name}
+              className={`grid ${grid} items-center px-3 h-9 border-b border-[#1f2428] hover:bg-[#1f2428] transition-colors cursor-default`}
+            >
+              <span className="font-mono text-[13px] text-bus-text truncate">{a.name}</span>
+              <span className={`font-mono text-[13px] tabular-nums text-right ${a.runsPerSec > 0 ? 'text-bus-green' : 'text-bus-muted'}`}>
+                {a.runsPerSec > 0 ? fmtNum(a.runsPerSec) : '—'}
+              </span>
+              <span className="font-mono text-[13px] text-bus-muted tabular-nums text-right">{fmtNum(a.runs)}</span>
+              <span className={`font-mono text-[13px] tabular-nums text-right ${a.active > 0 ? 'text-bus-green' : 'text-bus-muted'}`}>
+                {a.active > 0 ? a.active : '—'}
+              </span>
+              <span className={`font-mono text-[13px] tabular-nums text-right ${a.errors > 0 ? 'text-bus-red' : 'text-bus-muted'}`}>
+                {a.errors > 0 ? a.errors : '—'}
+              </span>
+              <span className="font-mono text-[13px] text-bus-cyan tabular-nums text-right">
+                {a.runs > 0 ? a.avgDurationMs : '—'}
+              </span>
+              <span className="font-mono text-[13px] text-bus-muted tabular-nums text-right">
+                <LastSeen ts={a.lastRunAt} />
+              </span>
+            </div>
+          ))
+        )}
+      </div>
     </section>
   )
 }

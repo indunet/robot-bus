@@ -35,6 +35,8 @@ struct StatusResponse {
     act_be: String,
     msg_per_sec: u64,
     bytes_per_sec: u64,
+    svc_calls_per_sec: u64,
+    act_runs_per_sec: u64,
     total_messages: u64,
     total_errors: u64,
 }
@@ -63,6 +65,7 @@ struct TopicsEnvelope {
 struct ServiceResponse {
     name: String,
     calls: u64,
+    calls_per_sec: u64,
     errors: u64,
     timeouts: u64,
     avg_latency_ms: u64,
@@ -81,6 +84,7 @@ struct ServicesEnvelope {
 struct ActionResponse {
     name: String,
     runs: u64,
+    runs_per_sec: u64,
     active: u64,
     errors: u64,
     avg_duration_ms: u64,
@@ -95,6 +99,8 @@ struct ActionsEnvelope {
 
 pub async fn status(State(state): State<Arc<ConsoleState>>) -> impl IntoResponse {
     let rates = state.rates();
+    let svc = state.service_rates();
+    let act = state.action_rates();
     Json(StatusResponse {
         status: "ONLINE",
         version: state.version.to_string(),
@@ -110,6 +116,8 @@ pub async fn status(State(state): State<Arc<ConsoleState>>) -> impl IntoResponse
         act_be: state.endpoints.act_be.clone(),
         msg_per_sec: rates.msg_per_sec.round() as u64,
         bytes_per_sec: rates.bytes_per_sec.round() as u64,
+        svc_calls_per_sec: svc.calls_per_sec.round() as u64,
+        act_runs_per_sec: act.runs_per_sec.round() as u64,
         total_messages: rates.total_msgs,
         total_errors: 0,
     })
@@ -138,13 +146,14 @@ pub async fn topics(State(state): State<Arc<ConsoleState>>) -> impl IntoResponse
 }
 
 pub async fn services(State(state): State<Arc<ConsoleState>>) -> impl IntoResponse {
-    let snap = state.services_snapshot();
-    let services = snap
+    let rates = state.service_rates();
+    let services = rates
         .services
         .into_iter()
         .map(|s| ServiceResponse {
             name: s.name,
             calls: s.calls,
+            calls_per_sec: s.calls_per_sec.round() as u64,
             errors: s.errors,
             timeouts: 0,
             avg_latency_ms: s.avg_latency_ms,
@@ -156,13 +165,14 @@ pub async fn services(State(state): State<Arc<ConsoleState>>) -> impl IntoRespon
 }
 
 pub async fn actions(State(state): State<Arc<ConsoleState>>) -> impl IntoResponse {
-    let snap = state.actions_snapshot();
-    let actions = snap
+    let rates = state.action_rates();
+    let actions = rates
         .actions
         .into_iter()
         .map(|a| ActionResponse {
             name: a.name,
             runs: a.runs,
+            runs_per_sec: a.runs_per_sec.round() as u64,
             active: a.active,
             errors: a.errors,
             avg_duration_ms: a.avg_duration_ms,

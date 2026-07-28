@@ -23,7 +23,7 @@ export default function BrokerOverview({ broker }: Props) {
   ]
 
   return (
-    <section className="border border-bus-border bg-bus-panel rounded-sm">
+    <section className="border border-bus-border bg-bus-panel rounded-sm h-full">
       <PanelHeader icon={<Server size={14} />} title={t('brokerTitle')} sub={t('brokerSub')} />
       <div className="p-3 grid grid-cols-1 gap-1.5">
         {buses.map((b) => (

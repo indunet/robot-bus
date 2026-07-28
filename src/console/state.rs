@@ -14,6 +14,7 @@ use crate::broker::service_bus::{ServiceMetrics, ServiceMetricsSnapshot};
 
 const EVENT_RING_CAP: usize = 500;
 const EVENT_BROADCAST_CAP: usize = 64;
+const RATE_BASELINE_MS: u64 = 500;
 
 /// Listen / bind addresses shown in the console.
 #[derive(Clone, Debug)]
@@ -89,9 +90,21 @@ impl EventLog {
 }
 
 #[derive(Clone, Debug)]
-struct RateSample {
+struct MsgRateSample {
     at: Instant,
     snap: MessageMetricsSnapshot,
+}
+
+#[derive(Clone, Debug)]
+struct SvcRateSample {
+    at: Instant,
+    snap: ServiceMetricsSnapshot,
+}
+
+#[derive(Clone, Debug)]
+struct ActRateSample {
+    at: Instant,
+    snap: ActionMetricsSnapshot,
 }
 
 /// Process-wide console state shared with Axum handlers.
@@ -104,7 +117,9 @@ pub struct ConsoleState {
     pub service_metrics: Arc<ServiceMetrics>,
     pub action_metrics: Arc<ActionMetrics>,
     pub events: EventLog,
-    rate: Mutex<Option<RateSample>>,
+    msg_rate: Mutex<Option<MsgRateSample>>,
+    svc_rate: Mutex<Option<SvcRateSample>>,
+    act_rate: Mutex<Option<ActRateSample>>,
 }
 
 impl ConsoleState {
@@ -123,7 +138,9 @@ impl ConsoleState {
             service_metrics,
             action_metrics,
             events: EventLog::new(),
-            rate: Mutex::new(None),
+            msg_rate: Mutex::new(None),
+            svc_rate: Mutex::new(None),
+            act_rate: Mutex::new(None),
         });
         state.events.emit(
             "INFO",
@@ -163,14 +180,14 @@ impl ConsoleState {
         self.started_at.elapsed().as_secs()
     }
 
-    /// Compute rates from the delta since the last baseline sample.
+    /// Compute message rates from the delta since the last baseline sample.
     ///
     /// Baseline advances at most once per ~500ms so concurrent `/status` + `/topics`
     /// reads share a stable window.
     pub fn rates(&self) -> RateView {
         let now = Instant::now();
         let snap = self.metrics.snapshot();
-        let mut guard = self.rate.lock().unwrap_or_else(|e| e.into_inner());
+        let mut guard = self.msg_rate.lock().unwrap_or_else(|e| e.into_inner());
 
         let view = match guard.as_ref() {
             Some(prev) => {
@@ -180,14 +197,57 @@ impl ConsoleState {
             None => rate_view_zero(&snap),
         };
 
-        let should_advance = match guard.as_ref() {
-            None => true,
-            Some(prev) => now.duration_since(prev.at) >= Duration::from_millis(500),
-        };
-        if should_advance {
-            *guard = Some(RateSample { at: now, snap });
+        if should_advance_baseline(guard.as_ref().map(|s| s.at), now) {
+            *guard = Some(MsgRateSample { at: now, snap });
         }
         view
+    }
+
+    /// Service call rates (accepted/forwarded calls per second).
+    pub fn service_rates(&self) -> ServiceRateView {
+        let now = Instant::now();
+        let snap = self.service_metrics.snapshot();
+        let mut guard = self.svc_rate.lock().unwrap_or_else(|e| e.into_inner());
+
+        let view = match guard.as_ref() {
+            Some(prev) => {
+                let dt = now.duration_since(prev.at).as_secs_f64().max(1e-3);
+                service_rate_from_delta(&snap, &prev.snap, dt)
+            }
+            None => service_rate_zero(&snap),
+        };
+
+        if should_advance_baseline(guard.as_ref().map(|s| s.at), now) {
+            *guard = Some(SvcRateSample { at: now, snap });
+        }
+        view
+    }
+
+    /// Action run rates (accepted goals per second).
+    pub fn action_rates(&self) -> ActionRateView {
+        let now = Instant::now();
+        let snap = self.action_metrics.snapshot();
+        let mut guard = self.act_rate.lock().unwrap_or_else(|e| e.into_inner());
+
+        let view = match guard.as_ref() {
+            Some(prev) => {
+                let dt = now.duration_since(prev.at).as_secs_f64().max(1e-3);
+                action_rate_from_delta(&snap, &prev.snap, dt)
+            }
+            None => action_rate_zero(&snap),
+        };
+
+        if should_advance_baseline(guard.as_ref().map(|s| s.at), now) {
+            *guard = Some(ActRateSample { at: now, snap });
+        }
+        view
+    }
+}
+
+fn should_advance_baseline(prev_at: Option<Instant>, now: Instant) -> bool {
+    match prev_at {
+        None => true,
+        Some(at) => now.duration_since(at) >= Duration::from_millis(RATE_BASELINE_MS),
     }
 }
 
@@ -247,6 +307,106 @@ fn rate_view_from_delta(
     }
 }
 
+fn service_rate_zero(snap: &ServiceMetricsSnapshot) -> ServiceRateView {
+    ServiceRateView {
+        calls_per_sec: 0.0,
+        total_calls: snap.total_calls,
+        services: snap
+            .services
+            .iter()
+            .map(|s| ServiceRate {
+                name: s.name.clone(),
+                calls: s.calls,
+                errors: s.errors,
+                workers: s.workers,
+                avg_latency_ms: s.avg_latency_ms,
+                last_seen_unix_ms: s.last_seen_unix_ms,
+                calls_per_sec: 0.0,
+            })
+            .collect(),
+    }
+}
+
+fn service_rate_from_delta(
+    snap: &ServiceMetricsSnapshot,
+    prev: &ServiceMetricsSnapshot,
+    dt: f64,
+) -> ServiceRateView {
+    let call_delta = snap.total_calls.saturating_sub(prev.total_calls) as f64;
+    let mut services = Vec::with_capacity(snap.services.len());
+    for s in &snap.services {
+        let prev_s = prev.services.iter().find(|p| p.name == s.name);
+        let dc = match prev_s {
+            Some(p) => s.calls.saturating_sub(p.calls) as f64,
+            None => 0.0,
+        };
+        services.push(ServiceRate {
+            name: s.name.clone(),
+            calls: s.calls,
+            errors: s.errors,
+            workers: s.workers,
+            avg_latency_ms: s.avg_latency_ms,
+            last_seen_unix_ms: s.last_seen_unix_ms,
+            calls_per_sec: dc / dt,
+        });
+    }
+    ServiceRateView {
+        calls_per_sec: call_delta / dt,
+        total_calls: snap.total_calls,
+        services,
+    }
+}
+
+fn action_rate_zero(snap: &ActionMetricsSnapshot) -> ActionRateView {
+    ActionRateView {
+        runs_per_sec: 0.0,
+        total_runs: snap.total_runs,
+        actions: snap
+            .actions
+            .iter()
+            .map(|a| ActionRate {
+                name: a.name.clone(),
+                runs: a.runs,
+                errors: a.errors,
+                active: a.active,
+                avg_duration_ms: a.avg_duration_ms,
+                last_seen_unix_ms: a.last_seen_unix_ms,
+                runs_per_sec: 0.0,
+            })
+            .collect(),
+    }
+}
+
+fn action_rate_from_delta(
+    snap: &ActionMetricsSnapshot,
+    prev: &ActionMetricsSnapshot,
+    dt: f64,
+) -> ActionRateView {
+    let run_delta = snap.total_runs.saturating_sub(prev.total_runs) as f64;
+    let mut actions = Vec::with_capacity(snap.actions.len());
+    for a in &snap.actions {
+        let prev_a = prev.actions.iter().find(|p| p.name == a.name);
+        let dr = match prev_a {
+            Some(p) => a.runs.saturating_sub(p.runs) as f64,
+            None => 0.0,
+        };
+        actions.push(ActionRate {
+            name: a.name.clone(),
+            runs: a.runs,
+            errors: a.errors,
+            active: a.active,
+            avg_duration_ms: a.avg_duration_ms,
+            last_seen_unix_ms: a.last_seen_unix_ms,
+            runs_per_sec: dr / dt,
+        });
+    }
+    ActionRateView {
+        runs_per_sec: run_delta / dt,
+        total_runs: snap.total_runs,
+        actions,
+    }
+}
+
 #[derive(Clone, Debug)]
 pub struct TopicRate {
     pub name: String,
@@ -264,6 +424,42 @@ pub struct RateView {
     pub total_msgs: u64,
     pub total_bytes: u64,
     pub topics: Vec<TopicRate>,
+}
+
+#[derive(Clone, Debug)]
+pub struct ServiceRate {
+    pub name: String,
+    pub calls: u64,
+    pub errors: u64,
+    pub workers: u64,
+    pub avg_latency_ms: u64,
+    pub last_seen_unix_ms: u64,
+    pub calls_per_sec: f64,
+}
+
+#[derive(Clone, Debug)]
+pub struct ServiceRateView {
+    pub calls_per_sec: f64,
+    pub total_calls: u64,
+    pub services: Vec<ServiceRate>,
+}
+
+#[derive(Clone, Debug)]
+pub struct ActionRate {
+    pub name: String,
+    pub runs: u64,
+    pub errors: u64,
+    pub active: u64,
+    pub avg_duration_ms: u64,
+    pub last_seen_unix_ms: u64,
+    pub runs_per_sec: f64,
+}
+
+#[derive(Clone, Debug)]
+pub struct ActionRateView {
+    pub runs_per_sec: f64,
+    pub total_runs: u64,
+    pub actions: Vec<ActionRate>,
 }
 
 fn unix_ms() -> u64 {

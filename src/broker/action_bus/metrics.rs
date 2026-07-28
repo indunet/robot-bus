@@ -29,6 +29,7 @@ pub struct ActionSnapshot {
 /// Aggregate snapshot.
 #[derive(Clone, Debug, Default)]
 pub struct ActionMetricsSnapshot {
+    pub total_runs: u64,
     pub actions: Vec<ActionSnapshot>,
 }
 
@@ -137,7 +138,11 @@ impl ActionMetrics {
             })
             .collect();
         actions.sort_by(|a, b| a.name.cmp(&b.name));
-        ActionMetricsSnapshot { actions }
+        let total_runs = actions.iter().map(|a| a.runs).sum();
+        ActionMetricsSnapshot {
+            total_runs,
+            actions,
+        }
     }
 }
 
@@ -155,5 +160,6 @@ mod tests {
         assert_eq!(s.runs, 1);
         assert_eq!(s.active, 0);
         assert_eq!(s.errors, 0);
+        assert_eq!(m.snapshot().total_runs, 1);
     }
 }
