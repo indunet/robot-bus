@@ -169,7 +169,7 @@ def main() -> int:
     with tempfile.TemporaryDirectory(prefix="robot-bus-java-msgs-") as tmp_name:
         tmp = Path(tmp_name)
         prepared = prepare_proto_tree(tmp)
-        print(f"{PROTOC} ({protoc_version(PROTOC)}) → {len(prepared)} files …")
+        print(f"{PROTOC} ({protoc_version(PROTOC)}) -> {len(prepared)} files ...")
         run_protoc(tmp, prepared)
 
     imu = (
