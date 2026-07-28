@@ -95,6 +95,24 @@ jobs:
           python3 scripts/generate_typescript_msgs.py
           python3 scripts/generate_rust_msgs.py
 
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11
+
+      - name: Setup Node (console embed)
+        uses: actions/setup-node@v6
+        with:
+          node-version: "22"
+          cache: pnpm
+          cache-dependency-path: console/pnpm-lock.yaml
+
+      - name: Build embedded console assets
+        shell: bash
+        run: |
+          cd console && pnpm install --frozen-lockfile && pnpm build
+          cd .. && ./scripts/sync_console_assets.sh
+
       - name: Build native addon
         working-directory: bindings/typescript
         run: npx napi build --platform --release --target ${{ matrix.target }} --manifest-path native/Cargo.toml --output-dir .

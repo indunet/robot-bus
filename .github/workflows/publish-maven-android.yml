@@ -61,6 +61,23 @@ jobs:
       - name: Install cargo-ndk
         run: cargo install cargo-ndk --locked
 
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11
+
+      - name: Setup Node (console embed)
+        uses: actions/setup-node@v6
+        with:
+          node-version: "22"
+          cache: pnpm
+          cache-dependency-path: console/pnpm-lock.yaml
+
+      - name: Build embedded console assets
+        run: |
+          cd console && pnpm install --frozen-lockfile && pnpm build
+          cd .. && ./scripts/sync_console_assets.sh
+
       - name: Generate Rust stubs (needed by native crate features)
         run: python3 scripts/generate_rust_msgs.py
 

@@ -69,6 +69,23 @@ jobs:
           python3 scripts/generate_python_msgs.py
           python3 scripts/generate_rust_msgs.py
 
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11
+
+      - name: Setup Node (console embed)
+        uses: actions/setup-node@v6
+        with:
+          node-version: "22"
+          cache: pnpm
+          cache-dependency-path: console/pnpm-lock.yaml
+
+      - name: Build embedded console assets
+        run: |
+          cd console && pnpm install --frozen-lockfile && pnpm build
+          cd .. && ./scripts/sync_console_assets.sh
+
       - name: Build wheels
         uses: PyO3/maturin-action@v1
         with:
@@ -114,6 +131,23 @@ jobs:
           python3 scripts/generate_python_msgs.py
           python3 scripts/generate_rust_msgs.py
 
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11
+
+      - name: Setup Node (console embed)
+        uses: actions/setup-node@v6
+        with:
+          node-version: "22"
+          cache: pnpm
+          cache-dependency-path: console/pnpm-lock.yaml
+
+      - name: Build embedded console assets
+        run: |
+          cd console && pnpm install --frozen-lockfile && pnpm build
+          cd .. && ./scripts/sync_console_assets.sh
+
       - name: Build wheels
         uses: PyO3/maturin-action@v1
         with:
@@ -147,6 +181,24 @@ jobs:
           set -eux
           python3 scripts/generate_python_msgs.py
           python3 scripts/generate_rust_msgs.py
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11
+
+      - name: Setup Node (console embed)
+        uses: actions/setup-node@v6
+        with:
+          node-version: "22"
+          cache: pnpm
+          cache-dependency-path: console/pnpm-lock.yaml
+
+      - name: Build embedded console assets
+        shell: bash
+        run: |
+          cd console && pnpm install --frozen-lockfile && pnpm build
+          cd .. && ./scripts/sync_console_assets.sh
 
       - name: Build wheels
         uses: PyO3/maturin-action@v1

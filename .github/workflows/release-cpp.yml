@@ -71,7 +71,7 @@ jobs:
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
         with:
-          version: 9
+          version: 11
 
       - name: Setup Node (console embed)
         uses: actions/setup-node@v6
@@ -142,7 +142,7 @@ jobs:
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
         with:
-          version: 9
+          version: 11
 
       - name: Setup Node (console embed)
         uses: actions/setup-node@v6
@@ -294,7 +294,7 @@ jobs:
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
         with:
-          version: 9
+          version: 11
 
       - name: Setup Node (console embed)
         uses: actions/setup-node@v6
