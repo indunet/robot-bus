@@ -53,4 +53,6 @@ jobs:
       - name: Publish to crates.io
         env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
-        run: cargo publish
+        # Stubs under src/generated/** are gitignored and regenerated above;
+        # Cargo.toml `include` ships them in the crate, so the tree is dirty by design.
+        run: cargo publish --allow-dirty

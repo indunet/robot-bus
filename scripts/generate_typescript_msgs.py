@@ -154,7 +154,7 @@ def main() -> int:
         return 1
 
     clear_generated()
-    print(f"{PROTOC} ({protoc_version(PROTOC)}) → {len(protos)} files …")
+    print(f"{PROTOC} ({protoc_version(PROTOC)}) -> {len(protos)} files ...")
     run_protoc(protos, plugin)
     write_index()
     print(f"wrote TypeScript stubs under {OUT_ROOT}")

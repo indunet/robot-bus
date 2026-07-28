@@ -272,7 +272,7 @@ def main() -> int:
 
     with tempfile.TemporaryDirectory(prefix="robot-bus-py-msgs-") as tmp_name:
         tmp = Path(tmp_name)
-        print(f"{PROTOC} ({protoc_version(PROTOC)}) → {len(protos)} files …")
+        print(f"{PROTOC} ({protoc_version(PROTOC)}) -> {len(protos)} files ...")
         run_protoc(protos, tmp)
         copy_and_rewrite(tmp)
 
