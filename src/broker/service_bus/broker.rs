@@ -7,9 +7,11 @@
 use anyhow::{Context, Result};
 use std::collections::{HashMap, VecDeque};
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
 use std::time::{Duration, Instant};
 use zmq::Socket;
 
+use super::metrics::ServiceMetrics;
 use super::ServiceBusConfig;
 
 /// Worker control commands (UTF-8 bytes, never protobuf).
@@ -474,6 +476,7 @@ pub fn run_loop(
     backend: &Socket,
     config: &ServiceBusConfig,
     shutdown: &AtomicBool,
+    metrics: Option<&Arc<ServiceMetrics>>,
 ) -> Result<()> {
     let mut registry = WorkerRegistry::new();
     let mut pending: VecDeque<PendingRequest> = VecDeque::new();
@@ -492,16 +495,23 @@ pub fn run_loop(
         zmq::poll(&mut items, timeout_ms).context("poll")?;
 
         if items[0].get_revents().contains(zmq::POLLIN) {
-            handle_client_request(frontend, backend, &mut registry, &mut pending, &mut client_is_req)?;
+            handle_client_request(
+                frontend,
+                backend,
+                &mut registry,
+                &mut pending,
+                &mut client_is_req,
+                metrics,
+            )?;
         }
         if items[1].get_revents().contains(zmq::POLLIN) {
-            handle_worker_message(backend, frontend, &mut registry, &client_is_req)?;
+            handle_worker_message(backend, frontend, &mut registry, &client_is_req, metrics)?;
         }
 
         if Instant::now() >= next_sweep {
             let now = Instant::now();
             registry.sweep_dead(now, Duration::from_millis(config.heartbeat_timeout_ms));
-            retry_pending(frontend, backend, &mut pending, &mut registry, now)?;
+            retry_pending(frontend, backend, &mut pending, &mut registry, now, metrics)?;
             next_sweep = now + Duration::from_millis(config.heartbeat_interval_ms);
         }
     }
@@ -515,6 +525,7 @@ fn handle_client_request(
     registry: &mut WorkerRegistry,
     pending: &mut VecDeque<PendingRequest>,
     client_is_req: &mut HashMap<Vec<u8>, bool>,
+    metrics: Option<&Arc<ServiceMetrics>>,
 ) -> Result<()> {
     let frames = match frontend.recv_multipart(0) {
         Ok(f) => f,
@@ -544,6 +555,9 @@ fn handle_client_request(
     client_is_req.insert(client_id.to_vec(), has_delim);
 
     if let Some(worker_id) = registry.select_worker(&svc_str) {
+        if let Some(m) = metrics {
+            m.record_call_start(&svc_str, client_id, req_id);
+        }
         let fwd = build_worker_forward(worker_id.as_slice(), client_id, svc, req_id, body);
         backend.send_multipart(fwd, 0).context("backend send forward")?;
     } else if pending.len() < MAX_PENDING {
@@ -556,6 +570,9 @@ fn handle_client_request(
             queued_at: Instant::now(),
         });
     } else {
+        if let Some(m) = metrics {
+            m.record_error(&svc_str);
+        }
         let err = build_error_body(svc);
         let reply = build_client_reply(client_id, svc, req_id, &err, has_delim);
         frontend.send_multipart(reply, 0).context("frontend send reject")?;
@@ -568,6 +585,7 @@ fn handle_worker_message(
     frontend: &Socket,
     registry: &mut WorkerRegistry,
     client_is_req: &HashMap<Vec<u8>, bool>,
+    metrics: Option<&Arc<ServiceMetrics>>,
 ) -> Result<()> {
     let frames = match backend.recv_multipart(0) {
         Ok(f) => f,
@@ -583,11 +601,20 @@ fn handle_worker_message(
             let svc = &frames[2];
             if cmd == CMD_READY {
                 let svc_str = String::from_utf8_lossy(svc).into_owned();
-                registry.register(worker_id.to_vec(), svc_str, Instant::now());
+                registry.register(worker_id.to_vec(), svc_str.clone(), Instant::now());
+                if let Some(m) = metrics {
+                    m.set_workers(&svc_str, registry.worker_count(&svc_str) as u64);
+                }
             } else if cmd == CMD_HEARTBEAT {
                 registry.heartbeat(worker_id, Instant::now());
             } else if cmd == CMD_DISCONNECT {
+                let svcs = registry.services_of(worker_id);
                 registry.remove(worker_id);
+                if let Some(m) = metrics {
+                    for s in svcs {
+                        m.set_workers(&s, registry.worker_count(&s) as u64);
+                    }
+                }
             }
             Ok(())
         }
@@ -598,6 +625,11 @@ fn handle_worker_message(
             let svc = &frames[2];
             let req_id = &frames[3];
             let body = &frames[4];
+            if let Some(m) = metrics {
+                if let Ok(svc_str) = std::str::from_utf8(svc) {
+                    m.record_call_ok(svc_str, client_id, req_id);
+                }
+            }
             let has_delim = client_is_req.get(client_id).copied().unwrap_or(false);
             let reply = build_client_reply(client_id, svc, req_id, body, has_delim);
             frontend.send_multipart(reply, 0).context("frontend send reply")?;
@@ -614,6 +646,7 @@ fn retry_pending(
     pending: &mut VecDeque<PendingRequest>,
     registry: &mut WorkerRegistry,
     now: Instant,
+    metrics: Option<&Arc<ServiceMetrics>>,
 ) -> Result<()> {
     let mut still_pending = VecDeque::new();
     let timeout = Duration::from_secs(5);
@@ -623,6 +656,9 @@ fn retry_pending(
             Err(_) => continue, // drop malformed
         };
         if let Some(worker_id) = registry.select_worker(&svc_str) {
+            if let Some(m) = metrics {
+                m.record_call_start(&svc_str, &req.client_identity, &req.request_id);
+            }
             let fwd = build_worker_forward(
                 worker_id.as_slice(),
                 &req.client_identity,
@@ -632,6 +668,9 @@ fn retry_pending(
             );
             backend.send_multipart(fwd, 0).context("backend send pending forward")?;
         } else if now.duration_since(req.queued_at) > timeout {
+            if let Some(m) = metrics {
+                m.record_error(&svc_str);
+            }
             let err = build_error_body(&req.service);
             let reply = build_client_reply(
                 &req.client_identity,

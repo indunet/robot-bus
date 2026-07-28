@@ -18,7 +18,7 @@ use axum::routing::get;
 use rust_embed::Embed;
 use tokio::net::TcpListener;
 
-use api::{events, status, topics};
+use api::{actions, events, services, status, topics};
 
 /// Compile-time embedded `assets/console/` (Next.js static export).
 #[derive(Embed)]
@@ -34,6 +34,8 @@ pub async fn serve_with_shutdown(
     let app = Router::new()
         .route("/api/v1/status", get(status))
         .route("/api/v1/topics", get(topics))
+        .route("/api/v1/services", get(services))
+        .route("/api/v1/actions", get(actions))
         .route("/api/v1/events", get(events))
         .fallback(get(static_handler))
         .with_state(state);

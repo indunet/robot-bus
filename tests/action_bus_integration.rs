@@ -47,7 +47,7 @@ fn spawn_broker(config: ActionBusConfig) -> BrokerHandle {
     let shutdown_broker = shutdown.clone();
     let cfg = config.clone();
     let handle = thread::spawn(move || {
-        let _ = run_loop(&frontend, &backend, &cfg, &shutdown_broker);
+        let _ = run_loop(&frontend, &backend, &cfg, &shutdown_broker, None);
     });
     thread::sleep(Duration::from_millis(50));
     BrokerHandle {

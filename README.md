@@ -284,7 +284,7 @@ just console
 # then cargo build again
 ```
 
-Wired to the broker's same-port monitoring API: `GET /api/v1/status`, `GET /api/v1/topics`, `SSE /api/v1/events`. Service / Action stats are not hooked up yet. The frontend source tree is not published as a separate crates.io / PyPI package, but the build output is compiled into binaries with the `console` feature (on by default).
+Wired to the broker's same-port monitoring API: `GET /api/v1/status`, `GET /api/v1/topics`, `GET /api/v1/services`, `GET /api/v1/actions`, `SSE /api/v1/events`. The frontend source tree is not published as a separate crates.io / PyPI package, but the build output is compiled into binaries with the `console` feature (on by default).
 
 ## gRPC / gRPC-Web gateway
 

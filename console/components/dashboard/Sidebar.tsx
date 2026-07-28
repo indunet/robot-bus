@@ -1,6 +1,7 @@
 'use client'
 
-import { LayoutDashboard, Radio, Cpu, Zap, ScrollText, Settings } from 'lucide-react'
+import { LayoutDashboard, Radio, ScrollText, Cpu, Zap } from 'lucide-react'
+import { useI18n } from '@/lib/i18n'
 
 type Tab = 'overview' | 'topics' | 'services' | 'actions' | 'logs'
 
@@ -9,42 +10,34 @@ interface Props {
   onSelect: (tab: Tab) => void
 }
 
-const NAV_ITEMS: { id: Tab; label: string; icon: React.ReactNode }[] = [
-  { id: 'overview',  label: 'OVERVIEW',  icon: <LayoutDashboard size={14} /> },
-  { id: 'topics',    label: 'TOPICS',    icon: <Radio size={14} /> },
-  { id: 'services',  label: 'SERVICES',  icon: <Cpu size={14} /> },
-  { id: 'actions',   label: 'ACTIONS',   icon: <Zap size={14} /> },
-  { id: 'logs',      label: 'EVENTS',    icon: <ScrollText size={14} /> },
-]
-
 export default function Sidebar({ active, onSelect }: Props) {
+  const { t } = useI18n()
+
+  const items: { id: Tab; label: string; short: string; icon: React.ReactNode }[] = [
+    { id: 'overview', label: t('navOverview'), short: t('navOverviewShort'), icon: <LayoutDashboard size={16} /> },
+    { id: 'topics', label: t('navTopics'), short: t('navTopicsShort'), icon: <Radio size={16} /> },
+    { id: 'services', label: t('navServices'), short: t('navServicesShort'), icon: <Cpu size={16} /> },
+    { id: 'actions', label: t('navActions'), short: t('navActionsShort'), icon: <Zap size={16} /> },
+    { id: 'logs', label: t('navEvents'), short: t('navEventsShort'), icon: <ScrollText size={16} /> },
+  ]
+
   return (
-    <aside className="w-14 bg-[#0e1012] border-r border-[#2a2f35] flex flex-col items-center py-3 gap-1 shrink-0">
-      {NAV_ITEMS.map((item) => (
+    <aside className="w-16 bg-[#0e1012] border-r border-bus-border flex flex-col items-center py-3 gap-1.5 shrink-0">
+      {items.map((item) => (
         <button
           key={item.id}
           onClick={() => onSelect(item.id)}
           title={item.label}
-          className={`w-10 h-10 flex flex-col items-center justify-center gap-0.5 rounded transition-colors group ${
+          className={`w-12 h-12 flex flex-col items-center justify-center gap-0.5 rounded transition-colors group ${
             active === item.id
-              ? 'bg-[#00d4ff]/15 text-[#00d4ff]'
-              : 'text-[#5a6370] hover:text-[#c8ced6] hover:bg-[#1a1d20]'
+              ? 'bg-bus-cyan/15 text-bus-cyan'
+              : 'text-bus-muted hover:text-bus-text hover:bg-bus-panel'
           }`}
         >
           {item.icon}
-          <span className="font-mono text-[7px] tracking-widest">{item.label.slice(0, 3)}</span>
+          <span className="font-mono text-[9px] tracking-widest">{item.short}</span>
         </button>
       ))}
-
-      <div className="flex-1" />
-
-      <button
-        title="设置"
-        className="w-10 h-10 flex flex-col items-center justify-center gap-0.5 rounded text-[#5a6370] hover:text-[#c8ced6] hover:bg-[#1a1d20] transition-colors"
-      >
-        <Settings size={14} />
-        <span className="font-mono text-[7px] tracking-widest">CFG</span>
-      </button>
     </aside>
   )
 }

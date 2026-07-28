@@ -2,6 +2,7 @@
 
 import { type BrokerInfo } from '@/lib/mock-data'
 import { Server } from 'lucide-react'
+import { useI18n } from '@/lib/i18n'
 
 interface Props {
   broker: BrokerInfo
@@ -10,6 +11,8 @@ interface Props {
 type BusEndpoint = { label: string; addr: string; alive: boolean }
 
 export default function BrokerOverview({ broker }: Props) {
+  const { t } = useI18n()
+
   const buses: BusEndpoint[] = [
     { label: 'MSG XSUB', addr: broker.msgBusXSub, alive: broker.status !== 'OFFLINE' },
     { label: 'MSG XPUB', addr: broker.msgBusXPub, alive: broker.status !== 'OFFLINE' },
@@ -20,16 +23,16 @@ export default function BrokerOverview({ broker }: Props) {
   ]
 
   return (
-    <section className="border border-[#2a2f35] bg-[#1a1d20] rounded-sm">
-      <PanelHeader icon={<Server size={12} />} title="BROKER" sub="端点健康" />
-      <div className="p-3 grid grid-cols-1 gap-1">
+    <section className="border border-bus-border bg-bus-panel rounded-sm">
+      <PanelHeader icon={<Server size={14} />} title={t('brokerTitle')} sub={t('brokerSub')} />
+      <div className="p-3 grid grid-cols-1 gap-1.5">
         {buses.map((b) => (
-          <div key={b.label} className="flex items-center gap-2 h-6">
-            <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${b.alive ? 'bg-[#22c55e] pulse-green' : 'bg-[#ef4444] pulse-red'}`} />
-            <span className="font-mono text-[10px] text-[#5a6370] w-16 shrink-0">{b.label}</span>
-            <span className="font-mono text-[10px] text-[#c8ced6] flex-1 truncate">{b.addr}</span>
-            <span className={`font-mono text-[10px] ${b.alive ? 'text-[#22c55e]' : 'text-[#ef4444]'}`}>
-              {b.alive ? 'LISTEN' : 'DOWN'}
+          <div key={b.label} className="flex items-center gap-2 h-7">
+            <span className={`w-2 h-2 rounded-full shrink-0 ${b.alive ? 'bg-bus-green pulse-green' : 'bg-bus-red pulse-red'}`} />
+            <span className="font-mono text-xs text-bus-muted w-[4.5rem] shrink-0">{b.label}</span>
+            <span className="font-mono text-xs text-bus-text flex-1 truncate">{b.addr}</span>
+            <span className={`font-mono text-xs ${b.alive ? 'text-bus-green' : 'text-bus-red'}`}>
+              {b.alive ? t('listen') : t('down')}
             </span>
           </div>
         ))}
@@ -48,16 +51,16 @@ export function PanelHeader({
   sub?: string
 }) {
   return (
-    <div className="flex items-center justify-between px-3 h-8 border-b border-[#2a2f35]">
+    <div className="flex items-center justify-between px-3 h-9 border-b border-bus-border">
       <div className="flex items-center gap-2">
         {icon ? (
-          <span className="text-[#00d4ff]">{icon}</span>
+          <span className="text-bus-cyan">{icon}</span>
         ) : (
-          <div className="w-0.5 h-3.5 bg-[#00d4ff]" />
+          <div className="w-0.5 h-4 bg-bus-cyan" />
         )}
-        <span className="font-mono text-[11px] font-bold text-[#c8ced6] tracking-widest uppercase">{title}</span>
+        <span className="font-mono text-xs font-bold text-bus-text tracking-widest uppercase">{title}</span>
       </div>
-      {sub && <span className="font-mono text-[10px] text-[#5a6370]">{sub}</span>}
+      {sub && <span className="font-mono text-xs text-bus-muted">{sub}</span>}
     </div>
   )
 }

@@ -1,110 +1,122 @@
 'use client'
 
-import { type TopicInfo, fmtBytes, fmtNum, fmtAge } from '@/lib/mock-data'
+import { type TopicInfo, fmtBytes, fmtNum } from '@/lib/mock-data'
 import { PanelHeader } from './BrokerOverview'
 import { LineChart, Line, ResponsiveContainer } from 'recharts'
 import { Radio } from 'lucide-react'
+import { fmtAgeLocalized, useI18n } from '@/lib/i18n'
 
 interface Props {
   topics: TopicInfo[]
 }
 
+const COLS = 'grid-cols-[1fr_80px_96px_80px_56px_56px_96px]'
+
 export default function TopicTable({ topics }: Props) {
-  // 按 msg/s 降序
+  const { t } = useI18n()
   const sorted = [...topics].sort((a, b) => b.msgPerSec - a.msgPerSec)
+  const headers = [
+    t('colTopic'),
+    t('colMsgS'),
+    t('colBandwidth'),
+    t('colTotal'),
+    t('colPub'),
+    t('colSub'),
+    t('colLastSeen'),
+  ]
 
   return (
-    <section className="border border-[#2a2f35] bg-[#1a1d20] rounded-sm flex flex-col min-h-0">
-      <PanelHeader icon={<Radio size={12} />} title="TOPICS" sub={`${topics.length} 活跃`} />
+    <section className="border border-bus-border bg-bus-panel rounded-sm flex flex-col min-h-0">
+      <PanelHeader
+        icon={<Radio size={14} />}
+        title={t('topicsTitle')}
+        sub={t('topicsActive', { n: topics.length })}
+      />
 
-      {/* 表头 */}
-      <div className="grid grid-cols-[1fr_70px_80px_70px_50px_60px_80px] items-center px-3 h-7 border-b border-[#2a2f35] bg-[#141618]">
-        {['TOPIC', 'MSG/S', 'BANDWIDTH', 'TOTAL', 'PUB', 'SUB', 'LAST SEEN'].map((h, i) => (
-          <span
-            key={h}
-            className={`font-mono text-[10px] text-[#5a6370] uppercase tracking-wider ${i > 0 ? 'text-right' : ''}`}
-          >
-            {h}
-          </span>
-        ))}
-      </div>
+      <div className="overflow-x-auto">
+        <div className="min-w-[720px]">
+          <div className={`grid ${COLS} items-center px-3 h-8 border-b border-bus-border bg-bus-bg`}>
+            {headers.map((h, i) => (
+              <span
+                key={h}
+                className={`font-mono text-xs text-bus-muted uppercase tracking-wider ${i > 0 ? 'text-right' : ''}`}
+              >
+                {h}
+              </span>
+            ))}
+          </div>
 
-      {/* 数据行 */}
-      <div className="flex-1 overflow-y-auto">
-        {sorted.map((t) => (
-          <TopicRow key={t.name} topic={t} />
-        ))}
+          <div className="flex-1 overflow-y-auto">
+            {sorted.map((topic) => (
+              <TopicRow key={topic.name} topic={topic} />
+            ))}
+          </div>
+        </div>
       </div>
     </section>
   )
 }
 
 function TopicRow({ topic }: { topic: TopicInfo }) {
+  const { t } = useI18n()
   const isIdle = topic.msgPerSec === 0
-  const isHot  = topic.msgPerSec > 80
+  const isHot = topic.msgPerSec > 80
 
   const sparkData = topic.sparkline.map((v, i) => ({ i, v }))
 
-  const rateColor = isIdle ? 'text-[#5a6370]' : isHot ? 'text-[#f59e0b]' : 'text-[#00d4ff]'
+  const rateColor = isIdle ? 'text-bus-muted' : isHot ? 'text-bus-amber' : 'text-bus-cyan'
   const sparkColor = isIdle ? '#2a2f35' : isHot ? '#f59e0b' : '#00d4ff'
   const rowBg = isIdle ? '' : 'hover:bg-[#1f2428]'
 
   return (
     <div
-      className={`grid grid-cols-[1fr_70px_80px_70px_50px_60px_80px] items-center px-3 h-8 border-b border-[#1f2428] transition-colors cursor-default ${rowBg}`}
+      className={`grid ${COLS} items-center px-3 h-9 border-b border-[#1f2428] transition-colors cursor-default ${rowBg}`}
     >
-      {/* Topic 名称 */}
       <div className="flex items-center gap-2 min-w-0">
-        <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${isIdle ? 'bg-[#5a6370]' : 'bg-[#22c55e] pulse-green'}`} />
-        <span className={`font-mono text-[11px] truncate ${isIdle ? 'text-[#5a6370]' : 'text-[#c8ced6]'}`}>
+        <span className={`w-2 h-2 rounded-full shrink-0 ${isIdle ? 'bg-bus-muted' : 'bg-bus-green pulse-green'}`} />
+        <span className={`font-mono text-[13px] truncate ${isIdle ? 'text-bus-muted' : 'text-bus-text'}`}>
           {topic.name}
         </span>
       </div>
 
-      {/* Sparkline + msg/s */}
       <div className="flex items-center justify-end gap-1.5">
-        <div className="w-10 h-4">
+        <div className="w-12 h-5">
           <ResponsiveContainer width="100%" height="100%">
             <LineChart data={sparkData}>
               <Line
                 type="monotone"
                 dataKey="v"
                 stroke={sparkColor}
-                strokeWidth={1}
+                strokeWidth={1.5}
                 dot={false}
                 isAnimationActive={false}
               />
             </LineChart>
           </ResponsiveContainer>
         </div>
-        <span className={`font-mono text-[11px] tabular-nums ${rateColor} w-7 text-right`}>
+        <span className={`font-mono text-[13px] tabular-nums ${rateColor} w-8 text-right`}>
           {topic.msgPerSec}
         </span>
       </div>
 
-      {/* Bandwidth */}
-      <span className="font-mono text-[11px] text-[#c8ced6] tabular-nums text-right">
+      <span className="font-mono text-[13px] text-bus-text tabular-nums text-right">
         {isIdle ? '—' : `${fmtBytes(topic.bytesPerSec)}/s`}
       </span>
 
-      {/* Total */}
-      <span className="font-mono text-[11px] text-[#5a6370] tabular-nums text-right">
+      <span className="font-mono text-[13px] text-bus-muted tabular-nums text-right">
         {fmtNum(topic.totalMsgs)}
       </span>
 
-      {/* Publishers */}
-      <span className="font-mono text-[11px] text-[#5a6370] tabular-nums text-right">
+      <span className="font-mono text-[13px] text-bus-muted tabular-nums text-right">
         {topic.publishers}
       </span>
 
-      {/* Subscribers */}
-      <span className="font-mono text-[11px] text-[#5a6370] tabular-nums text-right">
+      <span className="font-mono text-[13px] text-bus-muted tabular-nums text-right">
         {topic.subscribers}
       </span>
 
-      {/* Last seen */}
-      <span className={`font-mono text-[11px] tabular-nums text-right ${isIdle ? 'text-[#f59e0b]' : 'text-[#5a6370]'}`}>
-        {fmtAge(topic.lastSeen)}
+      <span className={`font-mono text-[13px] tabular-nums text-right ${isIdle ? 'text-bus-amber' : 'text-bus-muted'}`}>
+        {fmtAgeLocalized(topic.lastSeen, t)}
       </span>
     </div>
   )

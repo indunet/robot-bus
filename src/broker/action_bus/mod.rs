@@ -1,5 +1,6 @@
 mod bridge;
 mod broker;
+mod metrics;
 mod peer;
 mod ports;
 
@@ -7,6 +8,7 @@ pub use broker::{
     build_client_reply, build_error_body, build_worker_cancel, build_worker_goal, run_loop,
     WorkerRegistry,
 };
+pub use metrics::{ActionMetrics, ActionMetricsSnapshot, ActionSnapshot};
 pub use peer::ActionPeer;
 pub use ports::{
     BACKEND_PORT, DEFAULT_BACKEND_BIND, DEFAULT_FRONTEND_BIND, DEFAULT_HEARTBEAT_INTERVAL_MS,
@@ -59,8 +61,12 @@ impl Default for ActionBusConfig {
 }
 
 /// Run the dual-ROUTER action bus broker until `shutdown` is set.
-pub fn run_with_shutdown(config: ActionBusConfig, shutdown: Arc<AtomicBool>) -> Result<()> {
-    run_with_shutdown_ctx(ZmqContext::new(), config, shutdown)
+pub fn run_with_shutdown(
+    config: ActionBusConfig,
+    shutdown: Arc<AtomicBool>,
+    metrics: Option<Arc<ActionMetrics>>,
+) -> Result<()> {
+    run_with_shutdown_ctx(ZmqContext::new(), config, shutdown, metrics)
 }
 
 /// Like [`run_with_shutdown`], but sockets are created from the given context
@@ -69,6 +75,7 @@ pub fn run_with_shutdown_ctx(
     context: ZmqContext,
     config: ActionBusConfig,
     shutdown: Arc<AtomicBool>,
+    metrics: Option<Arc<ActionMetrics>>,
 ) -> Result<()> {
     let frontend = context
         .socket(SocketType::ROUTER)
@@ -119,9 +126,10 @@ pub fn run_with_shutdown_ctx(
     );
 
     if config.peers.is_empty() {
-        broker::run_loop(&frontend, &backend, &config, &shutdown).context("broker loop")?;
+        broker::run_loop(&frontend, &backend, &config, &shutdown, metrics.as_ref())
+            .context("broker loop")?;
     } else {
-        bridge::run_federated(&context, frontend, backend, &config, &shutdown)
+        bridge::run_federated(&context, frontend, backend, &config, &shutdown, metrics.as_ref())
             .context("federated action broker loop")?;
     }
     Ok(())
@@ -131,7 +139,7 @@ pub fn run_with_shutdown_ctx(
 pub fn run(config: ActionBusConfig) -> Result<()> {
     let shutdown = Arc::new(AtomicBool::new(false));
     shutdown::install(shutdown.clone());
-    run_with_shutdown(config, shutdown)
+    run_with_shutdown(config, shutdown, None)
 }
 
 fn apply_low_latency_options(socket: &Socket, snd_hwm: i32, rcv_hwm: i32) -> Result<()> {
