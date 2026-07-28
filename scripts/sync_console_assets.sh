@@ -13,4 +13,6 @@ fi
 rm -rf "$dst"
 mkdir -p "$dst"
 cp -R "$src"/. "$dst"/
-echo "synced console assets → assets/console/ ($(find "$dst" -type f | wc -l | tr -d ' ') files)"
+# Keep a tracked placeholder so the empty tree stays in git after cleans.
+touch "$dst/.gitkeep"
+echo "synced console assets → assets/console/ ($(find "$dst" -type f ! -name '.gitkeep' | wc -l | tr -d ' ') files)"

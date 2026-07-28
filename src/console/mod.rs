@@ -113,7 +113,7 @@ mod tests {
     fn embeds_index_html() {
         assert!(
             Assets::get("index.html").is_some(),
-            "assets/console/index.html must exist (run: cd console && pnpm build && ../scripts/sync_console_assets.sh)"
+            "assets/console/index.html must exist (run: just console)"
         );
     }
 }

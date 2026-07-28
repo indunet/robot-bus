@@ -40,7 +40,7 @@ Rust core stays at the repo root (`Cargo.toml` + `src/`). Language SDKs live und
 | [`src/`](src/), `Cargo.toml` | Rust core (crates.io / maturin entry) |
 | [`proto/`](proto/) | Contract source: ROS-style Protobuf → generated code for Rust / bindings |
 | [`bindings/`](bindings/) | Language SDKs (Python, TypeScript, C++, Java, Android) |
-| [`console/`](console/) | Web monitoring console (product UI; embed output in `assets/console/`) |
+| [`console/`](console/) | Web monitoring console (product UI; build output synced to `assets/console/` locally / in CI, not committed) |
 | [`benches/`](benches/) | Perf harnesses: [`robot_bus_perf/`](benches/robot_bus_perf/) (`just perf`), [`ros2_perf/`](benches/ros2_perf/) (`just perf-ros2`) |
 | [`tests/`](tests/) | Rust integration tests + cross-language interop (`just test-interop`) |
 | [`docs/`](docs/) | API guides and generated perf reports |
@@ -189,7 +189,7 @@ Add to `Cargo.toml`:
 
 ```toml
 robot-bus = { path = "../robot-bus" }
-# or from crates.io: robot-bus = "0.0.7"
+# or from crates.io: robot-bus = "0.0.8"
 ```
 
 Semantics mirror ROS 2: `Node::new` → typed `create_publisher` / `create_subscription` → `node.spin()` (auto-attaches a `SingleThreadedExecutor`).
@@ -260,31 +260,30 @@ Defaults: message `STREAM(2/2)`, service `RPC(4/4)`, action `ACTION(8/8)`. Broke
 
 ## Web console (`console/`)
 
-Optional monitoring UI for broker status, topic traffic, and event logs. Starts with the broker by default on `0.0.0.0:15771` (embedded static assets — no separate Next.js process).
+Optional monitoring UI for broker status, topic traffic, and event logs. With the `console` feature (default), the broker serves an **embedded** static UI on `0.0.0.0:15771` after you build assets once.
+
+**Development (hot reload — preferred):**
 
 ```bash
+# terminal 1
+cargo run --bin robot_bus_broker
+# terminal 2
+cd console && pnpm install && pnpm dev
+# open http://localhost:3000  (/api is proxied to the broker; override with ROBOT_BUS_BROKER_URL)
+```
+
+**Embedded in the broker binary:**
+
+```bash
+just console          # pnpm build + sync → assets/console/ (gitignored)
 cargo run --bin robot_bus_broker
 # open http://localhost:15771
-# disable console: cargo run --bin robot_bus_broker -- --no-console
+# disable: cargo run --bin robot_bus_broker -- --no-console
 ```
 
-Run the frontend alone for hot reload during development:
+`assets/console/` is **build output** (not committed). CI and release jobs run `just console` (or equivalent) before compiling with the `console` feature.
 
-```bash
-cd console
-pnpm install   # or npm install
-pnpm dev       # http://localhost:3000
-```
-
-Refresh the assets embedded in the broker:
-
-```bash
-just console
-# equivalent: cd console && pnpm build && cd .. && ./scripts/sync_console_assets.sh
-# then cargo build again
-```
-
-Wired to the broker's same-port monitoring API: `GET /api/v1/status`, `GET /api/v1/topics`, `GET /api/v1/services`, `GET /api/v1/actions`, `SSE /api/v1/events`. The frontend source tree is not published as a separate crates.io / PyPI package, but the build output is compiled into binaries with the `console` feature (on by default).
+Wired to the broker's same-port monitoring API: `GET /api/v1/status`, `GET /api/v1/topics`, `GET /api/v1/services`, `GET /api/v1/actions`, `SSE /api/v1/events`. The frontend source lives in `console/`; only the generated static files are compiled into binaries with the `console` feature.
 
 ## gRPC / gRPC-Web gateway
 

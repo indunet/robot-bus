@@ -93,7 +93,7 @@ test-cpp:
 	./bindings/cpp/build/federation_opts
 	./bindings/cpp/build/node_parameters
 
-# Build console and sync static assets into assets/console for rust-embed
+# Build console UI into assets/console/ for rust-embed (gitignored; run before cargo with `console`)
 console:
 	cd console && pnpm build
 	./scripts/sync_console_assets.sh

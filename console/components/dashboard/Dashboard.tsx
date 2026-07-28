@@ -160,7 +160,7 @@ function OverviewLayout({
   return (
     <div className="flex flex-col gap-3">
       {/* Row 1: Broker endpoints | snapshot metrics */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 items-stretch">
+      <div className="grid grid-cols-1 lg:grid-cols-[1.15fr_0.85fr] gap-3 items-stretch">
         <BrokerOverview broker={broker} />
         <OverviewStats
           broker={broker}

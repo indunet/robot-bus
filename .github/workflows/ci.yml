@@ -24,6 +24,20 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - name: Generate Rust protobuf stubs
         run: python3 scripts/generate_rust_msgs.py
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+      - name: Setup Node (console embed)
+        uses: actions/setup-node@v6
+        with:
+          node-version: "22"
+          cache: pnpm
+          cache-dependency-path: console/pnpm-lock.yaml
+      - name: Build embedded console assets
+        run: |
+          cd console && pnpm install --frozen-lockfile && pnpm build
+          cd .. && ./scripts/sync_console_assets.sh
       - run: cargo test
       - run: cargo test --no-default-features
 
