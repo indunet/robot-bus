@@ -40,7 +40,7 @@ Rust 核心留在仓库根目录（`Cargo.toml` + `src/`）。各语言 SDK 放�
 | [`src/`](src/)、`Cargo.toml` | Rust 核心（crates.io / maturin 入口） |
 | [`proto/`](proto/) | 契约源：ROS 风格 Protobuf → Rust / bindings 生成代码 |
 | [`bindings/`](bindings/) | 语言 SDK（Python、TypeScript、C++、Java、Android） |
-| [`console/`](console/) | Web 监控控制台（产品 UI；嵌入产物在 `assets/console/`） |
+| [`console/`](console/) | Web 监控控制台（产品 UI；构建产物同步到本地/CI 的 `assets/console/`，不入库） |
 | [`benches/`](benches/) | 性能压测：[`robot_bus_perf/`](benches/robot_bus_perf/)（`just perf`）、[`ros2_perf/`](benches/ros2_perf/)（`just perf-ros2`） |
 | [`tests/`](tests/) | Rust 集成测试 + 跨语言互通（`just test-interop`） |
 | [`docs/`](docs/) | API 文档与生成的性能报告 |
@@ -189,7 +189,7 @@ auto pub = node.create_publisher("/imu");
 
 ```toml
 robot-bus = { path = "../robot-bus" }
-# 或 crates.io：robot-bus = "0.0.7"
+# 或 crates.io：robot-bus = "0.0.8"
 ```
 
 语义接近 ROS 2：`Node::new` → typed `create_publisher` / `create_subscription` → `node.spin()`（自动挂 `SingleThreadedExecutor`）。
@@ -260,31 +260,30 @@ pub_.set_high_water_mark(HighWaterMark { snd: 10, rcv: 10 })?;
 
 ## Web 控制台（`console/`）
 
-可选的监控前端：查看 broker 状态、topic 流量与事件日志。默认随 broker 一起启动，监听 `0.0.0.0:15771`（嵌入静态资源，无需再跑 Next.js）。
+可选监控前端：查看 broker 状态、topic 流量与事件日志。开启 `console` feature（默认）时，先构建一次静态资源后，broker 在 `0.0.0.0:15771` 提供**嵌入式** UI。
+
+**开发（热更新，推荐）：**
 
 ```bash
+# 终端 1
 cargo run --bin robot_bus_broker
-# 浏览器打开 http://localhost:15771
-# 关闭控制台：cargo run --bin robot_bus_broker -- --no-console
+# 终端 2
+cd console && pnpm install && pnpm dev
+# 打开 http://localhost:3000  （/api 会代理到 broker；可用 ROBOT_BUS_BROKER_URL 覆盖）
 ```
 
-开发时单独跑前端（热更新）：
+**嵌入 broker 二进制：**
 
 ```bash
-cd console
-pnpm install   # 或 npm install
-pnpm dev       # http://localhost:3000
+just console          # pnpm build + sync → assets/console/（已 gitignore）
+cargo run --bin robot_bus_broker
+# 打开 http://localhost:15771
+# 关闭：cargo run --bin robot_bus_broker -- --no-console
 ```
 
-更新嵌入到 broker 的静态资源：
+`assets/console/` 是**构建产物**（不提交）。CI / 发布在带 `console` feature 编译前会先生成该目录。
 
-```bash
-just console
-# 等价：cd console && pnpm build && cd .. && ./scripts/sync_console_assets.sh
-# 然后重新 cargo build
-```
-
-已对接 broker 同端口监控 API：`GET /api/v1/status`、`GET /api/v1/topics`、`GET /api/v1/services`、`GET /api/v1/actions`、`SSE /api/v1/events`。不随 crates.io / PyPI 的「源码树」单独发布前端工程，但构建产物会编进带 `console` feature（默认开启）的二进制。
+已对接 broker 同端口监控 API：`GET /api/v1/status`、`GET /api/v1/topics`、`GET /api/v1/services`、`GET /api/v1/actions`、`SSE /api/v1/events`。前端源码在 `console/`；只有生成的静态文件会编进带 `console` feature 的二进制。
 
 ## gRPC / gRPC-Web 网关
 

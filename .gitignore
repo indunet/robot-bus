@@ -4,10 +4,12 @@ dist/
 *.whl
 *.egg-info/
 
-# Node / Next.js (console/) — committed embed lives in assets/console/
+# Node / Next.js (console/) — embed output is build-generated, not committed
 node_modules/
 .next/
 console/out/
+assets/console/**
+!assets/console/.gitkeep
 *.tsbuildinfo
 pnpm-debug.log*
 npm-debug.log*

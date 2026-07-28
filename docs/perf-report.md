@@ -4,7 +4,7 @@
 
 ## 环境
 
-- robot-bus: 0.0.7
+- robot-bus: 0.0.8
 - 系统: macOS 26.5.2 (25F84)
 - 逻辑 CPU: 10
 - CPU: Apple M5
