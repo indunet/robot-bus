@@ -58,6 +58,41 @@ struct TopicsEnvelope {
     topics: Vec<TopicResponse>,
 }
 
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ServiceResponse {
+    name: String,
+    calls: u64,
+    errors: u64,
+    timeouts: u64,
+    avg_latency_ms: u64,
+    last_call_at: u64,
+    workers: u64,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ServicesEnvelope {
+    services: Vec<ServiceResponse>,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ActionResponse {
+    name: String,
+    runs: u64,
+    active: u64,
+    errors: u64,
+    avg_duration_ms: u64,
+    last_run_at: u64,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ActionsEnvelope {
+    actions: Vec<ActionResponse>,
+}
+
 pub async fn status(State(state): State<Arc<ConsoleState>>) -> impl IntoResponse {
     let rates = state.rates();
     Json(StatusResponse {
@@ -100,6 +135,41 @@ pub async fn topics(State(state): State<Arc<ConsoleState>>) -> impl IntoResponse
         })
         .collect();
     Json(TopicsEnvelope { topics })
+}
+
+pub async fn services(State(state): State<Arc<ConsoleState>>) -> impl IntoResponse {
+    let snap = state.services_snapshot();
+    let services = snap
+        .services
+        .into_iter()
+        .map(|s| ServiceResponse {
+            name: s.name,
+            calls: s.calls,
+            errors: s.errors,
+            timeouts: 0,
+            avg_latency_ms: s.avg_latency_ms,
+            last_call_at: s.last_seen_unix_ms,
+            workers: s.workers,
+        })
+        .collect();
+    Json(ServicesEnvelope { services })
+}
+
+pub async fn actions(State(state): State<Arc<ConsoleState>>) -> impl IntoResponse {
+    let snap = state.actions_snapshot();
+    let actions = snap
+        .actions
+        .into_iter()
+        .map(|a| ActionResponse {
+            name: a.name,
+            runs: a.runs,
+            active: a.active,
+            errors: a.errors,
+            avg_duration_ms: a.avg_duration_ms,
+            last_run_at: a.last_seen_unix_ms,
+        })
+        .collect();
+    Json(ActionsEnvelope { actions })
 }
 
 pub async fn events(

@@ -5,6 +5,8 @@ import {
   EMPTY_BROKER,
   fetchStatus,
   fetchTopics,
+  fetchServices,
+  fetchActions,
   mergeTopics,
   type BrokerInfo,
   type TopicInfo,
@@ -14,20 +16,21 @@ import {
 } from '@/lib/mock-data'
 import StatusBar from './StatusBar'
 import Sidebar from './Sidebar'
-import MetricCards from './MetricCards'
 import BrokerOverview from './BrokerOverview'
 import TopicTable from './TopicTable'
 import ServiceActionTable from './ServiceActionTable'
 import EventStream from './EventStream'
 import ThroughputChart, { generateThroughputHistory } from './ThroughputChart'
+import { useI18n } from '@/lib/i18n'
 
 type Tab = 'overview' | 'topics' | 'services' | 'actions' | 'logs'
 
 export default function Dashboard() {
+  const { dateLocale } = useI18n()
   const [broker, setBroker] = useState<BrokerInfo>(EMPTY_BROKER)
   const [topics, setTopics] = useState<TopicInfo[]>([])
-  const [services] = useState<ServiceInfo[]>([])
-  const [actions] = useState<ActionInfo[]>([])
+  const [services, setServices] = useState<ServiceInfo[]>([])
+  const [actions, setActions] = useState<ActionInfo[]>([])
   const [logs, setLogs] = useState<LogEntry[]>([])
   const [throughput, setThroughput] = useState(() => generateThroughputHistory(0))
   const [activeTab, setActiveTab] = useState<Tab>('overview')
@@ -35,12 +38,19 @@ export default function Dashboard() {
 
   const poll = useCallback(async () => {
     try {
-      const [status, topicList] = await Promise.all([fetchStatus(), fetchTopics()])
+      const [status, topicList, serviceList, actionList] = await Promise.all([
+        fetchStatus(),
+        fetchTopics(),
+        fetchServices(),
+        fetchActions(),
+      ])
       setBroker(status)
       setTopics((prev) => mergeTopics(prev, topicList))
+      setServices(serviceList)
+      setActions(actionList)
       setThroughput((prev) => {
-        const t = new Date()
-        const label = t.toLocaleTimeString('zh-CN', {
+        const now = new Date()
+        const label = now.toLocaleTimeString(dateLocale, {
           minute: '2-digit',
           second: '2-digit',
           hour12: false,
@@ -50,7 +60,7 @@ export default function Dashboard() {
     } catch {
       setBroker((prev) => ({ ...prev, status: 'OFFLINE' }))
     }
-  }, [])
+  }, [dateLocale])
 
   useEffect(() => {
     void poll()
@@ -77,7 +87,7 @@ export default function Dashboard() {
   }, [])
 
   return (
-    <div className="flex flex-col h-screen bg-[#141618] overflow-hidden">
+    <div className="flex flex-col h-screen bg-bus-bg overflow-hidden">
       <StatusBar broker={broker} />
 
       <div className="flex flex-1 min-h-0">
@@ -96,13 +106,13 @@ export default function Dashboard() {
           )}
           {activeTab === 'topics' && <TopicTable topics={topics} />}
           {activeTab === 'services' && (
-            <ServiceActionTable services={services} actions={actions} />
+            <ServiceActionTable services={services} actions={actions} mode="services" />
           )}
           {activeTab === 'actions' && (
-            <ServiceActionTable services={services} actions={actions} />
+            <ServiceActionTable services={services} actions={actions} mode="actions" />
           )}
           {activeTab === 'logs' && (
-            <div style={{ height: 'calc(100vh - 76px)' }}>
+            <div style={{ height: 'calc(100vh - 88px)' }}>
               <EventStream logs={logs} />
             </div>
           )}
@@ -129,8 +139,7 @@ function OverviewLayout({
 }) {
   return (
     <div className="flex flex-col gap-3">
-      <div className="grid grid-cols-[1fr_220px_300px] gap-3">
-        <MetricCards broker={broker} />
+      <div className="grid grid-cols-1 lg:grid-cols-[1fr_1.2fr] gap-3">
         <BrokerOverview broker={broker} />
         <ThroughputChart data={throughput} />
       </div>
@@ -139,7 +148,7 @@ function OverviewLayout({
 
       <ServiceActionTable services={services} actions={actions} />
 
-      <div style={{ height: '220px' }}>
+      <div style={{ height: '260px' }}>
         <EventStream logs={logs} />
       </div>
     </div>

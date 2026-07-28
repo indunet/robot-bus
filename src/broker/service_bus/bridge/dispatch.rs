@@ -41,6 +41,7 @@ pub(super) fn dispatch_request(
     reply_target: ReplyTarget,
     peer_idx: Option<usize>,
     has_req_delim: bool,
+    metrics: Option<&std::sync::Arc<crate::broker::service_bus::ServiceMetrics>>,
 ) -> Result<()> {
     let hops_for_select = if hop_path.is_empty() {
         broker_id.to_string()
@@ -66,6 +67,9 @@ pub(super) fn dispatch_request(
             client_id.to_vec()
         };
 
+        if let Some(m) = metrics {
+            m.record_call_start(svc_str, client_id, req_id);
+        }
         let fwd = build_worker_forward(
             worker_id.as_slice(),
             &forward_client_id,
@@ -88,6 +92,9 @@ pub(super) fn dispatch_request(
             queued_at: Instant::now(),
         });
     } else {
+        if let Some(m) = metrics {
+            m.record_error(svc_str);
+        }
         let err = build_error_body(svc);
         match (peer_idx, peers) {
             (Some(idx), Some(peers)) => {
@@ -116,10 +123,16 @@ pub(super) fn deliver_reply(
     svc: &[u8],
     req_id: &[u8],
     body: &[u8],
+    metrics: Option<&std::sync::Arc<crate::broker::service_bus::ServiceMetrics>>,
 ) -> Result<()> {
     if let Some(entry) = corr.remove(client_id) {
         match entry.target {
             ReplyTarget::Frontend { has_req_delim } => {
+                if let Some(m) = metrics {
+                    if let Ok(svc_str) = std::str::from_utf8(svc) {
+                        m.record_call_ok(svc_str, &entry.original_client_id, req_id);
+                    }
+                }
                 let reply = build_client_reply(
                     &entry.original_client_id,
                     svc,
@@ -146,6 +159,11 @@ pub(super) fn deliver_reply(
         return Ok(());
     }
 
+    if let Some(m) = metrics {
+        if let Ok(svc_str) = std::str::from_utf8(svc) {
+            m.record_call_ok(svc_str, client_id, req_id);
+        }
+    }
     let has_delim = client_is_req.get(client_id).copied().unwrap_or(false);
     let reply = build_client_reply(client_id, svc, req_id, body, has_delim);
     frontend
@@ -163,6 +181,7 @@ pub(super) fn retry_pending(
     corr: &mut HashMap<Vec<u8>, CorrEntry>,
     broker_id: &str,
     now: Instant,
+    metrics: Option<&std::sync::Arc<crate::broker::service_bus::ServiceMetrics>>,
 ) -> Result<()> {
     let mut still = VecDeque::new();
     while let Some(req) = pending.pop_front() {
@@ -199,6 +218,9 @@ pub(super) fn retry_pending(
             } else {
                 req.client_identity.clone()
             };
+            if let Some(m) = metrics {
+                m.record_call_start(&svc_str, &req.client_identity, &req.request_id);
+            }
             let fwd = build_worker_forward(
                 worker_id.as_slice(),
                 &forward_client_id,
@@ -210,6 +232,9 @@ pub(super) fn retry_pending(
                 .send_multipart(fwd, 0)
                 .context("backend send pending forward")?;
         } else if now.duration_since(req.queued_at) > PENDING_TIMEOUT {
+            if let Some(m) = metrics {
+                m.record_error(&svc_str);
+            }
             let err = build_error_body(&req.service);
             if let Some(idx) = req.peer_idx {
                 let _ = peers[idx].dealer.send_multipart(

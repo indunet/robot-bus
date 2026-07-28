@@ -11,9 +11,9 @@ use std::thread::{self, JoinHandle};
 use std::time::Duration;
 use zmq::Context as ZmqContext;
 
-use super::action_bus::{self, ActionBusConfig};
+use super::action_bus::{self, ActionBusConfig, ActionMetrics};
 use super::message_bus::{self, BusConfig, MessageMetrics};
-use super::service_bus::{self, ServiceBusConfig};
+use super::service_bus::{self, ServiceBusConfig, ServiceMetrics};
 use crate::runtime::Context as BusContext;
 
 #[cfg(feature = "grpc")]
@@ -106,24 +106,31 @@ impl Drop for MessageBusBroker {
 pub struct ServiceBusBroker {
     pub frontend_bind: String,
     pub backend_bind: String,
+    pub metrics: Arc<ServiceMetrics>,
     shutdown: Arc<AtomicBool>,
     handle: Option<JoinHandle<Result<()>>>,
 }
 
 impl ServiceBusBroker {
     /// Bind and run the service bus on a background thread.
-    pub(crate) fn start_with_zmq(zmq: ZmqContext, config: ServiceBusConfig) -> Result<Self> {
+    pub(crate) fn start_with_zmq(
+        zmq: ZmqContext,
+        config: ServiceBusConfig,
+        metrics: Option<Arc<ServiceMetrics>>,
+    ) -> Result<Self> {
         let frontend_bind = config.frontend_bind.clone();
         let backend_bind = config.backend_bind.clone();
+        let stored = metrics.clone().unwrap_or_else(ServiceMetrics::new);
         let shutdown = Arc::new(AtomicBool::new(false));
         let shutdown_flag = shutdown.clone();
         let handle = thread::spawn(move || {
-            service_bus::run_with_shutdown_ctx(zmq, config, shutdown_flag)
+            service_bus::run_with_shutdown_ctx(zmq, config, shutdown_flag, metrics)
         });
         thread::sleep(STARTUP_SETTLE);
         Ok(Self {
             frontend_bind,
             backend_bind,
+            metrics: stored,
             shutdown,
             handle: Some(handle),
         })
@@ -152,24 +159,31 @@ impl Drop for ServiceBusBroker {
 pub struct ActionBusBroker {
     pub frontend_bind: String,
     pub backend_bind: String,
+    pub metrics: Arc<ActionMetrics>,
     shutdown: Arc<AtomicBool>,
     handle: Option<JoinHandle<Result<()>>>,
 }
 
 impl ActionBusBroker {
     /// Bind and run the action bus on a background thread.
-    pub(crate) fn start_with_zmq(zmq: ZmqContext, config: ActionBusConfig) -> Result<Self> {
+    pub(crate) fn start_with_zmq(
+        zmq: ZmqContext,
+        config: ActionBusConfig,
+        metrics: Option<Arc<ActionMetrics>>,
+    ) -> Result<Self> {
         let frontend_bind = config.frontend_bind.clone();
         let backend_bind = config.backend_bind.clone();
+        let stored = metrics.clone().unwrap_or_else(ActionMetrics::new);
         let shutdown = Arc::new(AtomicBool::new(false));
         let shutdown_flag = shutdown.clone();
         let handle = thread::spawn(move || {
-            action_bus::run_with_shutdown_ctx(zmq, config, shutdown_flag)
+            action_bus::run_with_shutdown_ctx(zmq, config, shutdown_flag, metrics)
         });
         thread::sleep(STARTUP_SETTLE);
         Ok(Self {
             frontend_bind,
             backend_bind,
+            metrics: stored,
             shutdown,
             handle: Some(handle),
         })
@@ -423,8 +437,17 @@ impl RobotBusBroker {
 
         let message =
             MessageBusBroker::start_with_zmq(zmq.clone(), config.message, message_metrics)?;
-        let service = ServiceBusBroker::start_with_zmq(zmq.clone(), config.service)?;
-        let action = ActionBusBroker::start_with_zmq(zmq, config.action)?;
+        #[cfg(feature = "console")]
+        let (service_metrics, action_metrics) = if config.console.enabled {
+            (Some(ServiceMetrics::new()), Some(ActionMetrics::new()))
+        } else {
+            (None, None)
+        };
+        #[cfg(not(feature = "console"))]
+        let (service_metrics, action_metrics) = (None, None);
+        let service =
+            ServiceBusBroker::start_with_zmq(zmq.clone(), config.service, service_metrics)?;
+        let action = ActionBusBroker::start_with_zmq(zmq, config.action, action_metrics)?;
 
         #[cfg(feature = "grpc")]
         let grpc = {
@@ -461,7 +484,12 @@ impl RobotBusBroker {
                 grpc: grpc_addr,
                 web: config.console.listen.to_string(),
             };
-            let state = ConsoleState::new(endpoints, message.metrics.clone());
+            let state = ConsoleState::new(
+                endpoints,
+                message.metrics.clone(),
+                service.metrics.clone(),
+                action.metrics.clone(),
+            );
             Some(ConsoleHttpHandle::start(config.console.listen, state)?)
         } else {
             None

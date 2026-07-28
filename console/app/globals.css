@@ -106,11 +106,11 @@
   }
 }
 
-/* 等宽数字工具类 */
-.font-mono-num {
-  font-family: 'JetBrains Mono', 'Fira Code', 'Cascadia Mono', ui-monospace, monospace;
-  font-variant-numeric: tabular-nums;
+/* 品牌展示字体（左上角 wordmark） */
+.font-brand {
+  font-family: var(--font-brand), 'Orbitron', ui-sans-serif, system-ui, sans-serif;
 }
+
 
 /* 状态灯脉冲动画 */
 @keyframes status-pulse {
@@ -127,9 +127,3 @@
   100% { color: inherit; }
 }
 .value-pop { animation: value-pop 0.4s ease-out; }
-
-/* 扫描线效果 */
-@keyframes scanline {
-  0%   { transform: translateY(-100%); }
-  100% { transform: translateY(100vh); }
-}

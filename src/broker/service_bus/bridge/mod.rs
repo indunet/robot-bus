@@ -13,6 +13,7 @@ mod remote;
 use anyhow::{Context, Result};
 use std::collections::{HashMap, VecDeque};
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
 use std::time::{Duration, Instant};
 use uuid::Uuid;
 use zmq::{Context as ZmqContext, Socket};
@@ -29,7 +30,7 @@ use self::remote::{
     CorrEntry, PeerLink, PendingRequest, ReplyTarget,
 };
 use super::broker::{build_error_body, extend_hops, hop_contains, WorkerRegistry};
-use super::ServiceBusConfig;
+use super::{ServiceBusConfig, ServiceMetrics};
 
 /// Run the federated service broker until `shutdown` is set.
 pub fn run_federated(
@@ -38,6 +39,7 @@ pub fn run_federated(
     backend: Socket,
     config: &ServiceBusConfig,
     shutdown: &AtomicBool,
+    metrics: Option<&Arc<ServiceMetrics>>,
 ) -> Result<()> {
     let broker_id = if config.broker_id.is_empty() {
         Uuid::new_v4().to_string()
@@ -105,6 +107,7 @@ pub fn run_federated(
                 &mut client_is_req,
                 &mut corr,
                 &broker_id,
+                metrics,
             )?;
         }
         if backend_ready {
@@ -116,6 +119,7 @@ pub fn run_federated(
                 &mut corr,
                 &mut peers,
                 &broker_id,
+                metrics,
             )?;
         }
         for (i, ready) in peer_ready.into_iter().enumerate() {
@@ -129,6 +133,7 @@ pub fn run_federated(
                     &mut pending,
                     &mut corr,
                     &broker_id,
+                    metrics,
                 )?;
             }
         }
@@ -150,6 +155,7 @@ pub fn run_federated(
                 &mut corr,
                 &broker_id,
                 now,
+                metrics,
             )?;
             expire_corr(&mut corr, now);
             next_sweep = now + Duration::from_millis(config.heartbeat_interval_ms);
@@ -167,6 +173,7 @@ fn handle_frontend(
     client_is_req: &mut HashMap<Vec<u8>, bool>,
     corr: &mut HashMap<Vec<u8>, CorrEntry>,
     broker_id: &str,
+    metrics: Option<&Arc<ServiceMetrics>>,
 ) -> Result<()> {
     let frames = match frontend.recv_multipart(0) {
         Ok(f) => f,
@@ -210,6 +217,7 @@ fn handle_frontend(
         },
         None,
         has_delim,
+        metrics,
     )
 }
 
@@ -222,6 +230,7 @@ fn handle_peer_dealer(
     pending: &mut VecDeque<PendingRequest>,
     corr: &mut HashMap<Vec<u8>, CorrEntry>,
     broker_id: &str,
+    metrics: Option<&Arc<ServiceMetrics>>,
 ) -> Result<()> {
     let frames = match peers[peer_idx].dealer.recv_multipart(0) {
         Ok(f) => f,
@@ -286,6 +295,7 @@ fn handle_peer_dealer(
         ReplyTarget::Peer { peer_idx },
         Some(peer_idx),
         false,
+        metrics,
     )
 }
 
@@ -297,6 +307,7 @@ fn handle_backend(
     corr: &mut HashMap<Vec<u8>, CorrEntry>,
     peers: &mut [PeerLink],
     broker_id: &str,
+    metrics: Option<&Arc<ServiceMetrics>>,
 ) -> Result<()> {
     let frames = match backend.recv_multipart(0) {
         Ok(f) => f,
@@ -380,6 +391,7 @@ fn handle_backend(
                 svc,
                 req_id,
                 body,
+                metrics,
             )
         }
         _ => Ok(()),

@@ -8,7 +8,9 @@ use std::time::{Duration, Instant};
 use serde::Serialize;
 use tokio::sync::broadcast;
 
+use crate::broker::action_bus::{ActionMetrics, ActionMetricsSnapshot};
 use crate::broker::message_bus::{MessageMetrics, MessageMetricsSnapshot};
+use crate::broker::service_bus::{ServiceMetrics, ServiceMetricsSnapshot};
 
 const EVENT_RING_CAP: usize = 500;
 const EVENT_BROADCAST_CAP: usize = 64;
@@ -99,18 +101,27 @@ pub struct ConsoleState {
     pub pid: u32,
     pub endpoints: BrokerEndpoints,
     pub metrics: Arc<MessageMetrics>,
+    pub service_metrics: Arc<ServiceMetrics>,
+    pub action_metrics: Arc<ActionMetrics>,
     pub events: EventLog,
     rate: Mutex<Option<RateSample>>,
 }
 
 impl ConsoleState {
-    pub fn new(endpoints: BrokerEndpoints, metrics: Arc<MessageMetrics>) -> Arc<Self> {
+    pub fn new(
+        endpoints: BrokerEndpoints,
+        metrics: Arc<MessageMetrics>,
+        service_metrics: Arc<ServiceMetrics>,
+        action_metrics: Arc<ActionMetrics>,
+    ) -> Arc<Self> {
         let state = Arc::new(Self {
             started_at: Instant::now(),
             version: env!("CARGO_PKG_VERSION"),
             pid: std::process::id(),
             endpoints,
             metrics,
+            service_metrics,
+            action_metrics,
             events: EventLog::new(),
             rate: Mutex::new(None),
         });
@@ -138,6 +149,14 @@ impl ConsoleState {
             );
         }
         state
+    }
+
+    pub fn services_snapshot(&self) -> ServiceMetricsSnapshot {
+        self.service_metrics.snapshot()
+    }
+
+    pub fn actions_snapshot(&self) -> ActionMetricsSnapshot {
+        self.action_metrics.snapshot()
     }
 
     pub fn uptime_secs(&self) -> u64 {

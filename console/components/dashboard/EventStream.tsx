@@ -2,38 +2,37 @@
 
 import { useState, useRef, useEffect } from 'react'
 import { type LogEntry, type LogLevel } from '@/lib/mock-data'
-import { PanelHeader } from './BrokerOverview'
 import { Filter, Pause, Play, Trash2, Terminal } from 'lucide-react'
+import { useI18n } from '@/lib/i18n'
 
 interface Props {
   logs: LogEntry[]
 }
 
 const LEVEL_COLORS: Record<LogLevel, string> = {
-  DEBUG: 'text-[#5a6370]',
-  INFO:  'text-[#00d4ff]',
-  WARN:  'text-[#f59e0b]',
-  ERROR: 'text-[#ef4444]',
+  DEBUG: 'text-bus-muted',
+  INFO:  'text-bus-cyan',
+  WARN:  'text-bus-amber',
+  ERROR: 'text-bus-red',
 }
 const LEVEL_BG: Record<LogLevel, string> = {
   DEBUG: '',
   INFO:  '',
-  WARN:  'bg-[#f59e0b]/5',
-  ERROR: 'bg-[#ef4444]/8',
+  WARN:  'bg-bus-amber/5',
+  ERROR: 'bg-bus-red/8',
 }
 
 export default function EventStream({ logs }: Props) {
+  const { t, dateLocale } = useI18n()
   const [filter, setFilter] = useState<LogLevel | 'ALL'>('ALL')
   const [paused, setPaused] = useState(false)
   const [entries, setEntries] = useState<LogEntry[]>(logs)
   const bottomRef = useRef<HTMLDivElement>(null)
 
-  // 接收外部 logs 更新（实时新消息追加）
   useEffect(() => {
     if (!paused) setEntries(logs)
   }, [logs, paused])
 
-  // 自动滚动到底部（在日志容器内，不影响页面滚动）
   const scrollContainerRef = useRef<HTMLDivElement>(null)
   useEffect(() => {
     if (!paused && scrollContainerRef.current) {
@@ -42,95 +41,97 @@ export default function EventStream({ logs }: Props) {
   }, [entries, paused])
 
   const visible = filter === 'ALL' ? entries : entries.filter((e) => e.level === filter)
+  const filterLabels = {
+    ALL: t('filterAll'),
+    DEBUG: 'DEBUG',
+    INFO: 'INFO',
+    WARN: 'WARN',
+    ERROR: 'ERROR',
+  } as const
 
   return (
-    <section className="border border-[#2a2f35] bg-[#1a1d20] rounded-sm flex flex-col min-h-0">
-      <div className="flex items-center justify-between px-3 h-8 border-b border-[#2a2f35] shrink-0">
+    <section className="border border-bus-border bg-bus-panel rounded-sm flex flex-col min-h-0">
+      <div className="flex items-center justify-between px-3 h-9 border-b border-bus-border shrink-0">
         <div className="flex items-center gap-2">
-          <Terminal size={12} className="text-[#00d4ff]" />
-          <span className="font-mono text-[11px] font-bold text-[#c8ced6] tracking-widest uppercase">EVENTS</span>
-          <span className="font-mono text-[10px] text-[#5a6370]">实时日志流</span>
+          <Terminal size={14} className="text-bus-cyan" />
+          <span className="font-mono text-xs font-bold text-bus-text tracking-widest uppercase">{t('eventsTitle')}</span>
+          <span className="font-mono text-xs text-bus-muted">{t('eventsSub')}</span>
         </div>
         <div className="flex items-center gap-2">
-          {/* 级别过滤 */}
-          <Filter size={11} className="text-[#5a6370]" />
+          <Filter size={13} className="text-bus-muted" />
           {(['ALL', 'DEBUG', 'INFO', 'WARN', 'ERROR'] as const).map((lvl) => (
             <button
               key={lvl}
               onClick={() => setFilter(lvl)}
-              className={`font-mono text-[10px] px-1.5 py-px rounded border transition-colors ${
+              className={`font-mono text-xs px-2 py-0.5 rounded border transition-colors ${
                 filter === lvl
-                  ? 'border-[#00d4ff] text-[#00d4ff] bg-[#00d4ff]/10'
-                  : 'border-[#2a2f35] text-[#5a6370] hover:text-[#c8ced6] hover:border-[#3a4045]'
+                  ? 'border-bus-cyan text-bus-cyan bg-bus-cyan/10'
+                  : 'border-bus-border text-bus-muted hover:text-bus-text hover:border-bus-border2'
               }`}
             >
-              {lvl}
+              {filterLabels[lvl]}
             </button>
           ))}
-          <div className="w-px h-4 bg-[#2a2f35]" />
-          {/* 暂停 */}
+          <div className="w-px h-4 bg-bus-border" />
           <button
             onClick={() => setPaused((p) => !p)}
-            className={`flex items-center gap-1 font-mono text-[10px] px-1.5 py-px rounded border transition-colors ${
+            className={`flex items-center gap-1 font-mono text-xs px-2 py-0.5 rounded border transition-colors ${
               paused
-                ? 'border-[#f59e0b] text-[#f59e0b] bg-[#f59e0b]/10'
-                : 'border-[#2a2f35] text-[#5a6370] hover:text-[#c8ced6]'
+                ? 'border-bus-amber text-bus-amber bg-bus-amber/10'
+                : 'border-bus-border text-bus-muted hover:text-bus-text'
             }`}
           >
-            {paused ? <Play size={9} /> : <Pause size={9} />}
-            {paused ? 'RESUME' : 'PAUSE'}
+            {paused ? <Play size={11} /> : <Pause size={11} />}
+            {paused ? t('resume') : t('pause')}
           </button>
-          {/* 清空 */}
           <button
             onClick={() => setEntries([])}
-            className="flex items-center gap-1 font-mono text-[10px] px-1.5 py-px rounded border border-[#2a2f35] text-[#5a6370] hover:text-[#ef4444] hover:border-[#ef4444] transition-colors"
+            className="flex items-center gap-1 font-mono text-xs px-2 py-0.5 rounded border border-bus-border text-bus-muted hover:text-bus-red hover:border-bus-red transition-colors"
           >
-            <Trash2 size={9} />
-            CLR
+            <Trash2 size={11} />
+            {t('clear')}
           </button>
         </div>
       </div>
 
-      {/* 日志列 */}
-      <div ref={scrollContainerRef} className="flex-1 overflow-y-auto min-h-0 font-mono text-[11px]">
+      <div ref={scrollContainerRef} className="flex-1 overflow-y-auto min-h-0 font-mono text-[13px]">
         {visible.length === 0 ? (
-          <div className="flex items-center justify-center h-16 text-[#5a6370] text-[11px]">
-            无日志条目
+          <div className="flex items-center justify-center h-16 text-bus-muted text-[13px]">
+            {t('eventsEmpty')}
           </div>
         ) : (
           visible.map((entry) => (
-            <LogLine key={entry.id} entry={entry} />
+            <LogLine key={entry.id} entry={entry} dateLocale={dateLocale} />
           ))
         )}
         <div ref={bottomRef} />
       </div>
 
-      {/* 状态栏 */}
-      <div className="h-6 border-t border-[#2a2f35] flex items-center px-3 gap-3 shrink-0 bg-[#141618]">
-        <span className="font-mono text-[10px] text-[#5a6370]">{visible.length} 条目</span>
+      <div className="h-7 border-t border-bus-border flex items-center px-3 gap-3 shrink-0 bg-bus-bg">
+        <span className="font-mono text-xs text-bus-muted">{t('eventsCount', { n: visible.length })}</span>
         {paused && (
-          <span className="font-mono text-[10px] text-[#f59e0b] animate-pulse">● 已暂停</span>
+          <span className="font-mono text-xs text-bus-amber animate-pulse">● {t('eventsPaused')}</span>
         )}
         {!paused && (
-          <span className="font-mono text-[10px] text-[#22c55e]">● 实时</span>
+          <span className="font-mono text-xs text-bus-green">● {t('eventsLive')}</span>
         )}
       </div>
     </section>
   )
 }
 
-function LogLine({ entry }: { entry: LogEntry }) {
+function LogLine({ entry, dateLocale }: { entry: LogEntry; dateLocale: string }) {
   const ts = new Date(entry.ts)
-  const timeStr = ts.toLocaleTimeString('zh-CN', {
+  const timeStr = ts.toLocaleTimeString(dateLocale, {
     hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false,
   }) + '.' + String(ts.getMilliseconds()).padStart(3, '0')
 
   return (
-    <div className={`flex items-start gap-2 px-3 py-0.5 border-b border-[#1a1d20] hover:bg-[#1f2428] ${LEVEL_BG[entry.level]}`}>
-      <span className="text-[#5a6370] tabular-nums shrink-0 w-[88px]">{timeStr}</span>
-      <span className={`${LEVEL_COLORS[entry.level]} font-bold shrink-0 w-[38px]`}>{entry.level}</span>
-      <span className="text-[#007fa0] shrink-0 w-[100px] truncate">{entry.source}</span>
-      <span className="text-[#c8ced6] leading-relaxed">{entry.message}</span>
+    <div className={`flex items-start gap-2.5 px-3 py-1 border-b border-bus-panel hover:bg-[#1f2428] ${LEVEL_BG[entry.level]}`}>
+      <span className="text-bus-muted tabular-nums shrink-0 w-[96px]">{timeStr}</span>
+      <span className={`${LEVEL_COLORS[entry.level]} font-bold shrink-0 w-11`}>{entry.level}</span>
+      <span className="text-bus-cyan-dim shrink-0 w-[110px] truncate">{entry.source}</span>
+      <span className="text-bus-text leading-relaxed">{entry.message}</span>
     </div>
   )
 }

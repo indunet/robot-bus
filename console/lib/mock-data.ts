@@ -39,6 +39,7 @@ export interface ServiceInfo {
   timeouts: number
   avgLatencyMs: number
   lastCallAt: number
+  workers: number
 }
 
 export interface ActionInfo {
@@ -91,6 +92,20 @@ export async function fetchTopics(): Promise<TopicInfo[]> {
   if (!res.ok) throw new Error(`topics ${res.status}`)
   const body = await res.json()
   return (body.topics ?? []) as TopicInfo[]
+}
+
+export async function fetchServices(): Promise<ServiceInfo[]> {
+  const res = await fetch('/api/v1/services')
+  if (!res.ok) throw new Error(`services ${res.status}`)
+  const body = await res.json()
+  return (body.services ?? []) as ServiceInfo[]
+}
+
+export async function fetchActions(): Promise<ActionInfo[]> {
+  const res = await fetch('/api/v1/actions')
+  if (!res.ok) throw new Error(`actions ${res.status}`)
+  const body = await res.json()
+  return (body.actions ?? []) as ActionInfo[]
 }
 
 /** Merge server topic stats into previous rows, preserving client sparklines. */

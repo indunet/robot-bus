@@ -12,6 +12,7 @@ mod remote;
 use anyhow::{Context, Result};
 use std::collections::{HashMap, VecDeque};
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
 use std::time::{Duration, Instant};
 use uuid::Uuid;
 use zmq::{Context as ZmqContext, Socket};
@@ -32,7 +33,7 @@ use super::broker::{
     build_client_reply, build_error_body, extend_hops, hop_contains, GoalReply, GoalTable,
     WorkerRegistry,
 };
-use super::ActionBusConfig;
+use super::{ActionBusConfig, ActionMetrics};
 
 /// Run the federated action broker until `shutdown` is set.
 pub fn run_federated(
@@ -41,6 +42,7 @@ pub fn run_federated(
     backend: Socket,
     config: &ActionBusConfig,
     shutdown: &AtomicBool,
+    metrics: Option<&Arc<ActionMetrics>>,
 ) -> Result<()> {
     let broker_id = if config.broker_id.is_empty() {
         Uuid::new_v4().to_string()
@@ -114,6 +116,7 @@ pub fn run_federated(
                 &mut pending,
                 &mut remote_rr,
                 &broker_id,
+                metrics,
             )?;
         }
         if backend_ready {
@@ -127,6 +130,7 @@ pub fn run_federated(
                 &mut pending,
                 &mut remote_rr,
                 &broker_id,
+                metrics,
             )?;
         }
         for (i, ready) in peer_ready.into_iter().enumerate() {
@@ -142,6 +146,7 @@ pub fn run_federated(
                     &mut pending,
                     &mut remote_rr,
                     &broker_id,
+                    metrics,
                 )?;
             }
         }
@@ -151,12 +156,12 @@ pub fn run_federated(
             let dead = registry.sweep_dead(now, hb_timeout);
             for wid in &dead {
                 let dropped = goals.drain_if(|e| e.worker_identity.as_slice() == wid.as_slice());
-                send_died_results(&frontend, &backend, dropped)?;
+                send_died_results(&frontend, &backend, dropped, metrics)?;
             }
             let dead_peers = remote.sweep_dead(now, hb_timeout);
             for peer_idx in dead_peers {
                 let dropped = goals.evict_peer(peer_idx);
-                send_died_results(&frontend, &backend, dropped)?;
+                send_died_results(&frontend, &backend, dropped, metrics)?;
             }
             sync_all_advertisements(&mut peers, &registry, &remote, &broker_id)?;
             send_peer_heartbeats(&peers)?;
@@ -172,6 +177,7 @@ pub fn run_federated(
                 &broker_id,
                 now,
                 pending_timeout,
+                metrics,
             )?;
             next_sweep = now + Duration::from_millis(config.heartbeat_interval_ms);
         }
@@ -190,6 +196,7 @@ fn handle_frontend(
     pending: &mut VecDeque<PendingGoal>,
     remote_rr: &mut HashMap<String, usize>,
     broker_id: &str,
+    metrics: Option<&Arc<ActionMetrics>>,
 ) -> Result<()> {
     let frames = match frontend.recv_multipart(0) {
         Ok(f) => f,
@@ -223,6 +230,7 @@ fn handle_frontend(
             &body,
             "",
             GoalReply::Frontend,
+            metrics,
         )
     } else if kind == KIND_CANCEL {
         handle_cancel(
@@ -235,6 +243,7 @@ fn handle_frontend(
             &goal_id,
             &body,
             GoalReply::Frontend,
+            metrics,
         )
     } else {
         Ok(())
@@ -252,6 +261,7 @@ fn handle_peer_dealer(
     _pending: &mut VecDeque<PendingGoal>,
     _remote_rr: &mut HashMap<String, usize>,
     _broker_id: &str,
+    metrics: Option<&Arc<ActionMetrics>>,
 ) -> Result<()> {
     let frames = match peers[peer_idx].dealer.recv_multipart(0) {
         Ok(f) => f,
@@ -267,7 +277,16 @@ fn handle_peer_dealer(
         let body = &frames[4];
         if kind == KIND_FEEDBACK || kind == KIND_RESULT {
             return deliver_goal_reply(
-                frontend, backend, peers, registry, goals, goal_id, action, kind, body,
+                frontend,
+                backend,
+                peers,
+                registry,
+                goals,
+                goal_id,
+                action,
+                kind,
+                body,
+                metrics,
             );
         }
     }
@@ -284,6 +303,7 @@ fn handle_backend(
     pending: &mut VecDeque<PendingGoal>,
     remote_rr: &mut HashMap<String, usize>,
     broker_id: &str,
+    metrics: Option<&Arc<ActionMetrics>>,
 ) -> Result<()> {
     let frames = match backend.recv_multipart(0) {
         Ok(f) => f,
@@ -306,6 +326,7 @@ fn handle_backend(
             broker_id,
             &frames,
             now,
+            metrics,
         );
     }
 
@@ -323,7 +344,7 @@ fn handle_backend(
                 registry.remove(worker_id);
                 let dropped =
                     goals.drain_if(|e| e.worker_identity.as_slice() == worker_id);
-                send_died_results(frontend, backend, dropped)?;
+                send_died_results(frontend, backend, dropped, metrics)?;
                 sync_all_advertisements(peers, registry, remote, broker_id)?;
             }
             Ok(())
@@ -338,7 +359,16 @@ fn handle_backend(
             }
             if goals.get(goal_id).is_some() {
                 deliver_goal_reply(
-                    frontend, backend, peers, registry, goals, goal_id, action, kind, body,
+                    frontend,
+                    backend,
+                    peers,
+                    registry,
+                    goals,
+                    goal_id,
+                    action,
+                    kind,
+                    body,
+                    metrics,
                 )?;
             } else {
                 let client_id = &frames[1];
@@ -368,6 +398,7 @@ fn handle_fed_backend_message(
     broker_id: &str,
     frames: &[Vec<u8>],
     now: Instant,
+    metrics: Option<&Arc<ActionMetrics>>,
 ) -> Result<()> {
     let identity = frames[0].as_slice();
     let Some(via) = parse_fed_broker_id(identity) else {
@@ -464,6 +495,7 @@ fn handle_fed_backend_message(
                     &body,
                     &hops,
                     reply,
+                    metrics,
                 )?;
             } else if kind == KIND_CANCEL {
                 handle_cancel(
@@ -476,6 +508,7 @@ fn handle_fed_backend_message(
                     &goal_id,
                     &body,
                     reply,
+                    metrics,
                 )?;
             }
             Ok(())

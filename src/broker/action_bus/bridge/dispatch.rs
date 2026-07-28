@@ -58,6 +58,7 @@ pub(super) fn dispatch_goal(
     body: &[u8],
     hop_path: &str,
     reply: GoalReply,
+    metrics: Option<&std::sync::Arc<crate::broker::action_bus::ActionMetrics>>,
 ) -> Result<()> {
     let act_str = match std::str::from_utf8(action) {
         Ok(s) => s.to_string(),
@@ -80,6 +81,9 @@ pub(super) fn dispatch_goal(
                 clone_reply(&reply),
                 None,
             );
+            if let Some(m) = metrics {
+                m.record_run_start(&act_str, goal_id);
+            }
             // Forward to local worker with a synthetic client id encoding goal_id
             // so replies can always be matched — actually workers echo client_id.
             // We pass client_id as goal bookkeeping; deliver uses GoalTable by goal_id.
@@ -101,6 +105,9 @@ pub(super) fn dispatch_goal(
             clone_reply(&reply),
             Some(peer_idx),
         );
+        if let Some(m) = metrics {
+            m.record_run_start(&act_str, goal_id);
+        }
         let _ = peers[peer_idx].dealer.send_multipart(
             [action, goal_id, KIND_GOAL, out_hop.as_bytes(), body],
             zmq::DONTWAIT,
@@ -119,6 +126,9 @@ pub(super) fn dispatch_goal(
             queued_at: Instant::now(),
         });
     } else {
+        if let Some(m) = metrics {
+            m.record_error(&act_str, None);
+        }
         send_error_result(
             frontend,
             backend,
@@ -152,6 +162,7 @@ pub(super) fn handle_cancel(
     goal_id: &[u8],
     body: &[u8],
     reply: GoalReply,
+    metrics: Option<&std::sync::Arc<crate::broker::action_bus::ActionMetrics>>,
 ) -> Result<()> {
     if let Some(entry) = goals.get(goal_id) {
         if let Some(peer_idx) = entry.via_peer {
@@ -173,6 +184,11 @@ pub(super) fn handle_cancel(
                 .context("backend send cancel")?;
         }
     } else {
+        if let Some(m) = metrics {
+            if let Ok(name) = std::str::from_utf8(action) {
+                m.record_error(name, None);
+            }
+        }
         send_error_result(
             frontend,
             backend,
@@ -197,6 +213,7 @@ pub(super) fn deliver_goal_reply(
     action: &[u8],
     kind: &[u8],
     body: &[u8],
+    metrics: Option<&std::sync::Arc<crate::broker::action_bus::ActionMetrics>>,
 ) -> Result<()> {
     let Some(entry) = goals.get(goal_id) else {
         return Ok(());
@@ -234,6 +251,11 @@ pub(super) fn deliver_goal_reply(
         if let Some(entry) = goals.remove(goal_id) {
             if !entry.worker_identity.is_empty() {
                 registry.release_worker(&entry.worker_identity);
+            }
+            if let Some(m) = metrics {
+                if let Ok(name) = std::str::from_utf8(action) {
+                    m.record_run_ok(name, goal_id);
+                }
             }
         }
     }
@@ -281,8 +303,13 @@ pub(super) fn send_died_results(
     frontend: &Socket,
     backend: &Socket,
     dropped: Vec<GoalEntry>,
+    metrics: Option<&std::sync::Arc<crate::broker::action_bus::ActionMetrics>>,
 ) -> Result<()> {
     for e in dropped {
+        if let Some(m) = metrics {
+            let name = String::from_utf8_lossy(&e.action);
+            m.record_error(&name, Some(&e.goal_id));
+        }
         let err = build_error_body(ERR_WORKER_DIED, &e.action);
         match &e.reply {
             GoalReply::Frontend => {
@@ -327,6 +354,7 @@ pub(super) fn retry_pending(
     broker_id: &str,
     now: Instant,
     pending_timeout: Duration,
+    metrics: Option<&std::sync::Arc<crate::broker::action_bus::ActionMetrics>>,
 ) -> Result<()> {
     let mut still = VecDeque::new();
     while let Some(req) = pending.pop_front() {
@@ -345,6 +373,9 @@ pub(super) fn retry_pending(
                     clone_reply(&req.reply),
                     None,
                 );
+                if let Some(m) = metrics {
+                    m.record_run_start(&act_str, &req.goal_id);
+                }
                 let fwd = build_worker_goal(
                     &worker_id,
                     &req.client_identity,
@@ -370,6 +401,9 @@ pub(super) fn retry_pending(
                     clone_reply(&req.reply),
                     Some(peer_idx),
                 );
+                if let Some(m) = metrics {
+                    m.record_run_start(&act_str, &req.goal_id);
+                }
                 let _ = peers[peer_idx].dealer.send_multipart(
                     [
                         req.action.as_slice(),
@@ -385,6 +419,9 @@ pub(super) fn retry_pending(
         }
         if !dispatched {
             if now.duration_since(req.queued_at) > pending_timeout {
+                if let Some(m) = metrics {
+                    m.record_error(&act_str, None);
+                }
                 send_error_result(
                     frontend,
                     backend,

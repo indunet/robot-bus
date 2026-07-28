@@ -6,9 +6,13 @@ Web 监控控制台：查看 broker 状态、topic 流量与事件日志。
 
 - `GET /api/v1/status`
 - `GET /api/v1/topics`
+- `GET /api/v1/services`
+- `GET /api/v1/actions`
 - `SSE /api/v1/events`
 
-Service / Action 统计尚未接入（表为空）。开发时用 `pnpm dev` 需自行把 `/api` 代理到 broker，或直接打开嵌入后的 `http://localhost:15771`。
+UI 文案支持 EN / 中文（默认 EN，偏好存在 `localStorage` 的 `robot-bus-console-locale`）。
+
+开发时用 `pnpm dev` 需自行把 `/api` 代理到 broker，或直接打开嵌入后的 `http://localhost:15771`。
 
 ## 开发
 

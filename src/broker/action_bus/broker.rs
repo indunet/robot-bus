@@ -12,9 +12,11 @@
 use anyhow::{Context, Result};
 use std::collections::{HashMap, VecDeque};
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
 use std::time::{Duration, Instant};
 use zmq::Socket;
 
+use super::metrics::ActionMetrics;
 use super::ActionBusConfig;
 
 /// Worker control commands (UTF-8 bytes, never protobuf).
@@ -517,6 +519,7 @@ pub fn run_loop(
     backend: &Socket,
     config: &ActionBusConfig,
     shutdown: &AtomicBool,
+    metrics: Option<&Arc<ActionMetrics>>,
 ) -> Result<()> {
     let mut registry = WorkerRegistry::new();
     let mut goals = GoalTable::new();
@@ -534,17 +537,24 @@ pub fn run_loop(
         zmq::poll(&mut items, timeout_ms).context("poll")?;
 
         if items[0].get_revents().contains(zmq::POLLIN) {
-            handle_client_message(frontend, backend, &mut registry, &mut goals, &mut pending)?;
+            handle_client_message(
+                frontend,
+                backend,
+                &mut registry,
+                &mut goals,
+                &mut pending,
+                metrics,
+            )?;
         }
         if items[1].get_revents().contains(zmq::POLLIN) {
-            handle_worker_message(backend, frontend, &mut registry, &mut goals)?;
+            handle_worker_message(backend, frontend, &mut registry, &mut goals, metrics)?;
         }
 
         if Instant::now() >= next_sweep {
             let now = Instant::now();
             let dead = registry.sweep_dead(now, Duration::from_millis(config.heartbeat_timeout_ms));
             for wid in dead {
-                reclaim_worker_goals(frontend, &mut goals, &wid)?;
+                reclaim_worker_goals(frontend, &mut goals, &wid, metrics)?;
             }
             retry_pending(
                 frontend,
@@ -554,6 +564,7 @@ pub fn run_loop(
                 &mut goals,
                 now,
                 Duration::from_millis(config.pending_timeout_ms),
+                metrics,
             )?;
             next_sweep = now + Duration::from_millis(config.heartbeat_interval_ms);
         }
@@ -568,9 +579,14 @@ fn reclaim_worker_goals(
     frontend: &Socket,
     goals: &mut GoalTable,
     worker_identity: &[u8],
+    metrics: Option<&Arc<ActionMetrics>>,
 ) -> Result<()> {
     let dropped = goals.evict_worker(worker_identity);
     for e in dropped {
+        if let Some(m) = metrics {
+            let name = String::from_utf8_lossy(&e.action);
+            m.record_error(&name, Some(&e.goal_id));
+        }
         let err = build_error_body(ERR_WORKER_DIED, &e.action);
         let reply = build_client_reply(
             &e.client_identity,
@@ -592,6 +608,7 @@ fn handle_client_message(
     registry: &mut WorkerRegistry,
     goals: &mut GoalTable,
     pending: &mut VecDeque<PendingGoal>,
+    metrics: Option<&Arc<ActionMetrics>>,
 ) -> Result<()> {
     let frames = match frontend.recv_multipart(0) {
         Ok(f) => f,
@@ -622,6 +639,9 @@ fn handle_client_message(
                     worker_id.clone(),
                     msg.action.to_vec(),
                 );
+                if let Some(m) = metrics {
+                    m.record_run_start(&action_str, msg.goal_id);
+                }
                 let fwd = build_worker_goal(&worker_id, client_id, msg.action, msg.goal_id, msg.body);
                 backend.send_multipart(fwd, 0).context("backend send goal")?;
             } else if pending.len() < MAX_PENDING {
@@ -633,6 +653,9 @@ fn handle_client_message(
                     queued_at: Instant::now(),
                 });
             } else {
+                if let Some(m) = metrics {
+                    m.record_error(&action_str, None);
+                }
                 let err = build_error_body(ERR_NO_WORKER, msg.action);
                 let reply = build_client_reply(client_id, msg.action, msg.goal_id, KIND_RESULT, &err);
                 frontend
@@ -656,6 +679,11 @@ fn handle_client_message(
             } else {
                 // Goal unknown or already finished: synthesize a RESULT so the
                 // client's DEALER is unlocked. Body encodes the reason.
+                if let Some(m) = metrics {
+                    if let Ok(name) = std::str::from_utf8(msg.action) {
+                        m.record_error(name, None);
+                    }
+                }
                 let err = build_error_body(ERR_NO_GOAL, msg.action);
                 let reply = build_client_reply(client_id, msg.action, msg.goal_id, KIND_RESULT, &err);
                 frontend
@@ -672,6 +700,7 @@ fn handle_worker_message(
     frontend: &Socket,
     registry: &mut WorkerRegistry,
     goals: &mut GoalTable,
+    metrics: Option<&Arc<ActionMetrics>>,
 ) -> Result<()> {
     let frames = match backend.recv_multipart(0) {
         Ok(f) => f,
@@ -687,14 +716,17 @@ fn handle_worker_message(
             match control {
                 WorkerControl::Ready => {
                     let act_str = String::from_utf8_lossy(action).into_owned();
-                    registry.register(worker_id.to_vec(), act_str, Instant::now());
+                    registry.register(worker_id.to_vec(), act_str.clone(), Instant::now());
+                    if let Some(m) = metrics {
+                        m.ensure(&act_str);
+                    }
                 }
                 WorkerControl::Heartbeat => {
                     registry.heartbeat(worker_id, Instant::now());
                 }
                 WorkerControl::Disconnect => {
                     registry.remove(worker_id);
-                    reclaim_worker_goals(frontend, goals, worker_id)?;
+                    reclaim_worker_goals(frontend, goals, worker_id, metrics)?;
                 }
             }
             Ok(())
@@ -714,6 +746,11 @@ fn handle_worker_message(
             if kind == WorkerKind::Result {
                 registry.release_worker(worker_id);
                 goals.remove(goal_id);
+                if let Some(m) = metrics {
+                    if let Ok(name) = std::str::from_utf8(action) {
+                        m.record_run_ok(name, goal_id);
+                    }
+                }
             }
             Ok(())
         }
@@ -730,6 +767,7 @@ fn retry_pending(
     goals: &mut GoalTable,
     now: Instant,
     pending_timeout: Duration,
+    metrics: Option<&Arc<ActionMetrics>>,
 ) -> Result<()> {
     let mut still_pending = VecDeque::new();
     while let Some(req) = pending.pop_front() {
@@ -744,6 +782,9 @@ fn retry_pending(
                 worker_id.clone(),
                 req.action.clone(),
             );
+            if let Some(m) = metrics {
+                m.record_run_start(&act_str, &req.goal_id);
+            }
             let fwd = build_worker_goal(
                 &worker_id,
                 &req.client_identity,
@@ -755,6 +796,9 @@ fn retry_pending(
                 .send_multipart(fwd, 0)
                 .context("backend send pending goal")?;
         } else if now.duration_since(req.queued_at) > pending_timeout {
+            if let Some(m) = metrics {
+                m.record_error(&act_str, None);
+            }
             let err = build_error_body(ERR_NO_WORKER, &req.action);
             let reply = build_client_reply(
                 &req.client_identity,
