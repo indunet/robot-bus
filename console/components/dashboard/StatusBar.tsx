@@ -44,6 +44,8 @@ export default function StatusBar({ broker }: StatusBarProps) {
       <div className="flex items-center gap-5 shrink-0">
         <Metric icon={<Activity size={13} className="text-bus-muted" />} label={t('metricMsgS')} value={fmtNum(broker.msgPerSec)} accent />
         <Metric icon={<Server size={13} className="text-bus-muted" />} label={t('metricBw')} value={`${fmtBytes(broker.bytesPerSec)}/s`} />
+        <Metric label={t('metricSvcS')} value={fmtNum(broker.svcCallsPerSec)} />
+        <Metric label={t('metricActS')} value={fmtNum(broker.actRunsPerSec)} />
         <Metric label={t('metricTotal')} value={fmtNum(broker.totalMessages)} />
         <Metric label={t('metricUptime')} value={fmtUptimeLocalized(broker.uptime, t)} />
         <Metric label={t('metricPid')} value={String(broker.pid)} />

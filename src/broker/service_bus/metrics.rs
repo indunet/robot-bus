@@ -30,6 +30,7 @@ pub struct ServiceSnapshot {
 /// Aggregate snapshot.
 #[derive(Clone, Debug, Default)]
 pub struct ServiceMetricsSnapshot {
+    pub total_calls: u64,
     pub services: Vec<ServiceSnapshot>,
 }
 
@@ -134,7 +135,11 @@ impl ServiceMetrics {
             })
             .collect();
         services.sort_by(|a, b| a.name.cmp(&b.name));
-        ServiceMetricsSnapshot { services }
+        let total_calls = services.iter().map(|s| s.calls).sum();
+        ServiceMetricsSnapshot {
+            total_calls,
+            services,
+        }
     }
 }
 
@@ -151,6 +156,7 @@ mod tests {
         assert_eq!(s.services.len(), 1);
         assert_eq!(s.services[0].calls, 1);
         assert_eq!(s.services[0].errors, 0);
+        assert_eq!(s.total_calls, 1);
     }
 
     #[test]

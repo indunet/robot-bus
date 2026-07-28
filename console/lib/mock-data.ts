@@ -17,6 +17,8 @@ export interface BrokerInfo {
   actBE: string
   msgPerSec: number
   bytesPerSec: number
+  svcCallsPerSec: number
+  actRunsPerSec: number
   totalMessages: number
   totalErrors: number
 }
@@ -35,6 +37,7 @@ export interface TopicInfo {
 export interface ServiceInfo {
   name: string
   calls: number
+  callsPerSec: number
   errors: number
   timeouts: number
   avgLatencyMs: number
@@ -45,6 +48,7 @@ export interface ServiceInfo {
 export interface ActionInfo {
   name: string
   runs: number
+  runsPerSec: number
   active: number
   errors: number
   avgDurationMs: number
@@ -77,6 +81,8 @@ export const EMPTY_BROKER: BrokerInfo = {
   actBE: '—',
   msgPerSec: 0,
   bytesPerSec: 0,
+  svcCallsPerSec: 0,
+  actRunsPerSec: 0,
   totalMessages: 0,
   totalErrors: 0,
 }
@@ -84,7 +90,13 @@ export const EMPTY_BROKER: BrokerInfo = {
 export async function fetchStatus(): Promise<BrokerInfo> {
   const res = await fetch('/api/v1/status')
   if (!res.ok) throw new Error(`status ${res.status}`)
-  return res.json()
+  const body = (await res.json()) as BrokerInfo
+  return {
+    ...EMPTY_BROKER,
+    ...body,
+    svcCallsPerSec: body.svcCallsPerSec ?? 0,
+    actRunsPerSec: body.actRunsPerSec ?? 0,
+  }
 }
 
 export async function fetchTopics(): Promise<TopicInfo[]> {
@@ -98,14 +110,20 @@ export async function fetchServices(): Promise<ServiceInfo[]> {
   const res = await fetch('/api/v1/services')
   if (!res.ok) throw new Error(`services ${res.status}`)
   const body = await res.json()
-  return (body.services ?? []) as ServiceInfo[]
+  return ((body.services ?? []) as ServiceInfo[]).map((s) => ({
+    ...s,
+    callsPerSec: s.callsPerSec ?? 0,
+  }))
 }
 
 export async function fetchActions(): Promise<ActionInfo[]> {
   const res = await fetch('/api/v1/actions')
   if (!res.ok) throw new Error(`actions ${res.status}`)
   const body = await res.json()
-  return (body.actions ?? []) as ActionInfo[]
+  return ((body.actions ?? []) as ActionInfo[]).map((a) => ({
+    ...a,
+    runsPerSec: a.runsPerSec ?? 0,
+  }))
 }
 
 /** Merge server topic stats into previous rows, preserving client sparklines. */
