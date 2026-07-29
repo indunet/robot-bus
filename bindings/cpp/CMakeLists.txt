@@ -10,8 +10,6 @@ option(ROBOT_BUS_BUILD_TESTS "Build C++ smoke tests" ON)
 option(ROBOT_BUS_BUILD_MSGS "Build librobot_bus_msgs from generated protobufs" ON)
 
 find_package(Protobuf REQUIRED)
-find_package(PkgConfig REQUIRED)
-pkg_check_modules(PROTOBUF_PC REQUIRED protobuf)
 
 set(ROBOT_BUS_GENERATED_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/generated")
 set(ROBOT_BUS_INCLUDE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/include")
@@ -25,12 +23,8 @@ if(ROBOT_BUS_BUILD_MSGS)
   target_include_directories(robot_bus_msgs
     PUBLIC
       $<BUILD_INTERFACE:${ROBOT_BUS_GENERATED_ROOT}>
-      $<INSTALL_INTERFACE:include>
-    PRIVATE
-      ${PROTOBUF_PC_INCLUDE_DIRS})
-  target_compile_options(robot_bus_msgs PRIVATE ${PROTOBUF_PC_CFLAGS_OTHER})
-  target_link_libraries(robot_bus_msgs PUBLIC protobuf::libprotobuf ${PROTOBUF_PC_LIBRARIES})
-  target_link_directories(robot_bus_msgs PUBLIC ${PROTOBUF_PC_LIBRARY_DIRS})
+      $<INSTALL_INTERFACE:include>)
+  target_link_libraries(robot_bus_msgs PUBLIC protobuf::libprotobuf)
   set_target_properties(robot_bus_msgs PROPERTIES
     OUTPUT_NAME robot_bus_msgs
     VERSION ${PROJECT_VERSION}

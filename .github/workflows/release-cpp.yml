@@ -109,14 +109,14 @@ jobs:
             "${{ steps.meta.outputs.version }}" \
             "${{ matrix.arch }}" \
             /tmp/robot-bus-stage \
-            "robot-bus-cpp_${{ steps.meta.outputs.version }}_${{ matrix.arch }}.deb"
+            "robot-bus-cpp_${{ steps.meta.outputs.version }}_linux_${{ matrix.arch }}.deb"
 
       - name: Upload to Release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           gh release upload "${{ steps.meta.outputs.tag }}" \
-            "robot-bus-cpp_${{ steps.meta.outputs.version }}_${{ matrix.arch }}.deb" \
+            "robot-bus-cpp_${{ steps.meta.outputs.version }}_linux_${{ matrix.arch }}.deb" \
             --clobber
 
   windows:
@@ -244,7 +244,7 @@ jobs:
           ./scripts/package_msi.sh \
             "${{ steps.meta.outputs.version }}" \
             /tmp/robot-bus-msi \
-            "robot-bus-cpp_${{ steps.meta.outputs.version }}_x64.msi"
+            "robot-bus-cpp_${{ steps.meta.outputs.version }}_windows_x64.msi"
 
       - name: Upload to Release
         env:
@@ -252,11 +252,11 @@ jobs:
         shell: bash
         run: |
           gh release upload "${{ steps.meta.outputs.tag }}" \
-            "robot-bus-cpp_${{ steps.meta.outputs.version }}_x64.msi" \
+            "robot-bus-cpp_${{ steps.meta.outputs.version }}_windows_x64.msi" \
             --clobber
 
   macos:
-    # Apple Silicon only (M-series / darwin-arm64).
+    # Apple Silicon only (M-series / macos_arm64).
     runs-on: macos-14
     steps:
       - uses: actions/checkout@v6
@@ -336,12 +336,12 @@ jobs:
           ./scripts/package_pkg.sh \
             "${{ steps.meta.outputs.version }}" \
             /tmp/robot-bus-stage \
-            "robot-bus-cpp_${{ steps.meta.outputs.version }}_darwin-arm64.pkg"
+            "robot-bus-cpp_${{ steps.meta.outputs.version }}_macos_arm64.pkg"
 
       - name: Upload to Release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           gh release upload "${{ steps.meta.outputs.tag }}" \
-            "robot-bus-cpp_${{ steps.meta.outputs.version }}_darwin-arm64.pkg" \
+            "robot-bus-cpp_${{ steps.meta.outputs.version }}_macos_arm64.pkg" \
             --clobber

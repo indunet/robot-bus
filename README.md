@@ -192,7 +192,7 @@ See [`docs/java-api.md`](docs/java-api.md) / [`docs/android-api.md`](docs/androi
 
 ### C++ (DEB / MSI)
 
-No central package registry for C++: download `robot-bus-cpp_*.deb` / `robot-bus-cpp_*.msi` / `robot-bus-cpp_*_darwin-arm64.pkg` from [GitHub Releases](https://github.com/indunet/robot-bus/releases) (CI attaches them after you Publish a release). See [`docs/cpp-api.md`](docs/cpp-api.md).
+No central package registry for C++: download `robot-bus-cpp_*_linux_*.deb` / `robot-bus-cpp_*_windows_*.msi` / `robot-bus-cpp_*_macos_*.pkg` from [GitHub Releases](https://github.com/indunet/robot-bus/releases) (CI attaches them after you Publish a release). See [`docs/cpp-api.md`](docs/cpp-api.md).
 
 ```cpp
 #include <robot_bus/Node.hpp>

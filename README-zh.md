@@ -194,7 +194,7 @@ val pub = node.createPublisher("/imu", Imu::class.java)
 
 ### C++（DEB / MSI）
 
-C++ 无中央库：从 [GitHub Releases](https://github.com/indunet/robot-bus/releases) 下载 `robot-bus-cpp_*.deb` / `robot-bus-cpp_*.msi` / `robot-bus-cpp_*_darwin-arm64.pkg`（你写 Release 说明并 Publish 后，CI 只挂附件）。详见 [`docs/cpp-api.md`](docs/cpp-api.md)。
+C++ 无中央库：从 [GitHub Releases](https://github.com/indunet/robot-bus/releases) 下载 `robot-bus-cpp_*_linux_*.deb` / `robot-bus-cpp_*_windows_*.msi` / `robot-bus-cpp_*_macos_*.pkg`（你写 Release 说明并 Publish 后，CI 只挂附件）。详见 [`docs/cpp-api.md`](docs/cpp-api.md)。
 
 ```cpp
 #include <robot_bus/Node.hpp>
