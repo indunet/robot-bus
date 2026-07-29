@@ -12,7 +12,9 @@ use robot_bus::broker::service_bus::ServiceBusConfig;
 use robot_bus::ConsoleBrokerConfig;
 #[cfg(feature = "grpc")]
 use robot_bus::GrpcBrokerConfig;
-use robot_bus::{Publisher, RobotBusBroker, RobotBusConfig, Subscriber};
+use robot_bus::{
+    DiscoveryConfig, Publisher, RobotBusBroker, RobotBusConfig, Subscriber,
+};
 use support::{free_port, lock_brokers};
 
 fn connect_addr(bind: &str) -> String {
@@ -60,6 +62,10 @@ fn federated_bus_config(
                 .parse()
                 .expect("grpc listen"),
             cors_origins: Vec::new(),
+        },
+        discovery: DiscoveryConfig {
+            enabled: false,
+            ..DiscoveryConfig::default()
         },
         #[cfg(feature = "console")]
         console: ConsoleBrokerConfig {

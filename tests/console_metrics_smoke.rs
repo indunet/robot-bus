@@ -13,7 +13,9 @@ use robot_bus::action_bus::ActionClient;
 use robot_bus::broker::action_bus::ActionBusConfig;
 use robot_bus::broker::message_bus::BusConfig;
 use robot_bus::broker::service_bus::ServiceBusConfig;
-use robot_bus::broker::{ConsoleBrokerConfig, GrpcBrokerConfig, RobotBusBroker, RobotBusConfig};
+use robot_bus::broker::{
+    ConsoleBrokerConfig, DiscoveryConfig, GrpcBrokerConfig, RobotBusBroker, RobotBusConfig,
+};
 use robot_bus::message_bus::{Publisher, Subscriber};
 use robot_bus::service_bus::ServiceClient;
 use robot_bus::worker_thread::WorkerThread;
@@ -46,6 +48,10 @@ fn test_broker_config(
             backend_bind: format!("tcp://127.0.0.1:{act_be}"),
             bind_all_transports: false,
             ..ActionBusConfig::default()
+        },
+        discovery: DiscoveryConfig {
+            enabled: false,
+            ..DiscoveryConfig::default()
         },
         grpc: GrpcBrokerConfig {
             listen: format!("127.0.0.1:{grpc}").parse().unwrap(),

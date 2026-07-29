@@ -15,7 +15,7 @@ use robot_bus::broker::service_bus::ServiceBusConfig;
 use robot_bus::ConsoleBrokerConfig;
 #[cfg(feature = "grpc")]
 use robot_bus::GrpcBrokerConfig;
-use robot_bus::{RobotBusBroker, RobotBusConfig};
+use robot_bus::{DiscoveryConfig, RobotBusBroker, RobotBusConfig};
 use zmq::{Context, Socket, SocketType};
 
 static PROXY_ID: AtomicU64 = AtomicU64::new(0);
@@ -92,6 +92,10 @@ pub fn ephemeral_robot_bus_config() -> RobotBusConfig {
                 .parse()
                 .expect("grpc listen"),
             cors_origins: Vec::new(),
+        },
+        discovery: DiscoveryConfig {
+            enabled: false,
+            ..DiscoveryConfig::default()
         },
         #[cfg(feature = "console")]
         console: ConsoleBrokerConfig {
