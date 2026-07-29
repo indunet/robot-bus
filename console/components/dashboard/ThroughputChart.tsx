@@ -28,7 +28,7 @@ function RateChart({ title, sub, seriesLabel, unit, stroke, gradientId, icon, da
       <PanelHeader icon={icon} title={title} sub={sub} />
       <div className="flex-1 min-h-[7rem] px-2 pb-1 pt-1">
         <ResponsiveContainer width="100%" height="100%">
-          <AreaChart data={data} margin={{ top: 4, right: 8, left: -28, bottom: 2 }}>
+          <AreaChart data={data} margin={{ top: 4, right: 8, left: -16, bottom: 2 }}>
             <defs>
               <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
                 <stop offset="0%" stopColor={stroke} stopOpacity={0.25} />
