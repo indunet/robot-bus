@@ -20,6 +20,11 @@ constructor(
     private val messagePeers: List<String>? = null,
     private val servicePeers: List<String>? = null,
     private val actionPeers: List<String>? = null,
+    private val noDiscovery: Boolean = false,
+    private val domainId: Int = 0,
+    private val advertiseHost: String? = null,
+    private val discoveryAddr: String? = null,
+    private val discoveryPort: Int = 0,
 ) {
     /** Keep-alive for native `char**` peer arrays until [Broker] start returns. */
     private var messagePeersNative: StringArray? = null
@@ -54,6 +59,16 @@ constructor(
 
     fun getActionPeers(): List<String> = actionPeers.orEmpty()
 
+    fun isNoDiscovery(): Boolean = noDiscovery
+
+    fun getDomainId(): Int = domainId
+
+    fun getAdvertiseHost(): String? = advertiseHost
+
+    fun getDiscoveryAddr(): String? = discoveryAddr
+
+    fun getDiscoveryPort(): Int = discoveryPort
+
     internal fun toNative(): RobotBusC.BrokerOptions {
         val o = RobotBusC.BrokerOptions()
         o.messageXsubBind = messageXsubBind
@@ -82,6 +97,11 @@ constructor(
             o.actionPeers = actionPeersNative
             o.actionPeerCount = actionPeers.size.toLong()
         }
+        o.noDiscovery = if (noDiscovery) 1 else 0
+        o.domainId = domainId
+        o.advertiseHost = advertiseHost
+        o.discoveryAddr = discoveryAddr
+        o.discoveryPort = (discoveryPort and 0xffff).toShort()
         o.write()
         return o
     }

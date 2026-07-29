@@ -98,6 +98,7 @@ export declare class Node {
   ): Node;
   static grpc(name: string): Node;
   static grpcAt(name: string, url: string): Node;
+  static discover(name: string, options?: DiscoverNodeOptions): Node;
   readonly name: string;
   createCallbackGroup(kind: JsCallbackGroupType): JsCallbackGroup;
   createPublisher(topic: string): TopicPublisher;
@@ -179,6 +180,15 @@ export declare class MultiThreadedExecutor {
   spin(): void;
 }
 
+export interface DiscoverNodeOptions {
+  transport?: string;
+  domainId?: number;
+  brokerId?: string;
+  multicastAddr?: string;
+  multicastPort?: number;
+  timeoutSecs?: number;
+}
+
 export interface BrokerStartOptions {
   messageXsubBind?: string;
   messageXpubBind?: string;
@@ -210,6 +220,11 @@ export interface BrokerStartOptions {
   messagePeers?: string[];
   servicePeers?: string[];
   actionPeers?: string[];
+  domainId?: number;
+  noDiscovery?: boolean;
+  advertiseHost?: string;
+  discoveryAddr?: string;
+  discoveryPort?: number;
 }
 
 export declare class RobotBusBroker {

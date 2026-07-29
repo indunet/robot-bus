@@ -1,6 +1,6 @@
 [package]
 name = "robot-bus"
-version = "0.0.8"
+version = "0.0.9"
 edition = "2024"
 description = "ZeroMQ message bus: broker routing and participant SDK"
 license = "Apache-2.0"
@@ -62,6 +62,7 @@ rust-embed = { version = "8", optional = true }
 serde = { version = "1", features = ["derive"] }
 serde_json = { version = "1", optional = true }
 serde_yaml = "0.9"
+socket2 = { version = "0.6.5", features = ["all"] }
 thiserror = "2"
 tokio = { version = "1", optional = true, features = ["rt-multi-thread", "macros", "net", "sync", "time", "signal"] }
 tokio-stream = { version = "0.1", optional = true, features = ["sync"] }

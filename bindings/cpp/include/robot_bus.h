@@ -80,7 +80,42 @@ typedef struct RobotBusBrokerOptions {
   /** Peer action backends (`[id=]tcp://host:port`). Length: action_peer_count. */
   const char *const *action_peers;
   size_t action_peer_count;
+  /** When non-zero, do not send UDP discovery announces. */
+  int no_discovery;
+  /** Discovery domain id (default 0). */
+  uint32_t domain_id;
+  /** Host clients should connect to (NULL → inferred). */
+  const char *advertise_host;
+  /** Multicast group (NULL → 239.255.76.67). */
+  const char *discovery_addr;
+  /** Multicast UDP port (0 → 15550). */
+  uint16_t discovery_port;
 } RobotBusBrokerOptions;
+
+/** Client UDP discovery options (NULL fields / 0 → defaults). */
+typedef struct RobotBusDiscoverOpts {
+  uint32_t domain_id;
+  const char *broker_id;
+  const char *multicast_addr;
+  uint16_t multicast_port;
+  double timeout_secs;
+} RobotBusDiscoverOpts;
+
+/**
+ * Owned endpoints after discovery + transport apply.
+ * Free with robot_bus_applied_node_options_free.
+ */
+typedef struct RobotBusAppliedNodeOptions {
+  char *host;
+  char *transport;
+  char *grpc_url;
+  char *message_xsub;
+  char *message_xpub;
+  char *service_frontend;
+  char *service_backend;
+  char *action_backend;
+  char *action_frontend;
+} RobotBusAppliedNodeOptions;
 
 /** Parameter scalar type: 0=bool, 1=integer, 2=double, 3=string. */
 typedef enum RobotBusParameterType {
@@ -191,6 +226,20 @@ ROBOT_BUS_API RobotBusNode *robot_bus_node_inproc_with_context(RobotBusContext *
                                                               const char *prefix);
 ROBOT_BUS_API RobotBusNode *robot_bus_node_grpc(const char *name);
 ROBOT_BUS_API RobotBusNode *robot_bus_node_grpc_at(const char *name, const char *url);
+/**
+ * Discover a broker via UDP multicast, apply `transport` (`tcp`/`ipc`/`inproc`/`grpc`),
+ * and create a node. `opts` may be NULL (domain 0, default timeout).
+ */
+ROBOT_BUS_API RobotBusNode *robot_bus_node_discover(const char *name, const char *transport,
+                                                    const RobotBusDiscoverOpts *opts);
+/**
+ * Discover + apply into owned endpoint strings (`out` must be zeroed by the caller).
+ * Returns 0 on success.
+ */
+ROBOT_BUS_API int robot_bus_discover_node_options(const char *transport,
+                                                  const RobotBusDiscoverOpts *opts,
+                                                  RobotBusAppliedNodeOptions *out);
+ROBOT_BUS_API void robot_bus_applied_node_options_free(RobotBusAppliedNodeOptions *o);
 ROBOT_BUS_API void robot_bus_node_free(RobotBusNode *n);
 ROBOT_BUS_API char *robot_bus_node_name(const RobotBusNode *n);
 ROBOT_BUS_API RobotBusCallbackGroup *robot_bus_node_create_callback_group(RobotBusNode *n,

@@ -65,7 +65,29 @@ Rust：
 
 ```bash
 cargo run --bin robot_bus_broker
+# 发现 / domain: robot_bus_broker --domain-id 0 --advertise-host 10.0.0.5
+# 关闭广播:        robot_bus_broker --no-discovery
 ```
+
+### Broker 发现（UDP 组播）
+
+Broker 周期在 `239.255.76.67:15550` 上广播（刻意避开 ROS 2 / DDS 的 `7400` 与 `239.255.0.1`）。UDP 载荷为纯 protobuf [`BrokerAnnounce`](proto/robot_bus_interface/msg/v1/announce.proto)（`magic` 必须为 `RBUS`）；解不出来的包直接丢弃。
+
+Client **仍手动选择传输**（`tcp` / `ipc` / `inproc` / `grpc`）；发现只填充 host / 路径 / gRPC URL：
+
+```rust
+use robot_bus::{DiscoverOpts, Node, NodeOptions};
+
+let opts = NodeOptions::tcp().discover(DiscoverOpts {
+    domain_id: 0,
+    ..Default::default()
+})?;
+let mut node = Node::with_options("talker", opts);
+```
+
+各语言绑定同款：`Node.discover(...)`（Python / C++ / Java / Android / TypeScript Node.js）。浏览器 gRPC-Web 无 UDP 发现。
+
+同 domain 多 broker 时请指定 `broker_id`，否则发现会报错并列出候选 id。
 
 Python（`pip install robot-bus` 后自带可执行入口）：
 
@@ -189,7 +211,7 @@ auto pub = node.create_publisher("/imu");
 
 ```toml
 robot-bus = { path = "../robot-bus" }
-# 或 crates.io：robot-bus = "0.0.8"
+# 或 crates.io：robot-bus = "0.0.9"
 ```
 
 语义接近 ROS 2：`Node::new` → typed `create_publisher` / `create_subscription` → `node.spin()`（自动挂 `SingleThreadedExecutor`）。
@@ -324,6 +346,10 @@ Proto（包名 `robot_bus_interface.grpc.v1`，与 ROS `*.msg.v1` / `*.srv.v1` �
 - [`message_gateway.proto`](proto/robot_bus_interface/grpc/v1/message_gateway.proto)
 - [`service_gateway.proto`](proto/robot_bus_interface/grpc/v1/service_gateway.proto)
 - [`action_gateway.proto`](proto/robot_bus_interface/grpc/v1/action_gateway.proto)
+
+UDP 发现（包名 `robot_bus_interface.msg.v1`）：
+
+- [`announce.proto`](proto/robot_bus_interface/msg/v1/announce.proto)
 
 ## 测试
 

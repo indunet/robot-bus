@@ -92,6 +92,19 @@ public final class Node implements AutoCloseable {
                 Errors.checkPtr(RobotBusC.Holder.INSTANCE.robot_bus_node_grpc_at(name, url), "Node.grpcAt"));
     }
 
+    /** Discover a broker via UDP multicast, then connect with {@code transport}. */
+    public static Node discover(String name, String transport) {
+        return discover(name, transport, new DiscoverOpts());
+    }
+
+    public static Node discover(String name, String transport, DiscoverOpts opts) {
+        return new Node(
+                Errors.checkPtr(
+                        RobotBusC.Holder.INSTANCE.robot_bus_node_discover(
+                                name, transport, opts != null ? opts.toNative() : null),
+                        "Node.discover"));
+    }
+
     static Node fromRaw(Pointer ptr) {
         return new Node(ptr);
     }

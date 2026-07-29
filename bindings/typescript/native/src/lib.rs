@@ -15,6 +15,7 @@ use robot_bus::broker::{
     apply_federation_opts, parse_robot_bus_config, robot_bus_broker_help,
     RobotBusBroker as RustRobotBusBroker, RobotBusConfig,
 };
+use robot_bus::discovery::{wait as discover_wait, DiscoverOpts as RustDiscoverOpts};
 use robot_bus::errors::BusError;
 use robot_bus::message_bus::{Publisher as RustPublisher, Subscriber as RustSubscriber};
 use robot_bus::runtime::{
@@ -540,6 +541,50 @@ impl Node {
         }
     }
 
+    /// Discover a broker via UDP multicast, then connect with `transport`.
+    #[napi(factory)]
+    pub fn discover(name: String, options: Option<DiscoverNodeOptions>) -> Result<Self> {
+        let o = options.unwrap_or_default();
+        let transport = o.transport.unwrap_or_else(|| "tcp".into());
+        let base = match transport.as_str() {
+            "tcp" => RustNodeOptions::tcp(),
+            "ipc" => RustNodeOptions::ipc(),
+            "inproc" => RustNodeOptions::inproc(),
+            "grpc" => RustNodeOptions::grpc(),
+            other => {
+                return Err(Error::from_reason(format!("unknown transport {other:?}")));
+            }
+        };
+        let mut opts = RustDiscoverOpts {
+            domain_id: o.domain_id.unwrap_or(0),
+            broker_id: o.broker_id.filter(|s| !s.is_empty()),
+            ..Default::default()
+        };
+        if let Some(addr) = o.multicast_addr.as_deref() {
+            if !addr.is_empty() {
+                opts.multicast_addr = addr
+                    .parse()
+                    .map_err(|e| Error::from_reason(format!("invalid multicast_addr: {e}")))?;
+            }
+        }
+        if let Some(port) = o.multicast_port {
+            if port != 0 {
+                opts.multicast_port = port as u16;
+            }
+        }
+        if let Some(timeout) = o.timeout_secs {
+            if timeout > 0.0 {
+                opts.timeout = Duration::from_secs_f64(timeout);
+            }
+        }
+        let applied = discover_wait(opts)
+            .and_then(|ann| ann.apply(base))
+            .map_err(bus_err)?;
+        Ok(Self {
+            inner: RustNode::with_options(name, applied),
+        })
+    }
+
     #[napi(getter)]
     pub fn name(&self) -> String {
         self.inner.name().to_string()
@@ -977,6 +1022,17 @@ impl MultiThreadedExecutor {
 }
 
 #[napi(object)]
+#[derive(Default)]
+pub struct DiscoverNodeOptions {
+    pub transport: Option<String>,
+    pub domain_id: Option<u32>,
+    pub broker_id: Option<String>,
+    pub multicast_addr: Option<String>,
+    pub multicast_port: Option<u32>,
+    pub timeout_secs: Option<f64>,
+}
+
+#[napi(object)]
 pub struct BrokerStartOptions {
     pub message_xsub_bind: Option<String>,
     pub message_xpub_bind: Option<String>,
@@ -1008,6 +1064,11 @@ pub struct BrokerStartOptions {
     pub message_peers: Option<Vec<String>>,
     pub service_peers: Option<Vec<String>>,
     pub action_peers: Option<Vec<String>>,
+    pub domain_id: Option<u32>,
+    pub no_discovery: Option<bool>,
+    pub advertise_host: Option<String>,
+    pub discovery_addr: Option<String>,
+    pub discovery_port: Option<u32>,
 }
 
 #[napi]
@@ -1123,6 +1184,29 @@ impl RobotBusBroker {
                 o.action_peers.as_deref().unwrap_or(&[]),
             )
             .map_err(anyhow_err)?;
+            if o.no_discovery.unwrap_or(false) {
+                config.discovery.enabled = false;
+            }
+            if let Some(v) = o.domain_id {
+                config.discovery.domain_id = v;
+            }
+            if let Some(v) = o.advertise_host {
+                if !v.is_empty() {
+                    config.discovery.advertise_host = Some(v);
+                }
+            }
+            if let Some(v) = o.discovery_addr {
+                if !v.is_empty() {
+                    config.discovery.multicast_addr = v.parse().map_err(|e| {
+                        Error::from_reason(format!("invalid discovery_addr: {e}"))
+                    })?;
+                }
+            }
+            if let Some(port) = o.discovery_port {
+                if port != 0 {
+                    config.discovery.multicast_port = port as u16;
+                }
+            }
         }
 
         let broker = match context {

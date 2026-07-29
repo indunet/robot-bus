@@ -14,7 +14,13 @@ use zmq::Context as ZmqContext;
 use super::action_bus::{self, ActionBusConfig, ActionMetrics};
 use super::message_bus::{self, BusConfig, MessageMetrics};
 use super::service_bus::{self, ServiceBusConfig, ServiceMetrics};
+use crate::discovery::{
+    resolve_advertise_host, spawn_announcer, tcp_port_from_bind, AnnounceHandle,
+    AnnouncerPayload, BrokerAnnouncement, DiscoveryConfig,
+};
+use crate::generated::robot_bus_interface::msg::v1::TcpPorts;
 use crate::runtime::Context as BusContext;
+use crate::transports::IPC_DIR;
 
 #[cfg(feature = "grpc")]
 use crate::grpc::{serve_with_shutdown, GatewayConfig};
@@ -252,6 +258,7 @@ pub struct RobotBusConfig {
     pub message: BusConfig,
     pub service: ServiceBusConfig,
     pub action: ActionBusConfig,
+    pub discovery: DiscoveryConfig,
     #[cfg(feature = "grpc")]
     pub grpc: GrpcBrokerConfig,
     #[cfg(feature = "console")]
@@ -406,6 +413,7 @@ pub struct RobotBusBroker {
     pub message: MessageBusBroker,
     pub service: ServiceBusBroker,
     pub action: ActionBusBroker,
+    discovery: Option<AnnounceHandle>,
     #[cfg(feature = "grpc")]
     grpc: GrpcGatewayHandle,
     #[cfg(feature = "console")]
@@ -422,7 +430,8 @@ impl RobotBusBroker {
     }
 
     /// Start buses using a shared [`crate::Context`] (required for inproc with SDK Nodes).
-    pub fn start_with_context(context: BusContext, config: RobotBusConfig) -> Result<Self> {
+    pub fn start_with_context(context: BusContext, mut config: RobotBusConfig) -> Result<Self> {
+        let broker_id = normalize_broker_id(&mut config);
         let zmq = context.clone_zmq();
         // Capture metrics only when the console will read them — otherwise keep
         // the message bus on a plain proxy_steerable with zero monitoring overhead.
@@ -436,7 +445,7 @@ impl RobotBusBroker {
         let message_metrics = None;
 
         let message =
-            MessageBusBroker::start_with_zmq(zmq.clone(), config.message, message_metrics)?;
+            MessageBusBroker::start_with_zmq(zmq.clone(), config.message.clone(), message_metrics)?;
         #[cfg(feature = "console")]
         let (service_metrics, action_metrics) = if config.console.enabled {
             (Some(ServiceMetrics::new()), Some(ActionMetrics::new()))
@@ -446,8 +455,9 @@ impl RobotBusBroker {
         #[cfg(not(feature = "console"))]
         let (service_metrics, action_metrics) = (None, None);
         let service =
-            ServiceBusBroker::start_with_zmq(zmq.clone(), config.service, service_metrics)?;
-        let action = ActionBusBroker::start_with_zmq(zmq, config.action, action_metrics)?;
+            ServiceBusBroker::start_with_zmq(zmq.clone(), config.service.clone(), service_metrics)?;
+        let action =
+            ActionBusBroker::start_with_zmq(zmq, config.action.clone(), action_metrics)?;
 
         #[cfg(feature = "grpc")]
         let grpc = {
@@ -457,7 +467,7 @@ impl RobotBusBroker {
                 message_xsub: bind_to_connect(&message.xsub_bind),
                 service_frontend: bind_to_connect(&service.frontend_bind),
                 action_frontend: bind_to_connect(&action.frontend_bind),
-                cors_origins: config.grpc.cors_origins,
+                cors_origins: config.grpc.cors_origins.clone(),
             };
             GrpcGatewayHandle::start(gateway)?
         };
@@ -495,10 +505,62 @@ impl RobotBusBroker {
             None
         };
 
+        let discovery = if config.discovery.enabled {
+            let advertise_host = resolve_advertise_host(&config.discovery);
+            let bind_all = config.message.bind_all_transports;
+            let tcp = TcpPorts {
+                message_xsub: tcp_port_from_bind(&config.message.xsub_bind)
+                    .unwrap_or(crate::transports::XSUB_PORT) as u32,
+                message_xpub: tcp_port_from_bind(&config.message.xpub_bind)
+                    .unwrap_or(crate::transports::XPUB_PORT) as u32,
+                service_frontend: tcp_port_from_bind(&config.service.frontend_bind)
+                    .unwrap_or(crate::transports::SERVICE_FRONTEND_PORT) as u32,
+                service_backend: tcp_port_from_bind(&config.service.backend_bind)
+                    .unwrap_or(crate::transports::SERVICE_BACKEND_PORT) as u32,
+                action_frontend: tcp_port_from_bind(&config.action.frontend_bind)
+                    .unwrap_or(crate::transports::ACTION_FRONTEND_PORT) as u32,
+                action_backend: tcp_port_from_bind(&config.action.backend_bind)
+                    .unwrap_or(crate::transports::ACTION_BACKEND_PORT) as u32,
+            };
+            let grpc_url = {
+                #[cfg(feature = "grpc")]
+                {
+                    Some(format!(
+                        "http://{advertise_host}:{}",
+                        config.grpc.listen.port()
+                    ))
+                }
+                #[cfg(not(feature = "grpc"))]
+                {
+                    let _ = &advertise_host;
+                    None
+                }
+            };
+            let announcement = BrokerAnnouncement {
+                broker_id: broker_id.clone(),
+                domain_id: config.discovery.domain_id,
+                advertise_host,
+                tcp: Some(tcp),
+                ipc_dir: bind_all.then(|| IPC_DIR.to_string()),
+                inproc_prefix: bind_all.then(|| "robot_bus".to_string()),
+                grpc_url,
+            };
+            Some(
+                spawn_announcer(
+                    config.discovery.clone(),
+                    AnnouncerPayload { announcement },
+                )
+                .map_err(|e| anyhow!("start discovery announcer: {e}"))?,
+            )
+        } else {
+            None
+        };
+
         Ok(Self {
             message,
             service,
             action,
+            discovery,
             #[cfg(feature = "grpc")]
             grpc,
             #[cfg(feature = "console")]
@@ -527,6 +589,9 @@ impl RobotBusBroker {
     /// Stop all buses (and gRPC / console) and join their threads.
     pub fn stop(self) -> Result<()> {
         // Stop in reverse start order; collect first error.
+        if let Some(d) = self.discovery {
+            d.stop();
+        }
         #[cfg(feature = "console")]
         let console = match self.console {
             Some(c) => c.stop(),
@@ -555,4 +620,21 @@ impl RobotBusBroker {
             action.and(service).and(message)
         }
     }
+}
+
+/// Ensure message/service/action share one broker id (for announce + federation hop-path).
+fn normalize_broker_id(config: &mut RobotBusConfig) -> String {
+    let id = [
+        config.message.broker_id.as_str(),
+        config.service.broker_id.as_str(),
+        config.action.broker_id.as_str(),
+    ]
+    .into_iter()
+    .find(|s| !s.is_empty())
+    .map(str::to_string)
+    .unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
+    config.message.broker_id = id.clone();
+    config.service.broker_id = id.clone();
+    config.action.broker_id = id.clone();
+    id
 }

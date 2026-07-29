@@ -13,6 +13,7 @@ use crate::broker::{
     apply_federation_opts, parse_robot_bus_config, robot_bus_broker_help,
     RobotBusBroker as RustRobotBusBroker, RobotBusConfig,
 };
+use crate::discovery::{wait as discover_wait, DiscoverOpts as RustDiscoverOpts};
 use crate::errors::BusError;
 use crate::message_bus::{Publisher as RustPublisher, Subscriber as RustSubscriber};
 use crate::runtime::{
@@ -126,6 +127,61 @@ fn py_node_options(
         action_backend,
         action_frontend,
     })
+}
+
+fn py_discover_options(
+    transport: &str,
+    domain_id: u32,
+    broker_id: Option<String>,
+    multicast_addr: Option<&str>,
+    multicast_port: Option<u16>,
+    timeout: f64,
+) -> PyResult<RustNodeOptions> {
+    let base = match transport {
+        "tcp" => RustNodeOptions::tcp(),
+        "ipc" => RustNodeOptions::ipc(),
+        "inproc" => RustNodeOptions::inproc(),
+        "grpc" => {
+            #[cfg(feature = "grpc")]
+            {
+                RustNodeOptions::grpc()
+            }
+            #[cfg(not(feature = "grpc"))]
+            {
+                return Err(PyRuntimeError::new_err(
+                    "transport=\"grpc\" requires the grpc feature",
+                ));
+            }
+        }
+        other => {
+            return Err(PyRuntimeError::new_err(format!(
+                "unknown transport {other:?}"
+            )));
+        }
+    };
+    let mut opts = RustDiscoverOpts {
+        domain_id,
+        broker_id: broker_id.filter(|s| !s.is_empty()),
+        ..Default::default()
+    };
+    if let Some(addr) = multicast_addr {
+        if !addr.is_empty() {
+            opts.multicast_addr = addr
+                .parse()
+                .map_err(|e| PyRuntimeError::new_err(format!("invalid multicast_addr: {e}")))?;
+        }
+    }
+    if let Some(port) = multicast_port {
+        if port != 0 {
+            opts.multicast_port = port;
+        }
+    }
+    if timeout > 0.0 {
+        opts.timeout = Duration::from_secs_f64(timeout);
+    }
+    discover_wait(opts)
+        .and_then(|ann| ann.apply(base))
+        .map_err(bus_err)
 }
 
 #[pyfunction]
@@ -701,6 +757,44 @@ impl PyNode {
         }
     }
 
+    /// Discover a broker via UDP multicast, then connect with `transport`.
+    ///
+    /// Transport is still chosen by the caller (`tcp` / `ipc` / `inproc` / `grpc`);
+    /// discovery only fills host / paths / gRPC URL.
+    #[classmethod]
+    #[pyo3(signature = (
+        name,
+        transport="tcp",
+        *,
+        domain_id=0,
+        broker_id=None,
+        multicast_addr=None,
+        multicast_port=None,
+        timeout=3.0,
+    ))]
+    fn discover(
+        _cls: &Bound<'_, PyType>,
+        name: String,
+        transport: &str,
+        domain_id: u32,
+        broker_id: Option<String>,
+        multicast_addr: Option<&str>,
+        multicast_port: Option<u16>,
+        timeout: f64,
+    ) -> PyResult<Self> {
+        let options = py_discover_options(
+            transport,
+            domain_id,
+            broker_id,
+            multicast_addr,
+            multicast_port,
+            timeout,
+        )?;
+        Ok(Self {
+            inner: RustNode::with_options(name, options),
+        })
+    }
+
     /// gRPC client node talking to `url` (e.g. `http://127.0.0.1:15770`).
     #[cfg(feature = "grpc")]
     #[classmethod]
@@ -997,6 +1091,11 @@ impl PyRobotBusBroker {
         message_peers = None,
         service_peers = None,
         action_peers = None,
+        domain_id = 0,
+        no_discovery = false,
+        advertise_host = None,
+        discovery_addr = None,
+        discovery_port = None,
     ))]
     fn start(
         context: Option<&PyContext>,
@@ -1030,6 +1129,11 @@ impl PyRobotBusBroker {
         message_peers: Option<Vec<String>>,
         service_peers: Option<Vec<String>>,
         action_peers: Option<Vec<String>>,
+        domain_id: u32,
+        no_discovery: bool,
+        advertise_host: Option<String>,
+        discovery_addr: Option<String>,
+        discovery_port: Option<u16>,
     ) -> PyResult<Self> {
         let mut config = RobotBusConfig::default();
 
@@ -1152,6 +1256,28 @@ impl PyRobotBusBroker {
             action_peers.as_deref().unwrap_or(&[]),
         )
         .map_err(anyhow_err)?;
+
+        if no_discovery {
+            config.discovery.enabled = false;
+        }
+        config.discovery.domain_id = domain_id;
+        if let Some(v) = advertise_host {
+            if !v.is_empty() {
+                config.discovery.advertise_host = Some(v);
+            }
+        }
+        if let Some(v) = discovery_addr {
+            if !v.is_empty() {
+                config.discovery.multicast_addr = v
+                    .parse()
+                    .map_err(|e| PyRuntimeError::new_err(format!("invalid discovery_addr: {e}")))?;
+            }
+        }
+        if let Some(port) = discovery_port {
+            if port != 0 {
+                config.discovery.multicast_port = port;
+            }
+        }
 
         let broker = match context {
             Some(c) => RustRobotBusBroker::start_with_context(c.inner.clone(), config),

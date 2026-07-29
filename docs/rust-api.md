@@ -3,9 +3,9 @@
 `Cargo.toml`：
 
 ```toml
-robot-bus = "0.0.8"
+robot-bus = "0.0.9"
 # 本地：robot-bus = { path = "../robot-bus" }
-# 默认已启用 gRPC；若需关闭：robot-bus = { version = "0.0.8", default-features = false }
+# 默认已启用 gRPC；若需关闭：robot-bus = { version = "0.0.9", default-features = false }
 ```
 
 ## Broker 启动
@@ -16,6 +16,7 @@ robot-bus = "0.0.8"
 cargo run --bin robot_bus_broker
 # 查看参数：cargo run --bin robot_bus_broker -- --help
 # 只要 TCP：加 --tcp-only
+# 发现：--domain-id N / --advertise-host HOST / --no-discovery
 ```
 
 **默认端点：**
@@ -31,8 +32,29 @@ cargo run --bin robot_bus_broker
 | grpc | `0.0.0.0:15770` | — | — |
 | grpc-web | `0.0.0.0:15770` | — | — |
 | console http | `0.0.0.0:15771` | — | — |
+| discovery (UDP multicast) | `239.255.76.67:15550` | — | — |
 
 SDK 侧 `Node::new` 默认连本机 **tcp**（`localhost` + 上表端口）；`Node::ipc` / `Node::inproc` / `Node::grpc` 分别走对应传输。
+
+### UDP 发现（填地址，不选传输）
+
+Broker 默认周期广播 protobuf `BrokerAnnounce`（`proto/robot_bus_interface/msg/v1/announce.proto`）。`decode` 失败或消息内 `magic != "RBUS"` 视为无效丢弃。与 ROS 2 DDS 发现端口段（`7400 + 250 * domainId`）互不冲突。
+
+传输方式仍由你指定；发现只填充位置：
+
+```rust
+use robot_bus::{DiscoverOpts, Node, NodeOptions};
+
+// tcp / ipc / inproc / grpc 均可；discover 只填 host / 路径 / URL
+let opts = NodeOptions::tcp().discover(DiscoverOpts {
+    domain_id: 0,
+    broker_id: None, // 同 domain 多于一个 broker 时必填
+    ..Default::default()
+})?;
+let mut node = Node::with_options("talker", opts);
+```
+
+或分两步：`discovery::wait(opts)?` → `ann.apply(NodeOptions::grpc())?`。
 
 **同进程 inproc：** ZeroMQ 的 `inproc://` 是 context-local。嵌入式 broker 与 Node 必须共用同一个 [`Context`](../src/runtime/context.rs)：
 
@@ -515,6 +537,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 ```
 
 Proto 包名：`robot_bus_interface.grpc.v1`。见 `proto/robot_bus_interface/grpc/v1/{message,service,action}_gateway.proto`。
+
+UDP 发现：`robot_bus_interface.msg.v1`，见 `proto/robot_bus_interface/msg/v1/announce.proto`。
 
 ---
 

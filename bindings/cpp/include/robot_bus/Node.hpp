@@ -352,6 +352,13 @@ class Node {
         check_ptr(robot_bus_node_grpc_at(name.c_str(), url), "Node::grpc_at")));
   }
 
+  /// Discover a broker (UDP multicast) then connect with the chosen transport.
+  static Node discover(std::string name, const char *transport = "tcp",
+                       const RobotBusDiscoverOpts *opts = nullptr) {
+    return Node(static_cast<RobotBusNode *>(check_ptr(
+        robot_bus_node_discover(name.c_str(), transport, opts), "Node::discover")));
+  }
+
   ~Node() { robot_bus_node_free(n_); }
   Node(const Node &) = delete;
   Node &operator=(const Node &) = delete;

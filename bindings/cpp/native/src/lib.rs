@@ -12,6 +12,10 @@ use robot_bus::action_bus::ActionKind;
 use robot_bus::broker::{
     apply_federation_opts, RobotBusBroker as RustRobotBusBroker, RobotBusConfig,
 };
+use robot_bus::discovery::{
+    wait as discover_wait, DiscoverOpts as RustDiscoverOpts, DEFAULT_DISCOVERY_PORT,
+    DEFAULT_DISCOVERY_TIMEOUT, DEFAULT_MULTICAST_ADDR,
+};
 use robot_bus::errors::BusError;
 use robot_bus::message_bus::{Publisher as RustPublisher, Subscriber as RustSubscriber};
 use robot_bus::runtime::{
@@ -1024,6 +1028,193 @@ pub extern "C" fn robot_bus_node_grpc_at(
     Box::into_raw(Box::new(RobotBusNode {
         inner: RustNode::grpc_at(name, url),
     }))
+}
+
+#[repr(C)]
+pub struct RobotBusDiscoverOpts {
+    pub domain_id: u32,
+    pub broker_id: *const c_char,
+    pub multicast_addr: *const c_char,
+    pub multicast_port: u16,
+    pub timeout_secs: f64,
+}
+
+#[repr(C)]
+pub struct RobotBusAppliedNodeOptions {
+    pub host: *mut c_char,
+    pub transport: *mut c_char,
+    pub grpc_url: *mut c_char,
+    pub message_xsub: *mut c_char,
+    pub message_xpub: *mut c_char,
+    pub service_frontend: *mut c_char,
+    pub service_backend: *mut c_char,
+    pub action_backend: *mut c_char,
+    pub action_frontend: *mut c_char,
+}
+
+fn parse_discover_opts(opts: *const RobotBusDiscoverOpts) -> Result<RustDiscoverOpts, ()> {
+    let mut out = RustDiscoverOpts::default();
+    if opts.is_null() {
+        return Ok(out);
+    }
+    let o = unsafe { &*opts };
+    out.domain_id = o.domain_id;
+    if let Some(id) = cstr_opt(o.broker_id) {
+        if !id.is_empty() {
+            out.broker_id = Some(id.to_string());
+        }
+    }
+    if let Some(addr) = cstr_opt(o.multicast_addr) {
+        if !addr.is_empty() {
+            out.multicast_addr = addr.parse().map_err(|e| {
+                set_error(format!("invalid multicast_addr: {e}"));
+            })?;
+        }
+    }
+    if o.multicast_port != 0 {
+        out.multicast_port = o.multicast_port;
+    }
+    if o.timeout_secs > 0.0 {
+        out.timeout = Duration::from_secs_f64(o.timeout_secs);
+    }
+    let _ = (DEFAULT_MULTICAST_ADDR, DEFAULT_DISCOVERY_PORT, DEFAULT_DISCOVERY_TIMEOUT);
+    Ok(out)
+}
+
+fn transport_base_options(transport: &str) -> Result<RustNodeOptions, c_int> {
+    match transport {
+        "tcp" => Ok(RustNodeOptions::tcp()),
+        "ipc" => Ok(RustNodeOptions::ipc()),
+        "inproc" => Ok(RustNodeOptions::inproc()),
+        "grpc" => Ok(RustNodeOptions::grpc()),
+        other => Err(err(format!("unknown transport {other:?}"))),
+    }
+}
+
+fn apply_discovered(
+    transport: &str,
+    opts: *const RobotBusDiscoverOpts,
+) -> Result<RustNodeOptions, c_int> {
+    let discover = match parse_discover_opts(opts) {
+        Ok(d) => d,
+        Err(()) => return Err(-1),
+    };
+    let base = transport_base_options(transport)?;
+    match discover_wait(discover).and_then(|ann| ann.apply(base)) {
+        Ok(o) => Ok(o),
+        Err(e) => Err(bus_err(e)),
+    }
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn robot_bus_node_discover(
+    name: *const c_char,
+    transport: *const c_char,
+    opts: *const RobotBusDiscoverOpts,
+) -> *mut RobotBusNode {
+    clear_error();
+    let name = match cstr_req(name) {
+        Ok(n) => n.to_string(),
+        Err(_) => return ptr::null_mut(),
+    };
+    let transport = match cstr_req(transport) {
+        Ok(t) => t,
+        Err(_) => return ptr::null_mut(),
+    };
+    let options = match apply_discovered(transport, opts) {
+        Ok(o) => o,
+        Err(_) => return ptr::null_mut(),
+    };
+    Box::into_raw(Box::new(RobotBusNode {
+        inner: RustNode::with_options(name, options),
+    }))
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn robot_bus_discover_node_options(
+    transport: *const c_char,
+    opts: *const RobotBusDiscoverOpts,
+    out: *mut RobotBusAppliedNodeOptions,
+) -> c_int {
+    clear_error();
+    if out.is_null() {
+        return err("null out");
+    }
+    let transport = match cstr_req(transport) {
+        Ok(t) => t,
+        Err(_) => return -1,
+    };
+    let options = match apply_discovered(transport, opts) {
+        Ok(o) => o,
+        Err(code) => return code,
+    };
+    unsafe {
+        (*out).host = dup_string(&options.host);
+        (*out).transport = dup_string(&options.transport);
+        (*out).grpc_url = options
+            .grpc_url
+            .as_deref()
+            .map(dup_string)
+            .unwrap_or(ptr::null_mut());
+        (*out).message_xsub = options
+            .message_xsub
+            .as_deref()
+            .map(dup_string)
+            .unwrap_or(ptr::null_mut());
+        (*out).message_xpub = options
+            .message_xpub
+            .as_deref()
+            .map(dup_string)
+            .unwrap_or(ptr::null_mut());
+        (*out).service_frontend = options
+            .service_frontend
+            .as_deref()
+            .map(dup_string)
+            .unwrap_or(ptr::null_mut());
+        (*out).service_backend = options
+            .service_backend
+            .as_deref()
+            .map(dup_string)
+            .unwrap_or(ptr::null_mut());
+        (*out).action_backend = options
+            .action_backend
+            .as_deref()
+            .map(dup_string)
+            .unwrap_or(ptr::null_mut());
+        (*out).action_frontend = options
+            .action_frontend
+            .as_deref()
+            .map(dup_string)
+            .unwrap_or(ptr::null_mut());
+    }
+    ok()
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn robot_bus_applied_node_options_free(o: *mut RobotBusAppliedNodeOptions) {
+    if o.is_null() {
+        return;
+    }
+    unsafe {
+        robot_bus_free_string((*o).host);
+        robot_bus_free_string((*o).transport);
+        robot_bus_free_string((*o).grpc_url);
+        robot_bus_free_string((*o).message_xsub);
+        robot_bus_free_string((*o).message_xpub);
+        robot_bus_free_string((*o).service_frontend);
+        robot_bus_free_string((*o).service_backend);
+        robot_bus_free_string((*o).action_backend);
+        robot_bus_free_string((*o).action_frontend);
+        (*o).host = ptr::null_mut();
+        (*o).transport = ptr::null_mut();
+        (*o).grpc_url = ptr::null_mut();
+        (*o).message_xsub = ptr::null_mut();
+        (*o).message_xpub = ptr::null_mut();
+        (*o).service_frontend = ptr::null_mut();
+        (*o).service_backend = ptr::null_mut();
+        (*o).action_backend = ptr::null_mut();
+        (*o).action_frontend = ptr::null_mut();
+    }
 }
 
 #[unsafe(no_mangle)]
@@ -2106,6 +2297,11 @@ pub struct RobotBusBrokerOptions {
     /// Peer action backends (`ActionPeer::from_backend`); length `action_peer_count`.
     pub action_peers: *const *const c_char,
     pub action_peer_count: usize,
+    pub no_discovery: c_int,
+    pub domain_id: u32,
+    pub advertise_host: *const c_char,
+    pub discovery_addr: *const c_char,
+    pub discovery_port: u16,
 }
 
 #[unsafe(no_mangle)]
@@ -2200,6 +2396,27 @@ fn parse_broker_config(opts: *const RobotBusBrokerOptions) -> Result<RobotBusCon
         set_error(e.to_string());
         return Err(());
     }
+
+    if o.no_discovery != 0 {
+        config.discovery.enabled = false;
+    }
+    config.discovery.domain_id = o.domain_id;
+    if let Some(v) = cstr_opt(o.advertise_host) {
+        if !v.is_empty() {
+            config.discovery.advertise_host = Some(v.to_string());
+        }
+    }
+    if let Some(v) = cstr_opt(o.discovery_addr) {
+        if !v.is_empty() {
+            config.discovery.multicast_addr = v.parse().map_err(|e| {
+                set_error(format!("invalid discovery_addr: {e}"));
+            })?;
+        }
+    }
+    if o.discovery_port != 0 {
+        config.discovery.multicast_port = o.discovery_port;
+    }
+
     Ok(config)
 }
 

@@ -21,11 +21,11 @@ CMake sets `CMAKE_CXX_STANDARD 17`. Building with a newer standard (e.g. `-DCMAK
 
 ```bash
 # Debian / Ubuntu (amd64 example)
-sudo apt install ./robot-bus-cpp_0.0.8_amd64.deb
+sudo apt install ./robot-bus-cpp_0.0.9_amd64.deb
 # Depends: libzmq5, libprotobuf*
 
 # macOS Apple Silicon
-sudo installer -pkg robot-bus-cpp_0.0.8_darwin-arm64.pkg -target /
+sudo installer -pkg robot-bus-cpp_0.0.9_darwin-arm64.pkg -target /
 # Installs under /usr/local ({bin,lib,include})
 
 # Or from source (dev)
@@ -86,6 +86,15 @@ auto node = robot_bus::Node::inproc_with_context(ctx, "pilot");
 ```
 
 tcp / ipc / gRPC do not require a shared context.
+
+### UDP discovery (fill addresses, pick transport yourself)
+
+```cpp
+RobotBusDiscoverOpts d{};
+d.domain_id = 0;
+auto node = robot_bus::Node::discover("talker", "tcp", &d);
+// RobotBusBrokerOptions: domain_id / advertise_host / no_discovery
+```
 
 ## Local parameters
 

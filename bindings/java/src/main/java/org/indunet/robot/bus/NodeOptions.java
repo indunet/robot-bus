@@ -73,6 +73,34 @@ public final class NodeOptions {
         return actionFrontend;
     }
 
+    /** Discover broker endpoints for {@code transport} and return filled options. */
+    public static NodeOptions discover(String transport, DiscoverOpts opts) {
+        RobotBusC.AppliedNodeOptions out = new RobotBusC.AppliedNodeOptions();
+        Errors.check(
+                RobotBusC.Holder.INSTANCE.robot_bus_discover_node_options(
+                        transport, opts != null ? opts.toNative() : null, out),
+                "NodeOptions.discover");
+        out.read();
+        try {
+            return new NodeOptions(
+                    ptrString(out.host) != null ? ptrString(out.host) : "localhost",
+                    ptrString(out.transport) != null ? ptrString(out.transport) : transport,
+                    ptrString(out.grpcUrl),
+                    ptrString(out.messageXsub),
+                    ptrString(out.messageXpub),
+                    ptrString(out.serviceFrontend),
+                    ptrString(out.serviceBackend),
+                    ptrString(out.actionBackend),
+                    ptrString(out.actionFrontend));
+        } finally {
+            RobotBusC.Holder.INSTANCE.robot_bus_applied_node_options_free(out);
+        }
+    }
+
+    private static String ptrString(com.sun.jna.Pointer p) {
+        return p != null ? p.getString(0) : null;
+    }
+
     RobotBusC.NodeOptions toNative() {
         RobotBusC.NodeOptions o = new RobotBusC.NodeOptions();
         o.host = host;

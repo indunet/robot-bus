@@ -582,6 +582,21 @@ class Node : AutoCloseable {
                 ),
             )
 
+        /** Discover a broker via UDP multicast, then connect with [transport]. */
+        @JvmStatic
+        @JvmOverloads
+        fun discover(name: String, transport: String = "tcp", opts: DiscoverOpts? = null): Node =
+            Node(
+                Errors.checkPtr(
+                    RobotBusC.Holder.INSTANCE.robot_bus_node_discover(
+                        name,
+                        transport,
+                        opts?.toNative(),
+                    ),
+                    "Node.discover",
+                ),
+            )
+
         @JvmStatic
         internal fun fromRaw(ptr: Pointer): Node = Node(ptr)
 

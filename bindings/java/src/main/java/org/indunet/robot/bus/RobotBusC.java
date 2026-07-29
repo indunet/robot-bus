@@ -136,6 +136,12 @@ interface RobotBusC extends Library {
 
     Pointer robot_bus_node_grpc_at(String name, String url);
 
+    Pointer robot_bus_node_discover(String name, String transport, DiscoverOpts opts);
+
+    int robot_bus_discover_node_options(String transport, DiscoverOpts opts, AppliedNodeOptions out);
+
+    void robot_bus_applied_node_options_free(AppliedNodeOptions o);
+
     void robot_bus_node_free(Pointer n);
 
     Pointer robot_bus_node_name(Pointer n);
@@ -366,7 +372,12 @@ interface RobotBusC extends Library {
         "servicePeers",
         "servicePeerCount",
         "actionPeers",
-        "actionPeerCount"
+        "actionPeerCount",
+        "noDiscovery",
+        "domainId",
+        "advertiseHost",
+        "discoveryAddr",
+        "discoveryPort"
     })
     class BrokerOptions extends Structure {
         public String messageXsubBind;
@@ -386,6 +397,49 @@ interface RobotBusC extends Library {
         public long servicePeerCount;
         public Pointer actionPeers;
         public long actionPeerCount;
+        public int noDiscovery;
+        public int domainId;
+        public String advertiseHost;
+        public String discoveryAddr;
+        public short discoveryPort;
+    }
+
+    @Structure.FieldOrder({
+        "domainId",
+        "brokerId",
+        "multicastAddr",
+        "multicastPort",
+        "timeoutSecs"
+    })
+    class DiscoverOpts extends Structure {
+        public int domainId;
+        public String brokerId;
+        public String multicastAddr;
+        public short multicastPort;
+        public double timeoutSecs;
+    }
+
+    @Structure.FieldOrder({
+        "host",
+        "transport",
+        "grpcUrl",
+        "messageXsub",
+        "messageXpub",
+        "serviceFrontend",
+        "serviceBackend",
+        "actionBackend",
+        "actionFrontend"
+    })
+    class AppliedNodeOptions extends Structure {
+        public Pointer host;
+        public Pointer transport;
+        public Pointer grpcUrl;
+        public Pointer messageXsub;
+        public Pointer messageXpub;
+        public Pointer serviceFrontend;
+        public Pointer serviceBackend;
+        public Pointer actionBackend;
+        public Pointer actionFrontend;
     }
 
     @Structure.FieldOrder({"kind", "body", "bodyLen", "goalId", "actionName"})

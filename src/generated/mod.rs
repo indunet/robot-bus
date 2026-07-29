@@ -130,6 +130,15 @@ pub mod action {
     }
 }
 
+/// UDP multicast broker discovery messages (`robot_bus_interface.msg.v1`).
+pub mod robot_bus_interface {
+    pub mod msg {
+        pub mod v1 {
+            include!("robot_bus_interface/msg/v1/_includes.rs");
+        }
+    }
+}
+
 pub mod tf2_msgs {
     pub mod msg {
         pub mod v1 {

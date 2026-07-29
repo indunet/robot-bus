@@ -8,7 +8,7 @@ Package: `org.indunet.robot.bus`
 
 ```bash
 # Maven Central (when published)
-# implementation("org.indunet:robot-bus-android:0.0.8")
+# implementation("org.indunet:robot-bus-android:0.0.9")
 
 # 本地：
 just gen-android    # → bindings/android/generated/
@@ -36,7 +36,7 @@ class App : Application() {
 ```kotlin
 // build.gradle.kts
 dependencies {
-  implementation("org.indunet:robot-bus-android:0.0.8")
+  implementation("org.indunet:robot-bus-android:0.0.9")
 }
 ```
 
@@ -66,6 +66,13 @@ Broker().use { _ ->
     // node.spin()
   }
 }
+```
+
+### UDP 发现
+
+```kotlin
+val node = Node.discover("talker", "tcp", DiscoverOpts(domainId = 0))
+// BrokerOptions(domainId = 0, advertiseHost = "10.0.0.5", noDiscovery = false)
 ```
 
 跨 broker（federation）：

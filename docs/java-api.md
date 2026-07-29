@@ -2,7 +2,7 @@
 
 ```bash
 # Maven Central (when published)
-# implementation("org.indunet:robot-bus:0.0.8")           // JVM
+# implementation("org.indunet:robot-bus:0.0.9")           // JVM
 
 # 本地：
 just java-dev       # gen-java + cargo FFI + mvn test
@@ -106,6 +106,13 @@ node.createSubscription("/robot1/imu", (topic, payload) -> {
 
 见 [`docs/android-api.md`](android-api.md)（独立 Kotlin SDK；`RobotBusAndroid.init`、Node、参数等）。
 
+### UDP 发现
+
+```java
+Node node = Node.discover("talker", "tcp", new DiscoverOpts(0));
+// BrokerOptions(..., noDiscovery, domainId, advertiseHost, discoveryAddr, discoveryPort)
+```
+
 ### gRPC 模式 Node（客户端）
 `Node.grpc` / `Node.grpcAt` 经 broker gRPC 网关接入，不创建 ZMQ socket。
 
@@ -206,7 +213,7 @@ just java-install      # ~/.m2（仅 JVM；Android 不再需要）
 | 符号 | 说明 |
 |------|------|
 | `Node(name)` / `Node(name, NodeOptions)` | 建节点 |
-| `Node.tcp` / `ipc` / `inproc` / `inproc(Context, …)` / `withContext` / `grpc` / `grpcAt` | 传输预设；同进程 inproc 须共享 `Context` |
+| `Node.tcp` / `ipc` / `inproc` / `inproc(Context, …)` / `withContext` / `grpc` / `grpcAt` / `discover` | 传输预设；同进程 inproc 须共享 `Context`；`discover` 只填地址 |
 | `declareParameter` / `getParameter` / `setParameter` / `hasParameter` / `listParameters` | 本节点本地参数（Boolean / Long / Double / String） |
 | `loadParametersFromYaml` / `loadParametersFromYamlStr` | 从 YAML 文件或字符串加载参数 |
 | `Parameter` | `listParameters` 返回的 name/value |

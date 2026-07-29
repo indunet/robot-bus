@@ -32,6 +32,40 @@ constructor(
 
     fun getActionFrontend(): String? = actionFrontend
 
+    companion object {
+        /** Discover broker endpoints for [transport] and return filled options. */
+        @JvmStatic
+        @JvmOverloads
+        fun discover(transport: String, opts: DiscoverOpts? = null): NodeOptions {
+            val out = RobotBusC.AppliedNodeOptions()
+            Errors.check(
+                RobotBusC.Holder.INSTANCE.robot_bus_discover_node_options(
+                    transport,
+                    opts?.toNative(),
+                    out,
+                ),
+                "NodeOptions.discover",
+            )
+            out.read()
+            try {
+                fun ptrString(p: com.sun.jna.Pointer?): String? = p?.getString(0)
+                return NodeOptions(
+                    host = ptrString(out.host) ?: "localhost",
+                    transport = ptrString(out.transport) ?: transport,
+                    grpcUrl = ptrString(out.grpcUrl),
+                    messageXsub = ptrString(out.messageXsub),
+                    messageXpub = ptrString(out.messageXpub),
+                    serviceFrontend = ptrString(out.serviceFrontend),
+                    serviceBackend = ptrString(out.serviceBackend),
+                    actionBackend = ptrString(out.actionBackend),
+                    actionFrontend = ptrString(out.actionFrontend),
+                )
+            } finally {
+                RobotBusC.Holder.INSTANCE.robot_bus_applied_node_options_free(out)
+            }
+        }
+    }
+
     internal fun toNative(): RobotBusC.NodeOptions {
         val o = RobotBusC.NodeOptions()
         o.host = host

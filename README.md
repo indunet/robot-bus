@@ -65,7 +65,27 @@ Rust:
 
 ```bash
 cargo run --bin robot_bus_broker
+# discovery / domain: robot_bus_broker --domain-id 0 --advertise-host 10.0.0.5
+# disable announce:     robot_bus_broker --no-discovery
 ```
+
+### Broker discovery (UDP multicast)
+
+Brokers periodically announce on `239.255.76.67:15550` (away from ROS 2 / DDS `7400` / `239.255.0.1`). The UDP payload is a pure protobuf [`BrokerAnnounce`](proto/robot_bus_interface/msg/v1/announce.proto) (`magic` must be `RBUS`). Invalid packets are dropped.
+
+Clients still **choose the transport** (`tcp` / `ipc` / `inproc` / `grpc`); discovery only fills host / paths / gRPC URL:
+
+```rust
+use robot_bus::{DiscoverOpts, Node, NodeOptions};
+
+let opts = NodeOptions::tcp().discover(DiscoverOpts {
+    domain_id: 0,
+    ..Default::default()
+})?;
+let mut node = Node::with_options("talker", opts);
+```
+
+Same API shape in bindings: `Node.discover(...)` (Python / C++ / Java / Android / TypeScript Node.js). Browser gRPC-Web has no UDP discovery.
 
 Python (ships a CLI entry after `pip install robot-bus`):
 
@@ -189,7 +209,7 @@ Add to `Cargo.toml`:
 
 ```toml
 robot-bus = { path = "../robot-bus" }
-# or from crates.io: robot-bus = "0.0.8"
+# or from crates.io: robot-bus = "0.0.9"
 ```
 
 Semantics mirror ROS 2: `Node::new` → typed `create_publisher` / `create_subscription` → `node.spin()` (auto-attaches a `SingleThreadedExecutor`).
@@ -324,6 +344,10 @@ Proto (package `robot_bus_interface.grpc.v1`, distinct from ROS `*.msg.v1` / `*.
 - [`message_gateway.proto`](proto/robot_bus_interface/grpc/v1/message_gateway.proto)
 - [`service_gateway.proto`](proto/robot_bus_interface/grpc/v1/service_gateway.proto)
 - [`action_gateway.proto`](proto/robot_bus_interface/grpc/v1/action_gateway.proto)
+
+UDP discovery (`robot_bus_interface.msg.v1`):
+
+- [`announce.proto`](proto/robot_bus_interface/msg/v1/announce.proto)
 
 ## Testing
 

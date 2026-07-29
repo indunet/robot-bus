@@ -2,6 +2,7 @@
 
 pub mod action_bus;
 pub mod broker;
+pub mod discovery;
 pub mod errors;
 pub mod message_bus;
 pub mod runtime;
@@ -18,8 +19,8 @@ mod generated;
 
 pub use generated::{
     action, builtin_interfaces, control_msgs, diagnostic_msgs, foxglove_msgs, geometry_msgs,
-    nav2_msgs, nav_msgs, sensor_msgs, shape_msgs, std_msgs, std_srvs, tf2_msgs, trajectory_msgs,
-    unique_identifier_msgs, visualization_msgs,
+    nav2_msgs, nav_msgs, robot_bus_interface, sensor_msgs, shape_msgs, std_msgs, std_srvs,
+    tf2_msgs, trajectory_msgs, unique_identifier_msgs, visualization_msgs,
 };
 pub use typed::{Action, ActionOutcome, Service};
 
@@ -35,7 +36,12 @@ mod python_api;
 pub use action_bus::{ActionClient, ActionKind, ActionMessage, ActionWorker};
 pub use broker::{
     apply_federation_opts, parse_robot_bus_config, robot_bus_broker_help, ActionPeer,
-    MessagePeer, RobotBusBroker, RobotBusConfig, ServicePeer,
+    DiscoveryConfig, MessagePeer, RobotBusBroker, RobotBusConfig, ServicePeer,
+};
+pub use discovery::{
+    wait as discover_wait, BrokerAnnouncement, DiscoverOpts, DEFAULT_DISCOVERY_PORT,
+    DEFAULT_MULTICAST_ADDR, MAGIC as DISCOVERY_MAGIC,
+    SCHEMA_VERSION as DISCOVERY_SCHEMA_VERSION, encode_announce, decode_announce,
 };
 
 #[cfg(feature = "grpc")]

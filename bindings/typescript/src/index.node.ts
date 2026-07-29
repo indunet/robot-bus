@@ -232,6 +232,13 @@ export class Node {
     return new Node(native.Node.grpcAt(name, url));
   }
 
+  static discover(
+    name: string,
+    options?: import("./native-types.js").DiscoverNodeOptions,
+  ): Node {
+    return new Node(native.Node.discover(name, options));
+  }
+
   get name(): string {
     return this.inner.name;
   }

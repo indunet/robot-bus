@@ -20,6 +20,11 @@ public final class BrokerOptions {
     private final List<String> messagePeers;
     private final List<String> servicePeers;
     private final List<String> actionPeers;
+    private final boolean noDiscovery;
+    private final int domainId;
+    private final String advertiseHost;
+    private final String discoveryAddr;
+    private final int discoveryPort;
 
     /** Keep-alive for native {@code char**} peer arrays until {@link Broker} start returns. */
     private transient StringArray messagePeersNative;
@@ -27,7 +32,9 @@ public final class BrokerOptions {
     private transient StringArray actionPeersNative;
 
     public BrokerOptions() {
-        this(null, null, null, null, null, null, null, null, false, false, null, null, null, null);
+        this(
+                null, null, null, null, null, null, null, null, false, false, null, null, null, null,
+                false, 0, null, null, 0);
     }
 
     public BrokerOptions(
@@ -55,7 +62,12 @@ public final class BrokerOptions {
                 null,
                 null,
                 null,
-                null);
+                null,
+                false,
+                0,
+                null,
+                null,
+                0);
     }
 
     public BrokerOptions(
@@ -73,6 +85,48 @@ public final class BrokerOptions {
             List<String> messagePeers,
             List<String> servicePeers,
             List<String> actionPeers) {
+        this(
+                messageXsubBind,
+                messageXpubBind,
+                serviceFrontendBind,
+                serviceBackendBind,
+                actionFrontendBind,
+                actionBackendBind,
+                grpcListen,
+                consoleListen,
+                tcpOnly,
+                noConsole,
+                brokerId,
+                messagePeers,
+                servicePeers,
+                actionPeers,
+                false,
+                0,
+                null,
+                null,
+                0);
+    }
+
+    public BrokerOptions(
+            String messageXsubBind,
+            String messageXpubBind,
+            String serviceFrontendBind,
+            String serviceBackendBind,
+            String actionFrontendBind,
+            String actionBackendBind,
+            String grpcListen,
+            String consoleListen,
+            boolean tcpOnly,
+            boolean noConsole,
+            String brokerId,
+            List<String> messagePeers,
+            List<String> servicePeers,
+            List<String> actionPeers,
+            boolean noDiscovery,
+            int domainId,
+            String advertiseHost,
+            String discoveryAddr,
+            int discoveryPort) {
         this.messageXsubBind = messageXsubBind;
         this.messageXpubBind = messageXpubBind;
         this.serviceFrontendBind = serviceFrontendBind;
@@ -87,6 +141,11 @@ public final class BrokerOptions {
         this.messagePeers = messagePeers;
         this.servicePeers = servicePeers;
         this.actionPeers = actionPeers;
+        this.noDiscovery = noDiscovery;
+        this.domainId = domainId;
+        this.advertiseHost = advertiseHost;
+        this.discoveryAddr = discoveryAddr;
+        this.discoveryPort = discoveryPort;
     }
 
     public String getMessageXsubBind() {
@@ -145,6 +204,26 @@ public final class BrokerOptions {
         return actionPeers == null ? Collections.emptyList() : actionPeers;
     }
 
+    public boolean isNoDiscovery() {
+        return noDiscovery;
+    }
+
+    public int getDomainId() {
+        return domainId;
+    }
+
+    public String getAdvertiseHost() {
+        return advertiseHost;
+    }
+
+    public String getDiscoveryAddr() {
+        return discoveryAddr;
+    }
+
+    public int getDiscoveryPort() {
+        return discoveryPort;
+    }
+
     RobotBusC.BrokerOptions toNative() {
         RobotBusC.BrokerOptions o = new RobotBusC.BrokerOptions();
         o.messageXsubBind = messageXsubBind;
@@ -173,6 +252,11 @@ public final class BrokerOptions {
             o.actionPeers = actionPeersNative;
             o.actionPeerCount = actionPeers.size();
         }
+        o.noDiscovery = noDiscovery ? 1 : 0;
+        o.domainId = domainId;
+        o.advertiseHost = advertiseHost;
+        o.discoveryAddr = discoveryAddr;
+        o.discoveryPort = (short) (discoveryPort & 0xffff);
         o.write();
         return o;
     }

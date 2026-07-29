@@ -197,6 +197,35 @@ pub fn parse_robot_bus_config(args: &[String]) -> Result<Option<RobotBusConfig>>
                 config.action.bind_all_transports = false;
             }
 
+            // --- discovery ---
+            "--domain-id" => {
+                i += 1;
+                config.discovery.domain_id = require_arg(args, i, arg)?
+                    .parse()
+                    .with_context(|| format!("invalid {arg}"))?;
+            }
+            "--no-discovery" => {
+                config.discovery.enabled = false;
+            }
+            "--advertise-host" => {
+                i += 1;
+                config.discovery.advertise_host =
+                    Some(require_arg(args, i, arg)?.to_string());
+            }
+            "--discovery-port" => {
+                i += 1;
+                config.discovery.multicast_port = require_arg(args, i, arg)?
+                    .parse()
+                    .with_context(|| format!("invalid {arg}"))?;
+            }
+            "--discovery-addr" => {
+                i += 1;
+                let value = require_arg(args, i, arg)?;
+                config.discovery.multicast_addr = value
+                    .parse()
+                    .with_context(|| format!("invalid {arg} {value}"))?;
+            }
+
             // --- gRPC ---
             #[cfg(feature = "grpc")]
             "--grpc-listen" | "--listen" => {
@@ -283,6 +312,12 @@ Shared bus options:\n  \
 --heartbeat-interval-ms N      Apply to service + action\n  \
 --heartbeat-timeout-ms N       Apply to service + action\n  \
 --tcp-only                     Bind TCP only (skip inproc/ipc aliases)\n\n\
+Discovery options (UDP multicast announce):\n  \
+--domain-id N                  Discovery domain (default: 0)\n  \
+--advertise-host HOST          Host clients should connect to (default: inferred)\n  \
+--discovery-addr ADDR          Multicast group (default: 239.255.76.67)\n  \
+--discovery-port PORT          Multicast UDP port (default: 15550)\n  \
+--no-discovery                 Do not announce on the discovery multicast group\n\n\
 gRPC options (feature `grpc`, default on):\n  \
 --grpc-listen HOST:PORT        Listen address (alias: --listen)\n  \
 --cors-origin ORIGIN           Allowed browser origin (repeatable)\n\n\
@@ -429,6 +464,34 @@ mod tests {
         assert_eq!(config.message.peers[0].xsub, "tcp://127.0.0.1:16560");
         assert_eq!(config.message.peers[1].xpub, "tcp://10.0.0.2:17561");
         assert_eq!(config.message.peers[1].xsub, "tcp://10.0.0.2:17560");
+    }
+
+    #[test]
+    fn parses_discovery_flags() {
+        let config = parse_robot_bus_config(&args(&[
+            "--domain-id",
+            "3",
+            "--advertise-host",
+            "10.0.0.5",
+            "--discovery-port",
+            "45550",
+            "--discovery-addr",
+            "239.255.76.67",
+            "--no-discovery",
+        ]))
+        .unwrap()
+        .expect("config");
+        assert!(!config.discovery.enabled);
+        assert_eq!(config.discovery.domain_id, 3);
+        assert_eq!(
+            config.discovery.advertise_host.as_deref(),
+            Some("10.0.0.5")
+        );
+        assert_eq!(config.discovery.multicast_port, 45550);
+        assert_eq!(
+            config.discovery.multicast_addr,
+            "239.255.76.67".parse::<std::net::Ipv4Addr>().unwrap()
+        );
     }
 
     #[test]

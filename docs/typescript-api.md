@@ -38,6 +38,17 @@ const broker = RobotBusBroker.start({
 broker.stop();
 ```
 
+### UDP discovery（仅 Node.js 原生）
+
+```ts
+import { Node, RobotBusBroker } from "robot-bus";
+
+const broker = RobotBusBroker.start({ domainId: 0, advertiseHost: "127.0.0.1" });
+const node = Node.discover("talker", { transport: "tcp", domainId: 0 });
+```
+
+浏览器 gRPC-Web 入口无 UDP 发现，请用显式 `grpcUrl`。
+
 跨 broker（federation）与 CLI 同款字符串约定：
 
 ```ts

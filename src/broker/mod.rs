@@ -7,6 +7,7 @@ pub mod parse_config;
 pub mod service_bus;
 
 pub use handle::{RobotBusBroker, RobotBusConfig};
+pub use crate::discovery::DiscoveryConfig;
 pub use message_bus::MessagePeer;
 pub use parse_config::{
     apply_federation_opts, parse_robot_bus_config, robot_bus_broker_help,

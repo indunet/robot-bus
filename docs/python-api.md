@@ -46,6 +46,17 @@ with robot_bus.RobotBusBroker.start(
     pass
 ```
 
+### UDP 发现（填地址，不选传输）
+
+传输仍手动指定（`tcp` / `ipc` / `inproc` / `grpc`）；发现只填充位置：
+
+```python
+node = robot_bus.Node.discover("talker", transport="tcp", domain_id=0)
+# Broker：RobotBusBroker.start(domain_id=0, advertise_host="10.0.0.5")
+```
+
+同 domain 多 broker 时传 `broker_id=...`。
+
 同进程 **inproc** 时必须共享 `Context`：
 
 ```python
@@ -329,7 +340,7 @@ print(robot_bus.__version__)
 | 符号 | 说明 |
 |------|------|
 | `Node(name, host=..., transport=..., grpc_url=..., message_xsub=..., …)` | 建节点；首次 `create_*` / `spin` 时自动挂 `SingleThreadedExecutor` |
-| `Node.tcp` / `Node.ipc` / `Node.inproc` / `Node.inproc_with_context` / `Node.grpc` / `Node.grpc_at` | 传输预设（gRPC 为客户端模式；同进程 inproc 用 `inproc_with_context`） |
+| `Node.tcp` / `Node.ipc` / `Node.inproc` / `Node.inproc_with_context` / `Node.grpc` / `Node.grpc_at` / `Node.discover` | 传输预设（gRPC 为客户端模式；同进程 inproc 用 `inproc_with_context`；`discover` 只填地址） |
 | `Node.declare_parameter` / `get_parameter` / `set_parameter` / `has_parameter` / `list_parameters` | 本节点本地参数（`bool` / `int` / `float` / `str`） |
 | `Node.load_parameters_from_yaml_str` / `load_parameters_from_yaml_file` | 从 YAML 加载 / 覆盖参数 |
 | `node.spin()` / `spin_once` / `shutdown` | 驱动回调（ROS 2 式简单路径） |
