@@ -15,11 +15,29 @@ use robot_bus::GrpcBrokerConfig;
 use robot_bus::{
     DiscoveryConfig, Publisher, RobotBusBroker, RobotBusConfig, Subscriber,
 };
-use support::{free_port, lock_brokers};
+use support::{free_ports, lock_brokers};
 
 fn connect_addr(bind: &str) -> String {
     bind.replace("tcp://0.0.0.0:", "tcp://127.0.0.1:")
         .replace("tcp://*:", "tcp://127.0.0.1:")
+}
+
+/// Per-broker ports: `(xsub, xpub)` plus 6 binds for service/action/grpc/console.
+struct MessageBrokerPorts {
+    xsub: u16,
+    xpub: u16,
+    other: [u16; 6],
+}
+
+fn alloc_message_broker_ports(n: usize) -> Vec<MessageBrokerPorts> {
+    let raw = free_ports(n * 8);
+    raw.chunks(8)
+        .map(|c| MessageBrokerPorts {
+            xsub: c[0],
+            xpub: c[1],
+            other: [c[2], c[3], c[4], c[5], c[6], c[7]],
+        })
+        .collect()
 }
 
 /// Ephemeral TCP binds for one broker; message XSUB/XPUB need not be adjacent
@@ -27,17 +45,13 @@ fn connect_addr(bind: &str) -> String {
 fn federated_bus_config(
     broker_id: &str,
     peers: Vec<MessagePeer>,
-    msg_xsub: u16,
-    msg_xpub: u16,
+    ports: &MessageBrokerPorts,
 ) -> RobotBusConfig {
-    let mut ports = Vec::new();
-    for _ in 0..6 {
-        ports.push(free_port());
-    }
+    let other = &ports.other;
     RobotBusConfig {
         message: BusConfig {
-            xsub_bind: format!("tcp://127.0.0.1:{msg_xsub}"),
-            xpub_bind: format!("tcp://127.0.0.1:{msg_xpub}"),
+            xsub_bind: format!("tcp://127.0.0.1:{}", ports.xsub),
+            xpub_bind: format!("tcp://127.0.0.1:{}", ports.xpub),
             snd_hwm: 100,
             rcv_hwm: 100,
             bind_all_transports: false,
@@ -45,20 +59,20 @@ fn federated_bus_config(
             peers,
         },
         service: ServiceBusConfig {
-            frontend_bind: format!("tcp://127.0.0.1:{}", ports[0]),
-            backend_bind: format!("tcp://127.0.0.1:{}", ports[1]),
+            frontend_bind: format!("tcp://127.0.0.1:{}", other[0]),
+            backend_bind: format!("tcp://127.0.0.1:{}", other[1]),
             bind_all_transports: false,
             ..ServiceBusConfig::default()
         },
         action: ActionBusConfig {
-            frontend_bind: format!("tcp://127.0.0.1:{}", ports[2]),
-            backend_bind: format!("tcp://127.0.0.1:{}", ports[3]),
+            frontend_bind: format!("tcp://127.0.0.1:{}", other[2]),
+            backend_bind: format!("tcp://127.0.0.1:{}", other[3]),
             bind_all_transports: false,
             ..ActionBusConfig::default()
         },
         #[cfg(feature = "grpc")]
         grpc: GrpcBrokerConfig {
-            listen: format!("127.0.0.1:{}", ports[4])
+            listen: format!("127.0.0.1:{}", other[4])
                 .parse()
                 .expect("grpc listen"),
             cors_origins: Vec::new(),
@@ -70,19 +84,18 @@ fn federated_bus_config(
         #[cfg(feature = "console")]
         console: ConsoleBrokerConfig {
             enabled: false,
-            listen: format!("127.0.0.1:{}", ports[5])
+            listen: format!("127.0.0.1:{}", other[5])
                 .parse()
                 .expect("console listen"),
         },
     }
 }
 
-fn alloc_msg_ports(n_brokers: usize) -> Vec<(u16, u16)> {
-    let mut out = Vec::with_capacity(n_brokers);
-    for _ in 0..n_brokers {
-        out.push((free_port(), free_port()));
+fn msg_peer(ports: &MessageBrokerPorts) -> MessagePeer {
+    MessagePeer {
+        xpub: format!("tcp://127.0.0.1:{}", ports.xpub),
+        xsub: format!("tcp://127.0.0.1:{}", ports.xsub),
     }
-    out
 }
 
 fn recv_exact(sub: &Subscriber, expect: &[u8], timeout: Duration) -> String {
@@ -120,31 +133,20 @@ fn count_matching(sub: &Subscriber, expect: &[u8], window: Duration) -> usize {
 #[test]
 fn two_brokers_bidirectional_topics() {
     let _guard = lock_brokers();
-    let ports = alloc_msg_ports(2);
-    let (a_xsub, a_xpub) = ports[0];
-    let (b_xsub, b_xpub) = ports[1];
-
-    let peer_a = MessagePeer {
-        xpub: format!("tcp://127.0.0.1:{a_xpub}"),
-        xsub: format!("tcp://127.0.0.1:{a_xsub}"),
-    };
-    let peer_b = MessagePeer {
-        xpub: format!("tcp://127.0.0.1:{b_xpub}"),
-        xsub: format!("tcp://127.0.0.1:{b_xsub}"),
-    };
+    let ports = alloc_message_broker_ports(2);
+    let a = &ports[0];
+    let b = &ports[1];
 
     let broker_a = RobotBusBroker::start(federated_bus_config(
         "broker-a",
-        vec![peer_b.clone()],
-        a_xsub,
-        a_xpub,
+        vec![msg_peer(b)],
+        a,
     ))
     .expect("broker a");
     let broker_b = RobotBusBroker::start(federated_bus_config(
         "broker-b",
-        vec![peer_a],
-        b_xsub,
-        b_xpub,
+        vec![msg_peer(a)],
+        b,
     ))
     .expect("broker b");
 
@@ -181,36 +183,28 @@ fn two_brokers_bidirectional_topics() {
 #[test]
 fn three_brokers_line_relay() {
     let _guard = lock_brokers();
-    let ports = alloc_msg_ports(3);
-    let (a_xsub, a_xpub) = ports[0];
-    let (b_xsub, b_xpub) = ports[1];
-    let (c_xsub, c_xpub) = ports[2];
-
-    let peer = |xsub: u16, xpub: u16| MessagePeer {
-        xpub: format!("tcp://127.0.0.1:{xpub}"),
-        xsub: format!("tcp://127.0.0.1:{xsub}"),
-    };
+    let ports = alloc_message_broker_ports(3);
+    let a = &ports[0];
+    let b = &ports[1];
+    let c = &ports[2];
 
     // A — B — C (no direct A↔C)
     let broker_a = RobotBusBroker::start(federated_bus_config(
         "broker-a",
-        vec![peer(b_xsub, b_xpub)],
-        a_xsub,
-        a_xpub,
+        vec![msg_peer(b)],
+        a,
     ))
     .expect("broker a");
     let broker_b = RobotBusBroker::start(federated_bus_config(
         "broker-b",
-        vec![peer(a_xsub, a_xpub), peer(c_xsub, c_xpub)],
-        b_xsub,
-        b_xpub,
+        vec![msg_peer(a), msg_peer(c)],
+        b,
     ))
     .expect("broker b");
     let broker_c = RobotBusBroker::start(federated_bus_config(
         "broker-c",
-        vec![peer(b_xsub, b_xpub)],
-        c_xsub,
-        c_xpub,
+        vec![msg_peer(b)],
+        c,
     ))
     .expect("broker c");
 
@@ -237,31 +231,20 @@ fn three_brokers_line_relay() {
 #[test]
 fn mesh_does_not_storm() {
     let _guard = lock_brokers();
-    let ports = alloc_msg_ports(2);
-    let (a_xsub, a_xpub) = ports[0];
-    let (b_xsub, b_xpub) = ports[1];
-
-    let peer_a = MessagePeer {
-        xpub: format!("tcp://127.0.0.1:{a_xpub}"),
-        xsub: format!("tcp://127.0.0.1:{a_xsub}"),
-    };
-    let peer_b = MessagePeer {
-        xpub: format!("tcp://127.0.0.1:{b_xpub}"),
-        xsub: format!("tcp://127.0.0.1:{b_xsub}"),
-    };
+    let ports = alloc_message_broker_ports(2);
+    let a = &ports[0];
+    let b = &ports[1];
 
     let broker_a = RobotBusBroker::start(federated_bus_config(
         "broker-a",
-        vec![peer_b],
-        a_xsub,
-        a_xpub,
+        vec![msg_peer(b)],
+        a,
     ))
     .expect("broker a");
     let broker_b = RobotBusBroker::start(federated_bus_config(
         "broker-b",
-        vec![peer_a],
-        b_xsub,
-        b_xpub,
+        vec![msg_peer(a)],
+        b,
     ))
     .expect("broker b");
 

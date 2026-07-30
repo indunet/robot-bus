@@ -47,6 +47,7 @@ Cargo.lock
 # IDE / OS
 .idea/
 .vscode/
+.cursor/
 .DS_Store
 
 # Local env

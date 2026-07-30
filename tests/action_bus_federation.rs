@@ -18,41 +18,56 @@ use robot_bus::ConsoleBrokerConfig;
 #[cfg(feature = "grpc")]
 use robot_bus::GrpcBrokerConfig;
 use robot_bus::{DiscoveryConfig, RobotBusBroker, RobotBusConfig};
-use support::{free_port, lock_brokers};
+use support::{free_ports, lock_brokers};
 
 fn connect_addr(bind: &str) -> String {
     bind.replace("tcp://0.0.0.0:", "tcp://127.0.0.1:")
         .replace("tcp://*:", "tcp://127.0.0.1:")
 }
 
+/// Per-broker ports: `(act_fe, act_be)` plus 6 binds for message/service/grpc/console.
+/// Allocated in one `free_ports` batch so sequential probes cannot collide.
+struct ActionBrokerPorts {
+    act_fe: u16,
+    act_be: u16,
+    other: [u16; 6],
+}
+
+fn alloc_action_broker_ports(n: usize) -> Vec<ActionBrokerPorts> {
+    let raw = free_ports(n * 8);
+    raw.chunks(8)
+        .map(|c| ActionBrokerPorts {
+            act_fe: c[0],
+            act_be: c[1],
+            other: [c[2], c[3], c[4], c[5], c[6], c[7]],
+        })
+        .collect()
+}
+
 fn federated_action_config(
     broker_id: &str,
     peers: Vec<ActionPeer>,
-    act_fe: u16,
-    act_be: u16,
+    ports: &ActionBrokerPorts,
 ) -> RobotBusConfig {
-    let mut ports = Vec::new();
-    for _ in 0..6 {
-        ports.push(free_port());
-    }
+    let other = &ports.other;
     RobotBusConfig {
         message: BusConfig {
-            xsub_bind: format!("tcp://127.0.0.1:{}", ports[0]),
-            xpub_bind: format!("tcp://127.0.0.1:{}", ports[1]),
+            xsub_bind: format!("tcp://127.0.0.1:{}", other[0]),
+            xpub_bind: format!("tcp://127.0.0.1:{}", other[1]),
             bind_all_transports: false,
             broker_id: broker_id.to_string(),
             ..BusConfig::default()
         },
         service: ServiceBusConfig {
-            frontend_bind: format!("tcp://127.0.0.1:{}", ports[2]),
-            backend_bind: format!("tcp://127.0.0.1:{}", ports[3]),
+            frontend_bind: format!("tcp://127.0.0.1:{}", other[2]),
+            backend_bind: format!("tcp://127.0.0.1:{}", other[3]),
             bind_all_transports: false,
             broker_id: broker_id.to_string(),
             ..ServiceBusConfig::default()
         },
         action: ActionBusConfig {
-            frontend_bind: format!("tcp://127.0.0.1:{act_fe}"),
-            backend_bind: format!("tcp://127.0.0.1:{act_be}"),
+            frontend_bind: format!("tcp://127.0.0.1:{}", ports.act_fe),
+            backend_bind: format!("tcp://127.0.0.1:{}", ports.act_be),
             bind_all_transports: false,
             broker_id: broker_id.to_string(),
             peers,
@@ -63,7 +78,7 @@ fn federated_action_config(
         },
         #[cfg(feature = "grpc")]
         grpc: GrpcBrokerConfig {
-            listen: format!("127.0.0.1:{}", ports[4])
+            listen: format!("127.0.0.1:{}", other[4])
                 .parse()
                 .expect("grpc listen"),
             cors_origins: Vec::new(),
@@ -75,19 +90,11 @@ fn federated_action_config(
         #[cfg(feature = "console")]
         console: ConsoleBrokerConfig {
             enabled: false,
-            listen: format!("127.0.0.1:{}", ports[5])
+            listen: format!("127.0.0.1:{}", other[5])
                 .parse()
                 .expect("console listen"),
         },
     }
-}
-
-fn alloc_act_ports(n: usize) -> Vec<(u16, u16)> {
-    let mut out = Vec::with_capacity(n);
-    for _ in 0..n {
-        out.push((free_port(), free_port()));
-    }
-    out
 }
 
 fn peer(broker_id: &str, backend: u16) -> ActionPeer {
@@ -109,22 +116,20 @@ fn demo_handler(tag: &'static [u8]) -> Arc<dyn Fn(&[u8]) -> Vec<(String, Vec<u8>
 #[test]
 fn two_brokers_bidirectional_actions() {
     let _guard = lock_brokers();
-    let ports = alloc_act_ports(2);
-    let (a_fe, a_be) = ports[0];
-    let (b_fe, b_be) = ports[1];
+    let ports = alloc_action_broker_ports(2);
+    let a = &ports[0];
+    let b = &ports[1];
 
     let broker_a = RobotBusBroker::start(federated_action_config(
         "broker-a",
-        vec![peer("broker-b", b_be)],
-        a_fe,
-        a_be,
+        vec![peer("broker-b", b.act_be)],
+        a,
     ))
     .expect("broker a");
     let broker_b = RobotBusBroker::start(federated_action_config(
         "broker-b",
-        vec![peer("broker-a", a_be)],
-        b_fe,
-        b_be,
+        vec![peer("broker-a", a.act_be)],
+        b,
     ))
     .expect("broker b");
 
@@ -171,30 +176,27 @@ fn two_brokers_bidirectional_actions() {
 #[test]
 fn three_brokers_line_relay() {
     let _guard = lock_brokers();
-    let ports = alloc_act_ports(3);
-    let (a_fe, a_be) = ports[0];
-    let (b_fe, b_be) = ports[1];
-    let (c_fe, c_be) = ports[2];
+    let ports = alloc_action_broker_ports(3);
+    let a = &ports[0];
+    let b = &ports[1];
+    let c = &ports[2];
 
     let broker_a = RobotBusBroker::start(federated_action_config(
         "broker-a",
-        vec![peer("broker-b", b_be)],
-        a_fe,
-        a_be,
+        vec![peer("broker-b", b.act_be)],
+        a,
     ))
     .expect("broker a");
     let broker_b = RobotBusBroker::start(federated_action_config(
         "broker-b",
-        vec![peer("broker-a", a_be), peer("broker-c", c_be)],
-        b_fe,
-        b_be,
+        vec![peer("broker-a", a.act_be), peer("broker-c", c.act_be)],
+        b,
     ))
     .expect("broker b");
     let broker_c = RobotBusBroker::start(federated_action_config(
         "broker-c",
-        vec![peer("broker-b", b_be)],
-        c_fe,
-        c_be,
+        vec![peer("broker-b", b.act_be)],
+        c,
     ))
     .expect("broker c");
 
@@ -227,22 +229,20 @@ fn three_brokers_line_relay() {
 #[test]
 fn mesh_does_not_loop() {
     let _guard = lock_brokers();
-    let ports = alloc_act_ports(2);
-    let (a_fe, a_be) = ports[0];
-    let (b_fe, b_be) = ports[1];
+    let ports = alloc_action_broker_ports(2);
+    let a = &ports[0];
+    let b = &ports[1];
 
     let broker_a = RobotBusBroker::start(federated_action_config(
         "broker-a",
-        vec![peer("broker-b", b_be)],
-        a_fe,
-        a_be,
+        vec![peer("broker-b", b.act_be)],
+        a,
     ))
     .expect("broker a");
     let broker_b = RobotBusBroker::start(federated_action_config(
         "broker-b",
-        vec![peer("broker-a", a_be)],
-        b_fe,
-        b_be,
+        vec![peer("broker-a", a.act_be)],
+        b,
     ))
     .expect("broker b");
 
@@ -277,22 +277,20 @@ fn mesh_does_not_loop() {
 #[test]
 fn local_preferred_over_remote() {
     let _guard = lock_brokers();
-    let ports = alloc_act_ports(2);
-    let (a_fe, a_be) = ports[0];
-    let (b_fe, b_be) = ports[1];
+    let ports = alloc_action_broker_ports(2);
+    let a = &ports[0];
+    let b = &ports[1];
 
     let broker_a = RobotBusBroker::start(federated_action_config(
         "broker-a",
-        vec![peer("broker-b", b_be)],
-        a_fe,
-        a_be,
+        vec![peer("broker-b", b.act_be)],
+        a,
     ))
     .expect("broker a");
     let broker_b = RobotBusBroker::start(federated_action_config(
         "broker-b",
-        vec![peer("broker-a", a_be)],
-        b_fe,
-        b_be,
+        vec![peer("broker-a", a.act_be)],
+        b,
     ))
     .expect("broker b");
 
@@ -332,22 +330,20 @@ fn local_preferred_over_remote() {
 #[test]
 fn cancel_unknown_goal_on_federated_broker() {
     let _guard = lock_brokers();
-    let ports = alloc_act_ports(2);
-    let (a_fe, a_be) = ports[0];
-    let (b_fe, b_be) = ports[1];
+    let ports = alloc_action_broker_ports(2);
+    let a = &ports[0];
+    let b = &ports[1];
 
     let broker_a = RobotBusBroker::start(federated_action_config(
         "broker-a",
-        vec![peer("broker-b", b_be)],
-        a_fe,
-        a_be,
+        vec![peer("broker-b", b.act_be)],
+        a,
     ))
     .expect("broker a");
     let broker_b = RobotBusBroker::start(federated_action_config(
         "broker-b",
-        vec![peer("broker-a", a_be)],
-        b_fe,
-        b_be,
+        vec![peer("broker-a", a.act_be)],
+        b,
     ))
     .expect("broker b");
 
@@ -375,22 +371,20 @@ fn cancel_unknown_goal_on_federated_broker() {
 #[test]
 fn peer_death_returns_worker_died() {
     let _guard = lock_brokers();
-    let ports = alloc_act_ports(2);
-    let (a_fe, a_be) = ports[0];
-    let (b_fe, b_be) = ports[1];
+    let ports = alloc_action_broker_ports(2);
+    let a = &ports[0];
+    let b = &ports[1];
 
     let broker_a = RobotBusBroker::start(federated_action_config(
         "broker-a",
-        vec![peer("broker-b", b_be)],
-        a_fe,
-        a_be,
+        vec![peer("broker-b", b.act_be)],
+        a,
     ))
     .expect("broker a");
     let broker_b = RobotBusBroker::start(federated_action_config(
         "broker-b",
-        vec![peer("broker-a", a_be)],
-        b_fe,
-        b_be,
+        vec![peer("broker-a", a.act_be)],
+        b,
     ))
     .expect("broker b");
 

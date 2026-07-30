@@ -49,9 +49,11 @@ fn last_endpoint(sock: &Socket) -> String {
 
 /// Distinct ephemeral TCP ports for one config snapshot.
 ///
+/// Hold all listeners together so this batch never picks the same port twice
+/// (sequential [`free_port`] can return duplicates and flake on the second bind).
 /// Still subject to TOCTOU vs other processes after the listeners are dropped;
 /// broker tests serialize with [`lock_brokers`]. Prefer ZMQ `…:0` bind when possible.
-fn free_ports(n: usize) -> Vec<u16> {
+pub fn free_ports(n: usize) -> Vec<u16> {
     let listeners: Vec<TcpListener> = (0..n)
         .map(|_| TcpListener::bind("127.0.0.1:0").expect("bind ephemeral port"))
         .collect();
