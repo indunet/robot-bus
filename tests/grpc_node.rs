@@ -10,7 +10,7 @@ use robot_bus::worker_thread::WorkerThread;
 use robot_bus::{Node, Publisher, RobotBusBroker};
 use support::{ephemeral_robot_bus_config, lock_brokers};
 
-fn start_bus() -> (std::sync::MutexGuard<'static, ()>, RobotBusBroker) {
+fn start_bus() -> (support::BrokerLockGuard, RobotBusBroker) {
     let guard = lock_brokers();
     let broker = RobotBusBroker::start(ephemeral_robot_bus_config()).expect("start RobotBusBroker");
     (guard, broker)

@@ -15,7 +15,12 @@ use robot_bus::ConsoleBrokerConfig;
 use support::lock_brokers;
 
 fn inproc_broker_config() -> RobotBusConfig {
-    let mut config = RobotBusConfig::default();
+    // Ephemeral TCP/gRPC ports — defaults (e.g. :15770) collide under parallel cargo test.
+    let mut config = support::ephemeral_robot_bus_config();
+    // Keep inproc (+ ipc/tcp) so Node::inproc_with_context can reach the proxy.
+    config.message.bind_all_transports = true;
+    config.service.bind_all_transports = true;
+    config.action.bind_all_transports = true;
     #[cfg(feature = "console")]
     {
         config.console = ConsoleBrokerConfig {

@@ -23,7 +23,7 @@ use crate::runtime::Context as BusContext;
 use crate::transports::IPC_DIR;
 
 #[cfg(feature = "grpc")]
-use crate::grpc::{serve_with_shutdown, GatewayConfig};
+use crate::grpc::{serve_on_listener, GatewayConfig};
 #[cfg(feature = "console")]
 use crate::console::{serve_with_shutdown as serve_console_with_shutdown, BrokerEndpoints, ConsoleState};
 #[cfg(any(feature = "grpc", feature = "console"))]
@@ -276,6 +276,13 @@ struct GrpcGatewayHandle {
 impl GrpcGatewayHandle {
     fn start(config: GatewayConfig) -> Result<Self> {
         let listen = config.listen;
+        // Bind on the calling thread so EADDRINUSE fails at start(), not only at stop().
+        let std_listener = std::net::TcpListener::bind(listen)
+            .with_context(|| format!("bind gRPC listen {listen}"))?;
+        std_listener
+            .set_nonblocking(true)
+            .context("set gRPC listener nonblocking")?;
+
         let (shutdown_tx, shutdown_rx) = tokio::sync::watch::channel(false);
         let handle = thread::spawn(move || {
             let rt = tokio::runtime::Builder::new_multi_thread()
@@ -283,6 +290,8 @@ impl GrpcGatewayHandle {
                 .build()
                 .context("create tokio runtime for gRPC gateway")?;
             rt.block_on(async move {
+                let listener = tokio::net::TcpListener::from_std(std_listener)
+                    .context("tokio gRPC listener")?;
                 let mut graceful_rx = shutdown_rx.clone();
                 let graceful = async move {
                     while !*graceful_rx.borrow() {
@@ -303,7 +312,7 @@ impl GrpcGatewayHandle {
                     tokio::time::sleep(Duration::from_millis(500)).await;
                 };
                 tokio::select! {
-                    result = serve_with_shutdown(config, graceful) => result,
+                    result = serve_on_listener(config, listener, graceful) => result,
                     _ = force => Ok(()),
                 }
             })

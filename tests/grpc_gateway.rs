@@ -19,7 +19,7 @@ use tokio_stream::StreamExt;
 use tonic::Code;
 use tonic::Request;
 
-fn start_bus() -> (std::sync::MutexGuard<'static, ()>, RobotBusBroker) {
+fn start_bus() -> (support::BrokerLockGuard, RobotBusBroker) {
     let guard = lock_brokers();
     let broker = RobotBusBroker::start(ephemeral_robot_bus_config()).expect("start RobotBusBroker");
     (guard, broker)

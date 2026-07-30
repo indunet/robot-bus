@@ -1,5 +1,7 @@
 //! UDP discovery: wait for broker announce and connect via applied NodeOptions.
 
+mod support;
+
 use robot_bus::discovery::{DiscoverOpts, DEFAULT_MULTICAST_ADDR};
 use robot_bus::message_bus::{Publisher, Subscriber};
 use robot_bus::robot_bus_interface::msg::v1::TcpPorts;
@@ -8,6 +10,7 @@ use robot_bus::{
 };
 use std::thread;
 use std::time::Duration;
+use support::lock_brokers;
 
 fn unique_discovery_port() -> u16 {
     let base = 45550u16;
@@ -19,6 +22,7 @@ fn unique_discovery_port() -> u16 {
 
 #[test]
 fn discover_tcp_then_pubsub() {
+    let _guard = lock_brokers();
     let disco_port = unique_discovery_port();
     let offset = (disco_port % 200) as u16;
 

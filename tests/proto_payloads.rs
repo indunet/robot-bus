@@ -28,7 +28,7 @@ use robot_bus::RobotBusBroker;
 mod support;
 use support::{ephemeral_robot_bus_config, lock_brokers};
 
-fn start_bus() -> (std::sync::MutexGuard<'static, ()>, RobotBusBroker) {
+fn start_bus() -> (support::BrokerLockGuard, RobotBusBroker) {
     let guard = lock_brokers();
     let broker = RobotBusBroker::start(ephemeral_robot_bus_config()).expect("start RobotBusBroker");
     (guard, broker)

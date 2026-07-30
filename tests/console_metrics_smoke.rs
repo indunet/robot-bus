@@ -5,6 +5,8 @@
 
 #![cfg(feature = "console")]
 
+mod support;
+
 use std::sync::Arc;
 use std::thread;
 use std::time::Duration;
@@ -19,6 +21,7 @@ use robot_bus::broker::{
 use robot_bus::message_bus::{Publisher, Subscriber};
 use robot_bus::service_bus::ServiceClient;
 use robot_bus::worker_thread::WorkerThread;
+use support::lock_brokers;
 
 fn test_broker_config(
     msg_xsub: u16,
@@ -66,6 +69,7 @@ fn test_broker_config(
 
 #[test]
 fn message_metrics_count_published_topics() {
+    let _guard = lock_brokers();
     let broker = RobotBusBroker::start(test_broker_config(
         25560, 25561, 25662, 25663, 25664, 25665, 25770, 25771,
     ))
@@ -119,6 +123,7 @@ fn message_metrics_count_published_topics() {
 
 #[test]
 fn service_and_action_metrics_via_console_api() {
+    let _guard = lock_brokers();
     let broker = RobotBusBroker::start(test_broker_config(
         26560, 26561, 26662, 26663, 26664, 26665, 26770, 26771,
     ))

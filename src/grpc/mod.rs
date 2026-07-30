@@ -16,5 +16,5 @@ pub mod pb {
 
 pub use action::ActionGatewayService;
 pub use message::MessageGatewayService;
-pub use server::{serve, serve_with_shutdown, GatewayConfig};
+pub use server::{serve, serve_on_listener, serve_with_shutdown, GatewayConfig};
 pub use service::ServiceGatewayService;

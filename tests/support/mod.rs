@@ -2,9 +2,10 @@
 
 #![allow(dead_code)] // shared across integration tests; not every helper is used in every crate
 
+use std::fs::OpenOptions;
 use std::net::TcpListener;
+use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::{Mutex, MutexGuard};
 use std::thread::{self, JoinHandle};
 use std::time::Duration;
 
@@ -20,13 +21,43 @@ use zmq::{Context, Socket, SocketType};
 
 static PROXY_ID: AtomicU64 = AtomicU64::new(0);
 
-/// `bind_all` uses fixed inproc/ipc names — only one full broker at a time.
-static BROKER_LOCK: Mutex<()> = Mutex::new(());
+/// Cross-process lock so parallel `cargo test` binaries cannot race on
+/// `free_ports` → bind TOCTOU (in-process `Mutex` is per test binary only).
+pub struct BrokerLockGuard {
+    _file: std::fs::File,
+}
 
-pub fn lock_brokers() -> MutexGuard<'static, ()> {
-    BROKER_LOCK
-        .lock()
-        .unwrap_or_else(|poisoned| poisoned.into_inner())
+/// Serialize broker integration tests across threads **and** test binaries.
+///
+/// `cargo test` runs many `tests/*.rs` targets in parallel; each gets its own
+/// copy of this module, so a process-local `Mutex` does not help. We `flock`
+/// a temp file instead (released when the process exits, even on panic).
+pub fn lock_brokers() -> BrokerLockGuard {
+    let path = broker_lock_path();
+    let file = OpenOptions::new()
+        .create(true)
+        .read(true)
+        .write(true)
+        .open(&path)
+        .unwrap_or_else(|e| panic!("open broker lock {}: {e}", path.display()));
+    #[cfg(unix)]
+    {
+        use std::os::unix::io::AsRawFd;
+        let fd = file.as_raw_fd();
+        let rc = unsafe { libc::flock(fd, libc::LOCK_EX) };
+        if rc != 0 {
+            panic!(
+                "flock {}: {}",
+                path.display(),
+                std::io::Error::last_os_error()
+            );
+        }
+    }
+    BrokerLockGuard { _file: file }
+}
+
+fn broker_lock_path() -> PathBuf {
+    std::env::temp_dir().join("robot-bus-integration-broker.lock")
 }
 
 /// Probe an unused TCP port. **TOCTOU**: the port is released when this returns,
@@ -170,7 +201,7 @@ impl Drop for MessageProxy {
 pub struct BrokerProcess {
     pub frontend_endpoint: String,
     pub backend_endpoint: String,
-    _guard: MutexGuard<'static, ()>,
+    _guard: BrokerLockGuard,
     _broker: RobotBusBroker,
 }
 

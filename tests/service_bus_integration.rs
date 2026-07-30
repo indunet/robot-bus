@@ -6,17 +6,17 @@
 use robot_bus::broker::service_bus::ServiceBusConfig;
 use robot_bus::RobotBusBroker;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, MutexGuard};
+use std::sync::Arc;
 use std::thread;
 use std::time::Duration;
 use zmq::{Context as ZmqContext, SocketType};
 
 mod support;
-use support::{ephemeral_robot_bus_config, lock_brokers};
+use support::{ephemeral_robot_bus_config, lock_brokers, BrokerLockGuard};
 
 /// Spawn all buses via [`RobotBusBroker::start`]; expose service endpoints.
 struct BrokerHandle {
-    _guard: MutexGuard<'static, ()>,
+    _guard: BrokerLockGuard,
     frontend_ep: String,
     backend_ep: String,
     _broker: RobotBusBroker,

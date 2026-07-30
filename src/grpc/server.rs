@@ -6,6 +6,8 @@ use std::net::SocketAddr;
 use anyhow::{Context, Result};
 use http::Method;
 use http::header::HeaderName;
+use tokio::net::TcpListener;
+use tokio_stream::wrappers::TcpListenerStream;
 use tonic::transport::Server;
 use tonic_web::GrpcWebLayer;
 use tower_http::cors::{AllowOrigin, Any, CorsLayer};
@@ -54,6 +56,19 @@ pub async fn serve_with_shutdown(
     config: GatewayConfig,
     shutdown: impl Future<Output = ()> + Send + 'static,
 ) -> Result<()> {
+    let listen = config.listen;
+    let listener = TcpListener::bind(listen)
+        .await
+        .with_context(|| format!("bind gRPC listen {listen}"))?;
+    serve_on_listener(config, listener, shutdown).await
+}
+
+/// Serve on an already-bound listener (caller owns the bind / fail-fast).
+pub async fn serve_on_listener(
+    config: GatewayConfig,
+    listener: TcpListener,
+    shutdown: impl Future<Output = ()> + Send + 'static,
+) -> Result<()> {
     let message = MessageGatewayService::new(
         config.message_xpub.clone(),
         config.message_xsub.clone(),
@@ -79,7 +94,7 @@ pub async fn serve_with_shutdown(
         .add_service(MessageGatewayServer::new(message))
         .add_service(ServiceGatewayServer::new(service))
         .add_service(ActionGatewayServer::new(action))
-        .serve_with_shutdown(config.listen, shutdown)
+        .serve_with_incoming_shutdown(TcpListenerStream::new(listener), shutdown)
         .await
         .context("gateway server")?;
     Ok(())
