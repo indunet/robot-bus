@@ -69,6 +69,19 @@ cargo run --bin robot_bus_broker
 # 关闭广播:        robot_bus_broker --no-discovery
 ```
 
+### 自省 CLI（`rbus`）
+
+查询 broker console 的 HTTP API（默认 `http://127.0.0.1:15771`；可用 `--url` 或环境变量 `ROBOT_BUS_BROKER_URL` 覆盖）：
+
+```bash
+cargo run --bin rbus -- topic list
+cargo run --bin rbus -- service list
+cargo run --bin rbus -- action list
+cargo run --bin rbus -- status
+```
+
+topic list 只显示近期有转发流量的名字（metrics 需要真实订阅者）。service / action 在 worker READY 后出现。
+
 ### Broker 发现（UDP 组播）
 
 Broker 周期在 `239.255.76.67:15550` 上广播（刻意避开 ROS 2 / DDS 的 `7400` 与 `239.255.0.1`）。UDP 载荷为纯 protobuf [`BrokerAnnounce`](proto/robot_bus_interface/msg/v1/announce.proto)（`magic` 必须为 `RBUS`）；解不出来的包直接丢弃。

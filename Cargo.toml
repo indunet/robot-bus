@@ -46,12 +46,12 @@ console = [
     "dep:axum",
     "dep:rust-embed",
     "dep:mime_guess",
-    "dep:serde_json",
 ]
 
 [dependencies]
 anyhow = "1"
 axum = { version = "0.8", optional = true, default-features = false, features = ["http1", "tokio", "query", "json"] }
+clap = { version = "4", features = ["derive"] }
 http = { version = "1", optional = true }
 log = "0.4"
 mime_guess = { version = "2", optional = true }
@@ -60,7 +60,7 @@ prost-types = "0.14"
 pyo3 = { version = "0.25", optional = true, features = ["abi3-py39"] }
 rust-embed = { version = "8", optional = true }
 serde = { version = "1", features = ["derive"] }
-serde_json = { version = "1", optional = true }
+serde_json = "1"
 serde_yaml = "0.9"
 socket2 = { version = "0.6.5", features = ["all"] }
 thiserror = "2"
@@ -70,6 +70,7 @@ tonic = { version = "0.14", optional = true }
 tonic-prost = { version = "0.14", optional = true }
 tonic-web = { version = "0.14", optional = true }
 tower-http = { version = "0.6", optional = true, features = ["cors"] }
+ureq = { version = "2", default-features = false, features = ["json"] }
 uuid = { version = "1", features = ["v4"] }
 zmq = "0.10"
 
@@ -95,9 +96,18 @@ name = "console_metrics_smoke"
 path = "tests/console_metrics_smoke.rs"
 required-features = ["console", "grpc"]
 
+[[test]]
+name = "rbus_cli_smoke"
+path = "tests/rbus_cli_smoke.rs"
+required-features = ["console", "grpc"]
+
 [[bin]]
 name = "robot_bus_broker"
 path = "src/bin/robot_bus_broker.rs"
+
+[[bin]]
+name = "rbus"
+path = "src/bin/rbus.rs"
 
 [[bin]]
 name = "robot_bus_interop"

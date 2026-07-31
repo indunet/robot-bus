@@ -69,6 +69,19 @@ cargo run --bin robot_bus_broker
 # disable announce:     robot_bus_broker --no-discovery
 ```
 
+### Introspection CLI (`rbus`)
+
+Query the broker console HTTP API (default `http://127.0.0.1:15771`; override with `--url` or `ROBOT_BUS_BROKER_URL`):
+
+```bash
+cargo run --bin rbus -- topic list
+cargo run --bin rbus -- service list
+cargo run --bin rbus -- action list
+cargo run --bin rbus -- status
+```
+
+Topic list shows names with recent forwarded traffic (a live subscriber is required for metrics). Services / actions appear after a worker READY.
+
 ### Broker discovery (UDP multicast)
 
 Brokers periodically announce on `239.255.76.67:15550` (away from ROS 2 / DDS `7400` / `239.255.0.1`). The UDP payload is a pure protobuf [`BrokerAnnounce`](proto/robot_bus_interface/msg/v1/announce.proto) (`magic` must be `RBUS`). Invalid packets are dropped.
