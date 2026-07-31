@@ -151,3 +151,8 @@ perf: gen-rust
 # ROS 2 comparison benches (Docker container `ros2`); writes docs/ros2-perf-report.md
 perf-ros2:
 	./benches/ros2_perf/run.sh
+
+# Typecheck ros2 bridge without a full ROS install (rclrs use_ros_shim)
+check-ros2-shim:
+	RUSTFLAGS='--cfg ros_distro="humble"' cargo check --features ros2,rclrs/use_ros_shim
+

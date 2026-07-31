@@ -30,6 +30,7 @@
 | `runtime::SingleThreadedExecutor` / `MultiThreadedExecutor` | 显式执行器（多节点 / 并行）；单节点可直接 `Node::spin` |
 | `runtime::Node` / `TopicPublisher` / `CallbackGroup` | 节点、publisher、callback group（互斥 / 可重入） |
 | `grpc::`（默认 feature） | gRPC / gRPC-Web 网关（随 broker 一起启动） |
+| `ros2::`（`ros2` feature） | 进程内 ROS 2 话题桥（`Ros2Bridge`） |
 
 ### 仓库布局
 
@@ -56,6 +57,10 @@ Rust 核心留在仓库根目录（`Cargo.toml` + `src/`）。各语言 SDK 放�
               ▼
 robot_bus_broker 进程
 ```
+
+### 可选 ROS 2 桥（Rust feature）
+
+日常开发 **不必安装 ROS 2**。进程内与 ROS 2 图互通时，开启 Cargo feature **`ros2`**，使用 `robot_bus::ros2::Ros2Bridge`（链式 API 或 YAML）。需 sourced 的 ROS 2 Humble（或更新）及可链接的 `rclrs` 环境。见 [ROS 2 桥](#ros-2-桥-feature-ros2)。
 
 ## 快速开始
 
@@ -224,7 +229,7 @@ auto pub = node.create_publisher("/imu");
 
 ```toml
 robot-bus = { path = "../robot-bus" }
-# 或 crates.io：robot-bus = "0.0.9"
+# 或 crates.io：robot-bus = "0.1.0"
 ```
 
 语义接近 ROS 2：`Node::new` → typed `create_publisher` / `create_subscription` → `node.spin()`（自动挂 `SingleThreadedExecutor`）。
@@ -363,6 +368,35 @@ Proto（包名 `robot_bus_interface.grpc.v1`，与 ROS `*.msg.v1` / `*.srv.v1` �
 UDP 发现（包名 `robot_bus_interface.msg.v1`）：
 
 - [`announce.proto`](proto/robot_bus_interface/msg/v1/announce.proto)
+
+## ROS 2 桥（`feature = "ros2"`）
+
+进程内话题桥：`robot_bus::ros2::Ros2Bridge`（链式 API 或 YAML）。**默认不启用** — 核心 SDK / crates.io / maturin 仍免 ROS。
+
+| 需要 | 说明 |
+|------|------|
+| Cargo | `--features ros2`（可选依赖 `rclrs`） |
+| 环境 | Source ROS 2 Humble+ 以便链接 `rcl`；主 CI **不**开此 feature |
+| Broker | 可达的 `robot_bus_broker`（tcp/ipc 或 `bus_discover`） |
+| MVP 类型 | `std_msgs/msg/String`、`sensor_msgs/msg/Imu`（动态 ROS 消息 ↔ robot-bus protobuf） |
+
+```rust
+use robot_bus::ros2::{Direction, Ros2Bridge};
+
+let mut bridge = Ros2Bridge::new("ros_bridge")
+    .bus_tcp("localhost")
+    .route("/chatter", "/chatter")
+        .string()
+        .direction(Direction::Both)
+        .add()
+    .route("/imu", "/imu")
+        .imu()
+        .direction(Direction::RosToBus)
+        .add()
+    .build()?;
+bridge.spin()?;
+// 或: Ros2Bridge::from_yaml("bridge.yaml")?.spin()?;
+```
 
 ## 测试
 

@@ -3,9 +3,9 @@
 `Cargo.toml`：
 
 ```toml
-robot-bus = "0.0.9"
+robot-bus = "0.1.0"
 # 本地：robot-bus = { path = "../robot-bus" }
-# 默认已启用 gRPC；若需关闭：robot-bus = { version = "0.0.9", default-features = false }
+# 默认已启用 gRPC；若需关闭：robot-bus = { version = "0.1.0", default-features = false }
 ```
 
 ## Broker 启动

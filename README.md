@@ -30,6 +30,7 @@ More API examples live under [`docs/`](docs/).
 | `runtime::SingleThreadedExecutor` / `MultiThreadedExecutor` | Explicit executors (multi-node / parallel); a single node can `Node::spin` directly |
 | `runtime::Node` / `TopicPublisher` / `CallbackGroup` | Nodes, publishers, callback groups (mutually exclusive / reentrant) |
 | `grpc::` (default feature) | gRPC / gRPC-Web gateway (started with the broker) |
+| `ros2::` (`ros2` feature) | In-process ROS 2 topic bridge (`Ros2Bridge`) |
 
 ### Repository layout
 
@@ -56,6 +57,10 @@ Application code (Rust / Python / TypeScript / C++ / Java / Android)
               ▼
 robot_bus_broker process
 ```
+
+### Optional ROS 2 bridge (Rust feature)
+
+Everyday robot-bus development **does not install ROS 2**. To interconnect with a ROS 2 graph in-process, enable Cargo feature **`ros2`** and use `robot_bus::ros2::Ros2Bridge` (chained API or YAML). Requires a sourced ROS 2 Humble (or later) + `rclrs` link environment. See the [ROS 2 bridge](#ros-2-bridge-feature-ros2) section.
 
 ## Quick start
 
@@ -222,7 +227,7 @@ Add to `Cargo.toml`:
 
 ```toml
 robot-bus = { path = "../robot-bus" }
-# or from crates.io: robot-bus = "0.0.9"
+# or from crates.io: robot-bus = "0.1.0"
 ```
 
 Semantics mirror ROS 2: `Node::new` → typed `create_publisher` / `create_subscription` → `node.spin()` (auto-attaches a `SingleThreadedExecutor`).
@@ -361,6 +366,35 @@ Proto (package `robot_bus_interface.grpc.v1`, distinct from ROS `*.msg.v1` / `*.
 UDP discovery (`robot_bus_interface.msg.v1`):
 
 - [`announce.proto`](proto/robot_bus_interface/msg/v1/announce.proto)
+
+## ROS 2 bridge (`feature = "ros2"`)
+
+In-process topic bridge via `robot_bus::ros2::Ros2Bridge` (chained API or YAML). **Not** enabled by default — core SDK, crates.io, and maturin builds stay ROS-free.
+
+| Need | Notes |
+|------|--------|
+| Cargo | `--features ros2` (pulls optional `rclrs`) |
+| Environment | Source ROS 2 Humble+ so `rcl` / type support libs link; main CI does **not** enable this feature |
+| Broker | Running `robot_bus_broker` reachable over tcp/ipc (or `bus_discover`) |
+| MVP types | `std_msgs/msg/String`, `sensor_msgs/msg/Imu` (dynamic ROS messages ↔ robot-bus protobuf) |
+
+```rust
+use robot_bus::ros2::{Direction, Ros2Bridge};
+
+let mut bridge = Ros2Bridge::new("ros_bridge")
+    .bus_tcp("localhost")
+    .route("/chatter", "/chatter")
+        .string()
+        .direction(Direction::Both)
+        .add()
+    .route("/imu", "/imu")
+        .imu()
+        .direction(Direction::RosToBus)
+        .add()
+    .build()?;
+bridge.spin()?;
+// or: Ros2Bridge::from_yaml("bridge.yaml")?.spin()?;
+```
 
 ## Testing
 

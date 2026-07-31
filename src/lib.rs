@@ -30,6 +30,9 @@ pub mod grpc;
 #[cfg(feature = "console")]
 pub mod console;
 
+#[cfg(feature = "ros2")]
+pub mod ros2;
+
 #[cfg(feature = "extension-module")]
 mod python_api;
 
