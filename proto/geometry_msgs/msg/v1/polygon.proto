@@ -17,3 +17,15 @@ message PolygonStamped {
   std_msgs.msg.v1.Header header = 1;
   Polygon polygon = 2;
 }
+
+// Equivalent to ROS 2 `geometry_msgs/msg/PolygonInstance`.
+message PolygonInstance {
+  Polygon polygon = 1;
+  int64 id = 2;
+}
+
+// Equivalent to ROS 2 `geometry_msgs/msg/PolygonInstanceStamped`.
+message PolygonInstanceStamped {
+  std_msgs.msg.v1.Header header = 1;
+  PolygonInstance polygon = 2;
+}

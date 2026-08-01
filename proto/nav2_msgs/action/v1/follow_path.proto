@@ -1,0 +1,29 @@
+syntax = "proto3";
+
+package nav2_msgs.action.v1;
+
+import "std_msgs/msg/v1/empty.proto";
+import "nav_msgs/msg/v1/path.proto";
+
+// Equivalent to ROS 2 `nav2_msgs/action/FollowPath`.
+message FollowPathGoal {
+  nav_msgs.msg.v1.Path path = 1;
+  string controller_id = 2;
+  string goal_checker_id = 3;
+  string progress_checker_id = 4;
+}
+
+message FollowPathResult {
+  std_msgs.msg.v1.Empty result = 1;
+  // uint16 in ROS 2:
+  //   NONE=0, UNKNOWN=100, INVALID_CONTROLLER=101, TF_ERROR=102,
+  //   INVALID_PATH=103, PATIENCE_EXCEEDED=104, FAILED_TO_MAKE_PROGRESS=105,
+  //   NO_VALID_CONTROL=106, CONTROLLER_TIMED_OUT=107
+  uint32 error_code = 2;
+  string error_msg = 3;
+}
+
+message FollowPathFeedback {
+  float distance_to_goal = 1;
+  float speed = 2;
+}

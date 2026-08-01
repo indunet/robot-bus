@@ -1,0 +1,20 @@
+syntax = "proto3";
+
+package action_msgs.srv.v1;
+
+import "action_msgs/msg/v1/goal_info.proto";
+
+// Equivalent to ROS 2 `action_msgs/srv/CancelGoal`.
+message CancelGoalRequest {
+  action_msgs.msg.v1.GoalInfo goal_info = 1;
+}
+
+message CancelGoalResponse {
+  // int8 in ROS 2:
+  //   ERROR_NONE = 0
+  //   ERROR_REJECTED = 1
+  //   ERROR_UNKNOWN_GOAL_ID = 2
+  //   ERROR_GOAL_TERMINATED = 3
+  int32 return_code = 1;
+  repeated action_msgs.msg.v1.GoalInfo goals_canceling = 2;
+}

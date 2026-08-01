@@ -1,0 +1,26 @@
+syntax = "proto3";
+
+package nav2_msgs.action.v1;
+
+import "builtin_interfaces/msg/v1/duration.proto";
+import "geometry_msgs/msg/v1/point.proto";
+
+// Equivalent to ROS 2 `nav2_msgs/action/DriveOnHeading`.
+message DriveOnHeadingGoal {
+  geometry_msgs.msg.v1.Point target = 1;
+  float speed = 2;
+  builtin_interfaces.msg.v1.Duration time_allowance = 3;
+}
+
+message DriveOnHeadingResult {
+  builtin_interfaces.msg.v1.Duration total_elapsed_time = 1;
+  // uint16 in ROS 2:
+  //   NONE=0, UNKNOWN=720, TIMEOUT=721, TF_ERROR=722,
+  //   COLLISION_AHEAD=723, INVALID_INPUT=724
+  uint32 error_code = 2;
+  string error_msg = 3;
+}
+
+message DriveOnHeadingFeedback {
+  float distance_traveled = 1;
+}

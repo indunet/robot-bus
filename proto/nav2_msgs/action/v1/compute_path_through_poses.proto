@@ -1,0 +1,29 @@
+syntax = "proto3";
+
+package nav2_msgs.action.v1;
+
+import "builtin_interfaces/msg/v1/duration.proto";
+import "geometry_msgs/msg/v1/stamped.proto";
+import "nav_msgs/msg/v1/path.proto";
+
+// Equivalent to ROS 2 `nav2_msgs/action/ComputePathThroughPoses`.
+message ComputePathThroughPosesGoal {
+  repeated geometry_msgs.msg.v1.PoseStamped goals = 1;
+  geometry_msgs.msg.v1.PoseStamped start = 2;
+  string planner_id = 3;
+  // If false, use current robot pose as path start.
+  bool use_start = 4;
+}
+
+message ComputePathThroughPosesResult {
+  nav_msgs.msg.v1.Path path = 1;
+  builtin_interfaces.msg.v1.Duration planning_time = 2;
+  // uint16 in ROS 2:
+  //   NONE=0, UNKNOWN=300, INVALID_PLANNER=301, TF_ERROR=302,
+  //   START_OUTSIDE_MAP=303, GOAL_OUTSIDE_MAP=304, START_OCCUPIED=305,
+  //   GOAL_OCCUPIED=306, TIMEOUT=307, NO_VALID_PATH=308, NO_VIAPOINTS_GIVEN=309
+  uint32 error_code = 3;
+  string error_msg = 4;
+}
+
+message ComputePathThroughPosesFeedback {}

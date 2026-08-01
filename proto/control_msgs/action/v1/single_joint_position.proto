@@ -1,0 +1,22 @@
+syntax = "proto3";
+
+package control_msgs.action.v1;
+
+import "std_msgs/msg/v1/header.proto";
+import "builtin_interfaces/msg/v1/duration.proto";
+
+// Equivalent to ROS 2 `control_msgs/action/SingleJointPosition`.
+message SingleJointPositionGoal {
+  double position = 1;
+  builtin_interfaces.msg.v1.Duration min_duration = 2;
+  double max_velocity = 3;
+}
+
+message SingleJointPositionResult {}
+
+message SingleJointPositionFeedback {
+  std_msgs.msg.v1.Header header = 1;
+  double position = 2;
+  double velocity = 3;
+  double error = 4;
+}

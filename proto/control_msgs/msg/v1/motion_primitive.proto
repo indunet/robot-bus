@@ -1,0 +1,35 @@
+syntax = "proto3";
+
+package control_msgs.msg.v1;
+
+import "geometry_msgs/msg/v1/stamped.proto";
+
+// Equivalent to ROS 2 `control_msgs/msg/MotionArgument`.
+message MotionArgument {
+  string name = 1;
+  double value = 2;
+}
+
+// Equivalent to ROS 2 `control_msgs/msg/MotionPrimitive`.
+message MotionPrimitive {
+  // int8 in ROS 2:
+  //   UNKNOWN = -1
+  //   LINEAR_JOINT = 0        (often PTP)
+  //   LINEAR_CARTESIAN = 50   (often LIN)
+  //   CIRCULAR_CARTESIAN = 51 (often CIRC)
+  int32 type = 1;
+
+  double blend_radius = 2;
+
+  // Vendor / use-case specific arguments (e.g. max velocity, acceleration).
+  repeated MotionArgument additional_arguments = 3;
+
+  // Targets via Cartesian poses and/or joint configurations.
+  repeated geometry_msgs.msg.v1.PoseStamped poses = 4;
+  repeated double joint_positions = 5;
+}
+
+// Equivalent to ROS 2 `control_msgs/msg/MotionPrimitiveSequence`.
+message MotionPrimitiveSequence {
+  repeated MotionPrimitive motions = 1;
+}

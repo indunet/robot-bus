@@ -1,0 +1,15 @@
+syntax = "proto3";
+
+package nav_msgs.msg.v1;
+
+import "std_msgs/msg/v1/header.proto";
+import "geometry_msgs/msg/v1/stamped.proto";
+
+// Equivalent to ROS 2 `nav_msgs/msg/Goals`.
+message Goals {
+  // Time at which the poses were computed (distinct from per-pose stamps).
+  std_msgs.msg.v1.Header header = 1;
+
+  // Goals executed in array order.
+  repeated geometry_msgs.msg.v1.PoseStamped goals = 2;
+}

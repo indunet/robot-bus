@@ -1,0 +1,21 @@
+syntax = "proto3";
+
+package control_msgs.action.v1;
+
+import "sensor_msgs/msg/v1/joint_state.proto";
+
+// Equivalent to ROS 2 `control_msgs/action/ParallelGripperCommand`.
+message ParallelGripperCommandGoal {
+  // name / position required; velocity and effort optional when empty.
+  sensor_msgs.msg.v1.JointState command = 1;
+}
+
+message ParallelGripperCommandResult {
+  sensor_msgs.msg.v1.JointState state = 1;
+  bool stalled = 2;
+  bool reached_goal = 3;
+}
+
+message ParallelGripperCommandFeedback {
+  sensor_msgs.msg.v1.JointState state = 1;
+}

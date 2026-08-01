@@ -1,0 +1,26 @@
+syntax = "proto3";
+
+package geometry_msgs.msg.v1;
+
+import "std_msgs/msg/v1/header.proto";
+import "geometry_msgs/msg/v1/twist.proto";
+import "geometry_msgs/msg/v1/covariance.proto";
+
+// Equivalent to ROS 2 `geometry_msgs/msg/VelocityStamped`.
+//
+// Timestamped velocity of frame `body_frame_id` relative to
+// `reference_frame_id`, expressed in the observation frame `header.frame_id`.
+message VelocityStamped {
+  std_msgs.msg.v1.Header header = 1;
+  string body_frame_id = 2;
+  string reference_frame_id = 3;
+  Twist velocity = 4;
+}
+
+// Equivalent to ROS 2 `geometry_msgs/msg/VelocityWithCovarianceStamped`.
+message VelocityWithCovarianceStamped {
+  std_msgs.msg.v1.Header header = 1;
+  string body_frame_id = 2;
+  string reference_frame_id = 3;
+  TwistWithCovariance velocity = 4;
+}

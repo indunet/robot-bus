@@ -1,0 +1,14 @@
+syntax = "proto3";
+
+package control_msgs.action.v1;
+
+import "trajectory_msgs/msg/v1/joint_trajectory.proto";
+
+// Equivalent to ROS 2 `control_msgs/action/JointTrajectory`.
+message JointTrajectoryGoal {
+  trajectory_msgs.msg.v1.JointTrajectory trajectory = 1;
+}
+
+message JointTrajectoryResult {}
+
+message JointTrajectoryFeedback {}

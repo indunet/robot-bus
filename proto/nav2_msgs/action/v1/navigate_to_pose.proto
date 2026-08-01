@@ -1,0 +1,27 @@
+syntax = "proto3";
+
+package nav2_msgs.action.v1;
+
+import "builtin_interfaces/msg/v1/duration.proto";
+import "geometry_msgs/msg/v1/stamped.proto";
+
+// Equivalent to ROS 2 `nav2_msgs/action/NavigateToPose`.
+message NavigateToPoseGoal {
+  geometry_msgs.msg.v1.PoseStamped pose = 1;
+  string behavior_tree = 2;
+}
+
+message NavigateToPoseResult {
+  // uint16 in ROS 2: NONE = 0, plus implementation-defined codes.
+  uint32 error_code = 1;
+  string error_msg = 2;
+}
+
+message NavigateToPoseFeedback {
+  geometry_msgs.msg.v1.PoseStamped current_pose = 1;
+  builtin_interfaces.msg.v1.Duration navigation_time = 2;
+  builtin_interfaces.msg.v1.Duration estimated_time_remaining = 3;
+  // int16 in ROS 2.
+  int32 number_of_recoveries = 4;
+  float distance_remaining = 5;
+}

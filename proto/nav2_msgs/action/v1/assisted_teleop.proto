@@ -1,0 +1,22 @@
+syntax = "proto3";
+
+package nav2_msgs.action.v1;
+
+import "builtin_interfaces/msg/v1/duration.proto";
+
+// Equivalent to ROS 2 `nav2_msgs/action/AssistedTeleop`.
+message AssistedTeleopGoal {
+  builtin_interfaces.msg.v1.Duration time_allowance = 1;
+}
+
+message AssistedTeleopResult {
+  builtin_interfaces.msg.v1.Duration total_elapsed_time = 1;
+  // uint16 in ROS 2:
+  //   NONE=0, UNKNOWN=730, TIMEOUT=731, TF_ERROR=732
+  uint32 error_code = 2;
+  string error_msg = 3;
+}
+
+message AssistedTeleopFeedback {
+  builtin_interfaces.msg.v1.Duration current_teleop_duration = 1;
+}

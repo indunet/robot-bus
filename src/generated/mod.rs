@@ -110,6 +110,43 @@ pub mod nav_msgs {
                 type Request = SetMapRequest;
                 type Response = SetMapResponse;
             }
+
+            /// ROS 2 `nav_msgs/srv/LoadMap` type marker.
+            pub struct LoadMap;
+            impl Service for LoadMap {
+                type Request = LoadMapRequest;
+                type Response = LoadMapResponse;
+            }
+        }
+    }
+}
+
+pub mod stereo_msgs {
+    pub mod msg {
+        pub mod v1 {
+            include!("stereo_msgs/msg/v1/_includes.rs");
+        }
+    }
+}
+
+pub mod action_msgs {
+    pub mod msg {
+        pub mod v1 {
+            include!("action_msgs/msg/v1/_includes.rs");
+        }
+    }
+    pub mod srv {
+        pub mod v1 {
+            include!("action_msgs/srv/v1/_includes.rs");
+
+            use crate::typed::Service;
+
+            /// ROS 2 `action_msgs/srv/CancelGoal` type marker.
+            pub struct CancelGoal;
+            impl Service for CancelGoal {
+                type Request = CancelGoalRequest;
+                type Response = CancelGoalResponse;
+            }
         }
     }
 }
@@ -201,12 +238,178 @@ pub mod control_msgs {
             include!("control_msgs/msg/v1/_includes.rs");
         }
     }
+    pub mod action {
+        pub mod v1 {
+            include!("control_msgs/action/v1/_includes.rs");
+
+            use crate::typed::Action;
+
+            /// ROS 2 `control_msgs/action/FollowJointTrajectory` type marker.
+            pub struct FollowJointTrajectory;
+            impl Action for FollowJointTrajectory {
+                type Goal = FollowJointTrajectoryGoal;
+                type Feedback = FollowJointTrajectoryFeedback;
+                type Result = FollowJointTrajectoryResult;
+            }
+
+            /// ROS 2 `control_msgs/action/GripperCommand` type marker.
+            pub struct GripperCommand;
+            impl Action for GripperCommand {
+                type Goal = GripperCommandGoal;
+                type Feedback = GripperCommandFeedback;
+                type Result = GripperCommandResult;
+            }
+
+            /// ROS 2 `control_msgs/action/PointHead` type marker.
+            pub struct PointHead;
+            impl Action for PointHead {
+                type Goal = PointHeadGoal;
+                type Feedback = PointHeadFeedback;
+                type Result = PointHeadResult;
+            }
+
+            /// ROS 2 `control_msgs/action/SingleJointPosition` type marker.
+            pub struct SingleJointPosition;
+            impl Action for SingleJointPosition {
+                type Goal = SingleJointPositionGoal;
+                type Feedback = SingleJointPositionFeedback;
+                type Result = SingleJointPositionResult;
+            }
+
+            /// ROS 2 `control_msgs/action/JointTrajectory` type marker.
+            pub struct JointTrajectory;
+            impl Action for JointTrajectory {
+                type Goal = JointTrajectoryGoal;
+                type Feedback = JointTrajectoryFeedback;
+                type Result = JointTrajectoryResult;
+            }
+
+            /// ROS 2 `control_msgs/action/ParallelGripperCommand` type marker.
+            pub struct ParallelGripperCommand;
+            impl Action for ParallelGripperCommand {
+                type Goal = ParallelGripperCommandGoal;
+                type Feedback = ParallelGripperCommandFeedback;
+                type Result = ParallelGripperCommandResult;
+            }
+
+            /// ROS 2 `control_msgs/action/ExecuteMotionPrimitiveSequence` type marker.
+            pub struct ExecuteMotionPrimitiveSequence;
+            impl Action for ExecuteMotionPrimitiveSequence {
+                type Goal = ExecuteMotionPrimitiveSequenceGoal;
+                type Feedback = ExecuteMotionPrimitiveSequenceFeedback;
+                type Result = ExecuteMotionPrimitiveSequenceResult;
+            }
+        }
+    }
 }
 
 pub mod nav2_msgs {
     pub mod msg {
         pub mod v1 {
             include!("nav2_msgs/msg/v1/_includes.rs");
+        }
+    }
+    pub mod action {
+        pub mod v1 {
+            include!("nav2_msgs/action/v1/_includes.rs");
+
+            use crate::typed::Action;
+
+            /// ROS 2 `nav2_msgs/action/NavigateToPose` type marker.
+            pub struct NavigateToPose;
+            impl Action for NavigateToPose {
+                type Goal = NavigateToPoseGoal;
+                type Feedback = NavigateToPoseFeedback;
+                type Result = NavigateToPoseResult;
+            }
+
+            /// ROS 2 `nav2_msgs/action/NavigateThroughPoses` type marker.
+            pub struct NavigateThroughPoses;
+            impl Action for NavigateThroughPoses {
+                type Goal = NavigateThroughPosesGoal;
+                type Feedback = NavigateThroughPosesFeedback;
+                type Result = NavigateThroughPosesResult;
+            }
+
+            /// ROS 2 `nav2_msgs/action/FollowPath` type marker.
+            pub struct FollowPath;
+            impl Action for FollowPath {
+                type Goal = FollowPathGoal;
+                type Feedback = FollowPathFeedback;
+                type Result = FollowPathResult;
+            }
+
+            /// ROS 2 `nav2_msgs/action/ComputePathToPose` type marker.
+            pub struct ComputePathToPose;
+            impl Action for ComputePathToPose {
+                type Goal = ComputePathToPoseGoal;
+                type Feedback = ComputePathToPoseFeedback;
+                type Result = ComputePathToPoseResult;
+            }
+
+            /// ROS 2 `nav2_msgs/action/ComputePathThroughPoses` type marker.
+            pub struct ComputePathThroughPoses;
+            impl Action for ComputePathThroughPoses {
+                type Goal = ComputePathThroughPosesGoal;
+                type Feedback = ComputePathThroughPosesFeedback;
+                type Result = ComputePathThroughPosesResult;
+            }
+
+            /// ROS 2 `nav2_msgs/action/Spin` type marker.
+            pub struct Spin;
+            impl Action for Spin {
+                type Goal = SpinGoal;
+                type Feedback = SpinFeedback;
+                type Result = SpinResult;
+            }
+
+            /// ROS 2 `nav2_msgs/action/BackUp` type marker.
+            pub struct BackUp;
+            impl Action for BackUp {
+                type Goal = BackUpGoal;
+                type Feedback = BackUpFeedback;
+                type Result = BackUpResult;
+            }
+
+            /// ROS 2 `nav2_msgs/action/Wait` type marker.
+            pub struct Wait;
+            impl Action for Wait {
+                type Goal = WaitGoal;
+                type Feedback = WaitFeedback;
+                type Result = WaitResult;
+            }
+
+            /// ROS 2 `nav2_msgs/action/FollowWaypoints` type marker.
+            pub struct FollowWaypoints;
+            impl Action for FollowWaypoints {
+                type Goal = FollowWaypointsGoal;
+                type Feedback = FollowWaypointsFeedback;
+                type Result = FollowWaypointsResult;
+            }
+
+            /// ROS 2 `nav2_msgs/action/SmoothPath` type marker.
+            pub struct SmoothPath;
+            impl Action for SmoothPath {
+                type Goal = SmoothPathGoal;
+                type Feedback = SmoothPathFeedback;
+                type Result = SmoothPathResult;
+            }
+
+            /// ROS 2 `nav2_msgs/action/DriveOnHeading` type marker.
+            pub struct DriveOnHeading;
+            impl Action for DriveOnHeading {
+                type Goal = DriveOnHeadingGoal;
+                type Feedback = DriveOnHeadingFeedback;
+                type Result = DriveOnHeadingResult;
+            }
+
+            /// ROS 2 `nav2_msgs/action/AssistedTeleop` type marker.
+            pub struct AssistedTeleop;
+            impl Action for AssistedTeleop {
+                type Goal = AssistedTeleopGoal;
+                type Feedback = AssistedTeleopFeedback;
+                type Result = AssistedTeleopResult;
+            }
         }
     }
 }

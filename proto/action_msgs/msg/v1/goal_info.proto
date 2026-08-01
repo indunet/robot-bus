@@ -1,0 +1,13 @@
+syntax = "proto3";
+
+package action_msgs.msg.v1;
+
+import "builtin_interfaces/msg/v1/time.proto";
+import "unique_identifier_msgs/msg/v1/uuid.proto";
+
+// Equivalent to ROS 2 `action_msgs/msg/GoalInfo`.
+message GoalInfo {
+  unique_identifier_msgs.msg.v1.UUID goal_id = 1;
+  // Time when the goal was accepted.
+  builtin_interfaces.msg.v1.Time stamp = 2;
+}

@@ -1,0 +1,24 @@
+syntax = "proto3";
+
+package sensor_msgs.msg.v1;
+
+// Equivalent to ROS 2 `sensor_msgs/msg/JoyFeedback`.
+//
+// Describes user feedback on a joystick, such as an LED, rumble pad, or buzzer.
+message JoyFeedback {
+  // uint8 in ROS 2:
+  //   TYPE_LED = 0
+  //   TYPE_RUMBLE = 1
+  //   TYPE_BUZZER = 2
+  uint32 type = 1;
+
+  // Id number for each instance of a feedback type.
+  // Example: first LED id=0, second LED id=1.
+  // uint8 in ROS 2.
+  uint32 id = 2;
+
+  // Intensity of the feedback, from 0.0 to 1.0 inclusive.
+  // If the device is binary, drivers should treat 0<=x<0.5 as off,
+  // 0.5<=x<=1 as on.
+  float intensity = 3;
+}

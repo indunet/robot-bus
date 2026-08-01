@@ -1,0 +1,22 @@
+syntax = "proto3";
+
+package control_msgs.action.v1;
+
+import "builtin_interfaces/msg/v1/duration.proto";
+import "geometry_msgs/msg/v1/stamped.proto";
+import "geometry_msgs/msg/v1/vector3.proto";
+
+// Equivalent to ROS 2 `control_msgs/action/PointHead`.
+message PointHeadGoal {
+  geometry_msgs.msg.v1.PointStamped target = 1;
+  geometry_msgs.msg.v1.Vector3 pointing_axis = 2;
+  string pointing_frame = 3;
+  builtin_interfaces.msg.v1.Duration min_duration = 4;
+  double max_velocity = 5;
+}
+
+message PointHeadResult {}
+
+message PointHeadFeedback {
+  double pointing_angle_error = 1;
+}

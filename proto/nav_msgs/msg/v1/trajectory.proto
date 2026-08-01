@@ -1,0 +1,25 @@
+syntax = "proto3";
+
+package nav_msgs.msg.v1;
+
+import "std_msgs/msg/v1/header.proto";
+import "geometry_msgs/msg/v1/pose.proto";
+import "geometry_msgs/msg/v1/twist.proto";
+import "geometry_msgs/msg/v1/accel_wrench.proto";
+
+// Equivalent to ROS 2 `nav_msgs/msg/TrajectoryPoint`.
+message TrajectoryPoint {
+  std_msgs.msg.v1.Header header = 1;
+  geometry_msgs.msg.v1.Pose pose = 2;
+  geometry_msgs.msg.v1.Twist velocity = 3;
+  // Optional; linear.x is NaN if unset in ROS 2.
+  geometry_msgs.msg.v1.Accel acceleration = 4;
+  // Optional; force.x is NaN if unset in ROS 2.
+  geometry_msgs.msg.v1.Wrench effort = 5;
+}
+
+// Equivalent to ROS 2 `nav_msgs/msg/Trajectory`.
+message Trajectory {
+  std_msgs.msg.v1.Header header = 1;
+  repeated TrajectoryPoint points = 2;
+}

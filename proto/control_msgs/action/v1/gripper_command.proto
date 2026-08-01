@@ -1,0 +1,24 @@
+syntax = "proto3";
+
+package control_msgs.action.v1;
+
+import "control_msgs/msg/v1/gripper_command.proto";
+
+// Equivalent to ROS 2 `control_msgs/action/GripperCommand`.
+message GripperCommandGoal {
+  control_msgs.msg.v1.GripperCommand command = 1;
+}
+
+message GripperCommandResult {
+  double position = 1;
+  double effort = 2;
+  bool stalled = 3;
+  bool reached_goal = 4;
+}
+
+message GripperCommandFeedback {
+  double position = 1;
+  double effort = 2;
+  bool stalled = 3;
+  bool reached_goal = 4;
+}

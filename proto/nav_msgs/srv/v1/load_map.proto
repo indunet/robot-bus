@@ -1,0 +1,22 @@
+syntax = "proto3";
+
+package nav_msgs.srv.v1;
+
+import "nav_msgs/msg/v1/occupancy_grid.proto";
+
+// Equivalent to ROS 2 `nav_msgs/srv/LoadMap`.
+message LoadMapRequest {
+  // Absolute file:// URL or package:// URL of a map resource.
+  string map_url = 1;
+}
+
+message LoadMapResponse {
+  // uint8 in ROS 2:
+  //   RESULT_SUCCESS = 0
+  //   RESULT_MAP_DOES_NOT_EXIST = 1
+  //   RESULT_INVALID_MAP_DATA = 2
+  //   RESULT_INVALID_MAP_METADATA = 3
+  //   RESULT_UNDEFINED_FAILURE = 255
+  nav_msgs.msg.v1.OccupancyGrid map = 1;
+  uint32 result = 2;
+}

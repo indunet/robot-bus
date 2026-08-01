@@ -1,0 +1,25 @@
+syntax = "proto3";
+
+package nav2_msgs.action.v1;
+
+import "geometry_msgs/msg/v1/stamped.proto";
+import "nav2_msgs/msg/v1/missed_waypoint.proto";
+
+// Equivalent to ROS 2 `nav2_msgs/action/FollowWaypoints`.
+message FollowWaypointsGoal {
+  uint32 number_of_loops = 1;
+  uint32 goal_index = 2;
+  repeated geometry_msgs.msg.v1.PoseStamped poses = 3;
+}
+
+message FollowWaypointsResult {
+  repeated nav2_msgs.msg.v1.MissedWaypoint missed_waypoints = 1;
+  // uint16 in ROS 2:
+  //   NONE=0, UNKNOWN=600, TASK_EXECUTOR_FAILED=601
+  uint32 error_code = 2;
+  string error_msg = 3;
+}
+
+message FollowWaypointsFeedback {
+  uint32 current_waypoint = 1;
+}

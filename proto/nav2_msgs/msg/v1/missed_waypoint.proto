@@ -1,0 +1,13 @@
+syntax = "proto3";
+
+package nav2_msgs.msg.v1;
+
+import "geometry_msgs/msg/v1/stamped.proto";
+
+// Equivalent to ROS 2 `nav2_msgs/msg/MissedWaypoint`.
+message MissedWaypoint {
+  uint32 index = 1;
+  geometry_msgs.msg.v1.PoseStamped goal = 2;
+  // uint16 in ROS 2.
+  uint32 error_code = 3;
+}

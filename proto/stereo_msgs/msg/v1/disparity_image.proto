@@ -1,0 +1,35 @@
+syntax = "proto3";
+
+package stereo_msgs.msg.v1;
+
+import "std_msgs/msg/v1/header.proto";
+import "sensor_msgs/msg/v1/image.proto";
+import "sensor_msgs/msg/v1/camera_info.proto";
+
+// Equivalent to ROS 2 `stereo_msgs/msg/DisparityImage`.
+//
+// Floating-point disparity image. Disparities are pre-adjusted for any
+// x-offset between the principal points of the two cameras.
+// For disparity d, depth Z = f * T / d.
+message DisparityImage {
+  // Separate header for TimeSynchronizer compatibility; prefer image.header.
+  std_msgs.msg.v1.Header header = 1;
+
+  sensor_msgs.msg.v1.Image image = 2;
+
+  // Focal length [pixels].
+  float f = 3;
+
+  // Baseline [world units].
+  float t = 4;
+
+  // Subwindow of (potentially) valid disparity values.
+  sensor_msgs.msg.v1.RegionOfInterest valid_window = 5;
+
+  // Any disparity less than min_disparity is invalid.
+  float min_disparity = 6;
+  float max_disparity = 7;
+
+  // Smallest allowed disparity increment.
+  float delta_d = 8;
+}

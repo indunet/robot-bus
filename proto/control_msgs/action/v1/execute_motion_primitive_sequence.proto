@@ -1,0 +1,24 @@
+syntax = "proto3";
+
+package control_msgs.action.v1;
+
+import "control_msgs/msg/v1/motion_primitive.proto";
+
+// Equivalent to ROS 2 `control_msgs/action/ExecuteMotionPrimitiveSequence`.
+message ExecuteMotionPrimitiveSequenceGoal {
+  control_msgs.msg.v1.MotionPrimitiveSequence trajectory = 1;
+}
+
+message ExecuteMotionPrimitiveSequenceResult {
+  // int32 in ROS 2:
+  //   SUCCESSFUL = 0
+  //   INVALID_GOAL = -1
+  //   OLD_HEADER_TIMESTAMP = -3
+  int32 error_code = 1;
+  string error_string = 2;
+}
+
+message ExecuteMotionPrimitiveSequenceFeedback {
+  // uint8 in ROS 2: index of the currently executed motion primitive.
+  uint32 current_primitive_index = 1;
+}

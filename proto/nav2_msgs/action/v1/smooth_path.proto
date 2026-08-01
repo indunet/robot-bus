@@ -1,0 +1,27 @@
+syntax = "proto3";
+
+package nav2_msgs.action.v1;
+
+import "builtin_interfaces/msg/v1/duration.proto";
+import "nav_msgs/msg/v1/path.proto";
+
+// Equivalent to ROS 2 `nav2_msgs/action/SmoothPath`.
+message SmoothPathGoal {
+  nav_msgs.msg.v1.Path path = 1;
+  string smoother_id = 2;
+  builtin_interfaces.msg.v1.Duration max_smoothing_duration = 3;
+  bool check_for_collisions = 4;
+}
+
+message SmoothPathResult {
+  nav_msgs.msg.v1.Path path = 1;
+  builtin_interfaces.msg.v1.Duration smoothing_duration = 2;
+  bool was_completed = 3;
+  // uint16 in ROS 2:
+  //   NONE=0, UNKNOWN=500, INVALID_SMOOTHER=501, TIMEOUT=502,
+  //   SMOOTHED_PATH_IN_COLLISION=503, FAILED_TO_SMOOTH_PATH=504, INVALID_PATH=505
+  uint32 error_code = 4;
+  string error_msg = 5;
+}
+
+message SmoothPathFeedback {}

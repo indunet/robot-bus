@@ -1,0 +1,12 @@
+syntax = "proto3";
+
+package sensor_msgs.msg.v1;
+
+import "sensor_msgs/msg/v1/joy_feedback.proto";
+
+// Equivalent to ROS 2 `sensor_msgs/msg/JoyFeedbackArray`.
+//
+// Publishes multiple joystick feedback values at once.
+message JoyFeedbackArray {
+  repeated JoyFeedback array = 1;
+}
