@@ -47,15 +47,16 @@ console = [
     "dep:rust-embed",
     "dep:mime_guess",
 ]
-# In-process ROS 2 ↔ robot-bus topic bridge (requires sourced ROS + linking rcl).
+# In-process ROS 2 ↔ robot-bus topic/service bridge (requires sourced ROS + linking rcl).
 # Default builds / crates.io / maturin do NOT enable this.
-ros2 = ["dep:rclrs"]
+ros2 = ["dep:rclrs", "dep:rosidl_runtime_rs"]
 # Typecheck without a real ROS install (rclrs stub).
-ros2-shim = ["ros2", "rclrs/use_ros_shim"]
+ros2-shim = ["ros2", "rclrs/use_ros_shim", "rosidl_runtime_rs/use_ros_shim"]
 
 [dependencies]
 anyhow = "1"
 rclrs = { version = "0.7", optional = true }
+rosidl_runtime_rs = { version = "0.6", optional = true }
 axum = { version = "0.8", optional = true, default-features = false, features = ["http1", "tokio", "query", "json"] }
 clap = { version = "4", features = ["derive"] }
 http = { version = "1", optional = true }

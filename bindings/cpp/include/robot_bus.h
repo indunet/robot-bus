@@ -372,6 +372,16 @@ ROBOT_BUS_API int robot_bus_ros2_bridge_builder_add_route(RobotBusRos2BridgeBuil
                                                           const char *ros_topic,
                                                           const char *bus_topic,
                                                           const char *type_name, int direction);
+/**
+ * Add a service bridge route.
+ * `type_name`: `std_srvs/srv/Trigger` or `std_srvs/srv/SetBool`.
+ * `direction`: ROBOT_BUS_ROS2_DIR_ROS_TO_BUS or ROBOT_BUS_ROS2_DIR_BUS_TO_ROS
+ * (BOTH is rejected).
+ */
+ROBOT_BUS_API int robot_bus_ros2_bridge_builder_add_service(RobotBusRos2BridgeBuilder *b,
+                                                            const char *ros_service,
+                                                            const char *bus_service,
+                                                            const char *type_name, int direction);
 /** Build bridge; builder must still be freed with `robot_bus_ros2_bridge_builder_free`. */
 ROBOT_BUS_API RobotBusRos2Bridge *robot_bus_ros2_bridge_builder_build(
     RobotBusRos2BridgeBuilder *b);

@@ -30,7 +30,7 @@ More API examples live under [`docs/`](docs/).
 | `runtime::SingleThreadedExecutor` / `MultiThreadedExecutor` | Explicit executors (multi-node / parallel); a single node can `Node::spin` directly |
 | `runtime::Node` / `TopicPublisher` / `CallbackGroup` | Nodes, publishers, callback groups (mutually exclusive / reentrant) |
 | `grpc::` (default feature) | gRPC / gRPC-Web gateway (started with the broker) |
-| `ros2::` (`ros2` feature) | In-process ROS 2 topic bridge (`Ros2Bridge`) |
+| `ros2::` (`ros2` feature) | In-process ROS 2 topic/service bridge (`Ros2Bridge`) |
 
 ### Repository layout
 
@@ -215,8 +215,8 @@ No central package registry for C++: download from [GitHub Releases](https://git
 | Package | Contents |
 |---------|----------|
 | `robot-bus-cpp_*_linux_*.deb` (also MSI / PKG) | Core SDK + broker, **no** ROS 2 bridge |
-| `robot-bus-cpp-ros2-humble_*_linux_*.deb` | Same + bridge linked for **Humble** (needs system Humble; does not vendor `rcl`) |
-| `robot-bus-cpp-ros2-jazzy_*_linux_*.deb` | Same + bridge linked for **Jazzy** |
+| `robot-bus-cpp-ros2-humble_*_linux_*.deb` | Same + bridge linked for **Humble** (Linux only; needs system Humble; does not vendor `rcl`) |
+| `robot-bus-cpp-ros2-jazzy_*_linux_*.deb` | Same + bridge linked for **Jazzy** (Linux only) |
 
 Install only one of the three (they conflict). See [`docs/cpp-api.md`](docs/cpp-api.md).
 
@@ -377,7 +377,7 @@ UDP discovery (`robot_bus_interface.msg.v1`):
 
 ## ROS 2 bridge (`feature = "ros2"`)
 
-In-process topic bridge via `robot_bus::ros2::Ros2Bridge` (chained API or YAML). **Not** enabled by default — core SDK, crates.io, and maturin builds stay ROS-free.
+In-process topic **and** service bridge via `robot_bus::ros2::Ros2Bridge` (chained API or YAML). **Not** enabled by default — core SDK, crates.io, and maturin builds stay ROS-free.
 
 **Supported ROS 2 distributions (official):** **Humble** and **Jazzy**. Other distros: build from source after sourcing that distro (best-effort).
 
@@ -385,9 +385,10 @@ In-process topic bridge via `robot_bus::ros2::Ros2Bridge` (chained API or YAML).
 |------|--------|
 | Cargo (Rust) | `--features ros2` (pulls optional `rclrs`) |
 | Environment | Source **Humble** or **Jazzy** so `rcl` / type support libs link; main CI does **not** enable this feature |
-| C++ packages | `robot-bus-cpp` (no bridge) vs `robot-bus-cpp-ros2-humble` / `robot-bus-cpp-ros2-jazzy` (mutually exclusive). Packages **do not vendor** `rcl`/RMW/DDS — install system ROS and `source /opt/ros/<distro>/setup.bash` |
+| C++ packages | `robot-bus-cpp` (no bridge) vs `robot-bus-cpp-ros2-humble` / `robot-bus-cpp-ros2-jazzy` (mutually exclusive, **Linux DEBs only** — Windows MSI / macOS PKG ship the core stub). Packages **do not vendor** `rcl`/RMW/DDS — install system ROS and `source /opt/ros/<distro>/setup.bash` |
 | Broker | Running `robot_bus_broker` reachable over tcp/ipc (or `bus_discover`) |
-| MVP types | `std_msgs/msg/String`, `sensor_msgs/msg/Imu` (dynamic ROS messages ↔ robot-bus protobuf) |
+| MVP topic types | `std_msgs/msg/String`, `sensor_msgs/msg/Imu` |
+| MVP service types | `std_srvs/srv/Trigger`, `std_srvs/srv/SetBool` (directions `ros_to_bus` / `bus_to_ros` only; default call timeout 5s) |
 
 ```rust
 use robot_bus::ros2::{Direction, Ros2Bridge};
@@ -398,16 +399,20 @@ let mut bridge = Ros2Bridge::new("ros_bridge")
         .string()
         .direction(Direction::Both)
         .add()
-    .route("/imu", "/imu")
-        .imu()
+    .service("/reset", "/reset")
+        .trigger()
         .direction(Direction::RosToBus)
-        .add()
+        .add()?
+    .service("/enable", "/enable")
+        .set_bool()
+        .direction(Direction::BusToRos)
+        .add()?
     .build()?;
 bridge.spin()?;
 // or: Ros2Bridge::from_yaml("bridge.yaml")?.spin()?;
 ```
 
-C++ (after installing the matching `robot-bus-cpp-ros2-*` package and sourcing ROS):
+C++ (after installing the matching **Linux** `robot-bus-cpp-ros2-*` package and sourcing ROS):
 
 ```cpp
 #include <robot_bus/Ros2Bridge.hpp>
@@ -417,6 +422,10 @@ auto bridge = robot_bus::Ros2Bridge::New("ros_bridge")
     .route("/chatter", "/chatter")
     .string()
     .direction(robot_bus::Ros2Direction::Both)
+    .add()
+    .service("/reset", "/reset")
+    .trigger()
+    .direction(robot_bus::Ros2Direction::RosToBus)
     .add()
     .build();
 bridge.spin();

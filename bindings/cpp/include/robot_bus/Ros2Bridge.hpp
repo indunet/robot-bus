@@ -9,7 +9,7 @@
 
 namespace robot_bus {
 
-/// Topic bridge direction (ROS 2 ↔ robot-bus).
+/// Topic / service bridge direction (ROS 2 ↔ robot-bus).
 enum class Ros2Direction {
   RosToBus = ROBOT_BUS_ROS2_DIR_ROS_TO_BUS,
   BusToRos = ROBOT_BUS_ROS2_DIR_BUS_TO_ROS,
@@ -22,7 +22,7 @@ inline bool ros2_available() { return robot_bus_ros2_available() != 0; }
 class Ros2Bridge;
 class Ros2BridgeBuilder;
 
-/// Intermediate route configuration before `.add()`.
+/// Intermediate topic route configuration before `.add()`.
 class Ros2BridgeRoute {
  public:
   Ros2BridgeRoute(RobotBusRos2BridgeBuilder *b, std::string ros_topic, std::string bus_topic)
@@ -86,6 +86,73 @@ class Ros2BridgeRoute {
   Ros2Direction direction_ = Ros2Direction::Both;
 };
 
+/// Intermediate service route configuration before `.add()`.
+class Ros2BridgeService {
+ public:
+  Ros2BridgeService(RobotBusRos2BridgeBuilder *b, std::string ros_service, std::string bus_service)
+      : b_(b),
+        ros_service_(std::move(ros_service)),
+        bus_service_(std::move(bus_service)) {}
+
+  ~Ros2BridgeService() { robot_bus_ros2_bridge_builder_free(b_); }
+
+  Ros2BridgeService(const Ros2BridgeService &) = delete;
+  Ros2BridgeService &operator=(const Ros2BridgeService &) = delete;
+
+  Ros2BridgeService(Ros2BridgeService &&o) noexcept
+      : b_(o.b_),
+        ros_service_(std::move(o.ros_service_)),
+        bus_service_(std::move(o.bus_service_)),
+        type_(std::move(o.type_)),
+        direction_(o.direction_) {
+    o.b_ = nullptr;
+  }
+
+  Ros2BridgeService &operator=(Ros2BridgeService &&o) noexcept {
+    if (this != &o) {
+      robot_bus_ros2_bridge_builder_free(b_);
+      b_ = o.b_;
+      o.b_ = nullptr;
+      ros_service_ = std::move(o.ros_service_);
+      bus_service_ = std::move(o.bus_service_);
+      type_ = std::move(o.type_);
+      direction_ = o.direction_;
+    }
+    return *this;
+  }
+
+  Ros2BridgeService &&trigger() && {
+    type_ = "std_srvs/srv/Trigger";
+    return std::move(*this);
+  }
+
+  Ros2BridgeService &&set_bool() && {
+    type_ = "std_srvs/srv/SetBool";
+    return std::move(*this);
+  }
+
+  Ros2BridgeService &&type_name(std::string type) && {
+    type_ = std::move(type);
+    return std::move(*this);
+  }
+
+  /// Services only support RosToBus / BusToRos (not Both).
+  Ros2BridgeService &&direction(Ros2Direction d) && {
+    direction_ = d;
+    return std::move(*this);
+  }
+
+  Ros2BridgeBuilder add() &&;
+
+ private:
+  friend class Ros2BridgeBuilder;
+  RobotBusRos2BridgeBuilder *b_ = nullptr;
+  std::string ros_service_;
+  std::string bus_service_;
+  std::string type_;
+  Ros2Direction direction_ = Ros2Direction::RosToBus;
+};
+
 /// Fluent builder matching Rust `Ros2Bridge::new(...).bus_tcp(...).route(...).add()`.
 class Ros2BridgeBuilder {
  public:
@@ -143,6 +210,12 @@ class Ros2BridgeBuilder {
     return Ros2BridgeRoute(b, std::move(ros_topic), std::move(bus_topic));
   }
 
+  Ros2BridgeService service(std::string ros_service, std::string bus_service) && {
+    RobotBusRos2BridgeBuilder *b = b_;
+    b_ = nullptr;
+    return Ros2BridgeService(b, std::move(ros_service), std::move(bus_service));
+  }
+
   /// Imperative add (type_name e.g. `std_msgs/msg/String`).
   Ros2BridgeBuilder &&add_route(const std::string &ros_topic, const std::string &bus_topic,
                                 const std::string &type_name,
@@ -154,15 +227,27 @@ class Ros2BridgeBuilder {
     return std::move(*this);
   }
 
+  /// Imperative service add (`std_srvs/srv/Trigger` or `SetBool`; not Both).
+  Ros2BridgeBuilder &&add_service(const std::string &ros_service, const std::string &bus_service,
+                                  const std::string &type_name,
+                                  Ros2Direction direction = Ros2Direction::RosToBus) && {
+    check(robot_bus_ros2_bridge_builder_add_service(b_, ros_service.c_str(), bus_service.c_str(),
+                                                     type_name.c_str(),
+                                                     static_cast<int>(direction)),
+          "add_service");
+    return std::move(*this);
+  }
+
   Ros2Bridge build() &&;
 
  private:
   friend class Ros2BridgeRoute;
+  friend class Ros2BridgeService;
   friend class Ros2Bridge;
   RobotBusRos2BridgeBuilder *b_ = nullptr;
 };
 
-/// In-process ROS 2 ↔ robot-bus topic bridge (`feature = "ros2"` / ros2 packages).
+/// In-process ROS 2 ↔ robot-bus topic/service bridge (`feature = "ros2"` / Linux ros2 packages).
 class Ros2Bridge {
  public:
   static Ros2BridgeBuilder New(std::string name) {
@@ -212,6 +297,18 @@ inline Ros2BridgeBuilder Ros2BridgeRoute::add() && {
   check(robot_bus_ros2_bridge_builder_add_route(b_, ros_topic_.c_str(), bus_topic_.c_str(),
                                                  type_.c_str(), static_cast<int>(direction_)),
         "add_route");
+  RobotBusRos2BridgeBuilder *b = b_;
+  b_ = nullptr;
+  return Ros2BridgeBuilder(b);
+}
+
+inline Ros2BridgeBuilder Ros2BridgeService::add() && {
+  if (type_.empty()) {
+    throw Error("ros2 bridge service: call .trigger() or .set_bool() before .add()");
+  }
+  check(robot_bus_ros2_bridge_builder_add_service(b_, ros_service_.c_str(), bus_service_.c_str(),
+                                                   type_.c_str(), static_cast<int>(direction_)),
+        "add_service");
   RobotBusRos2BridgeBuilder *b = b_;
   b_ = nullptr;
   return Ros2BridgeBuilder(b);

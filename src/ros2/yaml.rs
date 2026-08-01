@@ -7,12 +7,15 @@ use serde::Deserialize;
 
 use crate::errors::{BusError, Result};
 
-use super::builder::{Direction, MsgKind, Ros2Bridge, Ros2BridgeBuilder};
+use super::builder::{Direction, MsgKind, Ros2Bridge, Ros2BridgeBuilder, SrvKind};
 
 #[derive(Debug, Deserialize)]
 struct FileConfig {
     robot_bus: Option<RobotBusSection>,
+    #[serde(default)]
     routes: Vec<RouteSection>,
+    #[serde(default)]
+    services: Vec<ServiceSection>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -55,8 +58,22 @@ struct RouteSection {
     direction: String,
 }
 
+#[derive(Debug, Deserialize)]
+struct ServiceSection {
+    ros_service: String,
+    bus_service: String,
+    #[serde(rename = "type")]
+    type_name: String,
+    #[serde(default = "default_service_direction")]
+    direction: String,
+}
+
 fn default_direction() -> String {
     "both".into()
+}
+
+fn default_service_direction() -> String {
+    "ros_to_bus".into()
 }
 
 pub fn builder_from_yaml(path: impl AsRef<Path>) -> Result<Ros2BridgeBuilder> {
@@ -69,8 +86,10 @@ pub fn builder_from_yaml(path: impl AsRef<Path>) -> Result<Ros2BridgeBuilder> {
     let cfg: FileConfig = serde_yaml::from_str(&text)
         .map_err(|e| BusError::Protocol(format!("parse ros2 bridge yaml: {e}")))?;
 
-    if cfg.routes.is_empty() {
-        return Err(BusError::Protocol("yaml routes must be non-empty".into()));
+    if cfg.routes.is_empty() && cfg.services.is_empty() {
+        return Err(BusError::Protocol(
+            "yaml must include at least one routes[] or services[] entry".into(),
+        ));
     }
 
     let rb = cfg.robot_bus.unwrap_or(RobotBusSection {
@@ -107,6 +126,15 @@ pub fn builder_from_yaml(path: impl AsRef<Path>) -> Result<Ros2BridgeBuilder> {
         builder = builder.push_route(route.ros_topic, route.bus_topic, kind, direction);
     }
 
+    for (i, svc) in cfg.services.into_iter().enumerate() {
+        let kind = SrvKind::parse(&svc.type_name)
+            .map_err(|e| BusError::Protocol(format!("services[{i}]: {e}")))?;
+        let direction = parse_service_direction(&svc.direction)?;
+        builder = builder
+            .push_service(svc.ros_service, svc.bus_service, kind, direction)
+            .map_err(|e| BusError::Protocol(format!("services[{i}]: {e}")))?;
+    }
+
     Ok(builder)
 }
 
@@ -117,6 +145,19 @@ fn parse_direction(s: &str) -> Result<Direction> {
         "both" => Ok(Direction::Both),
         other => Err(BusError::Protocol(format!(
             "direction must be ros_to_bus | bus_to_ros | both, got {other:?}"
+        ))),
+    }
+}
+
+fn parse_service_direction(s: &str) -> Result<Direction> {
+    match s {
+        "ros_to_bus" => Ok(Direction::RosToBus),
+        "bus_to_ros" => Ok(Direction::BusToRos),
+        "both" => Err(BusError::Protocol(
+            "service direction must be ros_to_bus | bus_to_ros (both is not supported)".into(),
+        )),
+        other => Err(BusError::Protocol(format!(
+            "service direction must be ros_to_bus | bus_to_ros, got {other:?}"
         ))),
     }
 }

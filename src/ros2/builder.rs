@@ -1,27 +1,39 @@
 //! Chained builder for [`Ros2Bridge`].
 
+use std::any::Any;
 use std::path::Path;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{self, Receiver, SyncSender};
 use std::sync::{Arc, Mutex};
-use std::time::Duration;
+use std::thread::{self, JoinHandle};
+use std::time::{Duration, Instant};
 
 use prost::Message as ProstMessage;
 use rclrs::{
-    Context, CreateBasicExecutor, DynamicPublisher, DynamicSubscription, Executor, MessageTypeName,
+    Context, CreateBasicExecutor, DynamicPublisher, DynamicSubscription, MessageTypeName,
     SpinOptions,
 };
 
 use crate::discovery::DiscoverOpts;
 use crate::errors::{BusError, Result};
-use crate::runtime::{Node, NodeOptions, TopicPublisherRaw};
+use crate::runtime::{Node, NodeOptions, ServiceHandler, TopicPublisherRaw};
 use crate::sensor_msgs::msg::v1::Imu as BusImu;
 use crate::std_msgs::msg::v1::String as BusString;
+use crate::std_srvs::srv::v1::{
+    SetBool as BusSetBool, SetBoolRequest as BusSetBoolRequest,
+    SetBoolResponse as BusSetBoolResponse, Trigger as BusTrigger,
+    TriggerRequest as BusTriggerRequest, TriggerResponse as BusTriggerResponse,
+};
 
 use super::convert;
 use super::echo::EchoFilter;
+use super::vendor::std_srvs::srv as ros_srv;
 use super::yaml;
 
-/// Topic bridge direction.
+/// Default timeout for bridged service calls (ROS↔bus).
+pub const SERVICE_CALL_TIMEOUT: Duration = Duration::from_secs(5);
+
+/// Topic / service bridge direction.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Direction {
     RosToBus,
@@ -29,7 +41,7 @@ pub enum Direction {
     Both,
 }
 
-/// Whitelisted ROS message kinds.
+/// Whitelisted ROS message kinds (topics).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum MsgKind {
     String,
@@ -55,6 +67,52 @@ impl MsgKind {
     }
 }
 
+/// Whitelisted ROS service kinds.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SrvKind {
+    Trigger,
+    SetBool,
+}
+
+impl SrvKind {
+    pub fn type_name(self) -> &'static str {
+        match self {
+            Self::Trigger => "std_srvs/srv/Trigger",
+            Self::SetBool => "std_srvs/srv/SetBool",
+        }
+    }
+
+    pub fn parse(s: &str) -> Result<Self> {
+        match s {
+            "std_srvs/srv/Trigger" => Ok(Self::Trigger),
+            "std_srvs/srv/SetBool" => Ok(Self::SetBool),
+            other => Err(BusError::Protocol(format!(
+                "unsupported ros2 bridge service type {other:?}; supported: std_srvs/srv/Trigger, std_srvs/srv/SetBool"
+            ))),
+        }
+    }
+}
+
+#[cfg(test)]
+mod srv_kind_tests {
+    use super::*;
+
+    #[test]
+    fn parse_trigger_set_bool() {
+        assert_eq!(SrvKind::parse("std_srvs/srv/Trigger").unwrap(), SrvKind::Trigger);
+        assert_eq!(SrvKind::parse("std_srvs/srv/SetBool").unwrap(), SrvKind::SetBool);
+        assert!(SrvKind::parse("std_srvs/srv/Empty").is_err());
+    }
+
+    #[test]
+    fn reject_both_for_services() {
+        let res = Ros2Bridge::new("t").add_service("/a", "/a", SrvKind::Trigger, Direction::Both);
+        assert!(res.is_err());
+        let msg = res.err().unwrap().to_string();
+        assert!(msg.contains("both"));
+    }
+}
+
 #[derive(Debug, Clone)]
 pub(crate) struct RouteSpec {
     ros_topic: String,
@@ -63,16 +121,24 @@ pub(crate) struct RouteSpec {
     direction: Direction,
 }
 
+#[derive(Debug, Clone)]
+pub(crate) struct ServiceRouteSpec {
+    ros_service: String,
+    bus_service: String,
+    kind: SrvKind,
+    direction: Direction,
+}
+
 /// Fluent builder: `Ros2Bridge::new(...).bus_tcp(...).route(...).string().add().build()?`.
 pub struct Ros2BridgeBuilder {
     name: String,
     bus_options: NodeOptions,
     routes: Vec<RouteSpec>,
+    services: Vec<ServiceRouteSpec>,
 }
 
 /// In-process dual-stack bridge (ROS 2 + robot-bus).
 pub struct Ros2Bridge {
-    ros_executor: Executor,
     bus_node: Node,
     /// ROS→bus payloads (ZMQ publisher is not `Send`; drain on the spin thread).
     ros_to_bus_rx: Receiver<(String, Vec<u8>)>,
@@ -80,14 +146,36 @@ pub struct Ros2Bridge {
     _echo: Arc<Mutex<EchoFilter>>,
     _ros_subs: Vec<DynamicSubscription>,
     _ros_pubs: Vec<DynamicPublisher>,
+    /// Keeps typed ROS services / clients alive for the bridge lifetime.
+    _ros_entities: Vec<Box<dyn Any + Send + Sync>>,
+    ros_halt: Arc<AtomicBool>,
+    _ros_spin: Option<JoinHandle<()>>,
 }
 
-/// Intermediate route configuration before [`RouteBuilder::add`].
+impl Drop for Ros2Bridge {
+    fn drop(&mut self) {
+        self.ros_halt.store(true, Ordering::SeqCst);
+        if let Some(h) = self._ros_spin.take() {
+            let _ = h.join();
+        }
+    }
+}
+
+/// Intermediate topic route configuration before [`RouteBuilder::add`].
 pub struct RouteBuilder {
     parent: Ros2BridgeBuilder,
     ros_topic: String,
     bus_topic: String,
     kind: Option<MsgKind>,
+    direction: Direction,
+}
+
+/// Intermediate service route configuration before [`ServiceRouteBuilder::add`].
+pub struct ServiceRouteBuilder {
+    parent: Ros2BridgeBuilder,
+    ros_service: String,
+    bus_service: String,
+    kind: Option<SrvKind>,
     direction: Direction,
 }
 
@@ -97,6 +185,7 @@ impl Ros2Bridge {
             name: name.into(),
             bus_options: NodeOptions::tcp(),
             routes: Vec::new(),
+            services: Vec::new(),
         }
     }
 
@@ -111,9 +200,8 @@ impl Ros2Bridge {
     }
 
     pub fn spin_once(&mut self, timeout: Duration) -> Result<()> {
-        let _ = self
-            .ros_executor
-            .spin(SpinOptions::spin_once().timeout(timeout));
+        // ROS executor runs on a background thread so Bus→ROS service handlers
+        // can wait on client Promises without nested-spin deadlocks.
         while let Ok((topic, payload)) = self.ros_to_bus_rx.try_recv() {
             if let Some(pub_) = self.bus_pubs.get(&topic) {
                 if let Err(e) = pub_.publish(&payload) {
@@ -180,6 +268,20 @@ impl Ros2BridgeBuilder {
         }
     }
 
+    pub fn service(
+        self,
+        ros_service: impl Into<String>,
+        bus_service: impl Into<String>,
+    ) -> ServiceRouteBuilder {
+        ServiceRouteBuilder {
+            parent: self,
+            ros_service: ros_service.into(),
+            bus_service: bus_service.into(),
+            kind: None,
+            direction: Direction::RosToBus,
+        }
+    }
+
     pub(crate) fn push_route(
         mut self,
         ros_topic: String,
@@ -196,7 +298,29 @@ impl Ros2BridgeBuilder {
         self
     }
 
-    /// Add a typed route (for FFI / non-fluent callers).
+    pub(crate) fn push_service(
+        mut self,
+        ros_service: String,
+        bus_service: String,
+        kind: SrvKind,
+        direction: Direction,
+    ) -> Result<Self> {
+        if matches!(direction, Direction::Both) {
+            return Err(BusError::Protocol(
+                "ros2 bridge services do not support direction=both; use ros_to_bus or bus_to_ros"
+                    .into(),
+            ));
+        }
+        self.services.push(ServiceRouteSpec {
+            ros_service,
+            bus_service,
+            kind,
+            direction,
+        });
+        Ok(self)
+    }
+
+    /// Add a typed topic route (for FFI / non-fluent callers).
     pub fn add_route(
         self,
         ros_topic: impl Into<String>,
@@ -207,10 +331,26 @@ impl Ros2BridgeBuilder {
         self.push_route(ros_topic.into(), bus_topic.into(), kind, direction)
     }
 
+    /// Add a typed service route (for FFI / non-fluent callers).
+    pub fn add_service(
+        self,
+        ros_service: impl Into<String>,
+        bus_service: impl Into<String>,
+        kind: SrvKind,
+        direction: Direction,
+    ) -> Result<Self> {
+        self.push_service(
+            ros_service.into(),
+            bus_service.into(),
+            kind,
+            direction,
+        )
+    }
+
     pub fn build(self) -> Result<Ros2Bridge> {
-        if self.routes.is_empty() {
+        if self.routes.is_empty() && self.services.is_empty() {
             return Err(BusError::Protocol(
-                "Ros2Bridge requires at least one route".into(),
+                "Ros2Bridge requires at least one topic route or service".into(),
             ));
         }
 
@@ -219,7 +359,7 @@ impl Ros2BridgeBuilder {
                 "rclrs Context::default_from_env failed ({e}); source ROS 2 first"
             ))
         })?;
-        let ros_executor = context.create_basic_executor();
+        let mut ros_executor = context.create_basic_executor();
         let ros_node = ros_executor
             .create_node(self.name.as_str())
             .map_err(|e| BusError::Protocol(format!("rclrs create_node: {e}")))?;
@@ -231,6 +371,7 @@ impl Ros2BridgeBuilder {
         let mut ros_subs = Vec::new();
         let mut ros_pubs = Vec::new();
         let mut bus_pubs = std::collections::HashMap::new();
+        let mut ros_entities: Vec<Box<dyn Any + Send + Sync>> = Vec::new();
 
         for route in &self.routes {
             wire_route(
@@ -245,14 +386,33 @@ impl Ros2BridgeBuilder {
             )?;
         }
 
+        for svc in &self.services {
+            wire_service_route(&ros_node, &mut bus_node, svc, &mut ros_entities)?;
+        }
+
+        let ros_halt = Arc::new(AtomicBool::new(false));
+        let halt_flag = Arc::clone(&ros_halt);
+        let ros_spin = thread::Builder::new()
+            .name("ros2_bridge_spin".into())
+            .spawn(move || {
+                while !halt_flag.load(Ordering::Relaxed) {
+                    let _ = ros_executor.spin(
+                        SpinOptions::spin_once().timeout(Duration::from_millis(10)),
+                    );
+                }
+            })
+            .map_err(|e| BusError::Protocol(format!("spawn ros2 spin thread: {e}")))?;
+
         Ok(Ros2Bridge {
-            ros_executor,
             bus_node,
             ros_to_bus_rx,
             bus_pubs,
             _echo: echo,
             _ros_subs: ros_subs,
             _ros_pubs: ros_pubs,
+            _ros_entities: ros_entities,
+            ros_halt,
+            _ros_spin: Some(ros_spin),
         })
     }
 }
@@ -284,6 +444,38 @@ impl RouteBuilder {
         });
         self.parent
             .push_route(self.ros_topic, self.bus_topic, kind, self.direction)
+    }
+}
+
+impl ServiceRouteBuilder {
+    pub fn trigger(mut self) -> Self {
+        self.kind = Some(SrvKind::Trigger);
+        self
+    }
+
+    pub fn set_bool(mut self) -> Self {
+        self.kind = Some(SrvKind::SetBool);
+        self
+    }
+
+    pub fn srv_kind(mut self, kind: SrvKind) -> Self {
+        self.kind = Some(kind);
+        self
+    }
+
+    pub fn direction(mut self, direction: Direction) -> Self {
+        self.direction = direction;
+        self
+    }
+
+    pub fn add(self) -> Result<Ros2BridgeBuilder> {
+        let kind = self.kind.ok_or_else(|| {
+            BusError::Protocol(
+                "ros2 bridge service: call .trigger() or .set_bool() before .add()".into(),
+            )
+        })?;
+        self.parent
+            .push_service(self.ros_service, self.bus_service, kind, self.direction)
     }
 }
 
@@ -409,4 +601,187 @@ fn wire_route(
     }
 
     Ok(())
+}
+
+fn wire_service_route(
+    ros_node: &rclrs::Node,
+    bus_node: &mut Node,
+    route: &ServiceRouteSpec,
+    ros_entities: &mut Vec<Box<dyn Any + Send + Sync>>,
+) -> Result<()> {
+    match (route.kind, route.direction) {
+        (SrvKind::Trigger, Direction::RosToBus) => {
+            let bus_client = Arc::new(Mutex::new(
+                bus_node.create_client::<BusTrigger>(route.bus_service.as_str())?,
+            ));
+            let timeout = SERVICE_CALL_TIMEOUT;
+            let srv = ros_node
+                .create_service::<ros_srv::Trigger, _>(
+                    route.ros_service.as_str(),
+                    move |_req: ros_srv::Trigger_Request| {
+                        let bus_req = convert::trigger_ros_req_to_bus(&_req);
+                        let guard = match bus_client.lock() {
+                            Ok(g) => g,
+                            Err(e) => {
+                                return ros_srv::Trigger_Response {
+                                    success: false,
+                                    message: format!("bus client lock poisoned: {e}"),
+                                };
+                            }
+                        };
+                        match guard.call(&bus_req, Some(timeout)) {
+                            Ok(bus_resp) => convert::trigger_bus_resp_to_ros(&bus_resp),
+                            Err(e) => ros_srv::Trigger_Response {
+                                success: false,
+                                message: format!("bus call failed: {e}"),
+                            },
+                        }
+                    },
+                )
+                .map_err(|e| BusError::Protocol(format!("ros create_service Trigger: {e}")))?;
+            ros_entities.push(Box::new(srv));
+        }
+        (SrvKind::SetBool, Direction::RosToBus) => {
+            let bus_client = Arc::new(Mutex::new(
+                bus_node.create_client::<BusSetBool>(route.bus_service.as_str())?,
+            ));
+            let timeout = SERVICE_CALL_TIMEOUT;
+            let srv = ros_node
+                .create_service::<ros_srv::SetBool, _>(
+                    route.ros_service.as_str(),
+                    move |req: ros_srv::SetBool_Request| {
+                        let bus_req = convert::set_bool_ros_req_to_bus(&req);
+                        let guard = match bus_client.lock() {
+                            Ok(g) => g,
+                            Err(e) => {
+                                return ros_srv::SetBool_Response {
+                                    success: false,
+                                    message: format!("bus client lock poisoned: {e}"),
+                                };
+                            }
+                        };
+                        match guard.call(&bus_req, Some(timeout)) {
+                            Ok(bus_resp) => convert::set_bool_bus_resp_to_ros(&bus_resp),
+                            Err(e) => ros_srv::SetBool_Response {
+                                success: false,
+                                message: format!("bus call failed: {e}"),
+                            },
+                        }
+                    },
+                )
+                .map_err(|e| BusError::Protocol(format!("ros create_service SetBool: {e}")))?;
+            ros_entities.push(Box::new(srv));
+        }
+        (SrvKind::Trigger, Direction::BusToRos) => {
+            let ros_client = ros_node
+                .create_client::<ros_srv::Trigger>(route.ros_service.as_str())
+                .map_err(|e| BusError::Protocol(format!("ros create_client Trigger: {e}")))?;
+            ros_entities.push(Box::new(Arc::clone(&ros_client)));
+            let timeout = SERVICE_CALL_TIMEOUT;
+            let handler: ServiceHandler = Arc::new(move |body| {
+                let bus_req = match BusTriggerRequest::decode(body) {
+                    Ok(r) => r,
+                    Err(e) => {
+                        return BusTriggerResponse {
+                            success: false,
+                            message: format!("decode TriggerRequest: {e}"),
+                        }
+                        .encode_to_vec();
+                    }
+                };
+                match call_ros_trigger(&ros_client, &bus_req, timeout) {
+                    Ok(resp) => resp.encode_to_vec(),
+                    Err(msg) => BusTriggerResponse {
+                        success: false,
+                        message: msg,
+                    }
+                    .encode_to_vec(),
+                }
+            });
+            let _ = bus_node.create_service_raw(route.bus_service.as_str(), handler, None)?;
+        }
+        (SrvKind::SetBool, Direction::BusToRos) => {
+            let ros_client = ros_node
+                .create_client::<ros_srv::SetBool>(route.ros_service.as_str())
+                .map_err(|e| BusError::Protocol(format!("ros create_client SetBool: {e}")))?;
+            ros_entities.push(Box::new(Arc::clone(&ros_client)));
+            let timeout = SERVICE_CALL_TIMEOUT;
+            let handler: ServiceHandler = Arc::new(move |body| {
+                let bus_req = match BusSetBoolRequest::decode(body) {
+                    Ok(r) => r,
+                    Err(e) => {
+                        return BusSetBoolResponse {
+                            success: false,
+                            message: format!("decode SetBoolRequest: {e}"),
+                        }
+                        .encode_to_vec();
+                    }
+                };
+                match call_ros_set_bool(&ros_client, &bus_req, timeout) {
+                    Ok(resp) => resp.encode_to_vec(),
+                    Err(msg) => BusSetBoolResponse {
+                        success: false,
+                        message: msg,
+                    }
+                    .encode_to_vec(),
+                }
+            });
+            let _ = bus_node.create_service_raw(route.bus_service.as_str(), handler, None)?;
+        }
+        (_, Direction::Both) => {
+            return Err(BusError::Protocol(
+                "ros2 bridge services do not support direction=both".into(),
+            ));
+        }
+    }
+    Ok(())
+}
+
+fn wait_service_ready(client_ready: impl Fn() -> bool, timeout: Duration) -> std::result::Result<(), String> {
+    let deadline = Instant::now() + timeout;
+    while Instant::now() < deadline {
+        if client_ready() {
+            return Ok(());
+        }
+        thread::sleep(Duration::from_millis(10));
+    }
+    Err("timed out waiting for ROS service".into())
+}
+
+fn call_ros_trigger(
+    client: &rclrs::Client<ros_srv::Trigger>,
+    bus_req: &BusTriggerRequest,
+    timeout: Duration,
+) -> std::result::Result<BusTriggerResponse, String> {
+    wait_service_ready(|| client.service_is_ready().unwrap_or(false), timeout)?;
+    let ros_req = convert::trigger_bus_req_to_ros(bus_req);
+    let (tx, rx) = mpsc::sync_channel(1);
+    let _promise = client
+        .call_then(ros_req, move |resp: ros_srv::Trigger_Response| {
+            let _ = tx.send(resp);
+        })
+        .map_err(|e| format!("ros Trigger call: {e}"))?;
+    match rx.recv_timeout(timeout) {
+        Ok(resp) => Ok(convert::trigger_ros_resp_to_bus(&resp)),
+        Err(_) => Err("timed out waiting for ROS Trigger response".into()),
+    }
+}
+
+fn call_ros_set_bool(
+    client: &rclrs::Client<ros_srv::SetBool>,
+    bus_req: &BusSetBoolRequest,
+    timeout: Duration,
+) -> std::result::Result<BusSetBoolResponse, String> {
+    wait_service_ready(|| client.service_is_ready().unwrap_or(false), timeout)?;
+    let ros_req = convert::set_bool_bus_req_to_ros(bus_req);
+    let (tx, rx) = mpsc::sync_channel(1);
+    let _promise = client
+        .call_then(ros_req, move |resp: ros_srv::SetBool_Response| {
+            let _ = tx.send(resp);
+        })
+        .map_err(|e| format!("ros SetBool call: {e}"))?;
+    match rx.recv_timeout(timeout) {
+        Ok(resp) => Ok(convert::set_bool_ros_resp_to_bus(&resp)),
+        Err(_) => Err("timed out waiting for ROS SetBool response".into()),
+    }
 }

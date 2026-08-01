@@ -7,8 +7,8 @@ C++ SDK is distributed via **GitHub Release attachments** (no central C++ regist
 | Asset | ROS 2 bridge | Notes |
 |-------|--------------|--------|
 | `robot-bus-cpp_<ver>_linux_<arch>.deb` | No | Default SDK + broker. Also MSI / PKG on Windows / macOS. |
-| `robot-bus-cpp-ros2-humble_<ver>_linux_<arch>.deb` | Yes (Humble) | Linux only in release CI. Requires system **ROS 2 Humble**. |
-| `robot-bus-cpp-ros2-jazzy_<ver>_linux_<arch>.deb` | Yes (Jazzy) | Linux only in release CI. Requires system **ROS 2 Jazzy**. |
+| `robot-bus-cpp-ros2-humble_<ver>_linux_<arch>.deb` | Yes (Humble) | **Linux only** in release CI. Requires system **ROS 2 Humble**. No Windows/macOS ros2 installer. |
+| `robot-bus-cpp-ros2-jazzy_<ver>_linux_<arch>.deb` | Yes (Jazzy) | **Linux only** in release CI. Requires system **ROS 2 Jazzy**. |
 
 The three Debian packages **conflict** with each other (same `librobot_bus.so`). Install exactly one.
 
@@ -208,7 +208,7 @@ Repo layout: generated sources (gitignored) live under `bindings/cpp/generated/r
 
 ## ROS 2 bridge (`Ros2Bridge`)
 
-Supported distros for **prebuilt** packages: **Humble** and **Jazzy**. Headers ship in all packages; only ros2-* libs implement the bridge.
+Supported distros for **prebuilt** packages: **Humble** and **Jazzy** (**Linux DEBs only** — Windows MSI / macOS PKG ship core SDK with stub `Ros2Bridge` APIs). Headers ship in all packages; only ros2-* libs implement the bridge.
 
 ```cpp
 #include <robot_bus/Ros2Bridge.hpp>
@@ -220,9 +220,13 @@ auto bridge = robot_bus::Ros2Bridge::New("ros_bridge")
     .string()
     .direction(robot_bus::Ros2Direction::Both)
     .add()
-    .route("/imu", "/imu")
-    .imu()
+    .service("/reset", "/reset")
+    .trigger()
     .direction(robot_bus::Ros2Direction::RosToBus)
+    .add()
+    .service("/enable", "/enable")
+    .set_bool()
+    .direction(robot_bus::Ros2Direction::BusToRos)
     .add()
     .build();
 bridge.spin_once(0.01);
@@ -232,5 +236,7 @@ bridge.spin_once(0.01);
 auto from_file = robot_bus::Ros2Bridge::from_yaml("bridge.yaml");
 ```
 
-MVP types: `std_msgs/msg/String`, `sensor_msgs/msg/Imu`. Default `robot-bus-cpp` returns a clear error from these APIs (`robot_bus_last_error` / thrown `robot_bus::Error`).
+MVP topic types: `std_msgs/msg/String`, `sensor_msgs/msg/Imu`.  
+MVP service types: `std_srvs/srv/Trigger`, `std_srvs/srv/SetBool` (`RosToBus` / `BusToRos` only; default call timeout 5s).  
+Default `robot-bus-cpp` returns a clear error from these APIs (`robot_bus_last_error` / thrown `robot_bus::Error`).
 

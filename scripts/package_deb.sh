@@ -32,25 +32,27 @@ case "$VARIANT" in
     ;;
   ros2-humble)
     PACKAGE_NAME="robot-bus-cpp-ros2-humble"
-    DEPENDS="libzmq5, ros-humble-rcl, ros-humble-std-msgs, ros-humble-sensor-msgs"
+    DEPENDS="libzmq5, ros-humble-rcl, ros-humble-std-msgs, ros-humble-sensor-msgs, ros-humble-std-srvs"
     CONFLICTS="Conflicts: robot-bus-cpp, robot-bus-cpp-ros2-jazzy
 Provides: robot-bus-cpp
 Replaces: robot-bus-cpp"
     DESCRIPTION_SHORT="robot-bus C/C++ SDK with ROS 2 Humble bridge"
-    DESCRIPTION_LONG=" Same as robot-bus-cpp, plus in-process ROS 2 topic bridge
+    DESCRIPTION_LONG=" Same as robot-bus-cpp, plus in-process ROS 2 topic/service bridge
  (Ros2Bridge) linked against system ROS 2 Humble. Requires a sourced
- Humble environment at runtime. Does not vendor rcl/RMW/DDS."
+ Humble environment at runtime. Does not vendor rcl/RMW/DDS.
+ Linux only — there is no Windows/macOS ros2 package."
     ;;
   ros2-jazzy)
     PACKAGE_NAME="robot-bus-cpp-ros2-jazzy"
-    DEPENDS="libzmq5, ros-jazzy-rcl, ros-jazzy-std-msgs, ros-jazzy-sensor-msgs"
+    DEPENDS="libzmq5, ros-jazzy-rcl, ros-jazzy-std-msgs, ros-jazzy-sensor-msgs, ros-jazzy-std-srvs"
     CONFLICTS="Conflicts: robot-bus-cpp, robot-bus-cpp-ros2-humble
 Provides: robot-bus-cpp
 Replaces: robot-bus-cpp"
     DESCRIPTION_SHORT="robot-bus C/C++ SDK with ROS 2 Jazzy bridge"
-    DESCRIPTION_LONG=" Same as robot-bus-cpp, plus in-process ROS 2 topic bridge
+    DESCRIPTION_LONG=" Same as robot-bus-cpp, plus in-process ROS 2 topic/service bridge
  (Ros2Bridge) linked against system ROS 2 Jazzy. Requires a sourced
- Jazzy environment at runtime. Does not vendor rcl/RMW/DDS."
+ Jazzy environment at runtime. Does not vendor rcl/RMW/DDS.
+ Linux only — there is no Windows/macOS ros2 package."
     ;;
   *)
     echo "error: unknown variant '$VARIANT' (main|ros2-humble|ros2-jazzy)" >&2
