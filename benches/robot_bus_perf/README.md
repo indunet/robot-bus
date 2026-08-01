@@ -34,10 +34,12 @@ ROBOT_BUS_PERF_ONLY=message cargo run --release --bin robot_bus_perf --features 
 | 变量 | 默认 | 含义 |
 |------|------|------|
 | `ROBOT_BUS_PERF_MAX_LOSS_PCT` | `1.0` | 丢包阈值（%） |
-| `ROBOT_BUS_PERF_GOODPUT_TRIAL_SECS` | `1.0` | 每档试验时长（秒） |
-| `ROBOT_BUS_PERF_GOODPUT_TRIAL_MSGS` | （空） | 若设置则覆盖「时长×速率」条数 |
-| `ROBOT_BUS_PERF_GOODPUT_RATE_LO` / `_HI` | `1000` / `500000` | 二分搜索速率范围（Hz） |
+| `ROBOT_BUS_PERF_GOODPUT_TRIAL_SECS` | `1.0` | 每档试验时长（秒）；默认按时长发送，避免高速率被条数上限截成短突发 |
+| `ROBOT_BUS_PERF_GOODPUT_TRIAL_MSGS` | （空） | 若设置则改为固定条数（冒烟） |
+| `ROBOT_BUS_PERF_GOODPUT_RATE_LO` / `_HI` | `1000` / `2000000` | 二分搜索速率范围（Hz） |
 | `ROBOT_BUS_PERF_MSG_LATENCY_SAMPLES` | `5000` | 限速延迟抽样次数 |
+| `ROBOT_BUS_PERF_SVC_ITERS` | `10000` | service call 次数 |
+| `ROBOT_BUS_PERF_ACT_ITERS` | `5000` | action send_goal 次数 |
 
 ## 说明
 

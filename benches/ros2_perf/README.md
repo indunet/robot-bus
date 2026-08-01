@@ -10,7 +10,9 @@ ROS 2（Humble）性能对比小项目：在 Docker 容器里测 **pub/sub / ser
 方法对齐仓库根目录的 `docs/perf-report.md`：
 
 - **延迟**：限速抽样（发一条等收到再发）
-- **吞吐（主指标）**：在目标速率下限速发送，**二分搜索**丢包 ≤ 1% 的最大可持续速率（max goodput）；默认搜索上限 **500000 Hz**（可用 `ROS2_PERF_GOODPUT_RATE_HI` 覆盖）
+- **吞吐（主指标）**：按目标速率限速发送约 **1s**（可用 `ROS2_PERF_GOODPUT_TRIAL_MSGS` 改为固定条数），**二分搜索**丢包 ≤ 1% 且发送窗口内 pub/sub 均 ≥90% 目标速率的最大可持续速率（max goodput）；默认搜索上限 **500000 Hz**（可用 `ROS2_PERF_GOODPUT_RATE_HI` 覆盖）
+
+> 旧实现曾用「条数上限 50000」截断高速率试验（短突发 + settle 排空），会虚高 max goodput；现已改为按时长发送，并要求发送窗口内订阅跟上。
 
 ## 结构
 

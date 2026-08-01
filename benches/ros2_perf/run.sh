@@ -84,7 +84,9 @@ def parse(path: Path):
     section = ""
     # Prefer the section matching the partial filename.
     want = "shm" if "shm" in path.name else "udp"
-    for m in re.finditer(r"(## (?:shm|udp).*\n\n\| 场景.*?)(?=\n## |\Z)", text, re.S):
+    # Title line only ([^\n]*); a greedy .* would swallow later ## sections.
+    sec_re = r"(## (?:shm|udp)[^\n]*\n\n\| 场景.*?)(?=\n## |\Z)"
+    for m in re.finditer(sec_re, text, re.S):
         block = m.group(1).strip() + "\n"
         if want in block.lower()[:40] or (want == "shm" and "Shared Memory" in block) or (want == "udp" and "UDPv4" in block):
             # Keep only if it has real data rows with digits
@@ -92,7 +94,7 @@ def parse(path: Path):
                 section = block
                 break
     if not section:
-        for m in re.finditer(r"(## (?:shm|udp).*\n\n\| 场景.*?)(?=\n## |\Z)", text, re.S):
+        for m in re.finditer(sec_re, text, re.S):
             block = m.group(1).strip() + "\n"
             if re.search(r"\| message pub/sub \| \d+", block):
                 section = block
@@ -127,7 +129,7 @@ lines.append("## 方法\n")
 lines.append("- RMW: `rmw_fastrtps_cpp`；传输由 Fast DDS XML 固定为 **SHM** 或 **UDPv4**。")
 lines.append("- 单进程多 Node + `MultiThreadedExecutor`（本机回环，非跨机）。")
 lines.append("- Payload：64 字节；QoS `KeepLast(2048)` best_effort。")
-lines.append("- Message **吞吐（主指标）**：在目标速率下限速发送，**二分搜索**丢包率 ≤ 1% 的最大可持续速率（max goodput）；每档约 1s。")
+lines.append("- Message **吞吐（主指标）**：按目标速率限速发送约 1s，**二分搜索**丢包率 ≤ 1% 且发送窗口内 pub/sub 均 ≥90% 目标速率的最大可持续速率（max goodput）。")
 lines.append("- Message **延迟**：另做限速抽样（发一条等收到再发）。")
 lines.append("- Service / action 延迟：每次 call / send_goal 本地计时。")
 lines.append("- 指标机器相关，不作为 CI 门槛。\n")

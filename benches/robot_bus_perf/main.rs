@@ -20,10 +20,16 @@ use support::{
 
 const PAYLOAD_LEN: usize = 64;
 const WARMUP: usize = 50;
-const SVC_ITERS: usize = 100_000;
-const ACT_ITERS: usize = 100_000;
 /// Bench-only depth. Keep modest vs trial length so queues cannot hide overload.
 const MSG_HWM: i32 = 2_048;
+
+fn svc_iters() -> usize {
+    env_usize("ROBOT_BUS_PERF_SVC_ITERS", 10_000)
+}
+
+fn act_iters() -> usize {
+    env_usize("ROBOT_BUS_PERF_ACT_ITERS", 5_000)
+}
 
 fn msg_latency_samples() -> usize {
     env_usize("ROBOT_BUS_PERF_MSG_LATENCY_SAMPLES", 5_000)
@@ -47,23 +53,24 @@ fn goodput_rate_lo() -> u64 {
 }
 
 fn goodput_rate_hi() -> u64 {
-    env_usize("ROBOT_BUS_PERF_GOODPUT_RATE_HI", 500_000) as u64
+    env_usize("ROBOT_BUS_PERF_GOODPUT_RATE_HI", 2_000_000) as u64
 }
 
 fn goodput_settle() -> Duration {
     Duration::from_millis(env_usize("ROBOT_BUS_PERF_GOODPUT_SETTLE_MS", 100) as u64)
 }
 
-/// Messages for one paced trial: prefer duration×rate so the burst exceeds HWM
-/// and settle cannot hide overload. Override with ROBOT_BUS_PERF_GOODPUT_TRIAL_MSGS.
-fn trial_msg_count(rate_hz: u64) -> usize {
+/// Fixed message count when `ROBOT_BUS_PERF_GOODPUT_TRIAL_MSGS` is set (smoke).
+/// Default path uses [`publish_paced_for`] (wall-clock duration), not a capped count —
+/// a 50k cap made MHz targets finish in ~40ms and inflated reported goodput.
+fn trial_msg_count(rate_hz: u64) -> Option<usize> {
     let fixed = goodput_trial_msgs();
     if fixed > 0 {
-        return fixed;
+        Some(fixed)
+    } else {
+        let _ = rate_hz;
+        None
     }
-    let n = (rate_hz as f64 * goodput_trial_secs()).round() as usize;
-    // Cap keeps binary search wall-time bounded while still >> HWM.
-    n.clamp(1_000, 50_000)
 }
 
 fn main() {
@@ -76,8 +83,12 @@ fn main() {
         "message" | "msg" | "pubsub" | "pub/sub"
     );
     println!("starting RobotBusBroker (bind_all + grpc)…");
+    let svc_iters = svc_iters();
+    let act_iters = act_iters();
     if only_message {
         println!("ROBOT_BUS_PERF_ONLY=message — skipping service/action");
+    } else {
+        println!("service iters={svc_iters} action iters={act_iters}");
     }
     let ctx = Context::new();
     let broker =
@@ -90,8 +101,8 @@ fn main() {
         println!("=== {transport} ===");
         results.push(bench_pubsub(&ctx, transport));
         if !only_message {
-            results.push(bench_service(&ctx, transport, SVC_ITERS));
-            results.push(bench_action(&ctx, transport, ACT_ITERS));
+            results.push(bench_service(&ctx, transport, svc_iters));
+            results.push(bench_action(&ctx, transport, act_iters));
         }
     }
 
@@ -99,8 +110,8 @@ fn main() {
     println!("=== grpc ({grpc_url}) ===");
     results.push(bench_grpc_subscribe(&broker, &grpc_url));
     if !only_message {
-        results.push(bench_grpc_service(&broker, &grpc_url, SVC_ITERS));
-        results.push(bench_grpc_action(&broker, &grpc_url, ACT_ITERS));
+        results.push(bench_grpc_service(&broker, &grpc_url, svc_iters));
+        results.push(bench_grpc_action(&broker, &grpc_url, act_iters));
     }
 
     broker.stop().expect("stop broker");
@@ -175,6 +186,29 @@ fn loss_pct(sent: usize, received: usize) -> f64 {
     }
 }
 
+/// Publish aiming for `rate_hz` until `duration` elapses (sustained trial).
+fn publish_paced_for(
+    publisher: &Publisher,
+    topic: &str,
+    rate_hz: f64,
+    duration: Duration,
+) -> (usize, Duration) {
+    let interval = Duration::from_secs_f64(1.0 / rate_hz.max(1.0));
+    let t0 = Instant::now();
+    let deadline = t0 + duration;
+    let mut next = t0;
+    let mut sent = 0usize;
+    while Instant::now() < deadline {
+        if publisher.publish(topic, &make_payload(now_ns())).is_err() {
+            break;
+        }
+        sent += 1;
+        next += interval;
+        wait_deadline(next);
+    }
+    (sent, t0.elapsed())
+}
+
 /// Publish `n` messages aiming for `rate_hz`. Uses sleep for coarse gaps and
 /// busy-wait for sub-ms deadlines (macOS sleep granularity is ~1ms).
 fn publish_paced(publisher: &Publisher, topic: &str, n: usize, rate_hz: f64) -> (usize, Duration) {
@@ -211,14 +245,21 @@ fn wait_deadline(deadline: Instant) {
 struct GoodputTrial {
     target_hz: u64,
     sent: usize,
+    /// Receives observed by end of the send window (before settle).
+    received_at_send_end: usize,
+    /// Receives after settle (loss / delivery).
     received: usize,
     elapsed: Duration,
 }
 
 fn trial_sustains_rate(t: &GoodputTrial) -> bool {
     let secs = t.elapsed.as_secs_f64().max(1e-9);
-    let actual = t.sent as f64 / secs;
-    actual >= 0.90 * t.target_hz as f64
+    let pub_rate = t.sent as f64 / secs;
+    // Subscriber must keep up *during* the send window — settle must not be what
+    // "saves" a burst that only fit in the ZMQ HWM.
+    let sub_rate = t.received_at_send_end as f64 / secs;
+    let target = t.target_hz as f64;
+    pub_rate >= 0.90 * target && sub_rate >= 0.90 * target
 }
 
 fn find_max_goodput(
@@ -243,11 +284,12 @@ fn find_max_goodput(
         let loss = loss_pct(t.sent, t.received);
         let sustained = trial_sustains_rate(&t);
         println!(
-            "  …   try {mid} Hz → sent={} recv={} loss={loss:.2}% pub={:.0}/s sub={:.0}/s sustained={}",
+            "  …   try {mid} Hz → sent={} recv_send={} recv_final={} loss={loss:.2}% pub={:.0}/s sub_send={:.0}/s sustained={}",
             t.sent,
+            t.received_at_send_end,
             t.received,
             t.sent as f64 / t.elapsed.as_secs_f64().max(1e-9),
-            t.received as f64 / t.elapsed.as_secs_f64().max(1e-9),
+            t.received_at_send_end as f64 / t.elapsed.as_secs_f64().max(1e-9),
             sustained,
         );
         // Pass only if loss is within budget AND we actually kept the target pace.
@@ -365,16 +407,19 @@ fn bench_pubsub(ctx: &Context, transport: &str) -> ScenarioResult {
         rec_pub.store(false, Ordering::Relaxed);
         let goodput = match find_max_goodput(&transport_pub, |rate_hz| {
             count_pub.store(0, Ordering::Relaxed);
-            let n = trial_msg_count(rate_hz);
-            let (sent, send_elapsed) =
-                publish_paced(&publisher, &topic_pub, n, rate_hz as f64);
+            let trial_secs = Duration::from_secs_f64(goodput_trial_secs());
+            let (sent, send_elapsed) = match trial_msg_count(rate_hz) {
+                Some(n) => publish_paced(&publisher, &topic_pub, n, rate_hz as f64),
+                None => publish_paced_for(&publisher, &topic_pub, rate_hz as f64, trial_secs),
+            };
+            let received_at_send_end = count_pub.load(Ordering::Relaxed);
             thread::sleep(settle);
             let received = count_pub.load(Ordering::Relaxed);
             Ok(GoodputTrial {
                 target_hz: rate_hz,
                 sent,
+                received_at_send_end,
                 received,
-                // Rate / sustain checks use send window only; settle is for late arrivals.
                 elapsed: send_elapsed,
             })
         }) {
@@ -396,6 +441,7 @@ fn bench_pubsub(ctx: &Context, transport: &str) -> ScenarioResult {
             &transport_pub,
             scenario,
             goodput.sent,
+            goodput.received_at_send_end,
             goodput.received,
             goodput.elapsed,
             latency,
@@ -682,12 +728,20 @@ fn bench_grpc_subscribe(broker: &RobotBusBroker, url: &str) -> ScenarioResult {
 
     let goodput = match find_max_goodput(transport, |rate_hz| {
         count.store(0, Ordering::Relaxed);
-        let trial_msgs = trial_msg_count(rate_hz);
+        let trial_secs = Duration::from_secs_f64(goodput_trial_secs());
         let interval = Duration::from_secs_f64(1.0 / (rate_hz as f64).max(1.0));
         let t0 = Instant::now();
         let mut next = t0;
         let mut sent = 0usize;
-        for _ in 0..trial_msgs {
+        let fixed_n = trial_msg_count(rate_hz);
+        loop {
+            let done = match fixed_n {
+                Some(n) => sent >= n,
+                None => Instant::now() >= t0 + trial_secs,
+            };
+            if done {
+                break;
+            }
             if publisher.publish(topic, &make_payload(now_ns())).is_err() {
                 break;
             }
@@ -704,6 +758,7 @@ fn bench_grpc_subscribe(broker: &RobotBusBroker, url: &str) -> ScenarioResult {
             }
         }
         let send_elapsed = t0.elapsed();
+        let received_at_send_end = count.load(Ordering::Relaxed);
         let settle_deadline = Instant::now() + settle;
         while Instant::now() < settle_deadline {
             let _ = node.spin_once(Some(Duration::from_millis(1)));
@@ -712,6 +767,7 @@ fn bench_grpc_subscribe(broker: &RobotBusBroker, url: &str) -> ScenarioResult {
         Ok(GoodputTrial {
             target_hz: rate_hz,
             sent,
+            received_at_send_end,
             received,
             elapsed: send_elapsed,
         })
@@ -730,6 +786,7 @@ fn bench_grpc_subscribe(broker: &RobotBusBroker, url: &str) -> ScenarioResult {
         transport,
         scenario,
         goodput.sent,
+        goodput.received_at_send_end,
         goodput.received,
         goodput.elapsed,
         latency,

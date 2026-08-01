@@ -129,11 +129,15 @@ pub enum ScenarioKind {
 
 impl ScenarioResult {
     /// Pub/sub max-goodput trial (paced rate with loss ≤ threshold).
+    ///
+    /// `received_at_send_end` drives subscribe rate (keep-up during send window).
+    /// `received_final` (after settle) drives delivery %.
     pub fn ok_message(
         transport: &str,
         scenario: &str,
         sent: usize,
-        received: usize,
+        received_at_send_end: usize,
+        received_final: usize,
         elapsed: Duration,
         latency: LatencyStats,
     ) -> Self {
@@ -142,14 +146,14 @@ impl ScenarioResult {
             transport: transport.into(),
             scenario: scenario.into(),
             sent,
-            received,
+            received: received_final,
             elapsed,
             publish_per_s: sent as f64 / secs,
-            subscribe_per_s: received as f64 / secs,
+            subscribe_per_s: received_at_send_end as f64 / secs,
             delivery_pct: if sent == 0 {
                 0.0
             } else {
-                100.0 * received as f64 / sent as f64
+                100.0 * received_final as f64 / sent as f64
             },
             latency,
             note: None,
@@ -231,15 +235,19 @@ pub fn write_report(results: &[ScenarioResult], env_lines: &[String]) -> std::io
     md.push_str("- Console HTTP 关闭；message HWM=2048（仅 bench）；service/action HWM=64。\n");
     md.push_str("- Payload：64 字节 raw（前 8 字节为发送端 Unix 纳秒时间戳，用于延迟）。\n");
     md.push_str(&format!(
-        "- Message **吞吐（主指标）**：在目标速率下限速发送，**二分搜索**丢包率 ≤ {:.1}% 的最大可持续速率（max goodput）；每档约 {:.1}s（可用 `ROBOT_BUS_PERF_GOODPUT_TRIAL_MSGS` 覆盖条数）。\n",
-        env_f64("ROBOT_BUS_PERF_MAX_LOSS_PCT", 1.0),
+        "- Message **吞吐（主指标）**：按目标速率限速发送约 {:.1}s（可用 `ROBOT_BUS_PERF_GOODPUT_TRIAL_MSGS` 改为固定条数），**二分搜索**丢包率 ≤ {:.1}% 且发送窗口内 pub/sub 均 ≥90% 目标速率的最大可持续速率（max goodput）。\n",
         env_f64("ROBOT_BUS_PERF_GOODPUT_TRIAL_SECS", 1.0),
+        env_f64("ROBOT_BUS_PERF_MAX_LOSS_PCT", 1.0),
     ));
     md.push_str(&format!(
         "- Message **延迟**：另做 {} 次限速抽样（发一条等收到再发），测单程时延。\n",
         env_usize("ROBOT_BUS_PERF_MSG_LATENCY_SAMPLES", 5_000),
     ));
-    md.push_str("- Service / action：各 100000 次；延迟为每次 call / send_goal 本地计时。\n");
+    md.push_str(&format!(
+        "- Service / action：各 {} / {} 次（`ROBOT_BUS_PERF_SVC_ITERS` / `ROBOT_BUS_PERF_ACT_ITERS`）；延迟为每次 call / send_goal 本地计时。\n",
+        env_usize("ROBOT_BUS_PERF_SVC_ITERS", 10_000),
+        env_usize("ROBOT_BUS_PERF_ACT_ITERS", 5_000),
+    ));
     md.push_str("- ZMQ：共享 `Context` + `Node::tcp` / `ipc` / `inproc`；gRPC：`Node::grpc_at`。\n");
     md.push_str("- inproc 与嵌入式 broker 必须共用同一 `Context`（ZeroMQ inproc 是 context-local）。\n");
     md.push_str("- 指标为单机本机回环，机器相关，不作为 CI 门槛。\n\n");

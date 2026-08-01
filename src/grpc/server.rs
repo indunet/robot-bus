@@ -7,7 +7,7 @@ use anyhow::{Context, Result};
 use http::Method;
 use http::header::HeaderName;
 use tokio::net::TcpListener;
-use tokio_stream::wrappers::TcpListenerStream;
+use tonic::transport::server::TcpIncoming;
 use tonic::transport::Server;
 use tonic_web::GrpcWebLayer;
 use tower_http::cors::{AllowOrigin, Any, CorsLayer};
@@ -87,6 +87,11 @@ pub async fn serve_on_listener(
         config.action_frontend
     );
 
+    // TcpListenerStream alone leaves TCP_NODELAY off; with serve_with_incoming_*
+    // tonic's Server::tcp_nodelay() is ignored — wrap so small streaming frames
+    // are not delayed by Nagle (~40ms classic delayed-ACK stall on action Run).
+    let incoming = TcpIncoming::from(listener).with_nodelay(Some(true));
+
     Server::builder()
         .accept_http1(true)
         .layer(cors)
@@ -94,7 +99,7 @@ pub async fn serve_on_listener(
         .add_service(MessageGatewayServer::new(message))
         .add_service(ServiceGatewayServer::new(service))
         .add_service(ActionGatewayServer::new(action))
-        .serve_with_incoming_shutdown(TcpListenerStream::new(listener), shutdown)
+        .serve_with_incoming_shutdown(incoming, shutdown)
         .await
         .context("gateway server")?;
     Ok(())

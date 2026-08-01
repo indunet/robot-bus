@@ -220,15 +220,10 @@ double loss_pct(size_t sent, size_t received)
   return 100.0 * static_cast<double>(sent - received) / static_cast<double>(sent);
 }
 
-size_t trial_msg_count(size_t rate_hz)
+size_t trial_msg_count_fixed()
 {
-  const size_t fixed = env_size("ROS2_PERF_GOODPUT_TRIAL_MSGS", kDefaultGoodputTrialMsgs);
-  if (fixed > 0) {
-    return fixed;
-  }
-  const double secs = env_double("ROS2_PERF_GOODPUT_TRIAL_SECS", kDefaultGoodputTrialSecs);
-  const size_t n = static_cast<size_t>(std::llround(static_cast<double>(rate_hz) * secs));
-  return std::clamp(n, static_cast<size_t>(1000), static_cast<size_t>(50000));
+  // 0 → duration-based trial (default). Non-zero → fixed message count (smoke).
+  return env_size("ROS2_PERF_GOODPUT_TRIAL_MSGS", kDefaultGoodputTrialMsgs);
 }
 
 class PubSubBench
@@ -325,12 +320,24 @@ public:
     while (lo <= hi) {
       const size_t mid = lo + (hi - lo) / 2;
       count_.store(0);
-      const size_t trial_msgs = trial_msg_count(mid);
+      const size_t fixed_msgs = trial_msg_count_fixed();
+      const double trial_secs =
+        env_double("ROS2_PERF_GOODPUT_TRIAL_SECS", kDefaultGoodputTrialSecs);
       const double interval_s = 1.0 / static_cast<double>(std::max<size_t>(mid, 1));
       const auto t0 = std::chrono::steady_clock::now();
+      const auto trial_deadline =
+        t0 + std::chrono::duration_cast<std::chrono::steady_clock::duration>(
+               std::chrono::duration<double>(trial_secs));
       auto next = t0;
       size_t sent = 0;
-      for (size_t i = 0; i < trial_msgs; ++i) {
+      for (;;) {
+        if (fixed_msgs > 0) {
+          if (sent >= fixed_msgs) {
+            break;
+          }
+        } else if (std::chrono::steady_clock::now() >= trial_deadline) {
+          break;
+        }
         publish_one(now_ns());
         ++sent;
         next += std::chrono::duration_cast<std::chrono::steady_clock::duration>(
@@ -348,24 +355,28 @@ public:
         }
       }
       const auto t_send_end = std::chrono::steady_clock::now();
+      const size_t received_at_send_end = count_.load();
       std::this_thread::sleep_for(std::chrono::milliseconds(settle_ms));
       const double elapsed =
         std::max(std::chrono::duration<double>(t_send_end - t0).count(), 1e-9);
       const size_t received = count_.load();
       const double loss = loss_pct(sent, received);
       const double actual_pub = sent / elapsed;
-      const bool sustained = actual_pub >= 0.90 * static_cast<double>(mid);
-      std::cout << "  …   try " << mid << " Hz (" << trial_msgs << " msgs) → sent=" << sent
-                << " recv=" << received
+      const double actual_sub_send = received_at_send_end / elapsed;
+      const bool sustained = actual_pub >= 0.90 * static_cast<double>(mid) &&
+        actual_sub_send >= 0.90 * static_cast<double>(mid);
+      std::cout << "  …   try " << mid << " Hz (sent=" << sent
+                << ") → recv_send=" << received_at_send_end
+                << " recv_final=" << received
                 << " loss=" << std::setprecision(2) << loss << "% pub="
                 << std::setprecision(0) << actual_pub
-                << "/s sub=" << (received / elapsed) << "/s sustained="
+                << "/s sub_send=" << actual_sub_send << "/s sustained="
                 << (sustained ? "true" : "false") << std::endl;
 
       if (received > 0 && loss <= max_loss && sustained) {
         have_best = true;
         best_sent = sent;
-        best_recv = received;
+        best_recv = received_at_send_end;  // report sustain-window receive rate
         best_elapsed = elapsed;
         best_target = mid;
         lo = mid + 1;

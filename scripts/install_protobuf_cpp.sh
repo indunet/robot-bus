@@ -16,6 +16,24 @@ is_windows() {
   [[ "${OS:-}" == "Windows_NT" ]]
 }
 
+# Pick a multi-config VS generator for the installed toolchain.
+# windows-latest (mid-2026+) ships VS 2026 only; windows-2022 still has VS 2022.
+windows_vs_generator() {
+  if [[ -n "${CMAKE_GENERATOR:-}" ]]; then
+    printf '%s\n' "$CMAKE_GENERATOR"
+    return
+  fi
+  local vsroot="/c/Program Files/Microsoft Visual Studio"
+  if [[ -d "$vsroot/18" ]]; then
+    echo "Visual Studio 18 2026"
+  elif [[ -d "$vsroot/2022" ]]; then
+    echo "Visual Studio 17 2022"
+  else
+    echo "error: no Visual Studio install found under $vsroot (tried 18 / 2022)" >&2
+    return 1
+  fi
+}
+
 curl -fsSL -o "$WORK/protobuf.tar.gz" \
   "https://github.com/protocolbuffers/protobuf/releases/download/v${VERSION}/protobuf-${VERSION}.tar.gz"
 tar -xzf "$WORK/protobuf.tar.gz" -C "$WORK"
@@ -34,8 +52,9 @@ CMAKE_ARGS=(
 )
 
 if is_windows; then
-  # Multi-config VS generator (MSVC is the default on windows-latest runners).
-  CMAKE_ARGS+=(-G "Visual Studio 17 2022" -A x64)
+  VS_GEN="$(windows_vs_generator)"
+  echo "Using CMake generator: ${VS_GEN}"
+  CMAKE_ARGS+=(-G "$VS_GEN" -A x64)
   cmake "${CMAKE_ARGS[@]}"
   cmake --build "$WORK/build" --config Release -j"$JOBS"
   cmake --install "$WORK/build" --config Release

@@ -100,78 +100,98 @@ fn run_session(
     };
 
     let mut active: Option<ActiveGoal> = None;
+    let mut client_closed = false;
 
     loop {
-        // Prefer draining client commands so CANCEL can interrupt a long goal wait.
-        match cmd_rx.recv_timeout(POLL_TICK) {
-            Ok(SessionCommand::Goal(goal)) => {
-                if goal.action_name.is_empty() {
-                    let _ = event_tx.blocking_send(Err(Status::invalid_argument(
-                        "action_name is required",
-                    )));
-                    return;
-                }
-                let goal_id = if goal.goal_id.is_empty() {
+        // When a goal is in flight, do not block on the command channel — RESULT may
+        // already be sitting on the ZMQ socket. Still drain non-blocking so CANCEL
+        // can interrupt. When idle, block briefly for the next GOAL / disconnect.
+        let cmd = if active.is_some() {
+            match cmd_rx.try_recv() {
+                Ok(cmd) => Some(cmd),
+                Err(std_mpsc::TryRecvError::Empty) => None,
+                Err(std_mpsc::TryRecvError::Disconnected) => {
+                    client_closed = true;
                     None
-                } else {
-                    Some(goal.goal_id.as_str())
-                };
-                match client.submit_goal(&goal.action_name, &goal.goal, goal_id) {
-                    Ok(gid) => {
-                        active = Some(ActiveGoal {
-                            action_name: goal.action_name,
-                            goal_id: gid,
-                            deadline: timeout_from_ms(goal.timeout_ms).map(|d| Instant::now() + d),
-                        });
+                }
+            }
+        } else {
+            match cmd_rx.recv_timeout(POLL_TICK) {
+                Ok(cmd) => Some(cmd),
+                Err(RecvTimeoutError::Timeout) => None,
+                Err(RecvTimeoutError::Disconnected) => break,
+            }
+        };
+
+        if let Some(cmd) = cmd {
+            match cmd {
+                SessionCommand::Goal(goal) => {
+                    if goal.action_name.is_empty() {
+                        let _ = event_tx.blocking_send(Err(Status::invalid_argument(
+                            "action_name is required",
+                        )));
+                        return;
                     }
-                    Err(err) => {
+                    let goal_id = if goal.goal_id.is_empty() {
+                        None
+                    } else {
+                        Some(goal.goal_id.as_str())
+                    };
+                    match client.submit_goal(&goal.action_name, &goal.goal, goal_id) {
+                        Ok(gid) => {
+                            active = Some(ActiveGoal {
+                                action_name: goal.action_name,
+                                goal_id: gid,
+                                deadline: timeout_from_ms(goal.timeout_ms)
+                                    .map(|d| Instant::now() + d),
+                            });
+                        }
+                        Err(err) => {
+                            let _ = event_tx.blocking_send(Err(bus_status(err)));
+                            return;
+                        }
+                    }
+                }
+                SessionCommand::Cancel(cancel) => {
+                    if cancel.action_name.is_empty() {
+                        let _ = event_tx.blocking_send(Err(Status::invalid_argument(
+                            "action_name is required",
+                        )));
+                        return;
+                    }
+                    if cancel.goal_id.is_empty() {
+                        let _ = event_tx
+                            .blocking_send(Err(Status::invalid_argument("goal_id is required")));
+                        return;
+                    }
+                    if let Err(err) =
+                        client.submit_cancel(&cancel.action_name, &cancel.goal_id, &cancel.body)
+                    {
                         let _ = event_tx.blocking_send(Err(bus_status(err)));
                         return;
                     }
+                    // Track so RESULT / NO_GOAL for this cancel is attributed.
+                    if active.as_ref().map(|a| a.goal_id.as_str()) != Some(cancel.goal_id.as_str()) {
+                        active = Some(ActiveGoal {
+                            action_name: cancel.action_name,
+                            goal_id: cancel.goal_id,
+                            deadline: Some(Instant::now() + Duration::from_secs(30)),
+                        });
+                    }
                 }
-            }
-            Ok(SessionCommand::Cancel(cancel)) => {
-                if cancel.action_name.is_empty() {
-                    let _ = event_tx.blocking_send(Err(Status::invalid_argument(
-                        "action_name is required",
-                    )));
-                    return;
-                }
-                if cancel.goal_id.is_empty() {
-                    let _ = event_tx
-                        .blocking_send(Err(Status::invalid_argument("goal_id is required")));
-                    return;
-                }
-                if let Err(err) =
-                    client.submit_cancel(&cancel.action_name, &cancel.goal_id, &cancel.body)
-                {
-                    let _ = event_tx.blocking_send(Err(bus_status(err)));
-                    return;
-                }
-                // Track so RESULT / NO_GOAL for this cancel is attributed.
-                if active.as_ref().map(|a| a.goal_id.as_str()) != Some(cancel.goal_id.as_str()) {
-                    active = Some(ActiveGoal {
-                        action_name: cancel.action_name,
-                        goal_id: cancel.goal_id,
-                        deadline: Some(Instant::now() + Duration::from_secs(30)),
-                    });
-                }
-            }
-            Ok(SessionCommand::Closed) => {
-                // Client finished sending; keep draining bus replies for an active goal.
-                if active.is_none() {
-                    break;
-                }
-            }
-            Err(RecvTimeoutError::Timeout) => {}
-            Err(RecvTimeoutError::Disconnected) => {
-                if active.is_none() {
-                    break;
+                SessionCommand::Closed => {
+                    client_closed = true;
+                    if active.is_none() {
+                        break;
+                    }
                 }
             }
         }
 
         let Some(goal) = active.as_ref() else {
+            if client_closed {
+                break;
+            }
             continue;
         };
         let action_name = goal.action_name.clone();
@@ -206,6 +226,9 @@ fn run_session(
                     active = None;
                     if event_tx.blocking_send(Ok(done)).is_err() {
                         return;
+                    }
+                    if client_closed {
+                        break;
                     }
                 } else if event_tx.blocking_send(Ok(to_event(msg))).is_err() {
                     return;

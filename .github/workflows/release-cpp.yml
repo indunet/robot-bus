@@ -361,8 +361,19 @@ jobs:
           set -eux
           # msgs only needs the pinned protobuf prefix — do not use the vcpkg
           # toolchain here (vcpkg's protobuf is a different major and would win).
+          # windows-latest (mid-2026+) has VS 2026 only; windows-2022 still has VS 2022.
+          VSROOT="/c/Program Files/Microsoft Visual Studio"
+          if [ -d "$VSROOT/18" ]; then
+            VS_GEN="Visual Studio 18 2026"
+          elif [ -d "$VSROOT/2022" ]; then
+            VS_GEN="Visual Studio 17 2022"
+          else
+            echo "error: no Visual Studio install found under $VSROOT" >&2
+            exit 1
+          fi
+          echo "Using CMake generator: ${VS_GEN}"
           cmake -S bindings/cpp -B bindings/cpp/build-win \
-            -G "Visual Studio 17 2022" -A x64 \
+            -G "$VS_GEN" -A x64 \
             -DROBOT_BUS_BUILD_TESTS=OFF \
             -DCMAKE_PREFIX_PATH="${PROTOBUF_PREFIX}"
           cmake --build bindings/cpp/build-win --config Release --target robot_bus_msgs -j2
