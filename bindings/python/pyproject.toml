@@ -32,4 +32,5 @@ python-source = "."
 module-name = "robot_bus._native"
 features = ["extension-module", "grpc"]
 # Keep wheels free of default multimedia features (system FFmpeg / audio / camera).
-cargo-extra-args = ["--no-default-features"]
+# Note: `cargo-extra-args` was removed in maturin 0.13; use this flag instead.
+no-default-features = true
