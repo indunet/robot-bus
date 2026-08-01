@@ -42,6 +42,9 @@ pub mod audio_capture;
 #[cfg(feature = "audio-play")]
 pub mod audio_play;
 
+#[cfg(feature = "camera-capture")]
+pub mod camera_capture;
+
 #[cfg(feature = "extension-module")]
 mod python_api;
 

@@ -44,7 +44,6 @@ Rust core stays at the repo root (`Cargo.toml` + `src/`). Language SDKs live und
 | [`console/`](console/) | Web monitoring console (product UI; build output synced to `assets/console/` locally / in CI, not committed) |
 | [`benches/`](benches/) | Perf harnesses: [`robot_bus_perf/`](benches/robot_bus_perf/) (`just perf`), [`ros2_perf/`](benches/ros2_perf/) (`just perf-ros2`) |
 | [`tests/`](tests/) | Rust integration tests + cross-language interop (`just test-interop`) |
-| [`nodes/`](nodes/) | Notes for in-crate tool-node features (image/audio binaries live in the main crate) |
 | [`docs/`](docs/) | API guides and generated perf reports |
 | [`scripts/`](scripts/), [`tools/`](tools/), `justfile` | Codegen, packaging, and task orchestration |
 
@@ -384,9 +383,10 @@ Tool binaries ship with the main `robot-bus` crate as **default features**. Inst
 cargo install robot-bus --bin robot_bus_image_encoder
 cargo install robot-bus --bin robot_bus_audio_capture
 cargo install robot-bus --bin robot_bus_audio_play
+cargo install robot-bus --bin robot_bus_camera_capture
 ```
 
-Skip them with `--no-default-features --features grpc,console` when you only need the library. See [`nodes/README.md`](nodes/README.md).
+Skip them with `--no-default-features --features grpc,console` when you only need the library.
 
 ### Image encoder (`robot_bus_image_encoder`)
 
@@ -428,6 +428,17 @@ cargo install robot-bus --bin robot_bus_audio_play
 robot_bus_audio_play --list-devices
 robot_bus_audio_play --print-example-config > play.yaml
 robot_bus_audio_play --params play.yaml
+```
+
+### Camera capture (`robot_bus_camera_capture`)
+
+Captures USB / webcam frames via [nokhwa](https://github.com/l1npengtul/nokhwa) (V4L2 / AVFoundation / Media Foundation) and publishes `sensor_msgs/Image` (`rgb8`). Defaults: 640×480 @ 30 fps on `/camera/image_raw` — ready for `robot_bus_image_encoder`. Feature `camera-capture` (default on). On macOS, grant camera permission when prompted.
+
+```bash
+cargo install robot-bus --bin robot_bus_camera_capture
+robot_bus_camera_capture --list-devices
+robot_bus_camera_capture --print-example-config > camera.yaml
+robot_bus_camera_capture --params camera.yaml
 ```
 
 ## ROS 2 bridge (`feature = "ros2"`)

@@ -597,4 +597,15 @@ robot_bus_audio_capture --print-example-config > capture.yaml
 robot_bus_audio_play --print-example-config > play.yaml
 ```
 
-不要默认多媒体依赖时：`cargo build --no-default-features --features grpc,console`。约定见 [`nodes/README.md`](../nodes/README.md)。
+## 工具节点：Camera capture
+
+主 crate feature **`camera-capture`（默认开启）**：模块 `robot_bus::camera_capture`，二进制 `robot_bus_camera_capture`。经 nokhwa 采集 USB / 摄像头，发布 `sensor_msgs/Image`（`rgb8`），默认话题 `/camera/image_raw`。
+
+```bash
+cargo install robot-bus --bin robot_bus_camera_capture
+robot_bus_camera_capture --list-devices
+robot_bus_camera_capture --print-example-config > camera.yaml
+robot_bus_camera_capture --params camera.yaml
+```
+
+不要默认多媒体依赖时：`cargo build --no-default-features --features grpc,console`。

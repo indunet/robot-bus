@@ -44,7 +44,6 @@ Rust 核心留在仓库根目录（`Cargo.toml` + `src/`）。各语言 SDK 放�
 | [`console/`](console/) | Web 监控控制台（产品 UI；构建产物同步到本地/CI 的 `assets/console/`，不入库） |
 | [`benches/`](benches/) | 性能压测：[`robot_bus_perf/`](benches/robot_bus_perf/)（`just perf`）、[`ros2_perf/`](benches/ros2_perf/)（`just perf-ros2`） |
 | [`tests/`](tests/) | Rust 集成测试 + 跨语言互通（`just test-interop`） |
-| [`nodes/`](nodes/) | 工具节点说明（图像/音频二进制在主 crate 的 feature 下） |
 | [`docs/`](docs/) | API 文档与生成的性能报告 |
 | [`scripts/`](scripts/)、[`tools/`](tools/)、`justfile` | 代码生成、打包与任务编排 |
 
@@ -386,10 +385,10 @@ UDP 发现（包名 `robot_bus_interface.msg.v1`）：
 cargo install robot-bus --bin robot_bus_image_encoder
 cargo install robot-bus --bin robot_bus_audio_capture
 cargo install robot-bus --bin robot_bus_audio_play
+cargo install robot-bus --bin robot_bus_camera_capture
 ```
 
-只要库时用 `--no-default-features --features grpc,console`。详见 [`nodes/README.md`](nodes/README.md)。
-
+只要库时用 `--no-default-features --features grpc,console`。
 ### 图像编码节点（`robot_bus_image_encoder`）
 
 订阅 `sensor_msgs/Image`（`rgb8` / `bgr8` / `mono8`），经 **系统 FFmpeg** 发布为 `foxglove_msgs/CompressedVideo`（`h264` 或 `h265`，Annex-B）。编码器优先级：NVENC → VideoToolbox → `libopenh264` / 软编。
@@ -430,6 +429,17 @@ cargo install robot-bus --bin robot_bus_audio_play
 robot_bus_audio_play --list-devices
 robot_bus_audio_play --print-example-config > play.yaml
 robot_bus_audio_play --params play.yaml
+```
+
+### 相机采集（`robot_bus_camera_capture`）
+
+经 [nokhwa](https://github.com/l1npengtul/nokhwa)（V4L2 / AVFoundation / Media Foundation）采集 USB / 摄像头画面，发布 `sensor_msgs/Image`（`rgb8`）。默认：640×480 @ 30 fps，话题 `/camera/image_raw`，可直接接 `robot_bus_image_encoder`。feature `camera-capture`（默认开）。macOS 需在弹窗中授权摄像头。
+
+```bash
+cargo install robot-bus --bin robot_bus_camera_capture
+robot_bus_camera_capture --list-devices
+robot_bus_camera_capture --print-example-config > camera.yaml
+robot_bus_camera_capture --params camera.yaml
 ```
 
 ## ROS 2 桥（`feature = "ros2"`）

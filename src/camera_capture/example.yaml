@@ -1,0 +1,11 @@
+# Example parameters for robot_bus_camera_capture.
+# robot_bus_camera_capture --print-example-config > camera.yaml
+
+ros__parameters:
+  output_topic: /camera/image_raw
+  # Empty = first camera (index 0). Otherwise a numeric index ("0") or exact device name.
+  device: ""
+  width: 640
+  height: 480
+  fps: 30
+  frame_id: camera

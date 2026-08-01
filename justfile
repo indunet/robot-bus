@@ -166,12 +166,13 @@ check-ros2-shim:
 
 # Build / test tool-node features
 nodes-build:
-	cargo build --bin robot_bus_image_encoder --bin robot_bus_audio_capture --bin robot_bus_audio_play
+	cargo build --bin robot_bus_image_encoder --bin robot_bus_audio_capture --bin robot_bus_audio_play --bin robot_bus_camera_capture
 
 nodes-test:
 	cargo test --lib image_encoder::
 	cargo test --lib audio_capture::
 	cargo test --lib audio_play::
+	cargo test --lib camera_capture::
 
 # Run image encoder (broker must already be up; needs system FFmpeg)
 node-image-encoder *args:
@@ -187,4 +188,9 @@ node-audio-capture *args:
 node-audio-play *args:
 	cargo run --bin robot_bus_audio_play -- --print-example-config > /tmp/robot_bus_audio_play.example.yaml
 	cargo run --bin robot_bus_audio_play -- --params /tmp/robot_bus_audio_play.example.yaml {{args}}
+
+# Run USB camera capture (broker must already be up; needs a camera)
+node-camera-capture *args:
+	cargo run --bin robot_bus_camera_capture -- --print-example-config > /tmp/robot_bus_camera_capture.example.yaml
+	cargo run --bin robot_bus_camera_capture -- --params /tmp/robot_bus_camera_capture.example.yaml {{args}}
 
