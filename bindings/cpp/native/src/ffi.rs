@@ -96,6 +96,7 @@ pub(crate) fn node_options(
         host: host.into(),
         transport: transport.into(),
         grpc_url: None,
+        console_url: None,
         message_xsub,
         message_xpub,
         service_frontend,

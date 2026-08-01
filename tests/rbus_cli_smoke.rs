@@ -142,7 +142,7 @@ fn rbus_lists_and_status() {
     let (code, stdout, stderr) = run_rbus(&url, &["topic", "list"]);
     assert_eq!(code, 0, "topic list: stderr={stderr}");
     assert!(
-        stdout.lines().any(|l| l == "/rbus/cli"),
+        stdout.lines().any(|l| l.split('\t').next() == Some("/rbus/cli")),
         "topics stdout={stdout}"
     );
 

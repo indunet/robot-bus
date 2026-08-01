@@ -1,0 +1,182 @@
+//! Topic type registry: typed create_publisher registers before any traffic.
+
+#![cfg(feature = "console")]
+
+mod support;
+
+use std::thread;
+use std::time::Duration;
+
+use prost::Name;
+use robot_bus::broker::action_bus::ActionBusConfig;
+use robot_bus::broker::message_bus::BusConfig;
+use robot_bus::broker::service_bus::ServiceBusConfig;
+use robot_bus::broker::{
+    ConsoleBrokerConfig, DiscoveryConfig, GrpcBrokerConfig, RobotBusBroker, RobotBusConfig,
+};
+use robot_bus::sensor_msgs::msg::v1::Imu;
+use robot_bus::std_msgs::msg::v1::String as BusString;
+use robot_bus::{Node, NodeOptions};
+use serde::Deserialize;
+use support::lock_brokers;
+
+fn test_broker_config(
+    msg_xsub: u16,
+    msg_xpub: u16,
+    svc_fe: u16,
+    svc_be: u16,
+    act_fe: u16,
+    act_be: u16,
+    grpc: u16,
+    console: u16,
+) -> RobotBusConfig {
+    RobotBusConfig {
+        message: BusConfig {
+            xsub_bind: format!("tcp://127.0.0.1:{msg_xsub}"),
+            xpub_bind: format!("tcp://127.0.0.1:{msg_xpub}"),
+            bind_all_transports: false,
+            ..BusConfig::default()
+        },
+        service: ServiceBusConfig {
+            frontend_bind: format!("tcp://127.0.0.1:{svc_fe}"),
+            backend_bind: format!("tcp://127.0.0.1:{svc_be}"),
+            bind_all_transports: false,
+            ..ServiceBusConfig::default()
+        },
+        action: ActionBusConfig {
+            frontend_bind: format!("tcp://127.0.0.1:{act_fe}"),
+            backend_bind: format!("tcp://127.0.0.1:{act_be}"),
+            bind_all_transports: false,
+            ..ActionBusConfig::default()
+        },
+        discovery: DiscoveryConfig {
+            enabled: false,
+            ..DiscoveryConfig::default()
+        },
+        grpc: GrpcBrokerConfig {
+            listen: format!("127.0.0.1:{grpc}").parse().unwrap(),
+            ..GrpcBrokerConfig::default()
+        },
+        console: ConsoleBrokerConfig {
+            enabled: true,
+            listen: format!("127.0.0.1:{console}").parse().unwrap(),
+        },
+    }
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct TopicRow {
+    name: String,
+    type_name: Option<String>,
+    #[serde(default)]
+    total_msgs: u64,
+}
+
+#[derive(Debug, Deserialize)]
+struct TopicsEnvelope {
+    topics: Vec<TopicRow>,
+}
+
+fn get_topics(console_url: &str) -> TopicsEnvelope {
+    let url = format!("{console_url}/api/v1/topics");
+    ureq::get(&url)
+        .call()
+        .unwrap_or_else(|e| panic!("GET {url}: {e}"))
+        .into_json()
+        .expect("decode topics")
+}
+
+fn get_topic_info(console_url: &str, topic: &str) -> TopicRow {
+    let encoded: String = topic
+        .bytes()
+        .map(|b| match b {
+            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' => {
+                (b as char).to_string()
+            }
+            _ => format!("%{b:02X}"),
+        })
+        .collect();
+    let url = format!("{console_url}/api/v1/topics/{encoded}");
+    ureq::get(&url)
+        .call()
+        .unwrap_or_else(|e| panic!("GET {url}: {e}"))
+        .into_json()
+        .expect("decode topic info")
+}
+
+#[test]
+fn typed_publisher_registers_type_before_traffic() {
+    let _guard = lock_brokers();
+    let console_port = 28771u16;
+    let broker = RobotBusBroker::start(test_broker_config(
+        28560, 28561, 28662, 28663, 28664, 28665, 28770, console_port,
+    ))
+    .expect("start broker");
+    thread::sleep(Duration::from_millis(200));
+
+    let console_url = format!("http://127.0.0.1:{console_port}");
+    let opts = NodeOptions {
+        message_xsub: Some("tcp://127.0.0.1:28560".into()),
+        message_xpub: Some("tcp://127.0.0.1:28561".into()),
+        console_url: Some(console_url.clone()),
+        ..NodeOptions::default()
+    };
+    let mut node = Node::with_options("type_reg", opts);
+    let _pub = node
+        .create_publisher::<Imu>("/robot1/imu")
+        .expect("create_publisher");
+
+    // Give HTTP register a moment (sync, but settle console).
+    thread::sleep(Duration::from_millis(50));
+
+    let list = get_topics(&console_url);
+    let row = list
+        .topics
+        .iter()
+        .find(|t| t.name == "/robot1/imu")
+        .unwrap_or_else(|| panic!("missing /robot1/imu in {list:?}"));
+    assert_eq!(row.type_name.as_deref(), Some(Imu::full_name().as_str()));
+    assert_eq!(row.total_msgs, 0, "no traffic yet");
+
+    let info = get_topic_info(&console_url, "/robot1/imu");
+    assert_eq!(info.name, "/robot1/imu");
+    assert_eq!(info.type_name.as_deref(), Some("sensor_msgs.msg.v1.Imu"));
+
+    broker.stop().expect("stop");
+}
+
+#[test]
+fn type_register_last_write_wins() {
+    let _guard = lock_brokers();
+    let console_port = 28871u16;
+    let broker = RobotBusBroker::start(test_broker_config(
+        28860, 28861, 28862, 28863, 28864, 28865, 28870, console_port,
+    ))
+    .expect("start broker");
+    thread::sleep(Duration::from_millis(200));
+
+    let console_url = format!("http://127.0.0.1:{console_port}");
+    let body1 = serde_json::json!({
+        "topic": "/conflict",
+        "typeName": "sensor_msgs.msg.v1.Imu",
+    });
+    let body2 = serde_json::json!({
+        "topic": "/conflict",
+        "typeName": BusString::full_name(),
+    });
+    ureq::post(&format!("{console_url}/api/v1/topics/register"))
+        .send_json(body1)
+        .expect("register 1");
+    ureq::post(&format!("{console_url}/api/v1/topics/register"))
+        .send_json(body2)
+        .expect("register 2");
+
+    let info = get_topic_info(&console_url, "/conflict");
+    assert_eq!(
+        info.type_name.as_deref(),
+        Some(BusString::full_name().as_str())
+    );
+
+    broker.stop().expect("stop");
+}

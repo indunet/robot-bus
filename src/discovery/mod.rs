@@ -45,6 +45,11 @@ impl BrokerAnnouncement {
                 )));
             }
         }
+        if opts.console_url.is_none() {
+            if let Some(url) = self.console_url.clone() {
+                opts.console_url = Some(url);
+            }
+        }
         Ok(opts)
     }
 

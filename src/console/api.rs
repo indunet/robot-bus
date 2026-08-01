@@ -1,18 +1,20 @@
 //! REST / SSE monitoring endpoints for the embedded console.
 
+use std::collections::HashMap;
 use std::convert::Infallible;
 use std::sync::Arc;
 use std::time::Duration;
 
 use axum::Json;
-use axum::extract::State;
+use axum::extract::{Path, State};
+use axum::http::StatusCode;
 use axum::response::sse::{Event, KeepAlive, Sse};
 use axum::response::IntoResponse;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use tokio_stream::wrappers::BroadcastStream;
 use tokio_stream::StreamExt;
 
-use super::state::{ConsoleState, LogEntryDto};
+use super::state::{ConsoleState, LogEntryDto, TopicRate};
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -45,6 +47,8 @@ struct StatusResponse {
 #[serde(rename_all = "camelCase")]
 struct TopicResponse {
     name: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    type_name: Option<String>,
     msg_per_sec: u64,
     bytes_per_sec: u64,
     last_seen: u64,
@@ -58,6 +62,19 @@ struct TopicResponse {
 #[serde(rename_all = "camelCase")]
 struct TopicsEnvelope {
     topics: Vec<TopicResponse>,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RegisterTopicRequest {
+    topic: String,
+    type_name: String,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct RegisterTopicResponse {
+    ok: bool,
 }
 
 #[derive(Serialize)]
@@ -124,14 +141,76 @@ pub async fn status(State(state): State<Arc<ConsoleState>>) -> impl IntoResponse
 }
 
 pub async fn topics(State(state): State<Arc<ConsoleState>>) -> impl IntoResponse {
+    Json(TopicsEnvelope {
+        topics: merge_topics(&state),
+    })
+}
+
+pub async fn topic_info(
+    State(state): State<Arc<ConsoleState>>,
+    Path(name): Path<String>,
+) -> impl IntoResponse {
+    let name = normalize_topic_path(&name);
+    match merge_topics(&state).into_iter().find(|t| t.name == name) {
+        Some(t) => (StatusCode::OK, Json(t)).into_response(),
+        None => (StatusCode::NOT_FOUND, "topic not found").into_response(),
+    }
+}
+
+pub async fn register_topic(
+    State(state): State<Arc<ConsoleState>>,
+    Json(body): Json<RegisterTopicRequest>,
+) -> impl IntoResponse {
+    let topic = body.topic.trim();
+    let type_name = body.type_name.trim();
+    if topic.is_empty() || type_name.is_empty() {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(RegisterTopicResponse { ok: false }),
+        )
+            .into_response();
+    }
+    state.topic_types.register(topic, type_name);
+    state.events.emit(
+        "INFO",
+        "topic-registry",
+        format!("registered {topic} -> {type_name}"),
+    );
+    (StatusCode::OK, Json(RegisterTopicResponse { ok: true })).into_response()
+}
+
+fn merge_topics(state: &ConsoleState) -> Vec<TopicResponse> {
     let rates = state.rates();
-    let topics = rates
+    let type_map: HashMap<String, String> = state.topic_types.snapshot().into_iter().collect();
+
+    let mut by_name: HashMap<String, TopicRate> = rates
         .topics
         .into_iter()
-        .map(|t| {
+        .map(|t| (t.name.clone(), t))
+        .collect();
+
+    for topic in type_map.keys() {
+        by_name.entry(topic.clone()).or_insert_with(|| TopicRate {
+            name: topic.clone(),
+            total_msgs: 0,
+            total_bytes: 0,
+            last_seen_unix_ms: 0,
+            msg_per_sec: 0.0,
+            bytes_per_sec: 0.0,
+        });
+    }
+
+    let mut names: Vec<_> = by_name.keys().cloned().collect();
+    names.sort();
+
+    names
+        .into_iter()
+        .filter_map(|name| {
+            let t = by_name.remove(&name)?;
             let rate = t.msg_per_sec.round() as u64;
-            TopicResponse {
+            Some(TopicResponse {
                 name: t.name,
+                type_name: type_map.get(&name).cloned(),
                 msg_per_sec: rate,
                 bytes_per_sec: t.bytes_per_sec.round() as u64,
                 last_seen: t.last_seen_unix_ms,
@@ -139,10 +218,22 @@ pub async fn topics(State(state): State<Arc<ConsoleState>>) -> impl IntoResponse
                 sparkline: vec![rate; 20],
                 subscribers: 0,
                 publishers: 0,
-            }
+            })
         })
-        .collect();
-    Json(TopicsEnvelope { topics })
+        .collect()
+}
+
+/// Axum `{*name}` may omit a leading `/`; registered topics usually include it.
+fn normalize_topic_path(name: &str) -> String {
+    let name = name.trim();
+    if name.is_empty() {
+        return name.to_string();
+    }
+    if name.starts_with('/') {
+        name.to_string()
+    } else {
+        format!("/{name}")
+    }
 }
 
 pub async fn services(State(state): State<Arc<ConsoleState>>) -> impl IntoResponse {

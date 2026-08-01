@@ -166,14 +166,14 @@ check-ros2-shim:
 
 # Build / test tool-node features
 nodes-build:
-	cargo build --bin rbus_image_encoder --bin rbus_image_decoder --bin rbus_audio_capture --bin rbus_audio_play --bin rbus_camera_capture --bin rbus_xbox_joy
+	cargo build --bin rbus_image_encoder --bin rbus_image_decoder --bin rbus_audio_capture --bin rbus_audio_play --bin rbus_usb_camera --bin rbus_xbox_joy
 
 nodes-test:
 	cargo test --lib image_encoder::
 	cargo test --lib image_decoder::
 	cargo test --lib audio_capture::
 	cargo test --lib audio_play::
-	cargo test --lib camera_capture::
+	cargo test --lib usb_camera::
 	cargo test --lib xbox_joy::
 
 # Run image encoder (broker must already be up; needs system FFmpeg)
@@ -196,10 +196,10 @@ node-audio-play *args:
 	cargo run --bin rbus_audio_play -- --print-example-config > /tmp/rbus_audio_play.example.yaml
 	cargo run --bin rbus_audio_play -- --params /tmp/rbus_audio_play.example.yaml {{args}}
 
-# Run USB camera capture (broker must already be up; needs a camera)
-node-camera-capture *args:
-	cargo run --bin rbus_camera_capture -- --print-example-config > /tmp/rbus_camera_capture.example.yaml
-	cargo run --bin rbus_camera_capture -- --params /tmp/rbus_camera_capture.example.yaml {{args}}
+# Run USB camera (broker must already be up; needs a camera)
+node-usb-camera *args:
+	cargo run --bin rbus_usb_camera -- --print-example-config > /tmp/rbus_usb_camera.example.yaml
+	cargo run --bin rbus_usb_camera -- --params /tmp/rbus_usb_camera.example.yaml {{args}}
 
 # Run Xbox joy node (broker must already be up; needs a USB pad / receiver)
 node-xbox-joy *args:

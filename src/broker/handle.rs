@@ -545,6 +545,23 @@ impl RobotBusBroker {
                     None
                 }
             };
+            let console_url = {
+                #[cfg(feature = "console")]
+                {
+                    if config.console.enabled {
+                        Some(format!(
+                            "http://{advertise_host}:{}",
+                            config.console.listen.port()
+                        ))
+                    } else {
+                        None
+                    }
+                }
+                #[cfg(not(feature = "console"))]
+                {
+                    None
+                }
+            };
             let announcement = BrokerAnnouncement {
                 broker_id: broker_id.clone(),
                 domain_id: config.discovery.domain_id,
@@ -553,6 +570,7 @@ impl RobotBusBroker {
                 ipc_dir: bind_all.then(|| IPC_DIR.to_string()),
                 inproc_prefix: bind_all.then(|| "robot_bus".to_string()),
                 grpc_url,
+                console_url,
             };
             Some(
                 spawn_announcer(

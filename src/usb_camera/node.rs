@@ -68,7 +68,7 @@ pub fn run(node_name: &str, options: NodeOptions, params_path: Option<&str>) -> 
         .camera_format()
         .context("read camera format after open")?;
     log::info!(
-        "camera capture ready: {label} -> {} (requested {}x{}@{} → got {}x{}@{} {:?})",
+        "usb camera ready: {label} -> {} (requested {}x{}@{} → got {}x{}@{} {:?})",
         cfg.output_topic,
         cfg.width,
         cfg.height,

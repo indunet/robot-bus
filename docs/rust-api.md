@@ -131,6 +131,8 @@ ros__parameters:
 
 接近 ROS 2：`Node::new` → typed `create_publisher` / `create_subscription`（创建时绑定消息类型，自动 encode/decode）→ `node.spin()`。底层与 gRPC 仍传 opaque bytes。
 
+Typed `create_publisher::<M>` 会向 broker console（默认 `http://127.0.0.1:15771`，或 `NodeOptions.console_url` / 环境变量 `ROBOT_BUS_BROKER_URL` / discovery 的 `console_url`）**best-effort** 登记 `topic → M::full_name()`（如 `sensor_msgs.msg.v1.Imu`）。登记失败只打日志，不影响 publish。`create_publisher_raw` 不登记。可用 `rbus topic list` / `rbus topic info /path` 查看。
+
 ```rust
 use std::sync::Arc;
 use std::time::Duration;
@@ -376,6 +378,8 @@ fn main() -> anyhow::Result<()> {
 
 总线与 gRPC 网关仍传 opaque bytes（gRPC 侧通常拿不到业务 proto，保持二进制）。Node SDK 在 create 时绑定类型并自动 encode/decode，例如 `create_publisher::<Imu>` / `create_subscription::<Imu, _>`。消息类型挂在 crate 命名空间下：`robot_bus::sensor_msgs::msg::v1::Imu`。其它消息同理，例如：
 
+类型名约定为 protobuf 全名（`prost::Name::full_name()`，如 `sensor_msgs.msg.v1.Imu`），经 console 控制面登记，**不**写入每条消息帧。
+
 ```rust
 use robot_bus::geometry_msgs::msg::v1::{Twist, Vector3};
 
@@ -608,15 +612,15 @@ rbus_audio_capture --print-example-config > capture.yaml
 rbus_audio_play --print-example-config > play.yaml
 ```
 
-## 工具节点：Camera capture
+## 工具节点：USB camera
 
-主 crate feature **`camera-capture`（默认开启）**：模块 `robot_bus::camera_capture`，二进制 `rbus_camera_capture`。经 nokhwa 采集 USB / 摄像头，发布 `sensor_msgs/Image`（`rgb8`），默认话题 `/camera/image_raw`。
+主 crate feature **`usb-camera`（默认开启）**：模块 `robot_bus::usb_camera`，二进制 `rbus_usb_camera`。经 nokhwa 采集 USB / 摄像头，发布 `sensor_msgs/Image`（`rgb8`），默认话题 `/camera/image_raw`。
 
 ```bash
-cargo install robot-bus --bin rbus_camera_capture
-rbus_camera_capture --list-devices
-rbus_camera_capture --print-example-config > camera.yaml
-rbus_camera_capture --params camera.yaml
+cargo install robot-bus --bin rbus_usb_camera
+rbus_usb_camera --list-devices
+rbus_usb_camera --print-example-config > camera.yaml
+rbus_usb_camera --params camera.yaml
 ```
 
 不要默认多媒体依赖时：`cargo build --no-default-features --features grpc,console`。

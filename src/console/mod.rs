@@ -2,8 +2,10 @@
 
 mod api;
 mod state;
+mod topic_registry;
 
 pub use state::{BrokerEndpoints, ConsoleState};
+pub use topic_registry::TopicTypeRegistry;
 
 use std::future::Future;
 use std::net::SocketAddr;
@@ -14,11 +16,11 @@ use axum::Router;
 use axum::body::Body;
 use axum::http::{header, StatusCode, Uri};
 use axum::response::{IntoResponse, Response};
-use axum::routing::get;
+use axum::routing::{get, post};
 use rust_embed::Embed;
 use tokio::net::TcpListener;
 
-use api::{actions, events, services, status, topics};
+use api::{actions, events, register_topic, services, status, topic_info, topics};
 
 /// Compile-time embedded `assets/console/` (Next.js static export).
 #[derive(Embed)]
@@ -33,7 +35,9 @@ pub async fn serve_with_shutdown(
 ) -> Result<()> {
     let app = Router::new()
         .route("/api/v1/status", get(status))
+        .route("/api/v1/topics/register", post(register_topic))
         .route("/api/v1/topics", get(topics))
+        .route("/api/v1/topics/{*name}", get(topic_info))
         .route("/api/v1/services", get(services))
         .route("/api/v1/actions", get(actions))
         .route("/api/v1/events", get(events))

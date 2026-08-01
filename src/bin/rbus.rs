@@ -1,7 +1,8 @@
 //! `rbus` — ROS 2–style introspection CLI over the broker console HTTP API.
 //!
-//! Phase 1: `topic|service|action list` and `status`. Default console URL is
-//! `http://127.0.0.1:15771` (override with `--url` or `ROBOT_BUS_BROKER_URL`).
+//! Commands: `topic list|info`, `service list`, `action list`, `status`.
+//! Default console URL is `http://127.0.0.1:15771` (override with `--url` or
+//! `ROBOT_BUS_BROKER_URL`).
 
 use std::process::ExitCode;
 
@@ -51,8 +52,13 @@ enum Commands {
 
 #[derive(Subcommand, Debug)]
 enum TopicCmd {
-    /// List topics with recent forwarded traffic
+    /// List topics (registered types and/or recent traffic)
     List,
+    /// Show details for one topic (type + metrics)
+    Info {
+        /// Topic name (e.g. `/robot1/imu`)
+        name: String,
+    },
 }
 
 #[derive(Subcommand, Debug)]
@@ -70,7 +76,7 @@ enum ActionCmd {
 #[derive(Deserialize)]
 struct NamedList {
     #[serde(default)]
-    topics: Vec<Named>,
+    topics: Vec<TopicRow>,
     #[serde(default)]
     services: Vec<Named>,
     #[serde(default)]
@@ -80,6 +86,26 @@ struct NamedList {
 #[derive(Deserialize)]
 struct Named {
     name: String,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct TopicRow {
+    name: String,
+    #[serde(default)]
+    type_name: Option<String>,
+    #[serde(default)]
+    msg_per_sec: u64,
+    #[serde(default)]
+    bytes_per_sec: u64,
+    #[serde(default)]
+    last_seen: u64,
+    #[serde(default)]
+    total_msgs: u64,
+    #[serde(default)]
+    subscribers: u64,
+    #[serde(default)]
+    publishers: u64,
 }
 
 #[derive(Deserialize)]
@@ -129,8 +155,24 @@ fn run() -> Result<()> {
         } => {
             let body: NamedList = get_json(&base, "/api/v1/topics")?;
             for t in body.topics {
-                println!("{}", t.name);
+                let ty = t.type_name.as_deref().unwrap_or("-");
+                println!("{}\t{}", t.name, ty);
             }
+        }
+        Commands::Topic {
+            command: TopicCmd::Info { name },
+        } => {
+            let path = format!("/api/v1/topics/{}", encode_topic_path(&name));
+            let t: TopicRow = get_json(&base, &path)?;
+            println!("Topic: {}", t.name);
+            println!("Type: {}", t.type_name.as_deref().unwrap_or("-"));
+            println!("Publisher count: n/a");
+            println!("Subscription count: n/a");
+            println!("Msg/s: {}", t.msg_per_sec);
+            println!("Bytes/s: {}", t.bytes_per_sec);
+            println!("Total msgs: {}", t.total_msgs);
+            println!("Last seen: {}", t.last_seen);
+            let _ = (t.publishers, t.subscribers);
         }
         Commands::Service {
             command: ServiceCmd::List,
@@ -187,6 +229,19 @@ fn resolve_base_url(cli_url: Option<&str>) -> String {
 
 fn trim_trailing_slash(s: &str) -> String {
     s.trim_end_matches('/').to_string()
+}
+
+/// Percent-encode a topic path so `/` survives as a single Axum `{*name}` segment.
+fn encode_topic_path(topic: &str) -> String {
+    topic
+        .bytes()
+        .map(|b| match b {
+            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' => {
+                (b as char).to_string()
+            }
+            _ => format!("%{b:02X}"),
+        })
+        .collect()
 }
 
 fn get_json<T: for<'de> Deserialize<'de>>(base: &str, path: &str) -> Result<T> {

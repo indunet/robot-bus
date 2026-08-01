@@ -45,8 +45,8 @@ pub mod audio_capture;
 #[cfg(feature = "audio-play")]
 pub mod audio_play;
 
-#[cfg(feature = "camera-capture")]
-pub mod camera_capture;
+#[cfg(feature = "usb-camera")]
+pub mod usb_camera;
 
 #[cfg(feature = "xbox-joy")]
 pub mod xbox_joy;

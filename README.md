@@ -80,12 +80,13 @@ Query the broker console HTTP API (default `http://127.0.0.1:15771`; override wi
 
 ```bash
 cargo run --bin rbus -- topic list
+cargo run --bin rbus -- topic info /robot1/imu
 cargo run --bin rbus -- service list
 cargo run --bin rbus -- action list
 cargo run --bin rbus -- status
 ```
 
-Topic list shows names with recent forwarded traffic (a live subscriber is required for metrics). Services / actions appear after a worker READY.
+`topic list` prints `name` and registered protobuf type (or `-`). Types appear after a typed `create_publisher::<M>` registers with the console (before any traffic). Topics with only raw traffic and no registration still list with type `-`. Services / actions appear after a worker READY.
 
 ### Broker discovery (UDP multicast)
 
@@ -384,7 +385,7 @@ cargo install robot-bus --bin rbus_image_encoder
 cargo install robot-bus --bin rbus_image_decoder
 cargo install robot-bus --bin rbus_audio_capture
 cargo install robot-bus --bin rbus_audio_play
-cargo install robot-bus --bin rbus_camera_capture
+cargo install robot-bus --bin rbus_usb_camera
 cargo install robot-bus --bin rbus_xbox_joy
 ```
 
@@ -443,15 +444,15 @@ rbus_audio_play --print-example-config > play.yaml
 rbus_audio_play --params play.yaml
 ```
 
-### Camera capture (`rbus_camera_capture`)
+### USB camera (`rbus_usb_camera`)
 
-Captures USB / webcam frames via [nokhwa](https://github.com/l1npengtul/nokhwa) (V4L2 / AVFoundation / Media Foundation) and publishes `sensor_msgs/Image` (`rgb8`). Defaults: 640×480 @ 30 fps on `/camera/image_raw` — ready for `rbus_image_encoder`. Feature `camera-capture` (default on). On macOS, grant camera permission when prompted.
+Captures USB / webcam frames via [nokhwa](https://github.com/l1npengtul/nokhwa) (V4L2 / AVFoundation / Media Foundation) and publishes `sensor_msgs/Image` (`rgb8`). Defaults: 640×480 @ 30 fps on `/camera/image_raw` — ready for `rbus_image_encoder`. Feature `usb-camera` (default on). On macOS, grant camera permission when prompted.
 
 ```bash
-cargo install robot-bus --bin rbus_camera_capture
-rbus_camera_capture --list-devices
-rbus_camera_capture --print-example-config > camera.yaml
-rbus_camera_capture --params camera.yaml
+cargo install robot-bus --bin rbus_usb_camera
+rbus_usb_camera --list-devices
+rbus_usb_camera --print-example-config > camera.yaml
+rbus_usb_camera --params camera.yaml
 ```
 
 ### Xbox joy (`rbus_xbox_joy`)
@@ -583,6 +584,7 @@ Generated stubs are **not checked into git**; run `just gen-*` after changing pr
 | C++ | `#include <robot_bus/…>` | `just gen-cpp`; packed into DEB/MSI |
 
 - Transport body remains opaque bytes (including the gRPC gateway); the Rust Node SDK binds types at create time and auto encode/decode (`create_publisher::<M>`, etc.), or use `*_raw`; Python / TypeScript / **Java** pass a protobuf type for typed APIs (thin wrappers), or omit the type for raw bytes
+- Typed `create_publisher::<M>` also **best-effort registers** `topic → M::full_name()` (e.g. `sensor_msgs.msg.v1.Imu`) with the broker console HTTP API so `rbus topic list` / `topic info` can show types without putting type metadata on the wire
 - **srv** is a pair of `*Request` / `*Response` messages, not gRPC
 - **grpc** (`robot_bus`) is the gateway RPC contract, started with the broker (default feature `grpc`)
 - Messages live under the `robot_bus` namespace and do **not** claim top-level ROS package names like `sensor_msgs`; encoding is protobuf and is not interoperable with ROS CDR

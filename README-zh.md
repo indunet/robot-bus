@@ -80,12 +80,13 @@ cargo run --bin robot_bus_broker
 
 ```bash
 cargo run --bin rbus -- topic list
+cargo run --bin rbus -- topic info /robot1/imu
 cargo run --bin rbus -- service list
 cargo run --bin rbus -- action list
 cargo run --bin rbus -- status
 ```
 
-topic list 只显示近期有转发流量的名字（metrics 需要真实订阅者）。service / action 在 worker READY 后出现。
+`topic list` 打印话题名与已登记的 protobuf 类型（未登记则为 `-`）。typed `create_publisher::<M>` 会向 console 登记类型（无需先有流量）；仅有 raw 流量、未登记类型的话题仍会列出，类型为 `-`。service / action 在 worker READY 后出现。
 
 ### Broker 发现（UDP 组播）
 
@@ -386,7 +387,7 @@ cargo install robot-bus --bin rbus_image_encoder
 cargo install robot-bus --bin rbus_image_decoder
 cargo install robot-bus --bin rbus_audio_capture
 cargo install robot-bus --bin rbus_audio_play
-cargo install robot-bus --bin rbus_camera_capture
+cargo install robot-bus --bin rbus_usb_camera
 cargo install robot-bus --bin rbus_xbox_joy
 ```
 
@@ -444,15 +445,15 @@ rbus_audio_play --print-example-config > play.yaml
 rbus_audio_play --params play.yaml
 ```
 
-### 相机采集（`rbus_camera_capture`）
+### USB 相机（`rbus_usb_camera`）
 
-经 [nokhwa](https://github.com/l1npengtul/nokhwa)（V4L2 / AVFoundation / Media Foundation）采集 USB / 摄像头画面，发布 `sensor_msgs/Image`（`rgb8`）。默认：640×480 @ 30 fps，话题 `/camera/image_raw`，可直接接 `rbus_image_encoder`。feature `camera-capture`（默认开）。macOS 需在弹窗中授权摄像头。
+经 [nokhwa](https://github.com/l1npengtul/nokhwa)（V4L2 / AVFoundation / Media Foundation）采集 USB / 摄像头画面，发布 `sensor_msgs/Image`（`rgb8`）。默认：640×480 @ 30 fps，话题 `/camera/image_raw`，可直接接 `rbus_image_encoder`。feature `usb-camera`（默认开）。macOS 需在弹窗中授权摄像头。
 
 ```bash
-cargo install robot-bus --bin rbus_camera_capture
-rbus_camera_capture --list-devices
-rbus_camera_capture --print-example-config > camera.yaml
-rbus_camera_capture --params camera.yaml
+cargo install robot-bus --bin rbus_usb_camera
+rbus_usb_camera --list-devices
+rbus_usb_camera --print-example-config > camera.yaml
+rbus_usb_camera --params camera.yaml
 ```
 
 ### Xbox Joy（`rbus_xbox_joy`）
@@ -559,6 +560,7 @@ just perf-ros2      # ROS 2 对标，见 benches/ros2_perf/
 | C++ | `#include <robot_bus/…>` | `just gen-cpp`；随 DEB/MSI 打包 |
 
 - 传输层 body 仍是 opaque bytes（含 gRPC 网关）；Rust Node SDK 在 create 时绑定类型并自动 encode/decode（`create_publisher::<M>` 等），也可用 `*_raw`；Python / TypeScript / **Java** 传入 protobuf 类型即可 typed（薄封装），省略类型则为 raw bytes
+- typed `create_publisher::<M>` 还会向 broker console **best-effort 登记** `topic → M::full_name()`（如 `sensor_msgs.msg.v1.Imu`），供 `rbus topic list` / `topic info` 展示；类型不在每条消息线上传输
 - **srv** 是一对 `*Request` / `*Response` message，不是 gRPC
 - **grpc**（`robot_bus`）是网关 RPC 契约，随 broker 启动（默认 feature `grpc`）
 - 消息在 `robot_bus` 命名空间下，**不占用** ROS 顶层 `sensor_msgs` 包名；编码是 protobuf，与 ROS CDR 不互通

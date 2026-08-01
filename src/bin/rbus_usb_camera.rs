@@ -1,18 +1,18 @@
-//! CLI: USB camera → sensor_msgs/Image rgb8 (feature `camera-capture`).
+//! CLI: USB camera → sensor_msgs/Image rgb8 (feature `usb-camera`).
 
 use anyhow::{Context, Result};
 use clap::Parser;
-use robot_bus::camera_capture::{list_cameras, run, EXAMPLE_CONFIG};
+use robot_bus::usb_camera::{list_cameras, run, EXAMPLE_CONFIG};
 use robot_bus::NodeOptions;
 
 #[derive(Debug, Parser)]
 #[command(
-    name = "rbus_camera_capture",
+    name = "rbus_usb_camera",
     about = "Capture USB / webcam frames and publish sensor_msgs/Image (rgb8)"
 )]
 struct Args {
     /// Node name on the bus.
-    #[arg(long, default_value = "camera_capture")]
+    #[arg(long, default_value = "usb_camera")]
     name: String,
 
     /// YAML parameter file (ros__parameters or flat map).
@@ -57,8 +57,7 @@ fn main() -> Result<()> {
         "ipc" => NodeOptions::ipc_at(&args.ipc_dir),
         other => anyhow::bail!("unsupported transport {other:?}; use tcp or ipc"),
     };
-
     run(&args.name, options, args.params.as_deref())
-        .with_context(|| format!("run camera capture node {}", args.name))?;
+        .with_context(|| format!("run usb camera node {}", args.name))?;
     Ok(())
 }

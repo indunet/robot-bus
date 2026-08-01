@@ -1,4 +1,4 @@
-//! Node parameters for the USB camera capture tool node.
+//! Node parameters for the USB camera tool node.
 
 use anyhow::{bail, Context, Result};
 use crate::{Node, ParameterValue};

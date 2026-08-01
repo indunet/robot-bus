@@ -17,6 +17,7 @@ pub struct BrokerAnnouncement {
     pub ipc_dir: Option<String>,
     pub inproc_prefix: Option<String>,
     pub grpc_url: Option<String>,
+    pub console_url: Option<String>,
 }
 
 impl From<&BrokerAnnouncement> for BrokerAnnounce {
@@ -31,6 +32,7 @@ impl From<&BrokerAnnouncement> for BrokerAnnounce {
             ipc_dir: a.ipc_dir.clone(),
             inproc_prefix: a.inproc_prefix.clone(),
             grpc_url: a.grpc_url.clone(),
+            console_url: a.console_url.clone(),
         }
     }
 }
@@ -105,6 +107,7 @@ fn validate_message(msg: BrokerAnnounce) -> Result<BrokerAnnouncement> {
         ipc_dir: nonempty(msg.ipc_dir),
         inproc_prefix: nonempty(msg.inproc_prefix),
         grpc_url: nonempty(msg.grpc_url),
+        console_url: nonempty(msg.console_url),
     })
 }
 
@@ -133,6 +136,7 @@ mod tests {
             ipc_dir: Some("/tmp/robot_bus".into()),
             inproc_prefix: Some("robot_bus".into()),
             grpc_url: Some("http://127.0.0.1:15770".into()),
+            console_url: Some("http://127.0.0.1:15771".into()),
         }
     }
 

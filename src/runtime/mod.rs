@@ -16,6 +16,7 @@ mod parameters;
 mod queues;
 mod registrations;
 mod timers;
+mod topic_type_register;
 mod worker_pool;
 
 pub use callback_group::{CallbackGroup, CallbackGroupType};

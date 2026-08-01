@@ -1,6 +1,6 @@
 //! Capture USB / webcam frames and publish `sensor_msgs/Image` (`rgb8`).
 //!
-//! Enabled with Cargo feature `camera-capture` (on by default).
+//! Enabled with Cargo feature `usb-camera` (on by default).
 
 pub mod config;
 pub mod device;

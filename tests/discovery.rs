@@ -105,6 +105,7 @@ fn apply_ipc_fails_when_tcp_only_announce() {
         ipc_dir: None,
         inproc_prefix: None,
         grpc_url: None,
+        console_url: None,
     };
     let bytes = discovery::encode_announce(&ann).unwrap();
     assert!(!bytes.is_empty());

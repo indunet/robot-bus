@@ -1,5 +1,5 @@
-# Example parameters for rbus_camera_capture.
-# rbus_camera_capture --print-example-config > camera.yaml
+# Example parameters for rbus_usb_camera.
+# rbus_usb_camera --print-example-config > camera.yaml
 
 ros__parameters:
   output_topic: /camera/image_raw

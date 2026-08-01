@@ -73,6 +73,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     prost_build::Config::new()
         .out_dir(&tmp)
+        .enable_type_names()
         .extern_path(".google.protobuf.Timestamp", "::prost_types::Timestamp")
         .extern_path(".google.protobuf.Duration", "::prost_types::Duration")
         .compile_protos(&msg_protos, &[proto_root.clone()])?;
@@ -282,6 +283,21 @@ fn parse_item_name(header: &str) -> Option<String> {
                 .next()
                 .unwrap_or("")
                 .trim();
+            if !name.is_empty() {
+                return Some(name.to_string());
+            }
+        }
+    }
+    // `impl ::prost::Name for Imu {` / `impl prost::Name for Foo.Bar {`
+    if header.starts_with("impl ") {
+        if let Some(rest) = header.split(" for ").nth(1) {
+            let name = rest
+                .split(|c: char| c.is_whitespace() || c == '{' || c == '<')
+                .next()
+                .unwrap_or("")
+                .trim();
+            // Nested: `Parent.Child` → use last segment for stem map lookup.
+            let name = name.rsplit('.').next().unwrap_or(name);
             if !name.is_empty() {
                 return Some(name.to_string());
             }

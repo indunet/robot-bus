@@ -21,11 +21,12 @@ use std::marker::PhantomData;
 use std::sync::{Arc, MutexGuard};
 use std::time::Duration;
 
-use prost::Message;
+use prost::{Message, Name};
 
 use crate::action_bus::{ActionClient as BusActionClient, ActionKind, ActionMessage};
 use crate::errors::{BusError, Result};
 use crate::message_bus::Publisher as BusPublisher;
+use crate::runtime::topic_type_register;
 use crate::runtime::callback_group::{CallbackGroup, CallbackGroupType};
 use crate::runtime::context::Context;
 use crate::runtime::executor::{Executor, ShutdownHandle};
@@ -62,6 +63,9 @@ pub struct NodeOptions {
     pub transport: String,
     /// gRPC gateway base URL when `transport == "grpc"` (e.g. `http://127.0.0.1:15770`).
     pub grpc_url: Option<String>,
+    /// Embedded console HTTP base URL for topic type registration / introspection
+    /// (e.g. `http://127.0.0.1:15771`). Filled by discovery when the broker announces it.
+    pub console_url: Option<String>,
     pub message_xsub: Option<String>,
     pub message_xpub: Option<String>,
     pub service_frontend: Option<String>,
@@ -82,6 +86,7 @@ impl NodeOptions {
             host: host.into(),
             transport: transport.into(),
             grpc_url: None,
+            console_url: None,
             message_xsub: None,
             message_xpub: None,
             service_frontend: None,
@@ -113,6 +118,7 @@ impl NodeOptions {
             host: "localhost".into(),
             transport: "ipc".into(),
             grpc_url: None,
+            console_url: None,
             message_xsub: Some(ipc_endpoint_in(dir, XSUB_CHANNEL)),
             message_xpub: Some(ipc_endpoint_in(dir, XPUB_CHANNEL)),
             service_frontend: Some(ipc_endpoint_in(dir, SERVICE_FRONTEND_CHANNEL)),
@@ -136,6 +142,7 @@ impl NodeOptions {
             host: "localhost".into(),
             transport: "inproc".into(),
             grpc_url: None,
+            console_url: None,
             message_xsub: Some(inproc_endpoint_with_prefix(prefix, XSUB_CHANNEL)),
             message_xpub: Some(inproc_endpoint_with_prefix(prefix, XPUB_CHANNEL)),
             service_frontend: Some(inproc_endpoint_with_prefix(prefix, SERVICE_FRONTEND_CHANNEL)),
@@ -159,6 +166,7 @@ impl NodeOptions {
             host: "127.0.0.1".into(),
             transport: "grpc".into(),
             grpc_url: Some(url),
+            console_url: None,
             message_xsub: None,
             message_xpub: None,
             service_frontend: None,
@@ -835,14 +843,22 @@ impl Node {
     /// Create a typed topic publisher (ROS 2 `create_publisher`).
     ///
     /// Multiple publishers on the same node share one bus PUB socket.
-    pub fn create_publisher<M: Message + Default>(
+    /// Best-effort registers `topic → M::full_name()` with the broker console.
+    pub fn create_publisher<M: Message + Name + Default>(
         &mut self,
         topic: impl Into<String>,
     ) -> Result<TopicPublisher<M>> {
-        Ok(TopicPublisher {
-            inner: self.create_publisher_raw(topic)?,
+        let topic = topic.into();
+        let pub_ = TopicPublisher {
+            inner: self.create_publisher_raw(topic.clone())?,
             _marker: PhantomData,
-        })
+        };
+        topic_type_register::register_topic_type(
+            self.options.console_url.as_deref(),
+            &topic,
+            &M::full_name(),
+        );
+        Ok(pub_)
     }
 
     /// Create a raw-bytes topic publisher.
@@ -879,15 +895,22 @@ impl Node {
     }
 
     /// Like [`create_publisher`](Self::create_publisher), setting HWM on first socket connect.
-    pub fn create_publisher_with_hwm<M: Message + Default>(
+    pub fn create_publisher_with_hwm<M: Message + Name + Default>(
         &mut self,
         topic: impl Into<String>,
         hwm: HighWaterMark,
     ) -> Result<TopicPublisher<M>> {
-        Ok(TopicPublisher {
-            inner: self.create_publisher_raw_with_hwm(topic, Some(hwm))?,
+        let topic = topic.into();
+        let pub_ = TopicPublisher {
+            inner: self.create_publisher_raw_with_hwm(topic.clone(), Some(hwm))?,
             _marker: PhantomData,
-        })
+        };
+        topic_type_register::register_topic_type(
+            self.options.console_url.as_deref(),
+            &topic,
+            &M::full_name(),
+        );
+        Ok(pub_)
     }
 
     fn ensure_bus_publisher(&mut self, hwm: Option<HighWaterMark>) -> Result<()> {
