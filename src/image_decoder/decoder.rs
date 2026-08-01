@@ -1,12 +1,11 @@
 //! FFmpeg video decoder: Annex-B access units → Image.
 
 use anyhow::{Context, Result};
-use ffmpeg_next::codec;
 use ffmpeg_next::decoder;
 use ffmpeg_next::frame::Video as VideoFrame;
 use ffmpeg_next::packet::Packet;
 
-use super::codec::resolve_decoder_name;
+use super::codec::{open_decoder, resolve_decoder_name};
 use super::config::{CodecKind, DecoderConfig, OutputEncoding};
 use super::convert::frame_to_image;
 use crate::builtin_interfaces::msg::v1::Time;
@@ -90,17 +89,7 @@ impl FrameDecoder {
             while old.receive_frame(&mut discarded).is_ok() {}
         }
 
-        let decoder_name = resolve_decoder_name(codec, &self.forced_decoder)?;
-        let codec_obj = decoder::find_by_name(&decoder_name)
-            .with_context(|| format!("find decoder {decoder_name}"))?;
-
-        let ctx = codec::context::Context::new_with_codec(codec_obj);
-        let opened = ctx
-            .decoder()
-            .open_as(codec_obj)
-            .with_context(|| format!("open decoder {decoder_name}"))?
-            .video()
-            .with_context(|| format!("decoder {decoder_name} is not a video decoder"))?;
+        let (decoder_name, opened) = open_decoder(codec, &self.forced_decoder)?;
 
         log::info!("opened decoder {decoder_name} for {}", codec.as_format());
         self.decoder_name = Some(decoder_name);
@@ -192,11 +181,12 @@ mod tests {
             enc
         };
 
+        // Force software decode so CI (FFmpeg lists h264_cuvid but cannot open it) is stable.
         let dec_cfg = DecoderConfig {
             input_topic: "/out".into(),
             output_topic: "/decoded".into(),
             codec: CodecKind::H264,
-            decoder: String::new(),
+            decoder: "h264".into(),
             output_encoding: OutputEncoding::Rgb8,
         };
         let Ok(mut dec) = FrameDecoder::new(&dec_cfg) else {

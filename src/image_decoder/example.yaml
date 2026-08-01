@@ -7,7 +7,9 @@ ros__parameters:
   output_topic: /camera/image_decoded
   # Default codec when CompressedVideo.format is empty; message format wins when set.
   codec: h264
-  # Leave empty to auto-pick (cuvid → videotoolbox → soft h264/hevc).
+  # Leave empty to auto-pick the first decoder that actually opens
+  # (cuvid → videotoolbox → soft h264/hevc). Listed-but-unusable HW
+  # decoders (e.g. cuvid without NVIDIA) are skipped.
   decoder: ""
   # Output Image encoding: rgb8 or bgr8.
   output_encoding: rgb8

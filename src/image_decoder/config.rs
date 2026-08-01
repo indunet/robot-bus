@@ -11,7 +11,7 @@ pub struct DecoderConfig {
     pub output_topic: String,
     /// Fallback when `CompressedVideo.format` is empty.
     pub codec: CodecKind,
-    /// Empty → auto-select by [`super::codec::resolve_decoder_name`].
+    /// Empty → auto-select first decoder that opens ([`super::codec::open_decoder`]).
     pub decoder: String,
     pub output_encoding: OutputEncoding,
 }
