@@ -177,6 +177,8 @@ jobs:
             "ros-${{ matrix.distro }}-std-msgs" \
             "ros-${{ matrix.distro }}-sensor-msgs" \
             "ros-${{ matrix.distro }}-std-srvs" \
+            "ros-${{ matrix.distro }}-example-interfaces" \
+            "ros-${{ matrix.distro }}-test-msgs" \
             "ros-${{ matrix.distro }}-rmw-fastrtps-cpp"
 
       - name: Install pinned protoc + C++ runtime
