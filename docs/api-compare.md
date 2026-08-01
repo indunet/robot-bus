@@ -175,9 +175,9 @@ fn main() -> robot_bus::Result<()> {
 
 ## 4. Action
 
-Humble 时期 rclrs 的 action 支持不完整；下面左侧用较新 rclrs 风格示意概念，右侧为 robot-bus 现写法。
+rclrs 0.7 provides `create_action_server` / `create_action_client`. robot-bus has a matching typed API; the optional ROS 2 bridge can also forward Fibonacci goals between the two graphs.
 
-**rclrs（概念）**
+**rclrs**
 
 ```rust
 // node.create_action_server / create_action_client
@@ -272,7 +272,7 @@ node.spin()?;
 | 订阅 | `create_subscription(topic, qos, cb)` | `create_subscription(topic, cb, group)` |
 | 服务端 | `create_service::<S, _>(name, cb)` | `create_service::<S, _>(name, cb, group)` |
 | 客户端 | `create_client::<S>(name)` + `call` | `create_client::<S>(name)` + `call(..., timeout)` |
-| Action 服务端 | `create_action_server`（Humble 弱） | `create_action_server::<A, _>(..., group)` |
+| Action 服务端 | `create_action_server` | `create_action_server::<A, _>(..., group)` |
 | Action 客户端 | `create_action_client` | `create_action_client` + `send_goal` |
 | 转起来 | `rclrs::spin(node)` | `node.spin()` |
 | 原始字节 | 动态消息 / 有限支持 | `create_*_raw` |

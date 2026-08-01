@@ -1,22 +1,30 @@
 //! Chained builder for [`Ros2Bridge`].
 
 use std::any::Any;
+use std::future::Future;
 use std::path::Path;
+use std::pin::Pin;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{self, Receiver, SyncSender};
 use std::sync::{Arc, Mutex};
+use std::task::{Context, Poll, RawWaker, RawWakerVTable, Waker};
 use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant};
 
 use prost::Message as ProstMessage;
+use rclrs::vendor::example_interfaces::action as ros_act;
 use rclrs::{
-    Context, CreateBasicExecutor, DynamicPublisher, DynamicSubscription, MessageTypeName,
-    SpinOptions,
+    BeginAcceptedGoal, Context as RosContext, CreateBasicExecutor, DynamicPublisher,
+    DynamicSubscription, GoalClient, MessageTypeName, SpinOptions,
 };
 
+use crate::action::v1::{
+    Fibonacci as BusFibonacci, FibonacciGoal as BusFibonacciGoal,
+    FibonacciResult as BusFibonacciResult,
+};
 use crate::discovery::DiscoverOpts;
 use crate::errors::{BusError, Result};
-use crate::runtime::{Node, NodeOptions, ServiceHandler, TopicPublisherRaw};
+use crate::runtime::{ActionGoalHandler, Node, NodeOptions, ServiceHandler, TopicPublisherRaw};
 use crate::sensor_msgs::msg::v1::Imu as BusImu;
 use crate::std_msgs::msg::v1::String as BusString;
 use crate::std_srvs::srv::v1::{
@@ -33,7 +41,10 @@ use super::yaml;
 /// Default timeout for bridged service calls (ROS↔bus).
 pub const SERVICE_CALL_TIMEOUT: Duration = Duration::from_secs(5);
 
-/// Topic / service bridge direction.
+/// Default timeout for bridged action goals (ROS↔bus).
+pub const ACTION_CALL_TIMEOUT: Duration = Duration::from_secs(30);
+
+/// Topic / service / action bridge direction.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Direction {
     RosToBus,
@@ -93,6 +104,29 @@ impl SrvKind {
     }
 }
 
+/// Whitelisted ROS action kinds.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ActKind {
+    Fibonacci,
+}
+
+impl ActKind {
+    pub fn type_name(self) -> &'static str {
+        match self {
+            Self::Fibonacci => "example_interfaces/action/Fibonacci",
+        }
+    }
+
+    pub fn parse(s: &str) -> Result<Self> {
+        match s {
+            "example_interfaces/action/Fibonacci" => Ok(Self::Fibonacci),
+            other => Err(BusError::Protocol(format!(
+                "unsupported ros2 bridge action type {other:?}; supported: example_interfaces/action/Fibonacci"
+            ))),
+        }
+    }
+}
+
 #[cfg(test)]
 mod srv_kind_tests {
     use super::*;
@@ -107,6 +141,33 @@ mod srv_kind_tests {
     #[test]
     fn reject_both_for_services() {
         let res = Ros2Bridge::new("t").add_service("/a", "/a", SrvKind::Trigger, Direction::Both);
+        assert!(res.is_err());
+        let msg = res.err().unwrap().to_string();
+        assert!(msg.contains("both"));
+    }
+}
+
+#[cfg(test)]
+mod act_kind_tests {
+    use super::*;
+
+    #[test]
+    fn parse_fibonacci() {
+        assert_eq!(
+            ActKind::parse("example_interfaces/action/Fibonacci").unwrap(),
+            ActKind::Fibonacci
+        );
+        assert!(ActKind::parse("example_interfaces/action/Other").is_err());
+    }
+
+    #[test]
+    fn reject_both_for_actions() {
+        let res = Ros2Bridge::new("t").add_action(
+            "/fib",
+            "/fib",
+            ActKind::Fibonacci,
+            Direction::Both,
+        );
         assert!(res.is_err());
         let msg = res.err().unwrap().to_string();
         assert!(msg.contains("both"));
@@ -129,12 +190,21 @@ pub(crate) struct ServiceRouteSpec {
     direction: Direction,
 }
 
+#[derive(Debug, Clone)]
+pub(crate) struct ActionRouteSpec {
+    ros_action: String,
+    bus_action: String,
+    kind: ActKind,
+    direction: Direction,
+}
+
 /// Fluent builder: `Ros2Bridge::new(...).bus_tcp(...).route(...).string().add().build()?`.
 pub struct Ros2BridgeBuilder {
     name: String,
     bus_options: NodeOptions,
     routes: Vec<RouteSpec>,
     services: Vec<ServiceRouteSpec>,
+    actions: Vec<ActionRouteSpec>,
 }
 
 /// In-process dual-stack bridge (ROS 2 + robot-bus).
@@ -146,7 +216,7 @@ pub struct Ros2Bridge {
     _echo: Arc<Mutex<EchoFilter>>,
     _ros_subs: Vec<DynamicSubscription>,
     _ros_pubs: Vec<DynamicPublisher>,
-    /// Keeps typed ROS services / clients alive for the bridge lifetime.
+    /// Keeps typed ROS services / clients / action entities alive for the bridge lifetime.
     _ros_entities: Vec<Box<dyn Any + Send + Sync>>,
     ros_halt: Arc<AtomicBool>,
     _ros_spin: Option<JoinHandle<()>>,
@@ -179,6 +249,15 @@ pub struct ServiceRouteBuilder {
     direction: Direction,
 }
 
+/// Intermediate action route configuration before [`ActionRouteBuilder::add`].
+pub struct ActionRouteBuilder {
+    parent: Ros2BridgeBuilder,
+    ros_action: String,
+    bus_action: String,
+    kind: Option<ActKind>,
+    direction: Direction,
+}
+
 impl Ros2Bridge {
     pub fn new(name: impl Into<String>) -> Ros2BridgeBuilder {
         Ros2BridgeBuilder {
@@ -186,6 +265,7 @@ impl Ros2Bridge {
             bus_options: NodeOptions::tcp(),
             routes: Vec::new(),
             services: Vec::new(),
+            actions: Vec::new(),
         }
     }
 
@@ -200,7 +280,7 @@ impl Ros2Bridge {
     }
 
     pub fn spin_once(&mut self, timeout: Duration) -> Result<()> {
-        // ROS executor runs on a background thread so Bus→ROS service handlers
+        // ROS executor runs on a background thread so Bus→ROS service/action handlers
         // can wait on client Promises without nested-spin deadlocks.
         while let Ok((topic, payload)) = self.ros_to_bus_rx.try_recv() {
             if let Some(pub_) = self.bus_pubs.get(&topic) {
@@ -282,6 +362,20 @@ impl Ros2BridgeBuilder {
         }
     }
 
+    pub fn action(
+        self,
+        ros_action: impl Into<String>,
+        bus_action: impl Into<String>,
+    ) -> ActionRouteBuilder {
+        ActionRouteBuilder {
+            parent: self,
+            ros_action: ros_action.into(),
+            bus_action: bus_action.into(),
+            kind: None,
+            direction: Direction::RosToBus,
+        }
+    }
+
     pub(crate) fn push_route(
         mut self,
         ros_topic: String,
@@ -320,6 +414,28 @@ impl Ros2BridgeBuilder {
         Ok(self)
     }
 
+    pub(crate) fn push_action(
+        mut self,
+        ros_action: String,
+        bus_action: String,
+        kind: ActKind,
+        direction: Direction,
+    ) -> Result<Self> {
+        if matches!(direction, Direction::Both) {
+            return Err(BusError::Protocol(
+                "ros2 bridge actions do not support direction=both; use ros_to_bus or bus_to_ros"
+                    .into(),
+            ));
+        }
+        self.actions.push(ActionRouteSpec {
+            ros_action,
+            bus_action,
+            kind,
+            direction,
+        });
+        Ok(self)
+    }
+
     /// Add a typed topic route (for FFI / non-fluent callers).
     pub fn add_route(
         self,
@@ -347,14 +463,30 @@ impl Ros2BridgeBuilder {
         )
     }
 
+    /// Add a typed action route (for FFI / non-fluent callers).
+    pub fn add_action(
+        self,
+        ros_action: impl Into<String>,
+        bus_action: impl Into<String>,
+        kind: ActKind,
+        direction: Direction,
+    ) -> Result<Self> {
+        self.push_action(
+            ros_action.into(),
+            bus_action.into(),
+            kind,
+            direction,
+        )
+    }
+
     pub fn build(self) -> Result<Ros2Bridge> {
-        if self.routes.is_empty() && self.services.is_empty() {
+        if self.routes.is_empty() && self.services.is_empty() && self.actions.is_empty() {
             return Err(BusError::Protocol(
-                "Ros2Bridge requires at least one topic route or service".into(),
+                "Ros2Bridge requires at least one topic route, service, or action".into(),
             ));
         }
 
-        let context = Context::default_from_env().map_err(|e| {
+        let context = RosContext::default_from_env().map_err(|e| {
             BusError::Protocol(format!(
                 "rclrs Context::default_from_env failed ({e}); source ROS 2 first"
             ))
@@ -388,6 +520,10 @@ impl Ros2BridgeBuilder {
 
         for svc in &self.services {
             wire_service_route(&ros_node, &mut bus_node, svc, &mut ros_entities)?;
+        }
+
+        for act in &self.actions {
+            wire_action_route(&ros_node, &mut bus_node, act, &mut ros_entities)?;
         }
 
         let ros_halt = Arc::new(AtomicBool::new(false));
@@ -476,6 +612,33 @@ impl ServiceRouteBuilder {
         })?;
         self.parent
             .push_service(self.ros_service, self.bus_service, kind, self.direction)
+    }
+}
+
+impl ActionRouteBuilder {
+    pub fn fibonacci(mut self) -> Self {
+        self.kind = Some(ActKind::Fibonacci);
+        self
+    }
+
+    pub fn act_kind(mut self, kind: ActKind) -> Self {
+        self.kind = Some(kind);
+        self
+    }
+
+    pub fn direction(mut self, direction: Direction) -> Self {
+        self.direction = direction;
+        self
+    }
+
+    pub fn add(self) -> Result<Ros2BridgeBuilder> {
+        let kind = self.kind.ok_or_else(|| {
+            BusError::Protocol(
+                "ros2 bridge action: call .fibonacci() before .add()".into(),
+            )
+        })?;
+        self.parent
+            .push_action(self.ros_action, self.bus_action, kind, self.direction)
     }
 }
 
@@ -783,5 +946,201 @@ fn call_ros_set_bool(
     match rx.recv_timeout(timeout) {
         Ok(resp) => Ok(convert::set_bool_ros_resp_to_bus(&resp)),
         Err(_) => Err("timed out waiting for ROS SetBool response".into()),
+    }
+}
+
+fn wire_action_route(
+    ros_node: &rclrs::Node,
+    bus_node: &mut Node,
+    route: &ActionRouteSpec,
+    ros_entities: &mut Vec<Box<dyn Any + Send + Sync>>,
+) -> Result<()> {
+    match (route.kind, route.direction) {
+        (ActKind::Fibonacci, Direction::RosToBus) => {
+            let bus_client = Arc::new(Mutex::new(
+                bus_node.create_action_client::<BusFibonacci>(route.bus_action.as_str())?,
+            ));
+            let timeout = ACTION_CALL_TIMEOUT;
+            let srv = ros_node
+                .create_action_server::<ros_act::Fibonacci, _>(
+                    route.ros_action.as_str(),
+                    move |requested| {
+                        let bus_client = Arc::clone(&bus_client);
+                        async move {
+                            let goal = (**requested.goal()).clone();
+                            let accepted = requested.accept();
+                            let executing = match accepted.begin() {
+                                BeginAcceptedGoal::Execute(e) => e,
+                                BeginAcceptedGoal::Cancel(c) => {
+                                    return c.cancelled_with(ros_act::Fibonacci_Result {
+                                        sequence: Vec::new(),
+                                    });
+                                }
+                            };
+                            let bus_goal = convert::fibonacci_ros_goal_to_bus(&goal);
+                            let call = tokio::task::spawn_blocking(move || {
+                                let guard = bus_client.lock().map_err(|e| {
+                                    format!("bus action client lock poisoned: {e}")
+                                })?;
+                                guard
+                                    .send_goal(&bus_goal, None, Some(timeout))
+                                    .map_err(|e| e.to_string())
+                            })
+                            .await;
+                            match call {
+                                Ok(Ok(outcome)) => {
+                                    for fb in &outcome.feedbacks {
+                                        executing.publish_feedback(
+                                            convert::fibonacci_bus_feedback_to_ros(fb),
+                                        );
+                                    }
+                                    executing.succeeded_with(convert::fibonacci_bus_result_to_ros(
+                                        &outcome.result,
+                                    ))
+                                }
+                                Ok(Err(e)) => {
+                                    log::warn!("ros→bus Fibonacci goal failed: {e}");
+                                    executing.aborted_with(ros_act::Fibonacci_Result {
+                                        sequence: Vec::new(),
+                                    })
+                                }
+                                Err(e) => {
+                                    log::warn!("ros→bus Fibonacci join failed: {e}");
+                                    executing.aborted_with(ros_act::Fibonacci_Result {
+                                        sequence: Vec::new(),
+                                    })
+                                }
+                            }
+                        }
+                    },
+                )
+                .map_err(|e| {
+                    BusError::Protocol(format!("ros create_action_server Fibonacci: {e}"))
+                })?;
+            ros_entities.push(Box::new(srv));
+        }
+        (ActKind::Fibonacci, Direction::BusToRos) => {
+            let ros_client = ros_node
+                .create_action_client::<ros_act::Fibonacci>(route.ros_action.as_str())
+                .map_err(|e| {
+                    BusError::Protocol(format!("ros create_action_client Fibonacci: {e}"))
+                })?;
+            ros_entities.push(Box::new(Arc::clone(&ros_client)));
+            let timeout = ACTION_CALL_TIMEOUT;
+            let handler: ActionGoalHandler = Arc::new(move |body| {
+                let bus_goal = match BusFibonacciGoal::decode(body) {
+                    Ok(g) => g,
+                    Err(e) => {
+                        log::warn!("decode FibonacciGoal: {e}");
+                        return vec![(
+                            "RESULT".into(),
+                            BusFibonacciResult {
+                                sequence: Vec::new(),
+                            }
+                            .encode_to_vec(),
+                        )];
+                    }
+                };
+                match call_ros_fibonacci(&ros_client, &bus_goal, timeout) {
+                    Ok(replies) => replies,
+                    Err(msg) => {
+                        log::warn!("bus→ros Fibonacci failed: {msg}");
+                        vec![(
+                            "RESULT".into(),
+                            BusFibonacciResult {
+                                sequence: Vec::new(),
+                            }
+                            .encode_to_vec(),
+                        )]
+                    }
+                }
+            });
+            let _ = bus_node.create_action_server_raw(route.bus_action.as_str(), handler, None)?;
+        }
+        (_, Direction::Both) => {
+            return Err(BusError::Protocol(
+                "ros2 bridge actions do not support direction=both".into(),
+            ));
+        }
+    }
+    Ok(())
+}
+
+fn noop_raw_waker() -> RawWaker {
+    fn clone(_: *const ()) -> RawWaker {
+        noop_raw_waker()
+    }
+    fn wake(_: *const ()) {}
+    fn wake_by_ref(_: *const ()) {}
+    fn drop(_: *const ()) {}
+    RawWaker::new(
+        std::ptr::null(),
+        &RawWakerVTable::new(clone, wake, wake_by_ref, drop),
+    )
+}
+
+fn poll_once<F: Future + Unpin>(fut: &mut F) -> Poll<F::Output> {
+    let waker = unsafe { Waker::from_raw(noop_raw_waker()) };
+    let mut cx = Context::from_waker(&waker);
+    Pin::new(fut).poll(&mut cx)
+}
+
+fn await_with_timeout<F: Future + Unpin>(
+    mut fut: F,
+    timeout: Duration,
+) -> std::result::Result<F::Output, String> {
+    let deadline = Instant::now() + timeout;
+    loop {
+        match poll_once(&mut fut) {
+            Poll::Ready(v) => return Ok(v),
+            Poll::Pending => {
+                if Instant::now() >= deadline {
+                    return Err("timed out waiting for ROS action".into());
+                }
+                thread::sleep(Duration::from_millis(10));
+            }
+        }
+    }
+}
+
+fn call_ros_fibonacci(
+    client: &rclrs::ActionClient<ros_act::Fibonacci>,
+    bus_goal: &BusFibonacciGoal,
+    timeout: Duration,
+) -> std::result::Result<Vec<(String, Vec<u8>)>, String> {
+    let ros_goal = convert::fibonacci_bus_goal_to_ros(bus_goal);
+    let requested = client
+        .try_request_goal(ros_goal)
+        .map_err(|e| format!("ros Fibonacci request_goal: {e}"))?;
+    let goal_client = match await_with_timeout(requested, timeout)? {
+        Some(gc) => gc,
+        None => return Err("ROS action server rejected Fibonacci goal".into()),
+    };
+    let GoalClient {
+        mut feedback,
+        result,
+        ..
+    } = goal_client;
+    let mut replies = Vec::new();
+    let deadline = Instant::now() + timeout;
+    let mut result_fut = result;
+    loop {
+        while let Ok(fb) = feedback.try_recv() {
+            let bus_fb = convert::fibonacci_ros_feedback_to_bus(&fb);
+            replies.push(("FEEDBACK".into(), bus_fb.encode_to_vec()));
+        }
+        match poll_once(&mut result_fut) {
+            Poll::Ready((_status, res)) => {
+                let bus_res = convert::fibonacci_ros_result_to_bus(&res);
+                replies.push(("RESULT".into(), bus_res.encode_to_vec()));
+                return Ok(replies);
+            }
+            Poll::Pending => {
+                if Instant::now() >= deadline {
+                    return Err("timed out waiting for ROS Fibonacci result".into());
+                }
+                thread::sleep(Duration::from_millis(10));
+            }
+        }
     }
 }

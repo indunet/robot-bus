@@ -217,7 +217,10 @@ jobs:
       - name: Build install tree (ros2)
         run: |
           set -eux
+          # ament setup scripts reference optional unset vars; don't trip nounset.
+          set +u
           source "/opt/ros/${{ matrix.distro }}/setup.bash"
+          set -u
           export PKG_CONFIG_PATH=/usr/local/lib/pkgconfig:${PKG_CONFIG_PATH:-}
           export CMAKE_PREFIX_PATH=/usr/local
           export ROBOT_BUS_ROS2=1

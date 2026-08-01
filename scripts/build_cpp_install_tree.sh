@@ -8,7 +8,7 @@
 set -euo pipefail
 
 DEST="${1:?dest}"
-VERSION="${2:-0.1.0}"
+VERSION="${2:-0.1.1}"
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 CPP="$ROOT/bindings/cpp"
 
@@ -25,16 +25,17 @@ cargo build --release --manifest-path "$ROOT/Cargo.toml" --bin robot_bus_broker
 cp -f "$ROOT/target/release/robot_bus_broker" "$DEST/usr/bin/"
 
 # FFI (rename robot_bus_c → robot_bus)
-FFI_FEATURES=()
+# Bash <4.4 + set -u treats empty "${arr[@]}" as unbound; avoid the expansion.
+FFI_CARGO_ARGS=(--release --manifest-path "$CPP/native/Cargo.toml")
 if [[ "${ROBOT_BUS_ROS2:-}" == "1" || "${ROBOT_BUS_ROS2:-}" == "true" ]]; then
   if [[ -z "${ROS_DISTRO:-}" ]]; then
     echo "error: ROBOT_BUS_ROS2=1 requires a sourced ROS 2 env (ROS_DISTRO unset)" >&2
     exit 1
   fi
   echo "building FFI with --features ros2 (ROS_DISTRO=${ROS_DISTRO})"
-  FFI_FEATURES=(--features ros2)
+  FFI_CARGO_ARGS+=(--features ros2)
 fi
-cargo build --release --manifest-path "$CPP/native/Cargo.toml" "${FFI_FEATURES[@]}"
+cargo build "${FFI_CARGO_ARGS[@]}"
 if [[ "$(uname -s)" == "Darwin" ]]; then
   cp -f "$CPP/native/target/release/librobot_bus_c.dylib" "$DEST/usr/lib/librobot_bus.dylib"
 elif [[ "$(uname -s)" == MINGW* || "$(uname -s)" == MSYS* || "$(uname -s)" == CYGWIN* ]]; then

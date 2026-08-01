@@ -7,7 +7,7 @@ use serde::Deserialize;
 
 use crate::errors::{BusError, Result};
 
-use super::builder::{Direction, MsgKind, Ros2Bridge, Ros2BridgeBuilder, SrvKind};
+use super::builder::{ActKind, Direction, MsgKind, Ros2Bridge, Ros2BridgeBuilder, SrvKind};
 
 #[derive(Debug, Deserialize)]
 struct FileConfig {
@@ -16,6 +16,8 @@ struct FileConfig {
     routes: Vec<RouteSection>,
     #[serde(default)]
     services: Vec<ServiceSection>,
+    #[serde(default)]
+    actions: Vec<ActionSection>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -68,6 +70,16 @@ struct ServiceSection {
     direction: String,
 }
 
+#[derive(Debug, Deserialize)]
+struct ActionSection {
+    ros_action: String,
+    bus_action: String,
+    #[serde(rename = "type")]
+    type_name: String,
+    #[serde(default = "default_service_direction")]
+    direction: String,
+}
+
 fn default_direction() -> String {
     "both".into()
 }
@@ -86,9 +98,9 @@ pub fn builder_from_yaml(path: impl AsRef<Path>) -> Result<Ros2BridgeBuilder> {
     let cfg: FileConfig = serde_yaml::from_str(&text)
         .map_err(|e| BusError::Protocol(format!("parse ros2 bridge yaml: {e}")))?;
 
-    if cfg.routes.is_empty() && cfg.services.is_empty() {
+    if cfg.routes.is_empty() && cfg.services.is_empty() && cfg.actions.is_empty() {
         return Err(BusError::Protocol(
-            "yaml must include at least one routes[] or services[] entry".into(),
+            "yaml must include at least one routes[], services[], or actions[] entry".into(),
         ));
     }
 
@@ -135,6 +147,15 @@ pub fn builder_from_yaml(path: impl AsRef<Path>) -> Result<Ros2BridgeBuilder> {
             .map_err(|e| BusError::Protocol(format!("services[{i}]: {e}")))?;
     }
 
+    for (i, act) in cfg.actions.into_iter().enumerate() {
+        let kind = ActKind::parse(&act.type_name)
+            .map_err(|e| BusError::Protocol(format!("actions[{i}]: {e}")))?;
+        let direction = parse_action_direction(&act.direction)?;
+        builder = builder
+            .push_action(act.ros_action, act.bus_action, kind, direction)
+            .map_err(|e| BusError::Protocol(format!("actions[{i}]: {e}")))?;
+    }
+
     Ok(builder)
 }
 
@@ -158,6 +179,19 @@ fn parse_service_direction(s: &str) -> Result<Direction> {
         )),
         other => Err(BusError::Protocol(format!(
             "service direction must be ros_to_bus | bus_to_ros, got {other:?}"
+        ))),
+    }
+}
+
+fn parse_action_direction(s: &str) -> Result<Direction> {
+    match s {
+        "ros_to_bus" => Ok(Direction::RosToBus),
+        "bus_to_ros" => Ok(Direction::BusToRos),
+        "both" => Err(BusError::Protocol(
+            "action direction must be ros_to_bus | bus_to_ros (both is not supported)".into(),
+        )),
+        other => Err(BusError::Protocol(format!(
+            "action direction must be ros_to_bus | bus_to_ros, got {other:?}"
         ))),
     }
 }

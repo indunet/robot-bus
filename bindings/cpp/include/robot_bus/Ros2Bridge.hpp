@@ -9,7 +9,7 @@
 
 namespace robot_bus {
 
-/// Topic / service bridge direction (ROS 2 ↔ robot-bus).
+/// Topic / service / action bridge direction (ROS 2 ↔ robot-bus).
 enum class Ros2Direction {
   RosToBus = ROBOT_BUS_ROS2_DIR_ROS_TO_BUS,
   BusToRos = ROBOT_BUS_ROS2_DIR_BUS_TO_ROS,
@@ -153,6 +153,68 @@ class Ros2BridgeService {
   Ros2Direction direction_ = Ros2Direction::RosToBus;
 };
 
+/// Intermediate action route configuration before `.add()`.
+class Ros2BridgeAction {
+ public:
+  Ros2BridgeAction(RobotBusRos2BridgeBuilder *b, std::string ros_action, std::string bus_action)
+      : b_(b),
+        ros_action_(std::move(ros_action)),
+        bus_action_(std::move(bus_action)) {}
+
+  ~Ros2BridgeAction() { robot_bus_ros2_bridge_builder_free(b_); }
+
+  Ros2BridgeAction(const Ros2BridgeAction &) = delete;
+  Ros2BridgeAction &operator=(const Ros2BridgeAction &) = delete;
+
+  Ros2BridgeAction(Ros2BridgeAction &&o) noexcept
+      : b_(o.b_),
+        ros_action_(std::move(o.ros_action_)),
+        bus_action_(std::move(o.bus_action_)),
+        type_(std::move(o.type_)),
+        direction_(o.direction_) {
+    o.b_ = nullptr;
+  }
+
+  Ros2BridgeAction &operator=(Ros2BridgeAction &&o) noexcept {
+    if (this != &o) {
+      robot_bus_ros2_bridge_builder_free(b_);
+      b_ = o.b_;
+      o.b_ = nullptr;
+      ros_action_ = std::move(o.ros_action_);
+      bus_action_ = std::move(o.bus_action_);
+      type_ = std::move(o.type_);
+      direction_ = o.direction_;
+    }
+    return *this;
+  }
+
+  Ros2BridgeAction &&fibonacci() && {
+    type_ = "example_interfaces/action/Fibonacci";
+    return std::move(*this);
+  }
+
+  Ros2BridgeAction &&type_name(std::string type) && {
+    type_ = std::move(type);
+    return std::move(*this);
+  }
+
+  /// Actions only support RosToBus / BusToRos (not Both).
+  Ros2BridgeAction &&direction(Ros2Direction d) && {
+    direction_ = d;
+    return std::move(*this);
+  }
+
+  Ros2BridgeBuilder add() &&;
+
+ private:
+  friend class Ros2BridgeBuilder;
+  RobotBusRos2BridgeBuilder *b_ = nullptr;
+  std::string ros_action_;
+  std::string bus_action_;
+  std::string type_;
+  Ros2Direction direction_ = Ros2Direction::RosToBus;
+};
+
 /// Fluent builder matching Rust `Ros2Bridge::new(...).bus_tcp(...).route(...).add()`.
 class Ros2BridgeBuilder {
  public:
@@ -216,6 +278,12 @@ class Ros2BridgeBuilder {
     return Ros2BridgeService(b, std::move(ros_service), std::move(bus_service));
   }
 
+  Ros2BridgeAction action(std::string ros_action, std::string bus_action) && {
+    RobotBusRos2BridgeBuilder *b = b_;
+    b_ = nullptr;
+    return Ros2BridgeAction(b, std::move(ros_action), std::move(bus_action));
+  }
+
   /// Imperative add (type_name e.g. `std_msgs/msg/String`).
   Ros2BridgeBuilder &&add_route(const std::string &ros_topic, const std::string &bus_topic,
                                 const std::string &type_name,
@@ -238,16 +306,28 @@ class Ros2BridgeBuilder {
     return std::move(*this);
   }
 
+  /// Imperative action add (`example_interfaces/action/Fibonacci`; not Both).
+  Ros2BridgeBuilder &&add_action(const std::string &ros_action, const std::string &bus_action,
+                                 const std::string &type_name,
+                                 Ros2Direction direction = Ros2Direction::RosToBus) && {
+    check(robot_bus_ros2_bridge_builder_add_action(b_, ros_action.c_str(), bus_action.c_str(),
+                                                    type_name.c_str(),
+                                                    static_cast<int>(direction)),
+          "add_action");
+    return std::move(*this);
+  }
+
   Ros2Bridge build() &&;
 
  private:
   friend class Ros2BridgeRoute;
   friend class Ros2BridgeService;
+  friend class Ros2BridgeAction;
   friend class Ros2Bridge;
   RobotBusRos2BridgeBuilder *b_ = nullptr;
 };
 
-/// In-process ROS 2 ↔ robot-bus topic/service bridge (`feature = "ros2"` / Linux ros2 packages).
+/// In-process ROS 2 ↔ robot-bus topic/service/action bridge (`feature = "ros2"` / Linux ros2 packages).
 class Ros2Bridge {
  public:
   static Ros2BridgeBuilder New(std::string name) {
@@ -309,6 +389,18 @@ inline Ros2BridgeBuilder Ros2BridgeService::add() && {
   check(robot_bus_ros2_bridge_builder_add_service(b_, ros_service_.c_str(), bus_service_.c_str(),
                                                    type_.c_str(), static_cast<int>(direction_)),
         "add_service");
+  RobotBusRos2BridgeBuilder *b = b_;
+  b_ = nullptr;
+  return Ros2BridgeBuilder(b);
+}
+
+inline Ros2BridgeBuilder Ros2BridgeAction::add() && {
+  if (type_.empty()) {
+    throw Error("ros2 bridge action: call .fibonacci() before .add()");
+  }
+  check(robot_bus_ros2_bridge_builder_add_action(b_, ros_action_.c_str(), bus_action_.c_str(),
+                                                  type_.c_str(), static_cast<int>(direction_)),
+        "add_action");
   RobotBusRos2BridgeBuilder *b = b_;
   b_ = nullptr;
   return Ros2BridgeBuilder(b);

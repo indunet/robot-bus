@@ -235,7 +235,7 @@ Add to `Cargo.toml`:
 
 ```toml
 robot-bus = { path = "../robot-bus" }
-# or from crates.io: robot-bus = "0.1.0"
+# or from crates.io: robot-bus = "0.1.1"
 ```
 
 Semantics mirror ROS 2: `Node::new` → typed `create_publisher` / `create_subscription` → `node.spin()` (auto-attaches a `SingleThreadedExecutor`).
@@ -377,7 +377,7 @@ UDP discovery (`robot_bus_interface.msg.v1`):
 
 ## ROS 2 bridge (`feature = "ros2"`)
 
-In-process topic **and** service bridge via `robot_bus::ros2::Ros2Bridge` (chained API or YAML). **Not** enabled by default — core SDK, crates.io, and maturin builds stay ROS-free.
+In-process topic, service, **and** action bridge via `robot_bus::ros2::Ros2Bridge` (chained API or YAML). **Not** enabled by default — core SDK, crates.io, and maturin builds stay ROS-free.
 
 **Supported ROS 2 distributions (official):** **Humble** and **Jazzy**. Other distros: build from source after sourcing that distro (best-effort).
 
@@ -389,6 +389,7 @@ In-process topic **and** service bridge via `robot_bus::ros2::Ros2Bridge` (chain
 | Broker | Running `robot_bus_broker` reachable over tcp/ipc (or `bus_discover`) |
 | MVP topic types | `std_msgs/msg/String`, `sensor_msgs/msg/Imu` |
 | MVP service types | `std_srvs/srv/Trigger`, `std_srvs/srv/SetBool` (directions `ros_to_bus` / `bus_to_ros` only; default call timeout 5s) |
+| MVP action types | `example_interfaces/action/Fibonacci` (directions `ros_to_bus` / `bus_to_ros` only; default goal timeout 30s) |
 
 ```rust
 use robot_bus::ros2::{Direction, Ros2Bridge};
@@ -406,6 +407,10 @@ let mut bridge = Ros2Bridge::new("ros_bridge")
     .service("/enable", "/enable")
         .set_bool()
         .direction(Direction::BusToRos)
+        .add()?
+    .action("/fibonacci", "/fibonacci")
+        .fibonacci()
+        .direction(Direction::RosToBus)
         .add()?
     .build()?;
 bridge.spin()?;
@@ -425,6 +430,10 @@ auto bridge = robot_bus::Ros2Bridge::New("ros_bridge")
     .add()
     .service("/reset", "/reset")
     .trigger()
+    .direction(robot_bus::Ros2Direction::RosToBus)
+    .add()
+    .action("/fibonacci", "/fibonacci")
+    .fibonacci()
     .direction(robot_bus::Ros2Direction::RosToBus)
     .add()
     .build();

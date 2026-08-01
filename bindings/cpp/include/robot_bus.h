@@ -382,6 +382,16 @@ ROBOT_BUS_API int robot_bus_ros2_bridge_builder_add_service(RobotBusRos2BridgeBu
                                                             const char *ros_service,
                                                             const char *bus_service,
                                                             const char *type_name, int direction);
+/**
+ * Add an action bridge route.
+ * `type_name`: `example_interfaces/action/Fibonacci`.
+ * `direction`: ROBOT_BUS_ROS2_DIR_ROS_TO_BUS or ROBOT_BUS_ROS2_DIR_BUS_TO_ROS
+ * (BOTH is rejected).
+ */
+ROBOT_BUS_API int robot_bus_ros2_bridge_builder_add_action(RobotBusRos2BridgeBuilder *b,
+                                                           const char *ros_action,
+                                                           const char *bus_action,
+                                                           const char *type_name, int direction);
 /** Build bridge; builder must still be freed with `robot_bus_ros2_bridge_builder_free`. */
 ROBOT_BUS_API RobotBusRos2Bridge *robot_bus_ros2_bridge_builder_build(
     RobotBusRos2BridgeBuilder *b);

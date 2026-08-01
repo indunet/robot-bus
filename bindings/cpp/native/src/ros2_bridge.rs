@@ -1,4 +1,4 @@
-//! C ABI for in-process ROS 2 ↔ robot-bus topic bridge.
+//! C ABI for in-process ROS 2 ↔ robot-bus topic/service/action bridge.
 //!
 //! When built without `--features ros2`, symbols still export but return errors
 //! pointing at `robot-bus-cpp-ros2-<distro>` / rebuild with the feature.
@@ -30,7 +30,7 @@ mod imp {
     use super::*;
     use std::time::Duration;
 
-    use robot_bus::ros2::{Direction, MsgKind, Ros2Bridge, Ros2BridgeBuilder, SrvKind};
+    use robot_bus::ros2::{ActKind, Direction, MsgKind, Ros2Bridge, Ros2BridgeBuilder, SrvKind};
 
     pub struct BuilderInner {
         pub inner: Option<Ros2BridgeBuilder>,
@@ -290,6 +290,56 @@ mod imp {
     }
 
     #[unsafe(no_mangle)]
+    pub extern "C" fn robot_bus_ros2_bridge_builder_add_action(
+        b: *mut RobotBusRos2BridgeBuilder,
+        ros_action: *const c_char,
+        bus_action: *const c_char,
+        type_name: *const c_char,
+        direction: c_int,
+    ) -> c_int {
+        if b.is_null() {
+            return err("null Ros2Bridge builder");
+        }
+        let ros_action = match cstr_req(ros_action) {
+            Ok(t) => t,
+            Err(e) => return e,
+        };
+        let bus_action = match cstr_req(bus_action) {
+            Ok(t) => t,
+            Err(e) => return e,
+        };
+        let type_name = match cstr_req(type_name) {
+            Ok(t) => t,
+            Err(e) => return e,
+        };
+        let kind = match ActKind::parse(type_name) {
+            Ok(k) => k,
+            Err(e) => return bus_err(e),
+        };
+        let direction = match parse_direction(direction) {
+            Ok(d) => d,
+            Err(e) => return e,
+        };
+        let inner = unsafe { &mut *(b as *mut BuilderInner) };
+        let builder = match take_builder(inner) {
+            Ok(x) => x,
+            Err(e) => return e,
+        };
+        match builder.add_action(
+            ros_action.to_string(),
+            bus_action.to_string(),
+            kind,
+            direction,
+        ) {
+            Ok(next) => {
+                inner.inner = Some(next);
+                ok()
+            }
+            Err(e) => bus_err(e),
+        }
+    }
+
+    #[unsafe(no_mangle)]
     pub extern "C" fn robot_bus_ros2_bridge_builder_build(
         b: *mut RobotBusRos2BridgeBuilder,
     ) -> *mut RobotBusRos2Bridge {
@@ -432,6 +482,17 @@ mod imp {
         _b: *mut RobotBusRos2BridgeBuilder,
         _ros_service: *const c_char,
         _bus_service: *const c_char,
+        _type_name: *const c_char,
+        _direction: c_int,
+    ) -> c_int {
+        err(ROS2_UNAVAILABLE)
+    }
+
+    #[unsafe(no_mangle)]
+    pub extern "C" fn robot_bus_ros2_bridge_builder_add_action(
+        _b: *mut RobotBusRos2BridgeBuilder,
+        _ros_action: *const c_char,
+        _bus_action: *const c_char,
         _type_name: *const c_char,
         _direction: c_int,
     ) -> c_int {

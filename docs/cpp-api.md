@@ -34,14 +34,14 @@ CMake sets `CMAKE_CXX_STANDARD 17`. Building with a newer standard (e.g. `-DCMAK
 
 ```bash
 # Core SDK (no ROS bridge)
-sudo apt install ./robot-bus-cpp_0.1.0_linux_amd64.deb
+sudo apt install ./robot-bus-cpp_0.1.1_linux_amd64.deb
 
 # Or ROS 2 bridge variant (Humble example) — needs Humble already installed
-sudo apt install ./robot-bus-cpp-ros2-humble_0.1.0_linux_amd64.deb
+sudo apt install ./robot-bus-cpp-ros2-humble_0.1.1_linux_amd64.deb
 source /opt/ros/humble/setup.bash
 
 # macOS Apple Silicon (core package only)
-sudo installer -pkg robot-bus-cpp_0.1.0_macos_arm64.pkg -target /
+sudo installer -pkg robot-bus-cpp_0.1.1_macos_arm64.pkg -target /
 # Installs under /usr/local ({bin,lib,include})
 
 # Or from source (dev)
@@ -228,6 +228,10 @@ auto bridge = robot_bus::Ros2Bridge::New("ros_bridge")
     .set_bool()
     .direction(robot_bus::Ros2Direction::BusToRos)
     .add()
+    .action("/fibonacci", "/fibonacci")
+    .fibonacci()
+    .direction(robot_bus::Ros2Direction::RosToBus)
+    .add()
     .build();
 bridge.spin_once(0.01);
 // bridge.spin();
@@ -238,5 +242,6 @@ auto from_file = robot_bus::Ros2Bridge::from_yaml("bridge.yaml");
 
 MVP topic types: `std_msgs/msg/String`, `sensor_msgs/msg/Imu`.  
 MVP service types: `std_srvs/srv/Trigger`, `std_srvs/srv/SetBool` (`RosToBus` / `BusToRos` only; default call timeout 5s).  
+MVP action types: `example_interfaces/action/Fibonacci` (`RosToBus` / `BusToRos` only; default goal timeout 30s).  
 Default `robot-bus-cpp` returns a clear error from these APIs (`robot_bus_last_error` / thrown `robot_bus::Error`).
 
