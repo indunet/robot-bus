@@ -48,6 +48,9 @@ pub mod audio_play;
 #[cfg(feature = "camera-capture")]
 pub mod camera_capture;
 
+#[cfg(feature = "xbox-joy")]
+pub mod xbox_joy;
+
 #[cfg(feature = "extension-module")]
 mod python_api;
 

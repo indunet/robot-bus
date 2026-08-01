@@ -166,7 +166,7 @@ check-ros2-shim:
 
 # Build / test tool-node features
 nodes-build:
-	cargo build --bin rbus_image_encoder --bin rbus_image_decoder --bin rbus_audio_capture --bin rbus_audio_play --bin rbus_camera_capture
+	cargo build --bin rbus_image_encoder --bin rbus_image_decoder --bin rbus_audio_capture --bin rbus_audio_play --bin rbus_camera_capture --bin rbus_xbox_joy
 
 nodes-test:
 	cargo test --lib image_encoder::
@@ -174,6 +174,7 @@ nodes-test:
 	cargo test --lib audio_capture::
 	cargo test --lib audio_play::
 	cargo test --lib camera_capture::
+	cargo test --lib xbox_joy::
 
 # Run image encoder (broker must already be up; needs system FFmpeg)
 node-image-encoder *args:
@@ -199,4 +200,9 @@ node-audio-play *args:
 node-camera-capture *args:
 	cargo run --bin rbus_camera_capture -- --print-example-config > /tmp/rbus_camera_capture.example.yaml
 	cargo run --bin rbus_camera_capture -- --params /tmp/rbus_camera_capture.example.yaml {{args}}
+
+# Run Xbox joy node (broker must already be up; needs a USB pad / receiver)
+node-xbox-joy *args:
+	cargo run --bin rbus_xbox_joy -- --print-example-config > /tmp/rbus_xbox_joy.example.yaml
+	cargo run --bin rbus_xbox_joy -- --params /tmp/rbus_xbox_joy.example.yaml {{args}}
 

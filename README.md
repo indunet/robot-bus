@@ -385,6 +385,7 @@ cargo install robot-bus --bin rbus_image_decoder
 cargo install robot-bus --bin rbus_audio_capture
 cargo install robot-bus --bin rbus_audio_play
 cargo install robot-bus --bin rbus_camera_capture
+cargo install robot-bus --bin rbus_xbox_joy
 ```
 
 Skip them with `--no-default-features --features grpc,console` when you only need the library.
@@ -451,6 +452,17 @@ cargo install robot-bus --bin rbus_camera_capture
 rbus_camera_capture --list-devices
 rbus_camera_capture --print-example-config > camera.yaml
 rbus_camera_capture --params camera.yaml
+```
+
+### Xbox joy (`rbus_xbox_joy`)
+
+Reads a standard USB Xbox-layout pad / wireless receiver via [gilrs](https://gitlab.com/gilrs-project/gilrs) (SDL GameController mappings; typically plug-and-play) and publishes `robot_bus_interface/XboxJoy`. Subscribes to `robot_bus_interface/XboxJoyRumble` for dual-motor vibration. Defaults: `/xbox_joy` out, `/xbox_joy/rumble` in, 50 Hz. Feature `xbox-joy` (default on). Rumble works on Linux / Windows; macOS supports input only.
+
+```bash
+cargo install robot-bus --bin rbus_xbox_joy
+rbus_xbox_joy --list-devices
+rbus_xbox_joy --print-example-config > xbox.yaml
+rbus_xbox_joy --params xbox.yaml
 ```
 
 ## ROS 2 bridge (`feature = "ros2"`)

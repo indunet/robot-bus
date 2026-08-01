@@ -6,7 +6,7 @@ import "std_msgs/msg/v1/header.proto";
 
 // robot-bus custom message (not a ROS 2 type).
 //
-// Xbox-layout gamepad state with named axes and buttons.
+// Xbox-layout joy state with named axes and buttons (ROS-style "Joy" naming).
 // Prefer this over anonymous `sensor_msgs/Joy` axes/buttons arrays when the
 // device follows (or is mapped to) a standard Xbox / XInput layout.
 //
@@ -14,7 +14,7 @@ import "std_msgs/msg/v1/header.proto";
 // Triggers are typically 0.0 .. 1.0 (0 = released).
 // Face-button names follow Xbox physical positions (A bottom, B right, X left, Y top).
 //
-message XboxGamepad {
+message XboxJoy {
   std_msgs.msg.v1.Header header = 1;
 
   // Left analog stick: +x right, +y up (or driver convention; document at publish site).

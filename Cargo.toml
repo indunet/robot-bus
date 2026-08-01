@@ -36,7 +36,7 @@ name = "robot_bus"
 crate-type = ["cdylib", "rlib"]
 
 [features]
-default = ["grpc", "console", "image-encoder", "image-decoder", "audio-capture", "audio-play", "camera-capture"]
+default = ["grpc", "console", "image-encoder", "image-decoder", "audio-capture", "audio-play", "camera-capture", "xbox-joy"]
 # Enable with maturin / `cargo build --features extension-module` for the Python module.
 extension-module = ["dep:pyo3", "pyo3/extension-module"]
 # gRPC / gRPC-Web gateway (started with RobotBusBroker; on by default).
@@ -68,6 +68,8 @@ audio-capture = ["dep:cpal", "dep:env_logger"]
 audio-play = ["dep:cpal", "dep:env_logger"]
 # USB / webcam → sensor_msgs/Image rgb8 (`rbus_camera_capture`).
 camera-capture = ["dep:nokhwa", "dep:env_logger"]
+# USB Xbox-layout joy → XboxJoy + rumble (`rbus_xbox_joy`).
+xbox-joy = ["dep:gilrs", "dep:env_logger"]
 # In-process ROS 2 ↔ robot-bus topic/service/action bridge (requires sourced ROS + linking rcl).
 # Not enabled by default — keep core SDK / maturin builds free of ROS.
 ros2 = ["dep:rclrs", "dep:rosidl_runtime_rs", "dep:tokio"]
@@ -83,6 +85,7 @@ clap = { version = "4", features = ["derive"] }
 cpal = { version = "0.15", optional = true }
 env_logger = { version = "0.11", optional = true }
 ffmpeg-next = { version = "8", optional = true }
+gilrs = { version = "0.11", optional = true }
 http = { version = "1", optional = true }
 log = "0.4"
 mime_guess = { version = "2", optional = true }
@@ -169,6 +172,11 @@ required-features = ["audio-play"]
 name = "rbus_camera_capture"
 path = "src/bin/rbus_camera_capture.rs"
 required-features = ["camera-capture"]
+
+[[bin]]
+name = "rbus_xbox_joy"
+path = "src/bin/rbus_xbox_joy.rs"
+required-features = ["xbox-joy"]
 
 [[bin]]
 name = "robot_bus_perf"

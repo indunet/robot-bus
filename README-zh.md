@@ -387,6 +387,7 @@ cargo install robot-bus --bin rbus_image_decoder
 cargo install robot-bus --bin rbus_audio_capture
 cargo install robot-bus --bin rbus_audio_play
 cargo install robot-bus --bin rbus_camera_capture
+cargo install robot-bus --bin rbus_xbox_joy
 ```
 
 只要库时用 `--no-default-features --features grpc,console`。
@@ -452,6 +453,17 @@ cargo install robot-bus --bin rbus_camera_capture
 rbus_camera_capture --list-devices
 rbus_camera_capture --print-example-config > camera.yaml
 rbus_camera_capture --params camera.yaml
+```
+
+### Xbox Joy（`rbus_xbox_joy`）
+
+经 [gilrs](https://gitlab.com/gilrs-project/gilrs)（SDL GameController 映射；常见 Xbox USB 接收器免驱）读取 Xbox 布局手柄，发布 `robot_bus_interface/XboxJoy`；订阅 `robot_bus_interface/XboxJoyRumble` 做双马达震动。默认：输出 `/xbox_joy`，震动 `/xbox_joy/rumble`，50 Hz。feature `xbox-joy`（默认开）。震动在 Linux / Windows 可用；macOS 仅支持输入。
+
+```bash
+cargo install robot-bus --bin rbus_xbox_joy
+rbus_xbox_joy --list-devices
+rbus_xbox_joy --print-example-config > xbox.yaml
+rbus_xbox_joy --params xbox.yaml
 ```
 
 ## ROS 2 桥（`feature = "ros2"`）
