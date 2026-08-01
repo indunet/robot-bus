@@ -1,36 +1,78 @@
 #!/usr/bin/env bash
 # Assemble a Debian package for robot-bus C++ SDK + broker.
-# Usage: scripts/package_deb.sh <version> <arch> <staging-prefix> <out-deb>
+# Usage: scripts/package_deb.sh <version> <arch> <staging-prefix> <out-deb> [variant]
 #   arch: amd64 | arm64
 #   staging-prefix: directory that already has usr/bin, usr/lib, usr/include layout
+#   variant: main (default) | ros2-humble | ros2-jazzy
 set -euo pipefail
 
 VERSION="${1:?version}"
 ARCH="${2:?arch}"
 STAGING="${3:?staging}"
 OUT_DEB="${4:?out-deb}"
+VARIANT="${5:-main}"
 
-ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 PKG_ROOT="$(mktemp -d)"
 trap 'rm -rf "$PKG_ROOT"' EXIT
 
 mkdir -p "$PKG_ROOT/DEBIAN"
 cp -a "$STAGING/." "$PKG_ROOT/"
 
-cat >"$PKG_ROOT/DEBIAN/control" <<EOF
-Package: robot-bus-cpp
-Version: ${VERSION}
-Section: libs
-Priority: optional
-Architecture: ${ARCH}
-Maintainer: deng_ran <deng_ran@aliyun.com>
-Depends: libzmq5
-Description: robot-bus C/C++ SDK and broker
- ZeroMQ message bus with ROS-style APIs. Ships shared libraries
+case "$VARIANT" in
+  main)
+    PACKAGE_NAME="robot-bus-cpp"
+    DEPENDS="libzmq5"
+    CONFLICTS=""
+    DESCRIPTION_SHORT="robot-bus C/C++ SDK and broker"
+    DESCRIPTION_LONG=" ZeroMQ message bus with ROS-style APIs. Ships shared libraries
  (including bundled libprotobuf matching the generated msgs),
  headers, CMake/pkg-config files, and the robot_bus_broker binary.
-Homepage: https://github.com/indunet/robot-bus
-EOF
+ Does not include the ROS 2 bridge (see robot-bus-cpp-ros2-humble /
+ robot-bus-cpp-ros2-jazzy)."
+    ;;
+  ros2-humble)
+    PACKAGE_NAME="robot-bus-cpp-ros2-humble"
+    DEPENDS="libzmq5, ros-humble-rcl, ros-humble-std-msgs, ros-humble-sensor-msgs"
+    CONFLICTS="Conflicts: robot-bus-cpp, robot-bus-cpp-ros2-jazzy
+Provides: robot-bus-cpp
+Replaces: robot-bus-cpp"
+    DESCRIPTION_SHORT="robot-bus C/C++ SDK with ROS 2 Humble bridge"
+    DESCRIPTION_LONG=" Same as robot-bus-cpp, plus in-process ROS 2 topic bridge
+ (Ros2Bridge) linked against system ROS 2 Humble. Requires a sourced
+ Humble environment at runtime. Does not vendor rcl/RMW/DDS."
+    ;;
+  ros2-jazzy)
+    PACKAGE_NAME="robot-bus-cpp-ros2-jazzy"
+    DEPENDS="libzmq5, ros-jazzy-rcl, ros-jazzy-std-msgs, ros-jazzy-sensor-msgs"
+    CONFLICTS="Conflicts: robot-bus-cpp, robot-bus-cpp-ros2-humble
+Provides: robot-bus-cpp
+Replaces: robot-bus-cpp"
+    DESCRIPTION_SHORT="robot-bus C/C++ SDK with ROS 2 Jazzy bridge"
+    DESCRIPTION_LONG=" Same as robot-bus-cpp, plus in-process ROS 2 topic bridge
+ (Ros2Bridge) linked against system ROS 2 Jazzy. Requires a sourced
+ Jazzy environment at runtime. Does not vendor rcl/RMW/DDS."
+    ;;
+  *)
+    echo "error: unknown variant '$VARIANT' (main|ros2-humble|ros2-jazzy)" >&2
+    exit 1
+    ;;
+esac
+
+{
+  echo "Package: ${PACKAGE_NAME}"
+  echo "Version: ${VERSION}"
+  echo "Section: libs"
+  echo "Priority: optional"
+  echo "Architecture: ${ARCH}"
+  echo "Maintainer: deng_ran <deng_ran@aliyun.com>"
+  echo "Depends: ${DEPENDS}"
+  if [[ -n "$CONFLICTS" ]]; then
+    printf '%s\n' "$CONFLICTS"
+  fi
+  echo "Description: ${DESCRIPTION_SHORT}"
+  printf '%s\n' "$DESCRIPTION_LONG"
+  echo "Homepage: https://github.com/indunet/robot-bus"
+} >"$PKG_ROOT/DEBIAN/control"
 
 # Ensure executable bit on broker if present
 if [[ -f "$PKG_ROOT/usr/bin/robot_bus_broker" ]]; then
@@ -38,4 +80,4 @@ if [[ -f "$PKG_ROOT/usr/bin/robot_bus_broker" ]]; then
 fi
 
 dpkg-deb --build --root-owner-group "$PKG_ROOT" "$OUT_DEB"
-echo "wrote $OUT_DEB"
+echo "wrote $OUT_DEB ($VARIANT)"

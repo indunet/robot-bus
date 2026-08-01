@@ -10,6 +10,13 @@ name = "robot_bus_c"
 crate-type = ["cdylib"]
 path = "src/lib.rs"
 
+[features]
+default = []
+# Links system ROS 2 (rcl via rclrs). Build only with a sourced Humble/Jazzy env.
+ros2 = ["robot-bus/ros2"]
+# Typecheck without a real ROS install.
+ros2-shim = ["robot-bus/ros2-shim"]
+
 [dependencies]
 anyhow = "1"
 robot-bus = { path = "../../..", default-features = false, features = ["grpc", "console"] }

@@ -1,6 +1,10 @@
 #!/usr/bin/env bash
 # Build install tree for robot-bus C++ packages.
 # Usage: scripts/build_cpp_install_tree.sh <dest> [version]
+#
+# Env:
+#   ROBOT_BUS_ROS2=1  — build native FFI with --features ros2
+#                       (requires sourced ROS 2; does NOT copy /opt/ros into DEST)
 set -euo pipefail
 
 DEST="${1:?dest}"
@@ -21,7 +25,16 @@ cargo build --release --manifest-path "$ROOT/Cargo.toml" --bin robot_bus_broker
 cp -f "$ROOT/target/release/robot_bus_broker" "$DEST/usr/bin/"
 
 # FFI (rename robot_bus_c → robot_bus)
-cargo build --release --manifest-path "$CPP/native/Cargo.toml"
+FFI_FEATURES=()
+if [[ "${ROBOT_BUS_ROS2:-}" == "1" || "${ROBOT_BUS_ROS2:-}" == "true" ]]; then
+  if [[ -z "${ROS_DISTRO:-}" ]]; then
+    echo "error: ROBOT_BUS_ROS2=1 requires a sourced ROS 2 env (ROS_DISTRO unset)" >&2
+    exit 1
+  fi
+  echo "building FFI with --features ros2 (ROS_DISTRO=${ROS_DISTRO})"
+  FFI_FEATURES=(--features ros2)
+fi
+cargo build --release --manifest-path "$CPP/native/Cargo.toml" "${FFI_FEATURES[@]}"
 if [[ "$(uname -s)" == "Darwin" ]]; then
   cp -f "$CPP/native/target/release/librobot_bus_c.dylib" "$DEST/usr/lib/librobot_bus.dylib"
 elif [[ "$(uname -s)" == MINGW* || "$(uname -s)" == MSYS* || "$(uname -s)" == CYGWIN* ]]; then
@@ -31,15 +44,26 @@ else
   cp -f "$CPP/native/target/release/librobot_bus_c.so" "$DEST/usr/lib/librobot_bus.so"
 fi
 
+# Never vendor system ROS into the package.
+if [[ -d "$DEST/opt/ros" ]]; then
+  echo "error: refusing to ship vendored /opt/ros under $DEST" >&2
+  exit 1
+fi
+
 # Headers
 cp -a "$CPP/include/." "$DEST/usr/include/"
 cp -a "$CPP/generated/robot_bus" "$DEST/usr/include/"
 
 # Msgs library via CMake (no tests)
 BUILD_DIR="$CPP/build-package"
+CMAKE_ROS2=OFF
+if [[ "${ROBOT_BUS_ROS2:-}" == "1" || "${ROBOT_BUS_ROS2:-}" == "true" ]]; then
+  CMAKE_ROS2=ON
+fi
 cmake -S "$CPP" -B "$BUILD_DIR" \
   -DCMAKE_BUILD_TYPE=Release \
   -DROBOT_BUS_BUILD_TESTS=OFF \
+  -DROBOT_BUS_ROS2="${CMAKE_ROS2}" \
   -DCMAKE_INSTALL_PREFIX="$DEST/usr" \
   ${CMAKE_PREFIX_PATH:+-DCMAKE_PREFIX_PATH="$CMAKE_PREFIX_PATH"}
 JOBS="$(nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 2)"
@@ -69,4 +93,4 @@ rm -f "$DEST/usr/lib/cmake/robot_bus/robot_busConfig.cmake.bak"
 sed -i.bak 's|\${PACKAGE_PREFIX_DIR}|/usr|g' "$DEST/usr/lib/cmake/robot_bus/robot_busConfig.cmake"
 rm -f "$DEST/usr/lib/cmake/robot_bus/robot_busConfig.cmake.bak"
 
-echo "install tree ready at $DEST"
+echo "install tree ready at $DEST (ros2=${ROBOT_BUS_ROS2:-0})"

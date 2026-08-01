@@ -151,6 +151,7 @@ jobs:
           ./bindings/cpp/build/service_set_bool
           ./bindings/cpp/build/action_fibonacci
           ./bindings/cpp/build/grpc_node
+          ./bindings/cpp/build/ros2_bridge_stub
 
   java:
     runs-on: ubuntu-latest

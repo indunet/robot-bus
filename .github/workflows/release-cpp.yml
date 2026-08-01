@@ -119,6 +119,134 @@ jobs:
             "robot-bus-cpp_${{ steps.meta.outputs.version }}_linux_${{ matrix.arch }}.deb" \
             --clobber
 
+  # ROS 2 bridge packages (system rcl; does not vendor /opt/ros).
+  linux-ros2:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-22.04
+            arch: amd64
+            distro: humble
+            protoc_zip: protoc-35.1-linux-x86_64.zip
+          - runner: ubuntu-24.04
+            arch: amd64
+            distro: jazzy
+            protoc_zip: protoc-35.1-linux-x86_64.zip
+          - runner: ubuntu-22.04-arm
+            arch: arm64
+            distro: humble
+            protoc_zip: protoc-35.1-linux-aarch_64.zip
+          - runner: ubuntu-24.04-arm
+            arch: arm64
+            distro: jazzy
+            protoc_zip: protoc-35.1-linux-aarch_64.zip
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Resolve version / tag
+        id: meta
+        run: |
+          if [ "${{ github.event_name }}" = "release" ]; then
+            TAG="${{ github.event.release.tag_name }}"
+          else
+            TAG="${{ inputs.tag }}"
+          fi
+          VERSION="${TAG#v}"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            cmake g++ pkg-config libzmq3-dev \
+            curl unzip ninja-build gnupg lsb-release
+
+      - name: Install ROS 2 ${{ matrix.distro }}
+        uses: ros-tooling/setup-ros@v0.7
+        with:
+          required-ros-distributions: ${{ matrix.distro }}
+
+      - name: Install ROS build/runtime deps for bridge
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            "ros-${{ matrix.distro }}-rcl" \
+            "ros-${{ matrix.distro }}-std-msgs" \
+            "ros-${{ matrix.distro }}-sensor-msgs" \
+            "ros-${{ matrix.distro }}-rmw-fastrtps-cpp"
+
+      - name: Install pinned protoc + C++ runtime
+        run: |
+          set -eux
+          curl -fsSL -o /tmp/protoc.zip \
+            "https://github.com/protocolbuffers/protobuf/releases/download/v${PROTOC_VERSION}/${{ matrix.protoc_zip }}"
+          sudo unzip -o /tmp/protoc.zip -d /usr/local
+          sudo ./scripts/install_protobuf_cpp.sh /usr/local
+          sudo ldconfig
+          protoc --version
+          pkg-config --modversion protobuf
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11
+
+      - name: Setup Node (console embed)
+        uses: actions/setup-node@v6
+        with:
+          node-version: "22"
+          cache: pnpm
+          cache-dependency-path: console/pnpm-lock.yaml
+
+      - name: Build embedded console assets
+        run: |
+          cd console && pnpm install --frozen-lockfile && pnpm build
+          cd .. && ./scripts/sync_console_assets.sh
+
+      - name: Generate C++ + Rust protobuf stubs
+        run: |
+          python3 scripts/generate_cpp_msgs.py
+          python3 scripts/generate_rust_msgs.py
+
+      - name: Build install tree (ros2)
+        run: |
+          set -eux
+          source "/opt/ros/${{ matrix.distro }}/setup.bash"
+          export PKG_CONFIG_PATH=/usr/local/lib/pkgconfig:${PKG_CONFIG_PATH:-}
+          export CMAKE_PREFIX_PATH=/usr/local
+          export ROBOT_BUS_ROS2=1
+          ./scripts/build_cpp_install_tree.sh /tmp/robot-bus-stage-ros2 "${{ steps.meta.outputs.version }}"
+          mkdir -p /tmp/robot-bus-stage-ros2/usr/lib
+          cp -a /usr/local/lib/libprotobuf.so* /tmp/robot-bus-stage-ros2/usr/lib/ || true
+          cp -a /usr/local/lib/libabsl*.so* /tmp/robot-bus-stage-ros2/usr/lib/ || true
+          cp -a /usr/local/lib64/libprotobuf.so* /tmp/robot-bus-stage-ros2/usr/lib/ 2>/dev/null || true
+          cp -a /usr/local/lib64/libabsl*.so* /tmp/robot-bus-stage-ros2/usr/lib/ 2>/dev/null || true
+          # Guard: must not vendor ROS
+          test ! -d /tmp/robot-bus-stage-ros2/opt/ros
+          ! find /tmp/robot-bus-stage-ros2 -name 'librcl.so*' | grep -q .
+
+      - name: Package DEB (ros2-${{ matrix.distro }})
+        run: |
+          ./scripts/package_deb.sh \
+            "${{ steps.meta.outputs.version }}" \
+            "${{ matrix.arch }}" \
+            /tmp/robot-bus-stage-ros2 \
+            "robot-bus-cpp-ros2-${{ matrix.distro }}_${{ steps.meta.outputs.version }}_linux_${{ matrix.arch }}.deb" \
+            "ros2-${{ matrix.distro }}"
+
+      - name: Upload to Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release upload "${{ steps.meta.outputs.tag }}" \
+            "robot-bus-cpp-ros2-${{ matrix.distro }}_${{ steps.meta.outputs.version }}_linux_${{ matrix.arch }}.deb" \
+            --clobber
+
   windows:
     runs-on: windows-latest
     steps:

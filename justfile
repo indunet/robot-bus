@@ -49,6 +49,12 @@ cpp-dev: gen-cpp gen-rust
 	cmake -S bindings/cpp -B bindings/cpp/build -DCMAKE_BUILD_TYPE=Release
 	cmake --build bindings/cpp/build -j
 
+# Same as cpp-dev but enable ROS 2 bridge (requires sourced Humble or Jazzy).
+cpp-dev-ros2: gen-cpp gen-rust
+	cargo build --release --manifest-path bindings/cpp/native/Cargo.toml --features ros2
+	cmake -S bindings/cpp -B bindings/cpp/build -DCMAKE_BUILD_TYPE=Release -DROBOT_BUS_ROS2=ON
+	cmake --build bindings/cpp/build -j
+
 # Build Java JVM binding with Maven (needs librobot_bus_c from cpp native)
 java-dev: gen-java
 	cargo build --release --manifest-path bindings/cpp/native/Cargo.toml
@@ -92,6 +98,7 @@ test-cpp:
 	./bindings/cpp/build/inproc_context
 	./bindings/cpp/build/federation_opts
 	./bindings/cpp/build/node_parameters
+	./bindings/cpp/build/ros2_bridge_stub
 
 # Build console UI into assets/console/ for rust-embed (gitignored; run before cargo with `console`)
 console:
@@ -154,5 +161,6 @@ perf-ros2:
 
 # Typecheck ros2 bridge without a full ROS install (rclrs use_ros_shim)
 check-ros2-shim:
-	RUSTFLAGS='--cfg ros_distro="humble"' cargo check --features ros2,rclrs/use_ros_shim
+	RUSTFLAGS='--cstro="humble"' cargo check --features ros2-shim
+	RUSTFLAGS='--cfg ros_distro="humble"' cafg ros_dirgo check --manifest-path bindings/cpp/native/Cargo.toml --features ros2-shim
 

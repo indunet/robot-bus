@@ -32,27 +32,27 @@ thread_local! {
     static LAST_ERROR: RefCell<Option<CString>> = const { RefCell::new(None) };
 }
 
-fn set_error(msg: impl AsRef<str>) {
+pub(crate) fn set_error(msg: impl AsRef<str>) {
     let msg = msg.as_ref();
     let c = CString::new(msg.replace('\0', "")).unwrap_or_else(|_| CString::new("error").unwrap());
     LAST_ERROR.with(|slot| *slot.borrow_mut() = Some(c));
 }
 
-fn clear_error() {
+pub(crate) fn clear_error() {
     LAST_ERROR.with(|slot| *slot.borrow_mut() = None);
 }
 
-fn ok() -> c_int {
+pub(crate) fn ok() -> c_int {
     clear_error();
     0
 }
 
-fn err(msg: impl AsRef<str>) -> c_int {
+pub(crate) fn err(msg: impl AsRef<str>) -> c_int {
     set_error(msg);
     -1
 }
 
-fn bus_err(e: BusError) -> c_int {
+pub(crate) fn bus_err(e: BusError) -> c_int {
     err(e.to_string())
 }
 
@@ -60,7 +60,7 @@ fn anyhow_err(e: anyhow::Error) -> c_int {
     err(e.to_string())
 }
 
-fn cstr_opt<'a>(p: *const c_char) -> Option<&'a str> {
+pub(crate) fn cstr_opt<'a>(p: *const c_char) -> Option<&'a str> {
     if p.is_null() {
         None
     } else {
@@ -68,7 +68,7 @@ fn cstr_opt<'a>(p: *const c_char) -> Option<&'a str> {
     }
 }
 
-fn cstr_req<'a>(p: *const c_char) -> Result<&'a str, c_int> {
+pub(crate) fn cstr_req<'a>(p: *const c_char) -> Result<&'a str, c_int> {
     cstr_opt(p).ok_or_else(|| err("null string"))
 }
 
@@ -2581,3 +2581,6 @@ pub extern "C" fn robot_bus_broker_console_listen(b: *const RobotBusBroker) -> *
         Err(_) => ptr::null_mut(),
     }
 }
+
+mod ros2_bridge;
+

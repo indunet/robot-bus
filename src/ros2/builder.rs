@@ -147,7 +147,8 @@ impl Ros2BridgeBuilder {
         self.bus_discover_ex(domain_id, None, None)
     }
 
-    pub(crate) fn bus_discover_ex(
+    /// Discover with optional timeout (seconds) and broker id filter.
+    pub fn bus_discover_ex(
         mut self,
         domain_id: u32,
         timeout_secs: Option<f64>,
@@ -193,6 +194,17 @@ impl Ros2BridgeBuilder {
             direction,
         });
         self
+    }
+
+    /// Add a typed route (for FFI / non-fluent callers).
+    pub fn add_route(
+        self,
+        ros_topic: impl Into<String>,
+        bus_topic: impl Into<String>,
+        kind: MsgKind,
+        direction: Direction,
+    ) -> Self {
+        self.push_route(ros_topic.into(), bus_topic.into(), kind, direction)
     }
 
     pub fn build(self) -> Result<Ros2Bridge> {

@@ -334,6 +334,52 @@ ROBOT_BUS_API char *robot_bus_broker_action_backend_bind(const RobotBusBroker *b
 ROBOT_BUS_API char *robot_bus_broker_grpc_listen(const RobotBusBroker *b);
 ROBOT_BUS_API char *robot_bus_broker_console_listen(const RobotBusBroker *b);
 
+/** 1 if this lib was built with `--features ros2`, else 0. */
+ROBOT_BUS_API int robot_bus_ros2_available(void);
+
+typedef struct RobotBusRos2BridgeBuilder RobotBusRos2BridgeBuilder;
+typedef struct RobotBusRos2Bridge RobotBusRos2Bridge;
+
+#define ROBOT_BUS_ROS2_DIR_ROS_TO_BUS 0
+#define ROBOT_BUS_ROS2_DIR_BUS_TO_ROS 1
+#define ROBOT_BUS_ROS2_DIR_BOTH 2
+
+/**
+ * Load bridge from YAML (see docs). Returns NULL on error (`robot_bus_last_error`).
+ * Requires a sourced ROS 2 distro when the library was built with ros2.
+ */
+ROBOT_BUS_API RobotBusRos2Bridge *robot_bus_ros2_bridge_from_yaml(const char *path);
+
+ROBOT_BUS_API RobotBusRos2BridgeBuilder *robot_bus_ros2_bridge_builder_new(const char *name);
+ROBOT_BUS_API void robot_bus_ros2_bridge_builder_free(RobotBusRos2BridgeBuilder *b);
+ROBOT_BUS_API int robot_bus_ros2_bridge_builder_bus_tcp(RobotBusRos2BridgeBuilder *b,
+                                                        const char *host);
+ROBOT_BUS_API int robot_bus_ros2_bridge_builder_bus_ipc(RobotBusRos2BridgeBuilder *b);
+ROBOT_BUS_API int robot_bus_ros2_bridge_builder_bus_ipc_at(RobotBusRos2BridgeBuilder *b,
+                                                           const char *dir);
+/**
+ * UDP discover then TCP. `timeout_secs` <= 0 uses the default; `broker_id` may be NULL.
+ */
+ROBOT_BUS_API int robot_bus_ros2_bridge_builder_bus_discover(RobotBusRos2BridgeBuilder *b,
+                                                             uint32_t domain_id,
+                                                             double timeout_secs,
+                                                             const char *broker_id);
+/**
+ * `type_name`: `std_msgs/msg/String` or `sensor_msgs/msg/Imu`.
+ * `direction`: ROBOT_BUS_ROS2_DIR_*.
+ */
+ROBOT_BUS_API int robot_bus_ros2_bridge_builder_add_route(RobotBusRos2BridgeBuilder *b,
+                                                          const char *ros_topic,
+                                                          const char *bus_topic,
+                                                          const char *type_name, int direction);
+/** Build bridge; builder must still be freed with `robot_bus_ros2_bridge_builder_free`. */
+ROBOT_BUS_API RobotBusRos2Bridge *robot_bus_ros2_bridge_builder_build(
+    RobotBusRos2BridgeBuilder *b);
+
+ROBOT_BUS_API void robot_bus_ros2_bridge_free(RobotBusRos2Bridge *bridge);
+ROBOT_BUS_API int robot_bus_ros2_bridge_spin(RobotBusRos2Bridge *bridge);
+ROBOT_BUS_API int robot_bus_ros2_bridge_spin_once(RobotBusRos2Bridge *bridge, double timeout_secs);
+
 #ifdef __cplusplus
 }
 #endif

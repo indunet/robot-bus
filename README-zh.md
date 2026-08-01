@@ -60,7 +60,7 @@ robot_bus_broker 进程
 
 ### 可选 ROS 2 桥（Rust feature）
 
-日常开发 **不必安装 ROS 2**。进程内与 ROS 2 图互通时，开启 Cargo feature **`ros2`**，使用 `robot_bus::ros2::Ros2Bridge`（链式 API 或 YAML）。需 sourced 的 ROS 2 Humble（或更新）及可链接的 `rclrs` 环境。见 [ROS 2 桥](#ros-2-桥-feature-ros2)。
+日常开发 **不必安装 ROS 2**。进程内与 ROS 2 图互通时，开启 Cargo feature **`ros2`**，使用 `robot_bus::ros2::Ros2Bridge`（链式 API 或 YAML）。官方支持：**Humble**、**Jazzy**（需 source 对应发行版并链接 `rclrs`）。C++ 另有 `robot-bus-cpp-ros2-humble` / `…-jazzy` 包，依赖系统 ROS，**不**把 `rcl` 打进安装包。见 [ROS 2 桥](#ros-2-桥-feature-ros2)。
 
 ## 快速开始
 
@@ -212,7 +212,15 @@ val pub = node.createPublisher("/imu", Imu::class.java)
 
 ### C++（DEB / MSI）
 
-C++ 无中央库：从 [GitHub Releases](https://github.com/indunet/robot-bus/releases) 下载 `robot-bus-cpp_*_linux_*.deb` / `robot-bus-cpp_*_windows_*.msi` / `robot-bus-cpp_*_macos_*.pkg`（你写 Release 说明并 Publish 后，CI 只挂附件）。详见 [`docs/cpp-api.md`](docs/cpp-api.md)。
+C++ 无中央库：从 [GitHub Releases](https://github.com/indunet/robot-bus/releases) 下载（Publish 后 CI 挂附件）：
+
+| 包 | 内容 |
+|----|------|
+| `robot-bus-cpp_*_linux_*.deb`（另有 MSI / PKG） | 核心 SDK + broker，**无** ROS 2 桥 |
+| `robot-bus-cpp-ros2-humble_*_linux_*.deb` | 同上 + **Humble** 桥（需系统 Humble；不 vendor `rcl`） |
+| `robot-bus-cpp-ros2-jazzy_*_linux_*.deb` | 同上 + **Jazzy** 桥 |
+
+三选一安装（互斥）。详见 [`docs/cpp-api.md`](docs/cpp-api.md)。
 
 ```cpp
 #include <robot_bus/Node.hpp>
@@ -373,10 +381,13 @@ UDP 发现（包名 `robot_bus_interface.msg.v1`）：
 
 进程内话题桥：`robot_bus::ros2::Ros2Bridge`（链式 API 或 YAML）。**默认不启用** — 核心 SDK / crates.io / maturin 仍免 ROS。
 
+**官方支持的 ROS 2 发行版：** **Humble**、**Jazzy**。其它发行版：source 后本机自建（best-effort）。
+
 | 需要 | 说明 |
 |------|------|
-| Cargo | `--features ros2`（可选依赖 `rclrs`） |
-| 环境 | Source ROS 2 Humble+ 以便链接 `rcl`；主 CI **不**开此 feature |
+| Cargo（Rust） | `--features ros2`（可选依赖 `rclrs`） |
+| 环境 | Source **Humble** 或 **Jazzy** 以便链接 `rcl`；主 CI **不**开此 feature |
+| C++ 包 | `robot-bus-cpp`（无桥）与 `robot-bus-cpp-ros2-humble` / `robot-bus-cpp-ros2-jazzy`（互斥）。包内 **不 vendor** `rcl`/RMW/DDS — 需安装系统 ROS 并 `source /opt/ros/<distro>/setup.bash` |
 | Broker | 可达的 `robot_bus_broker`（tcp/ipc 或 `bus_discover`） |
 | MVP 类型 | `std_msgs/msg/String`、`sensor_msgs/msg/Imu`（动态 ROS 消息 ↔ robot-bus protobuf） |
 
@@ -397,6 +408,24 @@ let mut bridge = Ros2Bridge::new("ros_bridge")
 bridge.spin()?;
 // 或: Ros2Bridge::from_yaml("bridge.yaml")?.spin()?;
 ```
+
+C++（安装对应的 `robot-bus-cpp-ros2-*` 并 source ROS 后）：
+
+```cpp
+#include <robot_bus/Ros2Bridge.hpp>
+
+auto bridge = robot_bus::Ros2Bridge::New("ros_bridge")
+    .bus_tcp("localhost")
+    .route("/chatter", "/chatter")
+    .string()
+    .direction(robot_bus::Ros2Direction::Both)
+    .add()
+    .build();
+bridge.spin();
+// 或: robot_bus::Ros2Bridge::from_yaml("bridge.yaml").spin();
+```
+
+详见 [`docs/cpp-api.md`](docs/cpp-api.md)；本机构建可用 `just cpp-dev-ros2`。
 
 ## 测试
 

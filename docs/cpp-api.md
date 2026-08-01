@@ -1,10 +1,23 @@
 # C++ API
 
-C++ SDK is distributed via **GitHub Release attachments** (no central C++ registry):
+C++ SDK is distributed via **GitHub Release attachments** (no central C++ registry).
 
-- Linux: `robot-bus-cpp_<version>_linux_amd64.deb`, `robot-bus-cpp_<version>_linux_arm64.deb`
-- Windows: `robot-bus-cpp_<version>_windows_x64.msi`
-- macOS (Apple Silicon): `robot-bus-cpp_<version>_macos_arm64.pkg`
+## Packages
+
+| Asset | ROS 2 bridge | Notes |
+|-------|--------------|--------|
+| `robot-bus-cpp_<ver>_linux_<arch>.deb` | No | Default SDK + broker. Also MSI / PKG on Windows / macOS. |
+| `robot-bus-cpp-ros2-humble_<ver>_linux_<arch>.deb` | Yes (Humble) | Linux only in release CI. Requires system **ROS 2 Humble**. |
+| `robot-bus-cpp-ros2-jazzy_<ver>_linux_<arch>.deb` | Yes (Jazzy) | Linux only in release CI. Requires system **ROS 2 Jazzy**. |
+
+The three Debian packages **conflict** with each other (same `librobot_bus.so`). Install exactly one.
+
+**rcl is not vendored.** Ros2 packages dynamically link the `rcl` / typesupport already on the machine. After install:
+
+```bash
+source /opt/ros/humble/setup.bash   # or jazzy
+# then run your binary that uses Ros2Bridge
+```
 
 You write the Release notes on GitHub and Publish; CI only builds packages and uploads assets.
 
@@ -20,27 +33,35 @@ CMake sets `CMAKE_CXX_STANDARD 17`. Building with a newer standard (e.g. `-DCMAK
 ## Install
 
 ```bash
-# Debian / Ubuntu (amd64 example)
+# Core SDK (no ROS bridge)
 sudo apt install ./robot-bus-cpp_0.1.0_linux_amd64.deb
-# Depends: libzmq5, libprotobuf*
 
-# macOS Apple Silicon
+# Or ROS 2 bridge variant (Humble example) — needs Humble already installed
+sudo apt install ./robot-bus-cpp-ros2-humble_0.1.0_linux_amd64.deb
+source /opt/ros/humble/setup.bash
+
+# macOS Apple Silicon (core package only)
 sudo installer -pkg robot-bus-cpp_0.1.0_macos_arm64.pkg -target /
 # Installs under /usr/local ({bin,lib,include})
 
 # Or from source (dev)
 just gen-cpp
-just cpp-dev
+just cpp-dev              # no ros2
+# with bridge (source Humble or Jazzy first):
+just cpp-dev-ros2
 ```
 
 Headers install under the `robot_bus/` prefix (no `generated/` segment):
 
 ```cpp
 #include <robot_bus/Node.hpp>
+#include <robot_bus/Ros2Bridge.hpp>   // needs ros2-enabled librobot_bus
 #include <robot_bus/sensor_msgs/msg/v1/imu.pb.h>
 ```
 
 Link with `-lrobot_bus -lrobot_bus_msgs` (or CMake `robot_bus::robot_bus` + `robot_bus::msgs`).
+
+Check at runtime: `robot_bus::ros2_available()` / `robot_bus_ros2_available()` — `0` on the default package, `1` on ros2-* packages.
 
 ## Broker
 
@@ -177,9 +198,39 @@ target_link_libraries(my_app PRIVATE robot_bus::robot_bus robot_bus::msgs)
 ```bash
 just gen-cpp          # write bindings/cpp/generated (gitignored; protoc 35.1)
 
-just cpp-dev          # cargo FFI + cmake msgs/tests
-just test-cpp         # msgs / timer / pub-sub / service / action
+just cpp-dev          # cargo FFI + cmake msgs/tests (no ros2)
+just cpp-dev-ros2     # same with --features ros2 (source Humble/Jazzy first)
+just test-cpp         # msgs / timer / pub-sub / service / action / ros2 stub
+just check-ros2-shim  # typecheck ros2 without a full ROS install
 ```
 
 Repo layout: generated sources (gitignored) live under `bindings/cpp/generated/robot_bus/` after `just gen-cpp`; install/public includes drop the `generated/` segment. Release packages ship the generated headers — consumers do not need `protoc`.
+
+## ROS 2 bridge (`Ros2Bridge`)
+
+Supported distros for **prebuilt** packages: **Humble** and **Jazzy**. Headers ship in all packages; only ros2-* libs implement the bridge.
+
+```cpp
+#include <robot_bus/Ros2Bridge.hpp>
+
+// Chained API
+auto bridge = robot_bus::Ros2Bridge::New("ros_bridge")
+    .bus_tcp("localhost")
+    .route("/chatter", "/chatter")
+    .string()
+    .direction(robot_bus::Ros2Direction::Both)
+    .add()
+    .route("/imu", "/imu")
+    .imu()
+    .direction(robot_bus::Ros2Direction::RosToBus)
+    .add()
+    .build();
+bridge.spin_once(0.01);
+// bridge.spin();
+
+// Or YAML (same schema as Rust Ros2Bridge::from_yaml)
+auto from_file = robot_bus::Ros2Bridge::from_yaml("bridge.yaml");
+```
+
+MVP types: `std_msgs/msg/String`, `sensor_msgs/msg/Imu`. Default `robot-bus-cpp` returns a clear error from these APIs (`robot_bus_last_error` / thrown `robot_bus::Error`).
 

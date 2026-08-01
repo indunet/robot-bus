@@ -8,6 +8,8 @@ set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
 option(ROBOT_BUS_BUILD_TESTS "Build C++ smoke tests" ON)
 option(ROBOT_BUS_BUILD_MSGS "Build librobot_bus_msgs from generated protobufs" ON)
+# Build native FFI with --features ros2 (requires sourced ROS 2 Humble/Jazzy).
+option(ROBOT_BUS_ROS2 "Enable ROS 2 bridge in librobot_bus (cargo --features ros2)" OFF)
 
 find_package(Protobuf REQUIRED)
 
@@ -47,8 +49,16 @@ else()
   set(ROBOT_BUS_FFI_SONAME "librobot_bus.so")
 endif()
 
+if(ROBOT_BUS_ROS2)
+  set(ROBOT_BUS_FFI_CARGO_FEATURES --features ros2)
+  message(STATUS "robot_bus FFI: ROS 2 bridge enabled (source ROS 2 before build)")
+else()
+  set(ROBOT_BUS_FFI_CARGO_FEATURES)
+endif()
+
 add_custom_target(robot_bus_ffi_build
   COMMAND cargo build --release --manifest-path "${ROBOT_BUS_FFI_DIR}/Cargo.toml"
+          ${ROBOT_BUS_FFI_CARGO_FEATURES}
   WORKING_DIRECTORY "${ROBOT_BUS_FFI_DIR}"
   COMMENT "Building robot-bus C FFI (cargo)"
   BYPRODUCTS "${ROBOT_BUS_FFI_BUILT}")
@@ -75,7 +85,8 @@ if(ROBOT_BUS_BUILD_TESTS)
     inproc_context
     federation_opts
     node_parameters
-    interop_peer)
+    interop_peer
+    ros2_bridge_stub)
 
   set(ROBOT_BUS_TEST_TARGETS)
   foreach(t ${ROBOT_BUS_TEST_SOURCES})

@@ -50,6 +50,8 @@ console = [
 # In-process ROS 2 ↔ robot-bus topic bridge (requires sourced ROS + linking rcl).
 # Default builds / crates.io / maturin do NOT enable this.
 ros2 = ["dep:rclrs"]
+# Typecheck without a real ROS install (rclrs stub).
+ros2-shim = ["ros2", "rclrs/use_ros_shim"]
 
 [dependencies]
 anyhow = "1"
