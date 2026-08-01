@@ -62,7 +62,7 @@ jobs:
         run: cargo install cargo-ndk --locked
 
       - name: Setup pnpm
-        uses: pnpm/action-setup@v4
+        uses: pnpm/action-setup@v6
         with:
           version: 11
 
