@@ -31,3 +31,5 @@ manifest-path = "../../Cargo.toml"
 python-source = "."
 module-name = "robot_bus._native"
 features = ["extension-module", "grpc"]
+# Keep wheels free of default `image-encoder` (system FFmpeg).
+cargo-extra-args = ["--no-default-features"]

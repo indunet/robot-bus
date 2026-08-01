@@ -1,14 +1,15 @@
 //! FFmpeg video encoder → Annex-B access units.
 
-use crate::codec::resolve_encoder_name;
-use crate::config::{CodecKind, EncoderConfig};
-use crate::convert::image_to_yuv420;
 use anyhow::{bail, Context, Result};
 use ffmpeg_next::codec::{self, encoder, Flags};
 use ffmpeg_next::format::Pixel;
 use ffmpeg_next::packet::Packet;
 use ffmpeg_next::{Dictionary, Rational};
-use robot_bus::sensor_msgs::msg::v1::Image;
+
+use super::codec::resolve_encoder_name;
+use super::config::{CodecKind, EncoderConfig};
+use super::convert::image_to_yuv420;
+use crate::sensor_msgs::msg::v1::Image;
 
 pub struct FrameEncoder {
     codec_kind: CodecKind,
@@ -170,7 +171,7 @@ impl FrameEncoder {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use robot_bus::sensor_msgs::msg::v1::Image;
+    use crate::sensor_msgs::msg::v1::Image;
 
     fn solid_rgb8(width: u32, height: u32, r: u8, g: u8, b: u8) -> Image {
         let mut data = Vec::with_capacity((width * height * 3) as usize);

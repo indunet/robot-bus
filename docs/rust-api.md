@@ -574,11 +574,27 @@ match result {
 
 ## 工具节点：Image encoder
 
-仓库 [`nodes/`](../nodes/) 下的独立 crate（不进核心 SDK feature）。订阅 `sensor_msgs/Image`，发布 `foxglove_msgs/CompressedVideo`（H.264/H.265，系统 FFmpeg）。
+主 crate feature **`image-encoder`（默认开启）**：模块 `robot_bus::image_encoder`，二进制 `robot_bus_image_encoder`。订阅 `sensor_msgs/Image`，发布 `foxglove_msgs/CompressedVideo`（需系统 FFmpeg）。
 
 ```bash
 brew install ffmpeg   # 或 apt 安装 ffmpeg + libav*-dev
-cargo run -p robot-bus-image-encoder -- --params nodes/image_encoder/config/example.yaml
+cargo install robot-bus --bin robot_bus_image_encoder
+
+robot_bus_image_encoder --print-example-config > encoder.yaml
+robot_bus_image_encoder --params encoder.yaml
 ```
 
-约定与新增节点方式见 [`nodes/README.md`](../nodes/README.md)。
+## 工具节点：Audio capture / play
+
+主 crate features **`audio-capture` / `audio-play`（默认开启）**：`robot_bus_audio_capture`、`robot_bus_audio_play`。
+
+```bash
+# Debian/Ubuntu 可能需要：sudo apt install libasound2-dev
+cargo install robot-bus --bin robot_bus_audio_capture
+cargo install robot-bus --bin robot_bus_audio_play
+
+robot_bus_audio_capture --print-example-config > capture.yaml
+robot_bus_audio_play --print-example-config > play.yaml
+```
+
+不要默认多媒体依赖时：`cargo build --no-default-features --features grpc,console`。约定见 [`nodes/README.md`](../nodes/README.md)。

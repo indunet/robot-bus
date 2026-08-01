@@ -9,6 +9,7 @@
 
     <Feature Id="ProductFeature" Title="robot-bus" Level="1">
       <ComponentGroupRef Id="ProductComponents" />
+      <ComponentGroupRef Id="Harvested" />
     </Feature>
 
     <Directory Id="TARGETDIR" Name="SourceDir">
@@ -21,7 +22,8 @@
       </Directory>
     </Directory>
 
-    <ComponentGroup Id="ProductComponents" Directory="INSTALLFOLDER">
+    <!-- Directory only on Component (not ComponentGroup) — avoids CNDL0062. -->
+    <ComponentGroup Id="ProductComponents">
       <Component Id="BrokerExe" Directory="BINDIR" Guid="*">
         <File Id="robot_bus_broker" Source="$(var.StageDir)\bin\robot_bus_broker.exe" KeyPath="yes" />
         <Environment Id="Path" Name="PATH" Value="[BINDIR]" Permanent="no" Part="last" Action="set" System="yes" />
@@ -32,7 +34,7 @@
       <Component Id="MsgsDll" Directory="BINDIR" Guid="*">
         <File Id="robot_bus_msgs_dll" Source="$(var.StageDir)\bin\robot_bus_msgs.dll" KeyPath="yes" />
       </Component>
-      <!-- Headers / lib / cmake are harvested by heat.exe in CI; this stub covers core binaries. -->
+      <!-- Headers / lib / cmake come from heat.exe → ComponentGroup Harvested. -->
     </ComponentGroup>
   </Product>
 </Wix>

@@ -33,6 +33,15 @@ pub mod console;
 #[cfg(feature = "ros2")]
 pub mod ros2;
 
+#[cfg(feature = "image-encoder")]
+pub mod image_encoder;
+
+#[cfg(feature = "audio-capture")]
+pub mod audio_capture;
+
+#[cfg(feature = "audio-play")]
+pub mod audio_play;
+
 #[cfg(feature = "extension-module")]
 mod python_api;
 

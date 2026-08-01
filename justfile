@@ -37,7 +37,7 @@ gen-all: gen-rust proto gen-typescript gen-cpp gen-java gen-android
 
 # Build and install the Python binding into the active venv
 python-dev: proto gen-rust
-	cd bindings/python && maturin develop --features extension-module,grpc
+	cd bindings/python && maturin develop --features extension-module,grpc --no-default-features
 
 # Build TypeScript native addon + JS bundle
 ts-dev: gen-typescript gen-rust
@@ -164,14 +164,27 @@ check-ros2-shim:
 	RUSTFLAGS='--cfg ros_distro="humble"' cargo check --features ros2-shim
 	RUSTFLAGS='--cfg ros_distro="humble"' cargo check --manifest-path bindings/cpp/native/Cargo.toml --features ros2-shim
 
-# Build / test tool nodes under nodes/ (may need system deps, e.g. FFmpeg)
+# Build / test tool-node features
 nodes-build:
-	cargo build -p robot-bus-image-encoder
+	cargo build --bin robot_bus_image_encoder --bin robot_bus_audio_capture --bin robot_bus_audio_play
 
 nodes-test:
-	cargo test -p robot-bus-image-encoder
+	cargo test --lib image_encoder::
+	cargo test --lib audio_capture::
+	cargo test --lib audio_play::
 
 # Run image encoder (broker must already be up; needs system FFmpeg)
 node-image-encoder *args:
-	cargo run -p robot-bus-image-encoder -- --params nodes/image_encoder/config/example.yaml {{args}}
+	cargo run --bin robot_bus_image_encoder -- --print-example-config > /tmp/robot_bus_image_encoder.example.yaml
+	cargo run --bin robot_bus_image_encoder -- --params /tmp/robot_bus_image_encoder.example.yaml {{args}}
+
+# Run audio capture (broker must already be up; needs input device)
+node-audio-capture *args:
+	cargo run --bin robot_bus_audio_capture -- --print-example-config > /tmp/robot_bus_audio_capture.example.yaml
+	cargo run --bin robot_bus_audio_capture -- --params /tmp/robot_bus_audio_capture.example.yaml {{args}}
+
+# Run audio play (broker must already be up; needs output device)
+node-audio-play *args:
+	cargo run --bin robot_bus_audio_play -- --print-example-config > /tmp/robot_bus_audio_play.example.yaml
+	cargo run --bin robot_bus_audio_play -- --params /tmp/robot_bus_audio_play.example.yaml {{args}}
 

@@ -12,19 +12,32 @@ WXS="$ROOT/bindings/cpp/packaging/msi/Product.wxs"
 WORK="$(mktemp -d)"
 trap 'rm -rf "$WORK"' EXIT
 
-# Prefer harvesting full tree when heat is available.
+CANDLE="$(command -v candle.exe || command -v candle)"
+LIGHT="$(command -v light.exe || command -v light)"
+
+# Product.wxs always refs ComponentGroup Harvested. heat fills it with headers/libs;
+# without heat, emit an empty group so candle/light still link.
 if command -v heat.exe >/dev/null 2>&1 || command -v heat >/dev/null 2>&1; then
   HEAT="$(command -v heat.exe || command -v heat)"
-  CANDLE="$(command -v candle.exe || command -v candle)"
-  LIGHT="$(command -v light.exe || command -v light)"
-  "$HEAT" dir "$STAGE" -cg Harvested -gg -sfrag -srd -dr INSTALLFOLDER -var var.StageDir -out "$WORK/harvest.wxs"
-  "$CANDLE" -dProductVersion="$VERSION" -dStageDir="$STAGE" -out "$WORK/" "$WXS" "$WORK/harvest.wxs"
-  "$LIGHT" -out "$OUT_MSI" "$WORK"/*.wixobj
+  # Harvest include/ + lib/ only — bin/ is owned by ProductComponents (PATH + key files).
+  HARVEST_ROOT="$WORK/harvest_root"
+  mkdir -p "$HARVEST_ROOT"
+  cp -a "$STAGE/include" "$HARVEST_ROOT/"
+  cp -a "$STAGE/lib" "$HARVEST_ROOT/"
+  "$HEAT" dir "$HARVEST_ROOT" -cg Harvested -gg -sfrag -srd -dr INSTALLFOLDER \
+    -var var.StageDir -out "$WORK/harvest.wxs"
 else
-  CANDLE="$(command -v candle.exe || command -v candle)"
-  LIGHT="$(command -v light.exe || command -v light)"
-  "$CANDLE" -dProductVersion="$VERSION" -dStageDir="$STAGE" -out "$WORK/" "$WXS"
-  "$LIGHT" -out "$OUT_MSI" "$WORK"/*.wixobj
+  cat >"$WORK/harvest.wxs" <<'EOF'
+<?xml version="1.0" encoding="UTF-8"?>
+<Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
+  <Fragment>
+    <ComponentGroup Id="Harvested" />
+  </Fragment>
+</Wix>
+EOF
 fi
+
+"$CANDLE" -dProductVersion="$VERSION" -dStageDir="$STAGE" -out "$WORK/" "$WXS" "$WORK/harvest.wxs"
+"$LIGHT" -out "$OUT_MSI" "$WORK"/*.wixobj
 
 echo "wrote $OUT_MSI"

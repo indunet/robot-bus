@@ -1,13 +1,14 @@
 //! Wire robot-bus Node: Image in → CompressedVideo out.
 
-use crate::config::EncoderConfig;
-use crate::encoder::FrameEncoder;
 use anyhow::{Context, Result};
 use prost_types::Timestamp;
-use robot_bus::foxglove_msgs::msg::v1::CompressedVideo;
-use robot_bus::sensor_msgs::msg::v1::Image;
-use robot_bus::{Node, NodeOptions, TopicPublisher};
 use std::sync::Mutex;
+
+use super::config::EncoderConfig;
+use super::encoder::FrameEncoder;
+use crate::foxglove_msgs::msg::v1::CompressedVideo;
+use crate::sensor_msgs::msg::v1::Image;
+use crate::{Node, NodeOptions, TopicPublisher};
 
 /// Mutex-guarded handle that is safe to share with subscription callbacks.
 ///

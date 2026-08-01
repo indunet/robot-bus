@@ -44,7 +44,7 @@ Rust core stays at the repo root (`Cargo.toml` + `src/`). Language SDKs live und
 | [`console/`](console/) | Web monitoring console (product UI; build output synced to `assets/console/` locally / in CI, not committed) |
 | [`benches/`](benches/) | Perf harnesses: [`robot_bus_perf/`](benches/robot_bus_perf/) (`just perf`), [`ros2_perf/`](benches/ros2_perf/) (`just perf-ros2`) |
 | [`tests/`](tests/) | Rust integration tests + cross-language interop (`just test-interop`) |
-| [`nodes/`](nodes/) | Optional tool-node binaries (Cargo workspace members; not in the default crates.io SDK build) |
+| [`nodes/`](nodes/) | Notes for in-crate tool-node features (image/audio binaries live in the main crate) |
 | [`docs/`](docs/) | API guides and generated perf reports |
 | [`scripts/`](scripts/), [`tools/`](tools/), `justfile` | Codegen, packaging, and task orchestration |
 
@@ -376,13 +376,21 @@ UDP discovery (`robot_bus_interface.msg.v1`):
 
 - [`announce.proto`](proto/robot_bus_interface/msg/v1/announce.proto)
 
-## Tool nodes (`nodes/`)
+## Tool nodes (Cargo features)
 
-Optional executable utilities live under [`nodes/`](nodes/) as **Cargo workspace members** (see [`nodes/README.md`](nodes/README.md)). They depend on the `robot-bus` SDK but are **not** part of the default crates.io / language SDK packages. Plain `cargo test` / `cargo build` at the repo root only builds the core crate (`default-members = ["."]`).
+Tool binaries ship with the main `robot-bus` crate as **default features**. Install system deps (FFmpeg / ALSA headers), then:
 
-### Image encoder (`robot-bus-image-encoder`)
+```bash
+cargo install robot-bus --bin robot_bus_image_encoder
+cargo install robot-bus --bin robot_bus_audio_capture
+cargo install robot-bus --bin robot_bus_audio_play
+```
 
-Subscribes to `sensor_msgs/Image` (`rgb8` / `bgr8` / `mono8`) and publishes `foxglove_msgs/CompressedVideo` (`h264` or `h265`, Annex-B) via **system FFmpeg** (Rust binding: `ffmpeg-next`). Encoder preference: NVENC → VideoToolbox → `libopenh264` / soft encoders. FFmpeg is **not** vendored.
+Skip them with `--no-default-features --features grpc,console` when you only need the library. See [`nodes/README.md`](nodes/README.md).
+
+### Image encoder (`robot_bus_image_encoder`)
+
+Subscribes to `sensor_msgs/Image` (`rgb8` / `bgr8` / `mono8`) and publishes `foxglove_msgs/CompressedVideo` (`h264` or `h265`, Annex-B) via **system FFmpeg**. Encoder preference: NVENC → VideoToolbox → `libopenh264` / soft encoders.
 
 ```bash
 # macOS
@@ -390,11 +398,37 @@ brew install ffmpeg
 # Debian/Ubuntu
 sudo apt install ffmpeg libavcodec-dev libavutil-dev libswscale-dev
 
-cargo run -p robot-bus-image-encoder -- --params nodes/image_encoder/config/example.yaml
-# or: just node-image-encoder
+cargo install robot-bus --bin robot_bus_image_encoder
+robot_bus_image_encoder --print-example-config > encoder.yaml
+robot_bus_image_encoder --params encoder.yaml
 ```
 
-Linking GPL software encoders (`libx264` / `libx265`) is a deployment choice; prefer hardware encoders when available. See the example YAML for parameters (`codec`, `bitrate`, `encoder`, …).
+Linking GPL software encoders (`libx264` / `libx265`) is a deployment choice; prefer hardware encoders when available.
+
+### Audio capture (`robot_bus_audio_capture`)
+
+Captures microphone PCM in **shared** (non-exclusive) mode via [cpal](https://github.com/RustAudio/cpal) and publishes `foxglove_msgs/RawAudio` (`pcm-s16`). Defaults: 16 kHz mono, 20 ms chunks. Feature `audio-capture` (default on).
+
+```bash
+# Debian/Ubuntu
+sudo apt install libasound2-dev
+
+cargo install robot-bus --bin robot_bus_audio_capture
+robot_bus_audio_capture --list-devices
+robot_bus_audio_capture --print-example-config > capture.yaml
+robot_bus_audio_capture --params capture.yaml
+```
+
+### Audio play (`robot_bus_audio_play`)
+
+Subscribes to `foxglove_msgs/RawAudio` (`pcm-s16`) and plays on a speaker (cpal shared mode). Feature `audio-play` (default on). Incoming rate/channels must match node parameters.
+
+```bash
+cargo install robot-bus --bin robot_bus_audio_play
+robot_bus_audio_play --list-devices
+robot_bus_audio_play --print-example-config > play.yaml
+robot_bus_audio_play --params play.yaml
+```
 
 ## ROS 2 bridge (`feature = "ros2"`)
 

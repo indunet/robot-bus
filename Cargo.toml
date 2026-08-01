@@ -1,5 +1,11 @@
 [workspace]
-members = [".", "nodes/image_encoder"]
+members = ["."]
+# Invoked via --manifest-path; each declares its own [workspace].
+exclude = [
+    "tools/gen-msgs",
+    "bindings/cpp/native",
+    "bindings/typescript/native",
+]
 default-members = ["."]
 resolver = "2"
 
@@ -30,7 +36,7 @@ name = "robot_bus"
 crate-type = ["cdylib", "rlib"]
 
 [features]
-default = ["grpc", "console"]
+default = ["grpc", "console", "image-encoder", "audio-capture", "audio-play"]
 # Enable with maturin / `cargo build --features extension-module` for the Python module.
 extension-module = ["dep:pyo3", "pyo3/extension-module"]
 # gRPC / gRPC-Web gateway (started with RobotBusBroker; on by default).
@@ -52,8 +58,14 @@ console = [
     "dep:rust-embed",
     "dep:mime_guess",
 ]
+# Image → H.264/H.265 tool binary (`robot_bus_image_encoder`). Needs system FFmpeg.
+image-encoder = ["dep:ffmpeg-next", "dep:env_logger"]
+# Microphone → RawAudio (`robot_bus_audio_capture`). Needs audio stack (e.g. ALSA headers on Linux).
+audio-capture = ["dep:cpal", "dep:env_logger"]
+# RawAudio → speaker (`robot_bus_audio_play`).
+audio-play = ["dep:cpal", "dep:env_logger"]
 # In-process ROS 2 ↔ robot-bus topic/service/action bridge (requires sourced ROS + linking rcl).
-# Default builds / crates.io / maturin do NOT enable this.
+# Not enabled by default — keep core SDK / maturin builds free of ROS.
 ros2 = ["dep:rclrs", "dep:rosidl_runtime_rs", "dep:tokio"]
 # Typecheck without a real ROS install (rclrs stub).
 ros2-shim = ["ros2", "rclrs/use_ros_shim", "rosidl_runtime_rs/use_ros_shim"]
@@ -64,6 +76,9 @@ rclrs = { version = "0.7", optional = true }
 rosidl_runtime_rs = { version = "0.6", optional = true }
 axum = { version = "0.8", optional = true, default-features = false, features = ["http1", "tokio", "query", "json"] }
 clap = { version = "4", features = ["derive"] }
+cpal = { version = "0.15", optional = true }
+env_logger = { version = "0.11", optional = true }
+ffmpeg-next = { version = "8", optional = true }
 http = { version = "1", optional = true }
 log = "0.4"
 mime_guess = { version = "2", optional = true }
@@ -124,6 +139,21 @@ path = "src/bin/rbus.rs"
 [[bin]]
 name = "robot_bus_interop"
 path = "src/bin/robot_bus_interop.rs"
+
+[[bin]]
+name = "robot_bus_image_encoder"
+path = "src/bin/robot_bus_image_encoder.rs"
+required-features = ["image-encoder"]
+
+[[bin]]
+name = "robot_bus_audio_capture"
+path = "src/bin/robot_bus_audio_capture.rs"
+required-features = ["audio-capture"]
+
+[[bin]]
+name = "robot_bus_audio_play"
+path = "src/bin/robot_bus_audio_play.rs"
+required-features = ["audio-play"]
 
 [[bin]]
 name = "robot_bus_perf"

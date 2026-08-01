@@ -1,7 +1,8 @@
 //! Encoder name resolution (hardware / non-GPL preferred).
 
-use crate::config::CodecKind;
 use anyhow::{bail, Result};
+
+use super::config::CodecKind;
 
 /// Candidates in preference order for `codec`.
 pub fn encoder_candidates(codec: CodecKind) -> &'static [&'static str] {

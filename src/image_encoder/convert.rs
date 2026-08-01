@@ -4,7 +4,8 @@ use anyhow::{bail, Result};
 use ffmpeg_next::format;
 use ffmpeg_next::frame::Video as VideoFrame;
 use ffmpeg_next::software::scaling;
-use robot_bus::sensor_msgs::msg::v1::Image;
+
+use crate::sensor_msgs::msg::v1::Image;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PixelEncoding {

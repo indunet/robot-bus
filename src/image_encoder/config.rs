@@ -1,7 +1,8 @@
 //! Node parameters for the image encoder.
 
 use anyhow::{bail, Context, Result};
-use robot_bus::{Node, ParameterValue};
+
+use crate::{Node, ParameterValue};
 
 /// Validated runtime configuration.
 #[derive(Debug, Clone)]
@@ -12,7 +13,7 @@ pub struct EncoderConfig {
     pub bitrate: i64,
     pub gop_size: i64,
     pub fps: i64,
-    /// Empty → auto-select by [`crate::codec::resolve_encoder_name`].
+    /// Empty → auto-select by [`super::codec::resolve_encoder_name`].
     pub encoder: String,
     pub width: i64,
     pub height: i64,

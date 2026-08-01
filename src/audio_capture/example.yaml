@@ -1,0 +1,10 @@
+# Example parameters for robot_bus_audio_capture.
+# robot_bus_audio_capture --print-example-config > capture.yaml
+
+ros__parameters:
+  output_topic: /audio/mic
+  # Empty = system default input device.
+  device: ""
+  sample_rate: 16000
+  channels: 1
+  chunk_ms: 20
