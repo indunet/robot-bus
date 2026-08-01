@@ -1,18 +1,18 @@
-//! CLI: RawAudio → speaker (feature `audio-play`).
+//! CLI: USB camera → sensor_msgs/Image rgb8 (feature `camera-capture`).
 
 use anyhow::{Context, Result};
 use clap::Parser;
-use robot_bus::audio_play::{list_output_devices, run, EXAMPLE_CONFIG};
+use robot_bus::camera_capture::{list_cameras, run, EXAMPLE_CONFIG};
 use robot_bus::NodeOptions;
 
 #[derive(Debug, Parser)]
 #[command(
-    name = "robot_bus_audio_play",
-    about = "Subscribe to foxglove RawAudio (pcm-s16) and play on a speaker"
+    name = "rbus_camera_capture",
+    about = "Capture USB / webcam frames and publish sensor_msgs/Image (rgb8)"
 )]
 struct Args {
     /// Node name on the bus.
-    #[arg(long, default_value = "audio_play")]
+    #[arg(long, default_value = "camera_capture")]
     name: String,
 
     /// YAML parameter file (ros__parameters or flat map).
@@ -35,7 +35,7 @@ struct Args {
     #[arg(long, default_value = "/tmp/robot_bus")]
     ipc_dir: String,
 
-    /// List output devices and exit.
+    /// List cameras and exit.
     #[arg(long)]
     list_devices: bool,
 }
@@ -49,7 +49,7 @@ fn main() -> Result<()> {
         return Ok(());
     }
     if args.list_devices {
-        return list_output_devices();
+        return list_cameras();
     }
 
     let options = match args.transport.as_str() {
@@ -59,6 +59,6 @@ fn main() -> Result<()> {
     };
 
     run(&args.name, options, args.params.as_deref())
-        .with_context(|| format!("run audio play node {}", args.name))?;
+        .with_context(|| format!("run camera capture node {}", args.name))?;
     Ok(())
 }

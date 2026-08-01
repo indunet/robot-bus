@@ -1,0 +1,34 @@
+syntax = "proto3";
+
+package robot_bus_interface.msg.v1;
+
+import "std_msgs/msg/v1/header.proto";
+
+// robot-bus custom message (not a ROS 2 type).
+//
+// Downstream rumble command for an Xbox-layout / XInput-style gamepad.
+// Opposite direction from `XboxGamepad` (app → device).
+//
+// Mainstream Xbox pads expose two vibration motors:
+//   - left_motor  (low-frequency / "large"): heavy rumble
+//   - right_motor (high-frequency / "small"): light rumble
+// Intensities are 0.0 .. 1.0 (0 = off). Drivers should clamp out-of-range values.
+//
+// Typical usage: publish current intensities periodically while rumbling, or
+// publish once and let the device node hold; stop by publishing 0, 0.
+// Optional duration_ms > 0 asks the device node to auto-stop after that many
+// milliseconds (0 / unset = hold until a later command).
+//
+message XboxGamepadRumble {
+  std_msgs.msg.v1.Header header = 1;
+
+  // Low-frequency motor (left / large), 0.0 .. 1.0.
+  float left_motor = 2;
+
+  // High-frequency motor (right / small), 0.0 .. 1.0.
+  float right_motor = 3;
+
+  // Optional auto-stop duration in milliseconds.
+  // 0 means "no timed stop" (hold until the next rumble command).
+  uint32 duration_ms = 4;
+}

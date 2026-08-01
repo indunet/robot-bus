@@ -380,15 +380,16 @@ UDP discovery (`robot_bus_interface.msg.v1`):
 Tool binaries ship with the main `robot-bus` crate as **default features**. Install system deps (FFmpeg / ALSA headers), then:
 
 ```bash
-cargo install robot-bus --bin robot_bus_image_encoder
-cargo install robot-bus --bin robot_bus_audio_capture
-cargo install robot-bus --bin robot_bus_audio_play
-cargo install robot-bus --bin robot_bus_camera_capture
+cargo install robot-bus --bin rbus_image_encoder
+cargo install robot-bus --bin rbus_image_decoder
+cargo install robot-bus --bin rbus_audio_capture
+cargo install robot-bus --bin rbus_audio_play
+cargo install robot-bus --bin rbus_camera_capture
 ```
 
 Skip them with `--no-default-features --features grpc,console` when you only need the library.
 
-### Image encoder (`robot_bus_image_encoder`)
+### Image encoder (`rbus_image_encoder`)
 
 Subscribes to `sensor_msgs/Image` (`rgb8` / `bgr8` / `mono8`) and publishes `foxglove_msgs/CompressedVideo` (`h264` or `h265`, Annex-B) via **system FFmpeg**. Encoder preference: NVENC → VideoToolbox → `libopenh264` / soft encoders.
 
@@ -396,16 +397,27 @@ Subscribes to `sensor_msgs/Image` (`rgb8` / `bgr8` / `mono8`) and publishes `fox
 # macOS
 brew install ffmpeg
 # Debian/Ubuntu
-sudo apt install ffmpeg libavcodec-dev libavutil-dev libswscale-dev
+sudo apt install ffmpeg libavcodec-dev libavformat-dev libavutil-dev \
+  libswscale-dev libswresample-dev libavdevice-dev libavfilter-dev
 
-cargo install robot-bus --bin robot_bus_image_encoder
-robot_bus_image_encoder --print-example-config > encoder.yaml
-robot_bus_image_encoder --params encoder.yaml
+cargo install robot-bus --bin rbus_image_encoder
+rbus_image_encoder --print-example-config > encoder.yaml
+rbus_image_encoder --params encoder.yaml
 ```
 
 Linking GPL software encoders (`libx264` / `libx265`) is a deployment choice; prefer hardware encoders when available.
 
-### Audio capture (`robot_bus_audio_capture`)
+### Image decoder (`rbus_image_decoder`)
+
+Subscribes to `foxglove_msgs/CompressedVideo` (`h264` / `h265`, Annex-B) and publishes `sensor_msgs/Image` (`rgb8` or `bgr8`) via **system FFmpeg**. Decoder preference: NVDEC → VideoToolbox → soft `h264` / `hevc`. Default topics match the encoder: `/camera/video` → `/camera/image_decoded`.
+
+```bash
+cargo install robot-bus --bin rbus_image_decoder
+rbus_image_decoder --print-example-config > decoder.yaml
+rbus_image_decoder --params decoder.yaml
+```
+
+### Audio capture (`rbus_audio_capture`)
 
 Captures microphone PCM in **shared** (non-exclusive) mode via [cpal](https://github.com/RustAudio/cpal) and publishes `foxglove_msgs/RawAudio` (`pcm-s16`). Defaults: 16 kHz mono, 20 ms chunks. Feature `audio-capture` (default on).
 
@@ -413,32 +425,32 @@ Captures microphone PCM in **shared** (non-exclusive) mode via [cpal](https://gi
 # Debian/Ubuntu
 sudo apt install libasound2-dev
 
-cargo install robot-bus --bin robot_bus_audio_capture
-robot_bus_audio_capture --list-devices
-robot_bus_audio_capture --print-example-config > capture.yaml
-robot_bus_audio_capture --params capture.yaml
+cargo install robot-bus --bin rbus_audio_capture
+rbus_audio_capture --list-devices
+rbus_audio_capture --print-example-config > capture.yaml
+rbus_audio_capture --params capture.yaml
 ```
 
-### Audio play (`robot_bus_audio_play`)
+### Audio play (`rbus_audio_play`)
 
 Subscribes to `foxglove_msgs/RawAudio` (`pcm-s16`) and plays on a speaker (cpal shared mode). Feature `audio-play` (default on). Incoming rate/channels must match node parameters.
 
 ```bash
-cargo install robot-bus --bin robot_bus_audio_play
-robot_bus_audio_play --list-devices
-robot_bus_audio_play --print-example-config > play.yaml
-robot_bus_audio_play --params play.yaml
+cargo install robot-bus --bin rbus_audio_play
+rbus_audio_play --list-devices
+rbus_audio_play --print-example-config > play.yaml
+rbus_audio_play --params play.yaml
 ```
 
-### Camera capture (`robot_bus_camera_capture`)
+### Camera capture (`rbus_camera_capture`)
 
-Captures USB / webcam frames via [nokhwa](https://github.com/l1npengtul/nokhwa) (V4L2 / AVFoundation / Media Foundation) and publishes `sensor_msgs/Image` (`rgb8`). Defaults: 640×480 @ 30 fps on `/camera/image_raw` — ready for `robot_bus_image_encoder`. Feature `camera-capture` (default on). On macOS, grant camera permission when prompted.
+Captures USB / webcam frames via [nokhwa](https://github.com/l1npengtul/nokhwa) (V4L2 / AVFoundation / Media Foundation) and publishes `sensor_msgs/Image` (`rgb8`). Defaults: 640×480 @ 30 fps on `/camera/image_raw` — ready for `rbus_image_encoder`. Feature `camera-capture` (default on). On macOS, grant camera permission when prompted.
 
 ```bash
-cargo install robot-bus --bin robot_bus_camera_capture
-robot_bus_camera_capture --list-devices
-robot_bus_camera_capture --print-example-config > camera.yaml
-robot_bus_camera_capture --params camera.yaml
+cargo install robot-bus --bin rbus_camera_capture
+rbus_camera_capture --list-devices
+rbus_camera_capture --print-example-config > camera.yaml
+rbus_camera_capture --params camera.yaml
 ```
 
 ## ROS 2 bridge (`feature = "ros2"`)

@@ -1,0 +1,13 @@
+# Example parameters for rbus_image_decoder.
+# rbus_image_decoder --print-example-config > decoder.yaml
+# rbus_image_decoder --params decoder.yaml
+
+ros__parameters:
+  input_topic: /camera/video
+  output_topic: /camera/image_decoded
+  # Default codec when CompressedVideo.format is empty; message format wins when set.
+  codec: h264
+  # Leave empty to auto-pick (cuvid → videotoolbox → soft h264/hevc).
+  decoder: ""
+  # Output Image encoding: rgb8 or bgr8.
+  output_encoding: rgb8

@@ -36,6 +36,9 @@ pub mod ros2;
 #[cfg(feature = "image-encoder")]
 pub mod image_encoder;
 
+#[cfg(feature = "image-decoder")]
+pub mod image_decoder;
+
 #[cfg(feature = "audio-capture")]
 pub mod audio_capture;
 

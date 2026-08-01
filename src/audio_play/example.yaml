@@ -1,5 +1,5 @@
-# Example parameters for robot_bus_audio_play.
-# robot_bus_audio_play --print-example-config > play.yaml
+# Example parameters for rbus_audio_play.
+# rbus_audio_play --print-example-config > play.yaml
 
 ros__parameters:
   input_topic: /audio/play

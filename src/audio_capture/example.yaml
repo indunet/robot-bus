@@ -1,5 +1,5 @@
-# Example parameters for robot_bus_audio_capture.
-# robot_bus_audio_capture --print-example-config > capture.yaml
+# Example parameters for rbus_audio_capture.
+# rbus_audio_capture --print-example-config > capture.yaml
 
 ros__parameters:
   output_topic: /audio/mic

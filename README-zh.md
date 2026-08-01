@@ -382,14 +382,15 @@ UDP 发现（包名 `robot_bus_interface.msg.v1`）：
 工具二进制作为主 crate `robot-bus` 的 **默认 feature** 提供。先装系统依赖（FFmpeg / ALSA 头文件），再：
 
 ```bash
-cargo install robot-bus --bin robot_bus_image_encoder
-cargo install robot-bus --bin robot_bus_audio_capture
-cargo install robot-bus --bin robot_bus_audio_play
-cargo install robot-bus --bin robot_bus_camera_capture
+cargo install robot-bus --bin rbus_image_encoder
+cargo install robot-bus --bin rbus_image_decoder
+cargo install robot-bus --bin rbus_audio_capture
+cargo install robot-bus --bin rbus_audio_play
+cargo install robot-bus --bin rbus_camera_capture
 ```
 
 只要库时用 `--no-default-features --features grpc,console`。
-### 图像编码节点（`robot_bus_image_encoder`）
+### 图像编码节点（`rbus_image_encoder`）
 
 订阅 `sensor_msgs/Image`（`rgb8` / `bgr8` / `mono8`），经 **系统 FFmpeg** 发布为 `foxglove_msgs/CompressedVideo`（`h264` 或 `h265`，Annex-B）。编码器优先级：NVENC → VideoToolbox → `libopenh264` / 软编。
 
@@ -397,16 +398,27 @@ cargo install robot-bus --bin robot_bus_camera_capture
 # macOS
 brew install ffmpeg
 # Debian/Ubuntu
-sudo apt install ffmpeg libavcodec-dev libavutil-dev libswscale-dev
+sudo apt install ffmpeg libavcodec-dev libavformat-dev libavutil-dev \
+  libswscale-dev libswresample-dev libavdevice-dev libavfilter-dev
 
-cargo install robot-bus --bin robot_bus_image_encoder
-robot_bus_image_encoder --print-example-config > encoder.yaml
-robot_bus_image_encoder --params encoder.yaml
+cargo install robot-bus --bin rbus_image_encoder
+rbus_image_encoder --print-example-config > encoder.yaml
+rbus_image_encoder --params encoder.yaml
 ```
 
 若链接 GPL 软编（`libx264` / `libx265`），由部署方自行合规；有硬件编码时优先硬编。
 
-### 音频采集（`robot_bus_audio_capture`）
+### 图像解码节点（`rbus_image_decoder`）
+
+订阅 `foxglove_msgs/CompressedVideo`（`h264` / `h265`，Annex-B），经 **系统 FFmpeg** 发布为 `sensor_msgs/Image`（`rgb8` 或 `bgr8`）。解码器优先级：NVDEC → VideoToolbox → 软解 `h264` / `hevc`。默认话题与编码器对接：`/camera/video` → `/camera/image_decoded`。
+
+```bash
+cargo install robot-bus --bin rbus_image_decoder
+rbus_image_decoder --print-example-config > decoder.yaml
+rbus_image_decoder --params decoder.yaml
+```
+
+### 音频采集（`rbus_audio_capture`）
 
 经 [cpal](https://github.com/RustAudio/cpal) 以**共享**（非独占）模式采集麦克风 PCM，发布 `foxglove_msgs/RawAudio`（`pcm-s16`）。默认：16 kHz 单声道、20 ms 分块。feature `audio-capture`（默认开）。
 
@@ -414,32 +426,32 @@ robot_bus_image_encoder --params encoder.yaml
 # Debian/Ubuntu
 sudo apt install libasound2-dev
 
-cargo install robot-bus --bin robot_bus_audio_capture
-robot_bus_audio_capture --list-devices
-robot_bus_audio_capture --print-example-config > capture.yaml
-robot_bus_audio_capture --params capture.yaml
+cargo install robot-bus --bin rbus_audio_capture
+rbus_audio_capture --list-devices
+rbus_audio_capture --print-example-config > capture.yaml
+rbus_audio_capture --params capture.yaml
 ```
 
-### 音频播放（`robot_bus_audio_play`）
+### 音频播放（`rbus_audio_play`）
 
 订阅 `foxglove_msgs/RawAudio`（`pcm-s16`），经 cpal 共享模式输出到扬声器。feature `audio-play`（默认开）。消息中的采样率 / 声道须与节点参数一致。
 
 ```bash
-cargo install robot-bus --bin robot_bus_audio_play
-robot_bus_audio_play --list-devices
-robot_bus_audio_play --print-example-config > play.yaml
-robot_bus_audio_play --params play.yaml
+cargo install robot-bus --bin rbus_audio_play
+rbus_audio_play --list-devices
+rbus_audio_play --print-example-config > play.yaml
+rbus_audio_play --params play.yaml
 ```
 
-### 相机采集（`robot_bus_camera_capture`）
+### 相机采集（`rbus_camera_capture`）
 
-经 [nokhwa](https://github.com/l1npengtul/nokhwa)（V4L2 / AVFoundation / Media Foundation）采集 USB / 摄像头画面，发布 `sensor_msgs/Image`（`rgb8`）。默认：640×480 @ 30 fps，话题 `/camera/image_raw`，可直接接 `robot_bus_image_encoder`。feature `camera-capture`（默认开）。macOS 需在弹窗中授权摄像头。
+经 [nokhwa](https://github.com/l1npengtul/nokhwa)（V4L2 / AVFoundation / Media Foundation）采集 USB / 摄像头画面，发布 `sensor_msgs/Image`（`rgb8`）。默认：640×480 @ 30 fps，话题 `/camera/image_raw`，可直接接 `rbus_image_encoder`。feature `camera-capture`（默认开）。macOS 需在弹窗中授权摄像头。
 
 ```bash
-cargo install robot-bus --bin robot_bus_camera_capture
-robot_bus_camera_capture --list-devices
-robot_bus_camera_capture --print-example-config > camera.yaml
-robot_bus_camera_capture --params camera.yaml
+cargo install robot-bus --bin rbus_camera_capture
+rbus_camera_capture --list-devices
+rbus_camera_capture --print-example-config > camera.yaml
+rbus_camera_capture --params camera.yaml
 ```
 
 ## ROS 2 桥（`feature = "ros2"`）

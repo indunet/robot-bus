@@ -1,6 +1,6 @@
-# Example parameters for robot_bus_image_encoder.
-# robot_bus_image_encoder --print-example-config > encoder.yaml
-# robot_bus_image_encoder --params encoder.yaml
+# Example parameters for rbus_image_encoder.
+# rbus_image_encoder --print-example-config > encoder.yaml
+# rbus_image_encoder --params encoder.yaml
 
 ros__parameters:
   input_topic: /camera/image_raw

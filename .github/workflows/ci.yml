@@ -14,7 +14,9 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y curl unzip libzmq3-dev pkg-config \
-            ffmpeg libavcodec-dev libavutil-dev libswscale-dev libasound2-dev
+            ffmpeg libavcodec-dev libavformat-dev libavutil-dev \
+            libswscale-dev libswresample-dev libavdevice-dev libavfilter-dev \
+            libasound2-dev
       - name: Install protobuf compiler (codegen)
         run: |
           set -eux

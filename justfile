@@ -166,31 +166,37 @@ check-ros2-shim:
 
 # Build / test tool-node features
 nodes-build:
-	cargo build --bin robot_bus_image_encoder --bin robot_bus_audio_capture --bin robot_bus_audio_play --bin robot_bus_camera_capture
+	cargo build --bin rbus_image_encoder --bin rbus_image_decoder --bin rbus_audio_capture --bin rbus_audio_play --bin rbus_camera_capture
 
 nodes-test:
 	cargo test --lib image_encoder::
+	cargo test --lib image_decoder::
 	cargo test --lib audio_capture::
 	cargo test --lib audio_play::
 	cargo test --lib camera_capture::
 
 # Run image encoder (broker must already be up; needs system FFmpeg)
 node-image-encoder *args:
-	cargo run --bin robot_bus_image_encoder -- --print-example-config > /tmp/robot_bus_image_encoder.example.yaml
-	cargo run --bin robot_bus_image_encoder -- --params /tmp/robot_bus_image_encoder.example.yaml {{args}}
+	cargo run --bin rbus_image_encoder -- --print-example-config > /tmp/rbus_image_encoder.example.yaml
+	cargo run --bin rbus_image_encoder -- --params /tmp/rbus_image_encoder.example.yaml {{args}}
+
+# Run image decoder (broker must already be up; needs system FFmpeg)
+node-image-decoder *args:
+	cargo run --bin rbus_image_decoder -- --print-example-config > /tmp/rbus_image_decoder.example.yaml
+	cargo run --bin rbus_image_decoder -- --params /tmp/rbus_image_decoder.example.yaml {{args}}
 
 # Run audio capture (broker must already be up; needs input device)
 node-audio-capture *args:
-	cargo run --bin robot_bus_audio_capture -- --print-example-config > /tmp/robot_bus_audio_capture.example.yaml
-	cargo run --bin robot_bus_audio_capture -- --params /tmp/robot_bus_audio_capture.example.yaml {{args}}
+	cargo run --bin rbus_audio_capture -- --print-example-config > /tmp/rbus_audio_capture.example.yaml
+	cargo run --bin rbus_audio_capture -- --params /tmp/rbus_audio_capture.example.yaml {{args}}
 
 # Run audio play (broker must already be up; needs output device)
 node-audio-play *args:
-	cargo run --bin robot_bus_audio_play -- --print-example-config > /tmp/robot_bus_audio_play.example.yaml
-	cargo run --bin robot_bus_audio_play -- --params /tmp/robot_bus_audio_play.example.yaml {{args}}
+	cargo run --bin rbus_audio_play -- --print-example-config > /tmp/rbus_audio_play.example.yaml
+	cargo run --bin rbus_audio_play -- --params /tmp/rbus_audio_play.example.yaml {{args}}
 
 # Run USB camera capture (broker must already be up; needs a camera)
 node-camera-capture *args:
-	cargo run --bin robot_bus_camera_capture -- --print-example-config > /tmp/robot_bus_camera_capture.example.yaml
-	cargo run --bin robot_bus_camera_capture -- --params /tmp/robot_bus_camera_capture.example.yaml {{args}}
+	cargo run --bin rbus_camera_capture -- --print-example-config > /tmp/rbus_camera_capture.example.yaml
+	cargo run --bin rbus_camera_capture -- --params /tmp/rbus_camera_capture.example.yaml {{args}}
 

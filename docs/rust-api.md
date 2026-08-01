@@ -574,38 +574,49 @@ match result {
 
 ## 工具节点：Image encoder
 
-主 crate feature **`image-encoder`（默认开启）**：模块 `robot_bus::image_encoder`，二进制 `robot_bus_image_encoder`。订阅 `sensor_msgs/Image`，发布 `foxglove_msgs/CompressedVideo`（需系统 FFmpeg）。
+主 crate feature **`image-encoder`（默认开启）**：模块 `robot_bus::image_encoder`，二进制 `rbus_image_encoder`。订阅 `sensor_msgs/Image`，发布 `foxglove_msgs/CompressedVideo`（需系统 FFmpeg）。
 
 ```bash
 brew install ffmpeg   # 或 apt 安装 ffmpeg + libav*-dev
-cargo install robot-bus --bin robot_bus_image_encoder
+cargo install robot-bus --bin rbus_image_encoder
 
-robot_bus_image_encoder --print-example-config > encoder.yaml
-robot_bus_image_encoder --params encoder.yaml
+rbus_image_encoder --print-example-config > encoder.yaml
+rbus_image_encoder --params encoder.yaml
+```
+
+## 工具节点：Image decoder
+
+主 crate feature **`image-decoder`（默认开启）**：模块 `robot_bus::image_decoder`，二进制 `rbus_image_decoder`。订阅 `foxglove_msgs/CompressedVideo`（H.264/H.265 Annex-B），发布 `sensor_msgs/Image`（需系统 FFmpeg）。
+
+```bash
+cargo install robot-bus --bin rbus_image_decoder
+
+rbus_image_decoder --print-example-config > decoder.yaml
+rbus_image_decoder --params decoder.yaml
 ```
 
 ## 工具节点：Audio capture / play
 
-主 crate features **`audio-capture` / `audio-play`（默认开启）**：`robot_bus_audio_capture`、`robot_bus_audio_play`。
+主 crate features **`audio-capture` / `audio-play`（默认开启）**：`rbus_audio_capture`、`rbus_audio_play`。
 
 ```bash
 # Debian/Ubuntu 可能需要：sudo apt install libasound2-dev
-cargo install robot-bus --bin robot_bus_audio_capture
-cargo install robot-bus --bin robot_bus_audio_play
+cargo install robot-bus --bin rbus_audio_capture
+cargo install robot-bus --bin rbus_audio_play
 
-robot_bus_audio_capture --print-example-config > capture.yaml
-robot_bus_audio_play --print-example-config > play.yaml
+rbus_audio_capture --print-example-config > capture.yaml
+rbus_audio_play --print-example-config > play.yaml
 ```
 
 ## 工具节点：Camera capture
 
-主 crate feature **`camera-capture`（默认开启）**：模块 `robot_bus::camera_capture`，二进制 `robot_bus_camera_capture`。经 nokhwa 采集 USB / 摄像头，发布 `sensor_msgs/Image`（`rgb8`），默认话题 `/camera/image_raw`。
+主 crate feature **`camera-capture`（默认开启）**：模块 `robot_bus::camera_capture`，二进制 `rbus_camera_capture`。经 nokhwa 采集 USB / 摄像头，发布 `sensor_msgs/Image`（`rgb8`），默认话题 `/camera/image_raw`。
 
 ```bash
-cargo install robot-bus --bin robot_bus_camera_capture
-robot_bus_camera_capture --list-devices
-robot_bus_camera_capture --print-example-config > camera.yaml
-robot_bus_camera_capture --params camera.yaml
+cargo install robot-bus --bin rbus_camera_capture
+rbus_camera_capture --list-devices
+rbus_camera_capture --print-example-config > camera.yaml
+rbus_camera_capture --params camera.yaml
 ```
 
 不要默认多媒体依赖时：`cargo build --no-default-features --features grpc,console`。
