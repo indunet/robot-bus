@@ -1,0 +1,33 @@
+# Example parameters for rbus_ethercat_joint.
+# rbus_ethercat_joint --print-example-config > ethercat_joint.yaml
+#
+# Feature `ethercat-joint` is off by default (needs Linux + NIC permissions).
+# Use backend: mock for bring-up without hardware.
+
+ros__parameters:
+  iface: eth0
+  backend: ethercrab   # ethercrab | mock
+  cycle_ns: 1000000
+  state_rate_hz: 100
+  command_timeout_ms: 100
+  auto_enable: true
+  output_topic: /joint_states
+  command_topic: /joint_commands
+  diagnostics_topic: /diagnostics
+  enable_service: /ethercat_joint/enable
+  fault_reset_service: /ethercat_joint/fault_reset
+  frame_id: ethercat_joint
+  joints:
+    - name: joint_1
+      station_address: 1001
+      mode: csp            # csp | csv | cst
+      encoder_ticks_per_rev: 524288
+      gear_ratio: 101.0
+      direction: 1
+      position_offset_rad: 0.0
+      # Byte offsets into the slave PDI (defaults suit a minimal CiA402 layout).
+      pdo:
+        controlword: 0
+        target: 2
+        statusword: 0
+        actual: 2

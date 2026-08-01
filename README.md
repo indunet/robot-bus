@@ -459,11 +459,30 @@ rbus_camera_capture --params camera.yaml
 Reads a standard USB Xbox-layout pad / wireless receiver via [gilrs](https://gitlab.com/gilrs-project/gilrs) (SDL GameController mappings; typically plug-and-play) and publishes `robot_bus_interface/XboxJoy`. Subscribes to `robot_bus_interface/XboxJoyRumble` for dual-motor vibration. Defaults: `/xbox_joy` out, `/xbox_joy/rumble` in, 50 Hz. Feature `xbox-joy` (default on). Rumble works on Linux / Windows; macOS supports input only.
 
 ```bash
+# Debian/Ubuntu (gilrs needs libudev)
+sudo apt install libudev-dev
+
 cargo install robot-bus --bin rbus_xbox_joy
 rbus_xbox_joy --list-devices
 rbus_xbox_joy --print-example-config > xbox.yaml
 rbus_xbox_joy --params xbox.yaml
 ```
+
+### EtherCAT joints (`rbus_ethercat_joint`)
+
+Independent tool node (same pattern as camera / xbox — **not** part of the broker). Bridges EtherCAT / CiA402 drives: publishes `sensor_msgs/JointState`, subscribes to `robot_bus_interface/JointCommand`. Supports cyclic modes **CSP / CSV / CST** via YAML `mode` per joint. Feature `ethercat-joint` is **off by default** (needs a Linux NIC and usually `CAP_NET_RAW` / root for real hardware).
+
+```bash
+cargo install robot-bus --bin rbus_ethercat_joint --features ethercat-joint
+rbus_ethercat_joint --print-example-config > ethercat_joint.yaml
+# Edit iface, joints, PDO offsets; use backend: mock without hardware
+rbus_ethercat_joint --params ethercat_joint.yaml
+rbus_ethercat_joint --params ethercat_joint.yaml --list-devices
+```
+
+Optional services (same process): `std_srvs/SetBool` on `enable_service` (default `/ethercat_joint/enable`) and `std_srvs/Trigger` on `fault_reset_service` (default `/ethercat_joint/fault_reset`). For secondary development, depend on `robot-bus` with `ethercat-joint` and call `robot_bus::ethercat_joint::run_with_hooks` with a custom `JointHooks` impl.
+
+**Safety:** treat EtherCAT enable as hazardous. Use an external STO / e-stop; this node’s command-timeout and diagnostics are not a certified safety function.
 
 ## ROS 2 bridge (`feature = "ros2"`)
 

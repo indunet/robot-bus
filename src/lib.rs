@@ -51,6 +51,9 @@ pub mod camera_capture;
 #[cfg(feature = "xbox-joy")]
 pub mod xbox_joy;
 
+#[cfg(feature = "ethercat-joint")]
+pub mod ethercat_joint;
+
 #[cfg(feature = "extension-module")]
 mod python_api;
 

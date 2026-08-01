@@ -70,6 +70,9 @@ audio-play = ["dep:cpal", "dep:env_logger"]
 camera-capture = ["dep:nokhwa", "dep:env_logger"]
 # USB Xbox-layout joy → XboxJoy + rumble (`rbus_xbox_joy`).
 xbox-joy = ["dep:gilrs", "dep:env_logger"]
+# EtherCAT / CiA402 joints → JointState + JointCommand (`rbus_ethercat_joint`).
+# Off by default (Linux NIC + CAP_NET_RAW for real hardware; use backend: mock otherwise).
+ethercat-joint = ["dep:ethercrab", "dep:env_logger", "dep:tokio"]
 # In-process ROS 2 ↔ robot-bus topic/service/action bridge (requires sourced ROS + linking rcl).
 # Not enabled by default — keep core SDK / maturin builds free of ROS.
 ros2 = ["dep:rclrs", "dep:rosidl_runtime_rs", "dep:tokio"]
@@ -84,6 +87,7 @@ axum = { version = "0.8", optional = true, default-features = false, features = 
 clap = { version = "4", features = ["derive"] }
 cpal = { version = "0.15", optional = true }
 env_logger = { version = "0.11", optional = true }
+ethercrab = { version = "0.7", optional = true, default-features = true, features = ["std"] }
 ffmpeg-next = { version = "8", optional = true }
 gilrs = { version = "0.11", optional = true }
 http = { version = "1", optional = true }
@@ -177,6 +181,11 @@ required-features = ["camera-capture"]
 name = "rbus_xbox_joy"
 path = "src/bin/rbus_xbox_joy.rs"
 required-features = ["xbox-joy"]
+
+[[bin]]
+name = "rbus_ethercat_joint"
+path = "src/bin/rbus_ethercat_joint.rs"
+required-features = ["ethercat-joint"]
 
 [[bin]]
 name = "robot_bus_perf"
