@@ -378,10 +378,13 @@ jobs:
             exit 1
           fi
           echo "Using CMake generator: ${VS_GEN}"
+          # CONFIG mode is required so Abseil INTERFACE deps + ABSL_CONSUME_DLL
+          # propagate; MODULE FindProtobuf alone causes LNK2001 on MSVC.
           cmake -S bindings/cpp -B bindings/cpp/build-win \
             -G "$VS_GEN" -A x64 \
             -DROBOT_BUS_BUILD_TESTS=OFF \
-            -DCMAKE_PREFIX_PATH="${PROTOBUF_PREFIX}"
+            -DCMAKE_PREFIX_PATH="${PROTOBUF_PREFIX}" \
+            -DCMAKE_FIND_PACKAGE_PREFER_CONFIG=ON
           cmake --build bindings/cpp/build-win --config Release --target robot_bus_msgs -j2
 
       - name: Stage install tree
@@ -398,10 +401,14 @@ jobs:
           find bindings/cpp/build-win -name 'robot_bus_msgs.lib' -exec cp {} "$STAGE/lib/" \; || true
           # Bundle matching protobuf / abseil from the pinned prefix + zeromq from vcpkg
           cp "$PROTOBUF_PREFIX"/bin/libprotobuf*.dll "$STAGE/bin/" 2>/dev/null || true
-          cp "$PROTOBUF_PREFIX"/bin/abseil*.dll "$STAGE/bin/" 2>/dev/null || true
           cp "$PROTOBUF_PREFIX"/bin/*protobuf*.dll "$STAGE/bin/" 2>/dev/null || true
+          # Shared Abseil on Windows is a single abseil_dll.dll (plus any absl_*.dll).
+          cp "$PROTOBUF_PREFIX"/bin/abseil_dll.dll "$STAGE/bin/" 2>/dev/null || true
+          cp "$PROTOBUF_PREFIX"/bin/abseil*.dll "$STAGE/bin/" 2>/dev/null || true
           cp "$PROTOBUF_PREFIX"/bin/absl*.dll "$STAGE/bin/" 2>/dev/null || true
           cp "$VCPKG_ROOT"/installed/x64-windows/bin/libzmq*.dll "$STAGE/bin/" || true
+          ls -la "$STAGE/bin/"
+          test -f "$STAGE/bin/robot_bus_msgs.dll"
           cp -a bindings/cpp/include/. "$STAGE/include/"
           cp -a bindings/cpp/generated/robot_bus "$STAGE/include/"
 

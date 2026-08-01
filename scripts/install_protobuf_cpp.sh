@@ -49,17 +49,27 @@ CMAKE_ARGS=(
   -Dprotobuf_BUILD_TESTS=OFF
   -Dprotobuf_BUILD_SHARED_LIBS=ON
   -Dprotobuf_INSTALL=ON
+  -DABSL_PROPAGATE_CXX_STD=ON
+  -DABSL_ENABLE_INSTALL=ON
 )
 
 if is_windows; then
+  # CMAKE_REQUIRED_FLAGS forces Abseil's ABSL_INTERNAL_AT_LEAST_CXX17 check
+  # to succeed under MSVC (otherwise string_view option mismatches → LNK2001).
   VS_GEN="$(windows_vs_generator)"
   echo "Using CMake generator: ${VS_GEN}"
-  CMAKE_ARGS+=(-G "$VS_GEN" -A x64)
+  CMAKE_ARGS+=(
+    -G "$VS_GEN" -A x64
+    -DCMAKE_REQUIRED_FLAGS="/std:c++17"
+  )
   cmake "${CMAKE_ARGS[@]}"
   cmake --build "$WORK/build" --config Release -j"$JOBS"
   cmake --install "$WORK/build" --config Release
 else
-  CMAKE_ARGS+=(-DCMAKE_BUILD_TYPE=Release)
+  CMAKE_ARGS+=(
+    -DCMAKE_BUILD_TYPE=Release
+    -DCMAKE_REQUIRED_FLAGS="-std=c++17"
+  )
   cmake "${CMAKE_ARGS[@]}"
   cmake --build "$WORK/build" -j"$JOBS"
   cmake --install "$WORK/build"

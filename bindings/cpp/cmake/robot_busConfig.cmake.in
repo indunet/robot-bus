@@ -1,7 +1,7 @@
 @PACKAGE_INIT@
 
 include(CMakeFindDependencyMacro)
-find_dependency(Protobuf REQUIRED)
+find_dependency(Protobuf CONFIG REQUIRED)
 
 if(EXISTS "${CMAKE_CURRENT_LIST_DIR}/robot_busTargets.cmake")
   include("${CMAKE_CURRENT_LIST_DIR}/robot_busTargets.cmake")

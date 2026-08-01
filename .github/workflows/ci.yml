@@ -134,6 +134,7 @@ jobs:
           cargo build --release --manifest-path bindings/cpp/native/Cargo.toml
           cmake -S bindings/cpp -B bindings/cpp/build -DCMAKE_BUILD_TYPE=Release \
             -DCMAKE_PREFIX_PATH=/usr/local \
+            -DCMAKE_FIND_PACKAGE_PREFER_CONFIG=ON \
             -DROBOT_BUS_BUILD_TESTS=ON
           # Cap jobs: bare `-j` is unlimited under GNU make and OOMs GHA when
           # compiling ~130 protobuf .pb.cc units (exit 143 = SIGTERM).

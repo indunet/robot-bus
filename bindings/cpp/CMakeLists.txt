@@ -11,7 +11,11 @@ option(ROBOT_BUS_BUILD_MSGS "Build librobot_bus_msgs from generated protobufs" O
 # Build native FFI with --features ros2 (requires sourced ROS 2 Humble/Jazzy).
 option(ROBOT_BUS_ROS2 "Enable ROS 2 bridge in librobot_bus (cargo --features ros2)" OFF)
 
-find_package(Protobuf REQUIRED)
+# Prefer protobuf's CMake package config so Abseil INTERFACE deps propagate
+# (ABSL_CONSUME_DLL / PROTOBUF_USE_DLLS on Windows shared builds). CMake's
+# FindProtobuf MODULE mode only locates libprotobuf and skips Abseil, which
+# causes MSVC LNK2001 for LogMessage::operator<< in generated .pb.cc.
+find_package(Protobuf CONFIG REQUIRED)
 
 set(ROBOT_BUS_GENERATED_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/generated")
 set(ROBOT_BUS_INCLUDE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/include")
@@ -27,6 +31,15 @@ if(ROBOT_BUS_BUILD_MSGS)
       $<BUILD_INTERFACE:${ROBOT_BUS_GENERATED_ROOT}>
       $<INSTALL_INTERFACE:include>)
   target_link_libraries(robot_bus_msgs PUBLIC protobuf::libprotobuf)
+  # Belt-and-suspenders: shared Abseil on MSVC exports LogMessage templates
+  # from abseil_dll; without ABSL_CONSUME_DLL the linker looks for static
+  # symbols and fails with LNK2001.
+  if(WIN32)
+    get_target_property(_rb_pb_defs protobuf::libprotobuf INTERFACE_COMPILE_DEFINITIONS)
+    if(_rb_pb_defs MATCHES "PROTOBUF_USE_DLLS")
+      target_compile_definitions(robot_bus_msgs PUBLIC ABSL_CONSUME_DLL)
+    endif()
+  endif()
   set_target_properties(robot_bus_msgs PROPERTIES
     OUTPUT_NAME robot_bus_msgs
     VERSION ${PROJECT_VERSION}
