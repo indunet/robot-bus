@@ -1,0 +1,14 @@
+# Example parameters for robot-bus-image-encoder.
+# Load with: --params nodes/image_encoder/config/example.yaml
+
+ros__parameters:
+  input_topic: /camera/image_raw
+  output_topic: /camera/video
+  codec: h264
+  bitrate: 2000000
+  gop_size: 30
+  fps: 30
+  # Leave empty to auto-pick (nvenc → videotoolbox → openh264 → libx264 / libx265).
+  encoder: ""
+  width: 0
+  height: 0

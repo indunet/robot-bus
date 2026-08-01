@@ -44,6 +44,7 @@ Rust 核心留在仓库根目录（`Cargo.toml` + `src/`）。各语言 SDK 放�
 | [`console/`](console/) | Web 监控控制台（产品 UI；构建产物同步到本地/CI 的 `assets/console/`，不入库） |
 | [`benches/`](benches/) | 性能压测：[`robot_bus_perf/`](benches/robot_bus_perf/)（`just perf`）、[`ros2_perf/`](benches/ros2_perf/)（`just perf-ros2`） |
 | [`tests/`](tests/) | Rust 集成测试 + 跨语言互通（`just test-interop`） |
+| [`nodes/`](nodes/) | 可选工具型节点二进制（Cargo workspace 成员；不进默认 crates.io SDK 构建） |
 | [`docs/`](docs/) | API 文档与生成的性能报告 |
 | [`scripts/`](scripts/)、[`tools/`](tools/)、`justfile` | 代码生成、打包与任务编排 |
 
@@ -376,6 +377,26 @@ Proto（包名 `robot_bus_interface.grpc.v1`，与 ROS `*.msg.v1` / `*.srv.v1` �
 UDP 发现（包名 `robot_bus_interface.msg.v1`）：
 
 - [`announce.proto`](proto/robot_bus_interface/msg/v1/announce.proto)
+
+## 工具节点（`nodes/`）
+
+可选可执行工具放在 [`nodes/`](nodes/)，作为 **Cargo workspace 成员**（见 [`nodes/README.md`](nodes/README.md)）。依赖 `robot-bus` SDK，但**不**进入默认 crates.io / 各语言 SDK 包。仓库根目录下普通 `cargo test` / `cargo build` 只编核心 crate（`default-members = ["."]`）。
+
+### 图像编码节点（`robot-bus-image-encoder`）
+
+订阅 `sensor_msgs/Image`（`rgb8` / `bgr8` / `mono8`），经 **系统 FFmpeg**（Rust 绑定 `ffmpeg-next`）发布为 `foxglove_msgs/CompressedVideo`（`h264` 或 `h265`，Annex-B）。编码器优先级：NVENC → VideoToolbox → `libopenh264` / 软编。FFmpeg **不**打进安装包。
+
+```bash
+# macOS
+brew install ffmpeg
+# Debian/Ubuntu
+sudo apt install ffmpeg libavcodec-dev libavutil-dev libswscale-dev
+
+cargo run -p robot-bus-image-encoder -- --params nodes/image_encoder/config/example.yaml
+# 或：just node-image-encoder
+```
+
+若链接 GPL 软编（`libx264` / `libx265`），由部署方自行合规；有硬件编码时优先硬编。参数见示例 YAML。
 
 ## ROS 2 桥（`feature = "ros2"`）
 

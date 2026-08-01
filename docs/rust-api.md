@@ -571,3 +571,14 @@ match result {
     Ok(v) => { /* ... */ }
 }
 ```
+
+## 工具节点：Image encoder
+
+仓库 [`nodes/`](../nodes/) 下的独立 crate（不进核心 SDK feature）。订阅 `sensor_msgs/Image`，发布 `foxglove_msgs/CompressedVideo`（H.264/H.265，系统 FFmpeg）。
+
+```bash
+brew install ffmpeg   # 或 apt 安装 ffmpeg + libav*-dev
+cargo run -p robot-bus-image-encoder -- --params nodes/image_encoder/config/example.yaml
+```
+
+约定与新增节点方式见 [`nodes/README.md`](../nodes/README.md)。

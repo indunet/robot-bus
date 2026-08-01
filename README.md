@@ -44,6 +44,7 @@ Rust core stays at the repo root (`Cargo.toml` + `src/`). Language SDKs live und
 | [`console/`](console/) | Web monitoring console (product UI; build output synced to `assets/console/` locally / in CI, not committed) |
 | [`benches/`](benches/) | Perf harnesses: [`robot_bus_perf/`](benches/robot_bus_perf/) (`just perf`), [`ros2_perf/`](benches/ros2_perf/) (`just perf-ros2`) |
 | [`tests/`](tests/) | Rust integration tests + cross-language interop (`just test-interop`) |
+| [`nodes/`](nodes/) | Optional tool-node binaries (Cargo workspace members; not in the default crates.io SDK build) |
 | [`docs/`](docs/) | API guides and generated perf reports |
 | [`scripts/`](scripts/), [`tools/`](tools/), `justfile` | Codegen, packaging, and task orchestration |
 
@@ -374,6 +375,26 @@ Proto (package `robot_bus_interface.grpc.v1`, distinct from ROS `*.msg.v1` / `*.
 UDP discovery (`robot_bus_interface.msg.v1`):
 
 - [`announce.proto`](proto/robot_bus_interface/msg/v1/announce.proto)
+
+## Tool nodes (`nodes/`)
+
+Optional executable utilities live under [`nodes/`](nodes/) as **Cargo workspace members** (see [`nodes/README.md`](nodes/README.md)). They depend on the `robot-bus` SDK but are **not** part of the default crates.io / language SDK packages. Plain `cargo test` / `cargo build` at the repo root only builds the core crate (`default-members = ["."]`).
+
+### Image encoder (`robot-bus-image-encoder`)
+
+Subscribes to `sensor_msgs/Image` (`rgb8` / `bgr8` / `mono8`) and publishes `foxglove_msgs/CompressedVideo` (`h264` or `h265`, Annex-B) via **system FFmpeg** (Rust binding: `ffmpeg-next`). Encoder preference: NVENC → VideoToolbox → `libopenh264` / soft encoders. FFmpeg is **not** vendored.
+
+```bash
+# macOS
+brew install ffmpeg
+# Debian/Ubuntu
+sudo apt install ffmpeg libavcodec-dev libavutil-dev libswscale-dev
+
+cargo run -p robot-bus-image-encoder -- --params nodes/image_encoder/config/example.yaml
+# or: just node-image-encoder
+```
+
+Linking GPL software encoders (`libx264` / `libx265`) is a deployment choice; prefer hardware encoders when available. See the example YAML for parameters (`codec`, `bitrate`, `encoder`, …).
 
 ## ROS 2 bridge (`feature = "ros2"`)
 

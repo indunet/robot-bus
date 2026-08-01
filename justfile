@@ -2,7 +2,7 @@
 # Install: https://github.com/casey/just
 #
 # Layout: Rust core at repo root; language SDKs under bindings/;
-# benches/robot_bus_perf + benches/ros2_perf; tests/ for interop; console/ is product UI.
+# nodes/ tool-node workspace crates; benches/; tests/ for interop; console/ is product UI.
 
 set shell := ["bash", "-eu", "-o", "pipefail", "-c"]
 
@@ -161,6 +161,17 @@ perf-ros2:
 
 # Typecheck ros2 bridge without a full ROS install (rclrs use_ros_shim)
 check-ros2-shim:
-	RUSTFLAGS='--cstro="humble"' cargo check --features ros2-shim
-	RUSTFLAGS='--cfg ros_distro="humble"' cafg ros_dirgo check --manifest-path bindings/cpp/native/Cargo.toml --features ros2-shim
+	RUSTFLAGS='--cfg ros_distro="humble"' cargo check --features ros2-shim
+	RUSTFLAGS='--cfg ros_distro="humble"' cargo check --manifest-path bindings/cpp/native/Cargo.toml --features ros2-shim
+
+# Build / test tool nodes under nodes/ (may need system deps, e.g. FFmpeg)
+nodes-build:
+	cargo build -p robot-bus-image-encoder
+
+nodes-test:
+	cargo test -p robot-bus-image-encoder
+
+# Run image encoder (broker must already be up; needs system FFmpeg)
+node-image-encoder *args:
+	cargo run -p robot-bus-image-encoder -- --params nodes/image_encoder/config/example.yaml {{args}}
 
