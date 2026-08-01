@@ -73,3 +73,7 @@ bindings/android/generated/
 # Codegen helper crate
 tools/gen-msgs/target/
 tools/gen-msgs/Cargo.lock
+
+# ROS 2 perf local colcon workspace + merge partials (`run.sh --local`)
+benches/ros2_perf/_ws/
+benches/ros2_perf/_out.*.partial.md

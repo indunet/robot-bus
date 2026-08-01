@@ -5,13 +5,12 @@
 ## 环境
 
 - ROS: Humble (rmw_fastrtps_cpp)
-- Fast DDS profile: shm → `fastdds_shm.xml`；udp → `fastdds_udp.xml`
+- Fast DDS profile: `/root/robot-bus/benches/ros2_perf/config/fastdds_shm.xml`
 - Payload: 64 bytes
-- Message max loss / trial / rate range: 1% / ~1s (cap 50000 msgs) / 500..500000 Hz (KeepLast(2048) best_effort)
+- Message max loss / trial / rate range: 1% / ~1s / 500..500000 Hz (KeepLast(2048) best_effort)
 - Message latency samples: 5000 (paced)
-- Service/action iterations: 100000 / 100000
+- Service/action iterations: 50000 / 5000
 - Modes: **shm** (Fast DDS Shared Memory) + **udp** (Fast DDS UDPv4 only)
-- Host: Linux container `ros2`（Docker Desktop VM）；与 macOS 上 `just perf` 不在同一 OS
 
 ## 方法
 
@@ -29,26 +28,37 @@ message 为 **max goodput**（丢包阈值内的最大可持续订阅速率）�
 
 | 场景 | shm | udp |
 |------|-----|-----|
-| message 发布 | 74355/s | 99810/s |
-| message max goodput | 74355/s (100.0% delivered) | 99810/s (100.0% delivered) |
-| service call | 16395/s | 27497/s |
-| action send_goal | 128/s | 135/s |
+| message 发布 | 120265/s | 108731/s |
+| message max goodput | 120265/s (100.0% delivered) | 108731/s (100.0% delivered) |
+| service call | 19439/s | 19688/s |
+| action send_goal | 1885/s | 1887/s |
 
 ## shm（Fast DDS Shared Memory）
 
 | 场景 | 发送 | 接收 | 耗时 | 发布/s | 订阅/s | 投递% | p50 (µs) | p95 (µs) | p99 (µs) | mean (µs) |
 |------|------|------|------|--------|--------|-------|----------|----------|----------|-----------|
-| message pub/sub | 50000 | 50000 | 0.672s | 74355 | 74355 | 100.0 | 32 | 56 | 78 | 37 |
-| service call | 100000 | 100000 | 6.099s | 16395 | 16395 | 100.0 | 58 | 90 | 118 | 61 |
-| action send_goal | 100000 | 100000 | 780.453s | 128 | 128 | 100.0 | 7196 | 15085 | 19414 | 7804 |
+| message pub/sub | 50000 | 50000 | 0.416s | 120265 | 120265 | 100.0 | 57 | 98 | 156 | 61 |
+| service call | 50000 | 50000 | 2.572s | 19439 | 19439 | 100.0 | 48 | 73 | 103 | 51 |
+| action send_goal | 5000 | 5000 | 2.653s | 1885 | 1885 | 100.0 | 527 | 881 | 969 | 531 |
 
 ## udp（Fast DDS UDPv4，无 SHM）
 
 | 场景 | 发送 | 接收 | 耗时 | 发布/s | 订阅/s | 投递% | p50 (µs) | p95 (µs) | p99 (µs) | mean (µs) |
 |------|------|------|------|--------|--------|-------|----------|----------|----------|-----------|
-| message pub/sub | 50000 | 50000 | 0.501s | 99810 | 99810 | 100.0 | 85 | 210 | 497 | 107 |
-| service call | 100000 | 100000 | 3.637s | 27497 | 27497 | 100.0 | 37 | 45 | 54 | 36 |
-| action send_goal | 100000 | 100000 | 743.262s | 135 | 135 | 100.0 | 7419 | 14091 | 16249 | 7432 |
+
+
+## shm（Fast DDS Shared Memory）
+
+| 场景 | 发送 | 接收 | 耗时 | 发布/s | 订阅/s | 投递% | p50 (µs) | p95 (µs) | p99 (µs) | mean (µs) |
+|------|------|------|------|--------|--------|-------|----------|----------|----------|-----------|
+
+## udp（Fast DDS UDPv4，无 SHM）
+
+| 场景 | 发送 | 接收 | 耗时 | 发布/s | 订阅/s | 投递% | p50 (µs) | p95 (µs) | p99 (µs) | mean (µs) |
+|------|------|------|------|--------|--------|-------|----------|----------|----------|-----------|
+| message pub/sub | 50000 | 50000 | 0.460s | 108731 | 108731 | 100.0 | 58 | 96 | 131 | 60 |
+| service call | 50000 | 50000 | 2.540s | 19688 | 19688 | 100.0 | 48 | 70 | 100 | 51 |
+| action send_goal | 5000 | 5000 | 2.650s | 1887 | 1887 | 100.0 | 531 | 855 | 940 | 530 |
 
 ## 复现
 
