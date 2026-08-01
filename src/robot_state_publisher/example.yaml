@@ -1,0 +1,16 @@
+# Example parameters for rbus_robot_state_publisher.
+# rbus_robot_state_publisher --print-example-config > robot_state_publisher.yaml
+#
+# Provide an absolute (or cwd-relative) path to a URDF file.
+# A minimal sample lives at src/robot_state_publisher/examples/simple_arm.urdf
+
+ros__parameters:
+  urdf_file: simple_arm.urdf
+  joint_states_topic: /joint_states
+  tf_topic: /tf
+  tf_static_topic: /tf_static
+  # Republish rate for fixed joints on /tf_static (0 = once).
+  static_publish_rate_hz: 1.0
+  # When a movable joint is missing from JointState, use this (radians / metres).
+  # empty → URDF limit.lower (or 0.0)
+  # missing_joint_position: 0.0

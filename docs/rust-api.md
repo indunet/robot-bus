@@ -623,4 +623,27 @@ rbus_usb_camera --print-example-config > camera.yaml
 rbus_usb_camera --params camera.yaml
 ```
 
+## 工具节点：TF（static + robot_state_publisher）
+
+库模块 **`robot_bus::tf`**（始终可用）：`Buffer`、`TfListener`、`TransformBroadcaster`。消息真相源为 `tf2_msgs/TFMessage`（`/tf`、`/tf_static`）。
+
+- feature **`static-transform-publisher`** → `rbus_static_transform_publisher`
+- feature **`robot-state-publisher`** → `rbus_robot_state_publisher`（URDF 子集含 `<mimic>` + JointState）
+
+```bash
+cargo install robot-bus --bin rbus_static_transform_publisher
+cargo install robot-bus --bin rbus_robot_state_publisher
+rbus_static_transform_publisher --print-example-config > static_tf.yaml
+rbus_robot_state_publisher --print-example-config > rsp.yaml
+```
+
+```rust
+use robot_bus::tf::TfListener;
+
+let listener = TfListener::with_defaults(&mut node)?;
+let buf = listener.buffer();
+// after spin delivers /tf + /tf_static:
+let t = buf.lock().unwrap().lookup_transform("base_link", "camera", None)?;
+```
+
 不要默认多媒体依赖时：`cargo build --no-default-features --features grpc,console`。

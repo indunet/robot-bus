@@ -166,7 +166,7 @@ check-ros2-shim:
 
 # Build / test tool-node features
 nodes-build:
-	cargo build --bin rbus_image_encoder --bin rbus_image_decoder --bin rbus_audio_capture --bin rbus_audio_play --bin rbus_usb_camera --bin rbus_xbox_joy
+	cargo build --bin rbus_image_encoder --bin rbus_image_decoder --bin rbus_audio_capture --bin rbus_audio_play --bin rbus_usb_camera --bin rbus_xbox_joy --bin rbus_static_transform_publisher --bin rbus_robot_state_publisher
 
 nodes-test:
 	cargo test --lib image_encoder::
@@ -175,6 +175,9 @@ nodes-test:
 	cargo test --lib audio_play::
 	cargo test --lib usb_camera::
 	cargo test --lib xbox_joy::
+	cargo test --lib tf::
+	cargo test --lib static_transform_publisher::
+	cargo test --lib robot_state_publisher::
 
 # Run image encoder (broker must already be up; needs system FFmpeg)
 node-image-encoder *args:
@@ -205,4 +208,17 @@ node-usb-camera *args:
 node-xbox-joy *args:
 	cargo run --bin rbus_xbox_joy -- --print-example-config > /tmp/rbus_xbox_joy.example.yaml
 	cargo run --bin rbus_xbox_joy -- --params /tmp/rbus_xbox_joy.example.yaml {{args}}
+
+# Run static TF publisher (broker must already be up)
+node-static-tf *args:
+	cargo run --bin rbus_static_transform_publisher -- --print-example-config > /tmp/rbus_static_tf.example.yaml
+	cargo run --bin rbus_static_transform_publisher -- --params /tmp/rbus_static_tf.example.yaml {{args}}
+
+# Run robot_state_publisher (broker must already be up; needs JointState on /joint_states)
+node-robot-state-publisher *args:
+	cp src/robot_state_publisher/examples/simple_arm.urdf /tmp/simple_arm.urdf
+	cargo run --bin rbus_robot_state_publisher -- --print-example-config > /tmp/rbus_robot_state_publisher.example.yaml
+	# Point urdf_file at the copied sample.
+	python3 -c "import pathlib; p=pathlib.Path('/tmp/rbus_robot_state_publisher.example.yaml'); t=p.read_text(); p.write_text(t.replace('urdf_file: simple_arm.urdf','urdf_file: /tmp/simple_arm.urdf'))"
+	cargo run --bin rbus_robot_state_publisher -- --params /tmp/rbus_robot_state_publisher.example.yaml {{args}}
 

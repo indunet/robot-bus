@@ -387,6 +387,8 @@ cargo install robot-bus --bin rbus_audio_capture
 cargo install robot-bus --bin rbus_audio_play
 cargo install robot-bus --bin rbus_usb_camera
 cargo install robot-bus --bin rbus_xbox_joy
+cargo install robot-bus --bin rbus_static_transform_publisher
+cargo install robot-bus --bin rbus_robot_state_publisher
 ```
 
 Skip them with `--no-default-features --features grpc,console` when you only need the library.
@@ -468,6 +470,33 @@ rbus_xbox_joy --list-devices
 rbus_xbox_joy --print-example-config > xbox.yaml
 rbus_xbox_joy --params xbox.yaml
 ```
+
+### Static TF (`rbus_static_transform_publisher`)
+
+Publishes fixed parent→child transforms as `tf2_msgs/TFMessage` on `/tf_static` (ROS TF2 convention). Configure edges in YAML (`translation` + `rotation_rpy` or `rotation_xyzw`). Feature `static-transform-publisher` (default on). Match sensor `frame_id` values (e.g. USB camera `frame_id: camera`) to `child_frame_id` so the tree connects.
+
+```bash
+cargo install robot-bus --bin rbus_static_transform_publisher
+rbus_static_transform_publisher --print-example-config > static_tf.yaml
+rbus_static_transform_publisher --params static_tf.yaml
+```
+
+### Robot state publisher (`rbus_robot_state_publisher`)
+
+Loads a URDF (subset: `fixed` / `revolute` / `continuous` / `prismatic`, plus `<mimic>`), subscribes to `sensor_msgs/JointState`, and publishes movable joints on `/tf` plus fixed joints on `/tf_static`. Feature `robot-state-publisher` (default on). Pair with `rbus_ethercat_joint` (or any JointState source); keep joint **names** aligned with the URDF. Mimic joints use `q = multiplier * q_master + offset` and ignore any published value for the mimic joint itself. Drivers should **not** also broadcast TF for the same links.
+
+```bash
+cargo install robot-bus --bin rbus_robot_state_publisher
+# Point urdf_file at your model (sample: src/robot_state_publisher/examples/simple_arm.urdf)
+rbus_robot_state_publisher --print-example-config > rsp.yaml
+rbus_robot_state_publisher --params rsp.yaml
+```
+
+### TF library (`robot_bus::tf`)
+
+Always available (no feature gate). `Buffer` / `TfListener` subscribe to `/tf` + `/tf_static` and expose `lookup_transform` / `can_transform`. v1 time semantics: static edges always apply; dynamic edges use the **latest** sample (no interpolation). `TransformBroadcaster` helps publish `TFMessage` batches.
+
+Frame naming convention: prefer ROS-style `map` / `odom` / `base_link` / `*_link`. Message `header.frame_id` on sensors should match a link or static child in the tree.
 
 ### EtherCAT joints (`rbus_ethercat_joint`)
 

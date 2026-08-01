@@ -54,6 +54,14 @@ pub mod xbox_joy;
 #[cfg(feature = "ethercat-joint")]
 pub mod ethercat_joint;
 
+pub mod tf;
+
+#[cfg(feature = "static-transform-publisher")]
+pub mod static_transform_publisher;
+
+#[cfg(feature = "robot-state-publisher")]
+pub mod robot_state_publisher;
+
 #[cfg(feature = "extension-module")]
 mod python_api;
 

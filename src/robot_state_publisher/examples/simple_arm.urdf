@@ -1,0 +1,29 @@
+<?xml version="1.0"?>
+<robot name="simple_arm">
+  <link name="base_link"/>
+  <link name="link_1"/>
+  <link name="link_2"/>
+  <link name="tool_link"/>
+
+  <joint name="joint_1" type="revolute">
+    <parent link="base_link"/>
+    <child link="link_1"/>
+    <origin xyz="0 0 0.1" rpy="0 0 0"/>
+    <axis xyz="0 0 1"/>
+    <limit lower="-3.14" upper="3.14" effort="10" velocity="1"/>
+  </joint>
+
+  <joint name="joint_2" type="revolute">
+    <parent link="link_1"/>
+    <child link="link_2"/>
+    <origin xyz="0.2 0 0" rpy="0 0 0"/>
+    <axis xyz="0 1 0"/>
+    <limit lower="-1.57" upper="1.57" effort="10" velocity="1"/>
+  </joint>
+
+  <joint name="tool_fixed" type="fixed">
+    <parent link="link_2"/>
+    <child link="tool_link"/>
+    <origin xyz="0.1 0 0" rpy="0 0 0"/>
+  </joint>
+</robot>

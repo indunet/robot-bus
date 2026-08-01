@@ -389,6 +389,8 @@ cargo install robot-bus --bin rbus_audio_capture
 cargo install robot-bus --bin rbus_audio_play
 cargo install robot-bus --bin rbus_usb_camera
 cargo install robot-bus --bin rbus_xbox_joy
+cargo install robot-bus --bin rbus_static_transform_publisher
+cargo install robot-bus --bin rbus_robot_state_publisher
 ```
 
 只要库时用 `--no-default-features --features grpc,console`。
@@ -469,6 +471,33 @@ rbus_xbox_joy --list-devices
 rbus_xbox_joy --print-example-config > xbox.yaml
 rbus_xbox_joy --params xbox.yaml
 ```
+
+### 静态 TF（`rbus_static_transform_publisher`）
+
+按 YAML 发布固定 parent→child 变换为 `tf2_msgs/TFMessage`，话题 `/tf_static`（ROS TF2 约定）。姿态可用 `rotation_rpy` 或 `rotation_xyzw`。feature `static-transform-publisher`（默认开）。传感器的 `frame_id`（如相机 `frame_id: camera`）应与 `child_frame_id` 一致，才能挂上坐标系树。
+
+```bash
+cargo install robot-bus --bin rbus_static_transform_publisher
+rbus_static_transform_publisher --print-example-config > static_tf.yaml
+rbus_static_transform_publisher --params static_tf.yaml
+```
+
+### Robot state publisher（`rbus_robot_state_publisher`）
+
+加载 URDF（子集：`fixed` / `revolute` / `continuous` / `prismatic`，以及 `<mimic>`），订阅 `sensor_msgs/JointState`，可动关节发 `/tf`，固定关节发 `/tf_static`。feature `robot-state-publisher`（默认开）。可与 `rbus_ethercat_joint`（或其它 JointState 源）联用；关节 **name** 需与 URDF 对齐。mimic 关节按 `q = multiplier * q_master + offset` 计算，并忽略 JointState 里对该从关节本身的值。驱动节点不要再对同一连杆发 TF，避免双源。
+
+```bash
+cargo install robot-bus --bin rbus_robot_state_publisher
+# 将 urdf_file 指到你的模型（样例：src/robot_state_publisher/examples/simple_arm.urdf）
+rbus_robot_state_publisher --print-example-config > rsp.yaml
+rbus_robot_state_publisher --params rsp.yaml
+```
+
+### TF 库（`robot_bus::tf`）
+
+始终可用（无独立 feature）。`Buffer` / `TfListener` 订阅 `/tf` + `/tf_static`，提供 `lookup_transform` / `can_transform`。v1 时间语义：静态边始终生效；动态边取**最新**样本（无插值）。`TransformBroadcaster` 用于批量发布 `TFMessage`。
+
+坐标系命名建议与 ROS 一致：`map` / `odom` / `base_link` / `*_link`。传感器消息的 `header.frame_id` 应对应树中的 link 或静态 child。
 
 ## ROS 2 桥（`feature = "ros2"`）
 
