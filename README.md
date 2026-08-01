@@ -60,7 +60,7 @@ robot_bus_broker process
 
 ### Optional ROS 2 bridge (Rust feature)
 
-Everyday robot-bus development **does not install ROS 2**. To interconnect with a ROS 2 graph in-process, enable Cargo feature **`ros2`** and use `robot_bus::ros2::Ros2Bridge` (chained API or YAML). Official support: **Humble** and **Jazzy** (source that distro + `rclrs`). C++: install `robot-bus-cpp-ros2-humble` or `…-jazzy` (does not vendor `rcl`). See the [ROS 2 bridge](#ros-2-bridge-feature-ros2) section.
+Everyday robot-bus development **does not install ROS 2**. To interconnect with a ROS 2 graph in-process, enable Cargo feature **`ros2`** and use `robot_bus::ros2::Ros2Bridge` (chained API or YAML). Official support: **Humble** and **Jazzy** (source that distro + `rclrs`). C++: install `robot-bus-ros2-humble` or `…-jazzy` (does not vendor `rcl`). See the [ROS 2 bridge](#ros-2-bridge-feature-ros2) section.
 
 ## Quick start
 
@@ -214,9 +214,9 @@ No central package registry for C++: download from [GitHub Releases](https://git
 
 | Package | Contents |
 |---------|----------|
-| `robot-bus-cpp_*_linux_*.deb` (also MSI / PKG) | Core SDK + broker, **no** ROS 2 bridge |
-| `robot-bus-cpp-ros2-humble_*_linux_*.deb` | Same + bridge linked for **Humble** (Linux only; needs system Humble; does not vendor `rcl`) |
-| `robot-bus-cpp-ros2-jazzy_*_linux_*.deb` | Same + bridge linked for **Jazzy** (Linux only) |
+| `robot-bus_*_linux_*.deb` (also MSI / PKG) | Core SDK + broker, **no** ROS 2 bridge |
+| `robot-bus-ros2-humble_*_linux_*.deb` | Same + bridge linked for **Humble** (Linux only; needs system Humble; does not vendor `rcl`) |
+| `robot-bus-ros2-jazzy_*_linux_*.deb` | Same + bridge linked for **Jazzy** (Linux only) |
 
 Install only one of the three (they conflict). See [`docs/cpp-api.md`](docs/cpp-api.md).
 
@@ -385,7 +385,7 @@ In-process topic, service, **and** action bridge via `robot_bus::ros2::Ros2Bridg
 |------|--------|
 | Cargo (Rust) | `--features ros2` (pulls optional `rclrs`) |
 | Environment | Source **Humble** or **Jazzy** so `rcl` / type support libs link; main CI does **not** enable this feature |
-| C++ packages | `robot-bus-cpp` (no bridge) vs `robot-bus-cpp-ros2-humble` / `robot-bus-cpp-ros2-jazzy` (mutually exclusive, **Linux DEBs only** — Windows MSI / macOS PKG ship the core stub). Packages **do not vendor** `rcl`/RMW/DDS — install system ROS and `source /opt/ros/<distro>/setup.bash` |
+| C++ packages | `robot-bus` (no bridge) vs `robot-bus-ros2-humble` / `robot-bus-ros2-jazzy` (mutually exclusive, **Linux DEBs only** — Windows MSI / macOS PKG ship the core stub). Packages **do not vendor** `rcl`/RMW/DDS — install system ROS and `source /opt/ros/<distro>/setup.bash` |
 | Broker | Running `robot_bus_broker` reachable over tcp/ipc (or `bus_discover`) |
 | MVP topic types | `std_msgs/msg/String`, `sensor_msgs/msg/Imu` |
 | MVP service types | `std_srvs/srv/Trigger`, `std_srvs/srv/SetBool` (directions `ros_to_bus` / `bus_to_ros` only; default call timeout 5s) |
@@ -417,7 +417,7 @@ bridge.spin()?;
 // or: Ros2Bridge::from_yaml("bridge.yaml")?.spin()?;
 ```
 
-C++ (after installing the matching **Linux** `robot-bus-cpp-ros2-*` package and sourcing ROS):
+C++ (after installing the matching **Linux** `robot-bus-ros2-*` package and sourcing ROS):
 
 ```cpp
 #include <robot_bus/Ros2Bridge.hpp>

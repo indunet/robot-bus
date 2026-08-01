@@ -6,9 +6,9 @@ C++ SDK is distributed via **GitHub Release attachments** (no central C++ regist
 
 | Asset | ROS 2 bridge | Notes |
 |-------|--------------|--------|
-| `robot-bus-cpp_<ver>_linux_<arch>.deb` | No | Default SDK + broker. Also MSI / PKG on Windows / macOS. |
-| `robot-bus-cpp-ros2-humble_<ver>_linux_<arch>.deb` | Yes (Humble) | **Linux only** in release CI. Requires system **ROS 2 Humble**. No Windows/macOS ros2 installer. |
-| `robot-bus-cpp-ros2-jazzy_<ver>_linux_<arch>.deb` | Yes (Jazzy) | **Linux only** in release CI. Requires system **ROS 2 Jazzy**. |
+| `robot-bus_<ver>_linux_<arch>.deb` | No | Default SDK + broker. Also MSI / PKG on Windows / macOS. |
+| `robot-bus-ros2-humble_<ver>_linux_<arch>.deb` | Yes (Humble) | **Linux only** in release CI. Requires system **ROS 2 Humble**. No Windows/macOS ros2 installer. |
+| `robot-bus-ros2-jazzy_<ver>_linux_<arch>.deb` | Yes (Jazzy) | **Linux only** in release CI. Requires system **ROS 2 Jazzy**. |
 
 The three Debian packages **conflict** with each other (same `librobot_bus.so`). Install exactly one.
 
@@ -34,14 +34,14 @@ CMake sets `CMAKE_CXX_STANDARD 17`. Building with a newer standard (e.g. `-DCMAK
 
 ```bash
 # Core SDK (no ROS bridge)
-sudo apt install ./robot-bus-cpp_0.1.1_linux_amd64.deb
+sudo apt install ./robot-bus_0.1.1_linux_amd64.deb
 
 # Or ROS 2 bridge variant (Humble example) — needs Humble already installed
-sudo apt install ./robot-bus-cpp-ros2-humble_0.1.1_linux_amd64.deb
+sudo apt install ./robot-bus-ros2-humble_0.1.1_linux_amd64.deb
 source /opt/ros/humble/setup.bash
 
 # macOS Apple Silicon (core package only)
-sudo installer -pkg robot-bus-cpp_0.1.1_macos_arm64.pkg -target /
+sudo installer -pkg robot-bus_0.1.1_macos_arm64.pkg -target /
 # Installs under /usr/local ({bin,lib,include})
 
 # Or from source (dev)
@@ -59,7 +59,17 @@ Headers install under the `robot_bus/` prefix (no `generated/` segment):
 #include <robot_bus/sensor_msgs/msg/v1/imu.pb.h>
 ```
 
-Link with `-lrobot_bus -lrobot_bus_msgs` (or CMake `robot_bus::robot_bus` + `robot_bus::msgs`).
+Link with `-lrobot_bus -lrobot_bus_msgs` (or CMake `find_package(robot_bus)` → `robot_bus::robot_bus` + `robot_bus::msgs`).
+
+After a system install you should be able to compile against the headers immediately:
+
+| Platform | Include / lib roots | Typical CMake |
+|----------|---------------------|----------------|
+| Linux (DEB) | `/usr/include`, `/usr/lib` | `find_package(robot_bus REQUIRED)` or `pkg-config --cflags --libs robot_bus` |
+| macOS (PKG) | `/usr/local/include`, `/usr/local/lib` | same; `/usr/local` is on default search paths |
+| Windows (MSI) | `C:\Program Files\robot-bus\include` (+ `lib`, `bin` on PATH) | `-DCMAKE_PREFIX_PATH="C:/Program Files/robot-bus"` |
+
+You still need a matching **libprotobuf** (bundled next to the SDK libs in the package on Linux/macOS; DLLs under `bin/` on Windows) and, for typed msgs, to link `robot_bus_msgs`.
 
 Check at runtime: `robot_bus::ros2_available()` / `robot_bus_ros2_available()` — `0` on the default package, `1` on ros2-* packages.
 
@@ -243,5 +253,5 @@ auto from_file = robot_bus::Ros2Bridge::from_yaml("bridge.yaml");
 MVP topic types: `std_msgs/msg/String`, `sensor_msgs/msg/Imu`.  
 MVP service types: `std_srvs/srv/Trigger`, `std_srvs/srv/SetBool` (`RosToBus` / `BusToRos` only; default call timeout 5s).  
 MVP action types: `example_interfaces/action/Fibonacci` (`RosToBus` / `BusToRos` only; default goal timeout 30s).  
-Default `robot-bus-cpp` returns a clear error from these APIs (`robot_bus_last_error` / thrown `robot_bus::Error`).
+Default `robot-bus` returns a clear error from these APIs (`robot_bus_last_error` / thrown `robot_bus::Error`).
 

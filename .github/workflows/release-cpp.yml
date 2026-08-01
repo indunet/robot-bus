@@ -109,14 +109,14 @@ jobs:
             "${{ steps.meta.outputs.version }}" \
             "${{ matrix.arch }}" \
             /tmp/robot-bus-stage \
-            "robot-bus-cpp_${{ steps.meta.outputs.version }}_linux_${{ matrix.arch }}.deb"
+            "robot-bus_${{ steps.meta.outputs.version }}_linux_${{ matrix.arch }}.deb"
 
       - name: Upload to Release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           gh release upload "${{ steps.meta.outputs.tag }}" \
-            "robot-bus-cpp_${{ steps.meta.outputs.version }}_linux_${{ matrix.arch }}.deb" \
+            "robot-bus_${{ steps.meta.outputs.version }}_linux_${{ matrix.arch }}.deb" \
             --clobber
 
   # ROS 2 bridge packages (system rcl; does not vendor /opt/ros).
@@ -242,7 +242,7 @@ jobs:
             "${{ steps.meta.outputs.version }}" \
             "${{ matrix.arch }}" \
             /tmp/robot-bus-stage-ros2 \
-            "robot-bus-cpp-ros2-${{ matrix.distro }}_${{ steps.meta.outputs.version }}_linux_${{ matrix.arch }}.deb" \
+            "robot-bus-ros2-${{ matrix.distro }}_${{ steps.meta.outputs.version }}_linux_${{ matrix.arch }}.deb" \
             "ros2-${{ matrix.distro }}"
 
       - name: Upload to Release
@@ -250,7 +250,7 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           gh release upload "${{ steps.meta.outputs.tag }}" \
-            "robot-bus-cpp-ros2-${{ matrix.distro }}_${{ steps.meta.outputs.version }}_linux_${{ matrix.arch }}.deb" \
+            "robot-bus-ros2-${{ matrix.distro }}_${{ steps.meta.outputs.version }}_linux_${{ matrix.arch }}.deb" \
             --clobber
 
   windows:
@@ -393,9 +393,11 @@ jobs:
           set -eux
           STAGE=/tmp/robot-bus-msi
           rm -rf "$STAGE"
-          mkdir -p "$STAGE/bin" "$STAGE/lib" "$STAGE/include"
+          mkdir -p "$STAGE/bin" "$STAGE/lib" "$STAGE/include" \
+            "$STAGE/lib/cmake/robot_bus" "$STAGE/lib/pkgconfig"
           cp target/release/robot_bus_broker.exe "$STAGE/bin/"
           cp bindings/cpp/native/target/release/robot_bus_c.dll "$STAGE/bin/robot_bus.dll"
+          cp bindings/cpp/native/target/release/robot_bus_c.dll.lib "$STAGE/lib/robot_bus.lib" 2>/dev/null || true
           # msgs dll
           find bindings/cpp/build-win -name 'robot_bus_msgs.dll' -exec cp {} "$STAGE/bin/" \;
           find bindings/cpp/build-win -name 'robot_bus_msgs.lib' -exec cp {} "$STAGE/lib/" \; || true
@@ -411,6 +413,17 @@ jobs:
           test -f "$STAGE/bin/robot_bus_msgs.dll"
           cp -a bindings/cpp/include/. "$STAGE/include/"
           cp -a bindings/cpp/generated/robot_bus "$STAGE/include/"
+          # CMake / pkg-config so installed SDK is usable for app development
+          VERSION="${{ steps.meta.outputs.version }}"
+          sed -e "s|@CMAKE_INSTALL_PREFIX@|C:/Program Files/robot-bus|g" \
+              -e "s|@CMAKE_INSTALL_LIBDIR@|lib|g" \
+              -e "s|@CMAKE_INSTALL_INCLUDEDIR@|include|g" \
+              -e "s|@PROJECT_VERSION@|${VERSION}|g" \
+              bindings/cpp/cmake/robot_bus.pc.in >"$STAGE/lib/pkgconfig/robot_bus.pc"
+          sed -e 's/@PACKAGE_INIT@//' \
+              -e 's|\${PACKAGE_PREFIX_DIR}|C:/Program Files/robot-bus|g' \
+              bindings/cpp/cmake/robot_busConfig.cmake.in \
+              >"$STAGE/lib/cmake/robot_bus/robot_busConfig.cmake"
 
       - name: Build MSI
         shell: bash
@@ -421,7 +434,7 @@ jobs:
           ./scripts/package_msi.sh \
             "${{ steps.meta.outputs.version }}" \
             /tmp/robot-bus-msi \
-            "robot-bus-cpp_${{ steps.meta.outputs.version }}_windows_x64.msi"
+            "robot-bus_${{ steps.meta.outputs.version }}_windows_x64.msi"
 
       - name: Upload to Release
         env:
@@ -429,7 +442,7 @@ jobs:
         shell: bash
         run: |
           gh release upload "${{ steps.meta.outputs.tag }}" \
-            "robot-bus-cpp_${{ steps.meta.outputs.version }}_windows_x64.msi" \
+            "robot-bus_${{ steps.meta.outputs.version }}_windows_x64.msi" \
             --clobber
 
   macos:
@@ -513,12 +526,12 @@ jobs:
           ./scripts/package_pkg.sh \
             "${{ steps.meta.outputs.version }}" \
             /tmp/robot-bus-stage \
-            "robot-bus-cpp_${{ steps.meta.outputs.version }}_macos_arm64.pkg"
+            "robot-bus_${{ steps.meta.outputs.version }}_macos_arm64.pkg"
 
       - name: Upload to Release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           gh release upload "${{ steps.meta.outputs.tag }}" \
-            "robot-bus-cpp_${{ steps.meta.outputs.version }}_macos_arm64.pkg" \
+            "robot-bus_${{ steps.meta.outputs.version }}_macos_arm64.pkg" \
             --clobber

@@ -7,6 +7,12 @@ if(EXISTS "${CMAKE_CURRENT_LIST_DIR}/robot_busTargets.cmake")
   include("${CMAKE_CURRENT_LIST_DIR}/robot_busTargets.cmake")
 endif()
 
+# PACKAGE_PREFIX_DIR is set by @PACKAGE_INIT@ / configure_package_config_file.
+# Packaging scripts may rewrite it to an absolute prefix (/usr or /usr/local).
+if(NOT DEFINED PACKAGE_PREFIX_DIR)
+  get_filename_component(PACKAGE_PREFIX_DIR "${CMAKE_CURRENT_LIST_DIR}/../../.." ABSOLUTE)
+endif()
+
 if(NOT TARGET robot_bus::robot_bus)
   add_library(robot_bus::robot_bus SHARED IMPORTED)
   set_target_properties(robot_bus::robot_bus PROPERTIES
@@ -21,6 +27,26 @@ if(NOT TARGET robot_bus::robot_bus)
   else()
     set_target_properties(robot_bus::robot_bus PROPERTIES
       IMPORTED_LOCATION "${PACKAGE_PREFIX_DIR}/lib/librobot_bus.so")
+  endif()
+endif()
+
+# Packaged installs copy librobot_bus_msgs but may not ship an EXPORT file;
+# always expose robot_bus::msgs so consumers can link typed protobuf stubs.
+if(NOT TARGET robot_bus::msgs)
+  add_library(robot_bus::msgs SHARED IMPORTED)
+  set_target_properties(robot_bus::msgs PROPERTIES
+    INTERFACE_INCLUDE_DIRECTORIES "${PACKAGE_PREFIX_DIR}/include"
+    INTERFACE_LINK_LIBRARIES "protobuf::libprotobuf")
+  if(WIN32)
+    set_target_properties(robot_bus::msgs PROPERTIES
+      IMPORTED_LOCATION "${PACKAGE_PREFIX_DIR}/bin/robot_bus_msgs.dll"
+      IMPORTED_IMPLIB "${PACKAGE_PREFIX_DIR}/lib/robot_bus_msgs.lib")
+  elseif(APPLE)
+    set_target_properties(robot_bus::msgs PROPERTIES
+      IMPORTED_LOCATION "${PACKAGE_PREFIX_DIR}/lib/librobot_bus_msgs.dylib")
+  else()
+    set_target_properties(robot_bus::msgs PROPERTIES
+      IMPORTED_LOCATION "${PACKAGE_PREFIX_DIR}/lib/librobot_bus_msgs.so")
   endif()
 endif()
 

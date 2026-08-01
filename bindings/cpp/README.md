@@ -36,7 +36,7 @@ just cpp-dev          # no ROS
 just cpp-dev-ros2     # --features ros2
 ```
 
-Release DEBs: `robot-bus-cpp` (no bridge) and `robot-bus-cpp-ros2-{humble,jazzy}` (system ROS, no vendored `rcl`).
+Release DEBs: `robot-bus` (no bridge) and `robot-bus-ros2-{humble,jazzy}` (system ROS, no vendored `rcl`).
 
 ## Regenerate msgs
 

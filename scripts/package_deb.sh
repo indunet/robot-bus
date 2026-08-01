@@ -18,38 +18,41 @@ trap 'rm -rf "$PKG_ROOT"' EXIT
 mkdir -p "$PKG_ROOT/DEBIAN"
 cp -a "$STAGING/." "$PKG_ROOT/"
 
+# Legacy package names (robot-bus-cpp*) are listed in Conflicts/Replaces so
+# upgrading from older releases replaces the previous Debian package cleanly.
 case "$VARIANT" in
   main)
-    PACKAGE_NAME="robot-bus-cpp"
+    PACKAGE_NAME="robot-bus"
     DEPENDS="libzmq5"
-    CONFLICTS=""
+    CONFLICTS="Conflicts: robot-bus-cpp, robot-bus-ros2-humble, robot-bus-ros2-jazzy, robot-bus-cpp-ros2-humble, robot-bus-cpp-ros2-jazzy
+Replaces: robot-bus-cpp"
     DESCRIPTION_SHORT="robot-bus C/C++ SDK and broker"
     DESCRIPTION_LONG=" ZeroMQ message bus with ROS-style APIs. Ships shared libraries
  (including bundled libprotobuf matching the generated msgs),
  headers, CMake/pkg-config files, and the robot_bus_broker binary.
- Does not include the ROS 2 bridge (see robot-bus-cpp-ros2-humble /
- robot-bus-cpp-ros2-jazzy)."
+ Does not include the ROS 2 bridge (see robot-bus-ros2-humble /
+ robot-bus-ros2-jazzy)."
     ;;
   ros2-humble)
-    PACKAGE_NAME="robot-bus-cpp-ros2-humble"
+    PACKAGE_NAME="robot-bus-ros2-humble"
     DEPENDS="libzmq5, ros-humble-rcl, ros-humble-std-msgs, ros-humble-sensor-msgs, ros-humble-std-srvs"
-    CONFLICTS="Conflicts: robot-bus-cpp, robot-bus-cpp-ros2-jazzy
-Provides: robot-bus-cpp
-Replaces: robot-bus-cpp"
+    CONFLICTS="Conflicts: robot-bus, robot-bus-cpp, robot-bus-ros2-jazzy, robot-bus-cpp-ros2-humble, robot-bus-cpp-ros2-jazzy
+Provides: robot-bus
+Replaces: robot-bus, robot-bus-cpp, robot-bus-cpp-ros2-humble"
     DESCRIPTION_SHORT="robot-bus C/C++ SDK with ROS 2 Humble bridge"
-    DESCRIPTION_LONG=" Same as robot-bus-cpp, plus in-process ROS 2 topic/service bridge
+    DESCRIPTION_LONG=" Same as robot-bus, plus in-process ROS 2 topic/service bridge
  (Ros2Bridge) linked against system ROS 2 Humble. Requires a sourced
  Humble environment at runtime. Does not vendor rcl/RMW/DDS.
  Linux only — there is no Windows/macOS ros2 package."
     ;;
   ros2-jazzy)
-    PACKAGE_NAME="robot-bus-cpp-ros2-jazzy"
+    PACKAGE_NAME="robot-bus-ros2-jazzy"
     DEPENDS="libzmq5, ros-jazzy-rcl, ros-jazzy-std-msgs, ros-jazzy-sensor-msgs, ros-jazzy-std-srvs"
-    CONFLICTS="Conflicts: robot-bus-cpp, robot-bus-cpp-ros2-humble
-Provides: robot-bus-cpp
-Replaces: robot-bus-cpp"
+    CONFLICTS="Conflicts: robot-bus, robot-bus-cpp, robot-bus-ros2-humble, robot-bus-cpp-ros2-humble, robot-bus-cpp-ros2-jazzy
+Provides: robot-bus
+Replaces: robot-bus, robot-bus-cpp, robot-bus-cpp-ros2-jazzy"
     DESCRIPTION_SHORT="robot-bus C/C++ SDK with ROS 2 Jazzy bridge"
-    DESCRIPTION_LONG=" Same as robot-bus-cpp, plus in-process ROS 2 topic/service bridge
+    DESCRIPTION_LONG=" Same as robot-bus, plus in-process ROS 2 topic/service bridge
  (Ros2Bridge) linked against system ROS 2 Jazzy. Requires a sourced
  Jazzy environment at runtime. Does not vendor rcl/RMW/DDS.
  Linux only — there is no Windows/macOS ros2 package."

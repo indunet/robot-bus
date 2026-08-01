@@ -72,7 +72,7 @@ shopt -u nullglob
 
 pkgbuild \
   --root "$PAYLOAD" \
-  --identifier "org.indunet.robot-bus-cpp" \
+  --identifier "org.indunet.robot-bus" \
   --version "$VERSION" \
   --install-location "/" \
   "$OUT_PKG"

@@ -85,7 +85,7 @@ sed -e "s|@CMAKE_INSTALL_PREFIX@|/usr|g" \
     -e "s|@PROJECT_VERSION@|${VERSION}|g" \
     "$CPP/cmake/robot_bus.pc.in" >"$DEST/usr/lib/pkgconfig/robot_bus.pc"
 
-# Minimal CMake package config
+# Minimal CMake package config (imported targets for robot_bus + msgs).
 cp "$CPP/cmake/robot_busConfig.cmake.in" "$DEST/usr/lib/cmake/robot_bus/robot_busConfig.cmake"
 # Strip @PACKAGE_INIT@ for a usable installed file
 sed -i.bak 's/@PACKAGE_INIT@//' "$DEST/usr/lib/cmake/robot_bus/robot_busConfig.cmake"
