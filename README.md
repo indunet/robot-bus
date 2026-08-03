@@ -526,9 +526,9 @@ In-process topic, service, **and** action bridge via `robot_bus::ros2::Ros2Bridg
 | Environment | Source **Humble** or **Jazzy** so `rcl` / type support libs link; main CI does **not** enable this feature |
 | C++ packages | `robot-bus` (no bridge) vs `robot-bus-ros2-humble` / `robot-bus-ros2-jazzy` (mutually exclusive, **Linux DEBs only** — Windows MSI / macOS PKG ship the core stub). Packages **do not vendor** `rcl`/RMW/DDS — install system ROS and `source /opt/ros/<distro>/setup.bash` |
 | Broker | Running `robot_bus_broker` reachable over tcp/ipc (or `bus_discover`) |
-| MVP topic types | `std_msgs/msg/String`, `sensor_msgs/msg/Imu` |
-| MVP service types | `std_srvs/srv/Trigger`, `std_srvs/srv/SetBool` (directions `ros_to_bus` / `bus_to_ros` only; default call timeout 5s) |
-| MVP action types | `example_interfaces/action/Fibonacci` (directions `ros_to_bus` / `bus_to_ros` only; default goal timeout 30s) |
+| Topic types | **Registry** — configure any registered type by string (not a hardcoded enum). Built-in: `std_msgs/msg/String`, `sensor_msgs/msg/Imu`, `sensor_msgs/msg/Image`, `foxglove_msgs/msg/CompressedVideo`. Extend by implementing `TopicCodec` + registering it. |
+| Service types | `std_srvs/srv/Trigger`, `std_srvs/srv/SetBool` (directions `ros_to_bus` / `bus_to_ros` only; default call timeout 5s) |
+| Action types | `example_interfaces/action/Fibonacci` (directions `ros_to_bus` / `bus_to_ros` only; default goal timeout 30s) |
 
 ```rust
 use robot_bus::ros2::{Direction, Ros2Bridge};
@@ -538,7 +538,11 @@ let mut bridge = Ros2Bridge::new("ros_bridge")
     .route("/chatter", "/chatter")
         .string()
         .direction(Direction::Both)
-        .add()
+        .add()?
+    .route("/camera/image_raw", "/camera/image_raw")
+        .type_name("sensor_msgs/msg/Image")
+        .direction(Direction::RosToBus)
+        .add()?
     .service("/reset", "/reset")
         .trigger()
         .direction(Direction::RosToBus)
@@ -554,7 +558,10 @@ let mut bridge = Ros2Bridge::new("ros_bridge")
     .build()?;
 bridge.spin()?;
 // or: Ros2Bridge::from_yaml("bridge.yaml")?.spin()?;
+// Camera→H264 example YAML: src/ros2/example_camera_h264.yaml
 ```
+
+`foxglove_msgs/msg/CompressedVideo` requires the `foxglove_msgs` ROS package on the system (DynamicMessage type support).
 
 C++ (after installing the matching **Linux** `robot-bus-ros2-*` package and sourcing ROS):
 
@@ -567,6 +574,10 @@ auto bridge = robot_bus::Ros2Bridge::New("ros_bridge")
     .string()
     .direction(robot_bus::Ros2Direction::Both)
     .add()
+    .route("/camera/image_raw", "/camera/image_raw")
+    .type_name("sensor_msgs/msg/Image")
+    .direction(robot_bus::Ros2Direction::RosToBus)
+    .add()
     .service("/reset", "/reset")
     .trigger()
     .direction(robot_bus::Ros2Direction::RosToBus)
@@ -578,6 +589,7 @@ auto bridge = robot_bus::Ros2Bridge::New("ros_bridge")
     .build();
 bridge.spin();
 // or: robot_bus::Ros2Bridge::from_yaml("bridge.yaml").spin();
+// Camera→H264 example: src/ros2/example_camera_h264.yaml
 ```
 
 See [`docs/cpp-api.md`](docs/cpp-api.md) for package selection and local `just cpp-dev-ros2`.

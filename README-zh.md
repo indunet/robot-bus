@@ -511,8 +511,9 @@ rbus_robot_state_publisher --params rsp.yaml
 | 环境 | Source **Humble** 或 **Jazzy** 以便链接 `rcl`；主 CI **不**开此 feature |
 | C++ 包 | `robot-bus`（无桥）与 `robot-bus-ros2-humble` / `robot-bus-ros2-jazzy`（互斥，**仅 Linux DEB** — Windows MSI / macOS PKG 只有核心 stub）。包内 **不 vendor** `rcl`/RMW/DDS — 需安装系统 ROS 并 `source /opt/ros/<distro>/setup.bash` |
 | Broker | 可达的 `robot_bus_broker`（tcp/ipc 或 `bus_discover`） |
-| MVP 话题类型 | `std_msgs/msg/String`、`sensor_msgs/msg/Imu` |
-| MVP 服务类型 | `std_srvs/srv/Trigger`、`std_srvs/srv/SetBool`（仅 `ros_to_bus` / `bus_to_ros`；默认调用超时 5s） |
+| 话题类型 | **注册表** — YAML/API 用类型字符串配置（非写死枚举）。内置：`std_msgs/msg/String`、`sensor_msgs/msg/Imu`、`sensor_msgs/msg/Image`、`foxglove_msgs/msg/CompressedVideo`。扩展：实现 `TopicCodec` 并注册 |
+| 服务类型 | `std_srvs/srv/Trigger`、`std_srvs/srv/SetBool`（仅 `ros_to_bus` / `bus_to_ros`；默认调用超时 5s） |
+| Action 类型 | `example_interfaces/action/Fibonacci`（仅 `ros_to_bus` / `bus_to_ros`；默认 goal 超时 30s） |
 
 ```rust
 use robot_bus::ros2::{Direction, Ros2Bridge};
@@ -522,7 +523,11 @@ let mut bridge = Ros2Bridge::new("ros_bridge")
     .route("/chatter", "/chatter")
         .string()
         .direction(Direction::Both)
-        .add()
+        .add()?
+    .route("/camera/image_raw", "/camera/image_raw")
+        .type_name("sensor_msgs/msg/Image")
+        .direction(Direction::RosToBus)
+        .add()?
     .service("/reset", "/reset")
         .trigger()
         .direction(Direction::RosToBus)
@@ -534,7 +539,10 @@ let mut bridge = Ros2Bridge::new("ros_bridge")
     .build()?;
 bridge.spin()?;
 // 或: Ros2Bridge::from_yaml("bridge.yaml")?.spin()?;
+// 相机→H264 示例 YAML: src/ros2/example_camera_h264.yaml
 ```
+
+`foxglove_msgs/msg/CompressedVideo` 需系统已安装 `foxglove_msgs`（DynamicMessage 依赖类型支持）。
 
 C++（安装对应的 **Linux** `robot-bus-ros2-*` 并 source ROS 后）：
 
@@ -547,6 +555,10 @@ auto bridge = robot_bus::Ros2Bridge::New("ros_bridge")
     .string()
     .direction(robot_bus::Ros2Direction::Both)
     .add()
+    .route("/camera/image_raw", "/camera/image_raw")
+    .type_name("sensor_msgs/msg/Image")
+    .direction(robot_bus::Ros2Direction::RosToBus)
+    .add()
     .service("/reset", "/reset")
     .trigger()
     .direction(robot_bus::Ros2Direction::RosToBus)
@@ -554,6 +566,7 @@ auto bridge = robot_bus::Ros2Bridge::New("ros_bridge")
     .build();
 bridge.spin();
 // 或: robot_bus::Ros2Bridge::from_yaml("bridge.yaml").spin();
+// 相机→H264 示例: src/ros2/example_camera_h264.yaml
 ```
 
 详见 [`docs/cpp-api.md`](docs/cpp-api.md)；本机构建可用 `just cpp-dev-ros2`。

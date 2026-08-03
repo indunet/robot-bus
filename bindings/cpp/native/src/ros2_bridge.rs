@@ -30,7 +30,7 @@ mod imp {
     use super::*;
     use std::time::Duration;
 
-    use robot_bus::ros2::{ActKind, Direction, MsgKind, Ros2Bridge, Ros2BridgeBuilder, SrvKind};
+    use robot_bus::ros2::{ActKind, Direction, Ros2Bridge, Ros2BridgeBuilder, SrvKind};
 
     pub struct BuilderInner {
         pub inner: Option<Ros2BridgeBuilder>,
@@ -217,10 +217,6 @@ mod imp {
             Ok(t) => t,
             Err(e) => return e,
         };
-        let kind = match MsgKind::parse(type_name) {
-            Ok(k) => k,
-            Err(e) => return bus_err(e),
-        };
         let direction = match parse_direction(direction) {
             Ok(d) => d,
             Err(e) => return e,
@@ -230,13 +226,18 @@ mod imp {
             Ok(x) => x,
             Err(e) => return e,
         };
-        inner.inner = Some(builder.add_route(
+        match builder.add_route(
             ros_topic.to_string(),
             bus_topic.to_string(),
-            kind,
+            type_name.to_string(),
             direction,
-        ));
-        ok()
+        ) {
+            Ok(next) => {
+                inner.inner = Some(next);
+                ok()
+            }
+            Err(e) => bus_err(e),
+        }
     }
 
     #[unsafe(no_mangle)]

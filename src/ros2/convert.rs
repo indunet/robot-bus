@@ -4,12 +4,16 @@ use rclrs::{
     ArrayValue, ArrayValueMut, DynamicMessage, MessageTypeName, SimpleValue, SimpleValueMut, Value,
     ValueMut,
 };
+use prost_types::Timestamp;
 
 use crate::builtin_interfaces::msg::v1::Time as BusTime;
+use crate::foxglove_msgs::msg::v1::CompressedVideo as BusCompressedVideo;
 use crate::geometry_msgs::msg::v1::{Quaternion as BusQuat, Vector3 as BusVec3};
-use crate::sensor_msgs::msg::v1::Imu as BusImu;
+use crate::sensor_msgs::msg::v1::{Image as BusImage, Imu as BusImu};
 use crate::std_msgs::msg::v1::{Header as BusHeader, String as BusString};
 use crate::BusError;
+
+use super::codec::{read_bool_or_u8, read_byte_sequence, write_bool_as_u8, write_byte_sequence};
 
 type Result<T> = std::result::Result<T, BusError>;
 
@@ -17,17 +21,8 @@ fn err(msg: impl Into<String>) -> BusError {
     BusError::Protocol(msg.into())
 }
 
-pub fn type_name(kind: super::MsgKind) -> MessageTypeName {
-    match kind {
-        super::MsgKind::String => MessageTypeName {
-            package_name: "std_msgs".into(),
-            type_name: "String".into(),
-        },
-        super::MsgKind::Imu => MessageTypeName {
-            package_name: "sensor_msgs".into(),
-            type_name: "Imu".into(),
-        },
-    }
+fn ros_type(full: &str) -> Result<MessageTypeName> {
+    MessageTypeName::try_from(full).map_err(|e| err(format!("invalid ROS type {full:?}: {e}")))
 }
 
 fn read_string(msg: &DynamicMessage, field: &str) -> Result<String> {
@@ -253,7 +248,7 @@ pub fn string_dyn_to_bus(msg: &DynamicMessage) -> Result<BusString> {
 }
 
 pub fn string_bus_to_dyn(bus: &BusString) -> Result<DynamicMessage> {
-    let mut msg = DynamicMessage::new(type_name(super::MsgKind::String))
+    let mut msg = DynamicMessage::new(ros_type("std_msgs/msg/String")?)
         .map_err(|e| err(format!("create std_msgs/String: {e}")))?;
     write_string(&mut msg, "data", &bus.data)?;
     Ok(msg)
@@ -276,7 +271,7 @@ pub fn imu_dyn_to_bus(msg: &DynamicMessage) -> Result<BusImu> {
 }
 
 pub fn imu_bus_to_dyn(bus: &BusImu) -> Result<DynamicMessage> {
-    let mut msg = DynamicMessage::new(type_name(super::MsgKind::Imu))
+    let mut msg = DynamicMessage::new(ros_type("sensor_msgs/msg/Imu")?)
         .map_err(|e| err(format!("create sensor_msgs/Imu: {e}")))?;
     if let Some(header) = &bus.header {
         write_header(&mut msg, header)?;
@@ -301,6 +296,100 @@ pub fn imu_bus_to_dyn(bus: &BusImu) -> Result<DynamicMessage> {
         "linear_acceleration_covariance",
         &bus.linear_acceleration_covariance,
     )?;
+    Ok(msg)
+}
+
+fn read_u32_field(msg: &DynamicMessage, field: &str) -> Result<u32> {
+    match msg.get(field) {
+        Some(Value::Simple(SimpleValue::Uint32(v))) => Ok(*v),
+        other => Err(err(format!(
+            "expected u32 field `{field}`, got {other:?}"
+        ))),
+    }
+}
+
+fn write_u32_field(msg: &mut DynamicMessage, field: &str, value: u32) -> Result<()> {
+    match msg.get_mut(field) {
+        Some(ValueMut::Simple(SimpleValueMut::Uint32(v))) => {
+            *v = value;
+            Ok(())
+        }
+        other => Err(err(format!(
+            "expected mut u32 field `{field}`, got {other:?}"
+        ))),
+    }
+}
+
+fn timestamp_from_time_view(view: &rclrs::DynamicMessageView<'_>) -> Result<Timestamp> {
+    Ok(Timestamp {
+        seconds: i64::from(read_i32(view, "sec")?),
+        nanos: read_u32(view, "nanosec")? as i32,
+    })
+}
+
+fn write_time_field(msg: &mut DynamicMessage, field: &str, ts: &Timestamp) -> Result<()> {
+    with_nested_mut(msg, field, |view| {
+        write_i32(view, "sec", ts.seconds as i32)?;
+        write_u32(view, "nanosec", ts.nanos as u32)?;
+        Ok(())
+    })
+}
+
+pub fn image_dyn_to_bus(msg: &DynamicMessage) -> Result<BusImage> {
+    let header = header_from_view(&nested_view(msg, "header")?)?;
+    Ok(BusImage {
+        header: Some(header),
+        height: read_u32_field(msg, "height")?,
+        width: read_u32_field(msg, "width")?,
+        encoding: read_string(msg, "encoding")?,
+        is_bigendian: read_bool_or_u8(msg, "is_bigendian")?,
+        step: read_u32_field(msg, "step")?,
+        data: read_byte_sequence(msg, "data")?,
+    })
+}
+
+pub fn image_bus_to_dyn(bus: &BusImage) -> Result<DynamicMessage> {
+    let mut msg = DynamicMessage::new(ros_type("sensor_msgs/msg/Image")?)
+        .map_err(|e| err(format!("create sensor_msgs/Image: {e}")))?;
+    if let Some(header) = &bus.header {
+        write_header(&mut msg, header)?;
+    }
+    write_u32_field(&mut msg, "height", bus.height)?;
+    write_u32_field(&mut msg, "width", bus.width)?;
+    write_string(&mut msg, "encoding", &bus.encoding)?;
+    write_bool_as_u8(&mut msg, "is_bigendian", bus.is_bigendian)?;
+    write_u32_field(&mut msg, "step", bus.step)?;
+    write_byte_sequence(&mut msg, "data", &bus.data)?;
+    Ok(msg)
+}
+
+pub fn compressed_video_dyn_to_bus(msg: &DynamicMessage) -> Result<BusCompressedVideo> {
+    let timestamp = match msg.get("timestamp") {
+        Some(Value::Simple(SimpleValue::Message(view))) => Some(timestamp_from_time_view(&view)?),
+        None => None,
+        other => {
+            return Err(err(format!(
+                "expected nested timestamp message, got {other:?}"
+            )))
+        }
+    };
+    Ok(BusCompressedVideo {
+        timestamp,
+        frame_id: read_string(msg, "frame_id")?,
+        data: read_byte_sequence(msg, "data")?,
+        format: read_string(msg, "format")?,
+    })
+}
+
+pub fn compressed_video_bus_to_dyn(bus: &BusCompressedVideo) -> Result<DynamicMessage> {
+    let mut msg = DynamicMessage::new(ros_type("foxglove_msgs/msg/CompressedVideo")?)
+        .map_err(|e| err(format!("create foxglove_msgs/CompressedVideo: {e}")))?;
+    if let Some(ts) = &bus.timestamp {
+        write_time_field(&mut msg, "timestamp", ts)?;
+    }
+    write_string(&mut msg, "frame_id", &bus.frame_id)?;
+    write_byte_sequence(&mut msg, "data", &bus.data)?;
+    write_string(&mut msg, "format", &bus.format)?;
     Ok(msg)
 }
 

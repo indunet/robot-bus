@@ -2,8 +2,13 @@
 //!
 //! Requires a sourced ROS 2 distribution so `rclrs` can link against `rcl`.
 //! Everyday robot-bus builds leave this feature off.
+//!
+//! Topic routes are configured by ROS type string and resolved through the
+//! [`codec`] topic registry (not a hardcoded enum). Add a type by implementing
+//! [`TopicCodec`] and registering it in the builtin table.
 
 mod builder;
+mod codec;
 mod convert;
 mod echo;
 mod spin;
@@ -11,7 +16,8 @@ mod vendor;
 mod yaml;
 
 pub use builder::{
-    ActKind, ActionRouteBuilder, Direction, MsgKind, Ros2Bridge, Ros2BridgeBuilder, RouteBuilder,
+    ActKind, ActionRouteBuilder, Direction, Ros2Bridge, Ros2BridgeBuilder, RouteBuilder,
     ServiceRouteBuilder, SrvKind, ACTION_CALL_TIMEOUT, SERVICE_CALL_TIMEOUT,
 };
+pub use codec::{lookup_topic_codec, registered_topic_types, TopicCodec};
 pub use echo::EchoFilter;

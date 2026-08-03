@@ -65,6 +65,16 @@ class Ros2BridgeRoute {
     return std::move(*this);
   }
 
+  Ros2BridgeRoute &&image() && {
+    type_ = "sensor_msgs/msg/Image";
+    return std::move(*this);
+  }
+
+  Ros2BridgeRoute &&compressed_video() && {
+    type_ = "foxglove_msgs/msg/CompressedVideo";
+    return std::move(*this);
+  }
+
   Ros2BridgeRoute &&type_name(std::string type) && {
     type_ = std::move(type);
     return std::move(*this);
@@ -372,7 +382,8 @@ class Ros2Bridge {
 
 inline Ros2BridgeBuilder Ros2BridgeRoute::add() && {
   if (type_.empty()) {
-    throw Error("ros2 bridge route: call .string() or .imu() before .add()");
+    throw Error(
+        "ros2 bridge route: call .type_name(...) or .string()/.imu()/.image() before .add()");
   }
   check(robot_bus_ros2_bridge_builder_add_route(b_, ros_topic_.c_str(), bus_topic_.c_str(),
                                                  type_.c_str(), static_cast<int>(direction_)),

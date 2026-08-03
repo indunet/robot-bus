@@ -7,7 +7,8 @@ use serde::Deserialize;
 
 use crate::errors::{BusError, Result};
 
-use super::builder::{ActKind, Direction, MsgKind, Ros2Bridge, Ros2BridgeBuilder, SrvKind};
+use super::builder::{ActKind, Direction, Ros2Bridge, Ros2BridgeBuilder, SrvKind};
+use super::codec;
 
 #[derive(Debug, Deserialize)]
 struct FileConfig {
@@ -132,10 +133,12 @@ pub fn builder_from_yaml(path: impl AsRef<Path>) -> Result<Ros2BridgeBuilder> {
     };
 
     for (i, route) in cfg.routes.into_iter().enumerate() {
-        let kind = MsgKind::parse(&route.type_name)
+        codec::lookup_topic_codec(&route.type_name)
             .map_err(|e| BusError::Protocol(format!("routes[{i}]: {e}")))?;
         let direction = parse_direction(&route.direction)?;
-        builder = builder.push_route(route.ros_topic, route.bus_topic, kind, direction);
+        builder = builder
+            .push_route(route.ros_topic, route.bus_topic, route.type_name, direction)
+            .map_err(|e| BusError::Protocol(format!("routes[{i}]: {e}")))?;
     }
 
     for (i, svc) in cfg.services.into_iter().enumerate() {

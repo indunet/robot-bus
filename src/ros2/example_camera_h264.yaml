@@ -1,0 +1,20 @@
+# Example: ROS 2 camera Image → robot-bus → H.264 CompressedVideo → ROS 2.
+# Requires: sourced ROS 2, foxglove_msgs, running robot_bus_broker, and rbus_image_encoder.
+#
+#   Ros2Bridge::from_yaml("camera_h264_bridge.yaml")?.spin()?;
+#   # in another process:
+#   rbus_image_encoder --params encoder.yaml   # /camera/image_raw → /camera/video
+
+robot_bus:
+  transport: tcp
+  host: localhost
+
+routes:
+  - ros_topic: /camera/image_raw
+    bus_topic: /camera/image_raw
+    type: sensor_msgs/msg/Image
+    direction: ros_to_bus
+  - ros_topic: /camera/video
+    bus_topic: /camera/video
+    type: foxglove_msgs/msg/CompressedVideo
+    direction: bus_to_ros

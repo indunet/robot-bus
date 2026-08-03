@@ -258,6 +258,10 @@ auto bridge = robot_bus::Ros2Bridge::New("ros_bridge")
     .string()
     .direction(robot_bus::Ros2Direction::Both)
     .add()
+    .route("/camera/image_raw", "/camera/image_raw")
+    .type_name("sensor_msgs/msg/Image")
+    .direction(robot_bus::Ros2Direction::RosToBus)
+    .add()
     .service("/reset", "/reset")
     .trigger()
     .direction(robot_bus::Ros2Direction::RosToBus)
@@ -276,10 +280,12 @@ bridge.spin_once(0.01);
 
 // Or YAML (same schema as Rust Ros2Bridge::from_yaml)
 auto from_file = robot_bus::Ros2Bridge::from_yaml("bridge.yaml");
+// Camera→H264 example: src/ros2/example_camera_h264.yaml
 ```
 
-MVP topic types: `std_msgs/msg/String`, `sensor_msgs/msg/Imu`.  
-MVP service types: `std_srvs/srv/Trigger`, `std_srvs/srv/SetBool` (`RosToBus` / `BusToRos` only; default call timeout 5s).  
-MVP action types: `example_interfaces/action/Fibonacci` (`RosToBus` / `BusToRos` only; default goal timeout 30s).  
+Topic types use a **registry** (configure by type string): built-in `std_msgs/msg/String`, `sensor_msgs/msg/Imu`, `sensor_msgs/msg/Image`, `foxglove_msgs/msg/CompressedVideo`.  
+Service types: `std_srvs/srv/Trigger`, `std_srvs/srv/SetBool` (`RosToBus` / `BusToRos` only; default call timeout 5s).  
+Action types: `example_interfaces/action/Fibonacci` (`RosToBus` / `BusToRos` only; default goal timeout 30s).  
+`foxglove_msgs/msg/CompressedVideo` needs the `foxglove_msgs` ROS package installed.  
 Default `robot-bus` returns a clear error from these APIs (`robot_bus_last_error` / thrown `robot_bus::Error`).
 

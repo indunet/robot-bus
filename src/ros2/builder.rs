@@ -15,7 +15,7 @@ use prost::Message as ProstMessage;
 use rclrs::vendor::example_interfaces::action as ros_act;
 use rclrs::{
     BeginAcceptedGoal, Context as RosContext, CreateBasicExecutor, DynamicPublisher,
-    DynamicSubscription, GoalClient, MessageTypeName, SpinOptions,
+    DynamicSubscription, GoalClient, SpinOptions,
 };
 
 use crate::action::v1::{
@@ -24,15 +24,16 @@ use crate::action::v1::{
 };
 use crate::discovery::DiscoverOpts;
 use crate::errors::{BusError, Result};
-use crate::runtime::{ActionGoalHandler, Node, NodeOptions, ServiceHandler, TopicPublisherRaw};
-use crate::sensor_msgs::msg::v1::Imu as BusImu;
-use crate::std_msgs::msg::v1::String as BusString;
+use crate::runtime::{
+    ActionGoalHandler, MessageCallback, Node, NodeOptions, ServiceHandler, TopicPublisherRaw,
+};
 use crate::std_srvs::srv::v1::{
     SetBool as BusSetBool, SetBoolRequest as BusSetBoolRequest,
     SetBoolResponse as BusSetBoolResponse, Trigger as BusTrigger,
     TriggerRequest as BusTriggerRequest, TriggerResponse as BusTriggerResponse,
 };
 
+use super::codec::{self, TopicCodec};
 use super::convert;
 use super::echo::EchoFilter;
 use super::vendor::std_srvs::srv as ros_srv;
@@ -50,32 +51,6 @@ pub enum Direction {
     RosToBus,
     BusToRos,
     Both,
-}
-
-/// Whitelisted ROS message kinds (topics).
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum MsgKind {
-    String,
-    Imu,
-}
-
-impl MsgKind {
-    pub fn type_name(self) -> &'static str {
-        match self {
-            Self::String => "std_msgs/msg/String",
-            Self::Imu => "sensor_msgs/msg/Imu",
-        }
-    }
-
-    pub fn parse(s: &str) -> Result<Self> {
-        match s {
-            "std_msgs/msg/String" => Ok(Self::String),
-            "sensor_msgs/msg/Imu" => Ok(Self::Imu),
-            other => Err(BusError::Protocol(format!(
-                "unsupported ros2 bridge type {other:?}; supported: std_msgs/msg/String, sensor_msgs/msg/Imu"
-            ))),
-        }
-    }
 }
 
 /// Whitelisted ROS service kinds.
@@ -178,7 +153,7 @@ mod act_kind_tests {
 pub(crate) struct RouteSpec {
     ros_topic: String,
     bus_topic: String,
-    kind: MsgKind,
+    type_name: String,
     direction: Direction,
 }
 
@@ -198,7 +173,7 @@ pub(crate) struct ActionRouteSpec {
     direction: Direction,
 }
 
-/// Fluent builder: `Ros2Bridge::new(...).bus_tcp(...).route(...).string().add().build()?`.
+/// Fluent builder: `Ros2Bridge::new(...).bus_tcp(...).route(...).type_name(...).add().build()?`.
 pub struct Ros2BridgeBuilder {
     name: String,
     bus_options: NodeOptions,
@@ -236,7 +211,7 @@ pub struct RouteBuilder {
     parent: Ros2BridgeBuilder,
     ros_topic: String,
     bus_topic: String,
-    kind: Option<MsgKind>,
+    type_name: Option<String>,
     direction: Direction,
 }
 
@@ -343,7 +318,7 @@ impl Ros2BridgeBuilder {
             parent: self,
             ros_topic: ros_topic.into(),
             bus_topic: bus_topic.into(),
-            kind: None,
+            type_name: None,
             direction: Direction::Both,
         }
     }
@@ -380,16 +355,17 @@ impl Ros2BridgeBuilder {
         mut self,
         ros_topic: String,
         bus_topic: String,
-        kind: MsgKind,
+        type_name: String,
         direction: Direction,
-    ) -> Self {
+    ) -> Result<Self> {
+        codec::lookup_topic_codec(&type_name)?;
         self.routes.push(RouteSpec {
             ros_topic,
             bus_topic,
-            kind,
+            type_name,
             direction,
         });
-        self
+        Ok(self)
     }
 
     pub(crate) fn push_service(
@@ -436,15 +412,20 @@ impl Ros2BridgeBuilder {
         Ok(self)
     }
 
-    /// Add a typed topic route (for FFI / non-fluent callers).
+    /// Add a topic route by ROS type string (e.g. `sensor_msgs/msg/Image`).
     pub fn add_route(
         self,
         ros_topic: impl Into<String>,
         bus_topic: impl Into<String>,
-        kind: MsgKind,
+        type_name: impl Into<String>,
         direction: Direction,
-    ) -> Self {
-        self.push_route(ros_topic.into(), bus_topic.into(), kind, direction)
+    ) -> Result<Self> {
+        self.push_route(
+            ros_topic.into(),
+            bus_topic.into(),
+            type_name.into(),
+            direction,
+        )
     }
 
     /// Add a typed service route (for FFI / non-fluent callers).
@@ -554,18 +535,25 @@ impl Ros2BridgeBuilder {
 }
 
 impl RouteBuilder {
-    pub fn string(mut self) -> Self {
-        self.kind = Some(MsgKind::String);
-        self
+    pub fn string(self) -> Self {
+        self.type_name("std_msgs/msg/String")
     }
 
-    pub fn imu(mut self) -> Self {
-        self.kind = Some(MsgKind::Imu);
-        self
+    pub fn imu(self) -> Self {
+        self.type_name("sensor_msgs/msg/Imu")
     }
 
-    pub fn msg_kind(mut self, kind: MsgKind) -> Self {
-        self.kind = Some(kind);
+    pub fn image(self) -> Self {
+        self.type_name("sensor_msgs/msg/Image")
+    }
+
+    pub fn compressed_video(self) -> Self {
+        self.type_name("foxglove_msgs/msg/CompressedVideo")
+    }
+
+    /// Set an arbitrary registered ROS type (e.g. `sensor_msgs/msg/Image`).
+    pub fn type_name(mut self, type_name: impl Into<String>) -> Self {
+        self.type_name = Some(type_name.into());
         self
     }
 
@@ -574,12 +562,15 @@ impl RouteBuilder {
         self
     }
 
-    pub fn add(self) -> Ros2BridgeBuilder {
-        let kind = self.kind.unwrap_or_else(|| {
-            panic!("ros2 bridge route: call .string() or .imu() before .add()")
-        });
+    pub fn add(self) -> Result<Ros2BridgeBuilder> {
+        let type_name = self.type_name.ok_or_else(|| {
+            BusError::Protocol(
+                "ros2 bridge route: call .type_name(...) or .string()/.imu()/.image() before .add()"
+                    .into(),
+            )
+        })?;
         self.parent
-            .push_route(self.ros_topic, self.bus_topic, kind, self.direction)
+            .push_route(self.ros_topic, self.bus_topic, type_name, self.direction)
     }
 }
 
@@ -652,7 +643,8 @@ fn wire_route(
     ros_subs: &mut Vec<DynamicSubscription>,
     ros_pubs: &mut Vec<DynamicPublisher>,
 ) -> Result<()> {
-    let type_name: MessageTypeName = convert::type_name(route.kind);
+    let codec: &'static dyn TopicCodec = codec::lookup_topic_codec(&route.type_name)?;
+    let type_name = codec.ros_type();
     let ros_topic = route.ros_topic.clone();
     let bus_topic = route.bus_topic.clone();
 
@@ -672,7 +664,6 @@ fn wire_route(
             bus_node.create_publisher_raw(bus_topic.as_str())?,
         );
         let echo = Arc::clone(echo);
-        let kind = route.kind;
         let tx = ros_to_bus_tx.clone();
         let bus_topic_cb = bus_topic.clone();
         let sub = ros_node
@@ -680,21 +671,12 @@ fn wire_route(
                 type_name,
                 ros_topic.as_str(),
                 move |dyn_msg, _info| {
-                    let payload = match kind {
-                        MsgKind::String => match convert::string_dyn_to_bus(&dyn_msg) {
-                            Ok(m) => m.encode_to_vec(),
-                            Err(e) => {
-                                log::warn!("ros→bus String convert: {e}");
-                                return;
-                            }
-                        },
-                        MsgKind::Imu => match convert::imu_dyn_to_bus(&dyn_msg) {
-                            Ok(m) => m.encode_to_vec(),
-                            Err(e) => {
-                                log::warn!("ros→bus Imu convert: {e}");
-                                return;
-                            }
-                        },
+                    let payload = match codec.ros_to_bus(&dyn_msg) {
+                        Ok(p) => p,
+                        Err(e) => {
+                            log::warn!("ros→bus {} convert: {e}", codec.type_name());
+                            return;
+                        }
                     };
                     if let Ok(mut g) = echo.lock() {
                         if g.is_echo(&payload) {
@@ -713,54 +695,23 @@ fn wire_route(
 
     if let Some(ros_pub) = ros_pub {
         let echo = Arc::clone(echo);
-        match route.kind {
-            MsgKind::String => {
-                bus_node.create_subscription::<BusString, _>(
-                    bus_topic.as_str(),
-                    move |_topic, msg| {
-                        let payload = msg.encode_to_vec();
-                        if let Ok(mut g) = echo.lock() {
-                            if g.is_echo(&payload) {
-                                return;
-                            }
-                            g.remember(&payload);
-                        }
-                        match convert::string_bus_to_dyn(&msg) {
-                            Ok(dyn_msg) => {
-                                if let Err(e) = ros_pub.publish(dyn_msg) {
-                                    log::warn!("bus→ros String publish: {e}");
-                                }
-                            }
-                            Err(e) => log::warn!("bus→ros String convert: {e}"),
-                        }
-                    },
-                    None,
-                )?;
+        let cb: MessageCallback = Arc::new(move |_topic, payload| {
+            if let Ok(mut g) = echo.lock() {
+                if g.is_echo(payload) {
+                    return;
+                }
+                g.remember(payload);
             }
-            MsgKind::Imu => {
-                bus_node.create_subscription::<BusImu, _>(
-                    bus_topic.as_str(),
-                    move |_topic, msg| {
-                        let payload = msg.encode_to_vec();
-                        if let Ok(mut g) = echo.lock() {
-                            if g.is_echo(&payload) {
-                                return;
-                            }
-                            g.remember(&payload);
-                        }
-                        match convert::imu_bus_to_dyn(&msg) {
-                            Ok(dyn_msg) => {
-                                if let Err(e) = ros_pub.publish(dyn_msg) {
-                                    log::warn!("bus→ros Imu publish: {e}");
-                                }
-                            }
-                            Err(e) => log::warn!("bus→ros Imu convert: {e}"),
-                        }
-                    },
-                    None,
-                )?;
+            match codec.bus_to_ros(payload) {
+                Ok(dyn_msg) => {
+                    if let Err(e) = ros_pub.publish(dyn_msg) {
+                        log::warn!("bus→ros {} publish: {e}", codec.type_name());
+                    }
+                }
+                Err(e) => log::warn!("bus→ros {} convert: {e}", codec.type_name()),
             }
-        }
+        });
+        bus_node.create_subscription_raw(bus_topic.as_str(), cb, None)?;
     }
 
     Ok(())
