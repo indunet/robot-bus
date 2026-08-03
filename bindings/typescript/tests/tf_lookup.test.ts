@@ -1,5 +1,6 @@
 /**
  * TF buffer / listener smoke (needs napi addon from `just ts-dev`).
+ * Skips cleanly when the native binary is missing (CI smoke without ZMQ).
  */
 
 import assert from "node:assert/strict";
@@ -8,13 +9,6 @@ import { describe, it } from "node:test";
 import { setTimeout as sleep } from "node:timers/promises";
 import { TransformStamped } from "../generated/geometry_msgs/msg/v1/stamped.js";
 import { TFMessage } from "../generated/tf2_msgs/msg/v1/tf_message.js";
-import {
-  createTfBuffer,
-  Node,
-  RobotBusBroker,
-  TfListener,
-  TransformBroadcaster,
-} from "../src/index.node.js";
 
 async function freePort(): Promise<number> {
   return await new Promise((resolve, reject) => {
@@ -30,6 +24,14 @@ async function freePort(): Promise<number> {
       server.close((err) => (err ? reject(err) : resolve(port)));
     });
   });
+}
+
+async function tryLoadNodeApi() {
+  try {
+    return await import("../src/index.node.js");
+  } catch {
+    return null;
+  }
 }
 
 function staticEdge(
@@ -53,13 +55,12 @@ function staticEdge(
 }
 
 describe("tf lookup", () => {
-  it("offline buffer", () => {
-    let buf;
-    try {
-      buf = createTfBuffer();
-    } catch {
+  it("offline buffer", async () => {
+    const api = await tryLoadNodeApi();
+    if (!api?.createTfBuffer) {
       return; // native addon missing
     }
+    const buf = api.createTfBuffer();
     buf.setTransformMsg(TFMessage, staticEdge("base_link", "camera", 1, 0), true);
     assert.equal(buf.canTransform("base_link", "camera"), true);
     const t = buf.lookupTransform("base_link", "camera", TransformStamped);
@@ -68,9 +69,14 @@ describe("tf lookup", () => {
   });
 
   it("listener against broker", async () => {
-    let broker: InstanceType<typeof RobotBusBroker>;
+    const api = await tryLoadNodeApi();
+    if (!api?.RobotBusBroker || !api.Node || !api.TfListener || !api.TransformBroadcaster) {
+      return;
+    }
+
+    let broker: InstanceType<typeof api.RobotBusBroker>;
     try {
-      broker = RobotBusBroker.start({
+      broker = api.RobotBusBroker.start({
         messageXsubBind: `tcp://127.0.0.1:${await freePort()}`,
         messageXpubBind: `tcp://127.0.0.1:${await freePort()}`,
         serviceFrontendBind: `tcp://127.0.0.1:${await freePort()}`,
@@ -87,7 +93,7 @@ describe("tf lookup", () => {
     }
 
     try {
-      const node = new Node(
+      const node = new api.Node(
         "ts-tf",
         "localhost",
         "tcp",
@@ -99,9 +105,9 @@ describe("tf lookup", () => {
         broker.actionBackendBind,
         broker.actionFrontendBind,
       );
-      const listener = new TfListener(node);
+      const listener = new api.TfListener(node);
       const buf = listener.buffer();
-      const br = TransformBroadcaster.fromTyped(
+      const br = api.TransformBroadcaster.fromTyped(
         node.createPublisher("/tf_static", TFMessage),
         TFMessage,
       );
