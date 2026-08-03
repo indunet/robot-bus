@@ -11,6 +11,9 @@ pub enum BusError {
     #[error("worker died for '{name}'")]
     WorkerDied { name: String },
 
+    #[error("cancelled '{name}'")]
+    Cancelled { name: String },
+
     #[error("no goal '{goal_id}'")]
     NoGoal { goal_id: String },
 
@@ -54,6 +57,11 @@ pub fn parse_error_body(body: &[u8]) -> Option<BusError> {
     }
     if let Some(name) = strip_prefix(body, b"WORKER_DIED") {
         return Some(BusError::WorkerDied {
+            name: decode_field(name),
+        });
+    }
+    if let Some(name) = strip_prefix(body, b"CANCELLED") {
+        return Some(BusError::Cancelled {
             name: decode_field(name),
         });
     }

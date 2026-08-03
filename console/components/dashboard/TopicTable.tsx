@@ -84,11 +84,11 @@ function TopicRow({ topic }: { topic: TopicInfo }) {
       <div className="flex items-center gap-2 min-w-0">
         <span className={`w-2 h-2 rounded-full shrink-0 ${isIdle ? 'bg-bus-muted' : 'bg-bus-green pulse-green'}`} />
         <div className="min-w-0 flex flex-col">
-          <span className={`font-mono text-[13px] truncate ${isIdle ? 'text-bus-muted' : 'text-bus-text'}`}>
+          <span className={`font-mono text-[13px] font-medium truncate ${isIdle ? 'text-bus-muted' : 'text-bus-text'}`}>
             {topic.name}
           </span>
           {topic.typeName && (
-            <span className="font-mono text-[10px] text-bus-muted truncate">{topic.typeName}</span>
+            <span className="font-mono text-[10px] text-[#6b8294] truncate">{topic.typeName}</span>
           )}
         </div>
       </div>

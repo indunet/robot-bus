@@ -21,13 +21,13 @@ const CMD_DISCONNECT: &[u8] = b"DISCONNECT";
 
 /// Error body prefix written when no worker is registered for a service.
 /// Wire convention: `b"NO_WORKER"` + `b'\0'` + service_name. End-side parses.
-const ERR_NO_WORKER: &[u8] = b"NO_WORKER";
+pub const ERR_NO_WORKER: &[u8] = b"NO_WORKER";
+
+/// Error body prefix when an in-flight worker dies / disconnects before replying.
+pub const ERR_WORKER_DIED: &[u8] = b"WORKER_DIED";
 
 /// Cap poll timeout so the shutdown flag and pending-retry are responsive.
 const POLL_CAP_MS: i64 = 200;
-
-/// Max queued requests before the broker starts rejecting with NO_WORKER.
-const MAX_PENDING: usize = 64;
 
 /// Where a registered worker route comes from.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -401,6 +401,70 @@ struct PendingRequest {
     queued_at: Instant,
 }
 
+/// Tracks a request that has been forwarded to a worker and is awaiting a reply.
+#[derive(Clone, Debug)]
+pub struct InFlightEntry {
+    pub client_identity: Vec<u8>,
+    pub worker_identity: Vec<u8>,
+    pub service: Vec<u8>,
+    pub request_id: Vec<u8>,
+    pub has_req_delim: bool,
+}
+
+/// In-flight RPC bookkeeping: keyed by `client_id\\0request_id`.
+#[derive(Default)]
+pub struct InFlightTable {
+    entries: HashMap<Vec<u8>, InFlightEntry>,
+}
+
+impl InFlightTable {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    fn key(client_id: &[u8], request_id: &[u8]) -> Vec<u8> {
+        let mut k = Vec::with_capacity(client_id.len() + 1 + request_id.len());
+        k.extend_from_slice(client_id);
+        k.push(0);
+        k.extend_from_slice(request_id);
+        k
+    }
+
+    pub fn insert(&mut self, entry: InFlightEntry) {
+        let key = Self::key(&entry.client_identity, &entry.request_id);
+        self.entries.insert(key, entry);
+    }
+
+    pub fn remove(&mut self, client_id: &[u8], request_id: &[u8]) -> Option<InFlightEntry> {
+        self.entries.remove(&Self::key(client_id, request_id))
+    }
+
+    /// Drop all in-flight requests owned by `worker_identity`.
+    pub fn evict_worker(&mut self, worker_identity: &[u8]) -> Vec<InFlightEntry> {
+        let keys: Vec<Vec<u8>> = self
+            .entries
+            .iter()
+            .filter(|(_, e)| e.worker_identity == worker_identity)
+            .map(|(k, _)| k.clone())
+            .collect();
+        let mut dropped = Vec::with_capacity(keys.len());
+        for k in keys {
+            if let Some(e) = self.entries.remove(&k) {
+                dropped.push(e);
+            }
+        }
+        dropped
+    }
+
+    pub fn len(&self) -> usize {
+        self.entries.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.entries.is_empty()
+    }
+}
+
 // ── Pure frame helpers (no sockets, unit-testable) ───────────────────────
 
 /// Extract the service_name from client→broker frames `[client_id][svc][req_id][body]`.
@@ -459,10 +523,10 @@ pub fn build_client_reply(
     }
 }
 
-/// Build the error body written when no worker is available for a service.
-pub fn build_error_body(service: &[u8]) -> Vec<u8> {
-    let mut v = Vec::with_capacity(ERR_NO_WORKER.len() + 1 + service.len());
-    v.extend_from_slice(ERR_NO_WORKER);
+/// Build an error body: `prefix` + `\0` + `service`.
+pub fn build_error_body(prefix: &[u8], service: &[u8]) -> Vec<u8> {
+    let mut v = Vec::with_capacity(prefix.len() + 1 + service.len());
+    v.extend_from_slice(prefix);
     v.push(0);
     v.extend_from_slice(service);
     v
@@ -480,9 +544,12 @@ pub fn run_loop(
 ) -> Result<()> {
     let mut registry = WorkerRegistry::new();
     let mut pending: VecDeque<PendingRequest> = VecDeque::new();
+    let mut in_flight = InFlightTable::new();
     let mut client_is_req: HashMap<Vec<u8>, bool> = HashMap::new();
     let mut next_sweep =
         Instant::now() + Duration::from_millis(config.heartbeat_interval_ms);
+    let pending_timeout = Duration::from_millis(config.pending_timeout_ms);
+    let max_pending = config.max_pending;
 
     loop {
         if shutdown.load(Ordering::Acquire) {
@@ -500,22 +567,72 @@ pub fn run_loop(
                 backend,
                 &mut registry,
                 &mut pending,
+                &mut in_flight,
                 &mut client_is_req,
+                max_pending,
                 metrics,
             )?;
         }
         if items[1].get_revents().contains(zmq::POLLIN) {
-            handle_worker_message(backend, frontend, &mut registry, &client_is_req, metrics)?;
+            handle_worker_message(
+                backend,
+                frontend,
+                &mut registry,
+                &mut in_flight,
+                &client_is_req,
+                metrics,
+            )?;
         }
 
         if Instant::now() >= next_sweep {
             let now = Instant::now();
-            registry.sweep_dead(now, Duration::from_millis(config.heartbeat_timeout_ms));
-            retry_pending(frontend, backend, &mut pending, &mut registry, now, metrics)?;
+            let dead = registry.sweep_dead(now, Duration::from_millis(config.heartbeat_timeout_ms));
+            for wid in dead {
+                reclaim_worker_requests(frontend, &mut in_flight, &wid, metrics)?;
+            }
+            retry_pending(
+                frontend,
+                backend,
+                &mut pending,
+                &mut registry,
+                &mut in_flight,
+                now,
+                pending_timeout,
+                metrics,
+            )?;
             next_sweep = now + Duration::from_millis(config.heartbeat_interval_ms);
         }
     }
 
+    Ok(())
+}
+
+/// Send synthetic WORKER_DIED replies for in-flight requests owned by `worker_identity`.
+pub fn reclaim_worker_requests(
+    frontend: &Socket,
+    in_flight: &mut InFlightTable,
+    worker_identity: &[u8],
+    metrics: Option<&Arc<ServiceMetrics>>,
+) -> Result<()> {
+    let dropped = in_flight.evict_worker(worker_identity);
+    for e in dropped {
+        if let Some(m) = metrics {
+            let name = String::from_utf8_lossy(&e.service);
+            m.record_error(&name);
+            m.record_worker_died(&name);
+        }
+        let err = build_error_body(ERR_WORKER_DIED, &e.service);
+        let reply = build_client_reply(
+            &e.client_identity,
+            &e.service,
+            &e.request_id,
+            &err,
+            e.has_req_delim,
+        );
+        frontend
+            .send_multipart(reply, 0)
+            .context("frontend send worker-died reply")?;
+    }
     Ok(())
 }
 
@@ -524,7 +641,9 @@ fn handle_client_request(
     backend: &Socket,
     registry: &mut WorkerRegistry,
     pending: &mut VecDeque<PendingRequest>,
+    in_flight: &mut InFlightTable,
     client_is_req: &mut HashMap<Vec<u8>, bool>,
+    max_pending: usize,
     metrics: Option<&Arc<ServiceMetrics>>,
 ) -> Result<()> {
     let frames = match frontend.recv_multipart(0) {
@@ -558,9 +677,16 @@ fn handle_client_request(
         if let Some(m) = metrics {
             m.record_call_start(&svc_str, client_id, req_id);
         }
+        in_flight.insert(InFlightEntry {
+            client_identity: client_id.to_vec(),
+            worker_identity: worker_id.clone(),
+            service: svc.to_vec(),
+            request_id: req_id.to_vec(),
+            has_req_delim: has_delim,
+        });
         let fwd = build_worker_forward(worker_id.as_slice(), client_id, svc, req_id, body);
         backend.send_multipart(fwd, 0).context("backend send forward")?;
-    } else if pending.len() < MAX_PENDING {
+    } else if pending.len() < max_pending {
         pending.push_back(PendingRequest {
             client_identity: client_id.to_vec(),
             service: svc.to_vec(),
@@ -573,7 +699,7 @@ fn handle_client_request(
         if let Some(m) = metrics {
             m.record_error(&svc_str);
         }
-        let err = build_error_body(svc);
+        let err = build_error_body(ERR_NO_WORKER, svc);
         let reply = build_client_reply(client_id, svc, req_id, &err, has_delim);
         frontend.send_multipart(reply, 0).context("frontend send reject")?;
     }
@@ -584,6 +710,7 @@ fn handle_worker_message(
     backend: &Socket,
     frontend: &Socket,
     registry: &mut WorkerRegistry,
+    in_flight: &mut InFlightTable,
     client_is_req: &HashMap<Vec<u8>, bool>,
     metrics: Option<&Arc<ServiceMetrics>>,
 ) -> Result<()> {
@@ -610,6 +737,7 @@ fn handle_worker_message(
             } else if cmd == CMD_DISCONNECT {
                 let svcs = registry.services_of(worker_id);
                 registry.remove(worker_id);
+                reclaim_worker_requests(frontend, in_flight, worker_id, metrics)?;
                 if let Some(m) = metrics {
                     for s in svcs {
                         m.set_workers(&s, registry.worker_count(&s) as u64);
@@ -625,12 +753,15 @@ fn handle_worker_message(
             let svc = &frames[2];
             let req_id = &frames[3];
             let body = &frames[4];
+            let tracked = in_flight.remove(client_id, req_id);
             if let Some(m) = metrics {
                 if let Ok(svc_str) = std::str::from_utf8(svc) {
                     m.record_call_ok(svc_str, client_id, req_id);
                 }
             }
-            let has_delim = client_is_req.get(client_id).copied().unwrap_or(false);
+            let has_delim = tracked
+                .map(|e| e.has_req_delim)
+                .unwrap_or_else(|| client_is_req.get(client_id).copied().unwrap_or(false));
             let reply = build_client_reply(client_id, svc, req_id, body, has_delim);
             frontend.send_multipart(reply, 0).context("frontend send reply")?;
             Ok(())
@@ -645,11 +776,12 @@ fn retry_pending(
     backend: &Socket,
     pending: &mut VecDeque<PendingRequest>,
     registry: &mut WorkerRegistry,
+    in_flight: &mut InFlightTable,
     now: Instant,
+    pending_timeout: Duration,
     metrics: Option<&Arc<ServiceMetrics>>,
 ) -> Result<()> {
     let mut still_pending = VecDeque::new();
-    let timeout = Duration::from_secs(5);
     while let Some(req) = pending.pop_front() {
         let svc_str = match std::str::from_utf8(&req.service) {
             Ok(s) => s.to_string(),
@@ -659,6 +791,13 @@ fn retry_pending(
             if let Some(m) = metrics {
                 m.record_call_start(&svc_str, &req.client_identity, &req.request_id);
             }
+            in_flight.insert(InFlightEntry {
+                client_identity: req.client_identity.clone(),
+                worker_identity: worker_id.clone(),
+                service: req.service.clone(),
+                request_id: req.request_id.clone(),
+                has_req_delim: req.has_req_delim,
+            });
             let fwd = build_worker_forward(
                 worker_id.as_slice(),
                 &req.client_identity,
@@ -667,11 +806,12 @@ fn retry_pending(
                 &req.body,
             );
             backend.send_multipart(fwd, 0).context("backend send pending forward")?;
-        } else if now.duration_since(req.queued_at) > timeout {
+        } else if now.duration_since(req.queued_at) > pending_timeout {
             if let Some(m) = metrics {
                 m.record_error(&svc_str);
+                m.record_pending_timeout(&svc_str);
             }
-            let err = build_error_body(&req.service);
+            let err = build_error_body(ERR_NO_WORKER, &req.service);
             let reply = build_client_reply(
                 &req.client_identity,
                 &req.service,
@@ -849,10 +989,41 @@ mod tests {
 
     #[test]
     fn build_error_body_format() {
-        let err = build_error_body(b"svc.x");
+        let err = build_error_body(ERR_NO_WORKER, b"svc.x");
         assert_eq!(&err[..9], b"NO_WORKER");
         assert_eq!(err[9], 0);
         assert_eq!(&err[10..], b"svc.x");
+    }
+
+    #[test]
+    fn build_error_body_worker_died() {
+        let err = build_error_body(ERR_WORKER_DIED, b"svc.x");
+        assert_eq!(&err[..11], b"WORKER_DIED");
+        assert_eq!(err[11], 0);
+        assert_eq!(&err[12..], b"svc.x");
+    }
+
+    #[test]
+    fn inflight_evict_worker() {
+        let mut t = InFlightTable::new();
+        t.insert(InFlightEntry {
+            client_identity: b"c1".to_vec(),
+            worker_identity: b"w1".to_vec(),
+            service: b"svc".to_vec(),
+            request_id: b"r1".to_vec(),
+            has_req_delim: true,
+        });
+        t.insert(InFlightEntry {
+            client_identity: b"c2".to_vec(),
+            worker_identity: b"w2".to_vec(),
+            service: b"svc".to_vec(),
+            request_id: b"r2".to_vec(),
+            has_req_delim: false,
+        });
+        let dropped = t.evict_worker(b"w1");
+        assert_eq!(dropped.len(), 1);
+        assert_eq!(dropped[0].request_id, b"r1");
+        assert_eq!(t.len(), 1);
     }
 
     #[test]

@@ -41,11 +41,17 @@ const ERR_WORKER_DIED: &[u8] = b"WORKER_DIED";
 /// Error body prefix written when a CANCEL arrives for an unknown/finished goal.
 const ERR_NO_GOAL: &[u8] = b"NO_GOAL";
 
+/// Error body prefix when a pending (not yet dispatched) goal is cancelled.
+const ERR_CANCELLED: &[u8] = b"CANCELLED";
+
 /// Cap poll timeout so the shutdown flag and pending-retry are responsive.
 const POLL_CAP_MS: i64 = 200;
 
 /// Max queued goals before the broker starts rejecting with NO_WORKER.
 const MAX_PENDING: usize = 64;
+
+/// Soft cap on in-flight goals in the GoalTable.
+const MAX_GOALS: usize = 1024;
 
 #[derive(Clone, Debug)]
 struct WorkerInfo {
@@ -211,6 +217,15 @@ impl GoalTable {
         }
     }
 
+    pub fn contains(&self, goal_id: &[u8]) -> bool {
+        self.goals.contains_key(goal_id)
+    }
+
+    pub fn len(&self) -> usize {
+        self.goals.len()
+    }
+
+    #[allow(dead_code)]
     pub fn insert(
         &mut self,
         goal_id: Vec<u8>,
@@ -218,7 +233,7 @@ impl GoalTable {
         worker_identity: Vec<u8>,
         action: Vec<u8>,
     ) {
-        self.insert_full(
+        let _ = self.insert_full(
             goal_id,
             client_identity,
             worker_identity,
@@ -226,6 +241,34 @@ impl GoalTable {
             GoalReply::Frontend,
             None,
         );
+    }
+
+    /// Insert a new goal. Returns `false` if `goal_id` already exists or the table is full.
+    pub(crate) fn try_insert_full(
+        &mut self,
+        goal_id: Vec<u8>,
+        client_identity: Vec<u8>,
+        worker_identity: Vec<u8>,
+        action: Vec<u8>,
+        reply: GoalReply,
+        via_peer: Option<usize>,
+        max_goals: usize,
+    ) -> bool {
+        if self.goals.contains_key(&goal_id) || self.goals.len() >= max_goals {
+            return false;
+        }
+        self.goals.insert(
+            goal_id.clone(),
+            GoalEntry {
+                client_identity,
+                worker_identity,
+                action,
+                goal_id,
+                reply,
+                via_peer,
+            },
+        );
+        true
     }
 
     pub(crate) fn insert_full(
@@ -237,16 +280,14 @@ impl GoalTable {
         reply: GoalReply,
         via_peer: Option<usize>,
     ) {
-        self.goals.insert(
-            goal_id.clone(),
-            GoalEntry {
-                client_identity,
-                worker_identity,
-                action,
-                goal_id,
-                reply,
-                via_peer,
-            },
+        let _ = self.try_insert_full(
+            goal_id,
+            client_identity,
+            worker_identity,
+            action,
+            reply,
+            via_peer,
+            MAX_GOALS,
         );
     }
 
@@ -284,11 +325,6 @@ impl GoalTable {
             }
         }
         dropped
-    }
-
-    #[allow(dead_code)]
-    pub fn len(&self) -> usize {
-        self.goals.len()
     }
 }
 
@@ -586,6 +622,7 @@ fn reclaim_worker_goals(
         if let Some(m) = metrics {
             let name = String::from_utf8_lossy(&e.action);
             m.record_error(&name, Some(&e.goal_id));
+            m.record_worker_died(&name);
         }
         let err = build_error_body(ERR_WORKER_DIED, &e.action);
         let reply = build_client_reply(
@@ -632,13 +669,37 @@ fn handle_client_message(
                 Ok(s) => s.to_string(),
                 Err(_) => return Ok(()),
             };
+            if goals.contains(msg.goal_id) || goals.len() >= MAX_GOALS {
+                if let Some(m) = metrics {
+                    m.record_error(&action_str, Some(msg.goal_id));
+                }
+                // Duplicate / capacity: reject with NO_GOAL so the client unblocks.
+                let err = build_error_body(ERR_NO_GOAL, msg.action);
+                let reply =
+                    build_client_reply(client_id, msg.action, msg.goal_id, KIND_RESULT, &err);
+                frontend
+                    .send_multipart(reply, 0)
+                    .context("frontend send duplicate/cap reject")?;
+                return Ok(());
+            }
             if let Some(worker_id) = registry.select_worker(&action_str) {
-                goals.insert(
+                if !goals.try_insert_full(
                     msg.goal_id.to_vec(),
                     client_id.to_vec(),
                     worker_id.clone(),
                     msg.action.to_vec(),
-                );
+                    GoalReply::Frontend,
+                    None,
+                    MAX_GOALS,
+                ) {
+                    let err = build_error_body(ERR_NO_GOAL, msg.action);
+                    let reply =
+                        build_client_reply(client_id, msg.action, msg.goal_id, KIND_RESULT, &err);
+                    frontend
+                        .send_multipart(reply, 0)
+                        .context("frontend send insert reject")?;
+                    return Ok(());
+                }
                 if let Some(m) = metrics {
                     m.record_run_start(&action_str, msg.goal_id);
                 }
@@ -664,6 +725,28 @@ fn handle_client_message(
             }
         }
         ClientKind::Cancel => {
+            // Cancel a still-queued goal before it is dispatched.
+            if let Some(pos) = pending.iter().position(|p| p.goal_id == msg.goal_id) {
+                let req = pending.remove(pos).expect("position just found");
+                if let Some(m) = metrics {
+                    if let Ok(name) = std::str::from_utf8(&req.action) {
+                        m.record_error(name, Some(&req.goal_id));
+                        m.record_cancelled(name);
+                    }
+                }
+                let err = build_error_body(ERR_CANCELLED, &req.action);
+                let reply = build_client_reply(
+                    &req.client_identity,
+                    &req.action,
+                    &req.goal_id,
+                    KIND_RESULT,
+                    &err,
+                );
+                frontend
+                    .send_multipart(reply, 0)
+                    .context("frontend send cancelled")?;
+                return Ok(());
+            }
             // Route the cancel to the worker currently owning this goal.
             if let Some(entry) = goals.get(msg.goal_id) {
                 let fwd = build_worker_cancel(
@@ -739,6 +822,13 @@ fn handle_worker_message(
             kind,
             body,
         }) => {
+            // Fence late replies after WORKER_DIED reclaim (or unknown goal_id).
+            let Some(entry) = goals.get(goal_id) else {
+                return Ok(());
+            };
+            if entry.worker_identity != worker_id {
+                return Ok(());
+            }
             let reply = build_client_reply(client_id, action, goal_id, kind_as_bytes(kind), body);
             frontend
                 .send_multipart(reply, 0)
@@ -776,12 +866,32 @@ fn retry_pending(
             Err(_) => continue, // drop malformed
         };
         if let Some(worker_id) = registry.select_worker(&act_str) {
-            goals.insert(
+            if !goals.try_insert_full(
                 req.goal_id.clone(),
                 req.client_identity.clone(),
                 worker_id.clone(),
                 req.action.clone(),
-            );
+                GoalReply::Frontend,
+                None,
+                MAX_GOALS,
+            ) {
+                // Capacity / duplicate — reject to the waiting client.
+                if let Some(m) = metrics {
+                    m.record_error(&act_str, Some(&req.goal_id));
+                }
+                let err = build_error_body(ERR_NO_GOAL, &req.action);
+                let reply = build_client_reply(
+                    &req.client_identity,
+                    &req.action,
+                    &req.goal_id,
+                    KIND_RESULT,
+                    &err,
+                );
+                frontend
+                    .send_multipart(reply, 0)
+                    .context("frontend send pending insert reject")?;
+                continue;
+            }
             if let Some(m) = metrics {
                 m.record_run_start(&act_str, &req.goal_id);
             }

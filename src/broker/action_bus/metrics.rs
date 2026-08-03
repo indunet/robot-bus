@@ -10,6 +10,8 @@ use std::time::{Instant, SystemTime, UNIX_EPOCH};
 pub struct ActionCounters {
     pub runs: AtomicU64,
     pub errors: AtomicU64,
+    pub worker_died: AtomicU64,
+    pub cancelled: AtomicU64,
     pub active: AtomicU64,
     pub duration_ewma_ms: AtomicU64,
     pub last_seen_unix_ms: AtomicU64,
@@ -21,6 +23,8 @@ pub struct ActionSnapshot {
     pub name: String,
     pub runs: u64,
     pub errors: u64,
+    pub worker_died: u64,
+    pub cancelled: u64,
     pub active: u64,
     pub avg_duration_ms: u64,
     pub last_seen_unix_ms: u64,
@@ -124,6 +128,18 @@ impl ActionMetrics {
         }
     }
 
+    pub fn record_worker_died(&self, name: &str) {
+        let c = self.counters(name);
+        c.worker_died.fetch_add(1, Ordering::Relaxed);
+        Self::touch(&c);
+    }
+
+    pub fn record_cancelled(&self, name: &str) {
+        let c = self.counters(name);
+        c.cancelled.fetch_add(1, Ordering::Relaxed);
+        Self::touch(&c);
+    }
+
     pub fn snapshot(&self) -> ActionMetricsSnapshot {
         let map = self.actions.lock().unwrap_or_else(|e| e.into_inner());
         let mut actions: Vec<ActionSnapshot> = map
@@ -132,6 +148,8 @@ impl ActionMetrics {
                 name: name.clone(),
                 runs: c.runs.load(Ordering::Relaxed),
                 errors: c.errors.load(Ordering::Relaxed),
+                worker_died: c.worker_died.load(Ordering::Relaxed),
+                cancelled: c.cancelled.load(Ordering::Relaxed),
                 active: c.active.load(Ordering::Relaxed),
                 avg_duration_ms: c.duration_ewma_ms.load(Ordering::Relaxed),
                 last_seen_unix_ms: c.last_seen_unix_ms.load(Ordering::Relaxed),

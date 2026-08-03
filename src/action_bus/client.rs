@@ -224,7 +224,16 @@ impl Iterator for ActionGoalIter<'_> {
         }
         let msg = match self.client.recv_message(self.timeout) {
             Ok(msg) => msg,
-            Err(err) => return Some(Err(err)),
+            Err(err @ BusError::Timeout(_)) => {
+                // Best-effort cancel so the worker can stop abandoned work.
+                let _ = self.client.submit_cancel(&self.action_name, &self.goal_id, b"");
+                self.done = true;
+                return Some(Err(err));
+            }
+            Err(err) => {
+                self.done = true;
+                return Some(Err(err));
+            }
         };
         if msg.action_name != self.action_name || msg.goal_id != self.goal_id {
             return Some(Err(BusError::Protocol(format!(
@@ -234,6 +243,7 @@ impl Iterator for ActionGoalIter<'_> {
         }
         if msg.kind == ActionKind::Result {
             if let Some(err) = parse_error_body(&msg.body) {
+                self.done = true;
                 return Some(Err(err));
             }
             self.done = true;

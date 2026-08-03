@@ -24,6 +24,9 @@ pub(super) enum ReplyTarget {
 pub(super) struct CorrEntry {
     pub(super) target: ReplyTarget,
     pub(super) original_client_id: Vec<u8>,
+    pub(super) service: Vec<u8>,
+    pub(super) request_id: Vec<u8>,
+    pub(super) worker_identity: Vec<u8>,
     pub(super) queued_at: Instant,
 }
 

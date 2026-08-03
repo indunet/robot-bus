@@ -218,11 +218,11 @@ const ProcessNode = memo(function ProcessNode({ data }: NodeProps) {
                 title={p.topic}
               />
               <div className="min-w-0 flex-1">
-                <div className="text-[11px] text-bus-text truncate" title={p.topic}>
+                <div className="text-[11px] text-bus-text font-medium truncate" title={p.topic}>
                   {shortTopic(p.topic)}
                 </div>
                 {p.typeName && (
-                  <div className="text-[9px] text-bus-muted truncate" title={p.typeName}>
+                  <div className="text-[9px] text-[#6b8294] truncate" title={p.typeName}>
                     {p.typeName}
                   </div>
                 )}
@@ -240,11 +240,11 @@ const ProcessNode = memo(function ProcessNode({ data }: NodeProps) {
           {d.outputs.map((p) => (
             <div key={`out-${p.topic}`} className="relative flex items-center min-h-[22px] pl-2 pr-3 justify-end">
               <div className="min-w-0 text-right">
-                <div className="text-[11px] text-bus-cyan truncate" title={p.topic}>
+                <div className="text-[11px] text-bus-cyan font-medium truncate" title={p.topic}>
                   {shortTopic(p.topic)}
                 </div>
                 {p.typeName && (
-                  <div className="text-[9px] text-bus-muted truncate" title={p.typeName}>
+                  <div className="text-[9px] text-[#6b8294] truncate" title={p.typeName}>
                     {p.typeName}
                   </div>
                 )}

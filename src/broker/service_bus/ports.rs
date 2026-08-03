@@ -22,3 +22,9 @@ pub const DEFAULT_RCV_HWM: i32 = 4;
 /// worker if no frame is seen within `HEARTBEAT_TIMEOUT_MS`.
 pub const DEFAULT_HEARTBEAT_INTERVAL_MS: u64 = 2500;
 pub const DEFAULT_HEARTBEAT_TIMEOUT_MS: u64 = 7500;
+
+/// How long a request may sit queued waiting for a worker before `NO_WORKER`.
+pub const DEFAULT_PENDING_TIMEOUT_MS: u64 = 5000;
+
+/// Max queued requests before the broker starts rejecting with `NO_WORKER`.
+pub const DEFAULT_MAX_PENDING: usize = 64;

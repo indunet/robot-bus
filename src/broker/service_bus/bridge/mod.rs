@@ -20,7 +20,7 @@ use zmq::{Context as ZmqContext, Socket};
 
 use self::advertise::{send_peer_heartbeats, sync_all_advertisements};
 use self::dispatch::{
-    deliver_reply, dispatch_request, expire_corr, retry_pending,
+    deliver_reply, dispatch_request, expire_corr, reclaim_worker_inflight, retry_pending,
 };
 use self::protocol::{
     CMD_DISCONNECT, CMD_HEARTBEAT, CMD_READY, CMD_READY_FED, POLL_CAP_MS,
@@ -29,7 +29,9 @@ use self::remote::{
     connect_peer, is_fed_identity, learn_peer_broker_id, parse_corr_id, parse_fed_broker_id,
     CorrEntry, PeerLink, PendingRequest, ReplyTarget,
 };
-use super::broker::{build_error_body, extend_hops, hop_contains, WorkerRegistry};
+use super::broker::{
+    build_error_body, extend_hops, hop_contains, InFlightTable, WorkerRegistry, ERR_NO_WORKER,
+};
 use super::{ServiceBusConfig, ServiceMetrics};
 
 /// Run the federated service broker until `shutdown` is set.
@@ -70,6 +72,9 @@ pub fn run_federated(
     let mut pending: VecDeque<PendingRequest> = VecDeque::new();
     let mut client_is_req: HashMap<Vec<u8>, bool> = HashMap::new();
     let mut corr: HashMap<Vec<u8>, CorrEntry> = HashMap::new();
+    let mut in_flight = InFlightTable::new();
+    let pending_timeout = Duration::from_millis(config.pending_timeout_ms);
+    let max_pending = config.max_pending;
 
     let mut next_sweep =
         Instant::now() + Duration::from_millis(config.heartbeat_interval_ms);
@@ -106,7 +111,9 @@ pub fn run_federated(
                 &mut pending,
                 &mut client_is_req,
                 &mut corr,
+                &mut in_flight,
                 &broker_id,
+                max_pending,
                 metrics,
             )?;
         }
@@ -117,6 +124,7 @@ pub fn run_federated(
                 &mut registry,
                 &client_is_req,
                 &mut corr,
+                &mut in_flight,
                 &mut peers,
                 &broker_id,
                 metrics,
@@ -132,7 +140,9 @@ pub fn run_federated(
                     &mut registry,
                     &mut pending,
                     &mut corr,
+                    &mut in_flight,
                     &broker_id,
+                    max_pending,
                     metrics,
                 )?;
             }
@@ -140,10 +150,20 @@ pub fn run_federated(
 
         if Instant::now() >= next_sweep {
             let now = Instant::now();
-            let _ = registry.sweep_dead(
+            let dead = registry.sweep_dead(
                 now,
                 Duration::from_millis(config.heartbeat_timeout_ms),
             );
+            for wid in dead {
+                reclaim_worker_inflight(
+                    &frontend,
+                    &peers,
+                    &mut corr,
+                    &mut in_flight,
+                    &wid,
+                    metrics,
+                )?;
+            }
             sync_all_advertisements(&mut peers, &registry, &broker_id)?;
             send_peer_heartbeats(&peers)?;
             retry_pending(
@@ -153,11 +173,21 @@ pub fn run_federated(
                 &mut pending,
                 &mut registry,
                 &mut corr,
+                &mut in_flight,
                 &broker_id,
                 now,
+                pending_timeout,
+                max_pending,
                 metrics,
             )?;
-            expire_corr(&mut corr, now);
+            expire_corr(
+                &frontend,
+                &peers,
+                &mut corr,
+                now,
+                pending_timeout,
+                metrics,
+            )?;
             next_sweep = now + Duration::from_millis(config.heartbeat_interval_ms);
         }
     }
@@ -172,7 +202,9 @@ fn handle_frontend(
     pending: &mut VecDeque<PendingRequest>,
     client_is_req: &mut HashMap<Vec<u8>, bool>,
     corr: &mut HashMap<Vec<u8>, CorrEntry>,
+    in_flight: &mut InFlightTable,
     broker_id: &str,
+    max_pending: usize,
     metrics: Option<&Arc<ServiceMetrics>>,
 ) -> Result<()> {
     let frames = match frontend.recv_multipart(0) {
@@ -205,6 +237,7 @@ fn handle_frontend(
         registry,
         pending,
         corr,
+        in_flight,
         broker_id,
         client_id,
         svc,
@@ -217,6 +250,7 @@ fn handle_frontend(
         },
         None,
         has_delim,
+        max_pending,
         metrics,
     )
 }
@@ -229,7 +263,9 @@ fn handle_peer_dealer(
     registry: &mut WorkerRegistry,
     pending: &mut VecDeque<PendingRequest>,
     corr: &mut HashMap<Vec<u8>, CorrEntry>,
+    in_flight: &mut InFlightTable,
     broker_id: &str,
+    max_pending: usize,
     metrics: Option<&Arc<ServiceMetrics>>,
 ) -> Result<()> {
     let frames = match peers[peer_idx].dealer.recv_multipart(0) {
@@ -264,7 +300,7 @@ fn handle_peer_dealer(
         }
     }
     if hop_contains(&hops, broker_id) {
-        let err = build_error_body(&svc);
+        let err = build_error_body(ERR_NO_WORKER, &svc);
         let _ = peers[peer_idx].dealer.send_multipart(
             [
                 client_id.as_slice(),
@@ -285,6 +321,7 @@ fn handle_peer_dealer(
         registry,
         pending,
         corr,
+        in_flight,
         broker_id,
         &client_id,
         &svc,
@@ -295,6 +332,7 @@ fn handle_peer_dealer(
         ReplyTarget::Peer { peer_idx },
         Some(peer_idx),
         false,
+        max_pending,
         metrics,
     )
 }
@@ -305,6 +343,7 @@ fn handle_backend(
     registry: &mut WorkerRegistry,
     client_is_req: &HashMap<Vec<u8>, bool>,
     corr: &mut HashMap<Vec<u8>, CorrEntry>,
+    in_flight: &mut InFlightTable,
     peers: &mut [PeerLink],
     broker_id: &str,
     metrics: Option<&Arc<ServiceMetrics>>,
@@ -347,8 +386,27 @@ fn handle_backend(
                 let svc_str = String::from_utf8_lossy(svc).into_owned();
                 if is_fed_identity(worker_id) {
                     registry.remove_service_binding(worker_id, &svc_str);
+                    // Only reclaim when the identity is fully gone.
+                    if !registry.is_alive(worker_id) {
+                        reclaim_worker_inflight(
+                            frontend,
+                            peers,
+                            corr,
+                            in_flight,
+                            worker_id,
+                            metrics,
+                        )?;
+                    }
                 } else {
                     registry.remove(worker_id);
+                    reclaim_worker_inflight(
+                        frontend,
+                        peers,
+                        corr,
+                        in_flight,
+                        worker_id,
+                        metrics,
+                    )?;
                 }
                 sync_all_advertisements(peers, registry, broker_id)?;
             }
@@ -387,6 +445,7 @@ fn handle_backend(
                 peers,
                 client_is_req,
                 corr,
+                in_flight,
                 client_id,
                 svc,
                 req_id,

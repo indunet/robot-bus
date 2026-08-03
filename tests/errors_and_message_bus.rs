@@ -25,6 +25,12 @@ fn parse_no_goal() {
 }
 
 #[test]
+fn parse_cancelled() {
+    let err = parse_error_body(b"CANCELLED\0act.x").expect("error");
+    assert!(matches!(err, BusError::Cancelled { name } if name == "act.x"));
+}
+
+#[test]
 fn parse_ok_body() {
     assert!(parse_error_body(b"ok").is_none());
 }

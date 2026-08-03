@@ -6,13 +6,14 @@ mod ports;
 
 pub use broker::{
     build_client_reply, build_error_body, build_worker_forward, parse_service_name, run_loop,
-    WorkerRegistry, WorkerSource,
+    InFlightTable, WorkerRegistry, WorkerSource, ERR_NO_WORKER, ERR_WORKER_DIED,
 };
 pub use metrics::{ServiceMetrics, ServiceMetricsSnapshot, ServiceSnapshot};
 pub use peer::ServicePeer;
 pub use ports::{
     DEFAULT_BACKEND_BIND, DEFAULT_FRONTEND_BIND, DEFAULT_HEARTBEAT_INTERVAL_MS,
-    DEFAULT_HEARTBEAT_TIMEOUT_MS, DEFAULT_RCV_HWM, DEFAULT_SND_HWM, BACKEND_PORT, FRONTEND_PORT,
+    DEFAULT_HEARTBEAT_TIMEOUT_MS, DEFAULT_MAX_PENDING, DEFAULT_PENDING_TIMEOUT_MS, DEFAULT_RCV_HWM,
+    DEFAULT_SND_HWM, BACKEND_PORT, FRONTEND_PORT,
 };
 
 use anyhow::{Context, Result};
@@ -30,6 +31,10 @@ pub struct ServiceBusConfig {
     pub rcv_hwm: i32,
     pub heartbeat_interval_ms: u64,
     pub heartbeat_timeout_ms: u64,
+    /// How long a request may sit queued waiting for a worker before `NO_WORKER`.
+    pub pending_timeout_ms: u64,
+    /// Max queued requests before immediate `NO_WORKER`.
+    pub max_pending: usize,
     /// When true (default), also bind inproc + ipc aliases via [`bind_all`].
     pub bind_all_transports: bool,
     /// Stable id for hop-path loop prevention. Empty → random UUID at start.
@@ -47,6 +52,8 @@ impl Default for ServiceBusConfig {
             rcv_hwm: DEFAULT_RCV_HWM,
             heartbeat_interval_ms: DEFAULT_HEARTBEAT_INTERVAL_MS,
             heartbeat_timeout_ms: DEFAULT_HEARTBEAT_TIMEOUT_MS,
+            pending_timeout_ms: DEFAULT_PENDING_TIMEOUT_MS,
+            max_pending: DEFAULT_MAX_PENDING,
             bind_all_transports: true,
             broker_id: String::new(),
             peers: Vec::new(),

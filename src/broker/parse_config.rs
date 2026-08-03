@@ -113,6 +113,15 @@ pub fn parse_robot_bus_config(args: &[String]) -> Result<Option<RobotBusConfig>>
                 config.service.heartbeat_timeout_ms =
                     parse_u64(arg, require_arg(args, i, arg)?)?;
             }
+            "--service-pending-timeout-ms" => {
+                i += 1;
+                config.service.pending_timeout_ms = parse_u64(arg, require_arg(args, i, arg)?)?;
+            }
+            "--service-max-pending" => {
+                i += 1;
+                config.service.max_pending =
+                    parse_u64(arg, require_arg(args, i, arg)?)? as usize;
+            }
             "--service-peer" => {
                 i += 1;
                 let value = require_arg(args, i, arg)?;
@@ -298,6 +307,8 @@ Service options:\n  \
 --service-snd-hwm / --service-rcv-hwm N\n  \
 --service-heartbeat-interval-ms N\n  \
 --service-heartbeat-timeout-ms N\n  \
+--service-pending-timeout-ms N     NO_WORKER timeout for queued requests\n  \
+--service-max-pending N            Max queued requests before NO_WORKER\n  \
 --service-peer [ID=]tcp://HOST:BE  Peer service backend (repeatable; optional ID= for hop-path)\n\n\
 Action options:\n  \
 --action-frontend-bind ADDR    Client (DEALER) bind\n  \

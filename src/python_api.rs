@@ -1075,6 +1075,8 @@ impl PyRobotBusBroker {
         service_rcv_hwm = None,
         service_heartbeat_interval_ms = None,
         service_heartbeat_timeout_ms = None,
+        service_pending_timeout_ms = None,
+        service_max_pending = None,
         action_frontend_bind = None,
         action_backend_bind = None,
         action_snd_hwm = None,
@@ -1113,6 +1115,8 @@ impl PyRobotBusBroker {
         service_rcv_hwm: Option<i32>,
         service_heartbeat_interval_ms: Option<u64>,
         service_heartbeat_timeout_ms: Option<u64>,
+        service_pending_timeout_ms: Option<u64>,
+        service_max_pending: Option<u64>,
         action_frontend_bind: Option<String>,
         action_backend_bind: Option<String>,
         action_snd_hwm: Option<i32>,
@@ -1171,6 +1175,12 @@ impl PyRobotBusBroker {
         }
         if let Some(v) = service_heartbeat_timeout_ms {
             config.service.heartbeat_timeout_ms = v;
+        }
+        if let Some(v) = service_pending_timeout_ms {
+            config.service.pending_timeout_ms = v;
+        }
+        if let Some(v) = service_max_pending {
+            config.service.max_pending = v as usize;
         }
 
         if let Some(v) = action_frontend_bind {

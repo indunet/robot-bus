@@ -569,12 +569,22 @@ let ep = message_xpub_endpoint("localhost", "tcp")?;
 use robot_bus::{BusError, Result};
 
 match result {
-    Err(BusError::Timeout(_)) => { /* ... */ }
-    Err(BusError::NoWorker { name }) => { /* service/action 无 worker */ }
+    Err(BusError::Timeout(_)) => { /* client poll 超时；service REQ 会自动重建 socket，可直接再 call */ }
+    Err(BusError::NoWorker { name }) => { /* 无 worker / pending 排队超时 */ }
+    Err(BusError::WorkerDied { name }) => { /* 飞中 worker/peer 挂掉，broker 合成错误 */ }
+    Err(BusError::Cancelled { name }) => { /* action：pending 上的 goal 被 CANCEL */ }
+    Err(BusError::NoGoal { goal_id }) => { /* action：未知 goal / 重复 goal_id */ }
     Err(e) => eprintln!("{e}"),
     Ok(v) => { /* ... */ }
 }
 ```
+
+**可靠性语义（本期）：**
+
+- Service / action **不**做 broker 重启续传；调用方重试须使用新的 `request_id` / `goal_id`。
+- Service `call` 超时后 socket 已复位，同一 client 可继续调用。
+- Action `send_goal` / iter 在 recv 超时时会 best-effort 发 `CANCEL`。
+- Topic pub/sub 仍是 best-effort（无 ACK）。
 
 ## 工具节点：Image encoder
 

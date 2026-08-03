@@ -13,6 +13,7 @@ pub(super) const KIND_CANCEL: &[u8] = b"CANCEL";
 pub(super) const ERR_NO_WORKER: &[u8] = b"NO_WORKER";
 pub(super) const ERR_WORKER_DIED: &[u8] = b"WORKER_DIED";
 pub(super) const ERR_NO_GOAL: &[u8] = b"NO_GOAL";
+pub(super) const ERR_CANCELLED: &[u8] = b"CANCELLED";
 
 pub(super) const FED_ID_PREFIX: &str = "fed/";
 pub(super) const POLL_CAP_MS: i64 = 200;

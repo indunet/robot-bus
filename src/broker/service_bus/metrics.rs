@@ -10,6 +10,8 @@ use std::time::{Instant, SystemTime, UNIX_EPOCH};
 pub struct ServiceCounters {
     pub calls: AtomicU64,
     pub errors: AtomicU64,
+    pub worker_died: AtomicU64,
+    pub pending_timeout: AtomicU64,
     pub workers: AtomicU64,
     /// EWMA latency in milliseconds (scaled integer).
     pub latency_ewma_ms: AtomicU64,
@@ -22,6 +24,8 @@ pub struct ServiceSnapshot {
     pub name: String,
     pub calls: u64,
     pub errors: u64,
+    pub worker_died: u64,
+    pub pending_timeout: u64,
     pub workers: u64,
     pub avg_latency_ms: u64,
     pub last_seen_unix_ms: u64,
@@ -121,6 +125,18 @@ impl ServiceMetrics {
         Self::touch(&c);
     }
 
+    pub fn record_worker_died(&self, name: &str) {
+        let c = self.counters(name);
+        c.worker_died.fetch_add(1, Ordering::Relaxed);
+        Self::touch(&c);
+    }
+
+    pub fn record_pending_timeout(&self, name: &str) {
+        let c = self.counters(name);
+        c.pending_timeout.fetch_add(1, Ordering::Relaxed);
+        Self::touch(&c);
+    }
+
     pub fn snapshot(&self) -> ServiceMetricsSnapshot {
         let map = self.services.lock().unwrap_or_else(|e| e.into_inner());
         let mut services: Vec<ServiceSnapshot> = map
@@ -129,6 +145,8 @@ impl ServiceMetrics {
                 name: name.clone(),
                 calls: c.calls.load(Ordering::Relaxed),
                 errors: c.errors.load(Ordering::Relaxed),
+                worker_died: c.worker_died.load(Ordering::Relaxed),
+                pending_timeout: c.pending_timeout.load(Ordering::Relaxed),
                 workers: c.workers.load(Ordering::Relaxed),
                 avg_latency_ms: c.latency_ewma_ms.load(Ordering::Relaxed),
                 last_seen_unix_ms: c.last_seen_unix_ms.load(Ordering::Relaxed),

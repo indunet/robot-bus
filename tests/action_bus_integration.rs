@@ -8,7 +8,7 @@ use robot_bus::broker::action_bus::{run_loop, ActionBusConfig};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::thread;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 use zmq::{Context as ZmqContext, SocketType};
 
 /// Helper: bind a ROUTER to `tcp://127.0.0.1:0` and return (socket, real_endpoint).
@@ -337,9 +337,11 @@ fn heartbeat_timeout_evicts_worker_and_reclaims_goal() {
 
 #[test]
 fn cancel_routes_to_owning_worker() {
-    let broker = spawn_broker(default_test_config());
-    // A worker with many feedback messages so the goal is still in-flight when
-    // we cancel. We use a worker that blocks on a channel to control timing.
+    let mut cfg = default_test_config();
+    // Keep the silent worker alive long enough for the cancel handshake.
+    cfg.heartbeat_interval_ms = 2000;
+    cfg.heartbeat_timeout_ms = 10_000;
+    let broker = spawn_broker(cfg);
     let ctx = ZmqContext::new();
     let sock = ctx.socket(SocketType::DEALER).expect("DEALER");
     sock.set_identity(b"worker-cancel").expect("identity");
@@ -349,7 +351,6 @@ fn cancel_routes_to_owning_worker() {
     thread::sleep(Duration::from_millis(80));
 
     let client = make_client(&broker.frontend_ep);
-    // Send GOAL but don't collect yet — the worker will receive it and wait.
     client
         .send_multipart(
             [
@@ -362,15 +363,13 @@ fn cancel_routes_to_owning_worker() {
         )
         .expect("send goal");
 
-    // Worker receives the GOAL but holds off replying.
     sock.set_rcvtimeo(2000).expect("rcvtimeo");
     let frames = sock.recv_multipart(0).expect("worker recv goal");
     assert_eq!(frames.len(), 5);
     let client_id = frames[0].clone();
     let act = frames[1].clone();
-    let goal_id = frames[1].clone(); // will reuse for cancel echo
+    let goal_id = frames[2].clone();
 
-    // Client sends CANCEL for the same goal_id.
     client
         .send_multipart(
             [
@@ -383,7 +382,6 @@ fn cancel_routes_to_owning_worker() {
         )
         .expect("send cancel");
 
-    // Worker receives the CANCEL and replies with a RESULT.
     let cancel_frames = sock.recv_multipart(0).expect("worker recv cancel");
     assert_eq!(cancel_frames.len(), 5);
     assert_eq!(cancel_frames[3], b"CANCEL");
@@ -399,7 +397,6 @@ fn cancel_routes_to_owning_worker() {
     )
     .expect("worker send cancel-result");
 
-    // Client should now receive the RESULT (cancel acknowledged).
     client.set_rcvtimeo(2000).expect("rcvtimeo");
     let reply = client.recv_multipart(0).expect("client recv cancel-result");
     assert_eq!(reply[2], b"RESULT");
@@ -428,6 +425,255 @@ fn cancel_unknown_goal_returns_no_goal_result() {
     let reply = client.recv_multipart(0).expect("recv");
     assert_eq!(reply[0], b"act.u");
     assert_eq!(reply[1], b"ghost");
+    assert_eq!(reply[2], b"RESULT");
+    assert!(reply[3].starts_with(b"NO_GOAL"));
+}
+
+#[test]
+fn cancel_pending_goal_returns_cancelled() {
+    let mut cfg = default_test_config();
+    cfg.pending_timeout_ms = 5000;
+    let broker = spawn_broker(cfg);
+    let client = make_client(&broker.frontend_ep);
+
+    // No worker → goal sits in pending.
+    client
+        .send_multipart(
+            [
+                "act.pend".as_bytes(),
+                "g-pend".as_bytes(),
+                b"GOAL".as_ref(),
+                b"x".as_ref(),
+            ],
+            0,
+        )
+        .expect("send goal");
+    thread::sleep(Duration::from_millis(50));
+
+    client
+        .send_multipart(
+            [
+                "act.pend".as_bytes(),
+                "g-pend".as_bytes(),
+                b"CANCEL".as_ref(),
+                b"".as_ref(),
+            ],
+            0,
+        )
+        .expect("send cancel");
+    client.set_rcvtimeo(2000).expect("rcvtimeo");
+    let reply = client.recv_multipart(0).expect("recv cancelled");
+    assert_eq!(reply[2], b"RESULT");
+    assert!(
+        reply[3].starts_with(b"CANCELLED"),
+        "got {:?}",
+        String::from_utf8_lossy(&reply[3])
+    );
+
+    // A late-arriving worker must not receive the cancelled goal.
+    let got_goal = Arc::new(AtomicBool::new(false));
+    let flag = got_goal.clone();
+    let backend = broker.backend_ep.clone();
+    let stop = Arc::new(AtomicBool::new(false));
+    let stop2 = stop.clone();
+    let handle = thread::spawn(move || {
+        let ctx = ZmqContext::new();
+        let sock = ctx.socket(SocketType::DEALER).expect("DEALER");
+        sock.set_identity(b"worker-late").expect("identity");
+        sock.connect(&backend).expect("connect");
+        sock.send_multipart([b"READY".as_ref(), b"act.pend".as_ref()], 0)
+            .expect("READY");
+        sock.set_rcvtimeo(400).expect("rcvtimeo");
+        while !stop2.load(Ordering::Acquire) {
+            match sock.recv_multipart(0) {
+                Ok(frames) if frames.len() == 5 && frames[3] == b"GOAL" => {
+                    flag.store(true, Ordering::Release);
+                    break;
+                }
+                Ok(_) | Err(zmq::Error::EAGAIN) => continue,
+                Err(_) => break,
+            }
+        }
+    });
+    thread::sleep(Duration::from_millis(600));
+    stop.store(true, Ordering::Release);
+    let _ = handle.join();
+    assert!(
+        !got_goal.load(Ordering::Acquire),
+        "cancelled pending goal was dispatched to a late worker"
+    );
+}
+
+#[test]
+fn late_result_after_worker_died_dropped() {
+    let mut cfg = default_test_config();
+    cfg.heartbeat_interval_ms = 100;
+    cfg.heartbeat_timeout_ms = 300;
+    let broker = spawn_broker(cfg);
+
+    let ctx = ZmqContext::new();
+    let sock = ctx.socket(SocketType::DEALER).expect("DEALER");
+    sock.set_identity(b"worker-late-result").expect("identity");
+    sock.connect(&broker.backend_ep).expect("connect");
+    sock.send_multipart([b"READY".as_ref(), b"act.late".as_ref()], 0)
+        .expect("READY");
+    thread::sleep(Duration::from_millis(80));
+
+    let client = make_client(&broker.frontend_ep);
+    client
+        .send_multipart(
+            [
+                "act.late".as_bytes(),
+                "g1".as_bytes(),
+                b"GOAL".as_ref(),
+                b"x".as_ref(),
+            ],
+            0,
+        )
+        .expect("send goal");
+
+    // Worker receives GOAL but does not reply yet.
+    sock.set_rcvtimeo(2000).expect("rcvtimeo");
+    let frames = sock.recv_multipart(0).expect("recv goal");
+    assert_eq!(frames.len(), 5);
+    let client_id = frames[0].clone();
+
+    // Wait for WORKER_DIED from broker (HB eviction).
+    client.set_rcvtimeo(5000).expect("rcvtimeo");
+    let died = client.recv_multipart(0).expect("recv worker-died");
+    assert!(died[3].starts_with(b"WORKER_DIED"));
+
+    // Late RESULT from the dead worker must be fenced (dropped).
+    sock.send_multipart(
+        [
+            client_id.as_slice(),
+            b"act.late".as_ref(),
+            b"g1".as_ref(),
+            b"RESULT".as_ref(),
+            b"too-late".as_ref(),
+        ],
+        0,
+    )
+    .expect("late result");
+
+    client.set_rcvtimeo(400).expect("rcvtimeo");
+    let late = client.recv_multipart(0);
+    assert!(
+        late.is_err(),
+        "client should not receive a late RESULT after WORKER_DIED"
+    );
+}
+
+#[test]
+fn recv_timeout_submits_cancel() {
+    use robot_bus::action_bus::ActionClient;
+
+    let broker = spawn_broker(default_test_config());
+    let cancel_seen = Arc::new(AtomicBool::new(false));
+    let flag = cancel_seen.clone();
+    let backend = broker.backend_ep.clone();
+    let stop = Arc::new(AtomicBool::new(false));
+    let stop2 = stop.clone();
+    let handle = thread::spawn(move || {
+        let ctx = ZmqContext::new();
+        let sock = ctx.socket(SocketType::DEALER).expect("DEALER");
+        sock.set_identity(b"worker-slow").expect("identity");
+        sock.connect(&backend).expect("connect");
+        sock.send_multipart([b"READY".as_ref(), b"act.slow".as_ref()], 0)
+            .expect("READY");
+        sock.set_rcvtimeo(100).expect("rcvtimeo");
+        let mut client_id: Option<Vec<u8>> = None;
+        while !stop2.load(Ordering::Acquire) {
+            match sock.recv_multipart(0) {
+                Ok(frames) if frames.len() == 5 && frames[3] == b"GOAL" => {
+                    client_id = Some(frames[0].clone());
+                }
+                Ok(frames) if frames.len() == 5 && frames[3] == b"CANCEL" => {
+                    flag.store(true, Ordering::Release);
+                    if let Some(cid) = &client_id {
+                        let _ = sock.send_multipart(
+                            [
+                                cid.as_slice(),
+                                b"act.slow".as_ref(),
+                                frames[2].as_slice(),
+                                b"RESULT".as_ref(),
+                                b"CANCELLED\0act.slow".as_ref(),
+                            ],
+                            0,
+                        );
+                    }
+                    break;
+                }
+                Ok(_) | Err(zmq::Error::EAGAIN) => continue,
+                Err(_) => break,
+            }
+        }
+    });
+    thread::sleep(Duration::from_millis(80));
+
+    let client = ActionClient::new(Some(&broker.frontend_ep)).expect("client");
+    let err = client
+        .send_goal(
+            "act.slow",
+            b"x",
+            Some("g-to"),
+            Some(Duration::from_millis(300)),
+        )
+        .expect_err("expected timeout");
+    assert!(matches!(err, robot_bus::BusError::Timeout(_)), "{err:?}");
+
+    let deadline = Instant::now() + Duration::from_secs(2);
+    while Instant::now() < deadline && !cancel_seen.load(Ordering::Acquire) {
+        thread::sleep(Duration::from_millis(50));
+    }
+    stop.store(true, Ordering::Release);
+    let _ = handle.join();
+    assert!(
+        cancel_seen.load(Ordering::Acquire),
+        "worker did not observe CANCEL after client timeout"
+    );
+}
+
+#[test]
+fn duplicate_goal_id_rejected() {
+    let broker = spawn_broker(default_test_config());
+    let ctx = ZmqContext::new();
+    let sock = ctx.socket(SocketType::DEALER).expect("DEALER");
+    sock.set_identity(b"worker-dup").expect("identity");
+    sock.connect(&broker.backend_ep).expect("connect");
+    sock.send_multipart([b"READY".as_ref(), b"act.dup".as_ref()], 0)
+        .expect("READY");
+    thread::sleep(Duration::from_millis(80));
+
+    let client = make_client(&broker.frontend_ep);
+    client
+        .send_multipart(
+            [
+                "act.dup".as_bytes(),
+                "same".as_bytes(),
+                b"GOAL".as_ref(),
+                b"1".as_ref(),
+            ],
+            0,
+        )
+        .expect("first goal");
+    // Hold the first goal in-flight at the worker.
+    sock.set_rcvtimeo(2000).expect("rcvtimeo");
+    let _ = sock.recv_multipart(0).expect("recv first goal");
+
+    client
+        .send_multipart(
+            [
+                "act.dup".as_bytes(),
+                "same".as_bytes(),
+                b"GOAL".as_ref(),
+                b"2".as_ref(),
+            ],
+            0,
+        )
+        .expect("second goal");
+    client.set_rcvtimeo(2000).expect("rcvtimeo");
+    let reply = client.recv_multipart(0).expect("recv reject");
     assert_eq!(reply[2], b"RESULT");
     assert!(reply[3].starts_with(b"NO_GOAL"));
 }

@@ -28,6 +28,7 @@ fn bus_status(err: BusError) -> Status {
         BusError::Timeout(msg) => Status::deadline_exceeded(msg),
         BusError::NoWorker { name } => Status::unavailable(format!("no worker for '{name}'")),
         BusError::WorkerDied { name } => Status::unavailable(format!("worker died for '{name}'")),
+        BusError::Cancelled { name } => Status::cancelled(format!("cancelled '{name}'")),
         other => Status::internal(other.to_string()),
     }
 }

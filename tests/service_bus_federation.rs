@@ -311,3 +311,71 @@ fn local_preferred_over_remote() {
     broker_a.stop().expect("stop a");
     broker_b.stop().expect("stop b");
 }
+
+#[test]
+fn peer_death_inflight_returns_worker_died() {
+    use robot_bus::errors::BusError;
+    use std::sync::atomic::{AtomicBool, Ordering};
+    use std::time::Instant;
+
+    let _guard = lock_brokers();
+    let ports = alloc_service_broker_ports(2);
+    let a = &ports[0];
+    let b = &ports[1];
+
+    let mut cfg_a = federated_service_config(
+        "broker-a",
+        vec![peer("broker-b", b.svc_be)],
+        a,
+    );
+    cfg_a.service.heartbeat_interval_ms = 100;
+    cfg_a.service.heartbeat_timeout_ms = 400;
+    let mut cfg_b = federated_service_config(
+        "broker-b",
+        vec![peer("broker-a", a.svc_be)],
+        b,
+    );
+    cfg_b.service.heartbeat_interval_ms = 100;
+    cfg_b.service.heartbeat_timeout_ms = 400;
+
+    let broker_a = RobotBusBroker::start(cfg_a).expect("broker a");
+    let broker_b = RobotBusBroker::start(cfg_b).expect("broker b");
+    thread::sleep(Duration::from_millis(100));
+
+    let release = Arc::new(AtomicBool::new(false));
+    let release_flag = release.clone();
+    let worker_a = WorkerThread::spawn_service(
+        "svc.slow",
+        Arc::new(move |_| {
+            let deadline = Instant::now() + Duration::from_secs(30);
+            while !release_flag.load(Ordering::Relaxed) && Instant::now() < deadline {
+                thread::sleep(Duration::from_millis(50));
+            }
+            b"late".to_vec()
+        }),
+        &connect_addr(&broker_a.service.backend_bind),
+    )
+    .expect("worker a");
+
+    thread::sleep(Duration::from_millis(600));
+
+    let client_b = ServiceClient::new(Some(&connect_addr(&broker_b.service.frontend_bind)))
+        .expect("client b");
+
+    let handle = thread::spawn(move || {
+        client_b.call("svc.slow", b"x", Some("r1"), Some(Duration::from_secs(8)))
+    });
+
+    thread::sleep(Duration::from_millis(200));
+    broker_a.stop().expect("stop a");
+    release.store(true, Ordering::Relaxed);
+    drop(worker_a);
+
+    let result = handle.join().expect("join call");
+    match result {
+        Err(BusError::WorkerDied { .. }) | Err(BusError::NoWorker { .. }) => {}
+        other => panic!("expected WorkerDied/NoWorker after peer death, got {other:?}"),
+    }
+
+    broker_b.stop().expect("stop b");
+}

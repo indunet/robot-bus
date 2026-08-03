@@ -6,7 +6,8 @@ use std::time::{Duration, Instant};
 use zmq::Socket;
 
 use super::protocol::{
-    ERR_NO_GOAL, ERR_NO_WORKER, ERR_WORKER_DIED, KIND_CANCEL, KIND_GOAL, KIND_RESULT, MAX_PENDING,
+    ERR_CANCELLED, ERR_NO_GOAL, ERR_NO_WORKER, ERR_WORKER_DIED, KIND_CANCEL, KIND_GOAL, KIND_RESULT,
+    MAX_PENDING,
 };
 use super::remote::{PeerLink, PendingGoal, RemoteActions, RemoteRoute};
 use super::super::broker::{
@@ -157,6 +158,7 @@ pub(super) fn handle_cancel(
     backend: &Socket,
     peers: &mut [PeerLink],
     goals: &GoalTable,
+    pending: &mut VecDeque<PendingGoal>,
     client_id: &[u8],
     action: &[u8],
     goal_id: &[u8],
@@ -164,6 +166,26 @@ pub(super) fn handle_cancel(
     reply: GoalReply,
     metrics: Option<&std::sync::Arc<crate::broker::action_bus::ActionMetrics>>,
 ) -> Result<()> {
+    if let Some(pos) = pending.iter().position(|p| p.goal_id == goal_id) {
+        let req = pending.remove(pos).expect("position just found");
+        if let Some(m) = metrics {
+            if let Ok(name) = std::str::from_utf8(&req.action) {
+                m.record_error(name, Some(&req.goal_id));
+                m.record_cancelled(name);
+            }
+        }
+        send_error_result(
+            frontend,
+            backend,
+            peers,
+            &req.reply,
+            &req.client_identity,
+            &req.action,
+            &req.goal_id,
+            ERR_CANCELLED,
+        )?;
+        return Ok(());
+    }
     if let Some(entry) = goals.get(goal_id) {
         if let Some(peer_idx) = entry.via_peer {
             let hop = ""; // cancel follows established goal; hop not needed for routing

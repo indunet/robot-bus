@@ -195,11 +195,16 @@ const SystemNode = memo(function SystemNode({ data }: NodeProps) {
                   {p.kind === 'topic' ? 'topic' : p.kind === 'service' ? 'svc' : 'act'}
                 </span>
                 <div className="min-w-0 flex-1">
-                  <div className={`text-[12px] truncate ${p.selected ? 'text-bus-cyan' : 'text-bus-text'}`} title={p.name}>
+                  <div
+                    className={`text-[12px] font-medium truncate ${p.selected ? 'text-bus-cyan' : 'text-bus-text'}`}
+                    title={p.name}
+                  >
                     {shortName(p.name || '(empty)')}
                   </div>
-                  <div className="text-[9px] text-bus-muted truncate" title={p.typeName}>
-                    {dirLabel(p.direction)} · {p.typeName.split('/').pop()}
+                  <div className="text-[9px] text-[#6b8294] truncate" title={p.typeName}>
+                    <span className="text-[#8a7a5c]">{dirLabel(p.direction)}</span>
+                    <span className="text-[#4a5560]"> · </span>
+                    {p.typeName.split('/').pop()}
                   </div>
                 </div>
               </div>

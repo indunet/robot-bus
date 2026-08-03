@@ -48,6 +48,7 @@ fn bus_status(err: BusError) -> Status {
         BusError::Timeout(msg) => Status::deadline_exceeded(msg),
         BusError::NoWorker { name } => Status::unavailable(format!("no worker for '{name}'")),
         BusError::WorkerDied { name } => Status::unavailable(format!("worker died for '{name}'")),
+        BusError::Cancelled { name } => Status::cancelled(format!("cancelled '{name}'")),
         BusError::NoGoal { goal_id } => Status::not_found(format!("no goal '{goal_id}'")),
         other => Status::internal(other.to_string()),
     }
@@ -112,6 +113,9 @@ fn run_session(
                 Err(std_mpsc::TryRecvError::Empty) => None,
                 Err(std_mpsc::TryRecvError::Disconnected) => {
                     client_closed = true;
+                    if let Some(goal) = active.as_ref() {
+                        let _ = client.submit_cancel(&goal.action_name, &goal.goal_id, b"");
+                    }
                     None
                 }
             }
@@ -181,6 +185,9 @@ fn run_session(
                 }
                 SessionCommand::Closed => {
                     client_closed = true;
+                    if let Some(goal) = active.as_ref() {
+                        let _ = client.submit_cancel(&goal.action_name, &goal.goal_id, b"");
+                    }
                     if active.is_none() {
                         break;
                     }
@@ -199,6 +206,7 @@ fn run_session(
 
         if let Some(deadline) = goal.deadline {
             if Instant::now() >= deadline {
+                let _ = client.submit_cancel(&action_name, &goal_id, b"");
                 let _ = event_tx.blocking_send(Err(Status::deadline_exceeded(
                     "action session timed out waiting for bus reply",
                 )));

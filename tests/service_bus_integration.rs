@@ -202,7 +202,7 @@ fn ready_registers_multiple_workers_same_service() {
 }
 
 #[test]
-fn heartbeat_timeout_evicts_worker() {
+fn worker_death_mid_request_returns_worker_died() {
     let mut cfg = default_test_config();
     cfg.heartbeat_interval_ms = 100;
     cfg.heartbeat_timeout_ms = 300;
@@ -217,30 +217,62 @@ fn heartbeat_timeout_evicts_worker() {
     thread::sleep(Duration::from_millis(80));
 
     let client = make_client(&broker.frontend_ep);
-    client.set_rcvtimeo(2000).expect("rcvtimeo");
+    client.set_rcvtimeo(5000).expect("rcvtimeo");
     client
         .send_multipart(
             ["svc.die".as_bytes(), "r1".as_bytes(), "body".as_bytes()],
             0,
         )
         .expect("send");
-    // The worker is not replying; this will timeout.
-    let _ = client.recv_multipart(0);
+    // Worker took the request but never replies; after HB eviction the broker
+    // synthesizes WORKER_DIED.
+    let reply = client.recv_multipart(0).expect("recv worker-died");
+    assert_eq!(reply.len(), 3);
+    assert_eq!(reply[0], b"svc.die");
+    assert_eq!(reply[1], b"r1");
+    assert!(
+        reply[2].starts_with(b"WORKER_DIED"),
+        "expected WORKER_DIED, got {:?}",
+        String::from_utf8_lossy(&reply[2])
+    );
+}
 
-    // Wait past eviction timeout
-    thread::sleep(Duration::from_millis(500));
-
-    // New request should now hit NO_WORKER after pending timeout
-    let client2 = make_client(&broker.frontend_ep);
-    client2.set_rcvtimeo(8000).expect("rcvtimeo");
-    client2
+#[test]
+fn pending_timeout_returns_no_worker() {
+    let mut cfg = default_test_config();
+    cfg.pending_timeout_ms = 300;
+    cfg.heartbeat_interval_ms = 100;
+    let broker = spawn_broker(cfg);
+    let client = make_client(&broker.frontend_ep);
+    client.set_rcvtimeo(3000).expect("rcvtimeo");
+    client
         .send_multipart(
-            ["svc.die".as_bytes(), "r2".as_bytes(), "body".as_bytes()],
+            ["svc.none".as_bytes(), "r1".as_bytes(), "body".as_bytes()],
             0,
         )
         .expect("send");
-    let reply = client2.recv_multipart(0).expect("recv after eviction");
+    let reply = client.recv_multipart(0).expect("recv no-worker");
     assert!(reply[2].starts_with(b"NO_WORKER"));
+}
+
+#[test]
+fn client_timeout_then_second_call_ok() {
+    use robot_bus::service_bus::ServiceClient;
+    use std::time::Duration as StdDuration;
+
+    let broker = spawn_broker(default_test_config());
+    // No worker initially — call with short timeout, then register worker and retry.
+    let client = ServiceClient::new(Some(&broker.frontend_ep)).expect("client");
+    let err = client
+        .call("svc.late", b"x", Some("t1"), Some(StdDuration::from_millis(200)))
+        .expect_err("expected timeout");
+    assert!(matches!(err, robot_bus::BusError::Timeout(_)), "{err:?}");
+
+    let _worker = spawn_worker(&broker.backend_ep, "svc.late", "OK");
+    let reply = client
+        .call("svc.late", b"y", Some("t2"), Some(StdDuration::from_secs(2)))
+        .expect("second call after timeout");
+    assert_eq!(reply, b"OK:y");
 }
 
 #[test]
