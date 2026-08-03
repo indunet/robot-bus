@@ -109,9 +109,7 @@ jobs:
 
       - name: Build embedded console assets
         shell: bash
-        run: |
-          cd console && pnpm install --frozen-lockfile && pnpm build
-          cd .. && ./scripts/sync_console_assets.sh
+        run: ./scripts/build_console.sh
 
       - name: Build native addon
         working-directory: bindings/typescript

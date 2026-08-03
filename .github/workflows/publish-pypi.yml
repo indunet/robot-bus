@@ -82,9 +82,7 @@ jobs:
           cache-dependency-path: console/pnpm-lock.yaml
 
       - name: Build embedded console assets
-        run: |
-          cd console && pnpm install --frozen-lockfile && pnpm build
-          cd .. && ./scripts/sync_console_assets.sh
+        run: ./scripts/build_console.sh
 
       - name: Build wheels
         uses: PyO3/maturin-action@v1
@@ -144,9 +142,7 @@ jobs:
           cache-dependency-path: console/pnpm-lock.yaml
 
       - name: Build embedded console assets
-        run: |
-          cd console && pnpm install --frozen-lockfile && pnpm build
-          cd .. && ./scripts/sync_console_assets.sh
+        run: ./scripts/build_console.sh
 
       - name: Build wheels
         uses: PyO3/maturin-action@v1
@@ -196,9 +192,7 @@ jobs:
 
       - name: Build embedded console assets
         shell: bash
-        run: |
-          cd console && pnpm install --frozen-lockfile && pnpm build
-          cd .. && ./scripts/sync_console_assets.sh
+        run: ./scripts/build_console.sh
 
       - name: Build wheels
         uses: PyO3/maturin-action@v1

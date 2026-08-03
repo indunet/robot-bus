@@ -74,9 +74,7 @@ jobs:
           cache-dependency-path: console/pnpm-lock.yaml
 
       - name: Build embedded console assets
-        run: |
-          cd console && pnpm install --frozen-lockfile && pnpm build
-          cd .. && ./scripts/sync_console_assets.sh
+        run: ./scripts/build_console.sh
 
       - name: Generate Rust stubs (needed by native crate features)
         run: python3 scripts/generate_rust_msgs.py

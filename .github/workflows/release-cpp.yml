@@ -81,9 +81,7 @@ jobs:
           cache-dependency-path: console/pnpm-lock.yaml
 
       - name: Build embedded console assets
-        run: |
-          cd console && pnpm install --frozen-lockfile && pnpm build
-          cd .. && ./scripts/sync_console_assets.sh
+        run: ./scripts/build_console.sh
 
       - name: Generate C++ + Rust protobuf stubs
         run: |
@@ -207,9 +205,7 @@ jobs:
           cache-dependency-path: console/pnpm-lock.yaml
 
       - name: Build embedded console assets
-        run: |
-          cd console && pnpm install --frozen-lockfile && pnpm build
-          cd .. && ./scripts/sync_console_assets.sh
+        run: ./scripts/build_console.sh
 
       - name: Generate C++ + Rust protobuf stubs
         run: |
@@ -285,19 +281,10 @@ jobs:
           cache: pnpm
           cache-dependency-path: console/pnpm-lock.yaml
 
-      - name: Build embedded console assets
-        shell: bash
-        run: |
-          cd console && pnpm install --frozen-lockfile && pnpm build
-          cd .. && ./scripts/sync_console_assets.sh
-
       # Windows previously mixed Chocolatey protoc with unpinned vcpkg
       # libprotobuf (currently ~33.4), which trips the generated-header
       # PROTOBUF_VERSION guard. Pin both sides to PROTOC_VERSION like Linux/macOS.
-      - name: Install WiX
-        shell: bash
-        run: choco install wixtoolset -y
-
+      # protoc must be on PATH before build_console.sh (TypeScript codegen).
       - name: Install pinned protoc ${{ env.PROTOC_VERSION }}
         shell: bash
         run: |
@@ -309,6 +296,14 @@ jobs:
           unzip -o /tmp/protoc.zip -d /c/protoc
           echo "/c/protoc/bin" >> "$GITHUB_PATH"
           /c/protoc/bin/protoc.exe --version
+
+      - name: Build embedded console assets
+        shell: bash
+        run: ./scripts/build_console.sh
+
+      - name: Install WiX
+        shell: bash
+        run: choco install wixtoolset -y
 
       - name: Install pinned protobuf C++ runtime ${{ env.PROTOC_VERSION }}
         shell: bash
@@ -494,9 +489,7 @@ jobs:
           cache-dependency-path: console/pnpm-lock.yaml
 
       - name: Build embedded console assets
-        run: |
-          cd console && pnpm install --frozen-lockfile && pnpm build
-          cd .. && ./scripts/sync_console_assets.sh
+        run: ./scripts/build_console.sh
 
       - name: Generate C++ + Rust protobuf stubs
         run: |

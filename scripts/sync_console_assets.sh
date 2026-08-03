@@ -6,7 +6,7 @@ src="$root/console/out"
 dst="$root/assets/console"
 
 if [[ ! -f "$src/index.html" ]]; then
-  echo "error: $src/index.html not found — run: cd console && pnpm install && pnpm build" >&2
+  echo "error: $src/index.html not found — run: ./scripts/build_console.sh" >&2
   exit 1
 fi
 

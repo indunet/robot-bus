@@ -38,9 +38,7 @@ jobs:
           cache: pnpm
           cache-dependency-path: console/pnpm-lock.yaml
       - name: Build embedded console assets
-        run: |
-          cd console && pnpm install --frozen-lockfile && pnpm build
-          cd .. && ./scripts/sync_console_assets.sh
+        run: ./scripts/build_console.sh
       - run: cargo test
       - run: cargo test --no-default-features
 
@@ -123,9 +121,7 @@ jobs:
           cache: pnpm
           cache-dependency-path: console/pnpm-lock.yaml
       - name: Build embedded console assets
-        run: |
-          cd console && pnpm install --frozen-lockfile && pnpm build
-          cd .. && ./scripts/sync_console_assets.sh
+        run: ./scripts/build_console.sh
       - name: Generate C++ + Rust protobuf stubs
         run: |
           python3 scripts/generate_cpp_msgs.py
@@ -221,9 +217,7 @@ jobs:
           cache: pnpm
           cache-dependency-path: console/pnpm-lock.yaml
       - name: Build embedded console assets
-        run: |
-          cd console && pnpm install --frozen-lockfile && pnpm build
-          cd .. && ./scripts/sync_console_assets.sh
+        run: ./scripts/build_console.sh
       - name: Generate Rust + Java protobuf stubs
         run: |
           python3 scripts/generate_rust_msgs.py

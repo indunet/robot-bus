@@ -102,8 +102,7 @@ test-cpp:
 
 # Build console UI into assets/console/ for rust-embed (gitignored; run before cargo with `console`)
 console:
-	cd console && pnpm build
-	./scripts/sync_console_assets.sh
+	./scripts/build_console.sh
 
 # Rust tests (default features)
 test-rust: gen-rust
