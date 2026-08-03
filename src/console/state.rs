@@ -13,6 +13,7 @@ use crate::broker::message_bus::{MessageMetrics, MessageMetricsSnapshot};
 use crate::broker::service_bus::{ServiceMetrics, ServiceMetricsSnapshot};
 
 use super::topic_registry::TopicTypeRegistry;
+use super::topology_registry::TopologyRegistry;
 
 const EVENT_RING_CAP: usize = 500;
 const EVENT_BROADCAST_CAP: usize = 64;
@@ -119,6 +120,7 @@ pub struct ConsoleState {
     pub service_metrics: Arc<ServiceMetrics>,
     pub action_metrics: Arc<ActionMetrics>,
     pub topic_types: Arc<TopicTypeRegistry>,
+    pub topology: Arc<TopologyRegistry>,
     pub events: EventLog,
     msg_rate: Mutex<Option<MsgRateSample>>,
     svc_rate: Mutex<Option<SvcRateSample>>,
@@ -141,6 +143,7 @@ impl ConsoleState {
             service_metrics,
             action_metrics,
             topic_types: TopicTypeRegistry::new(),
+            topology: TopologyRegistry::new(),
             events: EventLog::new(),
             msg_rate: Mutex::new(None),
             svc_rate: Mutex::new(None),

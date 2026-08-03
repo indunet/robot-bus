@@ -309,7 +309,7 @@ pub_.set_high_water_mark(HighWaterMark { snd: 10, rcv: 10 })?;
 
 ## Web 控制台（`console/`）
 
-可选监控前端：查看 broker 状态、topic 流量与事件日志。开启 `console` feature（默认）时，先构建一次静态资源后，broker 在 `0.0.0.0:15771` 提供**嵌入式** UI。
+可选监控前端：查看 broker 状态、topic 流量、事件日志、**实时拓扑（Topology）**与 **ROS 2 桥 YAML 路由编辑（Routes）**。开启 `console` feature（默认）时，先构建一次静态资源后，broker 在 `0.0.0.0:15771` 提供**嵌入式** UI。
 
 **开发（热更新，推荐）：**
 
@@ -332,7 +332,7 @@ cargo run --bin robot_bus_broker
 
 `assets/console/` 是**构建产物**（不提交）。CI / 发布在带 `console` feature 编译前会先生成该目录。
 
-已对接 broker 同端口监控 API：`GET /api/v1/status`、`GET /api/v1/topics`、`GET /api/v1/services`、`GET /api/v1/actions`、`SSE /api/v1/events`。前端源码在 `console/`；只有生成的静态文件会编进带 `console` feature 的二进制。
+已对接 broker 同端口监控 API：`GET /api/v1/status`、`GET /api/v1/topics`、`GET /api/v1/services`、`GET /api/v1/actions`、`GET /api/v1/topology`、`SSE /api/v1/events`。Topology 依赖 `Node` 创建 publisher/subscription 时的 best-effort 登记；Routes 页为离线 YAML 编辑（不热更新运行中的桥）。前端源码在 `console/`；只有生成的静态文件会编进带 `console` feature 的二进制。
 
 ## gRPC / gRPC-Web 网关
 

@@ -1,6 +1,6 @@
 //! REST / SSE monitoring endpoints for the embedded console.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::convert::Infallible;
 use std::sync::Arc;
 use std::time::Duration;
@@ -15,6 +15,7 @@ use tokio_stream::wrappers::BroadcastStream;
 use tokio_stream::StreamExt;
 
 use super::state::{ConsoleState, LogEntryDto, TopicRate};
+use super::topology_registry::EndpointKind;
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -75,6 +76,56 @@ pub struct RegisterTopicRequest {
 #[serde(rename_all = "camelCase")]
 struct RegisterTopicResponse {
     ok: bool,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RegisterTopologyRequest {
+    endpoint_id: String,
+    node_name: String,
+    kind: String,
+    topic: String,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UnregisterTopologyRequest {
+    endpoint_id: String,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct OkResponse {
+    ok: bool,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct TopologyNodeDto {
+    id: String,
+    kind: &'static str,
+    label: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    type_name: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    msg_per_sec: Option<u64>,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct TopologyEdgeDto {
+    id: String,
+    source: String,
+    target: String,
+    kind: &'static str,
+    topic: String,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct TopologyResponse {
+    nodes: Vec<TopologyNodeDto>,
+    edges: Vec<TopologyEdgeDto>,
 }
 
 #[derive(Serialize)]
@@ -179,9 +230,113 @@ pub async fn register_topic(
     (StatusCode::OK, Json(RegisterTopicResponse { ok: true })).into_response()
 }
 
+pub async fn register_topology(
+    State(state): State<Arc<ConsoleState>>,
+    Json(body): Json<RegisterTopologyRequest>,
+) -> impl IntoResponse {
+    let endpoint_id = body.endpoint_id.trim();
+    let node_name = body.node_name.trim();
+    let topic = body.topic.trim();
+    let Some(kind) = EndpointKind::parse(&body.kind) else {
+        return (StatusCode::BAD_REQUEST, Json(OkResponse { ok: false })).into_response();
+    };
+    if endpoint_id.is_empty() || node_name.is_empty() || topic.is_empty() {
+        return (StatusCode::BAD_REQUEST, Json(OkResponse { ok: false })).into_response();
+    }
+    state
+        .topology
+        .register(endpoint_id, node_name, kind, topic);
+    (StatusCode::OK, Json(OkResponse { ok: true })).into_response()
+}
+
+pub async fn unregister_topology(
+    State(state): State<Arc<ConsoleState>>,
+    Json(body): Json<UnregisterTopologyRequest>,
+) -> impl IntoResponse {
+    let endpoint_id = body.endpoint_id.trim();
+    if endpoint_id.is_empty() {
+        return (StatusCode::BAD_REQUEST, Json(OkResponse { ok: false })).into_response();
+    }
+    let ok = state.topology.unregister(endpoint_id);
+    (StatusCode::OK, Json(OkResponse { ok })).into_response()
+}
+
+pub async fn topology(State(state): State<Arc<ConsoleState>>) -> impl IntoResponse {
+    Json(build_topology(&state))
+}
+
+fn build_topology(state: &ConsoleState) -> TopologyResponse {
+    let endpoints = state.topology.snapshot();
+    let type_map: HashMap<String, String> = state.topic_types.snapshot().into_iter().collect();
+    let rates = state.rates();
+    let rate_by_topic: HashMap<String, &TopicRate> =
+        rates.topics.iter().map(|t| (t.name.clone(), t)).collect();
+
+    let mut process_names: HashSet<String> = HashSet::new();
+    let mut topic_names: HashSet<String> = HashSet::new();
+    let mut edges = Vec::with_capacity(endpoints.len());
+
+    for ep in &endpoints {
+        process_names.insert(ep.node_name.clone());
+        topic_names.insert(ep.topic.clone());
+        let process_id = format!("node:{}", ep.node_name);
+        let topic_id = format!("topic:{}", ep.topic);
+        let (source, target) = match ep.kind {
+            EndpointKind::Publisher => (process_id, topic_id),
+            EndpointKind::Subscriber => (topic_id, process_id),
+        };
+        edges.push(TopologyEdgeDto {
+            id: ep.endpoint_id.clone(),
+            source,
+            target,
+            kind: ep.kind.as_str(),
+            topic: ep.topic.clone(),
+        });
+    }
+
+    // Include topics known only via metrics / type registry.
+    for name in rate_by_topic.keys() {
+        topic_names.insert(name.clone());
+    }
+    for name in type_map.keys() {
+        topic_names.insert(name.clone());
+    }
+
+    let mut nodes = Vec::new();
+    let mut process_sorted: Vec<_> = process_names.into_iter().collect();
+    process_sorted.sort();
+    for name in process_sorted {
+        nodes.push(TopologyNodeDto {
+            id: format!("node:{name}"),
+            kind: "process",
+            label: name,
+            type_name: None,
+            msg_per_sec: None,
+        });
+    }
+
+    let mut topic_sorted: Vec<_> = topic_names.into_iter().collect();
+    topic_sorted.sort();
+    for name in topic_sorted {
+        let msg_per_sec = rate_by_topic
+            .get(&name)
+            .map(|t| t.msg_per_sec.round() as u64);
+        nodes.push(TopologyNodeDto {
+            id: format!("topic:{name}"),
+            kind: "topic",
+            label: name.clone(),
+            type_name: type_map.get(&name).cloned(),
+            msg_per_sec,
+        });
+    }
+
+    TopologyResponse { nodes, edges }
+}
+
 fn merge_topics(state: &ConsoleState) -> Vec<TopicResponse> {
     let rates = state.rates();
     let type_map: HashMap<String, String> = state.topic_types.snapshot().into_iter().collect();
+    let counts = state.topology.counts_by_topic();
 
     let mut by_name: HashMap<String, TopicRate> = rates
         .topics
@@ -190,6 +345,16 @@ fn merge_topics(state: &ConsoleState) -> Vec<TopicResponse> {
         .collect();
 
     for topic in type_map.keys() {
+        by_name.entry(topic.clone()).or_insert_with(|| TopicRate {
+            name: topic.clone(),
+            total_msgs: 0,
+            total_bytes: 0,
+            last_seen_unix_ms: 0,
+            msg_per_sec: 0.0,
+            bytes_per_sec: 0.0,
+        });
+    }
+    for topic in counts.keys() {
         by_name.entry(topic.clone()).or_insert_with(|| TopicRate {
             name: topic.clone(),
             total_msgs: 0,
@@ -208,6 +373,7 @@ fn merge_topics(state: &ConsoleState) -> Vec<TopicResponse> {
         .filter_map(|name| {
             let t = by_name.remove(&name)?;
             let rate = t.msg_per_sec.round() as u64;
+            let (publishers, subscribers) = counts.get(&name).copied().unwrap_or((0, 0));
             Some(TopicResponse {
                 name: t.name,
                 type_name: type_map.get(&name).cloned(),
@@ -216,8 +382,8 @@ fn merge_topics(state: &ConsoleState) -> Vec<TopicResponse> {
                 last_seen: t.last_seen_unix_ms,
                 total_msgs: t.total_msgs,
                 sparkline: vec![rate; 20],
-                subscribers: 0,
-                publishers: 0,
+                subscribers,
+                publishers,
             })
         })
         .collect()

@@ -166,13 +166,12 @@ fn run() -> Result<()> {
             let t: TopicRow = get_json(&base, &path)?;
             println!("Topic: {}", t.name);
             println!("Type: {}", t.type_name.as_deref().unwrap_or("-"));
-            println!("Publisher count: n/a");
-            println!("Subscription count: n/a");
+            println!("Publisher count: {}", t.publishers);
+            println!("Subscription count: {}", t.subscribers);
             println!("Msg/s: {}", t.msg_per_sec);
             println!("Bytes/s: {}", t.bytes_per_sec);
             println!("Total msgs: {}", t.total_msgs);
             println!("Last seen: {}", t.last_seen);
-            let _ = (t.publishers, t.subscribers);
         }
         Commands::Service {
             command: ServiceCmd::List,

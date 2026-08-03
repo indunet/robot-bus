@@ -83,9 +83,14 @@ function TopicRow({ topic }: { topic: TopicInfo }) {
     >
       <div className="flex items-center gap-2 min-w-0">
         <span className={`w-2 h-2 rounded-full shrink-0 ${isIdle ? 'bg-bus-muted' : 'bg-bus-green pulse-green'}`} />
-        <span className={`font-mono text-[13px] truncate ${isIdle ? 'text-bus-muted' : 'text-bus-text'}`}>
-          {topic.name}
-        </span>
+        <div className="min-w-0 flex flex-col">
+          <span className={`font-mono text-[13px] truncate ${isIdle ? 'text-bus-muted' : 'text-bus-text'}`}>
+            {topic.name}
+          </span>
+          {topic.typeName && (
+            <span className="font-mono text-[10px] text-bus-muted truncate">{topic.typeName}</span>
+          )}
+        </div>
       </div>
 
       <div className="flex items-center justify-end gap-1.5">

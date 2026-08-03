@@ -25,6 +25,7 @@ export interface BrokerInfo {
 
 export interface TopicInfo {
   name: string
+  typeName?: string
   msgPerSec: number
   bytesPerSec: number
   lastSeen: number // unix ms
@@ -32,6 +33,27 @@ export interface TopicInfo {
   sparkline: number[] // recent samples (client-maintained)
   subscribers: number
   publishers: number
+}
+
+export interface TopologyNodeInfo {
+  id: string
+  kind: 'process' | 'topic' | string
+  label: string
+  typeName?: string
+  msgPerSec?: number
+}
+
+export interface TopologyEdgeInfo {
+  id: string
+  source: string
+  target: string
+  kind: 'publisher' | 'subscriber' | string
+  topic: string
+}
+
+export interface TopologyInfo {
+  nodes: TopologyNodeInfo[]
+  edges: TopologyEdgeInfo[]
 }
 
 export interface ServiceInfo {
@@ -103,7 +125,22 @@ export async function fetchTopics(): Promise<TopicInfo[]> {
   const res = await fetch('/api/v1/topics')
   if (!res.ok) throw new Error(`topics ${res.status}`)
   const body = await res.json()
-  return (body.topics ?? []) as TopicInfo[]
+  return ((body.topics ?? []) as TopicInfo[]).map((t) => ({
+    ...t,
+    typeName: t.typeName,
+    publishers: t.publishers ?? 0,
+    subscribers: t.subscribers ?? 0,
+  }))
+}
+
+export async function fetchTopology(): Promise<TopologyInfo> {
+  const res = await fetch('/api/v1/topology')
+  if (!res.ok) throw new Error(`topology ${res.status}`)
+  const body = (await res.json()) as TopologyInfo
+  return {
+    nodes: body.nodes ?? [],
+    edges: body.edges ?? [],
+  }
 }
 
 export async function fetchServices(): Promise<ServiceInfo[]> {

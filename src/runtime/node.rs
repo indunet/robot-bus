@@ -27,6 +27,7 @@ use crate::action_bus::{ActionClient as BusActionClient, ActionKind, ActionMessa
 use crate::errors::{BusError, Result};
 use crate::message_bus::Publisher as BusPublisher;
 use crate::runtime::topic_type_register;
+use crate::runtime::topology_register::TopologyEndpointGuard;
 use crate::runtime::callback_group::{CallbackGroup, CallbackGroupType};
 use crate::runtime::context::Context;
 use crate::runtime::executor::{Executor, ShutdownHandle};
@@ -268,10 +269,15 @@ fn grpc_mode_unsupported(op: &str) -> BusError {
 ///
 /// ZMQ mode shares one underlying bus PUB socket per node; gRPC mode issues
 /// unary `MessageGateway.Publish` RPCs. Each handle remembers its topic.
+///
+/// Topology registration is shared across clones and unregistered when the last
+/// handle drops.
 #[derive(Clone)]
 pub struct TopicPublisherRaw {
     backend: TopicPublisherBackend,
     topic: String,
+    /// Best-effort console topology registration (kept alive while handles exist).
+    _topology: Option<Arc<TopologyEndpointGuard>>,
 }
 
 #[derive(Clone)]
@@ -623,6 +629,8 @@ pub struct Node {
     subscriber_connected: bool,
     default_callback_group: CallbackGroup,
     parameters: ParameterStore,
+    /// Subscription topology guards (no per-sub handle; live until node drop).
+    topology_subscriptions: Vec<Arc<TopologyEndpointGuard>>,
 }
 
 impl Node {
@@ -715,6 +723,7 @@ impl Node {
             subscriber_connected: false,
             default_callback_group: CallbackGroup::mutually_exclusive(),
             parameters: ParameterStore::new(),
+            topology_subscriptions: Vec::new(),
         }
     }
 
@@ -876,13 +885,21 @@ impl Node {
         topic: impl Into<String>,
         hwm: Option<HighWaterMark>,
     ) -> Result<TopicPublisherRaw> {
+        let topic = topic.into();
+        let topology = Some(TopologyEndpointGuard::start(
+            self.options.console_url.as_deref(),
+            &self.name,
+            "publisher",
+            &topic,
+        ));
         #[cfg(feature = "grpc")]
         if self.options.is_grpc() {
             let _ = hwm; // gRPC publish has no local ZMQ HWM
             let grpc = self.ensure_grpc()?;
             return Ok(TopicPublisherRaw {
                 backend: TopicPublisherBackend::Grpc(grpc.client_context()),
-                topic: topic.into(),
+                topic,
+                _topology: topology,
             });
         }
         self.ensure_bus_publisher(hwm)?;
@@ -890,7 +907,8 @@ impl Node {
             backend: TopicPublisherBackend::Zmq(Arc::clone(
                 self.publisher.as_ref().expect("publisher just ensured"),
             )),
-            topic: topic.into(),
+            topic,
+            _topology: topology,
         })
     }
 
@@ -1036,12 +1054,22 @@ impl Node {
         let group = callback_group
             .cloned()
             .unwrap_or_else(|| self.default_callback_group.clone());
+        let topology = TopologyEndpointGuard::start(
+            self.options.console_url.as_deref(),
+            &self.name,
+            "subscriber",
+            topic,
+        );
         #[cfg(feature = "grpc")]
         if self.options.is_grpc() {
-            return self.ensure_grpc()?.subscribe(topic, callback, group);
+            self.ensure_grpc()?.subscribe(topic, callback, group)?;
+            self.topology_subscriptions.push(topology);
+            return Ok(());
         }
         self.ensure_subscriber()?;
-        self.lock_executor()?.subscribe(topic, callback, group)
+        self.lock_executor()?.subscribe(topic, callback, group)?;
+        self.topology_subscriptions.push(topology);
+        Ok(())
     }
 
     fn ensure_subscriber(&mut self) -> Result<()> {

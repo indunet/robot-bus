@@ -7,20 +7,24 @@ import {
   fetchTopics,
   fetchServices,
   fetchActions,
+  fetchTopology,
   mergeTopics,
   type BrokerInfo,
   type TopicInfo,
   type LogEntry,
   type ServiceInfo,
   type ActionInfo,
+  type TopologyInfo,
 } from '@/lib/mock-data'
 import StatusBar from './StatusBar'
-import Sidebar from './Sidebar'
+import Sidebar, { type Tab } from './Sidebar'
 import BrokerOverview from './BrokerOverview'
 import OverviewStats from './OverviewStats'
 import TopicTable from './TopicTable'
 import ServiceActionTable from './ServiceActionTable'
 import EventStream from './EventStream'
+import TopologyView from './TopologyView'
+import RoutesEditor from './RoutesEditor'
 import ThroughputChart, {
   ServiceRateChart,
   ActionRateChart,
@@ -28,8 +32,6 @@ import ThroughputChart, {
   type RatePoint,
 } from './ThroughputChart'
 import { useI18n } from '@/lib/i18n'
-
-type Tab = 'overview' | 'topics' | 'services' | 'actions' | 'logs'
 
 function appendRatePoint(prev: RatePoint[], label: string, value: number): RatePoint[] {
   return [...prev.slice(1), { t: label, value }]
@@ -41,6 +43,7 @@ export default function Dashboard() {
   const [topics, setTopics] = useState<TopicInfo[]>([])
   const [services, setServices] = useState<ServiceInfo[]>([])
   const [actions, setActions] = useState<ActionInfo[]>([])
+  const [topology, setTopology] = useState<TopologyInfo>({ nodes: [], edges: [] })
   const [logs, setLogs] = useState<LogEntry[]>([])
   const [throughput, setThroughput] = useState(() => generateRateHistory(0))
   const [svcRate, setSvcRate] = useState(() => generateRateHistory(0))
@@ -50,16 +53,18 @@ export default function Dashboard() {
 
   const poll = useCallback(async () => {
     try {
-      const [status, topicList, serviceList, actionList] = await Promise.all([
+      const [status, topicList, serviceList, actionList, topo] = await Promise.all([
         fetchStatus(),
         fetchTopics(),
         fetchServices(),
         fetchActions(),
+        fetchTopology(),
       ])
       setBroker(status)
       setTopics((prev) => mergeTopics(prev, topicList))
       setServices(serviceList)
       setActions(actionList)
+      setTopology(topo)
       const now = new Date()
       const label = now.toLocaleTimeString(dateLocale, {
         minute: '2-digit',
@@ -118,6 +123,8 @@ export default function Dashboard() {
               actRate={actRate}
             />
           )}
+          {activeTab === 'topology' && <TopologyView topology={topology} />}
+          {activeTab === 'routes' && <RoutesEditor />}
           {activeTab === 'topics' && <TopicTable topics={topics} />}
           {activeTab === 'services' && (
             <ServiceActionTable services={services} actions={actions} mode="services" />
@@ -159,7 +166,6 @@ function OverviewLayout({
 
   return (
     <div className="flex flex-col gap-3">
-      {/* Row 1: Broker endpoints | snapshot metrics */}
       <div className="grid grid-cols-1 lg:grid-cols-[1.15fr_0.85fr] gap-3 items-stretch">
         <BrokerOverview broker={broker} />
         <OverviewStats
@@ -170,13 +176,11 @@ function OverviewLayout({
         />
       </div>
 
-      {/* Row 2: Topics | topic throughput */}
       <div className="grid grid-cols-1 lg:grid-cols-[1.15fr_0.85fr] gap-3 items-stretch" style={{ minHeight: '16rem' }}>
         <TopicTable topics={topics} maxBodyHeight={listMax} />
         <ThroughputChart data={throughput} />
       </div>
 
-      {/* Row 3: Services | service call rate */}
       <div className="grid grid-cols-1 lg:grid-cols-[1.15fr_0.85fr] gap-3 items-stretch" style={{ minHeight: '16rem' }}>
         <ServiceActionTable
           services={services}
@@ -187,7 +191,6 @@ function OverviewLayout({
         <ServiceRateChart data={svcRate} />
       </div>
 
-      {/* Row 4: Actions | action run rate */}
       <div className="grid grid-cols-1 lg:grid-cols-[1.15fr_0.85fr] gap-3 items-stretch" style={{ minHeight: '16rem' }}>
         <ServiceActionTable
           services={services}
@@ -198,7 +201,6 @@ function OverviewLayout({
         <ActionRateChart data={actRate} />
       </div>
 
-      {/* Row 5: Events */}
       <div style={{ height: '260px' }}>
         <EventStream logs={logs} />
       </div>

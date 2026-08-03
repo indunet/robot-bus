@@ -307,7 +307,7 @@ Defaults: message `STREAM(2/2)`, service `RPC(4/4)`, action `ACTION(8/8)`. Broke
 
 ## Web console (`console/`)
 
-Optional monitoring UI for broker status, topic traffic, and event logs. With the `console` feature (default), the broker serves an **embedded** static UI on `0.0.0.0:15771` after you build assets once.
+Optional monitoring UI for broker status, topic traffic, event logs, **live topology**, and an offline **ROS 2 bridge YAML routes** editor. With the `console` feature (default), the broker serves an **embedded** static UI on `0.0.0.0:15771` after you build assets once.
 
 **Development (hot reload — preferred):**
 
@@ -330,7 +330,7 @@ cargo run --bin robot_bus_broker
 
 `assets/console/` is **build output** (not committed). CI and release jobs run `just console` (or equivalent) before compiling with the `console` feature.
 
-Wired to the broker's same-port monitoring API: `GET /api/v1/status`, `GET /api/v1/topics`, `GET /api/v1/services`, `GET /api/v1/actions`, `SSE /api/v1/events`. The frontend source lives in `console/`; only the generated static files are compiled into binaries with the `console` feature.
+Wired to the broker's same-port monitoring API: `GET /api/v1/status`, `GET /api/v1/topics`, `GET /api/v1/services`, `GET /api/v1/actions`, `GET /api/v1/topology`, `SSE /api/v1/events`. Topology uses best-effort registration from `Node` create_publisher/subscription; the Routes tab edits YAML offline (does not hot-apply a running bridge). The frontend source lives in `console/`; only the generated static files are compiled into binaries with the `console` feature.
 
 ## gRPC / gRPC-Web gateway
 
