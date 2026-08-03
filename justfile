@@ -122,6 +122,7 @@ test-python: proto
 test-python-native:
 	python3 bindings/python/tests/test_grpc_node.py
 	python3 bindings/python/tests/test_inproc_context.py
+	python3 bindings/python/tests/test_tf_lookup.py
 
 # Cross-language interop matrix (6 language-pair scenarios; skips missing peers)
 # Needs `just python-dev`; optionally java-dev / ts-dev / cpp-dev for full coverage.

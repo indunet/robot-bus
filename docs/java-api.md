@@ -129,6 +129,28 @@ Node node = Node.grpc("web-client");
 // 或 Node.grpcAt("web-client", "http://127.0.0.1:15770");
 ```
 
+### TF（坐标树）
+
+`TfBuffer` / `TfListener` / `TransformBroadcaster` 对应 Rust `robot_bus::tf`。消息为 `tf2_msgs/TFMessage`（`/tf`、`/tf_static`）。v1：静态边始终生效，动态边取最新样本。
+
+```java
+import org.indunet.robot.bus.TfListener;
+import org.indunet.robot.bus.TransformBroadcaster;
+import org.indunet.robot.bus.tf2_msgs.msg.v1.TFMessage;
+
+TfListener listener = new TfListener(node); // /tf + /tf_static
+TfBuffer buf = listener.buffer();
+
+TransformBroadcaster br =
+    new TransformBroadcaster(node.createPublisher("/tf_static", TFMessage.class));
+br.send(/* TFMessage or TransformStamped... */);
+
+// after start() delivers messages:
+var t = buf.lookupTransform("base_link", "camera");
+```
+
+离线可用 `new TfBuffer()` + `setTransformMsg`。见 `TfLookupTest`。
+
 ### Service / Action（typed）
 
 ```java

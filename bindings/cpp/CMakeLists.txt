@@ -99,7 +99,8 @@ if(ROBOT_BUS_BUILD_TESTS)
     federation_opts
     node_parameters
     interop_peer
-    ros2_bridge_stub)
+    ros2_bridge_stub
+    tf_lookup)
 
   set(ROBOT_BUS_TEST_TARGETS)
   foreach(t ${ROBOT_BUS_TEST_SOURCES})

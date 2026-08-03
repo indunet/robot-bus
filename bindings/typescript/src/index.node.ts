@@ -5,6 +5,7 @@
 
 import { loadNative } from "./native.js";
 import { decode, encode, type MessageType } from "./typed.js";
+import { TfBuffer } from "./tf.js";
 import type {
   ActionClient as NativeActionClient,
   ActionEvent,
@@ -15,6 +16,7 @@ import type {
 
 export * from "./native-types.js";
 export { encode, decode, type MessageType } from "./typed.js";
+export { TfBuffer, TransformBroadcaster } from "./tf.js";
 export {
   GrpcNode,
   GrpcServiceClient,
@@ -43,6 +45,10 @@ export const messageXsubEndpoint = native.messageXsubEndpoint;
 export const messageXpubEndpoint = native.messageXpubEndpoint;
 export const runBroker = native.runBroker;
 export const __version__ = native.getVersion();
+/** Create an offline typed TF buffer (no listener). */
+export function createTfBuffer(): TfBuffer {
+  return new TfBuffer(new native.TfBuffer());
+}
 
 export class TypedTopicPublisher<T extends object> {
   constructor(
@@ -399,5 +405,27 @@ export class Node {
 
   wait(): void {
     this.inner.wait();
+  }
+
+  /** Native napi handle (for {@link TfListener}). */
+  asNative(): NativeNode {
+    return this.inner;
+  }
+}
+
+/** Subscribes `/tf` + `/tf_static` (or custom topics) into a shared buffer. */
+export class TfListener {
+  private readonly inner: import("./native-types.js").TfListener;
+
+  constructor(node: Node, tfTopic?: string, tfStaticTopic?: string) {
+    const nativeNode = node.asNative();
+    this.inner =
+      tfTopic === undefined && tfStaticTopic === undefined
+        ? native.TfListener.withDefaults(nativeNode)
+        : new native.TfListener(nativeNode, tfTopic, tfStaticTopic);
+  }
+
+  buffer(): TfBuffer {
+    return new TfBuffer(this.inner.buffer());
   }
 }

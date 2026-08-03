@@ -250,3 +250,18 @@ export declare function messageXpubEndpoint(
 ): string;
 export declare function runBroker(): void;
 export declare function getVersion(): string;
+
+export declare class TfBuffer {
+  constructor();
+  clear(): void;
+  setTransformMsg(data: Buffer, isStatic: boolean): void;
+  lookupTransform(target: string, source: string): Buffer;
+  canTransform(target: string, source: string): boolean;
+  frames(): string[];
+}
+
+export declare class TfListener {
+  constructor(node: Node, tfTopic?: string, tfStaticTopic?: string);
+  static withDefaults(node: Node): TfListener;
+  buffer(): TfBuffer;
+}

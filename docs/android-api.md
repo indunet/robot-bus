@@ -68,6 +68,25 @@ Broker().use { _ ->
 }
 ```
 
+### TF（坐标树）
+
+`TfBuffer` / `TfListener` / `TransformBroadcaster` 对应 Rust `robot_bus::tf`。消息为 `tf2_msgs/TFMessage`（`/tf`、`/tf_static`）。v1：静态边始终生效，动态边取最新样本。
+
+```kotlin
+import org.indunet.robot.bus.TfListener
+import org.indunet.robot.bus.TransformBroadcaster
+import org.indunet.robot.bus.tf2_msgs.msg.v1.TFMessage
+
+val listener = TfListener(node) // /tf + /tf_static
+val buf = listener.buffer()
+val br = TransformBroadcaster(node.createPublisher("/tf_static", TFMessage::class.java))
+br.send(/* TFMessage or TransformStamped... */)
+// after start() delivers messages:
+val t = buf.lookupTransform("base_link", "camera")
+```
+
+离线可用 `TfBuffer()` + `setTransformMsg`。见 `TfLookupTest`。
+
 ### UDP 发现
 
 ```kotlin

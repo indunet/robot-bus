@@ -142,6 +142,26 @@ def on_raw(topic, payload: bytes):
 node.create_subscription("/robot1/imu", on_raw)
 ```
 
+### TF（坐标树）
+
+`TfBuffer` / `TfListener` / `TransformBroadcaster` 对应 Rust `robot_bus::tf`。消息为 `tf2_msgs/TFMessage`（`/tf`、`/tf_static`）。v1：静态边始终生效，动态边取最新样本。
+
+```python
+from robot_bus import TfListener, TransformBroadcaster
+from robot_bus.tf2_msgs.msg.v1 import TFMessage
+
+listener = TfListener(node)  # /tf + /tf_static
+buf = listener.buffer()
+
+br = TransformBroadcaster(node.create_publisher("/tf_static", TFMessage))
+br.send(msg)  # TFMessage or TransformStamped...
+
+# after start/spin delivers messages:
+t = buf.lookup_transform("base_link", "camera")
+```
+
+离线可用 `TfBuffer()` + `set_transform_msg`。见 `tests/test_tf_lookup.py`。
+
 ### gRPC 模式 Node（客户端）
 
 `Node.grpc` / `Node.grpc_at`（或 `Node(..., transport="grpc", grpc_url=...)`）经 broker gRPC 网关接入，不创建 ZMQ socket。

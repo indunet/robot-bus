@@ -186,6 +186,34 @@ auto node = robot_bus::Node::grpc("web-client");
 
 本地覆盖见 `bindings/cpp/tests/grpc_node.cpp`（`just test-cpp`）。
 
+## TF (coordinate frames)
+
+`TfBuffer` / `TfListener` / `TransformBroadcaster` mirror Rust `robot_bus::tf`. Wire format is `tf2_msgs/TFMessage` on `/tf` and `/tf_static`. Lookup returns `geometry_msgs/TransformStamped` protobuf bytes. v1 time semantics: static edges always apply; dynamic = latest only.
+
+```cpp
+#include <robot_bus/Tf.hpp>
+#include <robot_bus/tf2_msgs/msg/v1/tf_message.pb.h>
+#include <robot_bus/geometry_msgs/msg/v1/stamped.pb.h>
+
+robot_bus::TfListener listener(node);  // /tf + /tf_static
+auto buf = listener.buffer();
+
+auto pub = node.create_publisher("/tf_static");
+robot_bus::TransformBroadcaster br(std::move(pub));
+tf2_msgs::msg::v1::TFMessage msg;
+// … fill transforms …
+std::string bytes;
+msg.SerializeToString(&bytes);
+br.send(bytes);
+
+// after spin delivers messages:
+auto stamped_bytes = buf.lookup_transform("base_link", "camera");
+geometry_msgs::msg::v1::TransformStamped stamped;
+stamped.ParseFromArray(stamped_bytes.data(), static_cast<int>(stamped_bytes.size()));
+```
+
+Offline use: `robot_bus::TfBuffer` + `set_transform_msg` without a listener. See `bindings/cpp/tests/tf_lookup.cpp`.
+
 Compare imports across languages:
 
 | Language | Path |

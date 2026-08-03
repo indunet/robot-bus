@@ -21,6 +21,7 @@ ros2-shim = ["robot-bus/ros2-shim"]
 
 [dependencies]
 anyhow = "1"
+prost = "0.14"
 robot-bus = { path = "../../..", default-features = false, features = ["grpc", "console"] }
 uuid = { version = "1", features = ["v4"] }
 

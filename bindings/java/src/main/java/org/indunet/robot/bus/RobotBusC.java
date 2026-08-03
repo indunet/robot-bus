@@ -266,6 +266,33 @@ interface RobotBusC extends Library {
 
     Pointer robot_bus_broker_console_listen(Pointer b);
 
+    Pointer robot_bus_tf_buffer_new();
+
+    void robot_bus_tf_buffer_free(Pointer buf);
+
+    int robot_bus_tf_buffer_clear(Pointer buf);
+
+    int robot_bus_tf_buffer_set_transform_msg(Pointer buf, byte[] data, long len, int isStatic);
+
+    int robot_bus_tf_buffer_lookup_transform(
+            Pointer buf,
+            String target,
+            String source,
+            PointerByReference outData,
+            LongByReference outLen);
+
+    int robot_bus_tf_buffer_can_transform(Pointer buf, String target, String source);
+
+    Pointer robot_bus_tf_buffer_frames(Pointer buf);
+
+    Pointer robot_bus_tf_listener_new(Pointer node, String tfTopic, String tfStaticTopic);
+
+    Pointer robot_bus_tf_listener_with_defaults(Pointer node);
+
+    void robot_bus_tf_listener_free(Pointer listener);
+
+    Pointer robot_bus_tf_listener_buffer(Pointer listener);
+
     interface MsgCb extends Callback {
         void invoke(String topic, Pointer data, long len, Pointer user);
     }

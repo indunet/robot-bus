@@ -130,6 +130,32 @@ const node = Node.grpc("web-client");
 | `createActionClient` | |
 | `createTimer`、`spin` / `shutdown` | |
 
+## TF（坐标树，Node.js only）
+
+`TfBuffer` / `TfListener` / `TransformBroadcaster` 对应 Rust `robot_bus::tf`。浏览器入口不提供原生 Buffer。消息为 `tf2_msgs/TFMessage`（`/tf`、`/tf_static`）。
+
+```ts
+import {
+  createTfBuffer,
+  TfListener,
+  TransformBroadcaster,
+} from "robot-bus";
+import { TFMessage } from "robot-bus/tf2_msgs/msg/v1/tf_message.js";
+import { TransformStamped } from "robot-bus/geometry_msgs/msg/v1/stamped.js";
+
+const listener = new TfListener(node); // /tf + /tf_static
+const buf = listener.buffer();
+const br = TransformBroadcaster.fromTyped(
+  node.createPublisher("/tf_static", TFMessage),
+  TFMessage,
+);
+br.send(msg);
+
+const t = buf.lookupTransform("base_link", "camera", TransformStamped);
+```
+
+离线：`createTfBuffer()` + `setTransformMsg`。见 `tests/tf_lookup.test.ts`。
+
 ## 浏览器（gRPC-Web）
 
 ```ts

@@ -14,6 +14,7 @@ crate-type = ["cdylib"]
 napi = { version = "2", default-features = false, features = ["napi6", "serde-json"] }
 napi-derive = "2"
 anyhow = "1"
+prost = "0.14"
 robot-bus = { path = "../../..", default-features = false, features = ["grpc", "console"] }
 serde_json = "1"
 uuid = { version = "1", features = ["v4"] }
