@@ -130,7 +130,7 @@ const en = {
   topologyTitle: 'TOPOLOGY',
   topologySub: '{n} nodes · {e} edges',
   topologyHint:
-    'Process cards with in/out topic ports. Wires connect a publisher port to matching subscriber ports. Stale endpoints expire after ~30s.',
+    'Best-effort live pub/sub graph from client registration. Stale endpoints expire after ~30s.',
   topologyEmpty: 'No registered endpoints yet',
 
   routesTitle: 'ROS 2 BRIDGE',
@@ -290,7 +290,7 @@ const zh: Record<MessageKey, string> = {
 
   topologyTitle: '拓扑',
   topologySub: '{n} 节点 · {e} 边',
-  topologyHint: '进程卡片带入/出 topic 端口；连线从发布端口接到同名订阅端口。约 30s 无刷新的端点会过期。',
+  topologyHint: '基于客户端登记的实时 pub/sub 图（尽力而为）。约 30s 无刷新的端点会过期。',
   topologyEmpty: '暂无已登记端点',
 
   routesTitle: 'ROS 2 桥接',
