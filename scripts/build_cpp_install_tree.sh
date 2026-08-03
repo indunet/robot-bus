@@ -20,8 +20,9 @@ rm -rf "$DEST"
 mkdir -p "$DEST/usr/bin" "$DEST/usr/lib" "$DEST/usr/include" \
   "$DEST/usr/lib/pkgconfig" "$DEST/usr/lib/cmake/robot_bus"
 
-# Broker
-cargo build --release --manifest-path "$ROOT/Cargo.toml" --bin robot_bus_broker
+# Broker only needs grpc+console; default features pull FFmpeg/ALSA/libudev for tools.
+cargo build --release --manifest-path "$ROOT/Cargo.toml" --bin robot_bus_broker \
+  --no-default-features --features grpc,console
 cp -f "$ROOT/target/release/robot_bus_broker" "$DEST/usr/bin/"
 
 # FFI (rename robot_bus_c → robot_bus)

@@ -32,6 +32,8 @@ const en = {
   navTopologyShort: 'TOPO',
   navRoutes: 'ROUTES',
   navRoutesShort: 'RTE',
+  navVisualize: 'VISUALIZE',
+  navVisualizeShort: 'VIZ',
 
   metricMsgS: 'MSG/S',
   metricBw: 'BW',
@@ -176,6 +178,22 @@ const en = {
   routesFieldDirection: 'Direction',
 
   colType: 'TYPE',
+
+  vizTitle: 'VISUALIZE',
+  vizTopics: 'TOPICS',
+  vizTopicsSub: '{n} known',
+  vizFilter: 'Filter topics…',
+  vizSelectTopic: 'Select topic…',
+  vizAddPanel: 'Add panel',
+  vizNoTopics: 'No topics yet',
+  vizPanels: '{n} panels',
+  vizEmpty: 'Pick a topic on the left to open a visualization panel.',
+  vizUnknownType: 'unknown type',
+  vizVisualizer: 'Visualizer',
+  vizClosePanel: 'Close panel',
+  vizConnecting: 'connecting',
+  vizError: 'subscribe error',
+  vizOpen: 'Visualize',
 } as const
 
 const zh: Record<MessageKey, string> = {
@@ -193,6 +211,8 @@ const zh: Record<MessageKey, string> = {
   navTopologyShort: '拓扑',
   navRoutes: '路由',
   navRoutesShort: '路由',
+  navVisualize: '可视化',
+  navVisualizeShort: '可视',
 
   metricMsgS: 'MSG/S',
   metricBw: '带宽',
@@ -335,6 +355,22 @@ const zh: Record<MessageKey, string> = {
   routesFieldDirection: '方向',
 
   colType: '类型',
+
+  vizTitle: '可视化',
+  vizTopics: '话题',
+  vizTopicsSub: '{n} 已知',
+  vizFilter: '过滤话题…',
+  vizSelectTopic: '选择话题…',
+  vizAddPanel: '添加面板',
+  vizNoTopics: '暂无话题',
+  vizPanels: '{n} 个面板',
+  vizEmpty: '从左侧选择话题，打开可视化面板。',
+  vizUnknownType: '未知类型',
+  vizVisualizer: '可视化器',
+  vizClosePanel: '关闭面板',
+  vizConnecting: '连接中',
+  vizError: '订阅失败',
+  vizOpen: '可视化',
 }
 
 const catalogs: Record<Locale, Record<MessageKey, string>> = { en, zh }

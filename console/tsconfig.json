@@ -25,6 +25,12 @@
     "paths": {
       "@/*": [
         "./*"
+      ],
+      "robot-bus": [
+        "../bindings/typescript/dist/index.browser.d.ts"
+      ],
+      "robot-bus/*": [
+        "../bindings/typescript/generated/*"
       ]
     }
   },

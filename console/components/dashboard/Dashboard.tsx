@@ -25,6 +25,7 @@ import ServiceActionTable from './ServiceActionTable'
 import EventStream from './EventStream'
 import TopologyView from './TopologyView'
 import RoutesEditor from './RoutesEditor'
+import VisualizeWorkspace from './VisualizeWorkspace'
 import ThroughputChart, {
   ServiceRateChart,
   ActionRateChart,
@@ -49,7 +50,13 @@ export default function Dashboard() {
   const [svcRate, setSvcRate] = useState(() => generateRateHistory(0))
   const [actRate, setActRate] = useState(() => generateRateHistory(0))
   const [activeTab, setActiveTab] = useState<Tab>('overview')
+  const [vizTopic, setVizTopic] = useState<string | null>(null)
   const seenLogIds = useRef(new Set<string>())
+
+  const openVisualize = useCallback((topic: string) => {
+    setVizTopic(topic)
+    setActiveTab('visualize')
+  }, [])
 
   const poll = useCallback(async () => {
     try {
@@ -121,11 +128,20 @@ export default function Dashboard() {
               throughput={throughput}
               svcRate={svcRate}
               actRate={actRate}
+              onVisualize={openVisualize}
             />
           )}
           {activeTab === 'topology' && <TopologyView topology={topology} />}
           {activeTab === 'routes' && <RoutesEditor />}
-          {activeTab === 'topics' && <TopicTable topics={topics} />}
+          {activeTab === 'visualize' && (
+            <VisualizeWorkspace
+              topics={topics}
+              grpcAddr={broker.grpcAddr}
+              initialTopic={vizTopic}
+              onConsumedInitial={() => setVizTopic(null)}
+            />
+          )}
+          {activeTab === 'topics' && <TopicTable topics={topics} onVisualize={openVisualize} />}
           {activeTab === 'services' && (
             <ServiceActionTable services={services} actions={actions} mode="services" />
           )}
@@ -152,6 +168,7 @@ function OverviewLayout({
   throughput,
   svcRate,
   actRate,
+  onVisualize,
 }: {
   broker: BrokerInfo
   topics: TopicInfo[]
@@ -161,6 +178,7 @@ function OverviewLayout({
   throughput: RatePoint[]
   svcRate: RatePoint[]
   actRate: RatePoint[]
+  onVisualize?: (topic: string) => void
 }) {
   const listMax = '14rem'
 
@@ -177,7 +195,7 @@ function OverviewLayout({
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-[1.15fr_0.85fr] gap-3 items-stretch" style={{ minHeight: '16rem' }}>
-        <TopicTable topics={topics} maxBodyHeight={listMax} />
+        <TopicTable topics={topics} maxBodyHeight={listMax} onVisualize={onVisualize} />
         <ThroughputChart data={throughput} />
       </div>
 
