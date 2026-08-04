@@ -39,6 +39,7 @@ EXPECTED_PROTOC_VERSION = "35.1"
 
 # Top-level packages that own message/service protos (not robot_bus.grpc).
 MSG_PACKAGES = (
+    "apriltag_msgs",
     "builtin_interfaces",
     "control_msgs",
     "diagnostic_msgs",

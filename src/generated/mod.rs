@@ -15,6 +15,14 @@
 //! Action markers (e.g. [`crate::action::v1::Fibonacci`]) implement
 //! [`crate::typed::Action`].
 
+pub mod apriltag_msgs {
+    pub mod msg {
+        pub mod v1 {
+            include!("apriltag_msgs/msg/v1/_includes.rs");
+        }
+    }
+}
+
 pub mod builtin_interfaces {
     pub mod msg {
         pub mod v1 {

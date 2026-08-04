@@ -1,0 +1,10 @@
+syntax = "proto3";
+
+package apriltag_msgs.msg.v1;
+
+// Equivalent to ROS 2 `apriltag_msgs/msg/Point`.
+// 2D pixel coordinates (not `geometry_msgs/Point`).
+message Point {
+  double x = 1;
+  double y = 2;
+}

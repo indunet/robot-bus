@@ -18,9 +18,10 @@ pub mod zmq_helpers;
 mod generated;
 
 pub use generated::{
-    action, action_msgs, builtin_interfaces, control_msgs, diagnostic_msgs, foxglove_msgs,
-    geometry_msgs, nav2_msgs, nav_msgs, robot_bus_interface, sensor_msgs, shape_msgs, std_msgs,
-    std_srvs, stereo_msgs, tf2_msgs, trajectory_msgs, unique_identifier_msgs, visualization_msgs,
+    action, action_msgs, apriltag_msgs, builtin_interfaces, control_msgs, diagnostic_msgs,
+    foxglove_msgs, geometry_msgs, nav2_msgs, nav_msgs, robot_bus_interface, sensor_msgs, shape_msgs,
+    std_msgs, std_srvs, stereo_msgs, tf2_msgs, trajectory_msgs, unique_identifier_msgs,
+    visualization_msgs,
 };
 pub use typed::{Action, ActionOutcome, Service};
 

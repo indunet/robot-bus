@@ -1,0 +1,35 @@
+syntax = "proto3";
+
+package apriltag_msgs.msg.v1;
+
+import "apriltag_msgs/msg/v1/point.proto";
+
+// Equivalent to ROS 2 `apriltag_msgs/msg/AprilTagDetection`.
+//
+// Detection metadata from the AprilTag library. Pose is typically published
+// separately on TF by `apriltag_ros`; this message carries 2D geometry and
+// quality fields (family, id, hamming, decision_margin, homography).
+message AprilTagDetection {
+  // Tag family name, e.g. "tag36h11".
+  string family = 1;
+
+  int32 id = 2;
+
+  // Hamming distance (bit errors corrected).
+  int32 hamming = 3;
+
+  // Detection quality metric from the AprilTag library.
+  float goodness = 4;
+
+  // Decision margin (higher is more confident).
+  float decision_margin = 5;
+
+  // Centre in (x, y) pixel coordinates (ROS spelling: centre).
+  Point centre = 6;
+
+  // Corners of the tag ((x1,y1), (x2,y2), …). Fixed size 4 in ROS 2.
+  repeated Point corners = 7;
+
+  // 3x3 row-major homography matrix. Fixed size 9 in ROS 2.
+  repeated double homography = 8;
+}

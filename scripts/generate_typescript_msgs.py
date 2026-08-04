@@ -34,6 +34,7 @@ PROTOC = os.environ.get("PROTOC", "protoc")
 EXPECTED_PROTOC_VERSION = "35.1"
 
 MSG_PACKAGES = (
+    "apriltag_msgs",
     "builtin_interfaces",
     "control_msgs",
     "diagnostic_msgs",

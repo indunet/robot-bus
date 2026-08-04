@@ -1,0 +1,12 @@
+syntax = "proto3";
+
+package apriltag_msgs.msg.v1;
+
+import "std_msgs/msg/v1/header.proto";
+import "apriltag_msgs/msg/v1/april_tag_detection.proto";
+
+// Equivalent to ROS 2 `apriltag_msgs/msg/AprilTagDetectionArray`.
+message AprilTagDetectionArray {
+  std_msgs.msg.v1.Header header = 1;
+  repeated AprilTagDetection detections = 2;
+}
