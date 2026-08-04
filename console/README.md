@@ -1,6 +1,6 @@
 # robot-bus console
 
-Web 监控控制台：查看 broker 状态、topic 流量、事件日志、**实时拓扑**、**ROS 2 桥 YAML 路由编辑**，以及 **LIVE**（WHEP WebRTC 播放）。
+Web 监控控制台：查看 broker 状态、topic 流量、事件日志、**实时拓扑**、**管道 Flow 编排**（含 ROS 2 bridge），以及 **LIVE**（WHEP WebRTC 播放）。
 
 对接 broker 同端口 API：
 
@@ -14,17 +14,21 @@ Web 监控控制台：查看 broker 状态、topic 流量、事件日志、**实
 
 UI 文案支持 EN / 中文（默认 EN，偏好存在 `localStorage` 的 `robot-bus-console-locale`）。
 
-### Topology（L1）
+### Topology（只读）
 
 侧栏 **TOPOLOGY**：根据 `Node::create_publisher` / `create_subscription` 的 best-effort HTTP 登记绘制 pub/sub 图。端点约 30s 无刷新会过期；进程崩溃后依赖 TTL 清理。未走 Rust `Node`（或未连上 console）的路径可能不出现在图中。
+
+### Flow（可编辑管道）
+
+侧栏 **FLOW**：编排配置驱动的管道节点（`rbus_usb_camera` / `image_encoder` / `image_decoder` / `webrtc` / `ros2_bridge`）。拖拽节点库、端口连线即 topic 接线；与 Topology 对照显示 live / missing；不在 flow 中的业务进程以只读 external ghost 出现。
+
+- Import / Export `flow.yaml`（旧版纯 Ros2Bridge YAML 会自动升格为单节点 flow）
+- 可导出单节点 `ros__parameters` 或 bridge YAML，以及手动 launch 命令文本
+- **不会**自动启停进程或热更新 running 节点 / bridge
 
 ### LIVE
 
 侧栏 **LIVE**：填写 `rbus_webrtc` 的 WHEP 地址（默认 `http://127.0.0.1:8090/whep`，存 `localStorage`），连接后播放 H.264/Opus，并显示 DataChannel 日志。不走 gRPC-Web；依赖节点侧 CORS。
-
-### Routes（L2）
-
-侧栏 **ROUTES**：离线编辑 `Ros2Bridge` YAML（导入 / 粘贴 / 导出 / 复制）。**不会**热更新正在运行的桥；导出后仍需 `Ros2Bridge::from_yaml(...)`。
 
 ## 开发（推荐）
 

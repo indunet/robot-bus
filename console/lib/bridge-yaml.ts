@@ -1,4 +1,4 @@
-/** Ros2Bridge YAML schema helpers (offline editor; mirrors src/ros2/yaml.rs). */
+/** Ros2Bridge YAML schema helpers (used by Flow `ros2_bridge` nodes; mirrors src/ros2/yaml.rs). */
 
 import { parse as parseYaml, stringify as stringifyYaml } from 'yaml'
 

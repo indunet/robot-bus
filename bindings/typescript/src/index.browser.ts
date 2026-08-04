@@ -16,7 +16,7 @@ export {
 
 export { encode, decode, type MessageType } from "./typed.js";
 
-export const __version__ = "0.1.3";
+export const __version__ = "0.1.4";
 
 export function createPublisher(): never {
   throw new Error(

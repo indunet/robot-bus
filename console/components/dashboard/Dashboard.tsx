@@ -24,7 +24,7 @@ import TopicTable from './TopicTable'
 import ServiceActionTable from './ServiceActionTable'
 import EventStream from './EventStream'
 import TopologyView from './TopologyView'
-import RoutesEditor from './RoutesEditor'
+import FlowEditor from './FlowEditor'
 import VisualizeWorkspace from './VisualizeWorkspace'
 import LiveView from './LiveView'
 import ThroughputChart, {
@@ -133,7 +133,7 @@ export default function Dashboard() {
             />
           )}
           {activeTab === 'topology' && <TopologyView topology={topology} />}
-          {activeTab === 'routes' && <RoutesEditor />}
+          {activeTab === 'flow' && <FlowEditor topology={topology} />}
           {activeTab === 'visualize' && (
             <VisualizeWorkspace
               topics={topics}

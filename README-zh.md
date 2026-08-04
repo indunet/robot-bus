@@ -238,7 +238,7 @@ auto pub = node.create_publisher("/imu");
 
 ```toml
 robot-bus = { path = "../robot-bus" }
-# 或 crates.io：robot-bus = "0.1.3"
+# 或 crates.io：robot-bus = "0.1.4"
 ```
 
 语义接近 ROS 2：`Node::new` → typed `create_publisher` / `create_subscription` → `node.spin()`（自动挂 `SingleThreadedExecutor`）。
@@ -309,7 +309,7 @@ pub_.set_high_water_mark(HighWaterMark { snd: 10, rcv: 10 })?;
 
 ## Web 控制台（`console/`）
 
-可选监控前端：查看 broker 状态、topic 流量、事件日志、**实时拓扑（Topology）**、**ROS 2 桥 YAML 路由编辑（Routes）**，以及通过 WHEP 播放 `rbus_webrtc` 的 **LIVE** 页。开启 `console` feature（默认）时，先构建一次静态资源后，broker 在 `0.0.0.0:15771` 提供**嵌入式** UI。
+可选监控前端：查看 broker 状态、topic 流量、事件日志、**实时拓扑（Topology）**、**管道编排（Flow）**（`rbus_*` + ROS 2 bridge），以及通过 WHEP 播放 `rbus_webrtc` 的 **LIVE** 页。开启 `console` feature（默认）时，先构建一次静态资源后，broker 在 `0.0.0.0:15771` 提供**嵌入式** UI。
 
 **开发（热更新，推荐）：**
 
@@ -332,7 +332,7 @@ cargo run --bin robot_bus_broker
 
 `assets/console/` 是**构建产物**（不提交）。CI / 发布在带 `console` feature 编译前会先生成该目录。
 
-已对接 broker 同端口监控 API：`GET /api/v1/status`、`GET /api/v1/topics`、`GET /api/v1/services`、`GET /api/v1/actions`、`GET /api/v1/topology`、`SSE /api/v1/events`。Topology 依赖 `Node` 创建 publisher/subscription 时的 best-effort 登记；Routes 页为离线 YAML 编辑（不热更新运行中的桥）。**LIVE** 页直接连接 `rbus_webrtc` 的 WHEP 地址（默认 `http://127.0.0.1:8090/whep`；节点已开 CORS）。前端源码在 `console/`；只有生成的静态文件会编进带 `console` feature 的二进制。
+已对接 broker 同端口监控 API：`GET /api/v1/status`、`GET /api/v1/topics`、`GET /api/v1/services`、`GET /api/v1/actions`、`GET /api/v1/topology`、`SSE /api/v1/events`。Topology 依赖 `Node` 创建 publisher/subscription 时的 best-effort 登记。**Flow** 页编排管道节点与 topic 连线（导出 `flow.yaml` / 启动命令；不自动启停进程，也不热更新运行中的桥）。旧版纯 Ros2Bridge YAML 导入时会升格为单个 `ros2_bridge` 节点。**LIVE** 页直接连接 `rbus_webrtc` 的 WHEP 地址（默认 `http://127.0.0.1:8090/whep`；节点已开 CORS）。前端源码在 `console/`；只有生成的静态文件会编进带 `console` feature 的二进制。
 
 ## gRPC / gRPC-Web 网关
 
