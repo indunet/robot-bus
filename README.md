@@ -307,7 +307,7 @@ Defaults: message `STREAM(2/2)`, service `RPC(4/4)`, action `ACTION(8/8)`. Broke
 
 ## Web console (`console/`)
 
-Optional monitoring UI for broker status, topic traffic, event logs, **live topology**, and an offline **ROS 2 bridge YAML routes** editor. With the `console` feature (default), the broker serves an **embedded** static UI on `0.0.0.0:15771` after you build assets once.
+Optional monitoring UI for broker status, topic traffic, event logs, **live topology**, an offline **ROS 2 bridge YAML routes** editor, and a **LIVE** tab for WHEP WebRTC playback from `rbus_webrtc`. With the `console` feature (default), the broker serves an **embedded** static UI on `0.0.0.0:15771` after you build assets once.
 
 **Development (hot reload — preferred):**
 
@@ -330,7 +330,7 @@ cargo run --bin robot_bus_broker
 
 `assets/console/` is **build output** (not committed). CI and release jobs run `just console` (or equivalent) before compiling with the `console` feature.
 
-Wired to the broker's same-port monitoring API: `GET /api/v1/status`, `GET /api/v1/topics`, `GET /api/v1/services`, `GET /api/v1/actions`, `GET /api/v1/topology`, `SSE /api/v1/events`. Topology uses best-effort registration from `Node` create_publisher/subscription; the Routes tab edits YAML offline (does not hot-apply a running bridge). The frontend source lives in `console/`; only the generated static files are compiled into binaries with the `console` feature.
+Wired to the broker's same-port monitoring API: `GET /api/v1/status`, `GET /api/v1/topics`, `GET /api/v1/services`, `GET /api/v1/actions`, `GET /api/v1/topology`, `SSE /api/v1/events`. Topology uses best-effort registration from `Node` create_publisher/subscription; the Routes tab edits YAML offline (does not hot-apply a running bridge). The **LIVE** tab connects directly to a `rbus_webrtc` WHEP URL (default `http://127.0.0.1:8090/whep`; CORS-enabled on the node). The frontend source lives in `console/`; only the generated static files are compiled into binaries with the `console` feature.
 
 ## gRPC / gRPC-Web gateway
 
@@ -455,6 +455,28 @@ cargo install robot-bus --bin rbus_usb_camera
 rbus_usb_camera --list-devices
 rbus_usb_camera --print-example-config > camera.yaml
 rbus_usb_camera --params camera.yaml
+```
+
+### WebRTC / WHEP (`rbus_webrtc`)
+
+Subscribes to configurable `sensor_msgs/Image`, `foxglove_msgs/RawAudio` (`pcm-s16`), and optional raw **data** topics, then serves a **WHEP** livestream (H.264 + Opus + DataChannels). Image→H.264 reuses the same FFmpeg `FrameEncoder` as `rbus_image_encoder`. Feature `webrtc` is **off by default** (needs FFmpeg + libopus).
+
+Watch in Console → **LIVE** (preferred), or open the node's demo page at `http://<host>:8090/`.
+
+```bash
+# macOS
+brew install ffmpeg opus
+# Debian/Ubuntu
+sudo apt install ffmpeg libavcodec-dev libavformat-dev libavutil-dev \
+  libswscale-dev libswresample-dev libavdevice-dev libavfilter-dev libopus-dev
+
+cargo build --features webrtc --bin rbus_webrtc
+# or: cargo install robot-bus --features webrtc --bin rbus_webrtc
+
+rbus_webrtc --print-example-config > webrtc.yaml
+# Typical pipeline: rbus_usb_camera (+ optional rbus_audio_capture) → rbus_webrtc
+rbus_webrtc --params webrtc.yaml
+# Console LIVE → WHEP URL http://127.0.0.1:8090/whep → Connect
 ```
 
 ### Xbox joy (`rbus_xbox_joy`)

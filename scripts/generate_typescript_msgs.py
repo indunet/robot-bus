@@ -22,6 +22,7 @@ import re
 import shutil
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -73,12 +74,13 @@ def ensure_protoc_version(protoc: str) -> None:
         )
 
 
-def find_protoc_gen_ts() -> Path:
-    candidate = TS_ROOT / "node_modules" / ".bin" / "protoc-gen-ts"
-    if candidate.is_file() or candidate.with_suffix(".cmd").is_file():
-        return candidate
+def find_protoc_gen_ts_js() -> Path:
+    """Resolve the Node entry for @protobuf-ts/plugin (the real plugin script)."""
+    js = TS_ROOT / "node_modules" / "@protobuf-ts" / "plugin" / "bin" / "protoc-gen-ts"
+    if js.is_file():
+        return js.resolve()
     raise SystemExit(
-        f"error: {candidate} not found.\n"
+        f"error: {js} not found.\n"
         f"  Run: cd bindings/typescript && npm install"
     )
 
@@ -93,7 +95,7 @@ def clear_generated() -> None:
     OUT_ROOT.mkdir(parents=True, exist_ok=True)
 
 
-def run_protoc(protos: list[Path], plugin: Path) -> None:
+def _protoc_cmd(protos: list[Path], *, plugin: Path | None) -> list[str]:
     # client_generic → usable with GrpcWebFetchTransport / RpcTransport.
     ts_opt = ",".join(
         [
@@ -107,12 +109,51 @@ def run_protoc(protos: list[Path], plugin: Path) -> None:
     )
     cmd = [
         PROTOC,
-        f"--plugin=protoc-gen-ts={plugin}",
         f"--proto_path={PROTO_ROOT}",
         f"--ts_out={ts_opt}:{OUT_ROOT}",
         *[str(p) for p in protos],
     ]
-    subprocess.run(cmd, check=True)
+    if plugin is not None:
+        cmd.insert(1, f"--plugin=protoc-gen-ts={plugin}")
+    return cmd
+
+
+def _run_protoc_windows(protos: list[Path], js_plugin: Path) -> None:
+    """Invoke protoc on Windows without ``--plugin=`` absolute paths.
+
+    protoc 35.1 on Windows uses CreateProcess EXACT_NAME for ``--plugin=name=path``,
+    which cannot run npm's Node shebang shim (error: ``%1 is not a valid Win32
+    application``). SEARCH_PATH mode runs ``cmd.exe /c protoc-gen-ts``, which
+    resolves ``.cmd`` via PATHEXT.
+
+    We do **not** put ``node_modules/.bin`` on PATH: that directory also has an
+    extensionless ``protoc-gen-ts`` shim that can be preferred and fail the same
+    way. Instead, expose a temp dir containing only a ``.cmd`` that calls
+    ``node.exe`` with absolute paths.
+    """
+    node = shutil.which("node")
+    if not node:
+        raise SystemExit("error: node not found on PATH (required for protoc-gen-ts)")
+    node = str(Path(node).resolve())
+    js = str(js_plugin)
+
+    with tempfile.TemporaryDirectory(prefix="protoc-gen-ts-") as tmp:
+        wrap_dir = Path(tmp)
+        (wrap_dir / "protoc-gen-ts.cmd").write_bytes(
+            f'@echo off\r\n"{node}" "{js}" %*\r\n'.encode("ascii")
+        )
+        env = os.environ.copy()
+        env["PATH"] = str(wrap_dir) + os.pathsep + env.get("PATH", "")
+        subprocess.run(_protoc_cmd(protos, plugin=None), check=True, env=env)
+
+
+def run_protoc(protos: list[Path], js_plugin: Path) -> None:
+    if sys.platform == "win32":
+        _run_protoc_windows(protos, js_plugin)
+        return
+
+    # Unix: shebang works with EXACT_NAME; pin the script path.
+    subprocess.run(_protoc_cmd(protos, plugin=js_plugin), check=True)
 
 
 def write_index() -> None:
@@ -147,7 +188,7 @@ def main() -> int:
         return 1
 
     ensure_protoc_version(PROTOC)
-    plugin = find_protoc_gen_ts()
+    js_plugin = find_protoc_gen_ts_js()
     protos = collect_protos()
     if not protos:
         print("error: no proto files found", file=sys.stderr)
@@ -155,7 +196,7 @@ def main() -> int:
 
     clear_generated()
     print(f"{PROTOC} ({protoc_version(PROTOC)}) -> {len(protos)} files ...")
-    run_protoc(protos, plugin)
+    run_protoc(protos, js_plugin)
     write_index()
     print(f"wrote TypeScript stubs under {OUT_ROOT}")
     return 0

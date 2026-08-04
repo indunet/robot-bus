@@ -309,7 +309,7 @@ pub_.set_high_water_mark(HighWaterMark { snd: 10, rcv: 10 })?;
 
 ## Web 控制台（`console/`）
 
-可选监控前端：查看 broker 状态、topic 流量、事件日志、**实时拓扑（Topology）**与 **ROS 2 桥 YAML 路由编辑（Routes）**。开启 `console` feature（默认）时，先构建一次静态资源后，broker 在 `0.0.0.0:15771` 提供**嵌入式** UI。
+可选监控前端：查看 broker 状态、topic 流量、事件日志、**实时拓扑（Topology）**、**ROS 2 桥 YAML 路由编辑（Routes）**，以及通过 WHEP 播放 `rbus_webrtc` 的 **LIVE** 页。开启 `console` feature（默认）时，先构建一次静态资源后，broker 在 `0.0.0.0:15771` 提供**嵌入式** UI。
 
 **开发（热更新，推荐）：**
 
@@ -332,7 +332,7 @@ cargo run --bin robot_bus_broker
 
 `assets/console/` 是**构建产物**（不提交）。CI / 发布在带 `console` feature 编译前会先生成该目录。
 
-已对接 broker 同端口监控 API：`GET /api/v1/status`、`GET /api/v1/topics`、`GET /api/v1/services`、`GET /api/v1/actions`、`GET /api/v1/topology`、`SSE /api/v1/events`。Topology 依赖 `Node` 创建 publisher/subscription 时的 best-effort 登记；Routes 页为离线 YAML 编辑（不热更新运行中的桥）。前端源码在 `console/`；只有生成的静态文件会编进带 `console` feature 的二进制。
+已对接 broker 同端口监控 API：`GET /api/v1/status`、`GET /api/v1/topics`、`GET /api/v1/services`、`GET /api/v1/actions`、`GET /api/v1/topology`、`SSE /api/v1/events`。Topology 依赖 `Node` 创建 publisher/subscription 时的 best-effort 登记；Routes 页为离线 YAML 编辑（不热更新运行中的桥）。**LIVE** 页直接连接 `rbus_webrtc` 的 WHEP 地址（默认 `http://127.0.0.1:8090/whep`；节点已开 CORS）。前端源码在 `console/`；只有生成的静态文件会编进带 `console` feature 的二进制。
 
 ## gRPC / gRPC-Web 网关
 
@@ -456,6 +456,28 @@ cargo install robot-bus --bin rbus_usb_camera
 rbus_usb_camera --list-devices
 rbus_usb_camera --print-example-config > camera.yaml
 rbus_usb_camera --params camera.yaml
+```
+
+### WebRTC / WHEP（`rbus_webrtc`）
+
+订阅可配置的 `sensor_msgs/Image`、`foxglove_msgs/RawAudio`（`pcm-s16`）以及可选的 raw **数据**话题，对外提供 **WHEP** 直播（H.264 + Opus + DataChannel）。Image→H.264 复用与 `rbus_image_encoder` 相同的 FFmpeg `FrameEncoder`。feature `webrtc` **默认关闭**（需要 FFmpeg + libopus）。
+
+优先在 Console → **LIVE** 观看；也可打开节点自带 demo：`http://<host>:8090/`。
+
+```bash
+# macOS
+brew install ffmpeg opus
+# Debian/Ubuntu
+sudo apt install ffmpeg libavcodec-dev libavformat-dev libavutil-dev \
+  libswscale-dev libswresample-dev libavdevice-dev libavfilter-dev libopus-dev
+
+cargo build --features webrtc --bin rbus_webrtc
+# 或：cargo install robot-bus --features webrtc --bin rbus_webrtc
+
+rbus_webrtc --print-example-config > webrtc.yaml
+# 典型流水线：rbus_usb_camera（+ 可选 rbus_audio_capture）→ rbus_webrtc
+rbus_webrtc --params webrtc.yaml
+# Console LIVE → WHEP URL http://127.0.0.1:8090/whep → 连接
 ```
 
 ### Xbox Joy（`rbus_xbox_joy`）

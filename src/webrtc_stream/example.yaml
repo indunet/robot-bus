@@ -1,0 +1,24 @@
+# Example parameters for rbus_webrtc.
+# rbus_webrtc --print-example-config > webrtc.yaml
+# rbus_webrtc --params webrtc.yaml
+#
+# Watch in Console → LIVE with WHEP URL http://127.0.0.1:8090/whep
+# (or open http://127.0.0.1:8090/ for the built-in demo page).
+
+ros__parameters:
+  image_topic: /camera/image_raw
+  audio_topic: /audio/mic
+  # Comma-separated topic names (empty = no DataChannels).
+  data_topics: ""
+  listen: "0.0.0.0:8090"
+  # Video encode (FrameEncoder / FFmpeg H.264)
+  bitrate: 2000000
+  gop_size: 30
+  fps: 30
+  encoder: ""
+  width: 0
+  height: 0
+  # Audio → Opus (sample_rate must divide 48000: 8000/16000/24000/48000)
+  sample_rate: 16000
+  channels: 1
+  opus_bitrate: 32000

@@ -62,6 +62,18 @@ console = [
 image-encoder = ["dep:ffmpeg-next", "dep:env_logger"]
 # H.264/H.265 CompressedVideo → Image (`rbus_image_decoder`). Needs system FFmpeg.
 image-decoder = ["dep:ffmpeg-next", "dep:env_logger"]
+# Image/RawAudio/data topics → self-hosted WHEP (`rbus_webrtc`). Needs FFmpeg + libopus.
+webrtc = [
+    "image-encoder",
+    "dep:webrtc",
+    "dep:opus",
+    "dep:bytes",
+    "dep:tokio",
+    "dep:axum",
+    "dep:tower-http",
+    "dep:http",
+    "dep:env_logger",
+]
 # Microphone → RawAudio (`rbus_audio_capture`). Needs audio stack (e.g. ALSA headers on Linux).
 audio-capture = ["dep:cpal", "dep:env_logger"]
 # RawAudio → speaker (`rbus_audio_play`).
@@ -88,6 +100,7 @@ anyhow = "1"
 rclrs = { version = "0.7", optional = true }
 rosidl_runtime_rs = { version = "0.6", optional = true }
 axum = { version = "0.8", optional = true, default-features = false, features = ["http1", "tokio", "query", "json"] }
+bytes = { version = "1", optional = true }
 clap = { version = "4", features = ["derive"] }
 cpal = { version = "0.15", optional = true }
 env_logger = { version = "0.11", optional = true }
@@ -99,6 +112,7 @@ http = { version = "1", optional = true }
 log = "0.4"
 mime_guess = { version = "2", optional = true }
 nokhwa = { version = "0.10", optional = true, default-features = false, features = ["input-native", "output-threaded"] }
+opus = { version = "0.3", optional = true }
 prost = "0.14"
 prost-types = "0.14"
 pyo3 = { version = "0.25", optional = true, features = ["abi3-py39"] }
@@ -117,6 +131,7 @@ tower-http = { version = "0.6", optional = true, features = ["cors"] }
 ureq = { version = "2", default-features = false, features = ["json"] }
 urdf-rs = { version = "0.9", optional = true }
 uuid = { version = "1", features = ["v4"] }
+webrtc = { version = "0.12", optional = true }
 zmq = "0.10"
 
 [dev-dependencies]
@@ -172,6 +187,11 @@ required-features = ["image-encoder"]
 name = "rbus_image_decoder"
 path = "src/bin/rbus_image_decoder.rs"
 required-features = ["image-decoder"]
+
+[[bin]]
+name = "rbus_webrtc"
+path = "src/bin/rbus_webrtc.rs"
+required-features = ["webrtc"]
 
 [[bin]]
 name = "rbus_audio_capture"

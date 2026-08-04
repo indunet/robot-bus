@@ -34,6 +34,8 @@ const en = {
   navRoutesShort: 'RTE',
   navVisualize: 'VISUALIZE',
   navVisualizeShort: 'VIZ',
+  navLive: 'LIVE',
+  navLiveShort: 'LIVE',
 
   metricMsgS: 'MSG/S',
   metricBw: 'BW',
@@ -194,6 +196,18 @@ const en = {
   vizConnecting: 'connecting',
   vizError: 'subscribe error',
   vizOpen: 'Visualize',
+
+  liveTitle: 'LIVE',
+  liveSub: 'WHEP WebRTC playback from rbus_webrtc',
+  liveWhepUrl: 'WHEP URL',
+  liveConnect: 'CONNECT',
+  liveDisconnect: 'DISCONNECT',
+  liveStatusIdle: 'idle',
+  liveStatusConnecting: 'connecting',
+  liveStatusConnected: 'connected',
+  liveStatusFailed: 'failed',
+  liveDataTitle: 'DATA CHANNELS',
+  liveDataEmpty: 'No DataChannel messages yet. Configure data_topics on rbus_webrtc.',
 } as const
 
 const zh: Record<MessageKey, string> = {
@@ -213,6 +227,8 @@ const zh: Record<MessageKey, string> = {
   navRoutesShort: '路由',
   navVisualize: '可视化',
   navVisualizeShort: '可视',
+  navLive: '直播',
+  navLiveShort: '直播',
 
   metricMsgS: 'MSG/S',
   metricBw: '带宽',
@@ -371,6 +387,18 @@ const zh: Record<MessageKey, string> = {
   vizConnecting: '连接中',
   vizError: '订阅失败',
   vizOpen: '可视化',
+
+  liveTitle: '直播',
+  liveSub: '通过 WHEP 播放 rbus_webrtc 直播',
+  liveWhepUrl: 'WHEP 地址',
+  liveConnect: '连接',
+  liveDisconnect: '断开',
+  liveStatusIdle: '空闲',
+  liveStatusConnecting: '连接中',
+  liveStatusConnected: '已连接',
+  liveStatusFailed: '失败',
+  liveDataTitle: '数据通道',
+  liveDataEmpty: '暂无 DataChannel 消息。请在 rbus_webrtc 配置 data_topics。',
 }
 
 const catalogs: Record<Locale, Record<MessageKey, string>> = { en, zh }

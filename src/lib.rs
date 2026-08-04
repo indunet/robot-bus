@@ -39,6 +39,9 @@ pub mod image_encoder;
 #[cfg(feature = "image-decoder")]
 pub mod image_decoder;
 
+#[cfg(feature = "webrtc")]
+pub mod webrtc_stream;
+
 #[cfg(feature = "audio-capture")]
 pub mod audio_capture;
 

@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>robot-bus WHEP demo</title>
+  <style>
+    body { font-family: ui-sans-serif, system-ui, sans-serif; margin: 1.5rem; background: #0e1012; color: #e8eaed; }
+    input { width: min(36rem, 100%); padding: 0.4rem 0.6rem; background: #1a1d21; border: 1px solid #2a2f36; color: inherit; }
+    button { margin-left: 0.5rem; padding: 0.4rem 0.8rem; background: #1a9eaa; border: none; color: #041016; cursor: pointer; font-weight: 600; }
+    button:disabled { opacity: 0.5; cursor: default; }
+    video { display: block; width: min(720px, 100%); background: #000; margin-top: 1rem; }
+    #log { margin-top: 1rem; font-family: ui-monospace, monospace; font-size: 12px; white-space: pre-wrap; max-height: 12rem; overflow: auto; background: #15181c; padding: 0.75rem; }
+    .row { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; }
+    #status { color: #8b949e; font-size: 0.875rem; }
+  </style>
+</head>
+<body>
+  <h1>robot-bus WHEP</h1>
+  <p>Prefer the Console <strong>LIVE</strong> tab. This page is a minimal fallback.</p>
+  <div class="row">
+    <input id="url" value="/whep" />
+    <button id="connect">Connect</button>
+    <button id="disconnect" disabled>Disconnect</button>
+    <span id="status">idle</span>
+  </div>
+  <video id="video" autoplay playsinline controls></video>
+  <div id="log"></div>
+  <script>
+    const video = document.getElementById('video');
+    const logEl = document.getElementById('log');
+    const statusEl = document.getElementById('status');
+    let pc = null;
+    let resourceUrl = null;
+
+    function log(msg) {
+      logEl.textContent += msg + '\n';
+      logEl.scrollTop = logEl.scrollHeight;
+    }
+
+    function setStatus(s) { statusEl.textContent = s; }
+
+    document.getElementById('connect').onclick = async () => {
+      const whepUrl = document.getElementById('url').value.trim();
+      if (!whepUrl) return;
+      document.getElementById('connect').disabled = true;
+      document.getElementById('disconnect').disabled = false;
+      setStatus('connecting');
+      try {
+        pc = new RTCPeerConnection({ iceServers: [] });
+        const stream = new MediaStream();
+        video.srcObject = stream;
+        pc.ontrack = (ev) => {
+          ev.streams[0]?.getTracks().forEach((t) => stream.addTrack(t));
+          if (ev.track) stream.addTrack(ev.track);
+        };
+        pc.ondatachannel = (ev) => {
+          const dc = ev.channel;
+          log('datachannel open: ' + dc.label);
+          dc.onmessage = (m) => {
+            const data = m.data;
+            if (typeof data === 'string') log(dc.label + ': ' + data);
+            else log(dc.label + ': ' + data.byteLength + ' bytes');
+          };
+        };
+        pc.addTransceiver('video', { direction: 'recvonly' });
+        pc.addTransceiver('audio', { direction: 'recvonly' });
+        const offer = await pc.createOffer();
+        await pc.setLocalDescription(offer);
+        await new Promise((resolve) => {
+          if (pc.iceGatheringState === 'complete') resolve();
+          else pc.onicegatheringstatechange = () => {
+            if (pc.iceGatheringState === 'complete') resolve();
+          };
+        });
+        const resp = await fetch(whepUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/sdp' },
+          body: pc.localDescription.sdp,
+        });
+        if (!resp.ok) throw new Error('WHEP POST ' + resp.status + ' ' + await resp.text());
+        resourceUrl = resp.headers.get('Location');
+        const answer = await resp.text();
+        await pc.setRemoteDescription({ type: 'answer', sdp: answer });
+        setStatus('connected');
+        log('connected');
+      } catch (e) {
+        setStatus('failed');
+        log(String(e));
+        document.getElementById('connect').disabled = false;
+        document.getElementById('disconnect').disabled = true;
+      }
+    };
+
+    document.getElementById('disconnect').onclick = async () => {
+      if (resourceUrl) {
+        try { await fetch(resourceUrl, { method: 'DELETE' }); } catch (_) {}
+      }
+      resourceUrl = null;
+      if (pc) { pc.close(); pc = null; }
+      video.srcObject = null;
+      document.getElementById('connect').disabled = false;
+      document.getElementById('disconnect').disabled = true;
+      setStatus('idle');
+    };
+  </script>
+</body>
+</html>

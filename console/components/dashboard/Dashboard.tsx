@@ -26,6 +26,7 @@ import EventStream from './EventStream'
 import TopologyView from './TopologyView'
 import RoutesEditor from './RoutesEditor'
 import VisualizeWorkspace from './VisualizeWorkspace'
+import LiveView from './LiveView'
 import ThroughputChart, {
   ServiceRateChart,
   ActionRateChart,
@@ -141,6 +142,7 @@ export default function Dashboard() {
               onConsumedInitial={() => setVizTopic(null)}
             />
           )}
+          {activeTab === 'live' && <LiveView />}
           {activeTab === 'topics' && <TopicTable topics={topics} onVisualize={openVisualize} />}
           {activeTab === 'services' && (
             <ServiceActionTable services={services} actions={actions} mode="services" />
