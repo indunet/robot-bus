@@ -36,7 +36,7 @@ name = "robot_bus"
 crate-type = ["cdylib", "rlib"]
 
 [features]
-default = ["grpc", "console", "image-encoder", "image-decoder", "audio-capture", "audio-play", "usb-camera", "xbox-joy", "static-transform-publisher", "robot-state-publisher"]
+default = ["grpc", "console", "image-encoder", "image-decoder", "audio-capture", "audio-play", "usb-camera", "xbox-joy", "static-transform-publisher", "robot-state-publisher", "apriltag-detector"]
 # Enable with maturin / `cargo build --features extension-module` for the Python module.
 extension-module = ["dep:pyo3", "pyo3/extension-module"]
 # gRPC / gRPC-Web gateway (started with RobotBusBroker; on by default).
@@ -80,6 +80,8 @@ audio-capture = ["dep:cpal", "dep:env_logger"]
 audio-play = ["dep:cpal", "dep:env_logger"]
 # USB / webcam → sensor_msgs/Image rgb8 (`rbus_usb_camera`).
 usb-camera = ["dep:nokhwa", "dep:env_logger"]
+# Image → AprilTagDetectionArray (`rbus_apriltag_detector`). Links AprilTag C lib via apriltag crate.
+apriltag-detector = ["dep:apriltag", "dep:env_logger"]
 # USB Xbox-layout joy → XboxJoy + rumble (`rbus_xbox_joy`).
 xbox-joy = ["dep:gilrs", "dep:env_logger"]
 # EtherCAT / CiA402 joints → JointState + JointCommand (`rbus_ethercat_joint`).
@@ -97,6 +99,7 @@ ros2-shim = ["ros2", "rclrs/use_ros_shim", "rosidl_runtime_rs/use_ros_shim"]
 
 [dependencies]
 anyhow = "1"
+apriltag = { version = "0.4", optional = true }
 rclrs = { version = "0.7", optional = true }
 rosidl_runtime_rs = { version = "0.6", optional = true }
 axum = { version = "0.8", optional = true, default-features = false, features = ["http1", "tokio", "query", "json"] }
@@ -207,6 +210,11 @@ required-features = ["audio-play"]
 name = "rbus_usb_camera"
 path = "src/bin/rbus_usb_camera.rs"
 required-features = ["usb-camera"]
+
+[[bin]]
+name = "rbus_apriltag_detector"
+path = "src/bin/rbus_apriltag_detector.rs"
+required-features = ["apriltag-detector"]
 
 [[bin]]
 name = "rbus_xbox_joy"

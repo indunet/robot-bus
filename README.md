@@ -386,6 +386,7 @@ cargo install robot-bus --bin rbus_image_decoder
 cargo install robot-bus --bin rbus_audio_capture
 cargo install robot-bus --bin rbus_audio_play
 cargo install robot-bus --bin rbus_usb_camera
+cargo install robot-bus --bin rbus_apriltag_detector
 cargo install robot-bus --bin rbus_xbox_joy
 cargo install robot-bus --bin rbus_static_transform_publisher
 cargo install robot-bus --bin rbus_robot_state_publisher
@@ -455,6 +456,23 @@ cargo install robot-bus --bin rbus_usb_camera
 rbus_usb_camera --list-devices
 rbus_usb_camera --print-example-config > camera.yaml
 rbus_usb_camera --params camera.yaml
+```
+
+### AprilTag detector (`rbus_apriltag_detector`)
+
+Subscribes to `sensor_msgs/Image` (`rgb8` / `bgr8` / `mono8`) and publishes `apriltag_msgs/AprilTagDetectionArray` (2D geometry + quality; no pose / TF). Uses the [apriltag](https://crates.io/crates/apriltag) crate (official AprilTag C library, statically linked by default). Defaults: `tag36h11` on `/camera/image_raw` → `/apriltag/detections`. Feature `apriltag-detector` (default on). Needs a C toolchain + CMake to build the bundled AprilTag sources.
+
+```bash
+# macOS (Xcode CLT / cmake)
+xcode-select --install
+brew install cmake
+# Debian/Ubuntu
+sudo apt install build-essential cmake
+
+cargo install robot-bus --bin rbus_apriltag_detector
+rbus_apriltag_detector --print-example-config > apriltag.yaml
+# Pipeline: rbus_usb_camera → rbus_apriltag_detector
+rbus_apriltag_detector --params apriltag.yaml
 ```
 
 ### WebRTC / WHEP (`rbus_webrtc`)

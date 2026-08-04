@@ -388,6 +388,7 @@ cargo install robot-bus --bin rbus_image_decoder
 cargo install robot-bus --bin rbus_audio_capture
 cargo install robot-bus --bin rbus_audio_play
 cargo install robot-bus --bin rbus_usb_camera
+cargo install robot-bus --bin rbus_apriltag_detector
 cargo install robot-bus --bin rbus_xbox_joy
 cargo install robot-bus --bin rbus_static_transform_publisher
 cargo install robot-bus --bin rbus_robot_state_publisher
@@ -456,6 +457,23 @@ cargo install robot-bus --bin rbus_usb_camera
 rbus_usb_camera --list-devices
 rbus_usb_camera --print-example-config > camera.yaml
 rbus_usb_camera --params camera.yaml
+```
+
+### AprilTag 检测（`rbus_apriltag_detector`）
+
+订阅 `sensor_msgs/Image`（`rgb8` / `bgr8` / `mono8`），发布 `apriltag_msgs/AprilTagDetectionArray`（二维几何与质量字段；不含位姿 / TF）。依赖 [apriltag](https://crates.io/crates/apriltag) crate（官方 AprilTag C 库，默认静态链接）。默认：`tag36h11`，`/camera/image_raw` → `/apriltag/detections`。feature `apriltag-detector`（默认开）。编译捆绑的 AprilTag 源码需要 C 工具链与 CMake。
+
+```bash
+# macOS（Xcode CLT / cmake）
+xcode-select --install
+brew install cmake
+# Debian/Ubuntu
+sudo apt install build-essential cmake
+
+cargo install robot-bus --bin rbus_apriltag_detector
+rbus_apriltag_detector --print-example-config > apriltag.yaml
+# 典型链路：rbus_usb_camera → rbus_apriltag_detector
+rbus_apriltag_detector --params apriltag.yaml
 ```
 
 ### WebRTC / WHEP（`rbus_webrtc`）

@@ -52,6 +52,9 @@ pub mod audio_play;
 #[cfg(feature = "usb-camera")]
 pub mod usb_camera;
 
+#[cfg(feature = "apriltag-detector")]
+pub mod apriltag_detector;
+
 #[cfg(feature = "xbox-joy")]
 pub mod xbox_joy;
 

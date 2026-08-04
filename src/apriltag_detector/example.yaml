@@ -1,0 +1,20 @@
+# Example parameters for rbus_apriltag_detector.
+# rbus_apriltag_detector --print-example-config > apriltag.yaml
+# rbus_apriltag_detector --params apriltag.yaml
+
+ros__parameters:
+  input_topic: /camera/image_raw
+  output_topic: /apriltag/detections
+  # tag16h5 | tag25h9 | tag36h11 | tagCircle21h7 | tagCircle49h12
+  # | tagStandard41h12 | tagStandard52h13 | tagCustom48h12
+  family: tag36h11
+  # Max Hamming distance (bit errors) corrected when matching codes.
+  bits_corrected: 2
+  # Quad detection decimation (>1 is faster, slightly less accurate).
+  decimate: 2.0
+  # Gaussian blur sigma for quad detection (0 = off).
+  blur: 0.0
+  refine_edges: true
+  sharpening: 0.25
+  # Detector worker threads (1 is fine for most cameras).
+  threads: 1
