@@ -3,19 +3,18 @@
 import { type TopicInfo, fmtBytes, fmtNum } from '@/lib/mock-data'
 import { PanelHeader } from './BrokerOverview'
 import { LineChart, Line, ResponsiveContainer } from 'recharts'
-import { Eye, Radio } from 'lucide-react'
+import { Radio } from 'lucide-react'
 import { fmtAgeLocalized, useI18n } from '@/lib/i18n'
 
 interface Props {
   topics: TopicInfo[]
   /** Cap list height (overview split with chart). */
   maxBodyHeight?: string
-  onVisualize?: (topic: string) => void
 }
 
-const COLS = 'grid-cols-[1fr_80px_96px_80px_56px_56px_96px_40px]'
+const COLS = 'grid-cols-[1fr_80px_96px_80px_56px_56px_96px]'
 
-export default function TopicTable({ topics, maxBodyHeight, onVisualize }: Props) {
+export default function TopicTable({ topics, maxBodyHeight }: Props) {
   const { t } = useI18n()
   const sorted = [...topics].sort((a, b) => b.msgPerSec - a.msgPerSec)
   const headers = [
@@ -26,7 +25,6 @@ export default function TopicTable({ topics, maxBodyHeight, onVisualize }: Props
     t('colPub'),
     t('colSub'),
     t('colLastSeen'),
-    '',
   ]
 
   return (
@@ -38,7 +36,7 @@ export default function TopicTable({ topics, maxBodyHeight, onVisualize }: Props
       />
 
       <div className="overflow-x-auto flex-1 min-h-0">
-        <div className="min-w-[760px] h-full flex flex-col">
+        <div className="min-w-[720px] h-full flex flex-col">
           <div className={`grid ${COLS} items-center px-3 h-8 border-b border-bus-border bg-bus-bg shrink-0`}>
             {headers.map((h, i) => (
               <span
@@ -60,7 +58,7 @@ export default function TopicTable({ topics, maxBodyHeight, onVisualize }: Props
               </div>
             ) : (
               sorted.map((topic) => (
-                <TopicRow key={topic.name} topic={topic} onVisualize={onVisualize} />
+                <TopicRow key={topic.name} topic={topic} />
               ))
             )}
           </div>
@@ -70,13 +68,7 @@ export default function TopicTable({ topics, maxBodyHeight, onVisualize }: Props
   )
 }
 
-function TopicRow({
-  topic,
-  onVisualize,
-}: {
-  topic: TopicInfo
-  onVisualize?: (topic: string) => void
-}) {
+function TopicRow({ topic }: { topic: TopicInfo }) {
   const { t } = useI18n()
   const isIdle = topic.msgPerSec === 0
   const isHot = topic.msgPerSec > 80
@@ -142,19 +134,6 @@ function TopicRow({
       <span className={`font-mono text-[13px] tabular-nums text-right ${isIdle ? 'text-bus-amber' : 'text-bus-muted'}`}>
         {fmtAgeLocalized(topic.lastSeen, t)}
       </span>
-
-      <div className="flex justify-end">
-        {onVisualize && (
-          <button
-            type="button"
-            onClick={() => onVisualize(topic.name)}
-            className="p-1 text-bus-muted hover:text-bus-cyan"
-            title={t('vizOpen')}
-          >
-            <Eye size={14} />
-          </button>
-        )}
-      </div>
     </div>
   )
 }

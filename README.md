@@ -41,7 +41,7 @@ Rust core stays at the repo root (`Cargo.toml` + `src/`). Language SDKs live und
 | [`src/`](src/), `Cargo.toml` | Rust core (crates.io / maturin entry) |
 | [`proto/`](proto/) | Contract source: ROS-style Protobuf → generated code for Rust / bindings |
 | [`bindings/`](bindings/) | Language SDKs (Python, TypeScript, C++, Java, Android) |
-| [`console/`](console/) | Broker monitoring console (Overview / Topics / Topology; build → `assets/console/`) |
+| [`console/`](console/) | Broker monitoring console (Overview / Topics / Services / Actions / Topology / Logs; build → `assets/console/`) |
 | sibling [`robot-bus-tools`](https://github.com/indunet/robot-bus-tools) | `rbus_*` nodes, TF library + language extensions, Robot Bus Studio |
 | [`benches/`](benches/) | Perf harnesses: [`robot_bus_perf/`](benches/robot_bus_perf/) (`just perf`), [`ros2_perf/`](benches/ros2_perf/) (`just perf-ros2`) |
 | [`tests/`](tests/) | Rust integration tests + cross-language interop (`just test-interop`) |
@@ -308,7 +308,7 @@ Defaults: message `STREAM(2/2)`, service `RPC(4/4)`, action `ACTION(8/8)`. Broke
 
 ## Web console (`console/`)
 
-Optional monitoring UI for broker status, topic traffic, event logs, **live topology**, a **Flow** canvas for config-driven plumbing (`rbus_*` + ROS 2 bridge), and a **LIVE** tab for WHEP WebRTC playback from `rbus_webrtc`. With the `console` feature (default), the broker serves an **embedded** static UI on `0.0.0.0:15771` after you build assets once.
+Optional broker monitoring UI: Overview, Topics, Services, Actions, Topology, and event logs. With the `console` feature (default), the broker serves an **embedded** static UI on `0.0.0.0:15771` after you build assets once.
 
 **Development (hot reload — preferred):**
 
@@ -331,7 +331,7 @@ cargo run --bin robot_bus_broker
 
 `assets/console/` is **build output** (not committed). CI and release jobs run `just console` (or equivalent) before compiling with the `console` feature.
 
-Wired to the broker's same-port monitoring API: `GET /api/v1/status`, `GET /api/v1/topics`, `GET /api/v1/services`, `GET /api/v1/actions`, `GET /api/v1/topology`, `SSE /api/v1/events`. Topology uses best-effort registration from `Node` create_publisher/subscription. The **Flow** tab edits plumbing nodes and topic wires (export `flow.yaml` / launch commands; does not start processes or hot-apply a running bridge). Legacy Ros2Bridge YAML imports upgrade into a single `ros2_bridge` node. The **LIVE** tab connects directly to a `rbus_webrtc` WHEP URL (default `http://127.0.0.1:8090/whep`; CORS-enabled on the node). The frontend source lives in `console/`; only the generated static files are compiled into binaries with the `console` feature.
+Wired to the broker's same-port monitoring API: `GET /api/v1/status`, `GET /api/v1/topics`, `GET /api/v1/services`, `GET /api/v1/actions`, `GET /api/v1/topology`, `SSE /api/v1/events`. Topology uses best-effort registration from `Node` create_publisher/subscription. Domain visualizers, Flow, and LIVE / WHEP live in **[robot-bus-tools](https://github.com/indunet/robot-bus-tools)** Studio. The frontend source lives in `console/`; only the generated static files are compiled into binaries with the `console` feature.
 
 ## gRPC / gRPC-Web gateway
 

@@ -41,7 +41,7 @@ Rust 核心留在仓库根目录（`Cargo.toml` + `src/`）。各语言 SDK 放�
 | [`src/`](src/)、`Cargo.toml` | Rust 核心（crates.io / maturin 入口） |
 | [`proto/`](proto/) | 契约源：ROS 风格 Protobuf → Rust / bindings 生成代码 |
 | [`bindings/`](bindings/) | 语言 SDK（Python、TypeScript、C++、Java、Android） |
-| [`console/`](console/) | Web 监控控制台（产品 UI；构建产物同步到本地/CI 的 `assets/console/`，不入库） |
+| [`console/`](console/) | Broker 监控控制台（Overview / Topics / Services / Actions / Topology / Logs；构建产物 → `assets/console/`，不入库） |
 | [`benches/`](benches/) | 性能压测：[`robot_bus_perf/`](benches/robot_bus_perf/)（`just perf`）、[`ros2_perf/`](benches/ros2_perf/)（`just perf-ros2`） |
 | [`tests/`](tests/) | Rust 集成测试 + 跨语言互通（`just test-interop`） |
 | [`docs/`](docs/) | API 文档与生成的性能报告 |
@@ -309,7 +309,7 @@ pub_.set_high_water_mark(HighWaterMark { snd: 10, rcv: 10 })?;
 
 ## Web 控制台（`console/`）
 
-可选监控前端：查看 broker 状态、topic 流量、事件日志、**实时拓扑（Topology）**、**管道编排（Flow）**（`rbus_*` + ROS 2 bridge），以及通过 WHEP 播放 `rbus_webrtc` 的 **LIVE** 页。开启 `console` feature（默认）时，先构建一次静态资源后，broker 在 `0.0.0.0:15771` 提供**嵌入式** UI。
+可选 broker 监控前端：Overview、Topics、Services、Actions、Topology、事件日志。开启 `console` feature（默认）时，先构建一次静态资源后，broker 在 `0.0.0.0:15771` 提供**嵌入式** UI。
 
 **开发（热更新，推荐）：**
 
@@ -332,7 +332,7 @@ cargo run --bin robot_bus_broker
 
 `assets/console/` 是**构建产物**（不提交）。CI / 发布在带 `console` feature 编译前会先生成该目录。
 
-已对接 broker 同端口监控 API：`GET /api/v1/status`、`GET /api/v1/topics`、`GET /api/v1/services`、`GET /api/v1/actions`、`GET /api/v1/topology`、`SSE /api/v1/events`。Topology 依赖 `Node` 创建 publisher/subscription 时的 best-effort 登记。**Flow** 页编排管道节点与 topic 连线（导出 `flow.yaml` / 启动命令；不自动启停进程，也不热更新运行中的桥）。旧版纯 Ros2Bridge YAML 导入时会升格为单个 `ros2_bridge` 节点。**LIVE** 页直接连接 `rbus_webrtc` 的 WHEP 地址（默认 `http://127.0.0.1:8090/whep`；节点已开 CORS）。前端源码在 `console/`；只有生成的静态文件会编进带 `console` feature 的二进制。
+已对接 broker 同端口监控 API：`GET /api/v1/status`、`GET /api/v1/topics`、`GET /api/v1/services`、`GET /api/v1/actions`、`GET /api/v1/topology`、`SSE /api/v1/events`。Topology 依赖 `Node` 创建 publisher/subscription 时的 best-effort 登记。领域可视化、Flow、LIVE / WHEP 在同级仓库 **[robot-bus-tools](https://github.com/indunet/robot-bus-tools)** 的 Studio。前端源码在 `console/`；只有生成的静态文件会编进带 `console` feature 的二进制。
 
 ## gRPC / gRPC-Web 网关
 
