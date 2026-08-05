@@ -308,7 +308,6 @@ export default function TopologyView({ topology }: Props) {
           e: graph.wires.length,
         })}
       />
-      <p className="px-3 pb-2 font-mono text-[11px] text-bus-muted">{t('topologyHint')}</p>
       <div className="flex-1 min-h-0" style={{ height: 'calc(100vh - 160px)' }}>
         {empty ? (
           <div className="flex items-center justify-center h-full text-bus-muted font-mono text-xs">
