@@ -3,6 +3,7 @@
   <Product Id="*" Name="robot-bus" Language="1033" Version="$(var.ProductVersion)"
            Manufacturer="indunet" UpgradeCode="A1B2C3D4-E5F6-7890-ABCD-EF1234567890">
     <Package InstallerVersion="500" Compressed="yes" InstallScope="perMachine"
+             Platform="x64"
              Description="robot-bus C/C++ SDK and broker" />
     <MajorUpgrade DowngradeErrorMessage="A newer version of robot-bus is already installed." />
     <MediaTemplate EmbedCab="yes" />
@@ -22,16 +23,17 @@
       </Directory>
     </Directory>
 
-    <!-- Directory only on Component (not ComponentGroup) — avoids CNDL0062. -->
+    <!-- Directory only on Component (not ComponentGroup) — avoids CNDL0062.
+         Win64="yes" must match ProgramFiles64Folder (ICE80). -->
     <ComponentGroup Id="ProductComponents">
-      <Component Id="BrokerExe" Directory="BINDIR" Guid="*">
+      <Component Id="BrokerExe" Directory="BINDIR" Guid="*" Win64="yes">
         <File Id="robot_bus_broker" Source="$(var.StageDir)\bin\robot_bus_broker.exe" KeyPath="yes" />
         <Environment Id="Path" Name="PATH" Value="[BINDIR]" Permanent="no" Part="last" Action="set" System="yes" />
       </Component>
-      <Component Id="FfiDll" Directory="BINDIR" Guid="*">
+      <Component Id="FfiDll" Directory="BINDIR" Guid="*" Win64="yes">
         <File Id="robot_bus_dll" Source="$(var.StageDir)\bin\robot_bus.dll" KeyPath="yes" />
       </Component>
-      <Component Id="MsgsDll" Directory="BINDIR" Guid="*">
+      <Component Id="MsgsDll" Directory="BINDIR" Guid="*" Win64="yes">
         <File Id="robot_bus_msgs_dll" Source="$(var.StageDir)\bin\robot_bus_msgs.dll" KeyPath="yes" />
       </Component>
       <!-- Headers / lib / cmake come from heat.exe → ComponentGroup Harvested. -->

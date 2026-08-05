@@ -37,7 +37,10 @@ else
 EOF
 fi
 
-"$CANDLE" -dProductVersion="$VERSION" -dStageDir="$STAGE" -out "$WORK/" "$WXS" "$WORK/harvest.wxs"
+# -arch x64: ProgramFiles64Folder is a 64-bit directory; without this, candle
+# defaults to x86 and heat-harvested components stay 32-bit → ICE80 (LGHT0204).
+"$CANDLE" -arch x64 -dProductVersion="$VERSION" -dStageDir="$STAGE" \
+  -out "$WORK/" "$WXS" "$WORK/harvest.wxs"
 "$LIGHT" -out "$OUT_MSI" "$WORK"/*.wixobj
 
 echo "wrote $OUT_MSI"
