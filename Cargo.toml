@@ -36,7 +36,7 @@ name = "robot_bus"
 crate-type = ["cdylib", "rlib"]
 
 [features]
-default = ["grpc", "console", "image-encoder", "image-decoder", "audio-capture", "audio-play", "usb-camera", "xbox-joy", "static-transform-publisher", "robot-state-publisher", "apriltag-detector"]
+default = ["grpc", "console"]
 # Enable with maturin / `cargo build --features extension-module` for the Python module.
 extension-module = ["dep:pyo3", "pyo3/extension-module"]
 # gRPC / gRPC-Web gateway (started with RobotBusBroker; on by default).
@@ -57,40 +57,9 @@ console = [
     "dep:axum",
     "dep:rust-embed",
     "dep:mime_guess",
-]
-# Image → H.264/H.265 tool binary (`rbus_image_encoder`). Needs system FFmpeg.
-image-encoder = ["dep:ffmpeg-next", "dep:env_logger"]
-# H.264/H.265 CompressedVideo → Image (`rbus_image_decoder`). Needs system FFmpeg.
-image-decoder = ["dep:ffmpeg-next", "dep:env_logger"]
-# Image/RawAudio/data topics → self-hosted WHEP (`rbus_webrtc`). Needs FFmpeg + libopus.
-webrtc = [
-    "image-encoder",
-    "dep:webrtc",
-    "dep:opus",
-    "dep:bytes",
-    "dep:tokio",
-    "dep:axum",
     "dep:tower-http",
     "dep:http",
-    "dep:env_logger",
 ]
-# Microphone → RawAudio (`rbus_audio_capture`). Needs audio stack (e.g. ALSA headers on Linux).
-audio-capture = ["dep:cpal", "dep:env_logger"]
-# RawAudio → speaker (`rbus_audio_play`).
-audio-play = ["dep:cpal", "dep:env_logger"]
-# USB / webcam → sensor_msgs/Image rgb8 (`rbus_usb_camera`).
-usb-camera = ["dep:nokhwa", "dep:env_logger"]
-# Image → AprilTagDetectionArray (`rbus_apriltag_detector`). Links AprilTag C lib via apriltag crate.
-apriltag-detector = ["dep:apriltag", "dep:env_logger"]
-# USB Xbox-layout joy → XboxJoy + rumble (`rbus_xbox_joy`).
-xbox-joy = ["dep:gilrs", "dep:env_logger"]
-# EtherCAT / CiA402 joints → JointState + JointCommand (`rbus_ethercat_joint`).
-# Off by default (Linux NIC + CAP_NET_RAW for real hardware; use backend: mock otherwise).
-ethercat-joint = ["dep:ethercrab", "dep:env_logger", "dep:tokio"]
-# YAML static transforms → /tf_static (`rbus_static_transform_publisher`).
-static-transform-publisher = ["dep:env_logger"]
-# URDF + JointState → /tf + /tf_static (`rbus_robot_state_publisher`).
-robot-state-publisher = ["dep:urdf-rs", "dep:env_logger"]
 # In-process ROS 2 ↔ robot-bus topic/service/action bridge (requires sourced ROS + linking rcl).
 # Not enabled by default — keep core SDK / maturin builds free of ROS.
 ros2 = ["dep:rclrs", "dep:rosidl_runtime_rs", "dep:tokio"]
@@ -99,23 +68,13 @@ ros2-shim = ["ros2", "rclrs/use_ros_shim", "rosidl_runtime_rs/use_ros_shim"]
 
 [dependencies]
 anyhow = "1"
-apriltag = { version = "0.4", optional = true }
 rclrs = { version = "0.7", optional = true }
 rosidl_runtime_rs = { version = "0.6", optional = true }
 axum = { version = "0.8", optional = true, default-features = false, features = ["http1", "tokio", "query", "json"] }
-bytes = { version = "1", optional = true }
 clap = { version = "4", features = ["derive"] }
-cpal = { version = "0.15", optional = true }
-env_logger = { version = "0.11", optional = true }
-ethercrab = { version = "0.7", optional = true, default-features = true, features = ["std"] }
-ffmpeg-next = { version = "8", optional = true }
-gilrs = { version = "0.11", optional = true }
-glam = "0.30"
 http = { version = "1", optional = true }
 log = "0.4"
 mime_guess = { version = "2", optional = true }
-nokhwa = { version = "0.10", optional = true, default-features = false, features = ["input-native", "output-threaded"] }
-opus = { version = "0.3", optional = true }
 prost = "0.14"
 prost-types = "0.14"
 pyo3 = { version = "0.25", optional = true, features = ["abi3-py39"] }
@@ -132,9 +91,7 @@ tonic-prost = { version = "0.14", optional = true }
 tonic-web = { version = "0.14", optional = true }
 tower-http = { version = "0.6", optional = true, features = ["cors"] }
 ureq = { version = "2", default-features = false, features = ["json"] }
-urdf-rs = { version = "0.9", optional = true }
 uuid = { version = "1", features = ["v4"] }
-webrtc = { version = "0.12", optional = true }
 zmq = "0.10"
 
 [dev-dependencies]
@@ -180,61 +137,6 @@ path = "src/bin/rbus.rs"
 [[bin]]
 name = "robot_bus_interop"
 path = "src/bin/robot_bus_interop.rs"
-
-[[bin]]
-name = "rbus_image_encoder"
-path = "src/bin/rbus_image_encoder.rs"
-required-features = ["image-encoder"]
-
-[[bin]]
-name = "rbus_image_decoder"
-path = "src/bin/rbus_image_decoder.rs"
-required-features = ["image-decoder"]
-
-[[bin]]
-name = "rbus_webrtc"
-path = "src/bin/rbus_webrtc.rs"
-required-features = ["webrtc"]
-
-[[bin]]
-name = "rbus_audio_capture"
-path = "src/bin/rbus_audio_capture.rs"
-required-features = ["audio-capture"]
-
-[[bin]]
-name = "rbus_audio_play"
-path = "src/bin/rbus_audio_play.rs"
-required-features = ["audio-play"]
-
-[[bin]]
-name = "rbus_usb_camera"
-path = "src/bin/rbus_usb_camera.rs"
-required-features = ["usb-camera"]
-
-[[bin]]
-name = "rbus_apriltag_detector"
-path = "src/bin/rbus_apriltag_detector.rs"
-required-features = ["apriltag-detector"]
-
-[[bin]]
-name = "rbus_xbox_joy"
-path = "src/bin/rbus_xbox_joy.rs"
-required-features = ["xbox-joy"]
-
-[[bin]]
-name = "rbus_ethercat_joint"
-path = "src/bin/rbus_ethercat_joint.rs"
-required-features = ["ethercat-joint"]
-
-[[bin]]
-name = "rbus_static_transform_publisher"
-path = "src/bin/rbus_static_transform_publisher.rs"
-required-features = ["static-transform-publisher"]
-
-[[bin]]
-name = "rbus_robot_state_publisher"
-path = "src/bin/rbus_robot_state_publisher.rs"
-required-features = ["robot-state-publisher"]
 
 [[bin]]
 name = "robot_bus_perf"

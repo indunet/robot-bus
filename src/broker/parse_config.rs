@@ -271,8 +271,16 @@ pub fn parse_robot_bus_config(args: &[String]) -> Result<Option<RobotBusConfig>>
             "--no-console" => {
                 config.console.enabled = false;
             }
+            #[cfg(feature = "console")]
+            "--console-cors-origin" => {
+                i += 1;
+                config
+                    .console
+                    .cors_origins
+                    .push(require_arg(args, i, arg)?.to_string());
+            }
             #[cfg(not(feature = "console"))]
-            "--console-listen" | "--no-console" => {
+            "--console-listen" | "--no-console" | "--console-cors-origin" => {
                 bail!("{arg} requires the `console` feature");
             }
 
@@ -334,7 +342,8 @@ gRPC options (feature `grpc`, default on):\n  \
 --cors-origin ORIGIN           Allowed browser origin (repeatable)\n\n\
 Console options (feature `console`, default on):\n  \
 --console-listen HOST:PORT     Embedded Web UI listen address\n  \
---no-console                   Do not start the Web console\n\n\
+--no-console                   Do not start the Web console\n  \
+--console-cors-origin ORIGIN   Allow Studio/browser origin (repeatable)\n\n\
 --help, -h                     Show this help\n\n\
 Embed in code: robot_bus::RobotBusBroker::start(RobotBusConfig { ... }).\n"
 }

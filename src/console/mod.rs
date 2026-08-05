@@ -36,9 +36,10 @@ struct Assets;
 pub async fn serve_with_shutdown(
     listen: SocketAddr,
     state: Arc<ConsoleState>,
+    cors_origins: Vec<String>,
     shutdown: impl Future<Output = ()> + Send + 'static,
 ) -> Result<()> {
-    let app = Router::new()
+    let mut app = Router::new()
         .route("/api/v1/status", get(status))
         .route("/api/v1/topics/register", post(register_topic))
         .route("/api/v1/topics", get(topics))
@@ -51,6 +52,27 @@ pub async fn serve_with_shutdown(
         .route("/api/v1/events", get(events))
         .fallback(get(static_handler))
         .with_state(state);
+
+    if !cors_origins.is_empty() {
+        use tower_http::cors::{AllowOrigin, CorsLayer};
+        use axum::http::{HeaderValue, Method};
+        let origins: Vec<HeaderValue> = cors_origins
+            .iter()
+            .filter_map(|o| HeaderValue::from_str(o).ok())
+            .collect();
+        if !origins.is_empty() {
+            let cors = CorsLayer::new()
+                .allow_origin(AllowOrigin::list(origins))
+                .allow_methods([Method::GET, Method::POST, Method::OPTIONS])
+                .allow_headers([
+                    header::CONTENT_TYPE,
+                    header::ACCEPT,
+                    header::AUTHORIZATION,
+                ]);
+            app = app.layer(cors);
+            log::info!("robot_bus console CORS allowlist: {cors_origins:?}");
+        }
+    }
 
     let listener = TcpListener::bind(listen)
         .await

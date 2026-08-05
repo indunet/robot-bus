@@ -31,8 +31,6 @@ typedef struct RobotBusSingleThreadedExecutor RobotBusSingleThreadedExecutor;
 typedef struct RobotBusMultiThreadedExecutor RobotBusMultiThreadedExecutor;
 typedef struct RobotBusBroker RobotBusBroker;
 typedef struct RobotBusContext RobotBusContext;
-typedef struct RobotBusTfBuffer RobotBusTfBuffer;
-typedef struct RobotBusTfListener RobotBusTfListener;
 
 typedef struct RobotBusActionMessage {
   char *kind;
@@ -402,39 +400,6 @@ ROBOT_BUS_API void robot_bus_ros2_bridge_free(RobotBusRos2Bridge *bridge);
 ROBOT_BUS_API int robot_bus_ros2_bridge_spin(RobotBusRos2Bridge *bridge);
 ROBOT_BUS_API int robot_bus_ros2_bridge_spin_once(RobotBusRos2Bridge *bridge, double timeout_secs);
 
-/* --- TF (coordinate frames) ------------------------------------------------ */
-
-ROBOT_BUS_API RobotBusTfBuffer *robot_bus_tf_buffer_new(void);
-ROBOT_BUS_API void robot_bus_tf_buffer_free(RobotBusTfBuffer *buf);
-ROBOT_BUS_API int robot_bus_tf_buffer_clear(RobotBusTfBuffer *buf);
-/** Ingest a `tf2_msgs/TFMessage` protobuf. `is_static` non-zero = `/tf_static`. */
-ROBOT_BUS_API int robot_bus_tf_buffer_set_transform_msg(RobotBusTfBuffer *buf, const uint8_t *data,
-                                                        size_t len, int is_static);
-/**
- * Lookup transform of `source` in `target` frame.
- * On success writes owned `TransformStamped` protobuf bytes (`robot_bus_free_bytes`).
- */
-ROBOT_BUS_API int robot_bus_tf_buffer_lookup_transform(RobotBusTfBuffer *buf, const char *target,
-                                                       const char *source, uint8_t **out_data,
-                                                       size_t *out_len);
-/** 1 if a path exists, else 0. */
-ROBOT_BUS_API int robot_bus_tf_buffer_can_transform(RobotBusTfBuffer *buf, const char *target,
-                                                    const char *source);
-/**
- * Newline-separated sorted frame ids. Caller frees with `robot_bus_free_string`.
- * Returns NULL on error (`robot_bus_last_error`).
- */
-ROBOT_BUS_API char *robot_bus_tf_buffer_frames(RobotBusTfBuffer *buf);
-
-ROBOT_BUS_API RobotBusTfListener *robot_bus_tf_listener_new(RobotBusNode *node,
-                                                             const char *tf_topic,
-                                                             const char *tf_static_topic);
-ROBOT_BUS_API RobotBusTfListener *robot_bus_tf_listener_with_defaults(RobotBusNode *node);
-ROBOT_BUS_API void robot_bus_tf_listener_free(RobotBusTfListener *listener);
-/**
- * Shared buffer handle (Arc clone). Caller frees with `robot_bus_tf_buffer_free`.
- */
-ROBOT_BUS_API RobotBusTfBuffer *robot_bus_tf_listener_buffer(RobotBusTfListener *listener);
 
 #ifdef __cplusplus
 }

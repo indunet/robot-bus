@@ -34,41 +34,6 @@ pub mod console;
 #[cfg(feature = "ros2")]
 pub mod ros2;
 
-#[cfg(feature = "image-encoder")]
-pub mod image_encoder;
-
-#[cfg(feature = "image-decoder")]
-pub mod image_decoder;
-
-#[cfg(feature = "webrtc")]
-pub mod webrtc_stream;
-
-#[cfg(feature = "audio-capture")]
-pub mod audio_capture;
-
-#[cfg(feature = "audio-play")]
-pub mod audio_play;
-
-#[cfg(feature = "usb-camera")]
-pub mod usb_camera;
-
-#[cfg(feature = "apriltag-detector")]
-pub mod apriltag_detector;
-
-#[cfg(feature = "xbox-joy")]
-pub mod xbox_joy;
-
-#[cfg(feature = "ethercat-joint")]
-pub mod ethercat_joint;
-
-pub mod tf;
-
-#[cfg(feature = "static-transform-publisher")]
-pub mod static_transform_publisher;
-
-#[cfg(feature = "robot-state-publisher")]
-pub mod robot_state_publisher;
-
 #[cfg(feature = "extension-module")]
 mod python_api;
 

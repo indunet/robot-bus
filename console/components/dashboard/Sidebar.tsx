@@ -1,6 +1,6 @@
 'use client'
 
-import { LayoutDashboard, Radio, ScrollText, Cpu, Zap, Network, Workflow, Eye, Video } from 'lucide-react'
+import { LayoutDashboard, Radio, ScrollText, Cpu, Zap, Network } from 'lucide-react'
 import { useI18n } from '@/lib/i18n'
 
 export type Tab =
@@ -10,9 +10,6 @@ export type Tab =
   | 'actions'
   | 'logs'
   | 'topology'
-  | 'flow'
-  | 'visualize'
-  | 'live'
 
 interface Props {
   active: Tab
@@ -24,10 +21,7 @@ export default function Sidebar({ active, onSelect }: Props) {
 
   const items: { id: Tab; label: string; short: string; icon: React.ReactNode }[] = [
     { id: 'overview', label: t('navOverview'), short: t('navOverviewShort'), icon: <LayoutDashboard size={16} /> },
-    { id: 'visualize', label: t('navVisualize'), short: t('navVisualizeShort'), icon: <Eye size={16} /> },
-    { id: 'live', label: t('navLive'), short: t('navLiveShort'), icon: <Video size={16} /> },
     { id: 'topology', label: t('navTopology'), short: t('navTopologyShort'), icon: <Network size={16} /> },
-    { id: 'flow', label: t('navFlow'), short: t('navFlowShort'), icon: <Workflow size={16} /> },
     { id: 'topics', label: t('navTopics'), short: t('navTopicsShort'), icon: <Radio size={16} /> },
     { id: 'services', label: t('navServices'), short: t('navServicesShort'), icon: <Cpu size={16} /> },
     { id: 'actions', label: t('navActions'), short: t('navActionsShort'), icon: <Zap size={16} /> },

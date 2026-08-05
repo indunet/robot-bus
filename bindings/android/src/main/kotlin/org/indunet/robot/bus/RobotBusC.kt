@@ -121,23 +121,6 @@ internal interface RobotBusC : Library {
     fun robot_bus_broker_action_backend_bind(b: Pointer?): Pointer?
     fun robot_bus_broker_grpc_listen(b: Pointer?): Pointer?
     fun robot_bus_broker_console_listen(b: Pointer?): Pointer?
-    fun robot_bus_tf_buffer_new(): Pointer?
-    fun robot_bus_tf_buffer_free(buf: Pointer?)
-    fun robot_bus_tf_buffer_clear(buf: Pointer?): Int
-    fun robot_bus_tf_buffer_set_transform_msg(buf: Pointer?, data: ByteArray, len: Long, isStatic: Int): Int
-    fun robot_bus_tf_buffer_lookup_transform(
-        buf: Pointer?,
-        target: String?,
-        source: String?,
-        outData: PointerByReference,
-        outLen: LongByReference,
-    ): Int
-    fun robot_bus_tf_buffer_can_transform(buf: Pointer?, target: String?, source: String?): Int
-    fun robot_bus_tf_buffer_frames(buf: Pointer?): Pointer?
-    fun robot_bus_tf_listener_new(node: Pointer?, tfTopic: String?, tfStaticTopic: String?): Pointer?
-    fun robot_bus_tf_listener_with_defaults(node: Pointer?): Pointer?
-    fun robot_bus_tf_listener_free(listener: Pointer?)
-    fun robot_bus_tf_listener_buffer(listener: Pointer?): Pointer?
     fun interface MsgCb : Callback {
         fun invoke(topic: String?, data: Pointer?, len: Long, user: Pointer?)
     }

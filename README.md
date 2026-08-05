@@ -10,7 +10,7 @@ English | [中文](README-zh.md)
 [![Maven Central](https://img.shields.io/maven-central/v/org.indunet/robot-bus.svg?label=Maven%20Central&color=007396)](https://central.sonatype.com/artifact/org.indunet/robot-bus)
 [![License](https://img.shields.io/badge/License-Apache_2.0-green.svg)](https://opensource.org/licenses/Apache-2.0)
 
-Lightweight ROS 2–style messaging over ZeroMQ — topics, services & actions, no ROS install. SDKs for Rust, Python, TypeScript, C++, Java, and Android.
+Lightweight ROS 2–style messaging over ZeroMQ — topics, services & actions, no ROS install. SDKs for Rust, Python, TypeScript, C++, Java, and Android. Tool nodes, TF, and Studio UI live in [robot-bus-tools](https://github.com/indunet/robot-bus-tools).
 
 No ROS distro, no `source setup.bash`, no workspace. One broker process plus an SDK in any supported language is enough.
 
@@ -41,7 +41,8 @@ Rust core stays at the repo root (`Cargo.toml` + `src/`). Language SDKs live und
 | [`src/`](src/), `Cargo.toml` | Rust core (crates.io / maturin entry) |
 | [`proto/`](proto/) | Contract source: ROS-style Protobuf → generated code for Rust / bindings |
 | [`bindings/`](bindings/) | Language SDKs (Python, TypeScript, C++, Java, Android) |
-| [`console/`](console/) | Web monitoring console (product UI; build output synced to `assets/console/` locally / in CI, not committed) |
+| [`console/`](console/) | Broker monitoring console (Overview / Topics / Topology; build → `assets/console/`) |
+| sibling [`robot-bus-tools`](https://github.com/indunet/robot-bus-tools) | `rbus_*` nodes, TF library + language extensions, Robot Bus Studio |
 | [`benches/`](benches/) | Perf harnesses: [`robot_bus_perf/`](benches/robot_bus_perf/) (`just perf`), [`ros2_perf/`](benches/ros2_perf/) (`just perf-ros2`) |
 | [`tests/`](tests/) | Rust integration tests + cross-language interop (`just test-interop`) |
 | [`docs/`](docs/) | API guides and generated perf reports |
@@ -376,183 +377,20 @@ UDP discovery (`robot_bus_interface.msg.v1`):
 
 - [`announce.proto`](proto/robot_bus_interface/msg/v1/announce.proto)
 
-## Tool nodes (Cargo features)
+## Tool nodes, TF, and Studio
 
-Tool binaries ship with the main `robot-bus` crate as **default features**. Install system deps (FFmpeg / ALSA headers), then:
-
-```bash
-cargo install robot-bus --bin rbus_image_encoder
-cargo install robot-bus --bin rbus_image_decoder
-cargo install robot-bus --bin rbus_audio_capture
-cargo install robot-bus --bin rbus_audio_play
-cargo install robot-bus --bin rbus_usb_camera
-cargo install robot-bus --bin rbus_apriltag_detector
-cargo install robot-bus --bin rbus_xbox_joy
-cargo install robot-bus --bin rbus_static_transform_publisher
-cargo install robot-bus --bin rbus_robot_state_publisher
-```
-
-Skip them with `--no-default-features --features grpc,console` when you only need the library.
-
-### Image encoder (`rbus_image_encoder`)
-
-Subscribes to `sensor_msgs/Image` (`rgb8` / `bgr8` / `mono8`) and publishes `foxglove_msgs/CompressedVideo` (`h264` or `h265`, Annex-B) via **system FFmpeg**. Encoder preference: NVENC → VideoToolbox → `libopenh264` / soft encoders.
+Hardware / multimedia nodes (`rbus_*`), the TF coordinate-frame library, and the domain visualizer / Flow / LIVE UI now live in the sibling repository **[robot-bus-tools](https://github.com/indunet/robot-bus-tools)**.
 
 ```bash
-# macOS
-brew install ffmpeg
-# Debian/Ubuntu
-sudo apt install ffmpeg libavcodec-dev libavformat-dev libavutil-dev \
-  libswscale-dev libswresample-dev libavdevice-dev libavfilter-dev
-
-cargo install robot-bus --bin rbus_image_encoder
-rbus_image_encoder --print-example-config > encoder.yaml
-rbus_image_encoder --params encoder.yaml
+# After cloning both repos as siblings:
+cd ../robot-bus-tools
+cargo build --bins
+# Studio (visualizers + Flow + LIVE):
+cd studio && pnpm install && pnpm dev   # http://127.0.0.1:15772
 ```
 
-Linking GPL software encoders (`libx264` / `libx265`) is a deployment choice; prefer hardware encoders when available.
+`robot-bus` keeps the broker, multi-language communication SDKs, ROS 2 bridge, protobuf contracts (`tf2_msgs` included), and the broker monitoring console (Overview / Topics / Topology / Logs).
 
-### Image decoder (`rbus_image_decoder`)
-
-Subscribes to `foxglove_msgs/CompressedVideo` (`h264` / `h265`, Annex-B) and publishes `sensor_msgs/Image` (`rgb8` or `bgr8`) via **system FFmpeg**. Decoder preference: NVDEC → VideoToolbox → soft `h264` / `hevc`. Default topics match the encoder: `/camera/video` → `/camera/image_decoded`.
-
-```bash
-cargo install robot-bus --bin rbus_image_decoder
-rbus_image_decoder --print-example-config > decoder.yaml
-rbus_image_decoder --params decoder.yaml
-```
-
-### Audio capture (`rbus_audio_capture`)
-
-Captures microphone PCM in **shared** (non-exclusive) mode via [cpal](https://github.com/RustAudio/cpal) and publishes `foxglove_msgs/RawAudio` (`pcm-s16`). Defaults: 16 kHz mono, 20 ms chunks. Feature `audio-capture` (default on).
-
-```bash
-# Debian/Ubuntu
-sudo apt install libasound2-dev
-
-cargo install robot-bus --bin rbus_audio_capture
-rbus_audio_capture --list-devices
-rbus_audio_capture --print-example-config > capture.yaml
-rbus_audio_capture --params capture.yaml
-```
-
-### Audio play (`rbus_audio_play`)
-
-Subscribes to `foxglove_msgs/RawAudio` (`pcm-s16`) and plays on a speaker (cpal shared mode). Feature `audio-play` (default on). Incoming rate/channels must match node parameters.
-
-```bash
-cargo install robot-bus --bin rbus_audio_play
-rbus_audio_play --list-devices
-rbus_audio_play --print-example-config > play.yaml
-rbus_audio_play --params play.yaml
-```
-
-### USB camera (`rbus_usb_camera`)
-
-Captures USB / webcam frames via [nokhwa](https://github.com/l1npengtul/nokhwa) (V4L2 / AVFoundation / Media Foundation) and publishes `sensor_msgs/Image` (`rgb8`). Defaults: 640×480 @ 30 fps on `/camera/image_raw` — ready for `rbus_image_encoder`. Feature `usb-camera` (default on). On macOS, grant camera permission when prompted.
-
-```bash
-cargo install robot-bus --bin rbus_usb_camera
-rbus_usb_camera --list-devices
-rbus_usb_camera --print-example-config > camera.yaml
-rbus_usb_camera --params camera.yaml
-```
-
-### AprilTag detector (`rbus_apriltag_detector`)
-
-Subscribes to `sensor_msgs/Image` (`rgb8` / `bgr8` / `mono8`) and publishes `apriltag_msgs/AprilTagDetectionArray` (2D geometry + quality; no pose / TF). Uses the [apriltag](https://crates.io/crates/apriltag) crate (official AprilTag C library, statically linked by default). Defaults: `tag36h11` on `/camera/image_raw` → `/apriltag/detections`. Feature `apriltag-detector` (default on). Needs a C toolchain + CMake to build the bundled AprilTag sources.
-
-```bash
-# macOS (Xcode CLT / cmake)
-xcode-select --install
-brew install cmake
-# Debian/Ubuntu
-sudo apt install build-essential cmake
-
-cargo install robot-bus --bin rbus_apriltag_detector
-rbus_apriltag_detector --print-example-config > apriltag.yaml
-# Pipeline: rbus_usb_camera → rbus_apriltag_detector
-rbus_apriltag_detector --params apriltag.yaml
-```
-
-### WebRTC / WHEP (`rbus_webrtc`)
-
-Subscribes to configurable `sensor_msgs/Image`, `foxglove_msgs/RawAudio` (`pcm-s16`), and optional raw **data** topics, then serves a **WHEP** livestream (H.264 + Opus + DataChannels). Image→H.264 reuses the same FFmpeg `FrameEncoder` as `rbus_image_encoder`. Feature `webrtc` is **off by default** (needs FFmpeg + libopus).
-
-Watch in Console → **LIVE** (preferred), or open the node's demo page at `http://<host>:8090/`.
-
-```bash
-# macOS
-brew install ffmpeg opus
-# Debian/Ubuntu
-sudo apt install ffmpeg libavcodec-dev libavformat-dev libavutil-dev \
-  libswscale-dev libswresample-dev libavdevice-dev libavfilter-dev libopus-dev
-
-cargo build --features webrtc --bin rbus_webrtc
-# or: cargo install robot-bus --features webrtc --bin rbus_webrtc
-
-rbus_webrtc --print-example-config > webrtc.yaml
-# Typical pipeline: rbus_usb_camera (+ optional rbus_audio_capture) → rbus_webrtc
-rbus_webrtc --params webrtc.yaml
-# Console LIVE → WHEP URL http://127.0.0.1:8090/whep → Connect
-```
-
-### Xbox joy (`rbus_xbox_joy`)
-
-Reads a standard USB Xbox-layout pad / wireless receiver via [gilrs](https://gitlab.com/gilrs-project/gilrs) (SDL GameController mappings; typically plug-and-play) and publishes `robot_bus_interface/XboxJoy`. Subscribes to `robot_bus_interface/XboxJoyRumble` for dual-motor vibration. Defaults: `/xbox_joy` out, `/xbox_joy/rumble` in, 50 Hz. Feature `xbox-joy` (default on). Rumble works on Linux / Windows; macOS supports input only.
-
-```bash
-# Debian/Ubuntu (gilrs needs libudev)
-sudo apt install libudev-dev
-
-cargo install robot-bus --bin rbus_xbox_joy
-rbus_xbox_joy --list-devices
-rbus_xbox_joy --print-example-config > xbox.yaml
-rbus_xbox_joy --params xbox.yaml
-```
-
-### Static TF (`rbus_static_transform_publisher`)
-
-Publishes fixed parent→child transforms as `tf2_msgs/TFMessage` on `/tf_static` (ROS TF2 convention). Configure edges in YAML (`translation` + `rotation_rpy` or `rotation_xyzw`). Feature `static-transform-publisher` (default on). Match sensor `frame_id` values (e.g. USB camera `frame_id: camera`) to `child_frame_id` so the tree connects.
-
-```bash
-cargo install robot-bus --bin rbus_static_transform_publisher
-rbus_static_transform_publisher --print-example-config > static_tf.yaml
-rbus_static_transform_publisher --params static_tf.yaml
-```
-
-### Robot state publisher (`rbus_robot_state_publisher`)
-
-Loads a URDF (subset: `fixed` / `revolute` / `continuous` / `prismatic`, plus `<mimic>`), subscribes to `sensor_msgs/JointState`, and publishes movable joints on `/tf` plus fixed joints on `/tf_static`. Feature `robot-state-publisher` (default on). Pair with `rbus_ethercat_joint` (or any JointState source); keep joint **names** aligned with the URDF. Mimic joints use `q = multiplier * q_master + offset` and ignore any published value for the mimic joint itself. Drivers should **not** also broadcast TF for the same links.
-
-```bash
-cargo install robot-bus --bin rbus_robot_state_publisher
-# Point urdf_file at your model (sample: src/robot_state_publisher/examples/simple_arm.urdf)
-rbus_robot_state_publisher --print-example-config > rsp.yaml
-rbus_robot_state_publisher --params rsp.yaml
-```
-
-### TF library (`robot_bus::tf`)
-
-Always available (no feature gate). `Buffer` / `TfListener` subscribe to `/tf` + `/tf_static` and expose `lookup_transform` / `can_transform`. v1 time semantics: static edges always apply; dynamic edges use the **latest** sample (no interpolation). `TransformBroadcaster` helps publish `TFMessage` batches.
-
-Frame naming convention: prefer ROS-style `map` / `odom` / `base_link` / `*_link`. Message `header.frame_id` on sensors should match a link or static child in the tree.
-
-### EtherCAT joints (`rbus_ethercat_joint`)
-
-Independent tool node (same pattern as camera / xbox — **not** part of the broker). Bridges EtherCAT / CiA402 drives: publishes `sensor_msgs/JointState`, subscribes to `robot_bus_interface/JointCommand`. Supports cyclic modes **CSP / CSV / CST** via YAML `mode` per joint. Feature `ethercat-joint` is **off by default** (needs a Linux NIC and usually `CAP_NET_RAW` / root for real hardware).
-
-```bash
-cargo install robot-bus --bin rbus_ethercat_joint --features ethercat-joint
-rbus_ethercat_joint --print-example-config > ethercat_joint.yaml
-# Edit iface, joints, PDO offsets; use backend: mock without hardware
-rbus_ethercat_joint --params ethercat_joint.yaml
-rbus_ethercat_joint --params ethercat_joint.yaml --list-devices
-```
-
-Optional services (same process): `std_srvs/SetBool` on `enable_service` (default `/ethercat_joint/enable`) and `std_srvs/Trigger` on `fault_reset_service` (default `/ethercat_joint/fault_reset`). For secondary development, depend on `robot-bus` with `ethercat-joint` and call `robot_bus::ethercat_joint::run_with_hooks` with a custom `JointHooks` impl.
-
-**Safety:** treat EtherCAT enable as hazardous. Use an external STO / e-stop; this node’s command-timeout and diagnostics are not a certified safety function.
 
 ## ROS 2 bridge (`feature = "ros2"`)
 

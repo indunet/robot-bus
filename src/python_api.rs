@@ -26,8 +26,6 @@ use crate::runtime::{
 };
 use crate::action_bus::ActionKind;
 use crate::shutdown;
-use crate::tf::{Buffer as RustTfBuffer, SharedBuffer, TfListener as RustTfListener};
-use crate::tf2_msgs::msg::v1::TfMessage;
 use crate::transports;
 use prost::Message;
 
@@ -1441,98 +1439,6 @@ fn run_broker(py: Python<'_>) -> PyResult<()> {
     Ok(())
 }
 
-#[pyclass(name = "TfBuffer", unsendable)]
-struct PyTfBuffer {
-    buffer: SharedBuffer,
-}
-
-#[pymethods]
-impl PyTfBuffer {
-    #[new]
-    fn new() -> Self {
-        Self {
-            buffer: Arc::new(std::sync::Mutex::new(RustTfBuffer::new())),
-        }
-    }
-
-    fn clear(&self) -> PyResult<()> {
-        self.buffer
-            .lock()
-            .map_err(|_| PyRuntimeError::new_err("tf buffer lock poisoned"))?
-            .clear();
-        Ok(())
-    }
-
-    /// Ingest a `tf2_msgs/TFMessage` protobuf. `is_static` marks `/tf_static` traffic.
-    fn set_transform_msg(&self, data: &[u8], is_static: bool) -> PyResult<()> {
-        let msg = TfMessage::decode(data)
-            .map_err(|e| PyRuntimeError::new_err(format!("decode TFMessage: {e}")))?;
-        self.buffer
-            .lock()
-            .map_err(|_| PyRuntimeError::new_err("tf buffer lock poisoned"))?
-            .set_transform_msg(&msg, is_static);
-        Ok(())
-    }
-
-    /// Lookup transform of `source` in `target` as `TransformStamped` protobuf bytes.
-    fn lookup_transform(&self, target: &str, source: &str) -> PyResult<Vec<u8>> {
-        let stamped = self
-            .buffer
-            .lock()
-            .map_err(|_| PyRuntimeError::new_err("tf buffer lock poisoned"))?
-            .lookup_transform(target, source, None)
-            .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
-        Ok(stamped.encode_to_vec())
-    }
-
-    fn can_transform(&self, target: &str, source: &str) -> PyResult<bool> {
-        Ok(self
-            .buffer
-            .lock()
-            .map_err(|_| PyRuntimeError::new_err("tf buffer lock poisoned"))?
-            .can_transform(target, source))
-    }
-
-    fn frames(&self) -> PyResult<Vec<String>> {
-        Ok(self
-            .buffer
-            .lock()
-            .map_err(|_| PyRuntimeError::new_err("tf buffer lock poisoned"))?
-            .frames())
-    }
-}
-
-#[pyclass(name = "TfListener", unsendable)]
-struct PyTfListener {
-    inner: RustTfListener,
-}
-
-#[pymethods]
-impl PyTfListener {
-    #[new]
-    #[pyo3(signature = (node, tf_topic="/tf", tf_static_topic="/tf_static"))]
-    fn new(node: &mut PyNode, tf_topic: &str, tf_static_topic: &str) -> PyResult<Self> {
-        Ok(Self {
-            inner: RustTfListener::new(&mut node.inner, tf_topic, tf_static_topic)
-                .map_err(bus_err)?,
-        })
-    }
-
-    #[staticmethod]
-    fn with_defaults(node: &mut PyNode) -> PyResult<Self> {
-        Ok(Self {
-            inner: RustTfListener::with_defaults(&mut node.inner).map_err(bus_err)?,
-        })
-    }
-
-    /// Shared buffer handle (Arc clone).
-    fn buffer(&self) -> PyTfBuffer {
-        PyTfBuffer {
-            buffer: self.inner.buffer(),
-        }
-    }
-}
-
 #[pymodule]
 fn _native(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyPublisher>()?;
@@ -1549,8 +1455,6 @@ fn _native(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyShutdownHandle>()?;
     m.add_class::<PyTimerHandle>()?;
     m.add_class::<PyRobotBusBroker>()?;
-    m.add_class::<PyTfBuffer>()?;
-    m.add_class::<PyTfListener>()?;
     m.add_function(wrap_pyfunction!(message_xsub_endpoint, m)?)?;
     m.add_function(wrap_pyfunction!(message_xpub_endpoint, m)?)?;
     m.add_function(wrap_pyfunction!(run_broker, m)?)?;

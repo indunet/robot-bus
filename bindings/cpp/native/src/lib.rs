@@ -10,7 +10,6 @@ mod node_params;
 mod executor;
 mod broker;
 mod ros2_bridge;
-mod tf;
 
 // Re-export helpers used by `ros2_bridge` (including the `ros2` feature path).
 #[allow(unused_imports)]

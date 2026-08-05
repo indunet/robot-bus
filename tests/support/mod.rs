@@ -136,6 +136,7 @@ pub fn ephemeral_robot_bus_config() -> RobotBusConfig {
             listen: format!("127.0.0.1:{}", next())
                 .parse()
                 .expect("console listen"),
+            cors_origins: vec![],
         },
     }
 }

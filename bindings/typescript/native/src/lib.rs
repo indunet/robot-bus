@@ -26,10 +26,7 @@ use robot_bus::runtime::{
     ShutdownHandle as RustShutdownHandle, SingleThreadedExecutor as RustSingleThreadedExecutor,
     TimerCallback, TimerHandle as RustTimerHandle, TopicPublisherRaw as RustTopicPublisher,
 };
-use robot_bus::tf::{Buffer as RustTfBuffer, SharedBuffer, TfListener as RustTfListener};
-use robot_bus::tf2_msgs::msg::v1::TfMessage;
 use robot_bus::{shutdown, transports};
-use prost::Message;
 
 fn bus_err(err: BusError) -> Error {
     Error::from_reason(err.to_string())
@@ -1314,104 +1311,6 @@ pub fn run_broker() -> Result<()> {
     broker.stop()?;
     println!("robot-bus-broker stopped");
     Ok(())
-}
-
-#[napi]
-pub struct TfBuffer {
-    buffer: SharedBuffer,
-}
-
-#[napi]
-impl TfBuffer {
-    #[napi(constructor)]
-    pub fn new() -> Self {
-        Self {
-            buffer: Arc::new(std::sync::Mutex::new(RustTfBuffer::new())),
-        }
-    }
-
-    #[napi]
-    pub fn clear(&self) -> Result<()> {
-        self.buffer
-            .lock()
-            .map_err(|_| Error::from_reason("tf buffer lock poisoned"))?
-            .clear();
-        Ok(())
-    }
-
-    /// Ingest a `tf2_msgs/TFMessage` protobuf. `isStatic` marks `/tf_static` traffic.
-    #[napi]
-    pub fn set_transform_msg(&self, data: Buffer, is_static: bool) -> Result<()> {
-        let msg = TfMessage::decode(data.as_ref())
-            .map_err(|e| Error::from_reason(format!("decode TFMessage: {e}")))?;
-        self.buffer
-            .lock()
-            .map_err(|_| Error::from_reason("tf buffer lock poisoned"))?
-            .set_transform_msg(&msg, is_static);
-        Ok(())
-    }
-
-    /// Lookup transform of `source` in `target` as `TransformStamped` protobuf bytes.
-    #[napi]
-    pub fn lookup_transform(&self, target: String, source: String) -> Result<Buffer> {
-        let stamped = self
-            .buffer
-            .lock()
-            .map_err(|_| Error::from_reason("tf buffer lock poisoned"))?
-            .lookup_transform(&target, &source, None)
-            .map_err(|e| Error::from_reason(e.to_string()))?;
-        Ok(Buffer::from(stamped.encode_to_vec()))
-    }
-
-    #[napi]
-    pub fn can_transform(&self, target: String, source: String) -> Result<bool> {
-        Ok(self
-            .buffer
-            .lock()
-            .map_err(|_| Error::from_reason("tf buffer lock poisoned"))?
-            .can_transform(&target, &source))
-    }
-
-    #[napi]
-    pub fn frames(&self) -> Result<Vec<String>> {
-        Ok(self
-            .buffer
-            .lock()
-            .map_err(|_| Error::from_reason("tf buffer lock poisoned"))?
-            .frames())
-    }
-}
-
-#[napi]
-pub struct TfListener {
-    inner: RustTfListener,
-}
-
-#[napi]
-impl TfListener {
-    #[napi(constructor)]
-    pub fn new(node: &mut Node, tf_topic: Option<String>, tf_static_topic: Option<String>) -> Result<Self> {
-        let tf = tf_topic.as_deref().unwrap_or("/tf");
-        let tf_static = tf_static_topic.as_deref().unwrap_or("/tf_static");
-        Ok(Self {
-            inner: RustTfListener::new(&mut node.inner, tf, tf_static).map_err(bus_err)?,
-        })
-    }
-
-    #[napi(factory)]
-    pub fn with_defaults(node: &mut Node) -> Result<Self> {
-        Ok(Self {
-            inner: RustTfListener::with_defaults(&mut node.inner).map_err(bus_err)?,
-        })
-    }
-
-    /// Shared buffer handle (Arc clone).
-    #[napi]
-    pub fn buffer(&self) -> TfBuffer {
-        TfBuffer {
-            buffer: self.inner.buffer(),
-        }
-    }
 }
 
 #[napi]

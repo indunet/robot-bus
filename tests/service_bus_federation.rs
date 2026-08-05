@@ -84,11 +84,12 @@ fn federated_service_config(
             ..DiscoveryConfig::default()
         },
         #[cfg(feature = "console")]
-        console: ConsoleBrokerConfig {
+                console: ConsoleBrokerConfig {
             enabled: false,
             listen: format!("127.0.0.1:{}", other[5])
                 .parse()
                 .expect("console listen"),
+            cors_origins: vec![],
         },
     }
 }

@@ -63,6 +63,7 @@ fn test_broker_config(
         console: ConsoleBrokerConfig {
             enabled: true,
             listen: format!("127.0.0.1:{console}").parse().unwrap(),
+            cors_origins: vec![],
         },
     }
 }

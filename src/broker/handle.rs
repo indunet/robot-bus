@@ -240,6 +240,9 @@ pub struct ConsoleBrokerConfig {
     /// When false, the console HTTP server is not started.
     pub enabled: bool,
     pub listen: SocketAddr,
+    /// Explicit CORS allowlist for cross-origin Studio / browser clients.
+    /// Empty (default) disables CORS headers. Never uses `*`.
+    pub cors_origins: Vec<String>,
 }
 
 #[cfg(feature = "console")]
@@ -248,6 +251,7 @@ impl Default for ConsoleBrokerConfig {
         Self {
             enabled: true,
             listen: "0.0.0.0:15771".parse().expect("default console listen"),
+            cors_origins: Vec::new(),
         }
     }
 }
@@ -357,7 +361,11 @@ struct ConsoleHttpHandle {
 
 #[cfg(feature = "console")]
 impl ConsoleHttpHandle {
-    fn start(listen: SocketAddr, state: Arc<ConsoleState>) -> Result<Self> {
+    fn start(
+        listen: SocketAddr,
+        state: Arc<ConsoleState>,
+        cors_origins: Vec<String>,
+    ) -> Result<Self> {
         let (shutdown_tx, mut shutdown_rx) = tokio::sync::watch::channel(false);
         let handle = thread::spawn(move || {
             let rt = tokio::runtime::Builder::new_multi_thread()
@@ -372,7 +380,7 @@ impl ConsoleHttpHandle {
                         }
                     }
                 };
-                serve_console_with_shutdown(listen, state, shutdown).await
+                serve_console_with_shutdown(listen, state, cors_origins, shutdown).await
             })
         });
         thread::sleep(STARTUP_SETTLE);
@@ -509,7 +517,11 @@ impl RobotBusBroker {
                 service.metrics.clone(),
                 action.metrics.clone(),
             );
-            Some(ConsoleHttpHandle::start(config.console.listen, state)?)
+            Some(ConsoleHttpHandle::start(
+                config.console.listen,
+                state,
+                config.console.cors_origins.clone(),
+            )?)
         } else {
             None
         };

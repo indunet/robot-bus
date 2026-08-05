@@ -2,7 +2,8 @@
 # Install: https://github.com/casey/just
 #
 # Layout: Rust core at repo root; language SDKs under bindings/;
-# nodes/ tool-node workspace crates; benches/; tests/ for interop; console/ is product UI.
+# benches/; tests/ for interop; console/ is broker monitoring UI.
+# Tool nodes / TF / Studio live in sibling repo robot-bus-tools.
 
 set shell := ["bash", "-eu", "-o", "pipefail", "-c"]
 
@@ -164,61 +165,4 @@ check-ros2-shim:
 	RUSTFLAGS='--cfg ros_distro="humble"' cargo check --features ros2-shim
 	RUSTFLAGS='--cfg ros_distro="humble"' cargo check --manifest-path bindings/cpp/native/Cargo.toml --features ros2-shim
 
-# Build / test tool-node features
-nodes-build:
-	cargo build --bin rbus_image_encoder --bin rbus_image_decoder --bin rbus_audio_capture --bin rbus_audio_play --bin rbus_usb_camera --bin rbus_xbox_joy --bin rbus_static_transform_publisher --bin rbus_robot_state_publisher
-
-nodes-test:
-	cargo test --lib image_encoder::
-	cargo test --lib image_decoder::
-	cargo test --lib audio_capture::
-	cargo test --lib audio_play::
-	cargo test --lib usb_camera::
-	cargo test --lib xbox_joy::
-	cargo test --lib tf::
-	cargo test --lib static_transform_publisher::
-	cargo test --lib robot_state_publisher::
-
-# Run image encoder (broker must already be up; needs system FFmpeg)
-node-image-encoder *args:
-	cargo run --bin rbus_image_encoder -- --print-example-config > /tmp/rbus_image_encoder.example.yaml
-	cargo run --bin rbus_image_encoder -- --params /tmp/rbus_image_encoder.example.yaml {{args}}
-
-# Run image decoder (broker must already be up; needs system FFmpeg)
-node-image-decoder *args:
-	cargo run --bin rbus_image_decoder -- --print-example-config > /tmp/rbus_image_decoder.example.yaml
-	cargo run --bin rbus_image_decoder -- --params /tmp/rbus_image_decoder.example.yaml {{args}}
-
-# Run audio capture (broker must already be up; needs input device)
-node-audio-capture *args:
-	cargo run --bin rbus_audio_capture -- --print-example-config > /tmp/rbus_audio_capture.example.yaml
-	cargo run --bin rbus_audio_capture -- --params /tmp/rbus_audio_capture.example.yaml {{args}}
-
-# Run audio play (broker must already be up; needs output device)
-node-audio-play *args:
-	cargo run --bin rbus_audio_play -- --print-example-config > /tmp/rbus_audio_play.example.yaml
-	cargo run --bin rbus_audio_play -- --params /tmp/rbus_audio_play.example.yaml {{args}}
-
-# Run USB camera (broker must already be up; needs a camera)
-node-usb-camera *args:
-	cargo run --bin rbus_usb_camera -- --print-example-config > /tmp/rbus_usb_camera.example.yaml
-	cargo run --bin rbus_usb_camera -- --params /tmp/rbus_usb_camera.example.yaml {{args}}
-
-# Run Xbox joy node (broker must already be up; needs a USB pad / receiver)
-node-xbox-joy *args:
-	cargo run --bin rbus_xbox_joy -- --print-example-config > /tmp/rbus_xbox_joy.example.yaml
-	cargo run --bin rbus_xbox_joy -- --params /tmp/rbus_xbox_joy.example.yaml {{args}}
-
-# Run static TF publisher (broker must already be up)
-node-static-tf *args:
-	cargo run --bin rbus_static_transform_publisher -- --print-example-config > /tmp/rbus_static_tf.example.yaml
-	cargo run --bin rbus_static_transform_publisher -- --params /tmp/rbus_static_tf.example.yaml {{args}}
-
-# Run robot_state_publisher (broker must already be up; needs JointState on /joint_states)
-node-robot-state-publisher *args:
-	cp src/robot_state_publisher/examples/simple_arm.urdf /tmp/simple_arm.urdf
-	cargo run --bin rbus_robot_state_publisher -- --print-example-config > /tmp/rbus_robot_state_publisher.example.yaml
-	# Point urdf_file at the copied sample.
-	python3 -c "import pathlib; p=pathlib.Path('/tmp/rbus_robot_state_publisher.example.yaml'); t=p.read_text(); p.write_text(t.replace('urdf_file: simple_arm.urdf','urdf_file: /tmp/simple_arm.urdf'))"
-	cargo run --bin rbus_robot_state_publisher -- --params /tmp/rbus_robot_state_publisher.example.yaml {{args}}
-
+# Tool nodes moved to sibling repo robot-bus-tools.
