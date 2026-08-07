@@ -2,10 +2,10 @@
 
 Broker monitoring console: status, topic / service / action traffic, event logs, and live topology.
 
-The sidebar **SIM** entry opens the browser-based turtle simulation in a new tab:
+The sidebar **BOT** entry opens the browser-based micro-robot simulation floating windows (also available as standalone pages):
 
-- `/turtle_sim/` — canvas simulation; subscribes `cmd_vel`, publishes `pose`
-- `/turtle_teleop/` — WASD / arrow-key controller
+- `/bot_sim/` — canvas simulation; subscribes `cmd_vel`, publishes `pose`
+- `/bot_teleop/` — WASD / arrow-key controller
 
 Both pages use the in-repo TypeScript `GrpcNode` and connect to the broker's
 gRPC-Web endpoint reported by `/api/v1/status`.

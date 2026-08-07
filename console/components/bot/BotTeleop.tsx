@@ -5,7 +5,7 @@ import { Node as RobotBusNode } from 'robot-bus'
 import { Pose2D } from 'robot-bus/geometry_msgs/msg/v1/pose2d'
 import { Twist } from 'robot-bus/geometry_msgs/msg/v1/twist'
 import { useI18n } from '@/lib/i18n'
-import { CMD_VEL_TOPIC, POSE_TOPIC, resolveGrpcUrl } from '@/lib/turtle'
+import { CMD_VEL_TOPIC, POSE_TOPIC, resolveGrpcUrl } from '@/lib/bot'
 
 const LINEAR_SPEED = 1.5
 const ANGULAR_SPEED = 1.8
@@ -24,7 +24,7 @@ interface Props {
   autoFocus?: boolean
 }
 
-export default function TurtleTeleop({ compact = false, autoFocus = false }: Props) {
+export default function BotTeleop({ compact = false, autoFocus = false }: Props) {
   const { t } = useI18n()
   const rootRef = useRef<HTMLDivElement>(null)
   const pressedRef = useRef(new Set<Direction>())
@@ -79,7 +79,7 @@ export default function TurtleTeleop({ compact = false, autoFocus = false }: Pro
     void resolveGrpcUrl().then((url) => {
       if (disposed) return
       setGrpcUrl(url)
-      node = RobotBusNode.grpcAt('turtle_teleop_node', url)
+      node = RobotBusNode.grpcAt('bot_teleop_node', url)
       const publisher = node.createPublisher(CMD_VEL_TOPIC, Twist)
       node.createSubscription(POSE_TOPIC, () => undefined, Pose2D)
       publishStopRef.current = () => {
@@ -148,10 +148,10 @@ export default function TurtleTeleop({ compact = false, autoFocus = false }: Pro
 
   const statusLabel =
     status === 'ONLINE'
-      ? t('turtleOnline')
+      ? t('botOnline')
       : status === 'PUBLISH ERROR'
-        ? t('turtlePublishError')
-        : t('turtleConnecting')
+        ? t('botPublishError')
+        : t('botConnecting')
 
   return (
     <div
@@ -165,15 +165,15 @@ export default function TurtleTeleop({ compact = false, autoFocus = false }: Pro
       className={`${compact ? 'h-full bg-transparent' : 'min-h-screen bg-bus-bg'} text-bus-text outline-none focus:ring-1 focus:ring-inset focus:ring-bus-cyan/40`}
     >
       <main className={`${compact ? 'p-2' : 'max-w-md mx-auto p-3'}`}>
-        <section className={`${compact ? 'bg-bus-panel/76' : 'bg-bus-panel'} border border-bus-border/90 rounded-sm ${compact ? 'p-3' : 'p-5'}`}>
+        <section className={`${compact ? 'bg-bus-panel/18' : 'bg-bus-panel'} border border-white/10 rounded-sm shadow-[0_1px_0_rgb(255_255_255_/08%)_inset] ${compact ? 'p-3' : 'p-5'}`}>
           <div className="flex items-center justify-between gap-2">
-            <h1 className="font-mono text-xs text-bus-cyan">{t('turtleTeleopTitle')}</h1>
+            <h1 className="font-mono text-xs text-bus-cyan">{t('botTeleopTitle')}</h1>
             <span className={`font-mono text-[9px] ${status === 'ONLINE' ? 'text-bus-green' : 'text-bus-red'}`}>
               {statusLabel}
             </span>
           </div>
           <p className="font-mono text-[10px] leading-5 text-bus-muted mt-2">
-            {t('turtleArrowHelp')}
+            {t('botArrowHelp')}
           </p>
 
           <div className={`grid grid-cols-3 gap-2 mx-auto ${compact ? 'max-w-[230px] my-3' : 'max-w-[280px] my-5'}`}>
@@ -205,8 +205,8 @@ export default function TurtleTeleop({ compact = false, autoFocus = false }: Pro
             <dd className="text-right">{velocity.angular.toFixed(2)}</dd>
           </dl>
           <div className="mt-3 font-mono text-[9px] text-bus-muted break-all">
-            <div>{t('turtlePublish')} {CMD_VEL_TOPIC}</div>
-            <div>{t('turtleSubscribe')} {POSE_TOPIC}</div>
+            <div>{t('botPublish')} {CMD_VEL_TOPIC}</div>
+            <div>{t('botSubscribe')} {POSE_TOPIC}</div>
             {!compact && <div className="mt-1">{grpcUrl}</div>}
           </div>
         </section>

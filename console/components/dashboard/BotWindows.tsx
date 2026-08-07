@@ -1,8 +1,8 @@
 'use client'
 
 import { useState } from 'react'
-import TurtleSim from '@/components/turtle/TurtleSim'
-import TurtleTeleop from '@/components/turtle/TurtleTeleop'
+import BotSim from '@/components/bot/BotSim'
+import BotTeleop from '@/components/bot/BotTeleop'
 import { useI18n } from '@/lib/i18n'
 import FloatingWindow, { type WindowPosition } from './FloatingWindow'
 
@@ -21,7 +21,7 @@ function initialTeleopPosition(): WindowPosition {
   return { x: Math.max(84, (typeof window === 'undefined' ? 1280 : window.innerWidth) - 350), y: 104 }
 }
 
-export default function TurtleWindows({
+export default function BotWindows({
   simOpen,
   teleopOpen,
   onCloseSim,
@@ -36,7 +36,7 @@ export default function TurtleWindows({
     <>
       {simOpen && (
         <FloatingWindow
-          title={t('turtleSimWindowTitle')}
+          title={t('botSimWindowTitle')}
           position={simPosition}
           width={680}
           height={500}
@@ -45,12 +45,12 @@ export default function TurtleWindows({
           onBringToFront={() => setFront('sim')}
           onClose={onCloseSim}
         >
-          <TurtleSim compact />
+          <BotSim compact />
         </FloatingWindow>
       )}
       {teleopOpen && (
         <FloatingWindow
-          title={t('turtleTeleopWindowTitle')}
+          title={t('botTeleopWindowTitle')}
           position={teleopPosition}
           width={330}
           height={390}
@@ -59,7 +59,7 @@ export default function TurtleWindows({
           onBringToFront={() => setFront('teleop')}
           onClose={onCloseTeleop}
         >
-          <TurtleTeleop compact autoFocus />
+          <BotTeleop compact autoFocus />
         </FloatingWindow>
       )}
     </>

@@ -12,13 +12,14 @@ interface Props {
   maxBodyHeight?: string
 }
 
-const COLS = 'grid-cols-[1fr_80px_96px_80px_56px_56px_96px]'
+const COLS = 'grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)_80px_96px_80px_56px_56px_96px]'
 
 export default function TopicTable({ topics, maxBodyHeight }: Props) {
   const { t } = useI18n()
   const sorted = [...topics].sort((a, b) => b.msgPerSec - a.msgPerSec)
   const headers = [
     t('colTopic'),
+    t('colType'),
     t('colMsgS'),
     t('colBandwidth'),
     t('colTotal'),
@@ -36,7 +37,7 @@ export default function TopicTable({ topics, maxBodyHeight }: Props) {
       />
 
       <div className="overflow-x-auto flex-1 min-h-0">
-        <div className="min-w-[720px] h-full flex flex-col">
+        <div className="min-w-[860px] h-full flex flex-col">
           <div className={`grid ${COLS} items-center px-3 h-8 border-b border-bus-border bg-bus-bg shrink-0`}>
             {headers.map((h, i) => (
               <span
@@ -85,15 +86,20 @@ function TopicRow({ topic }: { topic: TopicInfo }) {
     >
       <div className="flex items-center gap-2 min-w-0">
         <span className={`w-2 h-2 rounded-full shrink-0 ${isIdle ? 'bg-bus-muted' : 'bg-bus-green pulse-green'}`} />
-        <div className="min-w-0 flex flex-col">
-          <span className={`font-mono text-[13px] font-medium truncate ${isIdle ? 'text-bus-muted' : 'text-bus-text'}`}>
-            {topic.name}
-          </span>
-          {topic.typeName && (
-            <span className="font-mono text-[10px] text-[#6b8294] truncate">{topic.typeName}</span>
-          )}
-        </div>
+        <span
+          className={`font-mono text-[13px] font-medium truncate ${isIdle ? 'text-bus-muted' : 'text-bus-text'}`}
+          title={topic.name}
+        >
+          {topic.name}
+        </span>
       </div>
+
+      <span
+        className="font-mono text-[12px] text-[#6b8294] truncate"
+        title={topic.typeName || undefined}
+      >
+        {topic.typeName || '—'}
+      </span>
 
       <div className="flex items-center justify-end gap-1.5">
         <div className="w-12 h-5">

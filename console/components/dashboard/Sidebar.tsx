@@ -7,7 +7,7 @@ import {
   Cpu,
   Zap,
   Network,
-  Turtle,
+  Bot,
 } from 'lucide-react'
 import { useI18n } from '@/lib/i18n'
 
@@ -22,10 +22,10 @@ export type Tab =
 interface Props {
   active: Tab
   onSelect: (tab: Tab) => void
-  onOpenTurtle: () => void
+  onOpenBot: () => void
 }
 
-export default function Sidebar({ active, onSelect, onOpenTurtle }: Props) {
+export default function Sidebar({ active, onSelect, onOpenBot }: Props) {
   const { t } = useI18n()
 
   const items: { id: Tab; label: string; short: string; icon: React.ReactNode }[] = [
@@ -57,12 +57,12 @@ export default function Sidebar({ active, onSelect, onOpenTurtle }: Props) {
       <div className="w-8 border-t border-bus-border my-1" />
       <button
         type="button"
-        onClick={onOpenTurtle}
-        title={t('navTurtleWindows')}
+        onClick={onOpenBot}
+        title={t('navBotWindows')}
         className="relative w-12 h-12 flex flex-col items-center justify-center gap-0.5 rounded transition-colors text-bus-muted hover:text-bus-cyan hover:bg-bus-panel"
       >
-        <Turtle size={17} />
-        <span className="font-mono text-[9px] tracking-widest">{t('navTurtleSimShort')}</span>
+        <Bot size={17} />
+        <span className="font-mono text-[9px] tracking-widest">{t('navBotSimShort')}</span>
       </button>
     </aside>
   )

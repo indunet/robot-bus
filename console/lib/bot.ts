@@ -1,7 +1,7 @@
 import { fetchStatus } from '@/lib/mock-data'
 
-export const CMD_VEL_TOPIC = '/turtle1/cmd_vel'
-export const POSE_TOPIC = '/turtle1/pose'
+export const CMD_VEL_TOPIC = '/bot1/cmd_vel'
+export const POSE_TOPIC = '/bot1/pose'
 
 const DEFAULT_GRPC_URL = 'http://127.0.0.1:15770'
 
