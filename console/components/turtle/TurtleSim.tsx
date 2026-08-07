@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react'
 import { Node as RobotBusNode } from 'robot-bus'
 import { Pose2D } from 'robot-bus/geometry_msgs/msg/v1/pose2d'
 import { Twist } from 'robot-bus/geometry_msgs/msg/v1/twist'
+import { useI18n } from '@/lib/i18n'
 import { CMD_VEL_TOPIC, POSE_TOPIC, resolveGrpcUrl } from '@/lib/turtle'
 
 const WORLD_SIZE = 11
@@ -17,6 +18,7 @@ interface Props {
 }
 
 export default function TurtleSim({ compact = false }: Props) {
+  const { t } = useI18n()
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const [pose, setPose] = useState<Pose>({
     x: WORLD_SIZE / 2,
@@ -43,7 +45,7 @@ export default function TurtleSim({ compact = false }: Props) {
       if (disposed) return
       setGrpcUrl(url)
 
-      node = RobotBusNode.grpcAt('turtle_sim_ui', url)
+      node = RobotBusNode.grpcAt('turtle_sim_node', url)
       const publisher = node.createPublisher(POSE_TOPIC, Pose2D)
       node.createSubscription(
         CMD_VEL_TOPIC,
@@ -107,6 +109,13 @@ export default function TurtleSim({ compact = false }: Props) {
     }
   }, [])
 
+  const statusLabel =
+    status === 'ONLINE'
+      ? t('turtleOnline')
+      : status === 'PUBLISH ERROR'
+        ? t('turtlePublishError')
+        : t('turtleConnecting')
+
   return (
     <div className={`bg-bus-bg text-bus-text ${compact ? 'h-full' : 'min-h-screen'}`}>
       <div className={`grid gap-3 ${compact ? 'grid-cols-[minmax(0,1fr)_150px] p-2' : 'max-w-5xl mx-auto p-3 grid-cols-1 lg:grid-cols-[minmax(0,1fr)_240px]'}`}>
@@ -120,9 +129,9 @@ export default function TurtleSim({ compact = false }: Props) {
         </section>
         <aside className={`bg-bus-panel border border-bus-border rounded-sm h-fit font-mono ${compact ? 'p-2' : 'p-4'}`}>
           <div className="flex items-center justify-between gap-2 mb-3">
-            <h1 className="text-xs text-bus-cyan">POSE</h1>
+            <h1 className="text-xs text-bus-cyan">{t('turtlePoseTitle')}</h1>
             <span className={`text-[9px] ${status === 'ONLINE' ? 'text-bus-green' : 'text-bus-red'}`}>
-              {status}
+              {statusLabel}
             </span>
           </div>
           <dl className="grid grid-cols-2 gap-y-1.5 text-xs">
@@ -134,8 +143,8 @@ export default function TurtleSim({ compact = false }: Props) {
             <dd className="text-right">{pose.theta.toFixed(3)}</dd>
           </dl>
           <div className="mt-3 pt-3 border-t border-bus-border text-[9px] leading-4 text-bus-muted break-all">
-            <div>SUB {CMD_VEL_TOPIC}</div>
-            <div>PUB {POSE_TOPIC}</div>
+            <div>{t('turtleSubscribe')} {CMD_VEL_TOPIC}</div>
+            <div>{t('turtlePublish')} {POSE_TOPIC}</div>
             {!compact && <div className="mt-2">{grpcUrl}</div>}
           </div>
         </aside>

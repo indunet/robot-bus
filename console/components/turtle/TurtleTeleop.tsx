@@ -2,8 +2,10 @@
 
 import { useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from 'react'
 import { Node as RobotBusNode } from 'robot-bus'
+import { Pose2D } from 'robot-bus/geometry_msgs/msg/v1/pose2d'
 import { Twist } from 'robot-bus/geometry_msgs/msg/v1/twist'
-import { CMD_VEL_TOPIC, resolveGrpcUrl } from '@/lib/turtle'
+import { useI18n } from '@/lib/i18n'
+import { CMD_VEL_TOPIC, POSE_TOPIC, resolveGrpcUrl } from '@/lib/turtle'
 
 const LINEAR_SPEED = 1.5
 const ANGULAR_SPEED = 1.8
@@ -11,10 +13,10 @@ const ANGULAR_SPEED = 1.8
 type Direction = 'forward' | 'back' | 'left' | 'right'
 
 const buttons: { direction: Direction; label: string; className: string }[] = [
-  { direction: 'forward', label: 'W / ↑', className: 'col-start-2' },
-  { direction: 'left', label: 'A / ←', className: 'col-start-1 row-start-2' },
-  { direction: 'right', label: 'D / →', className: 'col-start-3 row-start-2' },
-  { direction: 'back', label: 'S / ↓', className: 'col-start-2 row-start-3' },
+  { direction: 'forward', label: '↑', className: 'col-start-2 row-start-1' },
+  { direction: 'left', label: '←', className: 'col-start-1 row-start-2' },
+  { direction: 'back', label: '↓', className: 'col-start-2 row-start-2' },
+  { direction: 'right', label: '→', className: 'col-start-3 row-start-2' },
 ]
 
 interface Props {
@@ -23,6 +25,7 @@ interface Props {
 }
 
 export default function TurtleTeleop({ compact = false, autoFocus = false }: Props) {
+  const { t } = useI18n()
   const rootRef = useRef<HTMLDivElement>(null)
   const pressedRef = useRef(new Set<Direction>())
   const publishStopRef = useRef<(() => void) | null>(null)
@@ -76,8 +79,9 @@ export default function TurtleTeleop({ compact = false, autoFocus = false }: Pro
     void resolveGrpcUrl().then((url) => {
       if (disposed) return
       setGrpcUrl(url)
-      node = RobotBusNode.grpcAt('turtle_teleop_ui', url)
+      node = RobotBusNode.grpcAt('turtle_teleop_node', url)
       const publisher = node.createPublisher(CMD_VEL_TOPIC, Twist)
+      node.createSubscription(POSE_TOPIC, () => undefined, Pose2D)
       publishStopRef.current = () => {
         void publisher.publish(
           Twist.create({
@@ -142,6 +146,13 @@ export default function TurtleTeleop({ compact = false, autoFocus = false }: Pro
     event.preventDefault()
   }
 
+  const statusLabel =
+    status === 'ONLINE'
+      ? t('turtleOnline')
+      : status === 'PUBLISH ERROR'
+        ? t('turtlePublishError')
+        : t('turtleConnecting')
+
   return (
     <div
       ref={rootRef}
@@ -156,13 +167,13 @@ export default function TurtleTeleop({ compact = false, autoFocus = false }: Pro
       <main className={`${compact ? 'p-2' : 'max-w-md mx-auto p-3'}`}>
         <section className={`bg-bus-panel border border-bus-border rounded-sm ${compact ? 'p-3' : 'p-5'}`}>
           <div className="flex items-center justify-between gap-2">
-            <h1 className="font-mono text-xs text-bus-cyan">TELEOP</h1>
+            <h1 className="font-mono text-xs text-bus-cyan">{t('turtleTeleopTitle')}</h1>
             <span className={`font-mono text-[9px] ${status === 'ONLINE' ? 'text-bus-green' : 'text-bus-red'}`}>
-              {status}
+              {statusLabel}
             </span>
           </div>
           <p className="font-mono text-[10px] leading-5 text-bus-muted mt-2">
-            Click here, then use Arrow keys or WASD · Space stops
+            {t('turtleArrowHelp')}
           </p>
 
           <div className={`grid grid-cols-3 gap-2 mx-auto ${compact ? 'max-w-[230px] my-3' : 'max-w-[280px] my-5'}`}>
@@ -185,13 +196,6 @@ export default function TurtleTeleop({ compact = false, autoFocus = false }: Pro
                 {label}
               </button>
             ))}
-            <button
-              type="button"
-              onClick={stop}
-              className="col-start-2 row-start-2 h-12 border border-bus-border bg-[#1f2428] hover:border-bus-amber text-bus-amber rounded-sm font-mono text-xs"
-            >
-              STOP
-            </button>
           </div>
 
           <dl className="grid grid-cols-2 gap-y-1.5 font-mono text-xs border-t border-bus-border pt-3">
@@ -201,7 +205,8 @@ export default function TurtleTeleop({ compact = false, autoFocus = false }: Pro
             <dd className="text-right">{velocity.angular.toFixed(2)}</dd>
           </dl>
           <div className="mt-3 font-mono text-[9px] text-bus-muted break-all">
-            PUB {CMD_VEL_TOPIC}
+            <div>{t('turtlePublish')} {CMD_VEL_TOPIC}</div>
+            <div>{t('turtleSubscribe')} {POSE_TOPIC}</div>
             {!compact && <div className="mt-1">{grpcUrl}</div>}
           </div>
         </section>

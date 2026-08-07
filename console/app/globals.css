@@ -127,3 +127,48 @@
   100% { color: inherit; }
 }
 .value-pop { animation: value-pop 0.4s ease-out; }
+
+/* 网络拓扑画布控件 */
+.robot-bus-flow-controls {
+  overflow: hidden;
+  border: 1px solid rgb(0 127 160 / 65%) !important;
+  border-radius: 0 !important;
+  background: rgb(14 18 21 / 94%) !important;
+  box-shadow: 0 10px 28px rgb(0 0 0 / 42%) !important;
+  clip-path: polygon(0 0, calc(100% - 7px) 0, 100% 7px, 100% 100%, 7px 100%, 0 calc(100% - 7px));
+}
+
+.robot-bus-flow-controls .react-flow__controls-button {
+  width: 30px;
+  height: 30px;
+  border: 0 !important;
+  border-bottom: 1px solid rgb(42 47 53 / 90%) !important;
+  background: transparent !important;
+  color: #70808d !important;
+  transition: color 120ms ease, background-color 120ms ease;
+}
+
+.robot-bus-flow-controls .react-flow__controls-button:last-child {
+  border-bottom: 0 !important;
+}
+
+.robot-bus-flow-controls .react-flow__controls-button:hover {
+  background: rgb(0 212 255 / 10%) !important;
+  color: #00d4ff !important;
+}
+
+.robot-bus-flow-controls .react-flow__controls-button svg {
+  fill: currentColor;
+  max-width: 14px;
+  max-height: 14px;
+}
+
+.robot-bus-flow-minimap {
+  width: 168px !important;
+  height: 104px !important;
+  border: 1px solid rgb(0 127 160 / 60%) !important;
+  border-radius: 0 !important;
+  background: rgb(14 18 21 / 94%) !important;
+  box-shadow: 0 10px 28px rgb(0 0 0 / 42%) !important;
+  clip-path: polygon(0 0, calc(100% - 11px) 0, 100% 11px, 100% 100%, 8px 100%, 0 calc(100% - 8px));
+}

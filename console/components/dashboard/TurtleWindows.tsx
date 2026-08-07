@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import TurtleSim from '@/components/turtle/TurtleSim'
 import TurtleTeleop from '@/components/turtle/TurtleTeleop'
+import { useI18n } from '@/lib/i18n'
 import FloatingWindow, { type WindowPosition } from './FloatingWindow'
 
 interface Props {
@@ -26,6 +27,7 @@ export default function TurtleWindows({
   onCloseSim,
   onCloseTeleop,
 }: Props) {
+  const { t } = useI18n()
   const [simPosition, setSimPosition] = useState(initialSimPosition)
   const [teleopPosition, setTeleopPosition] = useState(initialTeleopPosition)
   const [front, setFront] = useState<'sim' | 'teleop'>('teleop')
@@ -34,7 +36,7 @@ export default function TurtleWindows({
     <>
       {simOpen && (
         <FloatingWindow
-          title="TURTLE SIM · turtle_sim_ui"
+          title={t('turtleSimWindowTitle')}
           position={simPosition}
           width={680}
           height={500}
@@ -48,7 +50,7 @@ export default function TurtleWindows({
       )}
       {teleopOpen && (
         <FloatingWindow
-          title="TURTLE TELEOP · turtle_teleop_ui"
+          title={t('turtleTeleopWindowTitle')}
           position={teleopPosition}
           width={330}
           height={390}

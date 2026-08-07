@@ -33,6 +33,16 @@ const en = {
   navTurtleSim: 'TURTLE SIM',
   navTurtleSimShort: 'SIM',
   navTurtleWindows: 'OPEN TURTLE SIM + TELEOP',
+  turtleSimWindowTitle: 'TURTLE SIM NODE · turtle_sim_node',
+  turtleTeleopWindowTitle: 'TURTLE TELEOP NODE · turtle_teleop_node',
+  turtlePoseTitle: 'POSE',
+  turtleTeleopTitle: 'TELEOP',
+  turtleConnecting: 'CONNECTING',
+  turtleOnline: 'ONLINE',
+  turtlePublishError: 'PUBLISH ERROR',
+  turtleArrowHelp: 'Click here, then use the Arrow keys',
+  turtlePublish: 'PUB',
+  turtleSubscribe: 'SUB',
 
   metricMsgS: 'MSG/S',
   metricBw: 'BW',
@@ -131,6 +141,10 @@ const en = {
   topologyTitle: 'TOPOLOGY',
   topologySub: '{n} nodes · {e} edges',
   topologyEmpty: 'No registered endpoints yet',
+  topologyNode: 'NODE',
+  topologyInput: 'INPUT',
+  topologyOutput: 'OUTPUT',
+  topologyNoPorts: 'No ports registered',
 } as const
 
 const zh: Record<MessageKey, string> = {
@@ -149,6 +163,16 @@ const zh: Record<MessageKey, string> = {
   navTurtleSim: '小乌龟仿真',
   navTurtleSimShort: '仿真',
   navTurtleWindows: '打开小乌龟仿真与遥控浮窗',
+  turtleSimWindowTitle: '小乌龟仿真节点 · turtle_sim_node',
+  turtleTeleopWindowTitle: '小乌龟遥控节点 · turtle_teleop_node',
+  turtlePoseTitle: '位姿',
+  turtleTeleopTitle: '遥控',
+  turtleConnecting: '连接中',
+  turtleOnline: '在线',
+  turtlePublishError: '发布错误',
+  turtleArrowHelp: '点击此处，然后使用键盘方向键',
+  turtlePublish: '发布',
+  turtleSubscribe: '订阅',
 
   metricMsgS: 'MSG/S',
   metricBw: '带宽',
@@ -247,6 +271,10 @@ const zh: Record<MessageKey, string> = {
   topologyTitle: '拓扑',
   topologySub: '{n} 节点 · {e} 边',
   topologyEmpty: '暂无已登记端点',
+  topologyNode: '节点',
+  topologyInput: '输入',
+  topologyOutput: '输出',
+  topologyNoPorts: '暂无已注册端口',
 }
 
 const catalogs: Record<Locale, Record<MessageKey, string>> = { en, zh }

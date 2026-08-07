@@ -16,7 +16,7 @@ import {
   type NodeProps,
 } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
-import { Network } from 'lucide-react'
+import { Cpu, Network } from 'lucide-react'
 import { PanelHeader } from './BrokerOverview'
 import { useI18n } from '@/lib/i18n'
 import type { TopologyInfo } from '@/lib/mock-data'
@@ -159,7 +159,7 @@ function layoutProcessNodes(
     return {
       id: p.id,
       type: 'process',
-      position: prevPos.get(p.id) ?? { x: 48 + col * 320, y: 40 + row * 220 },
+      position: prevPos.get(p.id) ?? { x: 40 + col * 280, y: 36 + row * 190 },
       data: {
         label: p.label,
         inputs: p.inputs,
@@ -198,53 +198,92 @@ function buildWireEdges(
 }
 
 const ProcessNode = memo(function ProcessNode({ data }: NodeProps) {
+  const { t } = useI18n()
   const d = data as ProcessNodeData
+  const portCount = d.inputs.length + d.outputs.length
+
   return (
-    <div className="min-w-[200px] max-w-[260px] rounded-sm border border-bus-cyan/70 bg-[#1a2228] shadow-md text-bus-text font-mono">
-      <div className="px-3 py-1.5 border-b border-bus-border bg-bus-cyan/10 text-[12px] font-semibold tracking-wide truncate">
-        {d.label}
+    <div
+      className="relative w-[218px] overflow-hidden border border-bus-cyan/45 bg-[#12171b]/95 shadow-[0_10px_30px_rgba(0,0,0,0.35)] text-bus-text font-mono"
+      style={{
+        clipPath:
+          'polygon(0 0, calc(100% - 12px) 0, 100% 12px, 100% 100%, 8px 100%, 0 calc(100% - 8px))',
+      }}
+    >
+      <span className="pointer-events-none absolute left-0 top-0 z-10 h-[2px] w-14 bg-bus-cyan" />
+      <span className="pointer-events-none absolute bottom-0 right-4 z-10 h-px w-9 bg-bus-cyan/70" />
+
+      <div className="flex items-center gap-2 border-b border-bus-border bg-gradient-to-r from-bus-cyan/15 to-transparent px-2.5 py-2">
+        <div className="flex h-7 w-7 shrink-0 items-center justify-center border border-bus-cyan/35 bg-bus-cyan/10 text-bus-cyan">
+          <Cpu size={14} />
+        </div>
+        <div className="min-w-0 flex-1">
+          <div className="text-[8px] uppercase tracking-[0.2em] text-bus-cyan/65">
+            {t('topologyNode')}
+          </div>
+          <div className="truncate text-[11px] font-semibold tracking-wide" title={d.label}>
+            {d.label}
+          </div>
+        </div>
+        <span className="flex h-5 min-w-5 items-center justify-center border border-bus-border bg-black/20 px-1 text-[9px] text-bus-muted">
+          {portCount}
+        </span>
       </div>
 
       {d.inputs.length > 0 && (
-        <div className="border-b border-bus-border/60 py-1">
-          <div className="px-2 pb-0.5 text-[9px] uppercase tracking-wider text-bus-muted">in</div>
+        <div className="border-b border-bus-border/60 py-1.5">
+          <div className="px-2.5 pb-1 text-[8px] uppercase tracking-[0.18em] text-bus-green/70">
+            {t('topologyInput')}
+          </div>
           {d.inputs.map((p) => (
-            <div key={`in-${p.topic}`} className="relative flex items-center min-h-[22px] pr-2 pl-3">
+            <div
+              key={`in-${p.topic}`}
+              className="relative mx-1.5 flex min-h-[28px] items-center border-l-2 border-bus-green/35 bg-white/[0.025] py-1 pl-2 pr-1.5"
+            >
               <Handle
                 type="target"
                 position={Position.Left}
                 id={portHandleId('in', p.topic)}
-                className="!w-2.5 !h-2.5 !bg-bus-green !border !border-[#0e1012] !-left-[5px]"
+                className="!-left-[11px] !h-2 !w-2 !border !border-[#0e1012] !bg-bus-green"
                 title={p.topic}
               />
               <div className="min-w-0 flex-1">
-                <div className="text-[11px] text-bus-text font-medium truncate" title={p.topic}>
+                <div className="truncate text-[10px] font-medium text-bus-text" title={p.topic}>
                   {shortTopic(p.topic)}
                 </div>
                 {p.typeName && (
-                  <div className="text-[9px] text-[#6b8294] truncate" title={p.typeName}>
+                  <div className="truncate text-[8px] text-[#647786]" title={p.typeName}>
                     {p.typeName}
                   </div>
                 )}
               </div>
+              <span className="ml-1 shrink-0 text-[8px] tabular-nums text-bus-muted">
+                {Math.round(p.msgPerSec ?? 0)}/s
+              </span>
             </div>
           ))}
         </div>
       )}
 
       {d.outputs.length > 0 && (
-        <div className="py-1">
-          <div className="px-2 pb-0.5 text-[9px] uppercase tracking-wider text-bus-muted text-right">
-            out
+        <div className="py-1.5">
+          <div className="px-2.5 pb-1 text-right text-[8px] uppercase tracking-[0.18em] text-bus-cyan/70">
+            {t('topologyOutput')}
           </div>
           {d.outputs.map((p) => (
-            <div key={`out-${p.topic}`} className="relative flex items-center min-h-[22px] pl-2 pr-3 justify-end">
-              <div className="min-w-0 text-right">
-                <div className="text-[11px] text-bus-cyan font-medium truncate" title={p.topic}>
+            <div
+              key={`out-${p.topic}`}
+              className="relative mx-1.5 flex min-h-[28px] items-center justify-end border-r-2 border-bus-cyan/35 bg-bus-cyan/[0.035] py-1 pl-1.5 pr-2"
+            >
+              <span className="mr-1 shrink-0 text-[8px] tabular-nums text-bus-muted">
+                {Math.round(p.msgPerSec ?? 0)}/s
+              </span>
+              <div className="min-w-0 flex-1 text-right">
+                <div className="truncate text-[10px] font-medium text-bus-cyan" title={p.topic}>
                   {shortTopic(p.topic)}
                 </div>
                 {p.typeName && (
-                  <div className="text-[9px] text-[#6b8294] truncate" title={p.typeName}>
+                  <div className="truncate text-[8px] text-[#647786]" title={p.typeName}>
                     {p.typeName}
                   </div>
                 )}
@@ -253,7 +292,7 @@ const ProcessNode = memo(function ProcessNode({ data }: NodeProps) {
                 type="source"
                 position={Position.Right}
                 id={portHandleId('out', p.topic)}
-                className="!w-2.5 !h-2.5 !bg-bus-cyan !border !border-[#0e1012] !-right-[5px]"
+                className="!-right-[11px] !h-2 !w-2 !border !border-[#0e1012] !bg-bus-cyan"
                 title={p.topic}
               />
             </div>
@@ -262,7 +301,7 @@ const ProcessNode = memo(function ProcessNode({ data }: NodeProps) {
       )}
 
       {d.inputs.length === 0 && d.outputs.length === 0 && (
-        <div className="px-3 py-2 text-[11px] text-bus-muted">no ports</div>
+        <div className="px-3 py-3 text-[10px] text-bus-muted">{t('topologyNoPorts')}</div>
       )}
     </div>
   )
@@ -315,20 +354,32 @@ export default function TopologyView({ topology }: Props) {
           </div>
         ) : (
           <ReactFlow
+            className="robot-bus-flow"
             nodes={nodes}
             edges={edges}
             nodeTypes={nodeTypes}
             onNodesChange={onNodesChange}
             onEdgesChange={onEdgesChange}
             fitView
+            fitViewOptions={{ padding: 0.28, maxZoom: 0.72 }}
+            minZoom={0.25}
+            maxZoom={1.5}
             proOptions={{ hideAttribution: true }}
             nodesDraggable
             nodesConnectable={false}
             elementsSelectable
           >
             <Background color="#2a2f35" gap={20} />
-            <Controls />
-            <MiniMap nodeColor="#00d4ff" maskColor="rgba(0,0,0,0.6)" />
+            <Controls className="robot-bus-flow-controls" />
+            <MiniMap
+              className="robot-bus-flow-minimap"
+              nodeColor="#007fa0"
+              nodeStrokeColor="#00d4ff"
+              nodeStrokeWidth={2}
+              maskColor="rgba(10, 13, 15, 0.72)"
+              pannable
+              zoomable
+            />
           </ReactFlow>
         )}
       </div>

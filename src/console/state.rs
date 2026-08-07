@@ -96,18 +96,21 @@ impl EventLog {
 struct MsgRateSample {
     at: Instant,
     snap: MessageMetricsSnapshot,
+    view: RateView,
 }
 
 #[derive(Clone, Debug)]
 struct SvcRateSample {
     at: Instant,
     snap: ServiceMetricsSnapshot,
+    view: ServiceRateView,
 }
 
 #[derive(Clone, Debug)]
 struct ActRateSample {
     at: Instant,
     snap: ActionMetricsSnapshot,
+    view: ActionRateView,
 }
 
 /// Process-wide console state shared with Axum handlers.
@@ -193,9 +196,15 @@ impl ConsoleState {
     /// reads share a stable window.
     pub fn rates(&self) -> RateView {
         let now = Instant::now();
-        let snap = self.metrics.snapshot();
         let mut guard = self.msg_rate.lock().unwrap_or_else(|e| e.into_inner());
 
+        if let Some(prev) = guard.as_ref()
+            && now.duration_since(prev.at) < Duration::from_millis(RATE_BASELINE_MS)
+        {
+            return prev.view.clone();
+        }
+
+        let snap = self.metrics.snapshot();
         let view = match guard.as_ref() {
             Some(prev) => {
                 let dt = now.duration_since(prev.at).as_secs_f64().max(1e-3);
@@ -204,18 +213,26 @@ impl ConsoleState {
             None => rate_view_zero(&snap),
         };
 
-        if should_advance_baseline(guard.as_ref().map(|s| s.at), now) {
-            *guard = Some(MsgRateSample { at: now, snap });
-        }
+        *guard = Some(MsgRateSample {
+            at: now,
+            snap,
+            view: view.clone(),
+        });
         view
     }
 
     /// Service call rates (accepted/forwarded calls per second).
     pub fn service_rates(&self) -> ServiceRateView {
         let now = Instant::now();
-        let snap = self.service_metrics.snapshot();
         let mut guard = self.svc_rate.lock().unwrap_or_else(|e| e.into_inner());
 
+        if let Some(prev) = guard.as_ref()
+            && now.duration_since(prev.at) < Duration::from_millis(RATE_BASELINE_MS)
+        {
+            return prev.view.clone();
+        }
+
+        let snap = self.service_metrics.snapshot();
         let view = match guard.as_ref() {
             Some(prev) => {
                 let dt = now.duration_since(prev.at).as_secs_f64().max(1e-3);
@@ -224,18 +241,26 @@ impl ConsoleState {
             None => service_rate_zero(&snap),
         };
 
-        if should_advance_baseline(guard.as_ref().map(|s| s.at), now) {
-            *guard = Some(SvcRateSample { at: now, snap });
-        }
+        *guard = Some(SvcRateSample {
+            at: now,
+            snap,
+            view: view.clone(),
+        });
         view
     }
 
     /// Action run rates (accepted goals per second).
     pub fn action_rates(&self) -> ActionRateView {
         let now = Instant::now();
-        let snap = self.action_metrics.snapshot();
         let mut guard = self.act_rate.lock().unwrap_or_else(|e| e.into_inner());
 
+        if let Some(prev) = guard.as_ref()
+            && now.duration_since(prev.at) < Duration::from_millis(RATE_BASELINE_MS)
+        {
+            return prev.view.clone();
+        }
+
+        let snap = self.action_metrics.snapshot();
         let view = match guard.as_ref() {
             Some(prev) => {
                 let dt = now.duration_since(prev.at).as_secs_f64().max(1e-3);
@@ -244,17 +269,12 @@ impl ConsoleState {
             None => action_rate_zero(&snap),
         };
 
-        if should_advance_baseline(guard.as_ref().map(|s| s.at), now) {
-            *guard = Some(ActRateSample { at: now, snap });
-        }
+        *guard = Some(ActRateSample {
+            at: now,
+            snap,
+            view: view.clone(),
+        });
         view
-    }
-}
-
-fn should_advance_baseline(prev_at: Option<Instant>, now: Instant) -> bool {
-    match prev_at {
-        None => true,
-        Some(at) => now.duration_since(at) >= Duration::from_millis(RATE_BASELINE_MS),
     }
 }
 

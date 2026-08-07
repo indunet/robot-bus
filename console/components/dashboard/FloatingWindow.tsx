@@ -60,7 +60,7 @@ export default function FloatingWindow({
       role="dialog"
       aria-label={title}
       onPointerDown={onBringToFront}
-      className="fixed flex flex-col overflow-hidden border border-bus-cyan-dim bg-bus-bg shadow-2xl rounded-sm"
+      className="fixed flex flex-col overflow-hidden border border-bus-cyan-dim bg-bus-bg shadow-2xl rounded-sm opacity-95"
       style={{
         left: position.x,
         top: position.y,
@@ -69,8 +69,17 @@ export default function FloatingWindow({
         maxWidth: 'calc(100vw - 12px)',
         maxHeight: 'calc(100vh - 12px)',
         zIndex,
+        clipPath:
+          'polygon(0 0, calc(100% - 16px) 0, 100% 16px, 100% 100%, 12px 100%, 0 calc(100% - 12px))',
       }}
     >
+      <div aria-hidden="true" className="pointer-events-none absolute inset-0 z-20">
+        <span className="absolute left-0 top-0 h-[2px] w-20 bg-bus-cyan" />
+        <span className="absolute right-[-3px] top-[7px] h-px w-[23px] rotate-45 bg-bus-cyan-dim" />
+        <span className="absolute bottom-[5px] left-[-3px] h-px w-[18px] rotate-45 bg-bus-cyan-dim" />
+        <span className="absolute bottom-0 right-5 h-[2px] w-12 bg-bus-cyan/70" />
+        <span className="absolute right-0 top-16 h-10 w-[2px] bg-bus-cyan/50" />
+      </div>
       <div
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}

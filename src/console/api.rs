@@ -221,12 +221,14 @@ pub async fn register_topic(
         )
             .into_response();
     }
-    state.topic_types.register(topic, type_name);
-    state.events.emit(
-        "INFO",
-        "topic-registry",
-        format!("registered {topic} -> {type_name}"),
-    );
+    let previous = state.topic_types.register(topic, type_name);
+    if previous.as_deref() != Some(type_name) {
+        state.events.emit(
+            "INFO",
+            "topic-registry",
+            format!("registered {topic} -> {type_name}"),
+        );
+    }
     (StatusCode::OK, Json(RegisterTopicResponse { ok: true })).into_response()
 }
 
