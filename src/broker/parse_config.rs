@@ -254,10 +254,16 @@ pub fn parse_robot_bus_config(args: &[String]) -> Result<Option<RobotBusConfig>>
             "--console-listen" => {
                 i += 1;
                 let value = require_arg(args, i, arg)?;
-                config.console.listen = value
+                let addr = value
                     .parse::<SocketAddr>()
                     .with_context(|| format!("invalid {arg} {value}"))?;
+                config.console.listen = addr;
                 config.console.enabled = true;
+                // Single-port: console is co-located with gRPC when both features are on.
+                #[cfg(feature = "grpc")]
+                {
+                    config.grpc.listen = addr;
+                }
             }
             #[cfg(feature = "console")]
             "--no-console" => {
@@ -292,8 +298,8 @@ Defaults:\n  \
 message  XSUB 15560 / XPUB 15561\n  \
 service  frontend 15662 / backend 15663\n  \
 action   frontend 15664 / backend 15665\n  \
-gRPC     0.0.0.0:15770 (gRPC + gRPC-Web)\n  \
-console  0.0.0.0:15771 (embedded Web UI)\n\n\
+gRPC     0.0.0.0:15770 (gRPC + gRPC-Web + embedded Web UI)\n  \
+console  same port as gRPC (use --no-console to disable)\n\n\
 Message options:\n  \
 --message-xsub-bind ADDR       Publisher bind (alias: --xsub-bind)\n  \
 --message-xpub-bind ADDR       Subscriber bind (alias: --xpub-bind)\n  \
@@ -333,7 +339,7 @@ gRPC options (feature `grpc`, default on):\n  \
 --grpc-listen HOST:PORT        Listen address (alias: --listen)\n  \
 --cors-origin ORIGIN           Allowed browser origin (repeatable)\n\n\
 Console options (feature `console`, default on):\n  \
---console-listen HOST:PORT     Embedded Web UI listen address\n  \
+--console-listen HOST:PORT     Alias of --grpc-listen (single-port UI + gRPC)\n  \
 --no-console                   Do not start the Web console\n  \
 --console-cors-origin ORIGIN   Allow Studio/browser origin (repeatable)\n\n\
 --help, -h                     Show this help\n\n\
@@ -448,6 +454,8 @@ mod tests {
             .expect("config");
         assert!(config.console.enabled);
         assert_eq!(config.console.listen.to_string(), "127.0.0.1:25771");
+        #[cfg(feature = "grpc")]
+        assert_eq!(config.grpc.listen.to_string(), "127.0.0.1:25771");
 
         let config = parse_robot_bus_config(&args(&["--no-console"]))
             .unwrap()

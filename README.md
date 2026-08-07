@@ -77,7 +77,7 @@ cargo run --bin robot_bus_broker
 
 ### Introspection CLI (`rbus`)
 
-Query the broker console HTTP API (default `http://127.0.0.1:15771`; override with `--url` or `ROBOT_BUS_BROKER_URL`):
+Query the broker console HTTP API (default `http://127.0.0.1:15770`; override with `--url` or `ROBOT_BUS_BROKER_URL`):
 
 ```bash
 cargo run --bin rbus -- topic list
@@ -308,7 +308,7 @@ Defaults: message `STREAM(2/2)`, service `RPC(4/4)`, action `ACTION(8/8)`. Broke
 
 ## Web console (`console/`)
 
-Optional broker monitoring UI: Overview, Topics, Services, Actions, Topology, and event logs. With the `console` feature (default), the broker serves an **embedded** static UI on `0.0.0.0:15771` after you build assets once.
+Optional broker monitoring UI: Overview, Topics, Services, Actions, Topology, and event logs. With the `console` feature (default), the broker serves an **embedded** static UI on `0.0.0.0:15770` after you build assets once.
 
 **Development (hot reload — preferred):**
 
@@ -325,13 +325,13 @@ cd console && pnpm install && pnpm dev
 ```bash
 just console          # pnpm build + sync → assets/console/ (gitignored)
 cargo run --bin robot_bus_broker
-# open http://localhost:15771
+# open http://localhost:15770
 # disable: cargo run --bin robot_bus_broker -- --no-console
 ```
 
 `assets/console/` is **build output** (not committed). CI and release jobs run `just console` (or equivalent) before compiling with the `console` feature.
 
-Wired to the broker's same-port monitoring API: `GET /api/v1/status`, `GET /api/v1/topics`, `GET /api/v1/services`, `GET /api/v1/actions`, `GET /api/v1/topology`, `SSE /api/v1/events`. Topology uses best-effort registration from `Node` create_publisher/subscription. Domain visualizers, Flow, and LIVE / WHEP live in **[robot-bus-tools](https://github.com/indunet/robot-bus-tools)** Studio. The frontend source lives in `console/`; only the generated static files are compiled into binaries with the `console` feature.
+Wired to the broker on the **same port** as gRPC-Web (`0.0.0.0:15770`): the Dashboard is a TypeScript `GrpcNode` that subscribes to `/_robot_bus/*` system topics. A thin REST shim (`GET /api/v1/...`) remains for `rbus` / tooling. Topology and topic-type registration use reliable control-plane services (`/_robot_bus/topology/register`, `/_robot_bus/topic_type/register`) through the existing service bus. Domain visualizers, Flow, and LIVE / WHEP live in **[robot-bus-tools](https://github.com/indunet/robot-bus-tools)** Studio. The frontend source lives in `console/`; only the generated static files are compiled into binaries with the `console` feature.
 
 ## gRPC / gRPC-Web gateway
 

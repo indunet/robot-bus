@@ -1,10 +1,14 @@
-//! Embedded Web console: static assets + monitoring API (default `:15771`).
+//! Embedded Web console: static assets + monitoring API (same port as gRPC-Web).
 
 mod api;
+mod bus_publish;
+mod control_plane;
 mod state;
 mod topic_registry;
 mod topology_registry;
 
+pub use bus_publish::StatusPublisherHandle;
+pub use control_plane::ControlPlaneHandle;
 pub use state::{BrokerEndpoints, ConsoleState};
 pub use topic_registry::TopicTypeRegistry;
 pub use topology_registry::TopologyRegistry;
@@ -16,42 +20,75 @@ use std::sync::Arc;
 use anyhow::{Context, Result};
 use axum::Router;
 use axum::body::Body;
+use axum::extract::Extension;
 use axum::http::{StatusCode, Uri, header};
 use axum::response::{IntoResponse, Response};
-use axum::routing::{get, post};
+use axum::routing::get;
 use rust_embed::Embed;
 use tokio::net::TcpListener;
 
-use api::{
-    actions, events, register_topic, register_topology, services, status, topic_info, topics,
-    topology, unregister_topology,
-};
+use api::{actions, events, services, status, topic_info, topics, topology};
 
 /// Compile-time embedded `assets/console/` (Next.js static export).
 #[derive(Embed)]
 #[folder = "assets/console/"]
 struct Assets;
 
-/// Serve until `shutdown` completes.
+/// REST routes only (no static fallback). Uses [`Extension`] for state so this
+/// `Router<()>` can merge with tonic gRPC routes.
+pub fn api_router(state: Arc<ConsoleState>) -> Router {
+    Router::new()
+        .route("/api/v1/status", get(status))
+        .route("/api/v1/topics", get(topics))
+        .route("/api/v1/topics/{*name}", get(topic_info))
+        .route("/api/v1/topology", get(topology))
+        .route("/api/v1/services", get(services))
+        .route("/api/v1/actions", get(actions))
+        .route("/api/v1/events", get(events))
+        .layer(Extension(state))
+}
+
+/// SPA / static asset fallback for unmatched non-gRPC paths.
+pub async fn static_handler(uri: Uri) -> Response {
+    let path = uri.path().trim_start_matches('/');
+
+    if path.is_empty() {
+        return asset_response("index.html");
+    }
+
+    // Do not SPA-fallback API or gRPC paths.
+    if path.starts_with("api/") || path.starts_with("robot_bus_interface.") {
+        return (StatusCode::NOT_FOUND, "not found").into_response();
+    }
+
+    if let Some(resp) = try_asset(path) {
+        return resp;
+    }
+
+    let index_path = if path.ends_with('/') {
+        format!("{path}index.html")
+    } else {
+        format!("{path}/index.html")
+    };
+    if let Some(resp) = try_asset(&index_path) {
+        return resp;
+    }
+
+    if let Some(resp) = try_asset("index.html") {
+        return resp;
+    }
+
+    (StatusCode::NOT_FOUND, "console asset not found").into_response()
+}
+
+/// Serve console-only (no gRPC) until `shutdown` completes.
 pub async fn serve_with_shutdown(
     listen: SocketAddr,
     state: Arc<ConsoleState>,
     cors_origins: Vec<String>,
     shutdown: impl Future<Output = ()> + Send + 'static,
 ) -> Result<()> {
-    let mut app = Router::new()
-        .route("/api/v1/status", get(status))
-        .route("/api/v1/topics/register", post(register_topic))
-        .route("/api/v1/topics", get(topics))
-        .route("/api/v1/topics/{*name}", get(topic_info))
-        .route("/api/v1/topology/register", post(register_topology))
-        .route("/api/v1/topology/unregister", post(unregister_topology))
-        .route("/api/v1/topology", get(topology))
-        .route("/api/v1/services", get(services))
-        .route("/api/v1/actions", get(actions))
-        .route("/api/v1/events", get(events))
-        .fallback(get(static_handler))
-        .with_state(state);
+    let mut app = api_router(state).fallback(get(static_handler));
 
     if !cors_origins.is_empty() {
         use axum::http::{HeaderValue, Method};
@@ -81,39 +118,6 @@ pub async fn serve_with_shutdown(
         .await
         .context("console HTTP server")?;
     Ok(())
-}
-
-async fn static_handler(uri: Uri) -> Response {
-    let path = uri.path().trim_start_matches('/');
-
-    if path.is_empty() {
-        return asset_response("index.html");
-    }
-
-    // Do not SPA-fallback API paths.
-    if path.starts_with("api/") {
-        return (StatusCode::NOT_FOUND, "not found").into_response();
-    }
-
-    if let Some(resp) = try_asset(path) {
-        return resp;
-    }
-
-    let index_path = if path.ends_with('/') {
-        format!("{path}index.html")
-    } else {
-        format!("{path}/index.html")
-    };
-    if let Some(resp) = try_asset(&index_path) {
-        return resp;
-    }
-
-    // SPA-style fallback for client-side routes.
-    if let Some(resp) = try_asset("index.html") {
-        return resp;
-    }
-
-    (StatusCode::NOT_FOUND, "console asset not found").into_response()
 }
 
 fn try_asset(path: &str) -> Option<Response> {

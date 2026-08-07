@@ -19,5 +19,6 @@ export {
 } from "./grpc-node.js";
 
 export { encode, decode, type MessageType } from "./typed.js";
+export * as consoleTopics from "./console-topics.js";
 
 export const __version__ = "0.1.6";

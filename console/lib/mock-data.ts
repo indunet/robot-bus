@@ -1,4 +1,4 @@
-// Types + formatters for the console. Live data comes from `/api/v1/*`.
+// Types + formatters for the console. Live data comes from `/_robot_bus/*` via GrpcNode.
 
 export type BrokerStatus = 'ONLINE' | 'DEGRADED' | 'OFFLINE'
 
@@ -109,61 +109,15 @@ export const EMPTY_BROKER: BrokerInfo = {
   totalErrors: 0,
 }
 
-export async function fetchStatus(): Promise<BrokerInfo> {
-  const res = await fetch('/api/v1/status')
-  if (!res.ok) throw new Error(`status ${res.status}`)
-  const body = (await res.json()) as BrokerInfo
-  return {
-    ...EMPTY_BROKER,
-    ...body,
-    svcCallsPerSec: body.svcCallsPerSec ?? 0,
-    actRunsPerSec: body.actRunsPerSec ?? 0,
-  }
+export function u64(value: string | number | bigint | undefined | null): number {
+  if (value == null || value === '') return 0
+  if (typeof value === 'number') return value
+  if (typeof value === 'bigint') return Number(value)
+  const n = Number(value)
+  return Number.isFinite(n) ? n : 0
 }
 
-export async function fetchTopics(): Promise<TopicInfo[]> {
-  const res = await fetch('/api/v1/topics')
-  if (!res.ok) throw new Error(`topics ${res.status}`)
-  const body = await res.json()
-  return ((body.topics ?? []) as TopicInfo[]).map((t) => ({
-    ...t,
-    typeName: t.typeName,
-    publishers: t.publishers ?? 0,
-    subscribers: t.subscribers ?? 0,
-  }))
-}
-
-export async function fetchTopology(): Promise<TopologyInfo> {
-  const res = await fetch('/api/v1/topology')
-  if (!res.ok) throw new Error(`topology ${res.status}`)
-  const body = (await res.json()) as TopologyInfo
-  return {
-    nodes: body.nodes ?? [],
-    edges: body.edges ?? [],
-  }
-}
-
-export async function fetchServices(): Promise<ServiceInfo[]> {
-  const res = await fetch('/api/v1/services')
-  if (!res.ok) throw new Error(`services ${res.status}`)
-  const body = await res.json()
-  return ((body.services ?? []) as ServiceInfo[]).map((s) => ({
-    ...s,
-    callsPerSec: s.callsPerSec ?? 0,
-  }))
-}
-
-export async function fetchActions(): Promise<ActionInfo[]> {
-  const res = await fetch('/api/v1/actions')
-  if (!res.ok) throw new Error(`actions ${res.status}`)
-  const body = await res.json()
-  return ((body.actions ?? []) as ActionInfo[]).map((a) => ({
-    ...a,
-    runsPerSec: a.runsPerSec ?? 0,
-  }))
-}
-
-/** Merge server topic stats into previous rows, preserving client sparklines. */
+/** Keep client-side sparklines when merging topic snapshots. */
 export function mergeTopics(prev: TopicInfo[], next: TopicInfo[]): TopicInfo[] {
   const prevMap = new Map(prev.map((t) => [t.name, t]))
   return next.map((t) => {

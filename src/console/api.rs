@@ -6,11 +6,11 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use axum::Json;
-use axum::extract::{Path, State};
+use axum::extract::{Extension, Path};
 use axum::http::StatusCode;
 use axum::response::IntoResponse;
 use axum::response::sse::{Event, KeepAlive, Sse};
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 use tokio_stream::StreamExt;
 use tokio_stream::wrappers::BroadcastStream;
 
@@ -63,40 +63,6 @@ struct TopicResponse {
 #[serde(rename_all = "camelCase")]
 struct TopicsEnvelope {
     topics: Vec<TopicResponse>,
-}
-
-#[derive(Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct RegisterTopicRequest {
-    topic: String,
-    type_name: String,
-}
-
-#[derive(Serialize)]
-#[serde(rename_all = "camelCase")]
-struct RegisterTopicResponse {
-    ok: bool,
-}
-
-#[derive(Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct RegisterTopologyRequest {
-    endpoint_id: String,
-    node_name: String,
-    kind: String,
-    topic: String,
-}
-
-#[derive(Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct UnregisterTopologyRequest {
-    endpoint_id: String,
-}
-
-#[derive(Serialize)]
-#[serde(rename_all = "camelCase")]
-struct OkResponse {
-    ok: bool,
 }
 
 #[derive(Serialize)]
@@ -165,7 +131,7 @@ struct ActionsEnvelope {
     actions: Vec<ActionResponse>,
 }
 
-pub async fn status(State(state): State<Arc<ConsoleState>>) -> impl IntoResponse {
+pub async fn status(Extension(state): Extension<Arc<ConsoleState>>) -> impl IntoResponse {
     let rates = state.rates();
     let svc = state.service_rates();
     let act = state.action_rates();
@@ -191,14 +157,14 @@ pub async fn status(State(state): State<Arc<ConsoleState>>) -> impl IntoResponse
     })
 }
 
-pub async fn topics(State(state): State<Arc<ConsoleState>>) -> impl IntoResponse {
+pub async fn topics(Extension(state): Extension<Arc<ConsoleState>>) -> impl IntoResponse {
     Json(TopicsEnvelope {
         topics: merge_topics(&state),
     })
 }
 
 pub async fn topic_info(
-    State(state): State<Arc<ConsoleState>>,
+    Extension(state): Extension<Arc<ConsoleState>>,
     Path(name): Path<String>,
 ) -> impl IntoResponse {
     let name = normalize_topic_path(&name);
@@ -208,60 +174,7 @@ pub async fn topic_info(
     }
 }
 
-pub async fn register_topic(
-    State(state): State<Arc<ConsoleState>>,
-    Json(body): Json<RegisterTopicRequest>,
-) -> impl IntoResponse {
-    let topic = body.topic.trim();
-    let type_name = body.type_name.trim();
-    if topic.is_empty() || type_name.is_empty() {
-        return (
-            StatusCode::BAD_REQUEST,
-            Json(RegisterTopicResponse { ok: false }),
-        )
-            .into_response();
-    }
-    let previous = state.topic_types.register(topic, type_name);
-    if previous.as_deref() != Some(type_name) {
-        state.events.emit(
-            "INFO",
-            "topic-registry",
-            format!("registered {topic} -> {type_name}"),
-        );
-    }
-    (StatusCode::OK, Json(RegisterTopicResponse { ok: true })).into_response()
-}
-
-pub async fn register_topology(
-    State(state): State<Arc<ConsoleState>>,
-    Json(body): Json<RegisterTopologyRequest>,
-) -> impl IntoResponse {
-    let endpoint_id = body.endpoint_id.trim();
-    let node_name = body.node_name.trim();
-    let topic = body.topic.trim();
-    let Some(kind) = EndpointKind::parse(&body.kind) else {
-        return (StatusCode::BAD_REQUEST, Json(OkResponse { ok: false })).into_response();
-    };
-    if endpoint_id.is_empty() || node_name.is_empty() || topic.is_empty() {
-        return (StatusCode::BAD_REQUEST, Json(OkResponse { ok: false })).into_response();
-    }
-    state.topology.register(endpoint_id, node_name, kind, topic);
-    (StatusCode::OK, Json(OkResponse { ok: true })).into_response()
-}
-
-pub async fn unregister_topology(
-    State(state): State<Arc<ConsoleState>>,
-    Json(body): Json<UnregisterTopologyRequest>,
-) -> impl IntoResponse {
-    let endpoint_id = body.endpoint_id.trim();
-    if endpoint_id.is_empty() {
-        return (StatusCode::BAD_REQUEST, Json(OkResponse { ok: false })).into_response();
-    }
-    let ok = state.topology.unregister(endpoint_id);
-    (StatusCode::OK, Json(OkResponse { ok })).into_response()
-}
-
-pub async fn topology(State(state): State<Arc<ConsoleState>>) -> impl IntoResponse {
+pub async fn topology(Extension(state): Extension<Arc<ConsoleState>>) -> impl IntoResponse {
     Json(build_topology(&state))
 }
 
@@ -402,7 +315,7 @@ fn normalize_topic_path(name: &str) -> String {
     }
 }
 
-pub async fn services(State(state): State<Arc<ConsoleState>>) -> impl IntoResponse {
+pub async fn services(Extension(state): Extension<Arc<ConsoleState>>) -> impl IntoResponse {
     let rates = state.service_rates();
     let services = rates
         .services
@@ -421,7 +334,7 @@ pub async fn services(State(state): State<Arc<ConsoleState>>) -> impl IntoRespon
     Json(ServicesEnvelope { services })
 }
 
-pub async fn actions(State(state): State<Arc<ConsoleState>>) -> impl IntoResponse {
+pub async fn actions(Extension(state): Extension<Arc<ConsoleState>>) -> impl IntoResponse {
     let rates = state.action_rates();
     let actions = rates
         .actions
@@ -440,7 +353,7 @@ pub async fn actions(State(state): State<Arc<ConsoleState>>) -> impl IntoRespons
 }
 
 pub async fn events(
-    State(state): State<Arc<ConsoleState>>,
+    Extension(state): Extension<Arc<ConsoleState>>,
 ) -> Sse<impl tokio_stream::Stream<Item = Result<Event, Infallible>>> {
     let history = state.events.recent();
     let rx = state.events.subscribe();

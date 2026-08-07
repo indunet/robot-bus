@@ -71,6 +71,13 @@ impl Publisher {
         Ok(())
     }
 
+    /// Milliseconds; `-1` waits forever. Used by console status publisher so
+    /// shutdown cannot block on a full capture HWM.
+    pub fn set_send_timeout_ms(&self, ms: i32) -> Result<()> {
+        self.socket.set_sndtimeo(ms)?;
+        Ok(())
+    }
+
     pub fn publish(&self, topic: &str, payload: &[u8]) -> Result<()> {
         self.socket.send_multipart([topic.as_bytes(), payload], 0)?;
         Ok(())

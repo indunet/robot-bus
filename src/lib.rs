@@ -2,6 +2,7 @@
 
 pub mod action_bus;
 pub mod broker;
+pub mod console_topics;
 pub mod discovery;
 pub mod errors;
 pub mod message_bus;

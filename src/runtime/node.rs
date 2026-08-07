@@ -67,8 +67,9 @@ pub struct NodeOptions {
     pub transport: String,
     /// gRPC gateway base URL when `transport == "grpc"` (e.g. `http://127.0.0.1:15770`).
     pub grpc_url: Option<String>,
-    /// Embedded console HTTP base URL for topic type registration / introspection
-    /// (e.g. `http://127.0.0.1:15771`). Filled by discovery when the broker announces it.
+    /// Embedded console HTTP base URL (same origin as gRPC when co-located).
+    /// Filled by discovery when the broker announces it. Used by `rbus` / introspection
+    /// clients; topology registration goes over the message bus.
     pub console_url: Option<String>,
     pub message_xsub: Option<String>,
     pub message_xpub: Option<String>,
@@ -1215,7 +1216,9 @@ impl Node {
             _marker: PhantomData,
         };
         topic_type_register::register_topic_type(
-            self.options.console_url.as_deref(),
+            self.options.service_frontend.as_deref(),
+            &self.options.host,
+            &self.options.transport,
             &topic,
             &M::full_name(),
         );
@@ -1236,7 +1239,9 @@ impl Node {
     ) -> Result<TopicPublisherRaw> {
         let topic = topic.into();
         let topology = Some(TopologyEndpointGuard::start(
-            self.options.console_url.as_deref(),
+            self.options.service_frontend.as_deref(),
+            &self.options.host,
+            &self.options.transport,
             &self.name,
             "publisher",
             &topic,
@@ -1273,7 +1278,9 @@ impl Node {
             _marker: PhantomData,
         };
         topic_type_register::register_topic_type(
-            self.options.console_url.as_deref(),
+            self.options.service_frontend.as_deref(),
+            &self.options.host,
+            &self.options.transport,
             &topic,
             &M::full_name(),
         );
@@ -1404,7 +1411,9 @@ impl Node {
             .cloned()
             .unwrap_or_else(|| self.default_callback_group.clone());
         let topology = TopologyEndpointGuard::start(
-            self.options.console_url.as_deref(),
+            self.options.service_frontend.as_deref(),
+            &self.options.host,
+            &self.options.transport,
             &self.name,
             "subscriber",
             topic,

@@ -30,8 +30,7 @@ fn test_broker_config(
     svc_be: u16,
     act_fe: u16,
     act_be: u16,
-    grpc: u16,
-    console: u16,
+    http: u16,
 ) -> RobotBusConfig {
     RobotBusConfig {
         message: BusConfig {
@@ -57,12 +56,12 @@ fn test_broker_config(
             ..DiscoveryConfig::default()
         },
         grpc: GrpcBrokerConfig {
-            listen: format!("127.0.0.1:{grpc}").parse().unwrap(),
+            listen: format!("127.0.0.1:{http}").parse().unwrap(),
             ..GrpcBrokerConfig::default()
         },
         console: ConsoleBrokerConfig {
             enabled: true,
-            listen: format!("127.0.0.1:{console}").parse().unwrap(),
+            listen: format!("127.0.0.1:{http}").parse().unwrap(),
             cors_origins: vec![],
         },
     }
@@ -88,21 +87,14 @@ fn run_rbus(url: &str, args: &[&str]) -> (i32, String, String) {
 #[test]
 fn rbus_lists_and_status() {
     let _guard = lock_brokers();
-    let console_port = 27771u16;
+    let http_port = 27770u16;
     let broker = RobotBusBroker::start(test_broker_config(
-        27560,
-        27561,
-        27662,
-        27663,
-        27664,
-        27665,
-        27770,
-        console_port,
+        27560, 27561, 27662, 27663, 27664, 27665, http_port,
     ))
     .expect("start broker");
     thread::sleep(Duration::from_millis(200));
 
-    let url = format!("http://127.0.0.1:{console_port}");
+    let url = format!("http://127.0.0.1:{http_port}");
 
     // Empty topic list is fine (exit 0).
     let (code, stdout, stderr) = run_rbus(&url, &["topic", "list"]);
@@ -112,12 +104,12 @@ fn rbus_lists_and_status() {
         "expected empty topics, got {stdout}"
     );
 
-    let sub = Subscriber::new(Some("tcp://127.0.0.1:27561")).expect("subscriber");
-    sub.subscribe("/rbus").expect("subscribe");
-    thread::sleep(Duration::from_millis(200));
-
     let pub_ = Publisher::new(Some("tcp://127.0.0.1:27560")).expect("publisher");
     thread::sleep(Duration::from_millis(100));
+    let sub = Subscriber::new(Some("tcp://127.0.0.1:27561")).expect("subscriber");
+    sub.subscribe("/rbus").expect("subscribe");
+    thread::sleep(Duration::from_millis(500));
+
     for _ in 0..10 {
         pub_.publish("/rbus/cli", &[0u8; 4]).unwrap();
         thread::sleep(Duration::from_millis(5));

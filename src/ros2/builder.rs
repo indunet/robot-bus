@@ -918,7 +918,7 @@ fn wire_action_route(
                                     .lock()
                                     .map_err(|e| format!("bus action client lock poisoned: {e}"))?;
                                 guard
-                                    .send_goal(&bus_goal, None, Some(timeout))
+                                    .send_goal_and_wait(&bus_goal, None, Some(timeout))
                                     .map_err(|e| e.to_string())
                             })
                             .await;

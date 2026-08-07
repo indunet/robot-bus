@@ -15,13 +15,26 @@ import {
   type ActionEvent as PbActionEvent,
 } from "../generated/robot_bus_interface/grpc/v1/action_gateway.js";
 import { decode, encode, type MessageType } from "./typed.js";
+import {
+  TOPIC_TYPE_REGISTER,
+  TOPOLOGY_REGISTER,
+  TOPOLOGY_UNREGISTER,
+} from "./console-topics.js";
+import {
+  TopologyRegister,
+  TopologyUnregister,
+  TopicTypeRegister,
+} from "../generated/robot_bus_interface/msg/v1/console_status.js";
 
 export const DEFAULT_GRPC_URL = "http://127.0.0.1:15770";
-const DEFAULT_CONSOLE_URL = "http://127.0.0.1:15771";
 const DEFAULT_TOPOLOGY_REFRESH_MS = 10_000;
 
 export interface GrpcNodeOptions {
-  /** Console HTTP base URL. `null` disables topology and topic-type registration. */
+  /**
+   * When `null`, disables topology and topic-type registration.
+   * Otherwise registration uses the broker control-plane services via gRPC-Web
+   * (same gateway URL as this node). The option name is retained for API compat.
+   */
   consoleUrl?: string | null;
   /** Topology lease refresh interval. Defaults to 10 seconds. */
   topologyRefreshMs?: number;
@@ -33,13 +46,6 @@ interface TopologyEndpoint {
   endpointId: string;
   kind: TopologyKind;
   topic: string;
-}
-
-function defaultConsoleUrl(): string {
-  if (typeof globalThis.location !== "undefined" && globalThis.location.origin) {
-    return globalThis.location.origin;
-  }
-  return DEFAULT_CONSOLE_URL;
 }
 
 function endpointId(): string {
@@ -243,7 +249,7 @@ export class GrpcNode {
   private readonly serviceClient: ServiceGatewayClient;
   private readonly actionClient: ActionGatewayClient;
   private readonly subscriptions = new Map<string, SubCallback[]>();
-  private readonly consoleUrl: string | null;
+  private readonly topologyEnabled: boolean;
   private readonly topologyRefreshMs: number;
   private readonly topologyEndpoints = new Map<string, TopologyEndpoint>();
   private readonly topicTypes = new Map<string, string>();
@@ -259,10 +265,7 @@ export class GrpcNode {
   private constructor(name: string, url: string, options: GrpcNodeOptions = {}) {
     this.name = name;
     this.url = url.replace(/\/$/, "");
-    this.consoleUrl =
-      options.consoleUrl === null
-        ? null
-        : (options.consoleUrl ?? defaultConsoleUrl()).replace(/\/$/, "");
+    this.topologyEnabled = options.consoleUrl !== null;
     this.topologyRefreshMs = Math.max(100, options.topologyRefreshMs ?? DEFAULT_TOPOLOGY_REFRESH_MS);
     this.transport = new GrpcWebFetchTransport({
       baseUrl: this.url,
@@ -502,7 +505,7 @@ export class GrpcNode {
   }
 
   private startTopologyRegistration(): void {
-    if (this.topologyStarted || !this.consoleUrl || typeof fetch === "undefined") return;
+    if (this.topologyStarted || !this.topologyEnabled) return;
     this.topologyStarted = true;
     this.refreshTopology();
     this.topologyTimer = setInterval(() => this.refreshTopology(), this.topologyRefreshMs);
@@ -514,9 +517,12 @@ export class GrpcNode {
     if (this.topologyTimer) clearInterval(this.topologyTimer);
     this.topologyTimer = null;
     for (const endpoint of this.topologyEndpoints.values()) {
-      this.postConsole("/api/v1/topology/unregister", {
-        endpointId: endpoint.endpointId,
-      });
+      this.publishControl(
+        TOPOLOGY_UNREGISTER,
+        TopologyUnregister.toBinary(
+          TopologyUnregister.create({ endpointId: endpoint.endpointId }),
+        ),
+      );
     }
   }
 
@@ -530,26 +536,31 @@ export class GrpcNode {
   }
 
   private registerEndpoint(endpoint: TopologyEndpoint): void {
-    this.postConsole("/api/v1/topology/register", {
-      endpointId: endpoint.endpointId,
-      nodeName: this.name,
-      kind: endpoint.kind,
-      topic: endpoint.topic,
-    });
+    this.publishControl(
+      TOPOLOGY_REGISTER,
+      TopologyRegister.toBinary(
+        TopologyRegister.create({
+          endpointId: endpoint.endpointId,
+          nodeName: this.name,
+          kind: endpoint.kind,
+          topic: endpoint.topic,
+        }),
+      ),
+    );
   }
 
   private registerTopicType(topic: string, typeName: string): void {
-    this.postConsole("/api/v1/topics/register", { topic, typeName });
+    this.publishControl(
+      TOPIC_TYPE_REGISTER,
+      TopicTypeRegister.toBinary(
+        TopicTypeRegister.create({ topic, typeName }),
+      ),
+    );
   }
 
-  private postConsole(path: string, body: object): void {
-    if (!this.consoleUrl || typeof fetch === "undefined") return;
-    void fetch(`${this.consoleUrl}${path}`, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify(body),
-      keepalive: true,
-    }).catch(() => {
+  private publishControl(topic: string, payload: Uint8Array): void {
+    if (!this.topologyEnabled) return;
+    void this.callService(topic, payload, 2).catch(() => {
       // Console introspection is best-effort and must not break message traffic.
     });
   }

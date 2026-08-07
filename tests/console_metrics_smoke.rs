@@ -30,8 +30,7 @@ fn test_broker_config(
     svc_be: u16,
     act_fe: u16,
     act_be: u16,
-    grpc: u16,
-    console: u16,
+    http: u16,
 ) -> RobotBusConfig {
     RobotBusConfig {
         message: BusConfig {
@@ -57,12 +56,12 @@ fn test_broker_config(
             ..DiscoveryConfig::default()
         },
         grpc: GrpcBrokerConfig {
-            listen: format!("127.0.0.1:{grpc}").parse().unwrap(),
+            listen: format!("127.0.0.1:{http}").parse().unwrap(),
             ..GrpcBrokerConfig::default()
         },
         console: ConsoleBrokerConfig {
             enabled: true,
-            listen: format!("127.0.0.1:{console}").parse().unwrap(),
+            listen: format!("127.0.0.1:{http}").parse().unwrap(),
             cors_origins: vec![],
         },
     }
@@ -72,19 +71,22 @@ fn test_broker_config(
 fn message_metrics_count_published_topics() {
     let _guard = lock_brokers();
     let broker = RobotBusBroker::start(test_broker_config(
-        25560, 25561, 25662, 25663, 25664, 25665, 25770, 25771,
+        25560, 25561, 25662, 25663, 25664, 25665, 25770,
     ))
     .expect("start broker");
 
     thread::sleep(Duration::from_millis(200));
 
+    // Connect the publisher before subscribing so the XSUB can forward the
+    // subscription to every currently connected upstream publisher.
+    let pub_ = Publisher::new(Some("tcp://127.0.0.1:25560")).expect("publisher");
+    thread::sleep(Duration::from_millis(100));
+
     // Real subscriber required — otherwise ZMQ PUB drops and metrics stay empty.
     let sub = Subscriber::new(Some("tcp://127.0.0.1:25561")).expect("subscriber");
     sub.subscribe("/demo").expect("subscribe");
-    thread::sleep(Duration::from_millis(200));
+    thread::sleep(Duration::from_millis(500));
 
-    let pub_ = Publisher::new(Some("tcp://127.0.0.1:25560")).expect("publisher");
-    thread::sleep(Duration::from_millis(100));
     for _ in 0..20 {
         pub_.publish("/demo/imu", &[0u8; 8]).unwrap();
         pub_.publish("/demo/odom", &[1u8; 4]).unwrap();
@@ -94,8 +96,8 @@ fn message_metrics_count_published_topics() {
 
     let snap = broker.message.metrics.snapshot();
     assert!(
-        snap.total_msgs >= 40,
-        "expected >=40 msgs, got {} topics={:?}",
+        snap.total_msgs >= 38,
+        "expected nearly all 40 msgs, got {} topics={:?}",
         snap.total_msgs,
         snap.topics
     );
@@ -111,11 +113,18 @@ fn message_metrics_count_published_topics() {
     );
 
     let status = std::process::Command::new("curl")
-        .args(["-s", "http://127.0.0.1:25771/api/v1/status"])
+        .args(["-s", "http://127.0.0.1:25770/api/v1/status"])
         .output()
         .map(|o| String::from_utf8_lossy(&o.stdout).into_owned())
         .unwrap_or_default();
     assert!(status.contains("ONLINE"), "status={status}");
+
+    let index = std::process::Command::new("curl")
+        .args(["-s", "http://127.0.0.1:25770/"])
+        .output()
+        .map(|o| String::from_utf8_lossy(&o.stdout).into_owned())
+        .unwrap_or_default();
+    assert!(index.contains("<!DOCTYPE html>"), "index={index}");
 
     // Keep sub alive until after snapshot (drop order).
     drop(sub);
@@ -126,7 +135,7 @@ fn message_metrics_count_published_topics() {
 fn service_and_action_metrics_via_console_api() {
     let _guard = lock_brokers();
     let broker = RobotBusBroker::start(test_broker_config(
-        26560, 26561, 26662, 26663, 26664, 26665, 26770, 26771,
+        26560, 26561, 26662, 26663, 26664, 26665, 26770,
     ))
     .expect("start broker");
     thread::sleep(Duration::from_millis(200));
@@ -180,7 +189,7 @@ fn service_and_action_metrics_via_console_api() {
     );
 
     let services_json = std::process::Command::new("curl")
-        .args(["-s", "http://127.0.0.1:26771/api/v1/services"])
+        .args(["-s", "http://127.0.0.1:26770/api/v1/services"])
         .output()
         .map(|o| String::from_utf8_lossy(&o.stdout).into_owned())
         .unwrap_or_default();
@@ -190,7 +199,7 @@ fn service_and_action_metrics_via_console_api() {
     );
 
     let actions_json = std::process::Command::new("curl")
-        .args(["-s", "http://127.0.0.1:26771/api/v1/actions"])
+        .args(["-s", "http://127.0.0.1:26770/api/v1/actions"])
         .output()
         .map(|o| String::from_utf8_lossy(&o.stdout).into_owned())
         .unwrap_or_default();

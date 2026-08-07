@@ -18,7 +18,7 @@ message BrokerAnnounce {
   optional string ipc_dir = 7;
   optional string inproc_prefix = 8;
   optional string grpc_url = 9;
-  // Embedded console HTTP base URL when enabled (e.g. http://10.0.0.5:15771).
+  // Embedded console HTTP base URL when enabled (same origin as grpc_url when co-located).
   optional string console_url = 10;
 }
 

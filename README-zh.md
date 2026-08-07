@@ -76,7 +76,7 @@ cargo run --bin robot_bus_broker
 
 ### 自省 CLI（`rbus`）
 
-查询 broker console 的 HTTP API（默认 `http://127.0.0.1:15771`；可用 `--url` 或环境变量 `ROBOT_BUS_BROKER_URL` 覆盖）：
+查询 broker console 的 HTTP API（默认 `http://127.0.0.1:15770`；可用 `--url` 或环境变量 `ROBOT_BUS_BROKER_URL` 覆盖）：
 
 ```bash
 cargo run --bin rbus -- topic list
@@ -309,7 +309,7 @@ pub_.set_high_water_mark(HighWaterMark { snd: 10, rcv: 10 })?;
 
 ## Web 控制台（`console/`）
 
-可选 broker 监控前端：Overview、Topics、Services、Actions、Topology、事件日志。开启 `console` feature（默认）时，先构建一次静态资源后，broker 在 `0.0.0.0:15771` 提供**嵌入式** UI。
+可选 broker 监控前端：Overview、Topics、Services、Actions、Topology、事件日志。开启 `console` feature（默认）时，先构建一次静态资源后，broker 在 `0.0.0.0:15770` 提供**嵌入式** UI。
 
 **开发（热更新，推荐）：**
 
@@ -326,13 +326,13 @@ cd console && pnpm install && pnpm dev
 ```bash
 just console          # pnpm build + sync → assets/console/（已 gitignore）
 cargo run --bin robot_bus_broker
-# 打开 http://localhost:15771
+# 打开 http://localhost:15770
 # 关闭：cargo run --bin robot_bus_broker -- --no-console
 ```
 
 `assets/console/` 是**构建产物**（不提交）。CI / 发布在带 `console` feature 编译前会先生成该目录。
 
-已对接 broker 同端口监控 API：`GET /api/v1/status`、`GET /api/v1/topics`、`GET /api/v1/services`、`GET /api/v1/actions`、`GET /api/v1/topology`、`SSE /api/v1/events`。Topology 依赖 `Node` 创建 publisher/subscription 时的 best-effort 登记。领域可视化、Flow、LIVE / WHEP 在同级仓库 **[robot-bus-tools](https://github.com/indunet/robot-bus-tools)** 的 Studio。前端源码在 `console/`；只有生成的静态文件会编进带 `console` feature 的二进制。
+已对接 **与 gRPC-Web 同一端口**（`0.0.0.0:15770`）：Dashboard 是 TypeScript `GrpcNode`，订阅 `/_robot_bus/*` 系统话题。`rbus` / 工具仍可用 REST 只读 shim（`GET /api/v1/...`）。拓扑与类型登记通过现有 service bus 上的可靠控制面服务（`/_robot_bus/topology/register`、`/_robot_bus/topic_type/register`）。领域可视化、Flow、LIVE / WHEP 在同级仓库 **[robot-bus-tools](https://github.com/indunet/robot-bus-tools)** 的 Studio。前端源码在 `console/`；只有生成的静态文件会编进带 `console` feature 的二进制。
 
 ## gRPC / gRPC-Web 网关
 

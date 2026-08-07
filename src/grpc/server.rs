@@ -1,14 +1,17 @@
-//! HTTP server: native gRPC + gRPC-Web on one port.
+//! HTTP server: native gRPC + gRPC-Web (+ optional console) on one port.
 
 use std::future::Future;
 use std::net::SocketAddr;
+#[cfg(feature = "console")]
+use std::sync::Arc;
 
 use anyhow::{Context, Result};
+#[cfg(feature = "console")]
+use axum::routing::get;
 use http::Method;
 use http::header::HeaderName;
 use tokio::net::TcpListener;
-use tonic::transport::Server;
-use tonic::transport::server::TcpIncoming;
+use tonic::service::Routes;
 use tonic_web::GrpcWebLayer;
 use tower_http::cors::{AllowOrigin, Any, CorsLayer};
 
@@ -19,7 +22,10 @@ use super::pb::message_gateway_server::MessageGatewayServer;
 use super::pb::service_gateway_server::ServiceGatewayServer;
 use super::service::ServiceGatewayService;
 
-#[derive(Clone, Debug)]
+#[cfg(feature = "console")]
+use crate::console::{self, ConsoleState};
+
+#[derive(Clone)]
 pub struct GatewayConfig {
     pub listen: SocketAddr,
     pub message_xpub: String,
@@ -28,6 +34,9 @@ pub struct GatewayConfig {
     pub action_frontend: String,
     /// When empty, allow any origin (local-dev default).
     pub cors_origins: Vec<String>,
+    /// When set (feature `console`), serve REST + static UI on the same listener.
+    #[cfg(feature = "console")]
+    pub console: Option<Arc<ConsoleState>>,
 }
 
 impl Default for GatewayConfig {
@@ -43,6 +52,8 @@ impl Default for GatewayConfig {
             action_frontend: crate::transports::action_frontend_endpoint("127.0.0.1", "tcp")
                 .unwrap_or_else(|_| "tcp://127.0.0.1:15664".to_string()),
             cors_origins: Vec::new(),
+            #[cfg(feature = "console")]
+            console: None,
         }
     }
 }
@@ -75,29 +86,43 @@ pub async fn serve_on_listener(
     let action = ActionGatewayService::new(config.action_frontend.clone());
     let cors = build_cors(&config.cors_origins)?;
 
+    #[cfg(feature = "console")]
+    let with_console = config.console.is_some();
+    #[cfg(not(feature = "console"))]
+    let with_console = false;
+
     log::info!(
-        "robot_bus gRPC gateway listening on http://{} (gRPC + gRPC-Web); \
+        "robot_bus gRPC gateway listening on http://{} (gRPC + gRPC-Web{}); \
          message XPUB {}; message XSUB {}; service frontend {}; action frontend {}",
         config.listen,
+        if with_console { " + console" } else { "" },
         config.message_xpub,
         config.message_xsub,
         config.service_frontend,
         config.action_frontend
     );
-
-    // TcpListenerStream alone leaves TCP_NODELAY off; with serve_with_incoming_*
-    // tonic's Server::tcp_nodelay() is ignored — wrap so small streaming frames
-    // are not delayed by Nagle (~40ms classic delayed-ACK stall on action streams).
-    let incoming = TcpIncoming::from(listener).with_nodelay(Some(true));
-
-    Server::builder()
-        .accept_http1(true)
-        .layer(cors)
-        .layer(GrpcWebLayer::new())
+    let app = Routes::default()
         .add_service(MessageGatewayServer::new(message))
         .add_service(ServiceGatewayServer::new(service))
         .add_service(ActionGatewayServer::new(action))
-        .serve_with_incoming_shutdown(incoming, shutdown)
+        .into_axum_router()
+        // Only wrap gRPC routes — GrpcWebLayer returns 400 for plain HTTP/1.1
+        // (REST / static must stay outside this layer).
+        .layer(GrpcWebLayer::new());
+
+    #[cfg(feature = "console")]
+    let app = match config.console {
+        Some(state) => app
+            .merge(console::api_router(state))
+            .fallback(get(console::static_handler)),
+        None => app,
+    };
+
+    let app = app.layer(cors);
+
+    // hyper auto HTTP/1 + HTTP/2 (native gRPC needs h2; browsers need HTTP/1 grpc-web).
+    axum::serve(listener, app)
+        .with_graceful_shutdown(shutdown)
         .await
         .context("gateway server")?;
     Ok(())

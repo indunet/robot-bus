@@ -1,13 +1,8 @@
 'use client'
 
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import {
   EMPTY_BROKER,
-  fetchStatus,
-  fetchTopics,
-  fetchServices,
-  fetchActions,
-  fetchTopology,
   mergeTopics,
   type BrokerInfo,
   type TopicInfo,
@@ -16,6 +11,7 @@ import {
   type ActionInfo,
   type TopologyInfo,
 } from '@/lib/mock-data'
+import { startConsoleBus } from '@/lib/console-bus'
 import StatusBar from './StatusBar'
 import Sidebar, { type Tab } from './Sidebar'
 import BrokerOverview from './BrokerOverview'
@@ -51,57 +47,38 @@ export default function Dashboard() {
   const [activeTab, setActiveTab] = useState<Tab>('overview')
   const [botWindows, setBotWindows] = useState({ sim: false, teleop: false })
   const seenLogIds = useRef(new Set<string>())
-
-  const poll = useCallback(async () => {
-    try {
-      const [status, topicList, serviceList, actionList, topo] = await Promise.all([
-        fetchStatus(),
-        fetchTopics(),
-        fetchServices(),
-        fetchActions(),
-        fetchTopology(),
-      ])
-      setBroker(status)
-      setTopics((prev) => mergeTopics(prev, topicList))
-      setServices(serviceList)
-      setActions(actionList)
-      setTopology(topo)
-      const now = new Date()
-      const label = now.toLocaleTimeString(dateLocale, {
-        minute: '2-digit',
-        second: '2-digit',
-        hour12: false,
-      })
-      setThroughput((prev) => appendRatePoint(prev, label, status.msgPerSec))
-      setSvcRate((prev) => appendRatePoint(prev, label, status.svcCallsPerSec ?? 0))
-      setActRate((prev) => appendRatePoint(prev, label, status.actRunsPerSec ?? 0))
-    } catch {
-      setBroker((prev) => ({ ...prev, status: 'OFFLINE' }))
-    }
-  }, [dateLocale])
+  const dateLocaleRef = useRef(dateLocale)
+  dateLocaleRef.current = dateLocale
 
   useEffect(() => {
-    void poll()
-    const id = setInterval(() => void poll(), 1000)
-    return () => clearInterval(id)
-  }, [poll])
-
-  useEffect(() => {
-    const es = new EventSource('/api/v1/events')
-    es.addEventListener('log', (ev) => {
-      try {
-        const entry = JSON.parse((ev as MessageEvent).data) as LogEntry
+    return startConsoleBus({
+      onStatus: (status) => {
+        setBroker(status)
+        const now = new Date()
+        const label = now.toLocaleTimeString(dateLocaleRef.current, {
+          minute: '2-digit',
+          second: '2-digit',
+          hour12: false,
+        })
+        setThroughput((prev) => appendRatePoint(prev, label, status.msgPerSec))
+        setSvcRate((prev) => appendRatePoint(prev, label, status.svcCallsPerSec ?? 0))
+        setActRate((prev) => appendRatePoint(prev, label, status.actRunsPerSec ?? 0))
+      },
+      onTopics: (topicList) => {
+        setTopics((prev) => mergeTopics(prev, topicList))
+      },
+      onServices: setServices,
+      onActions: setActions,
+      onTopology: setTopology,
+      onEvent: (entry) => {
         if (seenLogIds.current.has(entry.id)) return
         seenLogIds.current.add(entry.id)
         setLogs((prev) => [...prev.slice(-200), entry])
-      } catch {
-        /* ignore malformed */
-      }
+      },
+      onOffline: () => {
+        setBroker((prev) => ({ ...prev, status: 'OFFLINE' }))
+      },
     })
-    es.onerror = () => {
-      // Browser will retry; mark degraded if status polls also fail.
-    }
-    return () => es.close()
   }, [])
 
   return (

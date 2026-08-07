@@ -166,11 +166,18 @@ pub fn run_with_shutdown_ctx(
         reader.set_rcvhwm(10_000).context("reader rcvhwm")?;
         reader.set_linger(0).context("reader linger")?;
 
-        let stop = shutdown.clone();
-        let metrics_join = thread::spawn(move || capture_metrics_loop(reader, metrics, stop));
+        // Keep draining capture until the proxy thread exits — stopping the
+        // reader early can stall `proxy_steerable_with_capture` on TERMINATE.
+        let capture_stop = Arc::new(AtomicBool::new(false));
+        let capture_stop_flag = Arc::clone(&capture_stop);
+        let metrics_join =
+            thread::spawn(move || capture_metrics_loop(reader, metrics, capture_stop_flag));
         let proxy = thread::spawn(move || {
-            let _ =
-                zmq::proxy_steerable_with_capture(&mut xsub, &mut xpub, &mut capture, &mut control);
+            if let Err(err) =
+                zmq::proxy_steerable_with_capture(&mut xsub, &mut xpub, &mut capture, &mut control)
+            {
+                log::warn!("message bus proxy stopped with error: {err}");
+            }
         });
 
         wait_until_shutdown(&shutdown);
@@ -178,6 +185,7 @@ pub fn run_with_shutdown_ctx(
         proxy
             .join()
             .map_err(|e| anyhow::anyhow!("message bus proxy thread: {e:?}"))?;
+        capture_stop.store(true, Ordering::Release);
         let _ = metrics_join.join();
     } else {
         let proxy = thread::spawn(move || {
@@ -219,6 +227,11 @@ fn capture_metrics_loop(reader: Socket, metrics: Arc<MessageMetrics>, stop: Arc<
             let Some(topic) = frames.first().and_then(|f| std::str::from_utf8(f).ok()) else {
                 continue;
             };
+            // Console snapshot / control-plane traffic is internal bookkeeping,
+            // not user data — drain it but don't let it pollute topic metrics.
+            if topic.starts_with("/_robot_bus/") {
+                continue;
+            }
             let bytes: u64 = frames.iter().map(|f| f.len() as u64).sum();
             metrics.record(topic, bytes);
         }

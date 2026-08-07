@@ -15,6 +15,7 @@ import type {
 
 export * from "./native-types.js";
 export { encode, decode, type MessageType } from "./typed.js";
+export * as consoleTopics from "./console-topics.js";
 export {
   GrpcNode,
   GrpcServiceClient,

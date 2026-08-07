@@ -7,7 +7,7 @@ mod support;
 use std::thread;
 use std::time::Duration;
 
-use prost::Name;
+use prost::{Message, Name};
 use robot_bus::broker::action_bus::ActionBusConfig;
 use robot_bus::broker::message_bus::BusConfig;
 use robot_bus::broker::service_bus::ServiceBusConfig;
@@ -15,8 +15,10 @@ use robot_bus::broker::{
     ConsoleBrokerConfig, DiscoveryConfig, GrpcBrokerConfig, RobotBusBroker, RobotBusConfig,
 };
 use robot_bus::sensor_msgs::msg::v1::Imu;
+use robot_bus::service_bus::ServiceClient;
 use robot_bus::std_msgs::msg::v1::String as BusString;
 use robot_bus::{Node, NodeOptions};
+use robot_bus::{console_topics, robot_bus_interface::msg::v1::TopicTypeRegister};
 use serde::Deserialize;
 use support::lock_brokers;
 
@@ -27,8 +29,7 @@ fn test_broker_config(
     svc_be: u16,
     act_fe: u16,
     act_be: u16,
-    grpc: u16,
-    console: u16,
+    http: u16,
 ) -> RobotBusConfig {
     RobotBusConfig {
         message: BusConfig {
@@ -54,12 +55,12 @@ fn test_broker_config(
             ..DiscoveryConfig::default()
         },
         grpc: GrpcBrokerConfig {
-            listen: format!("127.0.0.1:{grpc}").parse().unwrap(),
+            listen: format!("127.0.0.1:{http}").parse().unwrap(),
             ..GrpcBrokerConfig::default()
         },
         console: ConsoleBrokerConfig {
             enabled: true,
-            listen: format!("127.0.0.1:{console}").parse().unwrap(),
+            listen: format!("127.0.0.1:{http}").parse().unwrap(),
             cors_origins: vec![],
         },
     }
@@ -109,25 +110,18 @@ fn get_topic_info(console_url: &str, topic: &str) -> TopicRow {
 #[test]
 fn typed_publisher_registers_type_before_traffic() {
     let _guard = lock_brokers();
-    let console_port = 28771u16;
+    let http_port = 28770u16;
     let broker = RobotBusBroker::start(test_broker_config(
-        28560,
-        28561,
-        28662,
-        28663,
-        28664,
-        28665,
-        28770,
-        console_port,
+        28560, 28561, 28662, 28663, 28664, 28665, http_port,
     ))
     .expect("start broker");
     thread::sleep(Duration::from_millis(200));
 
-    let console_url = format!("http://127.0.0.1:{console_port}");
+    let console_url = format!("http://127.0.0.1:{http_port}");
     let opts = NodeOptions {
         message_xsub: Some("tcp://127.0.0.1:28560".into()),
         message_xpub: Some("tcp://127.0.0.1:28561".into()),
-        console_url: Some(console_url.clone()),
+        service_frontend: Some("tcp://127.0.0.1:28662".into()),
         ..NodeOptions::default()
     };
     let mut node = Node::with_options("type_reg", opts);
@@ -135,8 +129,8 @@ fn typed_publisher_registers_type_before_traffic() {
         .create_publisher::<Imu>("/robot1/imu")
         .expect("create_publisher");
 
-    // Give HTTP register a moment (sync, but settle console).
-    thread::sleep(Duration::from_millis(50));
+    // Bus control-plane register + console settle.
+    thread::sleep(Duration::from_millis(500));
 
     let list = get_topics(&console_url);
     let row = list
@@ -151,41 +145,38 @@ fn typed_publisher_registers_type_before_traffic() {
     assert_eq!(info.name, "/robot1/imu");
     assert_eq!(info.type_name.as_deref(), Some("sensor_msgs.msg.v1.Imu"));
 
+    drop(_pub);
+    drop(node);
     broker.stop().expect("stop");
 }
 
 #[test]
 fn type_register_last_write_wins() {
     let _guard = lock_brokers();
-    let console_port = 28871u16;
+    let http_port = 28870u16;
     let broker = RobotBusBroker::start(test_broker_config(
-        28860,
-        28861,
-        28862,
-        28863,
-        28864,
-        28865,
-        28870,
-        console_port,
+        28860, 28861, 28862, 28863, 28864, 28865, http_port,
     ))
     .expect("start broker");
     thread::sleep(Duration::from_millis(200));
 
-    let console_url = format!("http://127.0.0.1:{console_port}");
-    let body1 = serde_json::json!({
-        "topic": "/conflict",
-        "typeName": "sensor_msgs.msg.v1.Imu",
-    });
-    let body2 = serde_json::json!({
-        "topic": "/conflict",
-        "typeName": BusString::full_name(),
-    });
-    ureq::post(&format!("{console_url}/api/v1/topics/register"))
-        .send_json(body1)
-        .expect("register 1");
-    ureq::post(&format!("{console_url}/api/v1/topics/register"))
-        .send_json(body2)
-        .expect("register 2");
+    let console_url = format!("http://127.0.0.1:{http_port}");
+    let client = ServiceClient::new(Some("tcp://127.0.0.1:28862")).expect("control client");
+    for type_name in ["sensor_msgs.msg.v1.Imu".to_string(), BusString::full_name()] {
+        let payload = TopicTypeRegister {
+            topic: "/conflict".into(),
+            type_name,
+        }
+        .encode_to_vec();
+        client
+            .call(
+                console_topics::TOPIC_TYPE_REGISTER,
+                &payload,
+                None,
+                Some(Duration::from_secs(3)),
+            )
+            .expect("register type");
+    }
 
     let info = get_topic_info(&console_url, "/conflict");
     assert_eq!(

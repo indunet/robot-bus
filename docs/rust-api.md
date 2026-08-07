@@ -31,7 +31,7 @@ cargo run --bin robot_bus_broker
 | action backend | `tcp://0.0.0.0:15665` | `ipc:///tmp/robot_bus/action_bus_backend.ipc` | `inproc://robot_bus/action_bus/backend` |
 | grpc | `0.0.0.0:15770` | — | — |
 | grpc-web | `0.0.0.0:15770` | — | — |
-| console http | `0.0.0.0:15771` | — | — |
+| console http | `0.0.0.0:15770` | — | — |
 | discovery (UDP multicast) | `239.255.76.67:15550` | — | — |
 
 SDK 侧 `Node::new` 默认连本机 **tcp**（`localhost` + 上表端口）；`Node::ipc` / `Node::inproc` / `Node::grpc` 分别走对应传输。
@@ -131,7 +131,7 @@ ros__parameters:
 
 接近 ROS 2：`Node::new` → typed `create_publisher` / `create_subscription`（创建时绑定消息类型，自动 encode/decode）→ `node.spin()`。底层与 gRPC 仍传 opaque bytes。
 
-Typed `create_publisher::<M>` 会向 broker console（默认 `http://127.0.0.1:15771`，或 `NodeOptions.console_url` / 环境变量 `ROBOT_BUS_BROKER_URL` / discovery 的 `console_url`）**best-effort** 登记 `topic → M::full_name()`（如 `sensor_msgs.msg.v1.Imu`）。登记失败只打日志，不影响 publish。`create_publisher_raw` 不登记。可用 `rbus topic list` / `rbus topic info /path` 查看。
+Typed `create_publisher::<M>` 会向 broker 控制面（service bus 服务 `/_robot_bus/topic_type/register`）**best-effort** 登记 `topic → M::full_name()`（如 `sensor_msgs.msg.v1.Imu`）。登记失败只打日志，不影响 publish。`create_publisher_raw` 不登记。可用 `rbus topic list` / `rbus topic info /path` 查看（HTTP 默认 `http://127.0.0.1:15770`）。
 
 ```rust
 use std::sync::Arc;

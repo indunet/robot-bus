@@ -197,14 +197,16 @@ impl ConsoleState {
     pub fn rates(&self) -> RateView {
         let now = Instant::now();
         let mut guard = self.msg_rate.lock().unwrap_or_else(|e| e.into_inner());
+        let snap = self.metrics.snapshot();
 
         if let Some(prev) = guard.as_ref()
             && now.duration_since(prev.at) < Duration::from_millis(RATE_BASELINE_MS)
+            && snap.total_msgs == prev.snap.total_msgs
+            && snap.topics.len() == prev.snap.topics.len()
         {
             return prev.view.clone();
         }
 
-        let snap = self.metrics.snapshot();
         let view = match guard.as_ref() {
             Some(prev) => {
                 let dt = now.duration_since(prev.at).as_secs_f64().max(1e-3);
@@ -225,14 +227,16 @@ impl ConsoleState {
     pub fn service_rates(&self) -> ServiceRateView {
         let now = Instant::now();
         let mut guard = self.svc_rate.lock().unwrap_or_else(|e| e.into_inner());
+        let snap = self.service_metrics.snapshot();
 
         if let Some(prev) = guard.as_ref()
             && now.duration_since(prev.at) < Duration::from_millis(RATE_BASELINE_MS)
+            && snap.total_calls == prev.snap.total_calls
+            && snap.services.len() == prev.snap.services.len()
         {
             return prev.view.clone();
         }
 
-        let snap = self.service_metrics.snapshot();
         let view = match guard.as_ref() {
             Some(prev) => {
                 let dt = now.duration_since(prev.at).as_secs_f64().max(1e-3);
@@ -253,14 +257,16 @@ impl ConsoleState {
     pub fn action_rates(&self) -> ActionRateView {
         let now = Instant::now();
         let mut guard = self.act_rate.lock().unwrap_or_else(|e| e.into_inner());
+        let snap = self.action_metrics.snapshot();
 
         if let Some(prev) = guard.as_ref()
             && now.duration_since(prev.at) < Duration::from_millis(RATE_BASELINE_MS)
+            && snap.total_runs == prev.snap.total_runs
+            && snap.actions.len() == prev.snap.actions.len()
         {
             return prev.view.clone();
         }
 
-        let snap = self.action_metrics.snapshot();
         let view = match guard.as_ref() {
             Some(prev) => {
                 let dt = now.duration_since(prev.at).as_secs_f64().max(1e-3);

@@ -22,10 +22,10 @@ use crate::generated::robot_bus_interface::msg::v1::TcpPorts;
 use crate::runtime::Context as BusContext;
 use crate::transports::IPC_DIR;
 
+#[cfg(all(feature = "console", not(feature = "grpc")))]
+use crate::console::serve_with_shutdown as serve_console_with_shutdown;
 #[cfg(feature = "console")]
-use crate::console::{
-    BrokerEndpoints, ConsoleState, serve_with_shutdown as serve_console_with_shutdown,
-};
+use crate::console::{BrokerEndpoints, ConsoleState, ControlPlaneHandle, StatusPublisherHandle};
 #[cfg(feature = "grpc")]
 use crate::grpc::{GatewayConfig, serve_on_listener};
 #[cfg(any(feature = "grpc", feature = "console"))]
@@ -236,11 +236,17 @@ impl Default for GrpcBrokerConfig {
 }
 
 /// Embedded Web console HTTP options (feature `console`, enabled by default).
+///
+/// When the `grpc` feature is also enabled, the console UI + REST API are served
+/// on [`GrpcBrokerConfig::listen`] instead — gRPC, gRPC-Web, and the console all
+/// share one port. `listen` here only takes effect when `grpc` is disabled (or
+/// this crate is built console-only).
 #[cfg(feature = "console")]
 #[derive(Clone, Debug)]
 pub struct ConsoleBrokerConfig {
-    /// When false, the console HTTP server is not started.
+    /// When false, the console is not started.
     pub enabled: bool,
+    /// Listen address used only when the `grpc` feature is disabled.
     pub listen: SocketAddr,
     /// Explicit CORS allowlist for cross-origin Studio / browser clients.
     /// Empty (default) disables CORS headers. Never uses `*`.
@@ -252,7 +258,7 @@ impl Default for ConsoleBrokerConfig {
     fn default() -> Self {
         Self {
             enabled: true,
-            listen: "0.0.0.0:15771".parse().expect("default console listen"),
+            listen: "0.0.0.0:15770".parse().expect("default console listen"),
             cors_origins: Vec::new(),
         }
     }
@@ -298,21 +304,16 @@ impl GrpcGatewayHandle {
             rt.block_on(async move {
                 let listener = tokio::net::TcpListener::from_std(std_listener)
                     .context("tokio gRPC listener")?;
+                // `wait_for` resolves immediately if the watch already holds `true` (e.g.
+                // the caller stopped right after start()); the old `while !*borrow() { changed().await }`
+                // loop could instead park forever waiting for a *change* that already happened.
                 let mut graceful_rx = shutdown_rx.clone();
                 let graceful = async move {
-                    while !*graceful_rx.borrow() {
-                        if graceful_rx.changed().await.is_err() {
-                            break;
-                        }
-                    }
+                    let _ = graceful_rx.wait_for(|shutdown| *shutdown).await;
                 };
                 let mut force_rx = shutdown_rx;
                 let force = async move {
-                    while !*force_rx.borrow() {
-                        if force_rx.changed().await.is_err() {
-                            break;
-                        }
-                    }
+                    let _ = force_rx.wait_for(|shutdown| *shutdown).await;
                     // Open client streams can block tonic's graceful drain forever;
                     // after a short grace period, drop the server future and free the port.
                     tokio::time::sleep(Duration::from_millis(500)).await;
@@ -354,14 +355,15 @@ impl Drop for GrpcGatewayHandle {
     }
 }
 
-#[cfg(feature = "console")]
+/// Console-only HTTP server (no `grpc` feature) — otherwise the console shares
+/// the gRPC gateway's listener (see [`GatewayConfig::console`]).
+#[cfg(all(feature = "console", not(feature = "grpc")))]
 struct ConsoleHttpHandle {
-    pub listen: SocketAddr,
     shutdown_tx: Option<tokio::sync::watch::Sender<bool>>,
     handle: Option<JoinHandle<Result<()>>>,
 }
 
-#[cfg(feature = "console")]
+#[cfg(all(feature = "console", not(feature = "grpc")))]
 impl ConsoleHttpHandle {
     fn start(
         listen: SocketAddr,
@@ -387,7 +389,6 @@ impl ConsoleHttpHandle {
         });
         thread::sleep(STARTUP_SETTLE);
         Ok(Self {
-            listen,
             shutdown_tx: Some(shutdown_tx),
             handle: Some(handle),
         })
@@ -404,7 +405,7 @@ impl ConsoleHttpHandle {
     }
 }
 
-#[cfg(feature = "console")]
+#[cfg(all(feature = "console", not(feature = "grpc")))]
 impl Drop for ConsoleHttpHandle {
     fn drop(&mut self) {
         if let Some(tx) = self.shutdown_tx.take() {
@@ -435,8 +436,16 @@ pub struct RobotBusBroker {
     discovery: Option<AnnounceHandle>,
     #[cfg(feature = "grpc")]
     grpc: GrpcGatewayHandle,
-    #[cfg(feature = "console")]
+    /// Console-only HTTP server; `None` when `grpc` is enabled (console shares its port)
+    /// or the console is disabled.
+    #[cfg(all(feature = "console", not(feature = "grpc")))]
     console: Option<ConsoleHttpHandle>,
+    #[cfg(feature = "console")]
+    status_pub: Option<StatusPublisherHandle>,
+    #[cfg(feature = "console")]
+    control_plane: Option<ControlPlaneHandle>,
+    #[cfg(feature = "console")]
+    console_listen: Option<SocketAddr>,
 }
 
 impl RobotBusBroker {
@@ -477,29 +486,28 @@ impl RobotBusBroker {
             ServiceBusBroker::start_with_zmq(zmq.clone(), config.service.clone(), service_metrics)?;
         let action = ActionBusBroker::start_with_zmq(zmq, config.action.clone(), action_metrics)?;
 
-        #[cfg(feature = "grpc")]
-        let grpc = {
-            let gateway = GatewayConfig {
-                listen: config.grpc.listen,
-                message_xpub: bind_to_connect(&message.xpub_bind),
-                message_xsub: bind_to_connect(&message.xsub_bind),
-                service_frontend: bind_to_connect(&service.frontend_bind),
-                action_frontend: bind_to_connect(&action.frontend_bind),
-                cors_origins: config.grpc.cors_origins.clone(),
-            };
-            GrpcGatewayHandle::start(gateway)?
-        };
-
+        // Build console state before starting the gRPC gateway — when both features
+        // are enabled, REST + static UI routes merge onto the same listener below.
         #[cfg(feature = "console")]
-        let console = if config.console.enabled {
+        let console_state: Option<Arc<ConsoleState>> = if config.console.enabled {
             let grpc_addr = {
                 #[cfg(feature = "grpc")]
                 {
-                    grpc.listen.to_string()
+                    config.grpc.listen.to_string()
                 }
                 #[cfg(not(feature = "grpc"))]
                 {
                     String::new()
+                }
+            };
+            let web_addr = {
+                #[cfg(feature = "grpc")]
+                {
+                    config.grpc.listen.to_string()
+                }
+                #[cfg(not(feature = "grpc"))]
+                {
+                    config.console.listen.to_string()
                 }
             };
             let endpoints = BrokerEndpoints {
@@ -510,19 +518,76 @@ impl RobotBusBroker {
                 act_fe: action.frontend_bind.clone(),
                 act_be: action.backend_bind.clone(),
                 grpc: grpc_addr,
-                web: config.console.listen.to_string(),
+                web: web_addr,
             };
-            let state = ConsoleState::new(
+            Some(ConsoleState::new(
                 endpoints,
                 message.metrics.clone(),
                 service.metrics.clone(),
                 action.metrics.clone(),
-            );
-            Some(ConsoleHttpHandle::start(
+            ))
+        } else {
+            None
+        };
+
+        #[cfg(feature = "grpc")]
+        let grpc = {
+            let gateway = GatewayConfig {
+                listen: config.grpc.listen,
+                message_xpub: bind_to_connect(&message.xpub_bind),
+                message_xsub: bind_to_connect(&message.xsub_bind),
+                service_frontend: bind_to_connect(&service.frontend_bind),
+                action_frontend: bind_to_connect(&action.frontend_bind),
+                cors_origins: config.grpc.cors_origins.clone(),
+                #[cfg(feature = "console")]
+                console: console_state.clone(),
+            };
+            GrpcGatewayHandle::start(gateway)?
+        };
+
+        // Console-only HTTP server — only needed when `grpc` is disabled; otherwise
+        // the console shares the gRPC gateway's listener started above.
+        #[cfg(all(feature = "console", not(feature = "grpc")))]
+        let console = match &console_state {
+            Some(state) => Some(ConsoleHttpHandle::start(
                 config.console.listen,
-                state,
+                state.clone(),
                 config.console.cors_origins.clone(),
-            )?)
+            )?),
+            None => None,
+        };
+
+        // Control-plane subscriber + 1 Hz status publisher (feature `console`),
+        // regardless of whether the console shares the gRPC port or has its own.
+        #[cfg(feature = "console")]
+        let (status_pub, control_plane) = match &console_state {
+            Some(state) => {
+                let control_plane = ControlPlaneHandle::start(
+                    state.clone(),
+                    bind_to_connect(&message.xpub_bind),
+                    bind_to_connect(&service.backend_bind),
+                )
+                .context("start console control plane")?;
+                let status_pub = StatusPublisherHandle::start(
+                    state.clone(),
+                    bind_to_connect(&message.xsub_bind),
+                )
+                .context("start console status publisher")?;
+                (Some(status_pub), Some(control_plane))
+            }
+            None => (None, None),
+        };
+
+        #[cfg(feature = "console")]
+        let console_listen: Option<SocketAddr> = if console_state.is_some() {
+            #[cfg(feature = "grpc")]
+            {
+                Some(grpc.listen)
+            }
+            #[cfg(not(feature = "grpc"))]
+            {
+                Some(config.console.listen)
+            }
         } else {
             None
         };
@@ -563,7 +628,17 @@ impl RobotBusBroker {
                 }
             };
             let console_url = {
-                #[cfg(feature = "console")]
+                // When both features are enabled, the console shares the gRPC
+                // listener — reuse `grpc_url` instead of recomputing it.
+                #[cfg(all(feature = "console", feature = "grpc"))]
+                {
+                    if config.console.enabled {
+                        grpc_url.clone()
+                    } else {
+                        None
+                    }
+                }
+                #[cfg(all(feature = "console", not(feature = "grpc")))]
                 {
                     if config.console.enabled {
                         Some(format!(
@@ -604,8 +679,14 @@ impl RobotBusBroker {
             discovery,
             #[cfg(feature = "grpc")]
             grpc,
-            #[cfg(feature = "console")]
+            #[cfg(all(feature = "console", not(feature = "grpc")))]
             console,
+            #[cfg(feature = "console")]
+            status_pub,
+            #[cfg(feature = "console")]
+            control_plane,
+            #[cfg(feature = "console")]
+            console_listen,
         })
     }
 
@@ -621,10 +702,13 @@ impl RobotBusBroker {
         connect_url_for_listen(self.grpc.listen)
     }
 
-    /// Console HTTP listen address when the console server is running (feature `console`).
+    /// Console HTTP listen address when the console is running (feature `console`).
+    ///
+    /// This is the gRPC listen address when `grpc` is also enabled (single port),
+    /// or the console's own listen address otherwise.
     #[cfg(feature = "console")]
     pub fn console_listen(&self) -> Option<SocketAddr> {
-        self.console.as_ref().map(|c| c.listen)
+        self.console_listen
     }
 
     /// Stop all buses (and gRPC / console) and join their threads.
@@ -633,20 +717,45 @@ impl RobotBusBroker {
         if let Some(d) = self.discovery {
             d.stop();
         }
+
+        // Ask the console background threads to wind down before tearing down
+        // the gateway they publish/subscribe through; give them a moment to
+        // notice before we start joining anything.
         #[cfg(feature = "console")]
+        if let Some(status_pub) = self.status_pub.as_ref() {
+            status_pub.request_stop();
+        }
+        #[cfg(feature = "console")]
+        if let Some(control_plane) = self.control_plane.as_ref() {
+            control_plane.request_stop();
+        }
+        #[cfg(feature = "console")]
+        thread::sleep(Duration::from_millis(50));
+
+        #[cfg(all(feature = "console", not(feature = "grpc")))]
         let console = match self.console {
             Some(c) => c.stop(),
             None => Ok(()),
         };
         #[cfg(feature = "grpc")]
         let grpc = self.grpc.stop();
+
+        #[cfg(feature = "console")]
+        if let Some(status_pub) = self.status_pub {
+            status_pub.stop();
+        }
+        #[cfg(feature = "console")]
+        if let Some(control_plane) = self.control_plane {
+            control_plane.stop();
+        }
+
         let action = self.action.stop();
         let service = self.service.stop();
         let message = self.message.stop();
 
         #[cfg(all(feature = "grpc", feature = "console"))]
         {
-            return console.and(grpc).and(action).and(service).and(message);
+            return grpc.and(action).and(service).and(message);
         }
         #[cfg(all(feature = "grpc", not(feature = "console")))]
         {

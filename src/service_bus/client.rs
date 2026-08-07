@@ -92,6 +92,10 @@ impl ServiceClient {
             .unwrap_or_else(|| Uuid::new_v4().simple().to_string());
         {
             let sock = self.socket.borrow();
+            if let Some(duration) = timeout {
+                let ms = duration.as_millis().min(i32::MAX as u128) as i32;
+                sock.set_sndtimeo(ms)?;
+            }
             sock.send_multipart([service_name.as_bytes(), req_id.as_bytes(), body], 0)?;
         }
 

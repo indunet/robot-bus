@@ -41,6 +41,7 @@ default = ["grpc", "console"]
 extension-module = ["dep:pyo3", "pyo3/extension-module"]
 # gRPC / gRPC-Web gateway (started with RobotBusBroker; on by default).
 # Stubs are pre-generated (`just gen-rust`); no protoc at compile time.
+# axum is required so gRPC routes can share one listener with the console.
 grpc = [
     "dep:tokio",
     "dep:tonic",
@@ -49,8 +50,9 @@ grpc = [
     "dep:tower-http",
     "dep:tokio-stream",
     "dep:http",
+    "dep:axum",
 ]
-# Embedded Web console HTTP server (default :15771).
+# Embedded Web console (static UI + REST shim; same port as gRPC when both enabled).
 console = [
     "dep:tokio",
     "dep:tokio-stream",

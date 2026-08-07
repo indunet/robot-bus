@@ -134,7 +134,7 @@ mod tests {
             ipc_dir: Some("/tmp/robot_bus".into()),
             inproc_prefix: Some("robot_bus".into()),
             grpc_url: Some("http://127.0.0.1:15770".into()),
-            console_url: Some("http://127.0.0.1:15771".into()),
+            console_url: Some("http://127.0.0.1:15770".into()),
         }
     }
 
