@@ -5,11 +5,16 @@
 
 #include <iostream>
 #include <string>
+#include <type_traits>
 #include <utility>
 #include <vector>
 
 int main() {
   using namespace robot_bus::test;
+  static_assert(!std::is_copy_constructible_v<robot_bus::ActionGoalHandle>);
+  static_assert(!std::is_copy_assignable_v<robot_bus::ActionGoalHandle>);
+  static_assert(std::is_move_constructible_v<robot_bus::ActionGoalHandle>);
+  static_assert(std::is_move_assignable_v<robot_bus::ActionGoalHandle>);
 
   auto bus = TestBus::start();
   auto server = bus.make_node("act_server");
@@ -64,21 +69,33 @@ int main() {
   std::string goal_bytes;
   ROBOT_BUS_CHECK(goal.SerializeToString(&goal_bytes));
 
-  auto messages = client.send_goal(goal_bytes, nullptr, 10.0);
-  ROBOT_BUS_CHECK(messages.size() == 2);
-  ROBOT_BUS_CHECK(messages[0].kind == "FEEDBACK");
-  ROBOT_BUS_CHECK(messages[1].kind == "RESULT");
+  std::vector<robot_bus::ActionMessage> feedback_messages;
+  auto original_handle = client.send_goal(
+      goal_bytes,
+      [&](const robot_bus::ActionMessage &message) { feedback_messages.push_back(message); },
+      "cpp-fibonacci-goal", 10.0);
+  auto handle = std::move(original_handle);
+
+  ROBOT_BUS_CHECK(handle.goal_id() == "cpp-fibonacci-goal");
+  ROBOT_BUS_CHECK(handle.action_name() == "fibonacci");
+  auto result_message = handle.wait_result(10.0);
+
+  ROBOT_BUS_CHECK(feedback_messages.size() == 1);
+  ROBOT_BUS_CHECK(feedback_messages[0].kind == "FEEDBACK");
+  ROBOT_BUS_CHECK(feedback_messages[0].goal_id == "cpp-fibonacci-goal");
+  ROBOT_BUS_CHECK(result_message.kind == "RESULT");
+  ROBOT_BUS_CHECK(result_message.goal_id == "cpp-fibonacci-goal");
 
   robot_bus_interface::action::v1::FibonacciFeedback feedback;
-  ROBOT_BUS_CHECK(feedback.ParseFromArray(messages[0].body.data(),
-                                          static_cast<int>(messages[0].body.size())));
+  ROBOT_BUS_CHECK(feedback.ParseFromArray(feedback_messages[0].body.data(),
+                                          static_cast<int>(feedback_messages[0].body.size())));
   ROBOT_BUS_CHECK(feedback.sequence_size() == 4);
   ROBOT_BUS_CHECK(feedback.sequence(0) == 0);
   ROBOT_BUS_CHECK(feedback.sequence(3) == 2);
 
   robot_bus_interface::action::v1::FibonacciResult result;
-  ROBOT_BUS_CHECK(result.ParseFromArray(messages[1].body.data(),
-                                        static_cast<int>(messages[1].body.size())));
+  ROBOT_BUS_CHECK(result.ParseFromArray(result_message.body.data(),
+                                        static_cast<int>(result_message.body.size())));
   ROBOT_BUS_CHECK(result.sequence_size() == 5);
   ROBOT_BUS_CHECK(result.sequence(4) == 3);
 

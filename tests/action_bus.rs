@@ -11,16 +11,15 @@ use support::BrokerProcess;
 #[test]
 fn action_goal_feedback_result() {
     let broker = BrokerProcess::spawn_action();
-    let handler: Arc<dyn Fn(&[u8]) -> Vec<(String, Vec<u8>)> + Send + Sync> =
-        Arc::new(|body| {
-            vec![
-                ("FEEDBACK".into(), b"step-1".to_vec()),
-                ("FEEDBACK".into(), b"step-2".to_vec()),
-                ("RESULT".into(), [b"done:", body].concat()),
-            ]
-        });
-    let worker = WorkerThread::spawn_action("act.demo", handler, &broker.backend_endpoint)
-        .expect("worker");
+    let handler: Arc<dyn Fn(&[u8]) -> Vec<(String, Vec<u8>)> + Send + Sync> = Arc::new(|body| {
+        vec![
+            ("FEEDBACK".into(), b"step-1".to_vec()),
+            ("FEEDBACK".into(), b"step-2".to_vec()),
+            ("RESULT".into(), [b"done:", body].concat()),
+        ]
+    });
+    let worker =
+        WorkerThread::spawn_action("act.demo", handler, &broker.backend_endpoint).expect("worker");
     std::thread::sleep(Duration::from_millis(100));
     let client = ActionClient::new(Some(&broker.frontend_endpoint)).expect("client");
     let messages = client

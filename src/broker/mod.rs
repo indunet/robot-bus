@@ -6,14 +6,12 @@ pub mod message_bus;
 pub mod parse_config;
 pub mod service_bus;
 
-pub use handle::{RobotBusBroker, RobotBusConfig};
 pub use crate::discovery::DiscoveryConfig;
-pub use message_bus::MessagePeer;
-pub use parse_config::{
-    apply_federation_opts, parse_robot_bus_config, robot_bus_broker_help,
-};
-pub use service_bus::ServicePeer;
 pub use action_bus::ActionPeer;
+pub use handle::{RobotBusBroker, RobotBusConfig};
+pub use message_bus::MessagePeer;
+pub use parse_config::{apply_federation_opts, parse_robot_bus_config, robot_bus_broker_help};
+pub use service_bus::ServicePeer;
 
 #[cfg(feature = "grpc")]
 pub use handle::GrpcBrokerConfig;

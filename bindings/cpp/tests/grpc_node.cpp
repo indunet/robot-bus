@@ -171,12 +171,22 @@ int main() {
 
     auto client = robot_bus::Node::grpc_at("grpc_action", grpc_url.c_str());
     auto action = client.create_action_client("act.cpp_grpc_demo");
-    auto messages = action.send_goal(std::string("fly"), nullptr, 5.0);
-    ROBOT_BUS_CHECK(messages.size() == 3);
-    ROBOT_BUS_CHECK(messages[0].kind == "FEEDBACK");
-    ROBOT_BUS_CHECK(std::string(messages[0].body.begin(), messages[0].body.end()) == "step-1");
-    ROBOT_BUS_CHECK(messages[2].kind == "RESULT");
-    ROBOT_BUS_CHECK(std::string(messages[2].body.begin(), messages[2].body.end()) == "done:fly");
+    std::vector<robot_bus::ActionMessage> feedback;
+    auto handle = action.send_goal(
+        std::string("fly"),
+        [&](const robot_bus::ActionMessage &message) { feedback.push_back(message); },
+        "cpp-grpc-goal", 5.0);
+    auto moved_handle = std::move(handle);
+    ROBOT_BUS_CHECK(moved_handle.goal_id() == "cpp-grpc-goal");
+    ROBOT_BUS_CHECK(moved_handle.action_name() == "act.cpp_grpc_demo");
+
+    auto result = moved_handle.wait_result(5.0);
+    ROBOT_BUS_CHECK(feedback.size() == 2);
+    ROBOT_BUS_CHECK(feedback[0].kind == "FEEDBACK");
+    ROBOT_BUS_CHECK(std::string(feedback[0].body.begin(), feedback[0].body.end()) == "step-1");
+    ROBOT_BUS_CHECK(std::string(feedback[1].body.begin(), feedback[1].body.end()) == "step-2");
+    ROBOT_BUS_CHECK(result.kind == "RESULT");
+    ROBOT_BUS_CHECK(std::string(result.body.begin(), result.body.end()) == "done:fly");
 
     server.shutdown();
     server.stop();

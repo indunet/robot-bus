@@ -8,10 +8,9 @@ use zmq::{Context, Socket, SocketType};
 
 use crate::errors::{BusError, Result};
 use crate::transports;
-use crate::zmq_helpers::{apply_action_options_with, poll_readable, HighWaterMark};
+use crate::zmq_helpers::{HighWaterMark, apply_action_options_with, poll_readable};
 
-pub type ActionGoalHandler =
-    Arc<dyn Fn(&[u8]) -> Vec<(String, Vec<u8>)> + Send + Sync>;
+pub type ActionGoalHandler = Arc<dyn Fn(&[u8]) -> Vec<(String, Vec<u8>)> + Send + Sync>;
 
 pub struct ActionWorker {
     pub action_name: String,
@@ -138,22 +137,10 @@ impl ActionWorker {
         }
     }
 
-    fn reply(
-        &self,
-        client_id: &[u8],
-        goal_id: &[u8],
-        kind: &[u8],
-        body: &[u8],
-    ) -> Result<()> {
+    fn reply(&self, client_id: &[u8], goal_id: &[u8], kind: &[u8], body: &[u8]) -> Result<()> {
         if let Some(socket) = &self.socket {
             socket.send_multipart(
-                [
-                    client_id,
-                    self.action_name.as_bytes(),
-                    goal_id,
-                    kind,
-                    body,
-                ],
+                [client_id, self.action_name.as_bytes(), goal_id, kind, body],
                 0,
             )?;
         }

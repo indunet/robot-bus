@@ -6,9 +6,9 @@ use std::time::Duration;
 use uuid::Uuid;
 use zmq::{Context, Socket, SocketType};
 
-use crate::errors::{parse_error_body, BusError, Result};
+use crate::errors::{BusError, Result, parse_error_body};
 use crate::transports;
-use crate::zmq_helpers::{apply_rpc_options_with, poll_readable, HighWaterMark};
+use crate::zmq_helpers::{HighWaterMark, apply_rpc_options_with, poll_readable};
 
 pub struct ServiceClient {
     context: Context,
@@ -92,14 +92,7 @@ impl ServiceClient {
             .unwrap_or_else(|| Uuid::new_v4().simple().to_string());
         {
             let sock = self.socket.borrow();
-            sock.send_multipart(
-                [
-                    service_name.as_bytes(),
-                    req_id.as_bytes(),
-                    body,
-                ],
-                0,
-            )?;
+            sock.send_multipart([service_name.as_bytes(), req_id.as_bytes(), body], 0)?;
         }
 
         if let Some(duration) = timeout {

@@ -52,13 +52,7 @@ impl TopologyRegistry {
     }
 
     /// Upsert an endpoint and refresh `last_seen`.
-    pub fn register(
-        &self,
-        endpoint_id: &str,
-        node_name: &str,
-        kind: EndpointKind,
-        topic: &str,
-    ) {
+    pub fn register(&self, endpoint_id: &str, node_name: &str, kind: EndpointKind, topic: &str) {
         let now = Instant::now();
         let mut map = self.endpoints.lock().unwrap_or_else(|e| e.into_inner());
         map.insert(
@@ -158,7 +152,10 @@ mod tests {
 
     #[test]
     fn parse_kind() {
-        assert_eq!(EndpointKind::parse("publisher"), Some(EndpointKind::Publisher));
+        assert_eq!(
+            EndpointKind::parse("publisher"),
+            Some(EndpointKind::Publisher)
+        );
         assert_eq!(EndpointKind::parse("SUB"), Some(EndpointKind::Subscriber));
         assert_eq!(EndpointKind::parse("nope"), None);
     }

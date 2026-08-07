@@ -15,9 +15,9 @@
 //! included when the group is reentrant).
 
 use std::collections::HashMap;
+use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{self, Receiver, Sender};
-use std::sync::Arc;
 use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant};
 
@@ -34,20 +34,18 @@ use crate::runtime::dispatch::{
 };
 use crate::runtime::queues::{ActionMessageCallback, OutboundCommand, ReplyMessage};
 use crate::runtime::registrations::{
-    ActionClientRegistration, ActionGoalHandler, ActionRegistration, MessageCallback,
-    Registration, ServiceHandler, ServiceRegistration, SubRegistration,
+    ActionClientRegistration, ActionGoalHandler, ActionRegistration, MessageCallback, Registration,
+    ServiceHandler, ServiceRegistration, SubRegistration,
 };
 use crate::runtime::timers::{
-    effective_poll_timeout_ms, tick_timers, Timer, TimerCallback, TimerHandle,
+    Timer, TimerCallback, TimerHandle, effective_poll_timeout_ms, tick_timers,
 };
 use crate::runtime::worker_pool::WorkerPool;
 use crate::transports::{
     action_backend_endpoint, action_frontend_endpoint, message_xpub_endpoint,
     service_backend_endpoint,
 };
-use crate::zmq_helpers::{
-    apply_subscriber_options_with, wait_for_connection, HighWaterMark,
-};
+use crate::zmq_helpers::{HighWaterMark, apply_subscriber_options_with, wait_for_connection};
 
 const DEFAULT_POLL_TIMEOUT_MS: i64 = 250;
 const DEFAULT_HEARTBEAT_INTERVAL_MS: u64 = 2500;
@@ -339,9 +337,7 @@ impl Executor {
     pub fn connect_action_client(&mut self, endpoint: Option<&str>) -> Result<()> {
         self.ensure_open()?;
         if self.action_client_registration.is_some() || self.has_action_client_registration() {
-            return Err(BusError::Protocol(
-                "action client already connected".into(),
-            ));
+            return Err(BusError::Protocol("action client already connected".into()));
         }
         let endpoint = match endpoint {
             Some(ep) => ep.to_string(),
@@ -691,8 +687,7 @@ impl Executor {
 
     fn sync_worker_registrations(&mut self) {
         while let Some(reg) = self.service_registrations.pop() {
-            self.socket_registrations
-                .push(Registration::Service(reg));
+            self.socket_registrations.push(Registration::Service(reg));
         }
         while let Some(reg) = self.action_registrations.pop() {
             self.socket_registrations.push(Registration::Action(reg));

@@ -8,22 +8,22 @@ use std::thread;
 use std::time::Duration;
 
 use prost::Message;
+use robot_bus::RobotBusBroker;
 use robot_bus::action_bus::{ActionClient, ActionKind};
-use robot_bus::message_bus::{Publisher, Subscriber};
 use robot_bus::geometry_msgs::msg::v1::{
     Pose, Pose2D, PoseStamped, PoseWithCovariance, PoseWithCovarianceStamped, Twist, Vector3,
 };
+use robot_bus::message_bus::{Publisher, Subscriber};
 use robot_bus::nav_msgs::msg::v1::{MapMetaData, OccupancyGrid, Odometry, Path};
 use robot_bus::nav_msgs::srv::v1::{
     GetMapRequest, GetMapResponse, GetPlanRequest, GetPlanResponse, SetMapRequest, SetMapResponse,
 };
+use robot_bus::service_bus::ServiceClient;
 use robot_bus::std_msgs::msg::v1::{Header, Int32, String as ProtoString};
 use robot_bus::std_srvs::srv::v1::{
     SetBoolRequest, SetBoolResponse, TriggerRequest, TriggerResponse,
 };
-use robot_bus::service_bus::ServiceClient;
 use robot_bus::worker_thread::WorkerThread;
-use robot_bus::RobotBusBroker;
 
 mod support;
 use support::{ephemeral_robot_bus_config, lock_brokers};
@@ -103,7 +103,10 @@ fn message_bus_odometry_pubsub() {
     let decoded = Odometry::decode(bytes.as_slice()).expect("decode Odometry");
     assert_eq!(decoded.child_frame_id, "base_link");
     assert_eq!(decoded.header.as_ref().unwrap().frame_id, "odom");
-    assert_eq!(decoded.header.as_ref().unwrap().stamp.as_ref().unwrap().sec, 10);
+    assert_eq!(
+        decoded.header.as_ref().unwrap().stamp.as_ref().unwrap().sec,
+        10
+    );
 
     broker.stop().expect("stop");
 }
@@ -112,16 +115,16 @@ fn message_bus_odometry_pubsub() {
 fn service_bus_string_echo_proto() {
     let (_guard, broker) = start_bus();
 
-    let handler: Arc<dyn Fn(&[u8]) -> Vec<u8> + Send + Sync> =
-        Arc::new(|body| {
-            let req = ProtoString::decode(body).expect("decode request");
-            ProtoString {
-                data: format!("echo:{}", req.data),
-            }
-            .encode_to_vec()
-        });
-    let worker = WorkerThread::spawn_service("svc.string_echo", handler, &broker.service.backend_bind)
-        .expect("worker");
+    let handler: Arc<dyn Fn(&[u8]) -> Vec<u8> + Send + Sync> = Arc::new(|body| {
+        let req = ProtoString::decode(body).expect("decode request");
+        ProtoString {
+            data: format!("echo:{}", req.data),
+        }
+        .encode_to_vec()
+    });
+    let worker =
+        WorkerThread::spawn_service("svc.string_echo", handler, &broker.service.backend_bind)
+            .expect("worker");
     thread::sleep(Duration::from_millis(100));
 
     let client = ServiceClient::new(Some(&broker.service.frontend_bind)).expect("client");
@@ -147,14 +150,13 @@ fn service_bus_string_echo_proto() {
 fn service_bus_int32_add_proto() {
     let (_guard, broker) = start_bus();
 
-    let handler: Arc<dyn Fn(&[u8]) -> Vec<u8> + Send + Sync> =
-        Arc::new(|body| {
-            let req = Int32::decode(body).expect("decode Int32");
-            Int32 {
-                data: req.data.saturating_add(1),
-            }
-            .encode_to_vec()
-        });
+    let handler: Arc<dyn Fn(&[u8]) -> Vec<u8> + Send + Sync> = Arc::new(|body| {
+        let req = Int32::decode(body).expect("decode Int32");
+        Int32 {
+            data: req.data.saturating_add(1),
+        }
+        .encode_to_vec()
+    });
     let worker = WorkerThread::spawn_service("svc.int_inc", handler, &broker.service.backend_bind)
         .expect("worker");
     thread::sleep(Duration::from_millis(100));
@@ -179,15 +181,14 @@ fn service_bus_int32_add_proto() {
 fn service_bus_std_srvs_trigger() {
     let (_guard, broker) = start_bus();
 
-    let handler: Arc<dyn Fn(&[u8]) -> Vec<u8> + Send + Sync> =
-        Arc::new(|body| {
-            let _req = TriggerRequest::decode(body).expect("decode TriggerRequest");
-            TriggerResponse {
-                success: true,
-                message: "triggered".into(),
-            }
-            .encode_to_vec()
-        });
+    let handler: Arc<dyn Fn(&[u8]) -> Vec<u8> + Send + Sync> = Arc::new(|body| {
+        let _req = TriggerRequest::decode(body).expect("decode TriggerRequest");
+        TriggerResponse {
+            success: true,
+            message: "triggered".into(),
+        }
+        .encode_to_vec()
+    });
     let worker = WorkerThread::spawn_service("svc.trigger", handler, &broker.service.backend_bind)
         .expect("worker");
     thread::sleep(Duration::from_millis(100));
@@ -213,15 +214,14 @@ fn service_bus_std_srvs_trigger() {
 fn service_bus_std_srvs_set_bool() {
     let (_guard, broker) = start_bus();
 
-    let handler: Arc<dyn Fn(&[u8]) -> Vec<u8> + Send + Sync> =
-        Arc::new(|body| {
-            let req = SetBoolRequest::decode(body).expect("decode SetBoolRequest");
-            SetBoolResponse {
-                success: true,
-                message: format!("set:{}", req.data),
-            }
-            .encode_to_vec()
-        });
+    let handler: Arc<dyn Fn(&[u8]) -> Vec<u8> + Send + Sync> = Arc::new(|body| {
+        let req = SetBoolRequest::decode(body).expect("decode SetBoolRequest");
+        SetBoolResponse {
+            success: true,
+            message: format!("set:{}", req.data),
+        }
+        .encode_to_vec()
+    });
     let worker = WorkerThread::spawn_service("svc.set_bool", handler, &broker.service.backend_bind)
         .expect("worker");
     thread::sleep(Duration::from_millis(100));
@@ -247,27 +247,26 @@ fn service_bus_std_srvs_set_bool() {
 fn service_bus_nav_msgs_get_map() {
     let (_guard, broker) = start_bus();
 
-    let handler: Arc<dyn Fn(&[u8]) -> Vec<u8> + Send + Sync> =
-        Arc::new(|body| {
-            let _req = GetMapRequest::decode(body).expect("decode GetMapRequest");
-            GetMapResponse {
-                map: Some(OccupancyGrid {
-                    header: Some(Header {
-                        stamp: None,
-                        frame_id: "map".into(),
-                    }),
-                    info: Some(MapMetaData {
-                        map_load_time: None,
-                        resolution: 0.05,
-                        width: 2,
-                        height: 2,
-                        origin: None,
-                    }),
-                    data: vec![0, 100, -1, 50],
+    let handler: Arc<dyn Fn(&[u8]) -> Vec<u8> + Send + Sync> = Arc::new(|body| {
+        let _req = GetMapRequest::decode(body).expect("decode GetMapRequest");
+        GetMapResponse {
+            map: Some(OccupancyGrid {
+                header: Some(Header {
+                    stamp: None,
+                    frame_id: "map".into(),
                 }),
-            }
-            .encode_to_vec()
-        });
+                info: Some(MapMetaData {
+                    map_load_time: None,
+                    resolution: 0.05,
+                    width: 2,
+                    height: 2,
+                    origin: None,
+                }),
+                data: vec![0, 100, -1, 50],
+            }),
+        }
+        .encode_to_vec()
+    });
     let worker = WorkerThread::spawn_service("svc.get_map", handler, &broker.service.backend_bind)
         .expect("worker");
     thread::sleep(Duration::from_millis(100));
@@ -295,36 +294,37 @@ fn service_bus_nav_msgs_get_map() {
 fn service_bus_nav_msgs_set_map_and_get_plan() {
     let (_guard, broker) = start_bus();
 
-    let set_map_handler: Arc<dyn Fn(&[u8]) -> Vec<u8> + Send + Sync> =
-        Arc::new(|body| {
-            let req = SetMapRequest::decode(body).expect("decode SetMapRequest");
-            assert!(req.map.is_some());
-            assert!(req.initial_pose.is_some());
-            SetMapResponse { success: true }.encode_to_vec()
-        });
-    let get_plan_handler: Arc<dyn Fn(&[u8]) -> Vec<u8> + Send + Sync> =
-        Arc::new(|body| {
-            let req = GetPlanRequest::decode(body).expect("decode GetPlanRequest");
-            let start = req.start.expect("start");
-            let goal = req.goal.expect("goal");
-            GetPlanResponse {
-                plan: Some(Path {
-                    header: Some(Header {
-                        stamp: None,
-                        frame_id: "map".into(),
-                    }),
-                    poses: vec![start, goal],
+    let set_map_handler: Arc<dyn Fn(&[u8]) -> Vec<u8> + Send + Sync> = Arc::new(|body| {
+        let req = SetMapRequest::decode(body).expect("decode SetMapRequest");
+        assert!(req.map.is_some());
+        assert!(req.initial_pose.is_some());
+        SetMapResponse { success: true }.encode_to_vec()
+    });
+    let get_plan_handler: Arc<dyn Fn(&[u8]) -> Vec<u8> + Send + Sync> = Arc::new(|body| {
+        let req = GetPlanRequest::decode(body).expect("decode GetPlanRequest");
+        let start = req.start.expect("start");
+        let goal = req.goal.expect("goal");
+        GetPlanResponse {
+            plan: Some(Path {
+                header: Some(Header {
+                    stamp: None,
+                    frame_id: "map".into(),
                 }),
-            }
-            .encode_to_vec()
-        });
+                poses: vec![start, goal],
+            }),
+        }
+        .encode_to_vec()
+    });
 
     let set_map_worker =
         WorkerThread::spawn_service("svc.set_map", set_map_handler, &broker.service.backend_bind)
             .expect("set_map worker");
-    let get_plan_worker =
-        WorkerThread::spawn_service("svc.get_plan", get_plan_handler, &broker.service.backend_bind)
-            .expect("get_plan worker");
+    let get_plan_worker = WorkerThread::spawn_service(
+        "svc.get_plan",
+        get_plan_handler,
+        &broker.service.backend_bind,
+    )
+    .expect("get_plan worker");
     thread::sleep(Duration::from_millis(100));
 
     let client = ServiceClient::new(Some(&broker.service.frontend_bind)).expect("client");
@@ -418,7 +418,14 @@ fn service_bus_nav_msgs_set_map_and_get_plan() {
     let plan = plan_resp.plan.expect("plan");
     assert_eq!(plan.poses.len(), 2);
     assert_eq!(
-        plan.poses[1].pose.as_ref().unwrap().position.as_ref().unwrap().x,
+        plan.poses[1]
+            .pose
+            .as_ref()
+            .unwrap()
+            .position
+            .as_ref()
+            .unwrap()
+            .x,
         1.0
     );
 
@@ -431,21 +438,17 @@ fn service_bus_nav_msgs_set_map_and_get_plan() {
 fn action_bus_pose2d_goal_proto() {
     let (_guard, broker) = start_bus();
 
-    let handler: Arc<dyn Fn(&[u8]) -> Vec<(String, Vec<u8>)> + Send + Sync> =
-        Arc::new(|body| {
-            let goal = Pose2D::decode(body).expect("decode Pose2D goal");
-            let progress = Int32 { data: 50 }.encode_to_vec();
-            let result = Pose2D {
-                x: goal.x,
-                y: goal.y,
-                theta: goal.theta + 0.1,
-            }
-            .encode_to_vec();
-            vec![
-                ("FEEDBACK".into(), progress),
-                ("RESULT".into(), result),
-            ]
-        });
+    let handler: Arc<dyn Fn(&[u8]) -> Vec<(String, Vec<u8>)> + Send + Sync> = Arc::new(|body| {
+        let goal = Pose2D::decode(body).expect("decode Pose2D goal");
+        let progress = Int32 { data: 50 }.encode_to_vec();
+        let result = Pose2D {
+            x: goal.x,
+            y: goal.y,
+            theta: goal.theta + 0.1,
+        }
+        .encode_to_vec();
+        vec![("FEEDBACK".into(), progress), ("RESULT".into(), result)]
+    });
     let worker = WorkerThread::spawn_action("act.goto", handler, &broker.action.backend_bind)
         .expect("worker");
     thread::sleep(Duration::from_millis(100));

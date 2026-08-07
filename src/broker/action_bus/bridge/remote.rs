@@ -5,8 +5,8 @@ use std::collections::HashMap;
 use std::time::{Duration, Instant};
 use zmq::{Context as ZmqContext, Socket, SocketType};
 
+use super::super::broker::{GoalReply, extend_hops};
 use super::protocol::FED_ID_PREFIX;
-use super::super::broker::{extend_hops, GoalReply};
 
 pub(super) struct PeerLink {
     pub(super) dealer: Socket,

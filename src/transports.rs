@@ -63,9 +63,7 @@ pub fn bind_all(socket: &Socket, tcp_endpoint: &str, channel: &str) -> Result<Ve
         ipc_endpoint(channel),
     ];
     for ep in &endpoints {
-        socket
-            .bind(ep)
-            .with_context(|| format!("bind {ep}"))?;
+        socket.bind(ep).with_context(|| format!("bind {ep}"))?;
     }
     Ok(endpoints.to_vec())
 }
@@ -75,7 +73,12 @@ pub fn format_endpoints(endpoints: &[String]) -> String {
     endpoints.join("\n    ")
 }
 
-fn pick_endpoint(host: &str, port: u16, channel: &str, transport: &str) -> std::result::Result<String, String> {
+fn pick_endpoint(
+    host: &str,
+    port: u16,
+    channel: &str,
+    transport: &str,
+) -> std::result::Result<String, String> {
     match transport {
         "tcp" => Ok(tcp_endpoint(host, port)),
         "inproc" => Ok(inproc_endpoint(channel)),
@@ -92,7 +95,10 @@ pub fn message_xpub_endpoint(host: &str, transport: &str) -> std::result::Result
     pick_endpoint(host, XPUB_PORT, XPUB_CHANNEL, transport)
 }
 
-pub fn service_frontend_endpoint(host: &str, transport: &str) -> std::result::Result<String, String> {
+pub fn service_frontend_endpoint(
+    host: &str,
+    transport: &str,
+) -> std::result::Result<String, String> {
     pick_endpoint(
         host,
         SERVICE_FRONTEND_PORT,
@@ -101,7 +107,10 @@ pub fn service_frontend_endpoint(host: &str, transport: &str) -> std::result::Re
     )
 }
 
-pub fn service_backend_endpoint(host: &str, transport: &str) -> std::result::Result<String, String> {
+pub fn service_backend_endpoint(
+    host: &str,
+    transport: &str,
+) -> std::result::Result<String, String> {
     pick_endpoint(
         host,
         SERVICE_BACKEND_PORT,
@@ -110,7 +119,10 @@ pub fn service_backend_endpoint(host: &str, transport: &str) -> std::result::Res
     )
 }
 
-pub fn action_frontend_endpoint(host: &str, transport: &str) -> std::result::Result<String, String> {
+pub fn action_frontend_endpoint(
+    host: &str,
+    transport: &str,
+) -> std::result::Result<String, String> {
     pick_endpoint(
         host,
         ACTION_FRONTEND_PORT,
@@ -120,12 +132,7 @@ pub fn action_frontend_endpoint(host: &str, transport: &str) -> std::result::Res
 }
 
 pub fn action_backend_endpoint(host: &str, transport: &str) -> std::result::Result<String, String> {
-    pick_endpoint(
-        host,
-        ACTION_BACKEND_PORT,
-        ACTION_BACKEND_CHANNEL,
-        transport,
-    )
+    pick_endpoint(host, ACTION_BACKEND_PORT, ACTION_BACKEND_CHANNEL, transport)
 }
 
 fn ensure_ipc_dir() -> Result<()> {

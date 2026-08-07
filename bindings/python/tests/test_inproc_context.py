@@ -65,6 +65,43 @@ def test_inproc_pubsub_with_shared_context() -> None:
         sub.wait()
 
 
+def test_inproc_action_goal_handle() -> None:
+    import robot_bus
+
+    ctx = robot_bus.Context()
+    with robot_bus.RobotBusBroker.start(context=ctx, **_inproc_binds()):
+        server = robot_bus.Node.inproc_with_context(ctx, "inproc-action-server")
+
+        def on_goal(body: bytes):
+            return [
+                ("FEEDBACK", b"step:" + bytes(body)),
+                ("RESULT", b"done:" + bytes(body)),
+            ]
+
+        server.create_action_server("/inproc/action", on_goal)
+        server.start()
+        time.sleep(0.1)
+
+        client = robot_bus.Node.inproc_with_context(
+            ctx, "inproc-action-client"
+        )
+        action = client.create_action_client("/inproc/action")
+        feedback: list[bytes] = []
+        goal = action.send_goal(
+            b"move",
+            feedback_callback=lambda body: feedback.append(bytes(body)),
+        )
+
+        assert goal.action_name == "/inproc/action"
+        assert goal.goal_id
+        assert bytes(goal.result(timeout=3.0)) == b"done:move"
+        assert feedback == [b"step:move"]
+
+        server.shutdown()
+        server.stop()
+        server.wait()
+
+
 def main() -> int:
     try:
         import robot_bus
@@ -77,6 +114,7 @@ def main() -> int:
         return 0
 
     test_inproc_pubsub_with_shared_context()
+    test_inproc_action_goal_handle()
     print("ok")
     return 0
 

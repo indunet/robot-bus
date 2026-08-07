@@ -10,11 +10,11 @@ pub use ports::{
     XPUB_PORT, XSUB_CHANNEL, XSUB_PORT,
 };
 
-use anyhow::{Context, Result};
 use crate::shutdown;
 use crate::transports::{bind_all, format_endpoints};
-use std::sync::atomic::{AtomicBool, Ordering};
+use anyhow::{Context, Result};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::thread;
 use std::time::Duration;
 use zmq::{Context as ZmqContext, Socket, SocketType};
@@ -98,7 +98,10 @@ pub fn run_with_shutdown_ctx(
             .with_context(|| format!("bind {}", config.xsub_bind))?;
         xpub.bind(&config.xpub_bind)
             .with_context(|| format!("bind {}", config.xpub_bind))?;
-        (vec![config.xsub_bind.clone()], vec![config.xpub_bind.clone()])
+        (
+            vec![config.xsub_bind.clone()],
+            vec![config.xpub_bind.clone()],
+        )
     };
 
     let federated = !config.peers.is_empty();
@@ -135,9 +138,7 @@ pub fn run_with_shutdown_ctx(
         .socket(SocketType::PAIR)
         .context("create proxy control client")?;
 
-    control
-        .bind(PROXY_CONTROL)
-        .context("bind proxy control")?;
+    control.bind(PROXY_CONTROL).context("bind proxy control")?;
     control_client
         .connect(PROXY_CONTROL)
         .context("connect proxy control")?;
@@ -152,9 +153,7 @@ pub fn run_with_shutdown_ctx(
         let mut capture = context
             .socket(SocketType::PAIR)
             .context("create proxy capture PAIR")?;
-        capture
-            .bind(PROXY_CAPTURE)
-            .context("bind proxy capture")?;
+        capture.bind(PROXY_CAPTURE).context("bind proxy capture")?;
         capture.set_sndhwm(10_000).context("capture sndhwm")?;
         capture.set_linger(0).context("capture linger")?;
 
@@ -170,12 +169,8 @@ pub fn run_with_shutdown_ctx(
         let stop = shutdown.clone();
         let metrics_join = thread::spawn(move || capture_metrics_loop(reader, metrics, stop));
         let proxy = thread::spawn(move || {
-            let _ = zmq::proxy_steerable_with_capture(
-                &mut xsub,
-                &mut xpub,
-                &mut capture,
-                &mut control,
-            );
+            let _ =
+                zmq::proxy_steerable_with_capture(&mut xsub, &mut xpub, &mut capture, &mut control);
         });
 
         wait_until_shutdown(&shutdown);

@@ -3,9 +3,9 @@
 `Cargo.toml`：
 
 ```toml
-robot-bus = "0.1.5"
+robot-bus = "0.1.6"
 # 本地：robot-bus = { path = "../robot-bus" }
-# 默认已启用 gRPC；若需关闭：robot-bus = { version = "0.1.5", default-features = false }
+# 默认已启用 gRPC；若需关闭：robot-bus = { version = "0.1.6", default-features = false }
 ```
 
 ## Broker 启动
@@ -286,58 +286,32 @@ Raw bytes：`create_service_raw` / `create_client_raw`。endpoint 取自 `NodeOp
 
 ## Action bus
 
-同样挂在 Node 上：typed `create_action_server` / `create_action_client` → `server_node.spin()`。
+同样挂在 Node 上：typed `create_action_server` / `create_action_client` → `server_node.spin()`。客户端采用 ROS 2 风格 `GoalHandle`：`send_goal` 立即返回，feedback 到达时实时调用回调，result 由 handle 独立等待。
+
+> 下例为概念性 API；GoalHandle API 正在实现中，最终签名以 crate 文档为准。
 
 ```rust
 use std::time::Duration;
-use robot_bus::action::v1::{
-    Fibonacci, FibonacciFeedback, FibonacciGoal, FibonacciResult,
-};
-use robot_bus::{ActionOutcome, Node};
+use robot_bus::action::v1::{Fibonacci, FibonacciGoal};
+use robot_bus::Node;
 
 fn main() -> robot_bus::Result<()> {
-    let mut server_node = Node::new("act_server");
-    let mut cli_node = Node::new("act_client");
+    let mut node = Node::new("act_client");
+    let client = node.create_action_client::<Fibonacci>("fibonacci")?;
+    let goal = client.send_goal(
+        &FibonacciGoal { order: 5 },
+        |feedback| println!("feedback: {:?}", feedback.sequence),
+    )?; // GoalHandle 立即返回
 
-    server_node.create_action_server::<Fibonacci, _>(
-        "fibonacci",
-        |goal: FibonacciGoal| {
-            let order = goal.order.max(0) as usize;
-            let mut seq = Vec::with_capacity(order);
-            for i in 0..order {
-                if i < 2 {
-                    seq.push(i as i32);
-                } else {
-                    seq.push(seq[i - 1] + seq[i - 2]);
-                }
-            }
-            ActionOutcome {
-                feedbacks: vec![FibonacciFeedback {
-                    sequence: seq.clone(),
-                }],
-                result: FibonacciResult { sequence: seq },
-            }
-        },
-        None,
-    )?;
-
-    let client = cli_node.create_action_client::<Fibonacci>("fibonacci")?;
-    let handle = server_node.shutdown_handle()?;
-    std::thread::spawn(move || {
-        std::thread::sleep(Duration::from_millis(100));
-        let outcome = client
-            .send_goal(&FibonacciGoal { order: 5 }, None, Some(Duration::from_secs(10)))
-            .expect("goal");
-        assert_eq!(outcome.result.sequence, vec![0, 1, 1, 2, 3]);
-        handle.shutdown();
-    });
-
-    server_node.spin()?;
+    // 可从其它控制路径调用；这是 best-effort 请求，不代表服务端已确认。
+    // goal.cancel()?;
+    let result = goal.result(Some(Duration::from_secs(10)))?;
+    assert_eq!(result.sequence, vec![0, 1, 1, 2, 3]);
     Ok(())
 }
 ```
 
-Raw bytes：`create_action_server_raw` / `create_action_client_raw`。
+Raw bytes：`create_action_server_raw` / `create_action_client_raw`。ZMQ 的 `cancel()` 发送显式 `CANCEL` 帧；gRPC 的 `cancel()` 取消对应的 server stream，两者都不提供“服务端已确认取消”的保证。
 
 ---
 
@@ -430,13 +404,16 @@ let client = node.create_client_raw("svc.echo")?;
 let reply = client.call(b"ping", Some(Duration::from_secs(2)))?;
 
 let action = node.create_action_client_raw("act.navigate")?;
-let events = action.send_goal(b"goal", None, Some(Duration::from_secs(10)))?;
+let goal = action.send_goal(b"goal", |feedback| {
+    println!("feedback: {} bytes", feedback.len());
+})?;
+let result = goal.result(Some(Duration::from_secs(10)))?;
 
-// 订阅回调需要 spin；publish / service/action 同步 call 不依赖 spin
+// 订阅与 action feedback 回调需要 spin；result 独立等待
 node.spin()?;
 ```
 
-底层仍是网关 RPC（`MessageGateway.Subscribe` / `MessageGateway.Publish` / `ServiceGateway.Call` / `ActionGateway.Run`）。需要更底层控制时，可直接用下一节的 tonic 客户端。
+上面的 GoalHandle 写法是概念性 API。底层仍是网关 RPC（`MessageGateway.Subscribe` / `MessageGateway.Publish` / `ServiceGateway.Call` / `ActionGateway.SendGoal`）。需要更底层控制时，可直接用下一节的 tonic 客户端。
 
 ---
 
@@ -449,7 +426,9 @@ node.spin()?;
 | `MessageGateway.Subscribe` | server stream：topic 前缀 → `TopicMessage` |
 | `MessageGateway.Publish` | 一元：`TopicMessage` → 写入 message bus XSUB |
 | `ServiceGateway.Call` | 一元：`service_name` + request bytes → response bytes |
-| `ActionGateway.Run` | 双向流：客户端 `GoalCommand` / `CancelCommand` ↔ 服务端 `ActionEvent` |
+| `ActionGateway.SendGoal` | 一元 `GoalRequest` → server stream `ActionEvent`（实时 `FEEDBACK`，最终 `RESULT`） |
+
+gRPC action 的取消就是取消该 goal 的响应流，不另发 cancel RPC，也不表示服务端已确认；ZMQ transport 则由 GoalHandle 发显式 `CANCEL` 帧。
 
 Subscribe 示例：
 
@@ -502,11 +481,9 @@ Service / Action 示例：
 ```rust
 use robot_bus::grpc::pb::action_gateway_client::ActionGatewayClient;
 use robot_bus::grpc::pb::service_gateway_client::ServiceGatewayClient;
-use robot_bus::grpc::pb::{
-    action_client_message, ActionClientMessage, ActionKind, GoalCommand, ServiceCallRequest,
-};
+use robot_bus::grpc::pb::{ActionKind, GoalRequest, ServiceCallRequest};
 use tonic::Request;
-use tokio_stream::{self, StreamExt};
+use tokio_stream::StreamExt;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -523,15 +500,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("service: {} bytes", resp.response.len());
 
     let mut act = ActionGatewayClient::connect("http://127.0.0.1:15770").await?;
-    let outbound = tokio_stream::iter(vec![ActionClientMessage {
-        msg: Some(action_client_message::Msg::Goal(GoalCommand {
+    let mut stream = act
+        .send_goal(Request::new(GoalRequest {
             action_name: "act.demo".into(),
             goal: b"go".to_vec(),
             goal_id: String::new(),
             timeout_ms: 10_000,
-        })),
-    }]);
-    let mut stream = act.run(Request::new(outbound)).await?.into_inner();
+        }))
+        .await?
+        .into_inner();
     while let Some(ev) = stream.next().await {
         let ev = ev?;
         println!("{:?}: {} bytes", ActionKind::try_from(ev.kind), ev.body.len());
@@ -583,7 +560,8 @@ match result {
 
 - Service / action **不**做 broker 重启续传；调用方重试须使用新的 `request_id` / `goal_id`。
 - Service `call` 超时后 socket 已复位，同一 client 可继续调用。
-- Action `send_goal` / iter 在 recv 超时时会 best-effort 发 `CANCEL`。
+- Action `send_goal` 立即返回 GoalHandle；feedback 回调与 `result()` 等待彼此独立。
+- Action `cancel()` / result 超时后的清理均为 best-effort：gRPC 取消响应流，ZMQ 发显式 `CANCEL` 帧；不保证服务端确认。
 - Topic pub/sub 仍是 best-effort（无 ACK）。
 
 ## 工具节点：Image encoder

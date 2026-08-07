@@ -1,8 +1,8 @@
 //! Frame parsing and inline callback dispatch for [`super::Executor`].
 
 use std::collections::HashMap;
-use std::sync::mpsc::Sender;
 use std::sync::Arc;
+use std::sync::mpsc::Sender;
 
 use crate::action_bus::{ActionKind, ActionMessage};
 use crate::runtime::callback_group::SubscriptionCallback;
@@ -114,7 +114,10 @@ pub fn dispatch_service_request(
     let req_id = frames[2].clone();
     let body = frames[3].clone();
     if String::from_utf8_lossy(&svc) != reg.service_name {
-        log::warn!("ignored request for service {:?}", String::from_utf8_lossy(&svc));
+        log::warn!(
+            "ignored request for service {:?}",
+            String::from_utf8_lossy(&svc)
+        );
         return;
     }
 
@@ -255,10 +258,7 @@ pub fn flush_reply_queue(
                     );
                 }
             }
-            ReplyMessage::Action {
-                action_name,
-                reply,
-            } => {
+            ReplyMessage::Action { action_name, reply } => {
                 if let Some(reg) = registrations.iter().find_map(|reg| {
                     if let Registration::Action(a) = reg {
                         if a.action_name == action_name {

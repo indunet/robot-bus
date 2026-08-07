@@ -24,12 +24,7 @@ pub(crate) struct Timer {
 }
 
 impl Timer {
-    pub fn new(
-        id: u64,
-        period: Duration,
-        callback: TimerCallback,
-        group: CallbackGroup,
-    ) -> Self {
+    pub fn new(id: u64, period: Duration, callback: TimerCallback, group: CallbackGroup) -> Self {
         Self {
             id,
             period,
@@ -81,11 +76,7 @@ pub(crate) fn ms_until_next_timer(timers: &[Timer], now: Instant) -> Option<i64>
         .min()
 }
 
-pub(crate) fn effective_poll_timeout_ms(
-    timers: &[Timer],
-    requested_ms: i64,
-    now: Instant,
-) -> i64 {
+pub(crate) fn effective_poll_timeout_ms(timers: &[Timer], requested_ms: i64, now: Instant) -> i64 {
     match ms_until_next_timer(timers, now) {
         Some(until) => until.min(requested_ms.max(0)),
         None => requested_ms.max(0),

@@ -4,11 +4,11 @@
 //! [`SingleThreadedExecutor`] lazily). Shared / multi-threaded: attach nodes
 //! with `add_node` / `create_node`, then `spin` on the executor.
 
+mod callback_group;
 mod context;
+mod dispatch;
 mod executor;
 mod executors;
-mod callback_group;
-mod dispatch;
 #[cfg(feature = "grpc")]
 mod grpc_runtime;
 mod node;
@@ -25,8 +25,9 @@ pub use context::Context;
 pub use executor::{Executor, ShutdownHandle};
 pub use executors::{ExecutorHandle, MultiThreadedExecutor, SingleThreadedExecutor};
 pub use node::{
-    Node, NodeActionClient, NodeActionClientRaw, NodeActionServer, NodeOptions, NodeService,
-    NodeServiceClient, NodeServiceClientRaw, TopicPublisher, TopicPublisherRaw,
+    GoalHandle, Node, NodeActionClient, NodeActionClientRaw, NodeActionServer, NodeOptions,
+    NodeService, NodeServiceClient, NodeServiceClientRaw, RawActionFeedbackCallback, RawGoalHandle,
+    TopicPublisher, TopicPublisherRaw,
 };
 pub use parameters::{Parameter, ParameterValue};
 pub use queues::ActionMessageCallback;

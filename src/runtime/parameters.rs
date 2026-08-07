@@ -126,8 +126,8 @@ impl ParameterStore {
     ///
     /// Undeclared names are declared; existing names are updated (`set`).
     pub(crate) fn load_from_yaml_str(&mut self, yaml: &str) -> Result<()> {
-        let root: serde_yaml::Value = serde_yaml::from_str(yaml)
-            .map_err(|e| BusError::ParameterYaml(e.to_string()))?;
+        let root: serde_yaml::Value =
+            serde_yaml::from_str(yaml).map_err(|e| BusError::ParameterYaml(e.to_string()))?;
         let mapping = extract_param_mapping(root)?;
         for (key, value) in mapping {
             let name = key
@@ -160,9 +160,9 @@ fn extract_param_mapping(root: serde_yaml::Value) -> Result<serde_yaml::Mapping>
         }
     };
 
-    if let Some(serde_yaml::Value::Mapping(m)) = mapping.get(serde_yaml::Value::String(
-        "ros__parameters".into(),
-    )) {
+    if let Some(serde_yaml::Value::Mapping(m)) =
+        mapping.get(serde_yaml::Value::String("ros__parameters".into()))
+    {
         return Ok(m.clone());
     }
 
@@ -233,17 +233,9 @@ mod tests {
             .declare("frame_id", ParameterValue::String("base_link".into()))
             .unwrap();
 
-        assert_eq!(
-            store.get("max_speed").unwrap(),
-            ParameterValue::Double(1.5)
-        );
-        store
-            .set("max_speed", ParameterValue::Double(2.0))
-            .unwrap();
-        assert_eq!(
-            store.get("max_speed").unwrap(),
-            ParameterValue::Double(2.0)
-        );
+        assert_eq!(store.get("max_speed").unwrap(), ParameterValue::Double(1.5));
+        store.set("max_speed", ParameterValue::Double(2.0)).unwrap();
+        assert_eq!(store.get("max_speed").unwrap(), ParameterValue::Double(2.0));
 
         let names: Vec<_> = store.list().into_iter().map(|p| p.name).collect();
         assert_eq!(names, vec!["frame_id", "max_speed"]);
@@ -254,9 +246,7 @@ mod tests {
     #[test]
     fn reject_duplicate_undeclared_and_type_mismatch() {
         let mut store = ParameterStore::new();
-        store
-            .declare("flag", ParameterValue::Bool(true))
-            .unwrap();
+        store.declare("flag", ParameterValue::Bool(true)).unwrap();
 
         assert!(matches!(
             store.declare("flag", ParameterValue::Bool(false)),
@@ -289,10 +279,7 @@ count: 3
 "#,
             )
             .unwrap();
-        assert_eq!(
-            store.get("max_speed").unwrap(),
-            ParameterValue::Double(1.5)
-        );
+        assert_eq!(store.get("max_speed").unwrap(), ParameterValue::Double(1.5));
         assert_eq!(
             store.get("frame_id").unwrap(),
             ParameterValue::String("base_link".into())
@@ -316,10 +303,7 @@ ros__parameters:
 "#,
             )
             .unwrap();
-        assert_eq!(
-            store.get("max_speed").unwrap(),
-            ParameterValue::Double(2.5)
-        );
+        assert_eq!(store.get("max_speed").unwrap(), ParameterValue::Double(2.5));
         assert_eq!(
             store.get("frame_id").unwrap(),
             ParameterValue::String("map".into())
@@ -344,9 +328,7 @@ ros__parameters:
     #[test]
     fn load_yaml_rejects_nested_and_type_mismatch() {
         let mut store = ParameterStore::new();
-        store
-            .declare("flag", ParameterValue::Bool(true))
-            .unwrap();
+        store.declare("flag", ParameterValue::Bool(true)).unwrap();
         assert!(matches!(
             store.load_from_yaml_str("nested:\n  a: 1\n"),
             Err(BusError::ParameterYaml(_))
@@ -360,22 +342,12 @@ ros__parameters:
     #[test]
     fn load_yaml_file() {
         let dir = std::env::temp_dir();
-        let path = dir.join(format!(
-            "robot_bus_params_{}.yaml",
-            std::process::id()
-        ));
-        std::fs::write(
-            &path,
-            "max_speed: 9.0\nframe_id: odom\n",
-        )
-        .unwrap();
+        let path = dir.join(format!("robot_bus_params_{}.yaml", std::process::id()));
+        std::fs::write(&path, "max_speed: 9.0\nframe_id: odom\n").unwrap();
         let mut store = ParameterStore::new();
         store.load_from_yaml_file(&path).unwrap();
         let _ = std::fs::remove_file(&path);
-        assert_eq!(
-            store.get("max_speed").unwrap(),
-            ParameterValue::Double(9.0)
-        );
+        assert_eq!(store.get("max_speed").unwrap(), ParameterValue::Double(9.0));
         assert_eq!(
             store.get("frame_id").unwrap(),
             ParameterValue::String("odom".into())
@@ -388,20 +360,11 @@ ros__parameters:
         store
             .declare("max_speed", ParameterValue::Double(1.5))
             .unwrap();
-        store
-            .set("max_speed", ParameterValue::Integer(2))
-            .unwrap();
-        assert_eq!(
-            store.get("max_speed").unwrap(),
-            ParameterValue::Double(2.0)
-        );
+        store.set("max_speed", ParameterValue::Integer(2)).unwrap();
+        assert_eq!(store.get("max_speed").unwrap(), ParameterValue::Double(2.0));
 
-        store
-            .declare("count", ParameterValue::Integer(3))
-            .unwrap();
-        store
-            .set("count", ParameterValue::Double(9.0))
-            .unwrap();
+        store.declare("count", ParameterValue::Integer(3)).unwrap();
+        store.set("count", ParameterValue::Double(9.0)).unwrap();
         assert_eq!(store.get("count").unwrap(), ParameterValue::Integer(9));
         assert!(matches!(
             store.set("count", ParameterValue::Double(1.5)),

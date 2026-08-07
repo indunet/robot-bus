@@ -145,12 +145,17 @@ def test_grpc_node_action_client() -> None:
 
         client = robot_bus.Node.grpc_at("grpc_action", grpc_url)
         action = client.create_action_client("act.py_grpc_demo")
-        messages = action.send_goal(b"fly", timeout=5.0)
-        assert len(messages) == 3
-        assert messages[0]["kind"] == "FEEDBACK"
-        assert bytes(messages[0]["body"]) == b"step-1"
-        assert messages[2]["kind"] == "RESULT"
-        assert bytes(messages[2]["body"]) == b"done:fly"
+        feedback: list[bytes] = []
+        goal = action.send_goal(
+            b"fly",
+            goal_id="py-grpc-goal",
+            timeout=5.0,
+            feedback_callback=lambda body: feedback.append(bytes(body)),
+        )
+        assert goal.goal_id == "py-grpc-goal"
+        assert goal.action_name == "act.py_grpc_demo"
+        assert bytes(goal.result(timeout=5.0)) == b"done:fly"
+        assert feedback == [b"step-1", b"step-2"]
 
         server.shutdown()
         server.stop()

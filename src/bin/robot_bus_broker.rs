@@ -1,10 +1,10 @@
 use anyhow::Result;
 use robot_bus::broker::{
-    parse_robot_bus_config, robot_bus_broker_help, RobotBusBroker, RobotBusConfig,
+    RobotBusBroker, RobotBusConfig, parse_robot_bus_config, robot_bus_broker_help,
 };
 use robot_bus::shutdown;
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::thread;
 use std::time::Duration;
 

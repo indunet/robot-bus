@@ -7,7 +7,7 @@ use zmq::{Context, Socket, SocketType};
 use crate::errors::{BusError, Result};
 use crate::transports;
 use crate::zmq_helpers::{
-    apply_subscriber_options_with, poll_readable, wait_for_connection, HighWaterMark,
+    HighWaterMark, apply_subscriber_options_with, poll_readable, wait_for_connection,
 };
 
 pub struct Subscriber {

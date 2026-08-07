@@ -19,9 +19,7 @@ impl TopicTypeRegistry {
         let mut map = self.topics.lock().unwrap_or_else(|e| e.into_inner());
         match map.insert(topic.to_string(), type_name.to_string()) {
             Some(prev) if prev != type_name => {
-                log::warn!(
-                    "topic type register overwrite: {topic} {prev} -> {type_name}"
-                );
+                log::warn!("topic type register overwrite: {topic} {prev} -> {type_name}");
                 Some(prev)
             }
             Some(prev) => Some(prev),
@@ -40,10 +38,7 @@ impl TopicTypeRegistry {
     /// Snapshot of all registered `(topic, type_name)` pairs, sorted by topic.
     pub fn snapshot(&self) -> Vec<(String, String)> {
         let map = self.topics.lock().unwrap_or_else(|e| e.into_inner());
-        let mut out: Vec<_> = map
-            .iter()
-            .map(|(k, v)| (k.clone(), v.clone()))
-            .collect();
+        let mut out: Vec<_> = map.iter().map(|(k, v)| (k.clone(), v.clone())).collect();
         out.sort_by(|a, b| a.0.cmp(&b.0));
         out
     }

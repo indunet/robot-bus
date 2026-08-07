@@ -8,11 +8,11 @@ use std::time::Duration;
 use axum::Json;
 use axum::extract::{Path, State};
 use axum::http::StatusCode;
-use axum::response::sse::{Event, KeepAlive, Sse};
 use axum::response::IntoResponse;
+use axum::response::sse::{Event, KeepAlive, Sse};
 use serde::{Deserialize, Serialize};
-use tokio_stream::wrappers::BroadcastStream;
 use tokio_stream::StreamExt;
+use tokio_stream::wrappers::BroadcastStream;
 
 use super::state::{ConsoleState, LogEntryDto, TopicRate};
 use super::topology_registry::EndpointKind;
@@ -245,9 +245,7 @@ pub async fn register_topology(
     if endpoint_id.is_empty() || node_name.is_empty() || topic.is_empty() {
         return (StatusCode::BAD_REQUEST, Json(OkResponse { ok: false })).into_response();
     }
-    state
-        .topology
-        .register(endpoint_id, node_name, kind, topic);
+    state.topology.register(endpoint_id, node_name, kind, topic);
     (StatusCode::OK, Json(OkResponse { ok: true })).into_response()
 }
 

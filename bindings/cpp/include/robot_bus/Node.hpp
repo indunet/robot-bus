@@ -209,6 +209,100 @@ struct ActionMessage {
   std::string action_name;
 };
 
+inline ActionMessage copy_action_message(const RobotBusActionMessage &message) {
+  ActionMessage out;
+  out.kind = message.kind ? message.kind : "";
+  if (message.body && message.body_len != 0) {
+    out.body.assign(message.body, message.body + message.body_len);
+  }
+  out.goal_id = message.goal_id ? message.goal_id : "";
+  out.action_name = message.action_name ? message.action_name : "";
+  return out;
+}
+
+inline void free_action_message_fields(RobotBusActionMessage &message) {
+  robot_bus_free_string(message.kind);
+  robot_bus_free_bytes(message.body, message.body_len);
+  robot_bus_free_string(message.goal_id);
+  robot_bus_free_string(message.action_name);
+  message = {};
+}
+
+using ActionFeedbackCallback = std::function<void(const ActionMessage &)>;
+
+struct ActionFeedbackState {
+  explicit ActionFeedbackState(ActionFeedbackCallback callback)
+      : callback(std::move(callback)) {}
+
+  ActionFeedbackCallback callback;
+};
+
+class ActionGoalHandle {
+ public:
+  ActionGoalHandle(RobotBusActionGoalHandle *handle,
+                   std::shared_ptr<ActionFeedbackState> feedback_state)
+      : handle_(handle), feedback_state_(std::move(feedback_state)) {}
+
+  ~ActionGoalHandle() { reset(); }
+  ActionGoalHandle(const ActionGoalHandle &) = delete;
+  ActionGoalHandle &operator=(const ActionGoalHandle &) = delete;
+
+  ActionGoalHandle(ActionGoalHandle &&other) noexcept
+      : handle_(other.handle_), feedback_state_(std::move(other.feedback_state_)) {
+    other.handle_ = nullptr;
+  }
+
+  ActionGoalHandle &operator=(ActionGoalHandle &&other) noexcept {
+    if (this != &other) {
+      reset();
+      handle_ = other.handle_;
+      feedback_state_ = std::move(other.feedback_state_);
+      other.handle_ = nullptr;
+    }
+    return *this;
+  }
+
+  std::string goal_id() const {
+    OwnedString value(robot_bus_action_goal_handle_goal_id(handle_));
+    return value.str();
+  }
+
+  std::string action_name() const {
+    OwnedString value(robot_bus_action_goal_handle_action_name(handle_));
+    return value.str();
+  }
+
+  ActionMessage wait_result(double timeout_secs = -1.0) {
+    RobotBusActionMessage message{};
+    check(robot_bus_action_goal_handle_wait_result(handle_, timeout_secs, &message),
+          "wait_result");
+    try {
+      ActionMessage out = copy_action_message(message);
+      free_action_message_fields(message);
+      return out;
+    } catch (...) {
+      free_action_message_fields(message);
+      throw;
+    }
+  }
+
+  void cancel() {
+    check(robot_bus_action_goal_handle_cancel(handle_), "cancel");
+  }
+
+ private:
+  void reset() noexcept {
+    if (handle_) {
+      robot_bus_action_goal_handle_free(handle_);
+      handle_ = nullptr;
+    }
+    feedback_state_.reset();
+  }
+
+  RobotBusActionGoalHandle *handle_ = nullptr;
+  std::shared_ptr<ActionFeedbackState> feedback_state_;
+};
+
 class ActionClient {
  public:
   explicit ActionClient(RobotBusActionClient *c) : c_(c) {}
@@ -222,25 +316,37 @@ class ActionClient {
     return s.str();
   }
 
-  std::vector<ActionMessage> send_goal(BytesView body, const char *goal_id = nullptr,
-                                       double timeout_secs = -1.0) {
-    RobotBusActionMessage *msgs = nullptr;
-    size_t count = 0;
-    check(robot_bus_action_client_send_goal(c_, body.data, body.size, goal_id, timeout_secs,
-                                            &msgs, &count),
+  ActionGoalHandle send_goal(BytesView body, ActionFeedbackCallback feedback = {},
+                             const char *goal_id = nullptr, double timeout_secs = -1.0) {
+    auto state = std::make_shared<ActionFeedbackState>(std::move(feedback));
+    RobotBusActionGoalHandle *handle = nullptr;
+    check(robot_bus_action_client_send_goal(
+              c_, body.data, body.size, goal_id, timeout_secs,
+              [](const RobotBusActionMessage *message, void *user) {
+                if (!message || !user) {
+                  return;
+                }
+                auto *state = static_cast<ActionFeedbackState *>(user);
+                if (!state->callback) {
+                  return;
+                }
+                try {
+                  const ActionMessage copied = copy_action_message(*message);
+                  state->callback(copied);
+                } catch (...) {
+                  // Exceptions must not cross the C callback boundary.
+                }
+              },
+              state.get(), &handle),
           "send_goal");
-    std::vector<ActionMessage> out;
-    out.reserve(count);
-    for (size_t i = 0; i < count; ++i) {
-      ActionMessage m;
-      m.kind = msgs[i].kind ? msgs[i].kind : "";
-      m.body.assign(msgs[i].body, msgs[i].body + msgs[i].body_len);
-      m.goal_id = msgs[i].goal_id ? msgs[i].goal_id : "";
-      m.action_name = msgs[i].action_name ? msgs[i].action_name : "";
-      out.push_back(std::move(m));
-    }
-    robot_bus_action_messages_free(msgs, count);
-    return out;
+    return ActionGoalHandle(
+        static_cast<RobotBusActionGoalHandle *>(check_ptr(handle, "send_goal handle")),
+        std::move(state));
+  }
+
+  ActionGoalHandle send_goal(BytesView body, const char *goal_id, double timeout_secs,
+                             ActionFeedbackCallback feedback = {}) {
+    return send_goal(body, std::move(feedback), goal_id, timeout_secs);
   }
 
  private:

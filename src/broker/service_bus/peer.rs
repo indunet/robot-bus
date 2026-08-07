@@ -1,6 +1,6 @@
 //! Static service-bus peer endpoints for broker↔broker RPC federation.
 
-use anyhow::{bail, Context, Result};
+use anyhow::{Context, Result, bail};
 
 use super::ports::{BACKEND_PORT, FRONTEND_PORT};
 

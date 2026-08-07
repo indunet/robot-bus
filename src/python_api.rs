@@ -1,33 +1,33 @@
 //! PyO3 bindings for the v1 Python SDK surface.
 
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::thread;
 use std::time::Duration;
 
-use pyo3::exceptions::PyRuntimeError;
+use pyo3::exceptions::{PyRuntimeError, PyTimeoutError};
 use pyo3::prelude::*;
 use pyo3::types::{PyBytes, PyType};
 
+use crate::action_bus::ActionKind;
 use crate::broker::{
-    apply_federation_opts, parse_robot_bus_config, robot_bus_broker_help,
-    RobotBusBroker as RustRobotBusBroker, RobotBusConfig,
+    RobotBusBroker as RustRobotBusBroker, RobotBusConfig, apply_federation_opts,
+    parse_robot_bus_config, robot_bus_broker_help,
 };
-use crate::discovery::{wait as discover_wait, DiscoverOpts as RustDiscoverOpts};
+use crate::discovery::{DiscoverOpts as RustDiscoverOpts, wait as discover_wait};
 use crate::errors::BusError;
 use crate::message_bus::{Publisher as RustPublisher, Subscriber as RustSubscriber};
 use crate::runtime::{
     ActionGoalHandler, CallbackGroup, CallbackGroupType, Context as RustContext,
     MultiThreadedExecutor as RustMultiThreadedExecutor, Node as RustNode,
     NodeActionClientRaw as RustNodeActionClient, NodeOptions as RustNodeOptions,
-    NodeServiceClientRaw as RustNodeServiceClient, ParameterValue, ShutdownHandle as RustShutdownHandle,
+    NodeServiceClientRaw as RustNodeServiceClient, ParameterValue, RawActionFeedbackCallback,
+    RawGoalHandle as RustRawGoalHandle, ShutdownHandle as RustShutdownHandle,
     SingleThreadedExecutor as RustSingleThreadedExecutor, TimerHandle as RustTimerHandle,
     TopicPublisherRaw as RustTopicPublisher,
 };
-use crate::action_bus::ActionKind;
 use crate::shutdown;
 use crate::transports;
-use prost::Message;
 
 fn bus_err(err: BusError) -> PyErr {
     PyRuntimeError::new_err(err.to_string())
@@ -83,6 +83,26 @@ fn anyhow_err(err: anyhow::Error) -> PyErr {
 
 fn map_endpoint_err(err: String) -> PyErr {
     PyRuntimeError::new_err(err)
+}
+
+fn action_message_to_py(
+    py: Python<'_>,
+    msg: crate::action_bus::ActionMessage,
+) -> PyResult<PyObject> {
+    let dict = pyo3::types::PyDict::new(py);
+    dict.set_item(
+        "kind",
+        match msg.kind {
+            ActionKind::Goal => "GOAL",
+            ActionKind::Feedback => "FEEDBACK",
+            ActionKind::Result => "RESULT",
+            ActionKind::Cancel => "CANCEL",
+        },
+    )?;
+    dict.set_item("body", PyBytes::new(py, &msg.body))?;
+    dict.set_item("goal_id", &msg.goal_id)?;
+    dict.set_item("action_name", &msg.action_name)?;
+    Ok(dict.into())
 }
 
 fn py_node_options(
@@ -354,13 +374,75 @@ impl PyNodeServiceClient {
     fn call(&self, py: Python<'_>, body: &[u8], timeout: Option<f64>) -> PyResult<Vec<u8>> {
         let timeout = timeout.map(Duration::from_secs_f64);
         // Release GIL so peer Node Python handlers can run on the spin thread.
-        unsafe { allow_threads_io(py, &self.inner, |inner| inner.call(body, timeout)).map_err(bus_err) }
+        unsafe {
+            allow_threads_io(py, &self.inner, |inner| inner.call(body, timeout)).map_err(bus_err)
+        }
     }
 }
 
 #[pyclass(name = "ActionClient", unsendable)]
 struct PyNodeActionClient {
     inner: RustNodeActionClient,
+}
+
+#[pyclass(name = "ActionGoalHandle")]
+struct PyActionGoalHandle {
+    inner: RustRawGoalHandle,
+}
+
+#[pymethods]
+impl PyActionGoalHandle {
+    #[getter]
+    fn goal_id(&self) -> &str {
+        self.inner.goal_id()
+    }
+
+    #[getter]
+    fn action_name(&self) -> &str {
+        self.inner.action_name()
+    }
+
+    /// Wait for the RESULT body. The action timeout starts when the goal is sent.
+    ///
+    /// If supplied, `timeout` limits only this call; the goal continues running.
+    #[pyo3(signature = (timeout=None))]
+    fn result(&self, py: Python<'_>, timeout: Option<f64>) -> PyResult<Vec<u8>> {
+        let msg = match timeout {
+            None => unsafe {
+                allow_threads_io(py, &self.inner, RustRawGoalHandle::wait_result)
+                    .map_err(bus_err)?
+            },
+            Some(seconds) => {
+                let timeout = Duration::from_secs_f64(seconds);
+                let handle = self.inner.clone();
+                let (tx, rx) = std::sync::mpsc::sync_channel(1);
+                thread::spawn(move || {
+                    let _ = tx.send(handle.wait_result());
+                });
+                py.allow_threads(move || rx.recv_timeout(timeout))
+                    .map_err(|err| match err {
+                        std::sync::mpsc::RecvTimeoutError::Timeout => {
+                            PyTimeoutError::new_err("action result timed out")
+                        }
+                        std::sync::mpsc::RecvTimeoutError::Disconnected => {
+                            PyRuntimeError::new_err("action result waiter disconnected")
+                        }
+                    })?
+                    .map_err(bus_err)?
+            }
+        };
+        Ok(msg.body)
+    }
+
+    /// Best-effort cancellation. This does not wait for server acknowledgement.
+    #[pyo3(signature = (body=None))]
+    fn cancel(&self, body: Option<&[u8]>) -> PyResult<()> {
+        match body {
+            Some(body) => self.inner.cancel_with_body(body),
+            None => self.inner.cancel(),
+        }
+        .map_err(bus_err)
+    }
 }
 
 #[pymethods]
@@ -370,12 +452,38 @@ impl PyNodeActionClient {
         self.inner.action_name()
     }
 
-    /// Send a goal and collect FEEDBACK/RESULT messages.
+    /// Send a goal and immediately return a live ActionGoalHandle.
     ///
-    /// Returns `list[dict]` with keys `kind`, `body`, `goal_id`, `action_name`.
-    /// `timeout` is seconds.
-    #[pyo3(signature = (body, goal_id=None, timeout=None))]
+    /// `feedback_callback`, when present, is called as `callback(body: bytes)`.
+    #[pyo3(signature = (body, goal_id=None, timeout=None, feedback_callback=None))]
     fn send_goal(
+        &self,
+        body: &[u8],
+        goal_id: Option<&str>,
+        timeout: Option<f64>,
+        feedback_callback: Option<Py<PyAny>>,
+    ) -> PyResult<PyActionGoalHandle> {
+        let timeout = timeout.map(Duration::from_secs_f64);
+        let callback = feedback_callback.map(|callback| {
+            Arc::new(move |message: &crate::action_bus::ActionMessage| {
+                Python::with_gil(|py| {
+                    if let Err(err) = callback.call1(py, (PyBytes::new(py, &message.body),)) {
+                        err.print(py);
+                    }
+                });
+            }) as RawActionFeedbackCallback
+        });
+        Ok(PyActionGoalHandle {
+            inner: self
+                .inner
+                .send_goal(body, goal_id, timeout, callback)
+                .map_err(bus_err)?,
+        })
+    }
+
+    /// Compatibility helper that waits for and collects FEEDBACK/RESULT messages.
+    #[pyo3(signature = (body, goal_id=None, timeout=None))]
+    fn send_goal_and_wait(
         &self,
         py: Python<'_>,
         body: &[u8],
@@ -385,61 +493,15 @@ impl PyNodeActionClient {
         let timeout = timeout.map(Duration::from_secs_f64);
         let messages = unsafe {
             allow_threads_io(py, &self.inner, |inner| {
-                inner.send_goal(body, goal_id, timeout)
+                inner.send_goal_and_wait(body, goal_id, timeout)
             })
         }
         .map_err(bus_err)?;
         let list = pyo3::types::PyList::empty(py);
         for msg in messages {
-            let dict = pyo3::types::PyDict::new(py);
-            dict.set_item(
-                "kind",
-                match msg.kind {
-                    ActionKind::Goal => "GOAL",
-                    ActionKind::Feedback => "FEEDBACK",
-                    ActionKind::Result => "RESULT",
-                    ActionKind::Cancel => "CANCEL",
-                },
-            )?;
-            dict.set_item("body", PyBytes::new(py, &msg.body))?;
-            dict.set_item("goal_id", &msg.goal_id)?;
-            dict.set_item("action_name", &msg.action_name)?;
-            list.append(dict)?;
+            list.append(action_message_to_py(py, msg)?)?;
         }
         Ok(list.into())
-    }
-
-    /// Cancel a goal; returns the RESULT message dict. `timeout` is seconds.
-    #[pyo3(signature = (goal_id, body=None, timeout=None))]
-    fn cancel(
-        &self,
-        py: Python<'_>,
-        goal_id: &str,
-        body: Option<&[u8]>,
-        timeout: Option<f64>,
-    ) -> PyResult<PyObject> {
-        let timeout = timeout.map(Duration::from_secs_f64);
-        let body = body.unwrap_or(b"");
-        let msg = unsafe {
-            allow_threads_io(py, &self.inner, |inner| {
-                inner.cancel(goal_id, body, timeout)
-            })
-        }
-        .map_err(bus_err)?;
-        let dict = pyo3::types::PyDict::new(py);
-        dict.set_item(
-            "kind",
-            match msg.kind {
-                ActionKind::Goal => "GOAL",
-                ActionKind::Feedback => "FEEDBACK",
-                ActionKind::Result => "RESULT",
-                ActionKind::Cancel => "CANCEL",
-            },
-        )?;
-        dict.set_item("body", PyBytes::new(py, &msg.body))?;
-        dict.set_item("goal_id", &msg.goal_id)?;
-        dict.set_item("action_name", &msg.action_name)?;
-        Ok(dict.into())
     }
 }
 
@@ -961,7 +1023,10 @@ impl PyNode {
     /// Create a service client bound to `service_name` (ROS 2 `create_client`).
     fn create_client(&mut self, service_name: &str) -> PyResult<PyNodeServiceClient> {
         Ok(PyNodeServiceClient {
-            inner: self.inner.create_client_raw(service_name).map_err(bus_err)?,
+            inner: self
+                .inner
+                .create_client_raw(service_name)
+                .map_err(bus_err)?,
         })
     }
 
@@ -1452,6 +1517,7 @@ fn _native(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyTopicPublisher>()?;
     m.add_class::<PyNodeServiceClient>()?;
     m.add_class::<PyNodeActionClient>()?;
+    m.add_class::<PyActionGoalHandle>()?;
     m.add_class::<PyShutdownHandle>()?;
     m.add_class::<PyTimerHandle>()?;
     m.add_class::<PyRobotBusBroker>()?;

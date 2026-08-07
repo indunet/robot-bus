@@ -175,57 +175,39 @@ fn main() -> robot_bus::Result<()> {
 
 ## 4. Action
 
-rclrs 0.7 provides `create_action_server` / `create_action_client`. robot-bus has a matching typed API; the optional ROS 2 bridge can also forward Fibonacci goals between the two graphs.
+rclrs 0.7 provides `create_action_server` / `create_action_client`. robot-bus uses the same ROS 2–style split between an immediately returned GoalHandle, streaming feedback, and a separately awaited result; the optional ROS 2 bridge can also forward Fibonacci goals between the two graphs.
 
 **rclrs**
 
 ```rust
 // node.create_action_server / create_action_client
-// goal → feedback 流 → result；需 executor.spin
+// send_goal 立即返回 goal handle
+// feedback callback 实时接收；result future/handle 独立等待；handle 可请求 cancel
 ```
 
 **robot-bus**
 
 ```rust
 use std::time::Duration;
-use robot_bus::action::v1::{Fibonacci, FibonacciFeedback, FibonacciGoal, FibonacciResult};
-use robot_bus::{ActionOutcome, Node};
+use robot_bus::action::v1::{Fibonacci, FibonacciGoal};
+use robot_bus::Node;
 
 fn main() -> robot_bus::Result<()> {
-    let mut server = Node::new("act_server");
     let mut client_node = Node::new("act_client");
-
-    server.create_action_server::<Fibonacci, _>(
-        "fibonacci",
-        |goal: FibonacciGoal| {
-            let order = goal.order.max(0) as usize;
-            let mut seq = vec![0i32, 1];
-            while seq.len() < order {
-                let n = seq[seq.len() - 1] + seq[seq.len() - 2];
-                seq.push(n);
-            }
-            seq.truncate(order);
-            ActionOutcome {
-                feedbacks: vec![FibonacciFeedback {
-                    sequence: seq.clone(),
-                }],
-                result: FibonacciResult { sequence: seq },
-            }
-        },
-        None,
-    )?;
-
     let client = client_node.create_action_client::<Fibonacci>("fibonacci")?;
-    let outcome = client.send_goal(
+    let goal = client.send_goal(
         &FibonacciGoal { order: 5 },
-        None,
-        Some(Duration::from_secs(10)),
-    )?;
+        |feedback| println!("feedback: {:?}", feedback.sequence),
+    )?; // GoalHandle 立即返回
 
-    server.spin()?;
+    // goal.cancel()?; // best-effort，不表示服务端已确认
+    let result = goal.result(Some(Duration::from_secs(10)))?;
+
     Ok(())
 }
 ```
+
+以上为概念性 API，具体签名正在实现。gRPC 使用 `ActionGateway.SendGoal` 的一元请求 + server stream（`FEEDBACK` / `RESULT`）；取消即断开该流。ZMQ 取消则发送显式 `CANCEL` 帧。两种 transport 都不承诺服务端取消确认。
 
 ---
 
@@ -273,7 +255,7 @@ node.spin()?;
 | 服务端 | `create_service::<S, _>(name, cb)` | `create_service::<S, _>(name, cb, group)` |
 | 客户端 | `create_client::<S>(name)` + `call` | `create_client::<S>(name)` + `call(..., timeout)` |
 | Action 服务端 | `create_action_server` | `create_action_server::<A, _>(..., group)` |
-| Action 客户端 | `create_action_client` | `create_action_client` + `send_goal` |
+| Action 客户端 | `create_action_client` + GoalHandle | `create_action_client` + `send_goal` → GoalHandle（feedback / result / cancel） |
 | 转起来 | `rclrs::spin(node)` | `node.spin()` |
 | 原始字节 | 动态消息 / 有限支持 | `create_*_raw` |
 

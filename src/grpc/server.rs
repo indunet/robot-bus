@@ -7,8 +7,8 @@ use anyhow::{Context, Result};
 use http::Method;
 use http::header::HeaderName;
 use tokio::net::TcpListener;
-use tonic::transport::server::TcpIncoming;
 use tonic::transport::Server;
+use tonic::transport::server::TcpIncoming;
 use tonic_web::GrpcWebLayer;
 use tower_http::cors::{AllowOrigin, Any, CorsLayer};
 
@@ -69,10 +69,8 @@ pub async fn serve_on_listener(
     listener: TcpListener,
     shutdown: impl Future<Output = ()> + Send + 'static,
 ) -> Result<()> {
-    let message = MessageGatewayService::new(
-        config.message_xpub.clone(),
-        config.message_xsub.clone(),
-    );
+    let message =
+        MessageGatewayService::new(config.message_xpub.clone(), config.message_xsub.clone());
     let service = ServiceGatewayService::new(config.service_frontend.clone());
     let action = ActionGatewayService::new(config.action_frontend.clone());
     let cors = build_cors(&config.cors_origins)?;
@@ -89,7 +87,7 @@ pub async fn serve_on_listener(
 
     // TcpListenerStream alone leaves TCP_NODELAY off; with serve_with_incoming_*
     // tonic's Server::tcp_nodelay() is ignored — wrap so small streaming frames
-    // are not delayed by Nagle (~40ms classic delayed-ACK stall on action Run).
+    // are not delayed by Nagle (~40ms classic delayed-ACK stall on action streams).
     let incoming = TcpIncoming::from(listener).with_nodelay(Some(true));
 
     Server::builder()

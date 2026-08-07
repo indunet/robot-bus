@@ -1,6 +1,6 @@
 {
   "name": "robot-bus",
-  "version": "0.1.5",
+  "version": "0.1.6",
   "description": "robot-bus TypeScript SDK: Node (napi-rs / ZMQ) + browser (gRPC-Web client)",
   "license": "Apache-2.0",
   "author": "deng_ran <deng_ran@aliyun.com>",
@@ -71,6 +71,9 @@
     "tsup": "^8.5.0",
     "tsx": "^4.19.0",
     "typescript": "^5.8.0"
+  },
+  "overrides": {
+    "esbuild": "^0.28.1"
   },
   "engines": {
     "node": ">=18"

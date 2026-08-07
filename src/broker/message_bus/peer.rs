@@ -1,6 +1,6 @@
 //! Static message-bus peer endpoints for broker↔broker topic federation.
 
-use anyhow::{bail, Context, Result};
+use anyhow::{Context, Result, bail};
 
 /// Remote broker message-bus endpoints (client-facing XSUB/XPUB of the peer).
 #[derive(Clone, Debug, PartialEq, Eq)]

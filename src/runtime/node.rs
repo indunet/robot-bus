@@ -18,16 +18,17 @@
 //! Topic / service / action names are used as given (pass full paths yourself).
 
 use std::marker::PhantomData;
-use std::sync::{Arc, MutexGuard};
-use std::time::Duration;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::mpsc::{self, Receiver, Sender};
+use std::sync::{Arc, Mutex, MutexGuard};
+use std::thread;
+use std::time::{Duration, Instant};
 
 use prost::{Message, Name};
 
 use crate::action_bus::{ActionClient as BusActionClient, ActionKind, ActionMessage};
-use crate::errors::{BusError, Result};
+use crate::errors::{BusError, Result, parse_error_body};
 use crate::message_bus::Publisher as BusPublisher;
-use crate::runtime::topic_type_register;
-use crate::runtime::topology_register::TopologyEndpointGuard;
 use crate::runtime::callback_group::{CallbackGroup, CallbackGroupType};
 use crate::runtime::context::Context;
 use crate::runtime::executor::{Executor, ShutdownHandle};
@@ -38,12 +39,14 @@ use crate::runtime::parameters::{Parameter, ParameterStore, ParameterValue};
 use crate::runtime::queues::ActionMessageCallback;
 use crate::runtime::registrations::{ActionGoalHandler, MessageCallback, ServiceHandler};
 use crate::runtime::timers::{TimerCallback, TimerHandle};
+use crate::runtime::topic_type_register;
+use crate::runtime::topology_register::TopologyEndpointGuard;
 use crate::service_bus::ServiceClient as BusServiceClient;
 use crate::transports::{
-    action_backend_endpoint, action_frontend_endpoint, inproc_endpoint_with_prefix,
-    ipc_endpoint_in, message_xpub_endpoint, message_xsub_endpoint, service_backend_endpoint,
-    service_frontend_endpoint, ACTION_BACKEND_CHANNEL, ACTION_FRONTEND_CHANNEL,
-    SERVICE_BACKEND_CHANNEL, SERVICE_FRONTEND_CHANNEL, XPUB_CHANNEL, XSUB_CHANNEL,
+    ACTION_BACKEND_CHANNEL, ACTION_FRONTEND_CHANNEL, SERVICE_BACKEND_CHANNEL,
+    SERVICE_FRONTEND_CHANNEL, XPUB_CHANNEL, XSUB_CHANNEL, action_backend_endpoint,
+    action_frontend_endpoint, inproc_endpoint_with_prefix, ipc_endpoint_in, message_xpub_endpoint,
+    message_xsub_endpoint, service_backend_endpoint, service_frontend_endpoint,
 };
 use crate::typed::{Action, ActionOutcome, Service};
 use crate::zmq_helpers::HighWaterMark;
@@ -146,7 +149,10 @@ impl NodeOptions {
             console_url: None,
             message_xsub: Some(inproc_endpoint_with_prefix(prefix, XSUB_CHANNEL)),
             message_xpub: Some(inproc_endpoint_with_prefix(prefix, XPUB_CHANNEL)),
-            service_frontend: Some(inproc_endpoint_with_prefix(prefix, SERVICE_FRONTEND_CHANNEL)),
+            service_frontend: Some(inproc_endpoint_with_prefix(
+                prefix,
+                SERVICE_FRONTEND_CHANNEL,
+            )),
             service_backend: Some(inproc_endpoint_with_prefix(prefix, SERVICE_BACKEND_CHANNEL)),
             action_backend: Some(inproc_endpoint_with_prefix(prefix, ACTION_BACKEND_CHANNEL)),
             action_frontend: Some(inproc_endpoint_with_prefix(prefix, ACTION_FRONTEND_CHANNEL)),
@@ -244,7 +250,9 @@ impl NodeOptions {
         self.require_zmq()?;
         match &self.action_backend {
             Some(ep) => Ok(ep.clone()),
-            None => action_backend_endpoint(&self.host, &self.transport).map_err(BusError::Protocol),
+            None => {
+                action_backend_endpoint(&self.host, &self.transport).map_err(BusError::Protocol)
+            }
         }
     }
 
@@ -426,11 +434,7 @@ impl<S: Service> NodeServiceClient<S> {
         self.inner.service_name()
     }
 
-    pub fn call(
-        &self,
-        request: &S::Request,
-        timeout: Option<Duration>,
-    ) -> Result<S::Response> {
+    pub fn call(&self, request: &S::Request, timeout: Option<Duration>) -> Result<S::Response> {
         let reply = self.inner.call(&request.encode_to_vec(), timeout)?;
         S::Response::decode(reply.as_slice()).map_err(|err| {
             BusError::Protocol(format!(
@@ -462,6 +466,298 @@ impl NodeActionServer {
     }
 }
 
+/// Callback invoked for each action feedback as it arrives.
+pub type RawActionFeedbackCallback = Arc<dyn Fn(&ActionMessage) + Send + Sync + 'static>;
+
+fn spawn_zmq_goal(
+    context: zmq::Context,
+    endpoint: String,
+    action_name: String,
+    body: Vec<u8>,
+    requested_goal_id: Option<String>,
+    timeout: Option<Duration>,
+    hwm: HighWaterMark,
+    feedback_callback: Option<RawActionFeedbackCallback>,
+) -> Result<RawGoalHandle> {
+    let (ready_tx, ready_rx) = mpsc::sync_channel(1);
+    let (event_tx, event_rx) = mpsc::channel();
+    let (command_tx, command_rx) = mpsc::channel();
+    let thread_action_name = action_name.clone();
+
+    thread::Builder::new()
+        .name(format!("action-{}", action_name))
+        .spawn(move || {
+            let client = match BusActionClient::with_context_hwm(&context, Some(&endpoint), hwm) {
+                Ok(client) => client,
+                Err(err) => {
+                    let _ = ready_tx.send(Err(err));
+                    return;
+                }
+            };
+            let goal_id = match client.submit_goal(
+                &thread_action_name,
+                &body,
+                requested_goal_id.as_deref(),
+            ) {
+                Ok(goal_id) => goal_id,
+                Err(err) => {
+                    let _ = ready_tx.send(Err(err));
+                    return;
+                }
+            };
+            if ready_tx.send(Ok(goal_id.clone())).is_err() {
+                return;
+            }
+
+            let deadline = timeout.map(|duration| Instant::now() + duration);
+            loop {
+                while let Ok(command) = command_rx.try_recv() {
+                    match command {
+                        GoalCommand::Cancel(body) => {
+                            if let Err(err) =
+                                client.submit_cancel(&thread_action_name, &goal_id, &body)
+                            {
+                                let _ = event_tx.send(Err(err));
+                                return;
+                            }
+                        }
+                    }
+                }
+
+                if deadline.is_some_and(|deadline| Instant::now() >= deadline) {
+                    let _ = client.submit_cancel(&thread_action_name, &goal_id, b"");
+                    let _ = event_tx.send(Err(BusError::Timeout(format!(
+                        "action client timed out after {}s",
+                        timeout.unwrap_or_default().as_secs_f64()
+                    ))));
+                    return;
+                }
+
+                let poll_timeout = deadline
+                    .map(|deadline| {
+                        deadline
+                            .saturating_duration_since(Instant::now())
+                            .min(Duration::from_millis(20))
+                    })
+                    .unwrap_or(Duration::from_millis(20));
+                let message = match client.recv_message(Some(poll_timeout)) {
+                    Ok(message) => message,
+                    Err(BusError::Timeout(_)) => continue,
+                    Err(err) => {
+                        let _ = event_tx.send(Err(err));
+                        return;
+                    }
+                };
+                if message.action_name != thread_action_name || message.goal_id != goal_id {
+                    let _ = event_tx.send(Err(BusError::Protocol(format!(
+                        "unexpected message for {:?}/{:?}",
+                        message.action_name, message.goal_id
+                    ))));
+                    return;
+                }
+                if message.kind == ActionKind::Feedback {
+                    if let Some(callback) = &feedback_callback {
+                        callback(&message);
+                    }
+                }
+                let done = message.kind == ActionKind::Result;
+                if done {
+                    if let Some(err) = parse_error_body(&message.body) {
+                        let _ = event_tx.send(Err(err));
+                        return;
+                    }
+                }
+                if event_tx.send(Ok(message)).is_err() || done {
+                    return;
+                }
+            }
+        })
+        .map_err(|err| BusError::Protocol(format!("spawn action thread: {err}")))?;
+
+    let goal_id = ready_rx
+        .recv()
+        .map_err(|_| BusError::Protocol("action thread ended before submitting goal".into()))??;
+    Ok(RawGoalHandle {
+        inner: Arc::new(GoalHandleCore {
+            action_name,
+            goal_id,
+            events: Mutex::new(event_rx),
+            messages: Mutex::new(Vec::new()),
+            control: GoalControl::Zmq(command_tx),
+            completed: AtomicBool::new(false),
+        }),
+    })
+}
+
+enum GoalControl {
+    Zmq(Sender<GoalCommand>),
+    #[cfg(feature = "grpc")]
+    Grpc(tokio::task::AbortHandle),
+}
+
+enum GoalCommand {
+    Cancel(Vec<u8>),
+}
+
+struct GoalHandleCore {
+    action_name: String,
+    goal_id: String,
+    events: Mutex<Receiver<Result<ActionMessage>>>,
+    messages: Mutex<Vec<ActionMessage>>,
+    control: GoalControl,
+    completed: AtomicBool,
+}
+
+impl GoalHandleCore {
+    fn wait_result(&self) -> Result<ActionMessage> {
+        if let Some(result) = self
+            .messages
+            .lock()
+            .map_err(|_| BusError::Protocol("action messages mutex poisoned".into()))?
+            .iter()
+            .find(|message| message.kind == ActionKind::Result)
+            .cloned()
+        {
+            return Ok(result);
+        }
+
+        loop {
+            let event = self
+                .events
+                .lock()
+                .map_err(|_| BusError::Protocol("action event mutex poisoned".into()))?
+                .recv()
+                .map_err(|_| {
+                    BusError::Protocol(format!(
+                        "action '{}' goal '{}' ended without RESULT",
+                        self.action_name, self.goal_id
+                    ))
+                })??;
+            let done = event.kind == ActionKind::Result;
+            self.messages
+                .lock()
+                .map_err(|_| BusError::Protocol("action messages mutex poisoned".into()))?
+                .push(event.clone());
+            if done {
+                self.completed.store(true, Ordering::Release);
+                return Ok(event);
+            }
+        }
+    }
+
+    fn collect(&self) -> Result<Vec<ActionMessage>> {
+        self.wait_result()?;
+        self.messages
+            .lock()
+            .map(|messages| messages.clone())
+            .map_err(|_| BusError::Protocol("action messages mutex poisoned".into()))
+    }
+
+    fn cancel(&self, body: &[u8]) -> Result<()> {
+        match &self.control {
+            GoalControl::Zmq(commands) => commands
+                .send(GoalCommand::Cancel(body.to_vec()))
+                .map_err(|_| BusError::Closed),
+            #[cfg(feature = "grpc")]
+            GoalControl::Grpc(abort) => {
+                abort.abort();
+                Ok(())
+            }
+        }
+    }
+}
+
+impl Drop for GoalHandleCore {
+    fn drop(&mut self) {
+        if self.completed.load(Ordering::Acquire) {
+            return;
+        }
+        match &self.control {
+            GoalControl::Zmq(commands) => {
+                let _ = commands.send(GoalCommand::Cancel(Vec::new()));
+            }
+            #[cfg(feature = "grpc")]
+            GoalControl::Grpc(abort) => abort.abort(),
+        }
+    }
+}
+
+/// Live handle for one raw (opaque bytes) action goal.
+#[derive(Clone)]
+pub struct RawGoalHandle {
+    inner: Arc<GoalHandleCore>,
+}
+
+impl RawGoalHandle {
+    pub fn goal_id(&self) -> &str {
+        &self.inner.goal_id
+    }
+
+    pub fn action_name(&self) -> &str {
+        &self.inner.action_name
+    }
+
+    pub fn wait_result(&self) -> Result<ActionMessage> {
+        self.inner.wait_result()
+    }
+
+    pub fn collect(&self) -> Result<Vec<ActionMessage>> {
+        self.inner.collect()
+    }
+
+    /// Best-effort cancellation. This does not wait for server acknowledgement.
+    pub fn cancel(&self) -> Result<()> {
+        self.inner.cancel(&[])
+    }
+
+    /// Best-effort cancellation with an opaque ZMQ cancel payload.
+    ///
+    /// gRPC cancellation is represented by aborting the response stream, so the
+    /// body is ignored on that transport.
+    pub fn cancel_with_body(&self, body: &[u8]) -> Result<()> {
+        self.inner.cancel(body)
+    }
+}
+
+/// Live handle for one typed action goal.
+pub struct GoalHandle<A: Action> {
+    inner: RawGoalHandle,
+    _marker: PhantomData<A>,
+}
+
+impl<A: Action> Clone for GoalHandle<A> {
+    fn clone(&self) -> Self {
+        Self {
+            inner: self.inner.clone(),
+            _marker: PhantomData,
+        }
+    }
+}
+
+impl<A: Action> GoalHandle<A> {
+    pub fn goal_id(&self) -> &str {
+        self.inner.goal_id()
+    }
+
+    pub fn action_name(&self) -> &str {
+        self.inner.action_name()
+    }
+
+    pub fn wait_result(&self) -> Result<A::Result> {
+        let message = self.inner.wait_result()?;
+        A::Result::decode(message.body.as_slice()).map_err(|err| {
+            BusError::Protocol(format!(
+                "action '{}' result decode failed: {err}",
+                self.action_name()
+            ))
+        })
+    }
+
+    pub fn cancel(&self) -> Result<()> {
+        self.inner.cancel()
+    }
+}
+
 /// Raw (opaque bytes) action client from [`Node::create_action_client_raw`].
 pub struct NodeActionClientRaw {
     inner: ActionClientInner,
@@ -469,7 +765,11 @@ pub struct NodeActionClientRaw {
 }
 
 enum ActionClientInner {
-    Zmq(BusActionClient),
+    Zmq {
+        context: zmq::Context,
+        endpoint: String,
+        hwm: Mutex<HighWaterMark>,
+    },
     #[cfg(feature = "grpc")]
     Grpc(GrpcClientContext),
 }
@@ -484,38 +784,70 @@ impl NodeActionClientRaw {
         body: &[u8],
         goal_id: Option<&str>,
         timeout: Option<Duration>,
-    ) -> Result<Vec<ActionMessage>> {
+        feedback_callback: Option<RawActionFeedbackCallback>,
+    ) -> Result<RawGoalHandle> {
         match &self.inner {
-            ActionClientInner::Zmq(client) => {
-                client.send_goal(&self.action_name, body, goal_id, timeout)
+            ActionClientInner::Zmq {
+                context,
+                endpoint,
+                hwm,
+            } => {
+                let hwm = *hwm
+                    .lock()
+                    .map_err(|_| BusError::Protocol("action HWM mutex poisoned".into()))?;
+                spawn_zmq_goal(
+                    context.clone(),
+                    endpoint.clone(),
+                    self.action_name.clone(),
+                    body.to_vec(),
+                    goal_id.map(str::to_string),
+                    timeout,
+                    hwm,
+                    feedback_callback,
+                )
             }
             #[cfg(feature = "grpc")]
-            ActionClientInner::Grpc(ctx) => {
-                ctx.send_goal(&self.action_name, body, goal_id, timeout)
-            }
+            ActionClientInner::Grpc(ctx) => ctx
+                .send_goal(&self.action_name, body, goal_id, timeout, feedback_callback)
+                .map(|session| RawGoalHandle {
+                    inner: Arc::new(GoalHandleCore {
+                        action_name: self.action_name.clone(),
+                        goal_id: session.goal_id,
+                        events: Mutex::new(session.events),
+                        messages: Mutex::new(Vec::new()),
+                        control: GoalControl::Grpc(session.abort),
+                        completed: AtomicBool::new(false),
+                    }),
+                }),
         }
     }
 
-    pub fn cancel(
+    /// Compatibility helper that waits for and collects FEEDBACK/RESULT.
+    pub fn send_goal_and_wait(
         &self,
-        goal_id: &str,
         body: &[u8],
+        goal_id: Option<&str>,
         timeout: Option<Duration>,
-    ) -> Result<ActionMessage> {
-        match &self.inner {
-            ActionClientInner::Zmq(client) => {
-                client.cancel(&self.action_name, goal_id, body, timeout)
-            }
-            #[cfg(feature = "grpc")]
-            ActionClientInner::Grpc(ctx) => {
-                ctx.cancel_goal(&self.action_name, goal_id, body, timeout)
-            }
-        }
+    ) -> Result<Vec<ActionMessage>> {
+        self.send_goal(body, goal_id, timeout, None)?.collect()
+    }
+
+    /// Alias for [`send_goal_and_wait`](Self::send_goal_and_wait).
+    pub fn collect(
+        &self,
+        body: &[u8],
+        goal_id: Option<&str>,
+        timeout: Option<Duration>,
+    ) -> Result<Vec<ActionMessage>> {
+        self.send_goal_and_wait(body, goal_id, timeout)
     }
 
     pub fn high_water_mark(&self) -> Result<HighWaterMark> {
         match &self.inner {
-            ActionClientInner::Zmq(client) => client.high_water_mark(),
+            ActionClientInner::Zmq { hwm, .. } => hwm
+                .lock()
+                .map(|hwm| *hwm)
+                .map_err(|_| BusError::Protocol("action HWM mutex poisoned".into())),
             #[cfg(feature = "grpc")]
             ActionClientInner::Grpc(_) => Err(BusError::Protocol(
                 "high_water_mark is not available in gRPC node mode".into(),
@@ -525,7 +857,12 @@ impl NodeActionClientRaw {
 
     pub fn set_high_water_mark(&self, hwm: HighWaterMark) -> Result<()> {
         match &self.inner {
-            ActionClientInner::Zmq(client) => client.set_high_water_mark(hwm),
+            ActionClientInner::Zmq { hwm: current, .. } => {
+                *current
+                    .lock()
+                    .map_err(|_| BusError::Protocol("action HWM mutex poisoned".into()))? = hwm;
+                Ok(())
+            }
             #[cfg(feature = "grpc")]
             ActionClientInner::Grpc(_) => Err(BusError::Protocol(
                 "set_high_water_mark is not available in gRPC node mode".into(),
@@ -550,10 +887,38 @@ impl<A: Action> NodeActionClient<A> {
         goal: &A::Goal,
         goal_id: Option<&str>,
         timeout: Option<Duration>,
+        feedback_callback: Option<Arc<dyn Fn(A::Feedback) + Send + Sync + 'static>>,
+    ) -> Result<GoalHandle<A>> {
+        let action_name = self.action_name().to_string();
+        let raw_callback = feedback_callback.map(|callback| {
+            Arc::new(move |message: &ActionMessage| {
+                match A::Feedback::decode(message.body.as_slice()) {
+                    Ok(feedback) => callback(feedback),
+                    Err(err) => {
+                        log::warn!("action '{}' feedback decode failed: {err}", action_name)
+                    }
+                }
+            }) as RawActionFeedbackCallback
+        });
+        let inner = self
+            .inner
+            .send_goal(&goal.encode_to_vec(), goal_id, timeout, raw_callback)?;
+        Ok(GoalHandle {
+            inner,
+            _marker: PhantomData,
+        })
+    }
+
+    /// Compatibility helper that waits for a result and collects feedback.
+    pub fn send_goal_and_wait(
+        &self,
+        goal: &A::Goal,
+        goal_id: Option<&str>,
+        timeout: Option<Duration>,
     ) -> Result<ActionOutcome<A>> {
         let messages = self
             .inner
-            .send_goal(&goal.encode_to_vec(), goal_id, timeout)?;
+            .send_goal_and_wait(&goal.encode_to_vec(), goal_id, timeout)?;
         let mut feedbacks = Vec::new();
         let mut result = None;
         for msg in messages {
@@ -586,15 +951,6 @@ impl<A: Action> NodeActionClient<A> {
             ))
         })?;
         Ok(ActionOutcome { feedbacks, result })
-    }
-
-    pub fn cancel(
-        &self,
-        goal_id: &str,
-        body: &[u8],
-        timeout: Option<Duration>,
-    ) -> Result<ActionMessage> {
-        self.inner.cancel(goal_id, body, timeout)
     }
 
     pub fn high_water_mark(&self) -> Result<HighWaterMark> {
@@ -706,11 +1062,7 @@ impl Node {
     }
 
     /// Create a node that shares `context` for all ZMQ sockets (required for inproc).
-    pub fn with_context(
-        context: Context,
-        name: impl Into<String>,
-        options: NodeOptions,
-    ) -> Self {
+    pub fn with_context(context: Context, name: impl Into<String>, options: NodeOptions) -> Self {
         Self {
             name: name.into(),
             options,
@@ -871,10 +1223,7 @@ impl Node {
     }
 
     /// Create a raw-bytes topic publisher.
-    pub fn create_publisher_raw(
-        &mut self,
-        topic: impl Into<String>,
-    ) -> Result<TopicPublisherRaw> {
+    pub fn create_publisher_raw(&mut self, topic: impl Into<String>) -> Result<TopicPublisherRaw> {
         self.create_publisher_raw_with_hwm(topic, None)
     }
 
@@ -1080,8 +1429,7 @@ impl Node {
         }
         if !self.subscriber_connected {
             let endpoint = self.options.message_xpub_endpoint()?;
-            self.lock_executor()?
-                .connect_subscriber(Some(&endpoint))?;
+            self.lock_executor()?.connect_subscriber(Some(&endpoint))?;
             self.subscriber_connected = true;
         }
         Ok(())
@@ -1103,8 +1451,7 @@ impl Node {
         if self.options.is_grpc() {
             return self.ensure_grpc()?.create_timer(period, callback, group);
         }
-        self.lock_executor()?
-            .create_timer(period, callback, group)
+        self.lock_executor()?.create_timer(period, callback, group)
     }
 
     pub fn cancel_timer(&mut self, handle: TimerHandle) -> Result<()> {
@@ -1210,7 +1557,10 @@ impl Node {
 
     fn client_rpc_hwm(&self) -> HighWaterMark {
         match &self.executor {
-            Some(exec) => exec.lock().map(|e| e.rpc_hwm()).unwrap_or(HighWaterMark::RPC),
+            Some(exec) => exec
+                .lock()
+                .map(|e| e.rpc_hwm())
+                .unwrap_or(HighWaterMark::RPC),
             None => HighWaterMark::RPC,
         }
     }
@@ -1305,11 +1655,11 @@ impl Node {
         }
         let endpoint = self.options.action_frontend_endpoint()?;
         Ok(NodeActionClientRaw {
-            inner: ActionClientInner::Zmq(BusActionClient::with_context_hwm(
-                self.context.zmq(),
-                Some(&endpoint),
-                hwm,
-            )?),
+            inner: ActionClientInner::Zmq {
+                context: self.context.clone_zmq(),
+                endpoint,
+                hwm: Mutex::new(hwm),
+            },
             action_name: action_name.into(),
         })
     }
@@ -1332,8 +1682,7 @@ impl Node {
             ));
         }
         let endpoint = self.options.action_frontend_endpoint()?;
-        self.lock_executor()?
-            .connect_action_client(Some(&endpoint))
+        self.lock_executor()?.connect_action_client(Some(&endpoint))
     }
 
     /// Submit a goal via the executor (callback receives FEEDBACK / RESULT). Prefer
@@ -1354,12 +1703,7 @@ impl Node {
             .send_goal(action_name, body, callback, goal_id)
     }
 
-    pub fn cancel_goal(
-        &mut self,
-        action_name: &str,
-        goal_id: &str,
-        body: &[u8],
-    ) -> Result<()> {
+    pub fn cancel_goal(&mut self, action_name: &str, goal_id: &str, body: &[u8]) -> Result<()> {
         if self.options.is_grpc() {
             return Err(grpc_mode_unsupported(
                 "cancel_goal (use create_action_client)",
@@ -1567,11 +1911,13 @@ ros__parameters:
                     .as_deref(),
                 Some("http://10.0.0.1:15770")
             );
-            assert!(NodeOptions::grpc()
-                .message_xpub_endpoint()
-                .unwrap_err()
-                .to_string()
-                .contains("gRPC"));
+            assert!(
+                NodeOptions::grpc()
+                    .message_xpub_endpoint()
+                    .unwrap_err()
+                    .to_string()
+                    .contains("gRPC")
+            );
         }
     }
 

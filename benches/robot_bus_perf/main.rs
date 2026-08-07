@@ -14,8 +14,8 @@ use std::time::{Duration, Instant};
 use robot_bus::worker_thread::WorkerThread;
 use robot_bus::{Context, HighWaterMark, Node, Publisher, RobotBusBroker};
 use support::{
-    env_f64, env_summary, env_usize, lock_broker, node_for, now_ns, options_for, perf_broker_config,
-    write_report, LatencyStats, ScenarioResult,
+    LatencyStats, ScenarioResult, env_f64, env_summary, env_usize, lock_broker, node_for, now_ns,
+    options_for, perf_broker_config, write_report,
 };
 
 const PAYLOAD_LEN: usize = 64;
@@ -91,8 +91,8 @@ fn main() {
         println!("service iters={svc_iters} action iters={act_iters}");
     }
     let ctx = Context::new();
-    let broker =
-        RobotBusBroker::start_with_context(ctx.clone(), perf_broker_config()).expect("start broker");
+    let broker = RobotBusBroker::start_with_context(ctx.clone(), perf_broker_config())
+        .expect("start broker");
     thread::sleep(Duration::from_millis(300));
 
     let mut results: Vec<ScenarioResult> = Vec::new();
@@ -304,7 +304,9 @@ fn find_max_goodput(
     }
 
     best.ok_or_else(|| {
-        format!("no rate in {rate_lo}..={rate_hi} Hz met loss≤{max_loss:.1}% at ≥90% of target pace")
+        format!(
+            "no rate in {rate_lo}..={rate_hi} Hz met loss≤{max_loss:.1}% at ≥90% of target pace"
+        )
     })
 }
 
@@ -317,7 +319,7 @@ fn bench_pubsub(ctx: &Context, transport: &str) -> ScenarioResult {
     let xsub = match options.message_xsub_endpoint() {
         Ok(ep) => ep,
         Err(err) => {
-            return ScenarioResult::skipped(&transport, scenario, format!("xsub endpoint: {err}"))
+            return ScenarioResult::skipped(&transport, scenario, format!("xsub endpoint: {err}"));
         }
     };
 
@@ -357,14 +359,22 @@ fn bench_pubsub(ctx: &Context, transport: &str) -> ScenarioResult {
     let shutdown = match sub.shutdown_handle() {
         Ok(h) => h,
         Err(err) => {
-            return ScenarioResult::skipped(&transport, scenario, format!("shutdown handle: {err}"))
+            return ScenarioResult::skipped(
+                &transport,
+                scenario,
+                format!("shutdown handle: {err}"),
+            );
         }
     };
 
     let publisher = match Publisher::with_shared_context(ctx, Some(&xsub), hwm) {
         Ok(p) => p,
         Err(err) => {
-            return ScenarioResult::skipped(&transport, scenario, format!("publisher failed: {err}"))
+            return ScenarioResult::skipped(
+                &transport,
+                scenario,
+                format!("publisher failed: {err}"),
+            );
         }
     };
 
@@ -468,7 +478,11 @@ fn bench_service(ctx: &Context, transport: &str, n: usize) -> ScenarioResult {
     let shutdown = match server.shutdown_handle() {
         Ok(h) => h,
         Err(err) => {
-            return ScenarioResult::skipped(&transport, scenario, format!("shutdown handle: {err}"))
+            return ScenarioResult::skipped(
+                &transport,
+                scenario,
+                format!("shutdown handle: {err}"),
+            );
         }
     };
 
@@ -476,8 +490,11 @@ fn bench_service(ctx: &Context, transport: &str, n: usize) -> ScenarioResult {
     let ctx_cli = ctx.clone();
     let worker = thread::spawn(move || {
         thread::sleep(Duration::from_millis(200));
-        let mut client_node =
-            node_for(&ctx_cli, format!("perf-svc-cli-{transport_cli}"), &transport_cli);
+        let mut client_node = node_for(
+            &ctx_cli,
+            format!("perf-svc-cli-{transport_cli}"),
+            &transport_cli,
+        );
         let client = match client_node.create_client_raw(&name) {
             Ok(c) => c,
             Err(err) => {
@@ -574,7 +591,11 @@ fn bench_action(ctx: &Context, transport: &str, n: usize) -> ScenarioResult {
     let shutdown = match server.shutdown_handle() {
         Ok(h) => h,
         Err(err) => {
-            return ScenarioResult::skipped(&transport, scenario, format!("shutdown handle: {err}"))
+            return ScenarioResult::skipped(
+                &transport,
+                scenario,
+                format!("shutdown handle: {err}"),
+            );
         }
     };
 
@@ -582,8 +603,11 @@ fn bench_action(ctx: &Context, transport: &str, n: usize) -> ScenarioResult {
     let ctx_cli = ctx.clone();
     let worker = thread::spawn(move || {
         thread::sleep(Duration::from_millis(200));
-        let mut client_node =
-            node_for(&ctx_cli, format!("perf-act-cli-{transport_cli}"), &transport_cli);
+        let mut client_node = node_for(
+            &ctx_cli,
+            format!("perf-act-cli-{transport_cli}"),
+            &transport_cli,
+        );
         let client = match client_node.create_action_client_raw(&name) {
             Ok(c) => c,
             Err(err) => {
@@ -597,7 +621,9 @@ fn bench_action(ctx: &Context, transport: &str, n: usize) -> ScenarioResult {
         };
 
         let payload = make_payload(0);
-        if let Err(err) = client.send_goal(&payload, None, Some(Duration::from_millis(800))) {
+        if let Err(err) =
+            client.send_goal_and_wait(&payload, None, Some(Duration::from_millis(800)))
+        {
             shutdown.shutdown();
             return ScenarioResult::skipped(
                 &transport_cli,
@@ -606,7 +632,7 @@ fn bench_action(ctx: &Context, transport: &str, n: usize) -> ScenarioResult {
             );
         }
         for _ in 1..WARMUP.min(10) {
-            let _ = client.send_goal(&payload, None, Some(Duration::from_secs(2)));
+            let _ = client.send_goal_and_wait(&payload, None, Some(Duration::from_secs(2)));
         }
 
         let mut samples = Vec::with_capacity(n);
@@ -614,7 +640,7 @@ fn bench_action(ctx: &Context, transport: &str, n: usize) -> ScenarioResult {
         let mut received = 0usize;
         for _ in 0..n {
             let start = Instant::now();
-            match client.send_goal(&payload, None, Some(Duration::from_secs(5))) {
+            match client.send_goal_and_wait(&payload, None, Some(Duration::from_secs(5))) {
                 Ok(_) => {
                     samples.push(start.elapsed().as_nanos() as u64);
                     received += 1;
@@ -695,7 +721,7 @@ fn bench_grpc_subscribe(broker: &RobotBusBroker, url: &str) -> ScenarioResult {
     let publisher = match Publisher::with_hwm(Some(&broker.message.xsub_bind), hwm) {
         Ok(p) => p,
         Err(err) => {
-            return ScenarioResult::skipped(transport, scenario, format!("publisher: {err}"))
+            return ScenarioResult::skipped(transport, scenario, format!("publisher: {err}"));
         }
     };
 
@@ -801,9 +827,7 @@ fn bench_grpc_service(broker: &RobotBusBroker, url: &str, n: usize) -> ScenarioR
     let handler: Arc<dyn Fn(&[u8]) -> Vec<u8> + Send + Sync> = Arc::new(|body| body.to_vec());
     let worker = match WorkerThread::spawn_service(name, handler, &broker.service.backend_bind) {
         Ok(w) => w,
-        Err(err) => {
-            return ScenarioResult::skipped(transport, scenario, format!("worker: {err}"))
-        }
+        Err(err) => return ScenarioResult::skipped(transport, scenario, format!("worker: {err}")),
     };
     thread::sleep(Duration::from_millis(150));
 
@@ -859,7 +883,7 @@ fn bench_grpc_service(broker: &RobotBusBroker, url: &str, n: usize) -> ScenarioR
 
 fn bench_grpc_action(broker: &RobotBusBroker, url: &str, n: usize) -> ScenarioResult {
     let transport = "grpc";
-    let scenario = "action Run";
+    let scenario = "action SendGoal";
     let name = "perf.grpc.act";
 
     let handler: Arc<dyn Fn(&[u8]) -> Vec<(String, Vec<u8>)> + Send + Sync> = Arc::new(|body| {
@@ -870,9 +894,7 @@ fn bench_grpc_action(broker: &RobotBusBroker, url: &str, n: usize) -> ScenarioRe
     });
     let worker = match WorkerThread::spawn_action(name, handler, &broker.action.backend_bind) {
         Ok(w) => w,
-        Err(err) => {
-            return ScenarioResult::skipped(transport, scenario, format!("worker: {err}"))
-        }
+        Err(err) => return ScenarioResult::skipped(transport, scenario, format!("worker: {err}")),
     };
     thread::sleep(Duration::from_millis(150));
 
@@ -891,7 +913,7 @@ fn bench_grpc_action(broker: &RobotBusBroker, url: &str, n: usize) -> ScenarioRe
 
     let payload = make_payload(0);
     for _ in 0..WARMUP.min(10) {
-        let _ = client.send_goal(&payload, None, Some(Duration::from_secs(2)));
+        let _ = client.send_goal_and_wait(&payload, None, Some(Duration::from_secs(2)));
     }
 
     let mut samples = Vec::with_capacity(n);
@@ -899,7 +921,7 @@ fn bench_grpc_action(broker: &RobotBusBroker, url: &str, n: usize) -> ScenarioRe
     let mut received = 0usize;
     for _ in 0..n {
         let start = Instant::now();
-        match client.send_goal(&payload, None, Some(Duration::from_secs(5))) {
+        match client.send_goal_and_wait(&payload, None, Some(Duration::from_secs(5))) {
             Ok(_) => {
                 samples.push(start.elapsed().as_nanos() as u64);
                 received += 1;

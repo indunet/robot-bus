@@ -12,8 +12,8 @@ mod remote;
 
 use anyhow::{Context, Result};
 use std::collections::{HashMap, VecDeque};
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
 use uuid::Uuid;
 use zmq::{Context as ZmqContext, Socket};
@@ -22,15 +22,13 @@ use self::advertise::{send_peer_heartbeats, sync_all_advertisements};
 use self::dispatch::{
     deliver_reply, dispatch_request, expire_corr, reclaim_worker_inflight, retry_pending,
 };
-use self::protocol::{
-    CMD_DISCONNECT, CMD_HEARTBEAT, CMD_READY, CMD_READY_FED, POLL_CAP_MS,
-};
+use self::protocol::{CMD_DISCONNECT, CMD_HEARTBEAT, CMD_READY, CMD_READY_FED, POLL_CAP_MS};
 use self::remote::{
-    connect_peer, is_fed_identity, learn_peer_broker_id, parse_corr_id, parse_fed_broker_id,
-    CorrEntry, PeerLink, PendingRequest, ReplyTarget,
+    CorrEntry, PeerLink, PendingRequest, ReplyTarget, connect_peer, is_fed_identity,
+    learn_peer_broker_id, parse_corr_id, parse_fed_broker_id,
 };
 use super::broker::{
-    build_error_body, extend_hops, hop_contains, InFlightTable, WorkerRegistry, ERR_NO_WORKER,
+    ERR_NO_WORKER, InFlightTable, WorkerRegistry, build_error_body, extend_hops, hop_contains,
 };
 use super::{ServiceBusConfig, ServiceMetrics};
 
@@ -76,8 +74,7 @@ pub fn run_federated(
     let pending_timeout = Duration::from_millis(config.pending_timeout_ms);
     let max_pending = config.max_pending;
 
-    let mut next_sweep =
-        Instant::now() + Duration::from_millis(config.heartbeat_interval_ms);
+    let mut next_sweep = Instant::now() + Duration::from_millis(config.heartbeat_interval_ms);
 
     loop {
         if shutdown.load(Ordering::Acquire) {
@@ -150,10 +147,7 @@ pub fn run_federated(
 
         if Instant::now() >= next_sweep {
             let now = Instant::now();
-            let dead = registry.sweep_dead(
-                now,
-                Duration::from_millis(config.heartbeat_timeout_ms),
-            );
+            let dead = registry.sweep_dead(now, Duration::from_millis(config.heartbeat_timeout_ms));
             for wid in dead {
                 reclaim_worker_inflight(
                     &frontend,
@@ -180,14 +174,7 @@ pub fn run_federated(
                 max_pending,
                 metrics,
             )?;
-            expire_corr(
-                &frontend,
-                &peers,
-                &mut corr,
-                now,
-                pending_timeout,
-                metrics,
-            )?;
+            expire_corr(&frontend, &peers, &mut corr, now, pending_timeout, metrics)?;
             next_sweep = now + Duration::from_millis(config.heartbeat_interval_ms);
         }
     }
@@ -389,24 +376,12 @@ fn handle_backend(
                     // Only reclaim when the identity is fully gone.
                     if !registry.is_alive(worker_id) {
                         reclaim_worker_inflight(
-                            frontend,
-                            peers,
-                            corr,
-                            in_flight,
-                            worker_id,
-                            metrics,
+                            frontend, peers, corr, in_flight, worker_id, metrics,
                         )?;
                     }
                 } else {
                     registry.remove(worker_id);
-                    reclaim_worker_inflight(
-                        frontend,
-                        peers,
-                        corr,
-                        in_flight,
-                        worker_id,
-                        metrics,
-                    )?;
+                    reclaim_worker_inflight(frontend, peers, corr, in_flight, worker_id, metrics)?;
                 }
                 sync_all_advertisements(peers, registry, broker_id)?;
             }
@@ -423,14 +398,7 @@ fn handle_backend(
                 return Ok(());
             }
             learn_peer_broker_id(peers, &via);
-            registry.register_federated(
-                worker_id.to_vec(),
-                svc,
-                now,
-                via,
-                origin,
-                hop,
-            );
+            registry.register_federated(worker_id.to_vec(), svc, now, via, origin, hop);
             sync_all_advertisements(peers, registry, broker_id)?;
             Ok(())
         }

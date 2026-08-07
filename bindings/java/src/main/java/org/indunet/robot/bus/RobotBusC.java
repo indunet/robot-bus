@@ -103,16 +103,20 @@ interface RobotBusC extends Library {
             long len,
             String goalId,
             double timeoutSecs,
-            PointerByReference outMsgs,
-            LongByReference outCount);
+            ActionFeedbackCb feedback,
+            Pointer user,
+            PointerByReference outHandle);
 
-    int robot_bus_action_client_cancel(
-            Pointer c,
-            String goalId,
-            byte[] data,
-            long len,
-            double timeoutSecs,
-            ActionMessageStruct outMsg);
+    void robot_bus_action_goal_handle_free(Pointer handle);
+
+    Pointer robot_bus_action_goal_handle_goal_id(Pointer handle);
+
+    Pointer robot_bus_action_goal_handle_action_name(Pointer handle);
+
+    int robot_bus_action_goal_handle_wait_result(
+            Pointer handle, double timeoutSecs, ActionMessageStruct outMsg);
+
+    int robot_bus_action_goal_handle_cancel(Pointer handle);
 
     Pointer robot_bus_context_new();
 
@@ -290,6 +294,10 @@ interface RobotBusC extends Library {
                 PointerByReference outPhases,
                 LongByReference outCount,
                 Pointer user);
+    }
+
+    interface ActionFeedbackCb extends Callback {
+        void invoke(Pointer message, Pointer user);
     }
 
     @Structure.FieldOrder({"type", "boolValue", "integerValue", "doubleValue", "stringValue"})

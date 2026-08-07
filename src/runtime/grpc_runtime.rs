@@ -19,14 +19,14 @@ use crate::grpc::pb::action_gateway_client::ActionGatewayClient;
 use crate::grpc::pb::message_gateway_client::MessageGatewayClient;
 use crate::grpc::pb::service_gateway_client::ServiceGatewayClient;
 use crate::grpc::pb::{
-    action_client_message, ActionClientMessage, ActionKind as PbActionKind, CancelCommand,
-    GoalCommand, ServiceCallRequest, SubscribeRequest, TopicMessage,
+    ActionKind as PbActionKind, GoalCommand, ServiceCallRequest, SubscribeRequest, TopicMessage,
 };
 use crate::runtime::callback_group::{CallbackGroup, SubscriptionCallback};
 use crate::runtime::executor::ShutdownHandle;
+use crate::runtime::node::RawActionFeedbackCallback;
 use crate::runtime::registrations::MessageCallback;
 use crate::runtime::timers::{
-    effective_poll_timeout_ms, tick_timers, Timer, TimerCallback, TimerHandle,
+    Timer, TimerCallback, TimerHandle, effective_poll_timeout_ms, tick_timers,
 };
 use tonic::transport::Channel;
 
@@ -47,6 +47,12 @@ struct TopicEvent {
 pub(crate) struct GrpcClientContext {
     channel: Channel,
     runtime: Arc<tokio::runtime::Runtime>,
+}
+
+pub(crate) struct GrpcGoalSession {
+    pub(crate) goal_id: String,
+    pub(crate) events: Receiver<Result<ActionMessage>>,
+    pub(crate) abort: tokio::task::AbortHandle,
 }
 
 impl GrpcClientContext {
@@ -99,7 +105,8 @@ impl GrpcClientContext {
         body: &[u8],
         goal_id: Option<&str>,
         timeout: Option<Duration>,
-    ) -> Result<Vec<ActionMessage>> {
+        feedback_callback: Option<RawActionFeedbackCallback>,
+    ) -> Result<GrpcGoalSession> {
         let channel = self.channel.clone();
         let action_name = action_name.to_string();
         let body = body.to_vec();
@@ -107,89 +114,70 @@ impl GrpcClientContext {
             .map(str::to_string)
             .unwrap_or_else(|| Uuid::new_v4().simple().to_string());
         let timeout_ms = timeout_ms_u32(timeout);
-
-        self.runtime.block_on(async move {
+        let session_goal_id = goal_id.clone();
+        let (event_tx, event_rx) = mpsc::channel();
+        let task = self.runtime.spawn(async move {
             let mut client = ActionGatewayClient::new(channel);
-            let outbound = tokio_stream::once(ActionClientMessage {
-                msg: Some(action_client_message::Msg::Goal(GoalCommand {
+            let response = client
+                .send_goal(Request::new(GoalCommand {
                     action_name: action_name.clone(),
                     goal: body,
                     goal_id: goal_id.clone(),
                     timeout_ms,
-                })),
-            });
-            let mut stream = client
-                .run(Request::new(outbound))
-                .await
-                .map_err(map_tonic_status)?
-                .into_inner();
-
-            let mut out = Vec::new();
+                }))
+                .await;
+            let mut stream = match response {
+                Ok(response) => response.into_inner(),
+                Err(status) => {
+                    let _ = event_tx.send(Err(map_tonic_status(status)));
+                    return;
+                }
+            };
             while let Some(item) = stream.next().await {
-                let ev = item.map_err(map_tonic_status)?;
-                let kind = pb_action_kind(ev.kind)?;
+                let ev = match item {
+                    Ok(ev) => ev,
+                    Err(status) => {
+                        let _ = event_tx.send(Err(map_tonic_status(status)));
+                        return;
+                    }
+                };
+                let kind = match pb_action_kind(ev.kind) {
+                    Ok(kind) => kind,
+                    Err(err) => {
+                        let _ = event_tx.send(Err(err));
+                        return;
+                    }
+                };
                 let done = kind == ActionKind::Result;
-                out.push(ActionMessage {
+                let message = ActionMessage {
                     action_name: ev.action_name,
                     goal_id: ev.goal_id,
                     kind,
                     body: ev.body,
-                });
+                };
+                if kind == ActionKind::Feedback {
+                    if let Some(callback) = &feedback_callback {
+                        callback(&message);
+                    }
+                }
                 if done {
-                    break;
+                    if let Some(err) = crate::errors::parse_error_body(&message.body) {
+                        let _ = event_tx.send(Err(err));
+                        return;
+                    }
+                }
+                if event_tx.send(Ok(message)).is_err() || done {
+                    return;
                 }
             }
-            if out.last().map(|m| m.kind) != Some(ActionKind::Result) {
-                return Err(BusError::Protocol(format!(
-                    "action '{action_name}' completed without RESULT"
-                )));
-            }
-            Ok(out)
-        })
-    }
-
-    pub(crate) fn cancel_goal(
-        &self,
-        action_name: &str,
-        goal_id: &str,
-        body: &[u8],
-        _timeout: Option<Duration>,
-    ) -> Result<ActionMessage> {
-        let channel = self.channel.clone();
-        let action_name = action_name.to_string();
-        let goal_id = goal_id.to_string();
-        let body = body.to_vec();
-
-        self.runtime.block_on(async move {
-            let mut client = ActionGatewayClient::new(channel);
-            let outbound = tokio_stream::once(ActionClientMessage {
-                msg: Some(action_client_message::Msg::Cancel(CancelCommand {
-                    action_name: action_name.clone(),
-                    goal_id: goal_id.clone(),
-                    body,
-                })),
-            });
-            let mut stream = client
-                .run(Request::new(outbound))
-                .await
-                .map_err(map_tonic_status)?
-                .into_inner();
-
-            let ev = stream
-                .next()
-                .await
-                .ok_or_else(|| {
-                    BusError::Protocol(format!(
-                        "action '{action_name}' cancel stream ended without event"
-                    ))
-                })?
-                .map_err(map_tonic_status)?;
-            Ok(ActionMessage {
-                action_name: ev.action_name,
-                goal_id: ev.goal_id,
-                kind: pb_action_kind(ev.kind)?,
-                body: ev.body,
-            })
+            let _ = event_tx.send(Err(BusError::Protocol(format!(
+                "action '{action_name}' completed without RESULT"
+            ))));
+        });
+        Ok(GrpcGoalSession {
+            goal_id: session_goal_id,
+            events: event_rx,
+            abort: task.abort_handle(),
         })
     }
 }
@@ -295,9 +283,7 @@ impl GrpcRuntime {
         let mut state = self.lock_state()?;
         let id = state.next_timer_id;
         state.next_timer_id += 1;
-        state
-            .timers
-            .push(Timer::new(id, period, callback, group));
+        state.timers.push(Timer::new(id, period, callback, group));
         Ok(TimerHandle { id })
     }
 

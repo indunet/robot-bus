@@ -108,8 +108,14 @@ mod srv_kind_tests {
 
     #[test]
     fn parse_trigger_set_bool() {
-        assert_eq!(SrvKind::parse("std_srvs/srv/Trigger").unwrap(), SrvKind::Trigger);
-        assert_eq!(SrvKind::parse("std_srvs/srv/SetBool").unwrap(), SrvKind::SetBool);
+        assert_eq!(
+            SrvKind::parse("std_srvs/srv/Trigger").unwrap(),
+            SrvKind::Trigger
+        );
+        assert_eq!(
+            SrvKind::parse("std_srvs/srv/SetBool").unwrap(),
+            SrvKind::SetBool
+        );
         assert!(SrvKind::parse("std_srvs/srv/Empty").is_err());
     }
 
@@ -137,12 +143,8 @@ mod act_kind_tests {
 
     #[test]
     fn reject_both_for_actions() {
-        let res = Ros2Bridge::new("t").add_action(
-            "/fib",
-            "/fib",
-            ActKind::Fibonacci,
-            Direction::Both,
-        );
+        let res =
+            Ros2Bridge::new("t").add_action("/fib", "/fib", ActKind::Fibonacci, Direction::Both);
         assert!(res.is_err());
         let msg = res.err().unwrap().to_string();
         assert!(msg.contains("both"));
@@ -309,11 +311,7 @@ impl Ros2BridgeBuilder {
         Ok(self)
     }
 
-    pub fn route(
-        self,
-        ros_topic: impl Into<String>,
-        bus_topic: impl Into<String>,
-    ) -> RouteBuilder {
+    pub fn route(self, ros_topic: impl Into<String>, bus_topic: impl Into<String>) -> RouteBuilder {
         RouteBuilder {
             parent: self,
             ros_topic: ros_topic.into(),
@@ -436,12 +434,7 @@ impl Ros2BridgeBuilder {
         kind: SrvKind,
         direction: Direction,
     ) -> Result<Self> {
-        self.push_service(
-            ros_service.into(),
-            bus_service.into(),
-            kind,
-            direction,
-        )
+        self.push_service(ros_service.into(), bus_service.into(), kind, direction)
     }
 
     /// Add a typed action route (for FFI / non-fluent callers).
@@ -452,12 +445,7 @@ impl Ros2BridgeBuilder {
         kind: ActKind,
         direction: Direction,
     ) -> Result<Self> {
-        self.push_action(
-            ros_action.into(),
-            bus_action.into(),
-            kind,
-            direction,
-        )
+        self.push_action(ros_action.into(), bus_action.into(), kind, direction)
     }
 
     pub fn build(self) -> Result<Ros2Bridge> {
@@ -513,9 +501,8 @@ impl Ros2BridgeBuilder {
             .name("ros2_bridge_spin".into())
             .spawn(move || {
                 while !halt_flag.load(Ordering::Relaxed) {
-                    let _ = ros_executor.spin(
-                        SpinOptions::spin_once().timeout(Duration::from_millis(10)),
-                    );
+                    let _ = ros_executor
+                        .spin(SpinOptions::spin_once().timeout(Duration::from_millis(10)));
                 }
             })
             .map_err(|e| BusError::Protocol(format!("spawn ros2 spin thread: {e}")))?;
@@ -624,9 +611,7 @@ impl ActionRouteBuilder {
 
     pub fn add(self) -> Result<Ros2BridgeBuilder> {
         let kind = self.kind.ok_or_else(|| {
-            BusError::Protocol(
-                "ros2 bridge action: call .fibonacci() before .add()".into(),
-            )
+            BusError::Protocol("ros2 bridge action: call .fibonacci() before .add()".into())
         })?;
         self.parent
             .push_action(self.ros_action, self.bus_action, kind, self.direction)
@@ -667,28 +652,24 @@ fn wire_route(
         let tx = ros_to_bus_tx.clone();
         let bus_topic_cb = bus_topic.clone();
         let sub = ros_node
-            .create_dynamic_subscription(
-                type_name,
-                ros_topic.as_str(),
-                move |dyn_msg, _info| {
-                    let payload = match codec.ros_to_bus(&dyn_msg) {
-                        Ok(p) => p,
-                        Err(e) => {
-                            log::warn!("ros→bus {} convert: {e}", codec.type_name());
-                            return;
-                        }
-                    };
-                    if let Ok(mut g) = echo.lock() {
-                        if g.is_echo(&payload) {
-                            return;
-                        }
-                        g.remember(&payload);
+            .create_dynamic_subscription(type_name, ros_topic.as_str(), move |dyn_msg, _info| {
+                let payload = match codec.ros_to_bus(&dyn_msg) {
+                    Ok(p) => p,
+                    Err(e) => {
+                        log::warn!("ros→bus {} convert: {e}", codec.type_name());
+                        return;
                     }
-                    if let Err(e) = tx.send((bus_topic_cb.clone(), payload)) {
-                        log::warn!("ros→bus channel: {e}");
+                };
+                if let Ok(mut g) = echo.lock() {
+                    if g.is_echo(&payload) {
+                        return;
                     }
-                },
-            )
+                    g.remember(&payload);
+                }
+                if let Err(e) = tx.send((bus_topic_cb.clone(), payload)) {
+                    log::warn!("ros→bus channel: {e}");
+                }
+            })
             .map_err(|e| BusError::Protocol(format!("ros dynamic subscription: {e}")))?;
         ros_subs.push(sub);
     }
@@ -851,7 +832,10 @@ fn wire_service_route(
     Ok(())
 }
 
-fn wait_service_ready(client_ready: impl Fn() -> bool, timeout: Duration) -> std::result::Result<(), String> {
+fn wait_service_ready(
+    client_ready: impl Fn() -> bool,
+    timeout: Duration,
+) -> std::result::Result<(), String> {
     let deadline = Instant::now() + timeout;
     while Instant::now() < deadline {
         if client_ready() {
@@ -930,9 +914,9 @@ fn wire_action_route(
                             };
                             let bus_goal = convert::fibonacci_ros_goal_to_bus(&goal);
                             let call = tokio::task::spawn_blocking(move || {
-                                let guard = bus_client.lock().map_err(|e| {
-                                    format!("bus action client lock poisoned: {e}")
-                                })?;
+                                let guard = bus_client
+                                    .lock()
+                                    .map_err(|e| format!("bus action client lock poisoned: {e}"))?;
                                 guard
                                     .send_goal(&bus_goal, None, Some(timeout))
                                     .map_err(|e| e.to_string())

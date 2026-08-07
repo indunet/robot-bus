@@ -2,13 +2,13 @@
 
 mod support;
 
-use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::thread;
 use std::time::Duration;
 
-use robot_bus::message_bus::Publisher;
 use robot_bus::geometry_msgs::msg::v1::Vector3;
+use robot_bus::message_bus::Publisher;
 use robot_bus::sensor_msgs::msg::v1::Imu;
 use robot_bus::{
     CallbackGroup, Executor, HighWaterMark, MessageCallback, Node, NodeOptions,
@@ -62,7 +62,11 @@ fn spin_stops_on_shutdown() {
         .connect_subscriber(Some(&proxy.xpub_endpoint))
         .expect("connect subscriber");
     executor
-        .subscribe("unused", Arc::new(|_topic, _payload| {}), CallbackGroup::mutually_exclusive())
+        .subscribe(
+            "unused",
+            Arc::new(|_topic, _payload| {}),
+            CallbackGroup::mutually_exclusive(),
+        )
         .expect("subscribe");
 
     let handle = executor.shutdown_handle();

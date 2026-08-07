@@ -17,6 +17,7 @@ from __future__ import annotations
 try:
     from robot_bus._native import (
         ActionClient,
+        ActionGoalHandle,
         CallbackGroup,
         CallbackGroupType,
         Context,
@@ -37,6 +38,7 @@ try:
     )
 except ImportError:  # pragma: no cover - msgs-only / docs import without extension
     ActionClient = None  # type: ignore[misc, assignment]
+    ActionGoalHandle = None  # type: ignore[misc, assignment]
     CallbackGroup = None  # type: ignore[misc, assignment]
     CallbackGroupType = None  # type: ignore[misc, assignment]
     Context = None  # type: ignore[misc, assignment]
@@ -61,12 +63,14 @@ else:
 
 from robot_bus._typed import (
     TypedActionClient,
+    TypedActionGoalHandle,
     TypedServiceClient,
     TypedTopicPublisher,
 )
 
 __all__ = [
     "ActionClient",
+    "ActionGoalHandle",
     "CallbackGroup",
     "CallbackGroupType",
     "Context",
@@ -81,6 +85,7 @@ __all__ = [
     "TimerHandle",
     "TopicPublisher",
     "TypedActionClient",
+    "TypedActionGoalHandle",
     "TypedServiceClient",
     "TypedTopicPublisher",
     "__version__",

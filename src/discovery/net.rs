@@ -7,10 +7,7 @@ use std::time::Duration;
 use socket2::{Domain, Protocol, Socket, Type};
 
 /// Socket that joins `multicast_addr` on `port` for receiving announces.
-pub fn join_multicast_receiver(
-    multicast_addr: Ipv4Addr,
-    port: u16,
-) -> io::Result<UdpSocket> {
+pub fn join_multicast_receiver(multicast_addr: Ipv4Addr, port: u16) -> io::Result<UdpSocket> {
     let socket = Socket::new(Domain::IPV4, Type::DGRAM, Some(Protocol::UDP))?;
     socket.set_reuse_address(true)?;
     #[cfg(unix)]

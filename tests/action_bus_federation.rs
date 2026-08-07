@@ -2,21 +2,21 @@
 
 mod support;
 
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::thread;
 use std::time::{Duration, Instant};
 
+#[cfg(feature = "console")]
+use robot_bus::ConsoleBrokerConfig;
+#[cfg(feature = "grpc")]
+use robot_bus::GrpcBrokerConfig;
 use robot_bus::action_bus::{ActionClient, ActionKind};
 use robot_bus::broker::action_bus::{ActionBusConfig, ActionPeer};
 use robot_bus::broker::message_bus::BusConfig;
 use robot_bus::broker::service_bus::ServiceBusConfig;
 use robot_bus::errors::BusError;
 use robot_bus::worker_thread::WorkerThread;
-#[cfg(feature = "console")]
-use robot_bus::ConsoleBrokerConfig;
-#[cfg(feature = "grpc")]
-use robot_bus::GrpcBrokerConfig;
 use robot_bus::{DiscoveryConfig, RobotBusBroker, RobotBusConfig};
 use support::{free_ports, lock_brokers};
 
@@ -88,7 +88,7 @@ fn federated_action_config(
             ..DiscoveryConfig::default()
         },
         #[cfg(feature = "console")]
-                console: ConsoleBrokerConfig {
+        console: ConsoleBrokerConfig {
             enabled: false,
             listen: format!("127.0.0.1:{}", other[5])
                 .parse()
@@ -151,8 +151,8 @@ fn two_brokers_bidirectional_actions() {
 
     thread::sleep(Duration::from_millis(600));
 
-    let client_b = ActionClient::new(Some(&connect_addr(&broker_b.action.frontend_bind)))
-        .expect("client b");
+    let client_b =
+        ActionClient::new(Some(&connect_addr(&broker_b.action.frontend_bind))).expect("client b");
     let msgs = client_b
         .send_goal("act.a", b"ping", None, Some(Duration::from_secs(5)))
         .expect("goal a from b");
@@ -160,8 +160,8 @@ fn two_brokers_bidirectional_actions() {
     let result = msgs.iter().find(|m| m.kind == ActionKind::Result).unwrap();
     assert_eq!(result.body, b"done:a:ping");
 
-    let client_a = ActionClient::new(Some(&connect_addr(&broker_a.action.frontend_bind)))
-        .expect("client a");
+    let client_a =
+        ActionClient::new(Some(&connect_addr(&broker_a.action.frontend_bind))).expect("client a");
     let msgs = client_a
         .send_goal("act.b", b"pong", None, Some(Duration::from_secs(5)))
         .expect("goal b from a");
@@ -212,8 +212,8 @@ fn three_brokers_line_relay() {
 
     thread::sleep(Duration::from_millis(900));
 
-    let client_c = ActionClient::new(Some(&connect_addr(&broker_c.action.frontend_bind)))
-        .expect("client c");
+    let client_c =
+        ActionClient::new(Some(&connect_addr(&broker_c.action.frontend_bind))).expect("client c");
     let msgs = client_c
         .send_goal("act.relay", b"hop", None, Some(Duration::from_secs(5)))
         .expect("relay goal");
@@ -258,8 +258,8 @@ fn mesh_does_not_loop() {
 
     thread::sleep(Duration::from_millis(600));
 
-    let client_b = ActionClient::new(Some(&connect_addr(&broker_b.action.frontend_bind)))
-        .expect("client b");
+    let client_b =
+        ActionClient::new(Some(&connect_addr(&broker_b.action.frontend_bind))).expect("client b");
     let msgs = client_b
         .send_goal("act.once", b"x", None, Some(Duration::from_secs(5)))
         .expect("goal");
@@ -312,8 +312,8 @@ fn local_preferred_over_remote() {
 
     thread::sleep(Duration::from_millis(600));
 
-    let client_a = ActionClient::new(Some(&connect_addr(&broker_a.action.frontend_bind)))
-        .expect("client a");
+    let client_a =
+        ActionClient::new(Some(&connect_addr(&broker_a.action.frontend_bind))).expect("client a");
     for _ in 0..5 {
         let msgs = client_a
             .send_goal("act.shared", b"", None, Some(Duration::from_secs(3)))
@@ -350,8 +350,8 @@ fn cancel_unknown_goal_on_federated_broker() {
 
     thread::sleep(Duration::from_millis(200));
 
-    let client_b = ActionClient::new(Some(&connect_addr(&broker_b.action.frontend_bind)))
-        .expect("client b");
+    let client_b =
+        ActionClient::new(Some(&connect_addr(&broker_b.action.frontend_bind))).expect("client b");
     let err = client_b
         .cancel(
             "act.missing",
@@ -408,8 +408,8 @@ fn peer_death_returns_worker_died() {
 
     thread::sleep(Duration::from_millis(600));
 
-    let client_b = ActionClient::new(Some(&connect_addr(&broker_b.action.frontend_bind)))
-        .expect("client b");
+    let client_b =
+        ActionClient::new(Some(&connect_addr(&broker_b.action.frontend_bind))).expect("client b");
     let gid = client_b
         .submit_goal("act.slow", b"x", None)
         .expect("submit");
@@ -438,10 +438,7 @@ fn peer_death_returns_worker_died() {
             Err(_) => break,
         }
     }
-    assert!(
-        saw_died,
-        "expected WORKER_DIED after peer broker stopped"
-    );
+    assert!(saw_died, "expected WORKER_DIED after peer broker stopped");
 
     broker_b.stop().expect("stop b");
 }

@@ -8,7 +8,7 @@ use std::env;
 use std::thread;
 use std::time::Duration;
 
-use anyhow::{bail, Context, Result};
+use anyhow::{Context, Result, bail};
 use robot_bus::geometry_msgs::msg::v1::Vector3;
 use robot_bus::sensor_msgs::msg::v1::Imu;
 use robot_bus::std_srvs::srv::v1::{SetBool, SetBoolRequest};
@@ -72,10 +72,7 @@ fn run_svc_client(options: NodeOptions) -> Result<()> {
         .create_client::<SetBool>(SERVICE)
         .context("create_client")?;
     let resp = client
-        .call(
-            &SetBoolRequest { data: true },
-            Some(Duration::from_secs(5)),
-        )
+        .call(&SetBoolRequest { data: true }, Some(Duration::from_secs(5)))
         .context("call")?;
     let ok_msg = resp.message == "set:true" || resp.message == "set:True";
     if !resp.success || !ok_msg {

@@ -158,8 +158,7 @@ impl SingleThreadedExecutor {
         name: impl Into<String>,
         options: NodeOptions,
     ) -> Result<Node> {
-        self.handle
-            .create_node_with_context(context, name, options)
+        self.handle.create_node_with_context(context, name, options)
     }
 
     pub fn shutdown_handle(&self) -> Result<ShutdownHandle> {
@@ -247,8 +246,7 @@ impl MultiThreadedExecutor {
         name: impl Into<String>,
         options: NodeOptions,
     ) -> Result<Node> {
-        self.handle
-            .create_node_with_context(context, name, options)
+        self.handle.create_node_with_context(context, name, options)
     }
 
     pub fn shutdown_handle(&self) -> Result<ShutdownHandle> {

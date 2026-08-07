@@ -192,9 +192,14 @@ client = node.create_client("svc.echo")
 reply = client.call(b"ping", timeout=2.0)
 
 action = node.create_action_client("act.navigate")
-events = action.send_goal(b"goal", timeout=10.0)
+goal = action.send_goal(
+    b"goal",
+    feedback_callback=lambda feedback: print("feedback", len(feedback)),
+)  # GoalHandle 立即返回
+result = goal.result(timeout=10.0)
+# goal.cancel()  # best-effort，不表示服务端已确认
 
-# 订阅回调需要 spin；publish / service/action 同步 call 不依赖 spin
+# 订阅回调需要 spin；action result 通过 GoalHandle 独立等待
 # node.spin()
 ```
 
@@ -220,7 +225,7 @@ node.create_action_server("navigate", on_goal, callback_group=group)
 
 ### Service / Action（Node）
 
-与 topic / timer 一样挂在 Node 上。可传 protobuf 类型做自动编解码，或省略走 raw bytes。
+与 topic / timer 一样挂在 Node 上。可传 protobuf 类型做自动编解码，或省略走 raw bytes。Action client 采用 ROS 2 风格 `GoalHandle`：`send_goal` 立即返回，feedback 到达时实时调用回调，result 由 handle 独立等待。
 
 ```python
 from robot_bus.std_srvs.srv.v1 import SetBoolRequest, SetBoolResponse
@@ -233,13 +238,10 @@ from robot_bus.robot_bus_interface.action.v1 import (
 def on_set_bool(req: SetBoolRequest) -> SetBoolResponse:
     return SetBoolResponse(success=True, message=f"set:{req.data}")
 
-def on_fibonacci(goal: FibonacciGoal):
-    # 返回 [(phase, Message), ...]；phase 一般为 "FEEDBACK" / "RESULT"
+def on_fibonacci(goal: FibonacciGoal, context):
     seq = list(range(goal.order))
-    return [
-        ("FEEDBACK", FibonacciFeedback(sequence=seq[:1])),
-        ("RESULT", FibonacciResult(sequence=seq)),
-    ]
+    context.publish_feedback(FibonacciFeedback(sequence=seq[:1]))
+    return FibonacciResult(sequence=seq)
 
 server_node = robot_bus.Node("worker")
 cli_node = robot_bus.Node("caller")
@@ -267,12 +269,20 @@ act = cli_node.create_action_client(
     feedback_type=FibonacciFeedback,
     result_type=FibonacciResult,
 )
-# messages = act.send_goal(FibonacciGoal(order=5), timeout=10.0)
+goal = act.send_goal(
+    FibonacciGoal(order=5),
+    feedback_callback=lambda feedback: print(feedback.sequence),
+)
+result = goal.result(timeout=10.0)
+# goal.cancel()  # best-effort；不代表服务端已确认
 # server_node.spin()
 ```
 
-Raw：`handler(body: bytes) -> bytes` / `call(bytes)`；action 同理传 bytes。
+Raw action 的 `feedback_callback(body: bytes)`、`ActionGoalHandle.result(timeout=None) -> bytes`；handle 还提供只读 `goal_id` / `action_name` 与 `cancel()`。`ActionClient.send_goal_and_wait(...)` 保留旧的批量消息列表用法。
+Raw service：`handler(body: bytes) -> bytes` / `call(bytes)`。
 endpoint 默认本机 broker；也可用 `Node(..., service_frontend=..., service_backend=..., action_backend=..., action_frontend=...)` 覆盖。
+
+取消语义随 transport 不同：gRPC 取消对应 goal 的 server stream；ZMQ 发送显式 `CANCEL` 帧。两者都不承诺服务端确认取消。
 
 ### 定时器
 
@@ -374,8 +384,9 @@ print(robot_bus.__version__)
 | `create_subscription(..., msg_type=, callback_group=)` | typed：`callback(topic, Message)`；省略类型：`callback(topic, bytes)` |
 | `create_service(..., request_type=, response_type=)` | typed：`handler(Request) -> Response`；否则 raw bytes |
 | `create_client(..., request_type=, response_type=)` | typed → `TypedServiceClient`；否则 `ServiceClient` |
-| `create_action_server(..., goal_type=, feedback_type=, result_type=)` | typed：`[(phase, Message), ...]`；否则 bytes |
-| `create_action_client(..., goal_type=, feedback_type=, result_type=)` | typed → `TypedActionClient`；否则 `ActionClient` |
+| `create_action_server(..., goal_type=, feedback_type=, result_type=)` | typed handler 通过 context 实时发布 feedback，并返回 result；否则 raw bytes |
+| `create_action_client(..., goal_type=, feedback_type=, result_type=)` | typed → `TypedActionClient`；`send_goal` 立即返回 GoalHandle（feedback callback / `result()` / `cancel()`） |
+| `ActionGoalHandle` / `TypedActionGoalHandle` | goal 标识、action 名称、阻塞等待 result 与 best-effort cancel |
 | `Publisher(endpoint=None)` | 低层连 XSUB（不经 Node） |
 | `RobotBusBroker.start(..., context=None, broker_id=..., message_peers=..., service_peers=..., action_peers=...)` | 进程内启动三个 bus + gRPC；同进程 inproc 传 `context`；peers 为 CLI 同款字符串列表 |
 | `run_broker()` | 阻塞 CLI 入口 |

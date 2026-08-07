@@ -5,9 +5,9 @@ use std::time::Duration;
 use uuid::Uuid;
 use zmq::{Context, Socket, SocketType};
 
-use crate::errors::{parse_error_body, BusError, Result};
+use crate::errors::{BusError, Result, parse_error_body};
 use crate::transports;
-use crate::zmq_helpers::{apply_action_options_with, poll_readable, HighWaterMark};
+use crate::zmq_helpers::{HighWaterMark, apply_action_options_with, poll_readable};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ActionKind {
@@ -24,7 +24,9 @@ impl ActionKind {
             "FEEDBACK" => Ok(Self::Feedback),
             "RESULT" => Ok(Self::Result),
             "CANCEL" => Ok(Self::Cancel),
-            other => Err(BusError::Protocol(format!("unknown action kind: {other:?}"))),
+            other => Err(BusError::Protocol(format!(
+                "unknown action kind: {other:?}"
+            ))),
         }
     }
 }
@@ -126,32 +128,15 @@ impl ActionClient {
         let gid = goal_id
             .map(str::to_string)
             .unwrap_or_else(|| Uuid::new_v4().simple().to_string());
-        self.socket.send_multipart(
-            [
-                action_name.as_bytes(),
-                gid.as_bytes(),
-                b"GOAL",
-                body,
-            ],
-            0,
-        )?;
+        self.socket
+            .send_multipart([action_name.as_bytes(), gid.as_bytes(), b"GOAL", body], 0)?;
         Ok(gid)
     }
 
     /// Send a CANCEL frame without waiting for RESULT.
-    pub fn submit_cancel(
-        &self,
-        action_name: &str,
-        goal_id: &str,
-        body: &[u8],
-    ) -> Result<()> {
+    pub fn submit_cancel(&self, action_name: &str, goal_id: &str, body: &[u8]) -> Result<()> {
         self.socket.send_multipart(
-            [
-                action_name.as_bytes(),
-                goal_id.as_bytes(),
-                b"CANCEL",
-                body,
-            ],
+            [action_name.as_bytes(), goal_id.as_bytes(), b"CANCEL", body],
             0,
         )?;
         Ok(())
@@ -226,7 +211,9 @@ impl Iterator for ActionGoalIter<'_> {
             Ok(msg) => msg,
             Err(err @ BusError::Timeout(_)) => {
                 // Best-effort cancel so the worker can stop abandoned work.
-                let _ = self.client.submit_cancel(&self.action_name, &self.goal_id, b"");
+                let _ = self
+                    .client
+                    .submit_cancel(&self.action_name, &self.goal_id, b"");
                 self.done = true;
                 return Some(Err(err));
             }

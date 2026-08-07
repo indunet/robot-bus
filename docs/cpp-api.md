@@ -34,14 +34,14 @@ CMake sets `CMAKE_CXX_STANDARD 17`. Building with a newer standard (e.g. `-DCMAK
 
 ```bash
 # Core SDK (no ROS bridge)
-sudo apt install ./robot-bus_0.1.5_linux_amd64.deb
+sudo apt install ./robot-bus_0.1.6_linux_amd64.deb
 
 # Or ROS 2 bridge variant (Humble example) — needs Humble already installed
-sudo apt install ./robot-bus-ros2-humble_0.1.5_linux_amd64.deb
+sudo apt install ./robot-bus-ros2-humble_0.1.6_linux_amd64.deb
 source /opt/ros/humble/setup.bash
 
 # macOS Apple Silicon (core package only)
-sudo installer -pkg robot-bus_0.1.5_macos_arm64.pkg -target /
+sudo installer -pkg robot-bus_0.1.6_macos_arm64.pkg -target /
 # Installs under /usr/local ({bin,lib,include})
 
 # Or from source (dev)

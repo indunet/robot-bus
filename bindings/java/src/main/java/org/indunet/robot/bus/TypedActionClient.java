@@ -1,8 +1,7 @@
 package org.indunet.robot.bus;
 
 import com.google.protobuf.MessageLite;
-import java.util.ArrayList;
-import java.util.List;
+import java.util.function.Consumer;
 
 /** Action client that encodes goals and decodes FEEDBACK / RESULT bodies. */
 public final class TypedActionClient<
@@ -40,15 +39,26 @@ public final class TypedActionClient<
         return resultType;
     }
 
-    public List<TypedActionMessage> sendGoal(Goal goal) {
-        return sendGoal(goal, null, -1.0);
+    public TypedActionGoalHandle<Feedback, Result> sendGoal(Goal goal) {
+        return sendGoal(goal, null, -1.0, null);
     }
 
-    public List<TypedActionMessage> sendGoal(Goal goal, String goalId) {
-        return sendGoal(goal, goalId, -1.0);
+    public TypedActionGoalHandle<Feedback, Result> sendGoal(
+            Goal goal, Consumer<Feedback> feedback) {
+        return sendGoal(goal, null, -1.0, feedback);
     }
 
-    public List<TypedActionMessage> sendGoal(Goal goal, String goalId, double timeoutSecs) {
+    public TypedActionGoalHandle<Feedback, Result> sendGoal(Goal goal, String goalId) {
+        return sendGoal(goal, goalId, -1.0, null);
+    }
+
+    public TypedActionGoalHandle<Feedback, Result> sendGoal(
+            Goal goal, String goalId, double timeoutSecs) {
+        return sendGoal(goal, goalId, timeoutSecs, null);
+    }
+
+    public TypedActionGoalHandle<Feedback, Result> sendGoal(
+            Goal goal, String goalId, double timeoutSecs, Consumer<Feedback> feedback) {
         if (goal == null) {
             throw new NullPointerException("goal");
         }
@@ -59,50 +69,18 @@ public final class TypedActionClient<
                             + " got "
                             + goal.getClass().getSimpleName());
         }
-        List<ActionMessage> raw = inner.sendGoal(ProtoCodec.encode(goal), goalId, timeoutSecs);
-        List<TypedActionMessage> out = new ArrayList<>(raw.size());
-        for (ActionMessage msg : raw) {
-            TypedActionMessage decoded = decode(msg);
-            if (decoded.getBody() == null
-                    && isTypedKind(msg.getKind())
-                    && msg.getBody().length > 0) {
-                continue;
-            }
-            out.add(decoded);
-        }
-        return out;
-    }
-
-    public TypedActionMessage cancel(String goalId) {
-        return cancel(goalId, null, -1.0);
-    }
-
-    public TypedActionMessage cancel(String goalId, MessageLite body) {
-        return cancel(goalId, body, -1.0);
-    }
-
-    public TypedActionMessage cancel(String goalId, MessageLite body, double timeoutSecs) {
-        byte[] raw = body == null ? new byte[0] : ProtoCodec.encode(body);
-        return decode(inner.cancel(goalId, raw, timeoutSecs));
-    }
-
-    private TypedActionMessage decode(ActionMessage msg) {
-        String kind = msg.getKind();
-        MessageLite decoded = null;
-        if ("FEEDBACK".equalsIgnoreCase(kind)) {
-            decoded = ProtoCodec.tryParse(feedbackType, msg.getBody());
-        } else if ("RESULT".equalsIgnoreCase(kind)) {
-            decoded = ProtoCodec.tryParse(resultType, msg.getBody());
-        } else if ("GOAL".equalsIgnoreCase(kind)) {
-            decoded = ProtoCodec.tryParse(goalType, msg.getBody());
-        }
-        return new TypedActionMessage(kind, decoded, msg.getBody(), msg.getGoalId(), msg.getActionName());
-    }
-
-    private static boolean isTypedKind(String kind) {
-        return "FEEDBACK".equalsIgnoreCase(kind)
-                || "RESULT".equalsIgnoreCase(kind)
-                || "GOAL".equalsIgnoreCase(kind);
+        Consumer<ActionMessage> rawFeedback =
+                feedback == null
+                        ? null
+                        : message -> {
+                            Feedback decoded = ProtoCodec.tryParse(feedbackType, message.getBody());
+                            if (decoded != null) {
+                                feedback.accept(decoded);
+                            }
+                        };
+        ActionGoalHandle handle =
+                inner.sendGoal(ProtoCodec.encode(goal), goalId, timeoutSecs, rawFeedback);
+        return new TypedActionGoalHandle<>(handle, resultType);
     }
 
     @Override

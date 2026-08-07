@@ -2,12 +2,12 @@
 //!
 //! Shared by `robot_bus_broker` and the Python `robot-bus-broker` entry point.
 
-use anyhow::{bail, Context, Result};
+use anyhow::{Context, Result, bail};
 
+use super::RobotBusConfig;
 use super::action_bus::ActionPeer;
 use super::message_bus::MessagePeer;
 use super::service_bus::ServicePeer;
-use super::RobotBusConfig;
 
 #[cfg(any(feature = "grpc", feature = "console"))]
 use std::net::SocketAddr;
@@ -78,12 +78,10 @@ pub fn parse_robot_bus_config(args: &[String]) -> Result<Option<RobotBusConfig>>
             "--message-peer" => {
                 i += 1;
                 let value = require_arg(args, i, arg)?;
-                config
-                    .message
-                    .peers
-                    .push(MessagePeer::from_xpub(value).with_context(|| {
-                        format!("invalid --message-peer {value}")
-                    })?);
+                config.message.peers.push(
+                    MessagePeer::from_xpub(value)
+                        .with_context(|| format!("invalid --message-peer {value}"))?,
+                );
             }
 
             // --- service bus ---
@@ -105,13 +103,11 @@ pub fn parse_robot_bus_config(args: &[String]) -> Result<Option<RobotBusConfig>>
             }
             "--service-heartbeat-interval-ms" => {
                 i += 1;
-                config.service.heartbeat_interval_ms =
-                    parse_u64(arg, require_arg(args, i, arg)?)?;
+                config.service.heartbeat_interval_ms = parse_u64(arg, require_arg(args, i, arg)?)?;
             }
             "--service-heartbeat-timeout-ms" => {
                 i += 1;
-                config.service.heartbeat_timeout_ms =
-                    parse_u64(arg, require_arg(args, i, arg)?)?;
+                config.service.heartbeat_timeout_ms = parse_u64(arg, require_arg(args, i, arg)?)?;
             }
             "--service-pending-timeout-ms" => {
                 i += 1;
@@ -119,8 +115,7 @@ pub fn parse_robot_bus_config(args: &[String]) -> Result<Option<RobotBusConfig>>
             }
             "--service-max-pending" => {
                 i += 1;
-                config.service.max_pending =
-                    parse_u64(arg, require_arg(args, i, arg)?)? as usize;
+                config.service.max_pending = parse_u64(arg, require_arg(args, i, arg)?)? as usize;
             }
             "--service-peer" => {
                 i += 1;
@@ -152,13 +147,11 @@ pub fn parse_robot_bus_config(args: &[String]) -> Result<Option<RobotBusConfig>>
             }
             "--action-heartbeat-interval-ms" => {
                 i += 1;
-                config.action.heartbeat_interval_ms =
-                    parse_u64(arg, require_arg(args, i, arg)?)?;
+                config.action.heartbeat_interval_ms = parse_u64(arg, require_arg(args, i, arg)?)?;
             }
             "--action-heartbeat-timeout-ms" => {
                 i += 1;
-                config.action.heartbeat_timeout_ms =
-                    parse_u64(arg, require_arg(args, i, arg)?)?;
+                config.action.heartbeat_timeout_ms = parse_u64(arg, require_arg(args, i, arg)?)?;
             }
             "--action-pending-timeout-ms" => {
                 i += 1;
@@ -218,8 +211,7 @@ pub fn parse_robot_bus_config(args: &[String]) -> Result<Option<RobotBusConfig>>
             }
             "--advertise-host" => {
                 i += 1;
-                config.discovery.advertise_host =
-                    Some(require_arg(args, i, arg)?.to_string());
+                config.discovery.advertise_host = Some(require_arg(args, i, arg)?.to_string());
             }
             "--discovery-port" => {
                 i += 1;
@@ -400,9 +392,11 @@ mod tests {
 
     #[test]
     fn help_returns_none() {
-        assert!(parse_robot_bus_config(&args(&["--help"]))
-            .unwrap()
-            .is_none());
+        assert!(
+            parse_robot_bus_config(&args(&["--help"]))
+                .unwrap()
+                .is_none()
+        );
     }
 
     #[test]
@@ -449,12 +443,9 @@ mod tests {
     #[cfg(feature = "console")]
     #[test]
     fn parses_console_flags() {
-        let config = parse_robot_bus_config(&args(&[
-            "--console-listen",
-            "127.0.0.1:25771",
-        ]))
-        .unwrap()
-        .expect("config");
+        let config = parse_robot_bus_config(&args(&["--console-listen", "127.0.0.1:25771"]))
+            .unwrap()
+            .expect("config");
         assert!(config.console.enabled);
         assert_eq!(config.console.listen.to_string(), "127.0.0.1:25771");
 
@@ -503,10 +494,7 @@ mod tests {
         .expect("config");
         assert!(!config.discovery.enabled);
         assert_eq!(config.discovery.domain_id, 3);
-        assert_eq!(
-            config.discovery.advertise_host.as_deref(),
-            Some("10.0.0.5")
-        );
+        assert_eq!(config.discovery.advertise_host.as_deref(), Some("10.0.0.5"));
         assert_eq!(config.discovery.multicast_port, 45550);
         assert_eq!(
             config.discovery.multicast_addr,

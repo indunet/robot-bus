@@ -19,8 +19,8 @@ mod generated;
 
 pub use generated::{
     action, action_msgs, apriltag_msgs, builtin_interfaces, control_msgs, diagnostic_msgs,
-    foxglove_msgs, geometry_msgs, nav2_msgs, nav_msgs, robot_bus_interface, sensor_msgs, shape_msgs,
-    std_msgs, std_srvs, stereo_msgs, tf2_msgs, trajectory_msgs, unique_identifier_msgs,
+    foxglove_msgs, geometry_msgs, nav_msgs, nav2_msgs, robot_bus_interface, sensor_msgs,
+    shape_msgs, std_msgs, std_srvs, stereo_msgs, tf2_msgs, trajectory_msgs, unique_identifier_msgs,
     visualization_msgs,
 };
 pub use typed::{Action, ActionOutcome, Service};
@@ -39,13 +39,13 @@ mod python_api;
 
 pub use action_bus::{ActionClient, ActionKind, ActionMessage, ActionWorker};
 pub use broker::{
-    apply_federation_opts, parse_robot_bus_config, robot_bus_broker_help, ActionPeer,
-    DiscoveryConfig, MessagePeer, RobotBusBroker, RobotBusConfig, ServicePeer,
+    ActionPeer, DiscoveryConfig, MessagePeer, RobotBusBroker, RobotBusConfig, ServicePeer,
+    apply_federation_opts, parse_robot_bus_config, robot_bus_broker_help,
 };
 pub use discovery::{
-    wait as discover_wait, BrokerAnnouncement, DiscoverOpts, DEFAULT_DISCOVERY_PORT,
-    DEFAULT_MULTICAST_ADDR, MAGIC as DISCOVERY_MAGIC,
-    SCHEMA_VERSION as DISCOVERY_SCHEMA_VERSION, encode_announce, decode_announce,
+    BrokerAnnouncement, DEFAULT_DISCOVERY_PORT, DEFAULT_MULTICAST_ADDR, DiscoverOpts,
+    MAGIC as DISCOVERY_MAGIC, SCHEMA_VERSION as DISCOVERY_SCHEMA_VERSION, decode_announce,
+    encode_announce, wait as discover_wait,
 };
 
 #[cfg(feature = "grpc")]
@@ -53,14 +53,15 @@ pub use broker::GrpcBrokerConfig;
 
 #[cfg(feature = "console")]
 pub use broker::ConsoleBrokerConfig;
-pub use errors::{parse_error_body, BusError, Result};
+pub use errors::{BusError, Result, parse_error_body};
 pub use message_bus::{Publisher, Subscriber};
 pub use runtime::{
     ActionGoalHandler, CallbackGroup, CallbackGroupType, Context, Executor, ExecutorHandle,
-    MessageCallback, MultiThreadedExecutor, Node, NodeActionClient, NodeActionClientRaw,
-    NodeActionServer, NodeOptions, NodeService, NodeServiceClient, NodeServiceClientRaw,
-    Parameter, ParameterValue, ServiceHandler, ShutdownHandle, SingleThreadedExecutor,
-    TimerCallback, TimerHandle, TopicPublisher, TopicPublisherRaw,
+    GoalHandle, MessageCallback, MultiThreadedExecutor, Node, NodeActionClient,
+    NodeActionClientRaw, NodeActionServer, NodeOptions, NodeService, NodeServiceClient,
+    NodeServiceClientRaw, Parameter, ParameterValue, RawActionFeedbackCallback, RawGoalHandle,
+    ServiceHandler, ShutdownHandle, SingleThreadedExecutor, TimerCallback, TimerHandle,
+    TopicPublisher, TopicPublisherRaw,
 };
 pub use service_bus::{ServiceClient, ServiceWorker};
 pub use transports::{

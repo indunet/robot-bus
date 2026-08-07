@@ -6,13 +6,13 @@ use std::sync::Arc;
 use std::thread;
 use std::time::Duration;
 
-use robot_bus::broker::action_bus::ActionBusConfig;
-use robot_bus::broker::message_bus::BusConfig;
-use robot_bus::broker::service_bus::{ServiceBusConfig, ServicePeer};
 #[cfg(feature = "console")]
 use robot_bus::ConsoleBrokerConfig;
 #[cfg(feature = "grpc")]
 use robot_bus::GrpcBrokerConfig;
+use robot_bus::broker::action_bus::ActionBusConfig;
+use robot_bus::broker::message_bus::BusConfig;
+use robot_bus::broker::service_bus::{ServiceBusConfig, ServicePeer};
 use robot_bus::service_bus::ServiceClient;
 use robot_bus::worker_thread::WorkerThread;
 use robot_bus::{DiscoveryConfig, RobotBusBroker, RobotBusConfig};
@@ -84,7 +84,7 @@ fn federated_service_config(
             ..DiscoveryConfig::default()
         },
         #[cfg(feature = "console")]
-                console: ConsoleBrokerConfig {
+        console: ConsoleBrokerConfig {
             enabled: false,
             listen: format!("127.0.0.1:{}", other[5])
                 .parse()
@@ -139,15 +139,15 @@ fn two_brokers_bidirectional_services() {
     // Let READY_FED propagate both ways.
     thread::sleep(Duration::from_millis(500));
 
-    let client_b = ServiceClient::new(Some(&connect_addr(&broker_b.service.frontend_bind)))
-        .expect("client b");
+    let client_b =
+        ServiceClient::new(Some(&connect_addr(&broker_b.service.frontend_bind))).expect("client b");
     let reply = client_b
         .call("svc.a", b"ping", None, Some(Duration::from_secs(5)))
         .expect("call a from b");
     assert_eq!(reply, b"a:ping");
 
-    let client_a = ServiceClient::new(Some(&connect_addr(&broker_a.service.frontend_bind)))
-        .expect("client a");
+    let client_a =
+        ServiceClient::new(Some(&connect_addr(&broker_a.service.frontend_bind))).expect("client a");
     let reply = client_a
         .call("svc.b", b"pong", None, Some(Duration::from_secs(5)))
         .expect("call b from a");
@@ -199,8 +199,8 @@ fn three_brokers_line_relay() {
     // Demand walks A→B→C via READY_FED re-advertisement.
     thread::sleep(Duration::from_millis(800));
 
-    let client_c = ServiceClient::new(Some(&connect_addr(&broker_c.service.frontend_bind)))
-        .expect("client c");
+    let client_c =
+        ServiceClient::new(Some(&connect_addr(&broker_c.service.frontend_bind))).expect("client c");
     let reply = client_c
         .call("svc.relay", b"hop", None, Some(Duration::from_secs(5)))
         .expect("call via B");
@@ -243,8 +243,8 @@ fn mesh_does_not_loop() {
 
     thread::sleep(Duration::from_millis(500));
 
-    let client_b = ServiceClient::new(Some(&connect_addr(&broker_b.service.frontend_bind)))
-        .expect("client b");
+    let client_b =
+        ServiceClient::new(Some(&connect_addr(&broker_b.service.frontend_bind))).expect("client b");
     let reply = client_b
         .call("svc.once", b"x", None, Some(Duration::from_secs(5)))
         .expect("call once");
@@ -298,8 +298,8 @@ fn local_preferred_over_remote() {
 
     thread::sleep(Duration::from_millis(500));
 
-    let client_a = ServiceClient::new(Some(&connect_addr(&broker_a.service.frontend_bind)))
-        .expect("client a");
+    let client_a =
+        ServiceClient::new(Some(&connect_addr(&broker_a.service.frontend_bind))).expect("client a");
     for _ in 0..5 {
         let reply = client_a
             .call("svc.shared", b"", None, Some(Duration::from_secs(3)))
@@ -324,18 +324,10 @@ fn peer_death_inflight_returns_worker_died() {
     let a = &ports[0];
     let b = &ports[1];
 
-    let mut cfg_a = federated_service_config(
-        "broker-a",
-        vec![peer("broker-b", b.svc_be)],
-        a,
-    );
+    let mut cfg_a = federated_service_config("broker-a", vec![peer("broker-b", b.svc_be)], a);
     cfg_a.service.heartbeat_interval_ms = 100;
     cfg_a.service.heartbeat_timeout_ms = 400;
-    let mut cfg_b = federated_service_config(
-        "broker-b",
-        vec![peer("broker-a", a.svc_be)],
-        b,
-    );
+    let mut cfg_b = federated_service_config("broker-b", vec![peer("broker-a", a.svc_be)], b);
     cfg_b.service.heartbeat_interval_ms = 100;
     cfg_b.service.heartbeat_timeout_ms = 400;
 
@@ -360,8 +352,8 @@ fn peer_death_inflight_returns_worker_died() {
 
     thread::sleep(Duration::from_millis(600));
 
-    let client_b = ServiceClient::new(Some(&connect_addr(&broker_b.service.frontend_bind)))
-        .expect("client b");
+    let client_b =
+        ServiceClient::new(Some(&connect_addr(&broker_b.service.frontend_bind))).expect("client b");
 
     let handle = thread::spawn(move || {
         client_b.call("svc.slow", b"x", Some("r1"), Some(Duration::from_secs(8)))

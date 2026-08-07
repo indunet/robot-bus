@@ -7,7 +7,7 @@ import { loadNative } from "./native.js";
 import { decode, encode, type MessageType } from "./typed.js";
 import type {
   ActionClient as NativeActionClient,
-  ActionEvent,
+  GoalHandle as NativeGoalHandle,
   Node as NativeNode,
   ServiceClient as NativeServiceClient,
   TopicPublisher as NativeTopicPublisher,
@@ -19,10 +19,12 @@ export {
   GrpcNode,
   GrpcServiceClient,
   GrpcActionClient,
+  GrpcGoalHandle,
   TypedGrpcServiceClient,
   TypedGrpcActionClient,
   DEFAULT_GRPC_URL,
   type GrpcActionEvent,
+  type GrpcSendGoalOptions,
 } from "./grpc-node.js";
 
 const native = loadNative();
@@ -102,29 +104,56 @@ export class TypedActionClient<
 
   sendGoal(
     goal: Goal,
-    goalId?: string,
-    timeout?: number,
-  ): { events: ActionEvent[]; feedback: Feedback[]; result: Result | null } {
-    const events = this.inner.sendGoal(
-      Buffer.from(encode(this.goalType, goal)),
-      goalId,
-      timeout,
-    );
-    const feedback: Feedback[] = [];
-    let result: Result | null = null;
-    for (const ev of events) {
-      if (ev.kind === "FEEDBACK") {
-        const fb = decode(this.feedbackType, ev.body);
-        if (fb) feedback.push(fb);
-      } else if (ev.kind === "RESULT") {
-        result = decode(this.resultType, ev.body);
-      }
-    }
-    return { events, feedback, result };
+    options: TypedSendGoalOptions<Feedback> = {},
+  ): TypedActionGoalHandle<Result> {
+    const raw = this.inner.sendGoal(Buffer.from(encode(this.goalType, goal)), {
+      goalId: options.goalId,
+      timeoutSeconds: options.timeoutSeconds,
+      onFeedback: options.onFeedback
+        ? (event) => {
+            const feedback = decode(this.feedbackType, event.body);
+            if (!feedback) {
+              throw new Error(`action ${this.actionName} feedback decode failed`);
+            }
+            options.onFeedback?.(feedback);
+          }
+        : undefined,
+    });
+    return new TypedActionGoalHandle(raw, this.resultType);
+  }
+}
+
+export interface TypedSendGoalOptions<Feedback> {
+  goalId?: string;
+  timeoutSeconds?: number;
+  onFeedback?: (feedback: Feedback) => void;
+}
+
+export class TypedActionGoalHandle<Result extends object> {
+  constructor(
+    private readonly inner: NativeGoalHandle,
+    private readonly resultType: MessageType<Result>,
+  ) {}
+
+  get goalId(): string {
+    return this.inner.goalId;
   }
 
-  cancel(goalId: string, body?: Buffer, timeout?: number): ActionEvent {
-    return this.inner.cancel(goalId, body, timeout);
+  get actionName(): string {
+    return this.inner.actionName;
+  }
+
+  async result(): Promise<Result> {
+    const event = await this.inner.result();
+    const result = decode(this.resultType, event.body);
+    if (!result) {
+      throw new Error(`action ${this.actionName} result decode failed`);
+    }
+    return result;
+  }
+
+  cancel(body?: Buffer): void {
+    this.inner.cancel(body);
   }
 }
 

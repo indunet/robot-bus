@@ -237,7 +237,7 @@ Add to `Cargo.toml`:
 
 ```toml
 robot-bus = { path = "../robot-bus" }
-# or from crates.io: robot-bus = "0.1.5"
+# or from crates.io: robot-bus = "0.1.6"
 ```
 
 Semantics mirror ROS 2: `Node::new` → typed `create_publisher` / `create_subscription` → `node.spin()` (auto-attaches a `SingleThreadedExecutor`).
@@ -344,7 +344,9 @@ You can also attach via the Node API with `Node::grpc` / `Node::grpc_at` (client
 | `MessageGateway.Subscribe` | Subscribe by topic prefix; server streams binary payloads |
 | `MessageGateway.Publish` | Unary publish: topic + binary payload onto the message bus |
 | `ServiceGateway.Call` | Unary: `service_name` + request bytes → response bytes |
-| `ActionGateway.Run` | Bidirectional stream: client sends GOAL / CANCEL; server pushes `ActionEvent` (`kind` distinguishes FEEDBACK / RESULT) |
+| `ActionGateway.SendGoal` | Unary goal request followed by a server stream of `ActionEvent` values (`FEEDBACK`, then `RESULT`) |
+
+Action clients use a ROS 2–style `GoalHandle` in every language: `send_goal` / `sendGoal` returns the handle immediately, feedback is delivered to a callback as it arrives, and the result is awaited separately. `handle.cancel()` is best-effort and does not imply server confirmation: gRPC cancels the goal stream, while ZMQ sends an explicit `CANCEL` frame.
 
 ```bash
 cargo run --bin robot_bus_broker

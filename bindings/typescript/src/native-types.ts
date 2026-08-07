@@ -15,6 +15,12 @@ export interface ActionEvent {
   actionName: string;
 }
 
+export interface SendGoalOptions {
+  goalId?: string;
+  timeoutSeconds?: number;
+  onFeedback?: (feedback: ActionEvent) => void;
+}
+
 export declare class ShutdownHandle {
   shutdown(): void;
   isRunning(): boolean;
@@ -58,8 +64,14 @@ export declare class ServiceClient {
 
 export declare class ActionClient {
   readonly actionName: string;
-  sendGoal(body: Buffer, goalId?: string, timeout?: number): ActionEvent[];
-  cancel(goalId: string, body?: Buffer, timeout?: number): ActionEvent;
+  sendGoal(body: Buffer, options?: SendGoalOptions): GoalHandle;
+}
+
+export declare class GoalHandle {
+  readonly goalId: string;
+  readonly actionName: string;
+  result(): Promise<ActionEvent>;
+  cancel(body?: Buffer): void;
 }
 
 export declare class Context {

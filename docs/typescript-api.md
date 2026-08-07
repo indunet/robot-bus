@@ -179,6 +179,34 @@ node.start(); // 或 node.spin()
 import { GrpcNode } from "robot-bus"; // Node 入口也导出 GrpcNode
 ```
 
+## Action GoalHandle
+
+Node.js（ZMQ）与浏览器（gRPC-Web）的 action client 采用同一套 ROS 2 风格语义：`sendGoal` 立即返回 `GoalHandle`，实时 feedback 交给 callback，result 独立等待。
+
+```ts
+const action = node.createActionClient("/navigate");
+const goal = action.sendGoal(goalPayload, {
+  onFeedback: (feedback) => console.log("feedback", feedback),
+});
+
+const result = await goal.result();
+// goal.cancel(); // best-effort，不表示服务端已确认
+```
+
+Node.js native 的 `timeoutSeconds` 覆盖整个 goal 生命周期；raw client 的 callback 收到 `ActionEvent`。通过 protobuf 类型创建的 `TypedActionClient` 会在 feedback 到达时实时解码，并让 `result()` 返回解码后的 result：
+
+```ts
+const action = node.createActionClient("/navigate", Goal, Feedback, Result);
+const goal = action.sendGoal(goalMessage, {
+  goalId: "navigate-1",
+  timeoutSeconds: 30,
+  onFeedback: (feedback) => console.log(feedback),
+});
+const result = await goal.result();
+```
+
+`goal.cancel()` 的传输行为不同：gRPC / gRPC-Web 取消对应 goal 的 server stream；ZMQ 发送显式 `CANCEL` 帧。两者都不提供服务端取消确认。底层 gRPC RPC 为 `ActionGateway.SendGoal`：一元 goal request，服务端流式返回 `FEEDBACK`，最终返回 `RESULT`。
+
 ## Protobuf 消息
 
 磁盘上生成代码在 `bindings/typescript/generated/`（`just gen-typescript`，protoc **35.1**；**gitignored**，随 npm 包发布）；对外导入路径与 Python / Rust 对齐（无 `generated` 段）：

@@ -5,16 +5,14 @@ mod support;
 use std::thread;
 use std::time::{Duration, Instant};
 
-use robot_bus::broker::action_bus::ActionBusConfig;
-use robot_bus::broker::message_bus::{BusConfig, MessagePeer};
-use robot_bus::broker::service_bus::ServiceBusConfig;
 #[cfg(feature = "console")]
 use robot_bus::ConsoleBrokerConfig;
 #[cfg(feature = "grpc")]
 use robot_bus::GrpcBrokerConfig;
-use robot_bus::{
-    DiscoveryConfig, Publisher, RobotBusBroker, RobotBusConfig, Subscriber,
-};
+use robot_bus::broker::action_bus::ActionBusConfig;
+use robot_bus::broker::message_bus::{BusConfig, MessagePeer};
+use robot_bus::broker::service_bus::ServiceBusConfig;
+use robot_bus::{DiscoveryConfig, Publisher, RobotBusBroker, RobotBusConfig, Subscriber};
 use support::{free_ports, lock_brokers};
 
 fn connect_addr(bind: &str) -> String {
@@ -82,7 +80,7 @@ fn federated_bus_config(
             ..DiscoveryConfig::default()
         },
         #[cfg(feature = "console")]
-                console: ConsoleBrokerConfig {
+        console: ConsoleBrokerConfig {
             enabled: false,
             listen: format!("127.0.0.1:{}", other[5])
                 .parse()
@@ -138,18 +136,10 @@ fn two_brokers_bidirectional_topics() {
     let a = &ports[0];
     let b = &ports[1];
 
-    let broker_a = RobotBusBroker::start(federated_bus_config(
-        "broker-a",
-        vec![msg_peer(b)],
-        a,
-    ))
-    .expect("broker a");
-    let broker_b = RobotBusBroker::start(federated_bus_config(
-        "broker-b",
-        vec![msg_peer(a)],
-        b,
-    ))
-    .expect("broker b");
+    let broker_a = RobotBusBroker::start(federated_bus_config("broker-a", vec![msg_peer(b)], a))
+        .expect("broker a");
+    let broker_b = RobotBusBroker::start(federated_bus_config("broker-b", vec![msg_peer(a)], b))
+        .expect("broker b");
 
     thread::sleep(Duration::from_millis(100));
 
@@ -190,24 +180,16 @@ fn three_brokers_line_relay() {
     let c = &ports[2];
 
     // A — B — C (no direct A↔C)
-    let broker_a = RobotBusBroker::start(federated_bus_config(
-        "broker-a",
-        vec![msg_peer(b)],
-        a,
-    ))
-    .expect("broker a");
+    let broker_a = RobotBusBroker::start(federated_bus_config("broker-a", vec![msg_peer(b)], a))
+        .expect("broker a");
     let broker_b = RobotBusBroker::start(federated_bus_config(
         "broker-b",
         vec![msg_peer(a), msg_peer(c)],
         b,
     ))
     .expect("broker b");
-    let broker_c = RobotBusBroker::start(federated_bus_config(
-        "broker-c",
-        vec![msg_peer(b)],
-        c,
-    ))
-    .expect("broker c");
+    let broker_c = RobotBusBroker::start(federated_bus_config("broker-c", vec![msg_peer(b)], c))
+        .expect("broker c");
 
     thread::sleep(Duration::from_millis(100));
 
@@ -236,18 +218,10 @@ fn mesh_does_not_storm() {
     let a = &ports[0];
     let b = &ports[1];
 
-    let broker_a = RobotBusBroker::start(federated_bus_config(
-        "broker-a",
-        vec![msg_peer(b)],
-        a,
-    ))
-    .expect("broker a");
-    let broker_b = RobotBusBroker::start(federated_bus_config(
-        "broker-b",
-        vec![msg_peer(a)],
-        b,
-    ))
-    .expect("broker b");
+    let broker_a = RobotBusBroker::start(federated_bus_config("broker-a", vec![msg_peer(b)], a))
+        .expect("broker a");
+    let broker_b = RobotBusBroker::start(federated_bus_config("broker-b", vec![msg_peer(a)], b))
+        .expect("broker b");
 
     thread::sleep(Duration::from_millis(100));
 

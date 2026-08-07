@@ -8,14 +8,16 @@ export {
   GrpcNode as Node,
   GrpcServiceClient,
   GrpcActionClient,
+  GrpcGoalHandle,
   GrpcTopicPublisher,
   TypedGrpcTopicPublisher,
   TypedGrpcServiceClient,
   TypedGrpcActionClient,
   DEFAULT_GRPC_URL,
   type GrpcActionEvent,
+  type GrpcSendGoalOptions,
 } from "./grpc-node.js";
 
 export { encode, decode, type MessageType } from "./typed.js";
 
-export const __version__ = "0.1.5";
+export const __version__ = "0.1.6";

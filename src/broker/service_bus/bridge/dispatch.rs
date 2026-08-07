@@ -5,12 +5,12 @@ use std::collections::{HashMap, VecDeque};
 use std::time::{Duration, Instant};
 use zmq::Socket;
 
-use super::remote::{
-    is_fed_identity, make_corr_id, CorrEntry, PeerLink, PendingRequest, ReplyTarget,
-};
 use super::super::broker::{
+    ERR_NO_WORKER, ERR_WORKER_DIED, InFlightEntry, InFlightTable, WorkerRegistry,
     build_client_reply, build_error_body, build_worker_forward, reclaim_worker_requests,
-    InFlightEntry, InFlightTable, WorkerRegistry, ERR_NO_WORKER, ERR_WORKER_DIED,
+};
+use super::remote::{
+    CorrEntry, PeerLink, PendingRequest, ReplyTarget, is_fed_identity, make_corr_id,
 };
 
 fn clone_reply_target(t: &ReplyTarget) -> ReplyTarget {
@@ -35,18 +35,16 @@ fn send_error_to_target(
 ) -> Result<()> {
     match target {
         ReplyTarget::Frontend { has_req_delim } => {
-            let reply =
-                build_client_reply(original_client_id, svc, req_id, err, *has_req_delim);
+            let reply = build_client_reply(original_client_id, svc, req_id, err, *has_req_delim);
             frontend
                 .send_multipart(reply, 0)
                 .context("frontend send error")?;
         }
         ReplyTarget::Peer { peer_idx } => {
             if let Some(peers) = peers {
-                let _ = peers[*peer_idx].dealer.send_multipart(
-                    [original_client_id, svc, req_id, err],
-                    zmq::DONTWAIT,
-                );
+                let _ = peers[*peer_idx]
+                    .dealer
+                    .send_multipart([original_client_id, svc, req_id, err], zmq::DONTWAIT);
             }
         }
     }
@@ -111,13 +109,7 @@ pub(super) fn dispatch_request(
         if let Some(m) = metrics {
             m.record_call_start(svc_str, client_id, req_id);
         }
-        let fwd = build_worker_forward(
-            worker_id.as_slice(),
-            &forward_client_id,
-            svc,
-            req_id,
-            body,
-        );
+        let fwd = build_worker_forward(worker_id.as_slice(), &forward_client_id, svc, req_id, body);
         backend
             .send_multipart(fwd, 0)
             .context("backend send forward")?;
@@ -139,10 +131,9 @@ pub(super) fn dispatch_request(
         let err = build_error_body(ERR_NO_WORKER, svc);
         match (peer_idx, peers) {
             (Some(idx), Some(peers)) => {
-                let _ = peers[idx].dealer.send_multipart(
-                    [client_id, svc, req_id, err.as_slice()],
-                    zmq::DONTWAIT,
-                );
+                let _ = peers[idx]
+                    .dealer
+                    .send_multipart([client_id, svc, req_id, err.as_slice()], zmq::DONTWAIT);
             }
             _ => {
                 let reply = build_client_reply(client_id, svc, req_id, &err, has_req_delim);
@@ -175,25 +166,15 @@ pub(super) fn deliver_reply(
                         m.record_call_ok(svc_str, &entry.original_client_id, req_id);
                     }
                 }
-                let reply = build_client_reply(
-                    &entry.original_client_id,
-                    svc,
-                    req_id,
-                    body,
-                    has_req_delim,
-                );
+                let reply =
+                    build_client_reply(&entry.original_client_id, svc, req_id, body, has_req_delim);
                 frontend
                     .send_multipart(reply, 0)
                     .context("frontend send reply")?;
             }
             ReplyTarget::Peer { peer_idx } => {
                 let _ = peers[peer_idx].dealer.send_multipart(
-                    [
-                        entry.original_client_id.as_slice(),
-                        svc,
-                        req_id,
-                        body,
-                    ],
+                    [entry.original_client_id.as_slice(), svc, req_id, body],
                     zmq::DONTWAIT,
                 );
             }

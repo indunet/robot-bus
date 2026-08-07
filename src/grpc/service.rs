@@ -65,12 +65,7 @@ impl ServiceGateway for ServiceGatewayService {
         let response = tokio::task::spawn_blocking(move || {
             let client = ServiceClient::new(Some(&frontend)).map_err(bus_status)?;
             let response = client
-                .call(
-                    &service_name,
-                    &body,
-                    request_id.as_deref(),
-                    timeout,
-                )
+                .call(&service_name, &body, request_id.as_deref(), timeout)
                 .map_err(bus_status)?;
             Ok::<_, Status>(response)
         })

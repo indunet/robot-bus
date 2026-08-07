@@ -11,13 +11,13 @@
 
 use anyhow::{Context, Result};
 use std::collections::{HashMap, VecDeque};
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
 use zmq::Socket;
 
-use super::metrics::ActionMetrics;
 use super::ActionBusConfig;
+use super::metrics::ActionMetrics;
 
 /// Worker control commands (UTF-8 bytes, never protobuf).
 const CMD_READY: &[u8] = b"READY";
@@ -569,7 +569,10 @@ pub fn run_loop(
 
         let sweep_in = next_sweep.saturating_duration_since(Instant::now());
         let timeout_ms = (sweep_in.as_millis() as i64).min(POLL_CAP_MS).max(0);
-        let mut items = [frontend.as_poll_item(zmq::POLLIN), backend.as_poll_item(zmq::POLLIN)];
+        let mut items = [
+            frontend.as_poll_item(zmq::POLLIN),
+            backend.as_poll_item(zmq::POLLIN),
+        ];
         zmq::poll(&mut items, timeout_ms).context("poll")?;
 
         if items[0].get_revents().contains(zmq::POLLIN) {
@@ -625,13 +628,8 @@ fn reclaim_worker_goals(
             m.record_worker_died(&name);
         }
         let err = build_error_body(ERR_WORKER_DIED, &e.action);
-        let reply = build_client_reply(
-            &e.client_identity,
-            &e.action,
-            &e.goal_id,
-            KIND_RESULT,
-            &err,
-        );
+        let reply =
+            build_client_reply(&e.client_identity, &e.action, &e.goal_id, KIND_RESULT, &err);
         frontend
             .send_multipart(reply, 0)
             .context("frontend send worker-died result")?;
@@ -703,8 +701,11 @@ fn handle_client_message(
                 if let Some(m) = metrics {
                     m.record_run_start(&action_str, msg.goal_id);
                 }
-                let fwd = build_worker_goal(&worker_id, client_id, msg.action, msg.goal_id, msg.body);
-                backend.send_multipart(fwd, 0).context("backend send goal")?;
+                let fwd =
+                    build_worker_goal(&worker_id, client_id, msg.action, msg.goal_id, msg.body);
+                backend
+                    .send_multipart(fwd, 0)
+                    .context("backend send goal")?;
             } else if pending.len() < MAX_PENDING {
                 pending.push_back(PendingGoal {
                     client_identity: client_id.to_vec(),
@@ -718,7 +719,8 @@ fn handle_client_message(
                     m.record_error(&action_str, None);
                 }
                 let err = build_error_body(ERR_NO_WORKER, msg.action);
-                let reply = build_client_reply(client_id, msg.action, msg.goal_id, KIND_RESULT, &err);
+                let reply =
+                    build_client_reply(client_id, msg.action, msg.goal_id, KIND_RESULT, &err);
                 frontend
                     .send_multipart(reply, 0)
                     .context("frontend send reject")?;
@@ -768,7 +770,8 @@ fn handle_client_message(
                     }
                 }
                 let err = build_error_body(ERR_NO_GOAL, msg.action);
-                let reply = build_client_reply(client_id, msg.action, msg.goal_id, KIND_RESULT, &err);
+                let reply =
+                    build_client_reply(client_id, msg.action, msg.goal_id, KIND_RESULT, &err);
                 frontend
                     .send_multipart(reply, 0)
                     .context("frontend send cancel-no-goal")?;
@@ -1009,7 +1012,12 @@ mod tests {
     #[test]
     fn goal_table_insert_remove() {
         let mut g = GoalTable::new();
-        g.insert(b"g1".to_vec(), b"c1".to_vec(), b"w1".to_vec(), b"act".to_vec());
+        g.insert(
+            b"g1".to_vec(),
+            b"c1".to_vec(),
+            b"w1".to_vec(),
+            b"act".to_vec(),
+        );
         assert_eq!(g.len(), 1);
         assert!(g.get(b"g1").is_some());
         let e = g.remove(b"g1").unwrap();
@@ -1022,9 +1030,24 @@ mod tests {
     #[test]
     fn goal_table_evict_worker_drops_owned() {
         let mut g = GoalTable::new();
-        g.insert(b"g1".to_vec(), b"c1".to_vec(), b"w1".to_vec(), b"act".to_vec());
-        g.insert(b"g2".to_vec(), b"c2".to_vec(), b"w2".to_vec(), b"act".to_vec());
-        g.insert(b"g3".to_vec(), b"c3".to_vec(), b"w1".to_vec(), b"act".to_vec());
+        g.insert(
+            b"g1".to_vec(),
+            b"c1".to_vec(),
+            b"w1".to_vec(),
+            b"act".to_vec(),
+        );
+        g.insert(
+            b"g2".to_vec(),
+            b"c2".to_vec(),
+            b"w2".to_vec(),
+            b"act".to_vec(),
+        );
+        g.insert(
+            b"g3".to_vec(),
+            b"c3".to_vec(),
+            b"w1".to_vec(),
+            b"act".to_vec(),
+        );
         let dropped = g.evict_worker(b"w1");
         assert_eq!(dropped.len(), 2);
         assert!(g.get(b"g1").is_none());
@@ -1035,7 +1058,12 @@ mod tests {
     #[test]
     fn goal_table_evict_unknown_worker_is_empty() {
         let mut g = GoalTable::new();
-        g.insert(b"g1".to_vec(), b"c1".to_vec(), b"w1".to_vec(), b"act".to_vec());
+        g.insert(
+            b"g1".to_vec(),
+            b"c1".to_vec(),
+            b"w1".to_vec(),
+            b"act".to_vec(),
+        );
         assert!(g.evict_worker(b"wX").is_empty());
         assert_eq!(g.len(), 1);
     }
@@ -1087,9 +1115,19 @@ mod tests {
 
     #[test]
     fn parse_client_rejects_empty_action_or_goal() {
-        let frames = vec![b"".to_vec(), b"g1".to_vec(), b"GOAL".to_vec(), b"b".to_vec()];
+        let frames = vec![
+            b"".to_vec(),
+            b"g1".to_vec(),
+            b"GOAL".to_vec(),
+            b"b".to_vec(),
+        ];
         assert!(parse_client_message(&frames).is_none());
-        let frames = vec![b"act".to_vec(), b"".to_vec(), b"GOAL".to_vec(), b"b".to_vec()];
+        let frames = vec![
+            b"act".to_vec(),
+            b"".to_vec(),
+            b"GOAL".to_vec(),
+            b"b".to_vec(),
+        ];
         assert!(parse_client_message(&frames).is_none());
     }
 
@@ -1097,7 +1135,9 @@ mod tests {
     fn parse_worker_control_ready() {
         let frames = vec![b"w1".to_vec(), b"READY".to_vec(), b"act.x".to_vec()];
         match parse_worker_message(&frames).unwrap() {
-            WorkerMessage::Control { control, action, .. } => {
+            WorkerMessage::Control {
+                control, action, ..
+            } => {
                 assert_eq!(control, WorkerControl::Ready);
                 assert_eq!(action, b"act.x");
             }
@@ -1182,16 +1222,18 @@ mod tests {
     fn parse_worker_rejects_wrong_frame_count() {
         assert!(parse_worker_message(&[]).is_none());
         assert!(parse_worker_message(&[b"x".to_vec(), b"y".to_vec()]).is_none());
-        assert!(parse_worker_message(&[
-            b"w".to_vec(),
-            b"c".to_vec(),
-            b"a".to_vec(),
-            b"g".to_vec(),
-            b"RESULT".to_vec(),
-            b"b".to_vec(),
-            b"extra".to_vec(),
-        ])
-        .is_none());
+        assert!(
+            parse_worker_message(&[
+                b"w".to_vec(),
+                b"c".to_vec(),
+                b"a".to_vec(),
+                b"g".to_vec(),
+                b"RESULT".to_vec(),
+                b"b".to_vec(),
+                b"extra".to_vec(),
+            ])
+            .is_none()
+        );
     }
 
     // ── Frame building ──

@@ -6,7 +6,7 @@ use std::time::{Duration, Instant};
 
 use super::config::DiscoverOpts;
 use super::net::{join_multicast_receiver, set_read_timeout};
-use super::packet::{try_parse_datagram, BrokerAnnouncement};
+use super::packet::{BrokerAnnouncement, try_parse_datagram};
 use crate::errors::{BusError, Result};
 
 /// Listen for UDP announces until `timeout`, then select one matching broker.
@@ -14,9 +14,8 @@ use crate::errors::{BusError, Result};
 /// Invalid datagrams are discarded. When multiple brokers match the domain and
 /// no `broker_id` filter is set, returns an error listing candidate ids.
 pub fn wait(opts: DiscoverOpts) -> Result<BrokerAnnouncement> {
-    let sock = join_multicast_receiver(opts.multicast_addr, opts.multicast_port).map_err(
-        |e| BusError::Protocol(format!("discovery join multicast: {e}")),
-    )?;
+    let sock = join_multicast_receiver(opts.multicast_addr, opts.multicast_port)
+        .map_err(|e| BusError::Protocol(format!("discovery join multicast: {e}")))?;
 
     let deadline = Instant::now() + opts.timeout;
     let mut by_id: HashMap<String, BrokerAnnouncement> = HashMap::new();
@@ -28,9 +27,8 @@ pub fn wait(opts: DiscoverOpts) -> Result<BrokerAnnouncement> {
             break;
         }
         let slice = remaining.min(Duration::from_millis(200));
-        set_read_timeout(&sock, Some(slice)).map_err(|e| {
-            BusError::Protocol(format!("discovery set_read_timeout: {e}"))
-        })?;
+        set_read_timeout(&sock, Some(slice))
+            .map_err(|e| BusError::Protocol(format!("discovery set_read_timeout: {e}")))?;
 
         match sock.recv_from(&mut buf) {
             Ok((n, _)) => {

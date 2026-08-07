@@ -21,59 +21,48 @@ class TypedActionClient<
 
     fun resultType(): Class<Result> = resultType
 
-    @JvmOverloads
+    fun sendGoal(goal: Goal): TypedActionGoalHandle<Feedback, Result> =
+        sendGoal(goal, null, -1.0, null)
+
     fun sendGoal(
         goal: Goal,
-        goalId: String? = null,
-        timeoutSecs: Double = -1.0,
-    ): List<TypedActionMessage> {
+        feedback: (Feedback) -> Unit,
+    ): TypedActionGoalHandle<Feedback, Result> = sendGoal(goal, null, -1.0, feedback)
+
+    fun sendGoal(
+        goal: Goal,
+        goalId: String?,
+    ): TypedActionGoalHandle<Feedback, Result> = sendGoal(goal, goalId, -1.0, null)
+
+    fun sendGoal(
+        goal: Goal,
+        goalId: String?,
+        timeoutSecs: Double,
+    ): TypedActionGoalHandle<Feedback, Result> = sendGoal(goal, goalId, timeoutSecs, null)
+
+    fun sendGoal(
+        goal: Goal,
+        goalId: String?,
+        timeoutSecs: Double,
+        feedback: ((Feedback) -> Unit)?,
+    ): TypedActionGoalHandle<Feedback, Result> {
         requireNotNull(goal) { "goal" }
         if (!goalType.isInstance(goal)) {
             throw IllegalArgumentException(
                 "action client for ${goalType.simpleName} got ${goal.javaClass.simpleName}",
             )
         }
-        val raw = inner.sendGoal(ProtoCodec.encode(goal), goalId, timeoutSecs)
-        val out = ArrayList<TypedActionMessage>(raw.size)
-        for (msg in raw) {
-            val decoded = decode(msg)
-            if (decoded.body == null && isTypedKind(msg.kind) && msg.body.isNotEmpty()) {
-                continue
+        val rawFeedback: ((ActionMessage) -> Unit)? =
+            feedback?.let { consumer ->
+                { message ->
+                    ProtoCodec.tryParse(feedbackType, message.body)?.let(consumer)
+                }
             }
-            out.add(decoded)
-        }
-        return out
+        return TypedActionGoalHandle(
+            inner.sendGoal(ProtoCodec.encode(goal), goalId, timeoutSecs, rawFeedback),
+            resultType,
+        )
     }
-
-    @JvmOverloads
-    fun cancel(
-        goalId: String,
-        body: MessageLite? = null,
-        timeoutSecs: Double = -1.0,
-    ): TypedActionMessage {
-        val raw = if (body == null) ByteArray(0) else ProtoCodec.encode(body)
-        return decode(inner.cancel(goalId, raw, timeoutSecs))
-    }
-
-    private fun decode(msg: ActionMessage): TypedActionMessage {
-        val kind = msg.kind
-        val decoded: MessageLite? =
-            when {
-                kind.equals("FEEDBACK", ignoreCase = true) ->
-                    ProtoCodec.tryParse(feedbackType, msg.body)
-                kind.equals("RESULT", ignoreCase = true) ->
-                    ProtoCodec.tryParse(resultType, msg.body)
-                kind.equals("GOAL", ignoreCase = true) ->
-                    ProtoCodec.tryParse(goalType, msg.body)
-                else -> null
-            }
-        return TypedActionMessage(kind, decoded, msg.body, msg.goalId, msg.actionName)
-    }
-
-    private fun isTypedKind(kind: String): Boolean =
-        kind.equals("FEEDBACK", ignoreCase = true) ||
-            kind.equals("RESULT", ignoreCase = true) ||
-            kind.equals("GOAL", ignoreCase = true)
 
     override fun close() {
         inner.close()

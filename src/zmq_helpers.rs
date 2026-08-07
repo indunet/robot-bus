@@ -1,7 +1,7 @@
 //! Shared ZeroMQ socket helpers.
 
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::thread::{self, JoinHandle};
 use std::time::Duration;
 
@@ -56,10 +56,7 @@ pub fn apply_publisher_options(socket: &Socket) -> Result<(), zmq::Error> {
     apply_publisher_options_with(socket, HighWaterMark::STREAM)
 }
 
-pub fn apply_publisher_options_with(
-    socket: &Socket,
-    hwm: HighWaterMark,
-) -> Result<(), zmq::Error> {
+pub fn apply_publisher_options_with(socket: &Socket, hwm: HighWaterMark) -> Result<(), zmq::Error> {
     socket.set_linger(0)?;
     hwm.apply(socket)?;
     socket.set_immediate(true)?;

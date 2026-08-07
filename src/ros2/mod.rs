@@ -16,8 +16,8 @@ mod vendor;
 mod yaml;
 
 pub use builder::{
-    ActKind, ActionRouteBuilder, Direction, Ros2Bridge, Ros2BridgeBuilder, RouteBuilder,
-    ServiceRouteBuilder, SrvKind, ACTION_CALL_TIMEOUT, SERVICE_CALL_TIMEOUT,
+    ACTION_CALL_TIMEOUT, ActKind, ActionRouteBuilder, Direction, Ros2Bridge, Ros2BridgeBuilder,
+    RouteBuilder, SERVICE_CALL_TIMEOUT, ServiceRouteBuilder, SrvKind,
 };
-pub use codec::{lookup_topic_codec, registered_topic_types, TopicCodec};
+pub use codec::{TopicCodec, lookup_topic_codec, registered_topic_types};
 pub use echo::EchoFilter;

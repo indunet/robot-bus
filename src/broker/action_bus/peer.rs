@@ -1,6 +1,6 @@
 //! Static action-bus peer endpoints for broker↔broker action federation.
 
-use anyhow::{bail, Context, Result};
+use anyhow::{Context, Result, bail};
 
 use super::ports::{BACKEND_PORT, FRONTEND_PORT};
 

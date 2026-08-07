@@ -4,9 +4,9 @@
 //! client (DEALER) and worker(s) (DEALER), then verifies end-to-end routing
 //! of goal/feedback/result and cancel flows.
 
-use robot_bus::broker::action_bus::{run_loop, ActionBusConfig};
-use std::sync::atomic::{AtomicBool, Ordering};
+use robot_bus::broker::action_bus::{ActionBusConfig, run_loop};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::thread;
 use std::time::{Duration, Instant};
 use zmq::{Context as ZmqContext, SocketType};
@@ -99,8 +99,8 @@ fn spawn_worker(backend_ep: &str, action: &str, tag: &str, n_feedback: usize) ->
             let body = &frames[4];
             if kind == b"CANCEL" {
                 // Acknowledge the cancel with a RESULT.
-                let resp = format!("{}:CANCELLED:{}", tag, String::from_utf8_lossy(body))
-                    .into_bytes();
+                let resp =
+                    format!("{}:CANCELLED:{}", tag, String::from_utf8_lossy(body)).into_bytes();
                 sock.send_multipart(
                     [
                         client_id.as_slice(),

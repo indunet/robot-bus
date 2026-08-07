@@ -9,13 +9,13 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::thread::{self, JoinHandle};
 use std::time::Duration;
 
-use robot_bus::broker::action_bus::ActionBusConfig;
-use robot_bus::broker::message_bus::BusConfig;
-use robot_bus::broker::service_bus::ServiceBusConfig;
 #[cfg(feature = "console")]
 use robot_bus::ConsoleBrokerConfig;
 #[cfg(feature = "grpc")]
 use robot_bus::GrpcBrokerConfig;
+use robot_bus::broker::action_bus::ActionBusConfig;
+use robot_bus::broker::message_bus::BusConfig;
+use robot_bus::broker::service_bus::ServiceBusConfig;
 use robot_bus::{DiscoveryConfig, RobotBusBroker, RobotBusConfig};
 use zmq::{Context, Socket, SocketType};
 
@@ -169,7 +169,9 @@ impl MessageProxy {
         let id = PROXY_ID.fetch_add(1, Ordering::Relaxed);
         let control_name = format!("inproc://message-proxy-ctl-{id}");
         control.bind(&control_name).expect("bind control");
-        control_client.connect(&control_name).expect("connect control");
+        control_client
+            .connect(&control_name)
+            .expect("connect control");
 
         let handle = thread::spawn(move || {
             let _ = zmq::proxy_steerable(&mut xsub, &mut xpub, &mut control);

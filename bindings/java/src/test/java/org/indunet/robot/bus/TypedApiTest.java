@@ -1,7 +1,6 @@
 package org.indunet.robot.bus;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -119,18 +118,18 @@ class TypedApiTest {
                             FibonacciGoal.class,
                             FibonacciFeedback.class,
                             FibonacciResult.class);
-            List<TypedActionMessage> events =
-                    client.sendGoal(FibonacciGoal.newBuilder().setOrder(5).build(), null, 5.0);
-
-            assertTrue(events.stream().anyMatch(e -> "FEEDBACK".equalsIgnoreCase(e.getKind())));
-            TypedActionMessage result =
-                    events.stream()
-                            .filter(e -> "RESULT".equalsIgnoreCase(e.getKind()))
-                            .findFirst()
-                            .orElseThrow();
-            assertInstanceOf(FibonacciResult.class, result.getBody());
-            assertEquals(1, ((FibonacciResult) result.getBody()).getSequenceCount());
-            assertEquals(5, ((FibonacciResult) result.getBody()).getSequence(0));
+            List<FibonacciFeedback> feedback = new java.util.ArrayList<>();
+            try (TypedActionGoalHandle<FibonacciFeedback, FibonacciResult> goal =
+                    client.sendGoal(
+                            FibonacciGoal.newBuilder().setOrder(5).build(),
+                            null,
+                            5.0,
+                            feedback::add)) {
+                FibonacciResult result = goal.result(5.0);
+                assertEquals(1, feedback.size());
+                assertEquals(1, result.getSequenceCount());
+                assertEquals(5, result.getSequence(0));
+            }
 
             server.shutdown();
             server.waitForShutdown();

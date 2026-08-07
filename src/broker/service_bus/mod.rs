@@ -5,22 +5,22 @@ mod peer;
 mod ports;
 
 pub use broker::{
+    ERR_NO_WORKER, ERR_WORKER_DIED, InFlightTable, WorkerRegistry, WorkerSource,
     build_client_reply, build_error_body, build_worker_forward, parse_service_name, run_loop,
-    InFlightTable, WorkerRegistry, WorkerSource, ERR_NO_WORKER, ERR_WORKER_DIED,
 };
 pub use metrics::{ServiceMetrics, ServiceMetricsSnapshot, ServiceSnapshot};
 pub use peer::ServicePeer;
 pub use ports::{
-    DEFAULT_BACKEND_BIND, DEFAULT_FRONTEND_BIND, DEFAULT_HEARTBEAT_INTERVAL_MS,
+    BACKEND_PORT, DEFAULT_BACKEND_BIND, DEFAULT_FRONTEND_BIND, DEFAULT_HEARTBEAT_INTERVAL_MS,
     DEFAULT_HEARTBEAT_TIMEOUT_MS, DEFAULT_MAX_PENDING, DEFAULT_PENDING_TIMEOUT_MS, DEFAULT_RCV_HWM,
-    DEFAULT_SND_HWM, BACKEND_PORT, FRONTEND_PORT,
+    DEFAULT_SND_HWM, FRONTEND_PORT,
 };
 
-use anyhow::{Context, Result};
 use crate::shutdown;
 use crate::transports::{bind_all, format_endpoints};
-use std::sync::atomic::AtomicBool;
+use anyhow::{Context, Result};
 use std::sync::Arc;
+use std::sync::atomic::AtomicBool;
 use zmq::{Context as ZmqContext, Socket, SocketType};
 
 #[derive(Clone, Debug)]
@@ -130,8 +130,15 @@ pub fn run_with_shutdown_ctx(
         broker::run_loop(&frontend, &backend, &config, &shutdown, metrics.as_ref())
             .context("broker loop")?;
     } else {
-        bridge::run_federated(&context, frontend, backend, &config, &shutdown, metrics.as_ref())
-            .context("federated broker loop")?;
+        bridge::run_federated(
+            &context,
+            frontend,
+            backend,
+            &config,
+            &shutdown,
+            metrics.as_ref(),
+        )
+        .context("federated broker loop")?;
     }
     Ok(())
 }

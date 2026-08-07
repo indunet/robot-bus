@@ -1,17 +1,17 @@
 //! Field conversion between `rclrs` [`DynamicMessage`] and robot-bus protobuf.
 
+use prost_types::Timestamp;
 use rclrs::{
     ArrayValue, ArrayValueMut, DynamicMessage, MessageTypeName, SimpleValue, SimpleValueMut, Value,
     ValueMut,
 };
-use prost_types::Timestamp;
 
+use crate::BusError;
 use crate::builtin_interfaces::msg::v1::Time as BusTime;
 use crate::foxglove_msgs::msg::v1::CompressedVideo as BusCompressedVideo;
 use crate::geometry_msgs::msg::v1::{Quaternion as BusQuat, Vector3 as BusVec3};
 use crate::sensor_msgs::msg::v1::{Image as BusImage, Imu as BusImu};
 use crate::std_msgs::msg::v1::{Header as BusHeader, String as BusString};
-use crate::BusError;
 
 use super::codec::{read_bool_or_u8, read_byte_sequence, write_bool_as_u8, write_byte_sequence};
 
@@ -49,9 +49,7 @@ fn write_string(msg: &mut DynamicMessage, field: &str, value: &str) -> Result<()
 fn read_f64(view: &rclrs::DynamicMessageView<'_>, field: &str) -> Result<f64> {
     match view.get(field) {
         Some(Value::Simple(SimpleValue::Double(v))) => Ok(*v),
-        other => Err(err(format!(
-            "expected f64 field `{field}`, got {other:?}"
-        ))),
+        other => Err(err(format!("expected f64 field `{field}`, got {other:?}"))),
     }
 }
 
@@ -70,9 +68,7 @@ fn write_f64(view: &mut rclrs::DynamicMessageViewMut<'_>, field: &str, value: f6
 fn read_i32(view: &rclrs::DynamicMessageView<'_>, field: &str) -> Result<i32> {
     match view.get(field) {
         Some(Value::Simple(SimpleValue::Int32(v))) => Ok(*v),
-        other => Err(err(format!(
-            "expected i32 field `{field}`, got {other:?}"
-        ))),
+        other => Err(err(format!("expected i32 field `{field}`, got {other:?}"))),
     }
 }
 
@@ -91,9 +87,7 @@ fn write_i32(view: &mut rclrs::DynamicMessageViewMut<'_>, field: &str, value: i3
 fn read_u32(view: &rclrs::DynamicMessageView<'_>, field: &str) -> Result<u32> {
     match view.get(field) {
         Some(Value::Simple(SimpleValue::Uint32(v))) => Ok(*v),
-        other => Err(err(format!(
-            "expected u32 field `{field}`, got {other:?}"
-        ))),
+        other => Err(err(format!("expected u32 field `{field}`, got {other:?}"))),
     }
 }
 
@@ -133,10 +127,7 @@ fn write_cov9(msg: &mut DynamicMessage, field: &str, values: &[f64]) -> Result<(
     }
 }
 
-fn nested_view<'a>(
-    msg: &'a DynamicMessage,
-    field: &str,
-) -> Result<rclrs::DynamicMessageView<'a>> {
+fn nested_view<'a>(msg: &'a DynamicMessage, field: &str) -> Result<rclrs::DynamicMessageView<'a>> {
     match msg.get(field) {
         Some(Value::Simple(SimpleValue::Message(view))) => Ok(view),
         other => Err(err(format!(
@@ -164,7 +155,7 @@ fn header_from_view(view: &rclrs::DynamicMessageView<'_>) -> Result<BusHeader> {
         other => {
             return Err(err(format!(
                 "expected header.frame_id string, got {other:?}"
-            )))
+            )));
         }
     };
     let mut header = BusHeader {
@@ -183,12 +174,10 @@ fn header_from_view(view: &rclrs::DynamicMessageView<'_>) -> Result<BusHeader> {
 fn write_header(msg: &mut DynamicMessage, header: &BusHeader) -> Result<()> {
     with_nested_mut(msg, "header", |view| {
         match view.get_mut("frame_id") {
-            Some(ValueMut::Simple(SimpleValueMut::String(s))) => *s = header.frame_id.as_str().into(),
-            other => {
-                return Err(err(format!(
-                    "expected mut header.frame_id, got {other:?}"
-                )))
+            Some(ValueMut::Simple(SimpleValueMut::String(s))) => {
+                *s = header.frame_id.as_str().into()
             }
+            other => return Err(err(format!("expected mut header.frame_id, got {other:?}"))),
         }
         if let Some(stamp) = &header.stamp {
             match view.get_mut("stamp") {
@@ -196,9 +185,7 @@ fn write_header(msg: &mut DynamicMessage, header: &BusHeader) -> Result<()> {
                     write_i32(&mut stamp_view, "sec", stamp.sec)?;
                     write_u32(&mut stamp_view, "nanosec", stamp.nanosec)?;
                 }
-                other => {
-                    return Err(err(format!("expected mut header.stamp, got {other:?}")))
-                }
+                other => return Err(err(format!("expected mut header.stamp, got {other:?}"))),
             }
         }
         Ok(())
@@ -279,7 +266,11 @@ pub fn imu_bus_to_dyn(bus: &BusImu) -> Result<DynamicMessage> {
     if let Some(q) = &bus.orientation {
         write_quat(&mut msg, "orientation", q)?;
     }
-    write_cov9(&mut msg, "orientation_covariance", &bus.orientation_covariance)?;
+    write_cov9(
+        &mut msg,
+        "orientation_covariance",
+        &bus.orientation_covariance,
+    )?;
     if let Some(v) = &bus.angular_velocity {
         write_vec3(&mut msg, "angular_velocity", v)?;
     }
@@ -302,9 +293,7 @@ pub fn imu_bus_to_dyn(bus: &BusImu) -> Result<DynamicMessage> {
 fn read_u32_field(msg: &DynamicMessage, field: &str) -> Result<u32> {
     match msg.get(field) {
         Some(Value::Simple(SimpleValue::Uint32(v))) => Ok(*v),
-        other => Err(err(format!(
-            "expected u32 field `{field}`, got {other:?}"
-        ))),
+        other => Err(err(format!("expected u32 field `{field}`, got {other:?}"))),
     }
 }
 
@@ -370,7 +359,7 @@ pub fn compressed_video_dyn_to_bus(msg: &DynamicMessage) -> Result<BusCompressed
         other => {
             return Err(err(format!(
                 "expected nested timestamp message, got {other:?}"
-            )))
+            )));
         }
     };
     Ok(BusCompressedVideo {
@@ -395,11 +384,11 @@ pub fn compressed_video_bus_to_dyn(bus: &BusCompressedVideo) -> Result<DynamicMe
 
 // --- std_srvs typed conversions (rclrs vendor ↔ bus prost) ---
 
+use super::vendor::std_srvs::srv as ros_srv;
 use crate::std_srvs::srv::v1::{
     SetBoolRequest as BusSetBoolRequest, SetBoolResponse as BusSetBoolResponse,
     TriggerRequest as BusTriggerRequest, TriggerResponse as BusTriggerResponse,
 };
-use super::vendor::std_srvs::srv as ros_srv;
 
 pub fn trigger_ros_req_to_bus(_req: &ros_srv::Trigger_Request) -> BusTriggerRequest {
     BusTriggerRequest {}

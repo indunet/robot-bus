@@ -90,7 +90,14 @@ fn rbus_lists_and_status() {
     let _guard = lock_brokers();
     let console_port = 27771u16;
     let broker = RobotBusBroker::start(test_broker_config(
-        27560, 27561, 27662, 27663, 27664, 27665, 27770, console_port,
+        27560,
+        27561,
+        27662,
+        27663,
+        27664,
+        27665,
+        27770,
+        console_port,
     ))
     .expect("start broker");
     thread::sleep(Duration::from_millis(200));
@@ -100,7 +107,10 @@ fn rbus_lists_and_status() {
     // Empty topic list is fine (exit 0).
     let (code, stdout, stderr) = run_rbus(&url, &["topic", "list"]);
     assert_eq!(code, 0, "topic list empty: stderr={stderr}");
-    assert!(stdout.trim().is_empty(), "expected empty topics, got {stdout}");
+    assert!(
+        stdout.trim().is_empty(),
+        "expected empty topics, got {stdout}"
+    );
 
     let sub = Subscriber::new(Some("tcp://127.0.0.1:27561")).expect("subscriber");
     sub.subscribe("/rbus").expect("subscribe");
@@ -116,15 +126,13 @@ fn rbus_lists_and_status() {
 
     let svc_handler: Arc<dyn Fn(&[u8]) -> Vec<u8> + Send + Sync> =
         Arc::new(|body| [b"ok:", body].concat());
-    let svc_worker =
-        WorkerThread::spawn_service("svc.rbus", svc_handler, "tcp://127.0.0.1:27663")
-            .expect("service worker");
+    let svc_worker = WorkerThread::spawn_service("svc.rbus", svc_handler, "tcp://127.0.0.1:27663")
+        .expect("service worker");
 
     let act_handler: Arc<dyn Fn(&[u8]) -> Vec<(String, Vec<u8>)> + Send + Sync> =
         Arc::new(|body| vec![("RESULT".into(), [b"done:", body].concat())]);
-    let act_worker =
-        WorkerThread::spawn_action("act.rbus", act_handler, "tcp://127.0.0.1:27665")
-            .expect("action worker");
+    let act_worker = WorkerThread::spawn_action("act.rbus", act_handler, "tcp://127.0.0.1:27665")
+        .expect("action worker");
 
     thread::sleep(Duration::from_millis(150));
 
@@ -143,7 +151,9 @@ fn rbus_lists_and_status() {
     let (code, stdout, stderr) = run_rbus(&url, &["topic", "list"]);
     assert_eq!(code, 0, "topic list: stderr={stderr}");
     assert!(
-        stdout.lines().any(|l| l.split('\t').next() == Some("/rbus/cli")),
+        stdout
+            .lines()
+            .any(|l| l.split('\t').next() == Some("/rbus/cli")),
         "topics stdout={stdout}"
     );
 

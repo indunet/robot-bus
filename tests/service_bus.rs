@@ -13,8 +13,8 @@ fn service_request_reply() {
     let broker = BrokerProcess::spawn_service();
     let handler: Arc<dyn Fn(&[u8]) -> Vec<u8> + Send + Sync> =
         Arc::new(|body| [b"echo:", body].concat());
-    let worker = WorkerThread::spawn_service("svc.echo", handler, &broker.backend_endpoint)
-        .expect("worker");
+    let worker =
+        WorkerThread::spawn_service("svc.echo", handler, &broker.backend_endpoint).expect("worker");
     std::thread::sleep(Duration::from_millis(100));
     let client = ServiceClient::new(Some(&broker.frontend_endpoint)).expect("client");
     let reply = client

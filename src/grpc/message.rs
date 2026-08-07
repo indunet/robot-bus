@@ -6,8 +6,8 @@ use std::thread;
 use std::time::Duration;
 
 use tokio::sync::mpsc;
-use tokio_stream::wrappers::ReceiverStream;
 use tokio_stream::Stream;
+use tokio_stream::wrappers::ReceiverStream;
 use tonic::{Request, Response, Status};
 
 use crate::errors::BusError;

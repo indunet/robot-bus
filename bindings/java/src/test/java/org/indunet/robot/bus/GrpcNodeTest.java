@@ -144,13 +144,19 @@ class GrpcNodeTest {
             Thread.sleep(200);
 
             ActionClient action = client.createActionClient("act.java_grpc_demo");
-            List<ActionMessage> messages =
-                    action.sendGoal("fly".getBytes(StandardCharsets.UTF_8), null, 5.0);
-            assertEquals(3, messages.size());
-            assertEquals("FEEDBACK", messages.get(0).getKind());
-            assertEquals("step-1", new String(messages.get(0).getBody(), StandardCharsets.UTF_8));
-            assertEquals("RESULT", messages.get(2).getKind());
-            assertEquals("done:fly", new String(messages.get(2).getBody(), StandardCharsets.UTF_8));
+            List<ActionMessage> feedback = new ArrayList<>();
+            try (ActionGoalHandle goal =
+                    action.sendGoal(
+                            "fly".getBytes(StandardCharsets.UTF_8), null, 5.0, feedback::add)) {
+                ActionMessage result = goal.result(5.0);
+                assertEquals(2, feedback.size());
+                assertEquals("FEEDBACK", feedback.get(0).getKind());
+                assertEquals(
+                        "step-1",
+                        new String(feedback.get(0).getBody(), StandardCharsets.UTF_8));
+                assertEquals("RESULT", result.getKind());
+                assertEquals("done:fly", new String(result.getBody(), StandardCharsets.UTF_8));
+            }
 
             server.shutdown();
             server.stop();

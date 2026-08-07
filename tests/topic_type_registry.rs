@@ -111,7 +111,14 @@ fn typed_publisher_registers_type_before_traffic() {
     let _guard = lock_brokers();
     let console_port = 28771u16;
     let broker = RobotBusBroker::start(test_broker_config(
-        28560, 28561, 28662, 28663, 28664, 28665, 28770, console_port,
+        28560,
+        28561,
+        28662,
+        28663,
+        28664,
+        28665,
+        28770,
+        console_port,
     ))
     .expect("start broker");
     thread::sleep(Duration::from_millis(200));
@@ -152,7 +159,14 @@ fn type_register_last_write_wins() {
     let _guard = lock_brokers();
     let console_port = 28871u16;
     let broker = RobotBusBroker::start(test_broker_config(
-        28860, 28861, 28862, 28863, 28864, 28865, 28870, console_port,
+        28860,
+        28861,
+        28862,
+        28863,
+        28864,
+        28865,
+        28870,
+        console_port,
     ))
     .expect("start broker");
     thread::sleep(Duration::from_millis(200));

@@ -39,7 +39,7 @@ describe("GrpcNode capability guards", () => {
 });
 
 describe("GrpcNode action client", () => {
-  it("uses one goal request and a server response stream", async () => {
+  it("returns a handle immediately and delivers feedback in real time", async () => {
     const node = GrpcNode.grpc("test");
     let request: {
       actionName: string;
@@ -47,6 +47,8 @@ describe("GrpcNode action client", () => {
       goalId: string;
       timeoutMs: number;
     } | undefined;
+    let releaseResult: (() => void) | undefined;
+    let feedbackDelivered = false;
     (node as unknown as {
       actionClient: {
         sendGoal: (
@@ -65,6 +67,9 @@ describe("GrpcNode action client", () => {
               kind: 2,
               body: new Uint8Array([1]),
             };
+            await new Promise<void>((resolve) => {
+              releaseResult = resolve;
+            });
             yield {
               actionName: input?.actionName ?? "",
               goalId: input?.goalId ?? "",
@@ -77,17 +82,74 @@ describe("GrpcNode action client", () => {
     };
 
     const client = node.createActionClient("/act");
-    const events = await client.sendGoal(new Uint8Array([9]), "goal-1", 2);
+    const handle = client.sendGoal(new Uint8Array([9]), {
+      goalId: "goal-1",
+      timeoutSeconds: 2,
+      onFeedback: (event) => {
+        feedbackDelivered = true;
+        assert.equal(event.kind, "FEEDBACK");
+        assert.deepEqual(Array.from(event.body), [1]);
+      },
+    });
 
+    assert.equal(handle.goalId, "goal-1");
+    assert.equal(handle.actionName, "/act");
     assert.equal(request?.actionName, "/act");
     assert.equal(request?.goalId, "goal-1");
     assert.equal(request?.timeoutMs, 2_000);
-    assert.deepEqual(events.map((event) => event.kind), ["FEEDBACK", "RESULT"]);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    assert.equal(feedbackDelivered, true);
+    releaseResult?.();
+    const result = await handle.result();
+    assert.equal(result.kind, "RESULT");
+    assert.deepEqual(Array.from(result.body), [2]);
   });
 
-  it("cancels an active goal by aborting its response stream", async () => {
+  it("decodes typed feedback and result as they arrive", async () => {
     const node = GrpcNode.grpc("test");
-    let signal: AbortSignal | undefined;
+    (node as unknown as {
+      actionClient: {
+        sendGoal: () => { responses: AsyncIterable<object> };
+      };
+    }).actionClient = {
+      sendGoal: () => ({
+        responses: (async function* () {
+          yield {
+            actionName: "/typed",
+            goalId: "typed-1",
+            kind: 2,
+            body: new Uint8Array([7]),
+          };
+          yield {
+            actionName: "/typed",
+            goalId: "typed-1",
+            kind: 3,
+            body: new Uint8Array([9]),
+          };
+        })(),
+      }),
+    };
+    const numberType = {
+      typeName: "fake.v1.Number",
+      create: (value?: { value?: number }) => ({ value: value?.value ?? 0 }),
+      toBinary: (value: { value: number }) => new Uint8Array([value.value]),
+      fromBinary: (bytes: Uint8Array) => ({ value: bytes[0] ?? 0 }),
+    } as MessageType<{ value: number }>;
+    const feedback: number[] = [];
+    const client = node.createActionClient("/typed", numberType, numberType, numberType);
+    const handle = client.sendGoal(
+      { value: 1 },
+      { goalId: "typed-1", onFeedback: (value) => feedback.push(value.value) },
+    );
+
+    const result = await handle.result();
+    assert.deepEqual(feedback, [7]);
+    assert.deepEqual(result, { value: 9 });
+  });
+
+  it("cancels through the handle and deprecated client wrapper", async () => {
+    const node = GrpcNode.grpc("test");
+    const signals: AbortSignal[] = [];
     (node as unknown as {
       actionClient: {
         sendGoal: (
@@ -97,7 +159,8 @@ describe("GrpcNode action client", () => {
       };
     }).actionClient = {
       sendGoal: (_input, options) => {
-        signal = options?.abort;
+        const signal = options?.abort;
+        if (signal) signals.push(signal);
         return {
           responses: (async function* () {
             await new Promise<void>((_resolve, reject) => {
@@ -116,12 +179,77 @@ describe("GrpcNode action client", () => {
     };
 
     const client = node.createActionClient("/act");
-    const pending = client.sendGoal(new Uint8Array(), "goal-cancel");
-    await client.cancel("goal-cancel");
+    const first = client.sendGoal(new Uint8Array(), { goalId: "goal-cancel-1" });
+    await first.cancel();
+    assert.equal(signals[0]?.aborted, true);
+    await assert.rejects(first.result(), /aborted/);
 
+    const second = client.sendGoal(new Uint8Array(), { goalId: "goal-cancel-2" });
+    await client.cancel("goal-cancel-2");
+    assert.equal(signals[1]?.aborted, true);
+    await assert.rejects(second.result(), /aborted/);
+    await assert.rejects(client.cancel("goal-cancel-2"), /no active goal/);
+  });
+
+  it("rejects result when the RPC stream fails", async () => {
+    const node = GrpcNode.grpc("test");
+    (node as unknown as {
+      actionClient: {
+        sendGoal: () => { responses: AsyncIterable<object> };
+      };
+    }).actionClient = {
+      sendGoal: () => ({
+        responses: (async function* () {
+          throw new Error("rpc unavailable");
+        })(),
+      }),
+    };
+
+    const handle = node.createActionClient("/act").sendGoal(new Uint8Array());
+    await assert.rejects(handle.result(), /rpc unavailable/);
+  });
+
+  it("rejects missing results and safely cleans duplicate and shutdown goals", async () => {
+    const node = GrpcNode.grpc("test");
+    let signal: AbortSignal | undefined;
+    let calls = 0;
+    (node as unknown as {
+      actionClient: {
+        sendGoal: (
+          input: object,
+          options?: { abort?: AbortSignal },
+        ) => { responses: AsyncIterable<object> };
+      };
+    }).actionClient = {
+      sendGoal: (_input, options) => {
+        calls += 1;
+        signal = options?.abort;
+        return {
+          responses: calls === 1
+            ? (async function* () {})()
+            : (async function* () {
+                await new Promise<void>((_resolve, reject) => {
+                  signal?.addEventListener("abort", () => reject(new Error("shutdown abort")), {
+                    once: true,
+                  });
+                });
+              })(),
+        };
+      },
+    };
+
+    const client = node.createActionClient("/act");
+    const missing = client.sendGoal(new Uint8Array(), { goalId: "reusable" });
+    await assert.rejects(missing.result(), /without a result/);
+
+    const active = client.sendGoal(new Uint8Array(), { goalId: "reusable" });
+    assert.throws(
+      () => client.sendGoal(new Uint8Array(), { goalId: "reusable" }),
+      /already active/,
+    );
+    node.shutdown();
     assert.equal(signal?.aborted, true);
-    await assert.rejects(pending, /aborted/);
-    await assert.rejects(client.cancel("goal-cancel"), /no active goal/);
+    await assert.rejects(active.result(), /shutdown abort/);
   });
 });
 

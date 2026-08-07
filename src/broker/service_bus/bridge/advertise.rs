@@ -3,9 +3,9 @@
 use anyhow::Result;
 use std::collections::HashMap;
 
+use super::super::broker::{WorkerRegistry, hop_contains};
 use super::protocol::{CMD_DISCONNECT, CMD_HEARTBEAT, CMD_READY_FED};
 use super::remote::PeerLink;
-use super::super::broker::{hop_contains, WorkerRegistry};
 
 pub(super) fn sync_all_advertisements(
     peers: &mut [PeerLink],

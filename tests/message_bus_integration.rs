@@ -76,8 +76,7 @@ fn make_sub(xpub_ep: &str, topic: &str) -> zmq::Socket {
     let ctx = ZmqContext::new();
     let sock = ctx.socket(SocketType::SUB).expect("create SUB");
     sock.connect(xpub_ep).expect("connect XPUB");
-    sock.set_subscribe(topic.as_bytes())
-        .expect("set subscribe");
+    sock.set_subscribe(topic.as_bytes()).expect("set subscribe");
     sock
 }
 
@@ -133,10 +132,7 @@ fn multiple_messages_in_order() {
 
     for i in 0..3 {
         pub_sock
-            .send_multipart(
-                [b"topic.v1".as_ref(), format!("payload-{i}").as_bytes()],
-                0,
-            )
+            .send_multipart([b"topic.v1".as_ref(), format!("payload-{i}").as_bytes()], 0)
             .expect("pub send");
     }
 

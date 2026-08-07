@@ -7,13 +7,13 @@
 
 use anyhow::{Context, Result};
 use std::collections::HashSet;
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use zmq::{Context as ZmqContext, Socket, SocketType};
 
+use super::BusConfig;
 use super::metrics::MessageMetrics;
 use super::peer::MessagePeer;
-use super::BusConfig;
 
 const HOP_SEP: char = ',';
 
@@ -131,7 +131,9 @@ fn connect_peer(
         .socket(SocketType::SUB)
         .context("create federation SUB")?;
     sub_sock.set_linger(0).context("peer SUB linger")?;
-    sub_sock.set_rcvhwm(rcv_hwm.max(100)).context("peer SUB rcvhwm")?;
+    sub_sock
+        .set_rcvhwm(rcv_hwm.max(100))
+        .context("peer SUB rcvhwm")?;
     sub_sock
         .connect(&peer.xpub)
         .with_context(|| format!("connect federation SUB -> {}", peer.xpub))?;

@@ -11,8 +11,8 @@ mod remote;
 
 use anyhow::{Context, Result};
 use std::collections::{HashMap, VecDeque};
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
 use uuid::Uuid;
 use zmq::{Context as ZmqContext, Socket};
@@ -22,16 +22,16 @@ use self::dispatch::{
     deliver_goal_reply, dispatch_goal, handle_cancel, retry_pending, send_died_results,
 };
 use self::protocol::{
-    CMD_DISCONNECT, CMD_HEARTBEAT, CMD_READY, CMD_READY_FED, KIND_CANCEL, KIND_FEEDBACK,
-    KIND_GOAL, KIND_RESULT, POLL_CAP_MS,
+    CMD_DISCONNECT, CMD_HEARTBEAT, CMD_READY, CMD_READY_FED, KIND_CANCEL, KIND_FEEDBACK, KIND_GOAL,
+    KIND_RESULT, POLL_CAP_MS,
 };
 use self::remote::{
-    connect_peer, is_fed_identity, learn_peer_broker_id, parse_fed_broker_id, PeerLink,
-    PendingGoal, RemoteActions,
+    PeerLink, PendingGoal, RemoteActions, connect_peer, is_fed_identity, learn_peer_broker_id,
+    parse_fed_broker_id,
 };
 use super::broker::{
-    build_client_reply, build_error_body, extend_hops, hop_contains, GoalReply, GoalTable,
-    WorkerRegistry,
+    GoalReply, GoalTable, WorkerRegistry, build_client_reply, build_error_body, extend_hops,
+    hop_contains,
 };
 use super::{ActionBusConfig, ActionMetrics};
 
@@ -73,8 +73,7 @@ pub fn run_federated(
     let mut remote = RemoteActions::new();
     let mut goals = GoalTable::new();
     let mut pending: VecDeque<PendingGoal> = VecDeque::new();
-    let mut next_sweep =
-        Instant::now() + Duration::from_millis(config.heartbeat_interval_ms);
+    let mut next_sweep = Instant::now() + Duration::from_millis(config.heartbeat_interval_ms);
     let pending_timeout = Duration::from_millis(config.pending_timeout_ms);
     let hb_timeout = Duration::from_millis(config.heartbeat_timeout_ms);
 
@@ -278,16 +277,7 @@ fn handle_peer_dealer(
         let body = &frames[4];
         if kind == KIND_FEEDBACK || kind == KIND_RESULT {
             return deliver_goal_reply(
-                frontend,
-                backend,
-                peers,
-                registry,
-                goals,
-                goal_id,
-                action,
-                kind,
-                body,
-                metrics,
+                frontend, backend, peers, registry, goals, goal_id, action, kind, body, metrics,
             );
         }
     }
@@ -316,18 +306,8 @@ fn handle_backend(
 
     if is_fed_identity(worker_id) {
         return handle_fed_backend_message(
-            backend,
-            frontend,
-            peers,
-            registry,
-            remote,
-            goals,
-            pending,
-            remote_rr,
-            broker_id,
-            &frames,
-            now,
-            metrics,
+            backend, frontend, peers, registry, remote, goals, pending, remote_rr, broker_id,
+            &frames, now, metrics,
         );
     }
 
@@ -343,8 +323,7 @@ fn handle_backend(
                 registry.heartbeat(worker_id, now);
             } else if cmd == CMD_DISCONNECT {
                 registry.remove(worker_id);
-                let dropped =
-                    goals.drain_if(|e| e.worker_identity.as_slice() == worker_id);
+                let dropped = goals.drain_if(|e| e.worker_identity.as_slice() == worker_id);
                 send_died_results(frontend, backend, dropped, metrics)?;
                 sync_all_advertisements(peers, registry, remote, broker_id)?;
             }
@@ -360,16 +339,7 @@ fn handle_backend(
             }
             if goals.get(goal_id).is_some() {
                 deliver_goal_reply(
-                    frontend,
-                    backend,
-                    peers,
-                    registry,
-                    goals,
-                    goal_id,
-                    action,
-                    kind,
-                    body,
-                    metrics,
+                    frontend, backend, peers, registry, goals, goal_id, action, kind, body, metrics,
                 )?;
             } else {
                 let client_id = &frames[1];
@@ -455,10 +425,7 @@ fn handle_fed_backend_message(
             }
             if hop_contains(&hops, broker_id) {
                 if kind == KIND_GOAL {
-                    let err = build_error_body(
-                        protocol::ERR_NO_WORKER,
-                        &action,
-                    );
+                    let err = build_error_body(protocol::ERR_NO_WORKER, &action);
                     let _ = backend.send_multipart(
                         [
                             identity,
@@ -481,36 +448,13 @@ fn handle_fed_backend_message(
 
             if kind == KIND_GOAL {
                 dispatch_goal(
-                    frontend,
-                    backend,
-                    peers,
-                    registry,
-                    remote,
-                    goals,
-                    pending,
-                    remote_rr,
-                    broker_id,
-                    identity,
-                    &action,
-                    &goal_id,
-                    &body,
-                    &hops,
-                    reply,
-                    metrics,
+                    frontend, backend, peers, registry, remote, goals, pending, remote_rr,
+                    broker_id, identity, &action, &goal_id, &body, &hops, reply, metrics,
                 )?;
             } else if kind == KIND_CANCEL {
                 handle_cancel(
-                    frontend,
-                    backend,
-                    peers,
-                    goals,
-                    pending,
-                    identity,
-                    &action,
-                    &goal_id,
-                    &body,
-                    reply,
-                    metrics,
+                    frontend, backend, peers, goals, pending, identity, &action, &goal_id, &body,
+                    reply, metrics,
                 )?;
             }
             Ok(())

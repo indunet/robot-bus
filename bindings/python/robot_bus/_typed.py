@@ -127,8 +127,44 @@ class TypedServiceClient:
         )
 
 
+class TypedActionGoalHandle:
+    """Live action goal handle that decodes the protobuf result."""
+
+    __slots__ = ("_inner", "_result_type")
+
+    def __init__(self, inner: Any, result_type: Type[Message]) -> None:
+        self._inner = inner
+        self._result_type = result_type
+
+    @property
+    def goal_id(self) -> str:
+        return self._inner.goal_id
+
+    @property
+    def action_name(self) -> str:
+        return self._inner.action_name
+
+    def result(self, timeout: Optional[float] = None) -> Message:
+        raw = self._inner.result(timeout)
+        result = _decode(self._result_type, raw)
+        if result is None:
+            raise ValueError(
+                f"action {self.action_name!r} result decode failed"
+            )
+        return result
+
+    def cancel(self) -> None:
+        self._inner.cancel()
+
+    def __repr__(self) -> str:
+        return (
+            f"TypedActionGoalHandle(action_name={self.action_name!r}, "
+            f"goal_id={self.goal_id!r})"
+        )
+
+
 class TypedActionClient:
-    """Action client that encodes goals and decodes FEEDBACK/RESULT bodies."""
+    """Action client that encodes goals and returns a live typed goal handle."""
 
     __slots__ = ("_inner", "_goal_type", "_feedback_type", "_result_type")
 
@@ -174,13 +210,39 @@ class TypedActionClient:
         goal: Message,
         goal_id: Optional[str] = None,
         timeout: Optional[float] = None,
+        feedback_callback: Optional[Callable[[Message], Any]] = None,
+    ) -> TypedActionGoalHandle:
+        if not isinstance(goal, self._goal_type):
+            raise TypeError(
+                f"action client for {self._goal_type.__name__} got "
+                f"{type(goal).__name__}"
+            )
+        raw_callback = None
+        if feedback_callback is not None:
+            def raw_callback(payload: bytes) -> None:
+                feedback = _decode(self._feedback_type, payload)
+                if feedback is not None:
+                    feedback_callback(feedback)
+
+        handle = self._inner.send_goal(
+            _encode(goal), goal_id, timeout, raw_callback
+        )
+        return TypedActionGoalHandle(handle, self._result_type)
+
+    def send_goal_and_wait(
+        self,
+        goal: Message,
+        goal_id: Optional[str] = None,
+        timeout: Optional[float] = None,
     ) -> list:
         if not isinstance(goal, self._goal_type):
             raise TypeError(
                 f"action client for {self._goal_type.__name__} got "
                 f"{type(goal).__name__}"
             )
-        messages = self._inner.send_goal(_encode(goal), goal_id, timeout)
+        messages = self._inner.send_goal_and_wait(
+            _encode(goal), goal_id, timeout
+        )
         out = []
         for msg in messages:
             kind = msg["kind"]
@@ -196,23 +258,6 @@ class TypedActionClient:
                 }
             )
         return out
-
-    def cancel(
-        self,
-        goal_id: str,
-        body: Optional[Message] = None,
-        timeout: Optional[float] = None,
-    ) -> dict:
-        raw = b"" if body is None else _encode(body)
-        msg = self._inner.cancel(goal_id, raw, timeout)
-        kind = msg["kind"]
-        decoded = self._decode_body(kind, msg["body"])
-        return {
-            "kind": kind,
-            "body": decoded if decoded is not None else msg["body"],
-            "goal_id": msg["goal_id"],
-            "action_name": msg["action_name"],
-        }
 
     def __repr__(self) -> str:
         return (

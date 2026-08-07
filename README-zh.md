@@ -238,7 +238,7 @@ auto pub = node.create_publisher("/imu");
 
 ```toml
 robot-bus = { path = "../robot-bus" }
-# 或 crates.io：robot-bus = "0.1.5"
+# 或 crates.io：robot-bus = "0.1.6"
 ```
 
 语义接近 ROS 2：`Node::new` → typed `create_publisher` / `create_subscription` → `node.spin()`（自动挂 `SingleThreadedExecutor`）。
@@ -345,7 +345,9 @@ cargo run --bin robot_bus_broker
 | `MessageGateway.Subscribe` | 按 topic 前缀订阅，服务端流式返回二进制 payload |
 | `MessageGateway.Publish` | 一元发布：topic + 二进制 payload 写入 message bus |
 | `ServiceGateway.Call` | 一元：`service_name` + request bytes → response bytes |
-| `ActionGateway.Run` | 双向流：客户端发 GOAL / CANCEL，服务端推 `ActionEvent`（`kind` 区分 FEEDBACK / RESULT） |
+| `ActionGateway.SendGoal` | 一元 goal 请求，随后由服务端流式返回 `ActionEvent`（`FEEDBACK`，最终为 `RESULT`） |
+
+各语言 action client 统一采用 ROS 2 风格 `GoalHandle`：`send_goal` / `sendGoal` 立即返回 handle，实时 feedback 交给回调，result 独立等待。`handle.cancel()` 是 best-effort 操作，不表示服务端已确认取消：gRPC 通过取消 goal 流实现，ZMQ 则发送显式 `CANCEL` 帧。
 
 ```bash
 cargo run --bin robot_bus_broker

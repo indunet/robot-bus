@@ -45,8 +45,12 @@ internal interface RobotBusC : Library {
     fun robot_bus_service_client_call(c: Pointer?, data: ByteArray, len: Long, timeoutSecs: Double, outData: PointerByReference, outLen: LongByReference): Int
     fun robot_bus_action_client_free(c: Pointer?)
     fun robot_bus_action_client_action_name(c: Pointer?): Pointer?
-    fun robot_bus_action_client_send_goal(c: Pointer?, data: ByteArray, len: Long, goalId: String?, timeoutSecs: Double, outMsgs: PointerByReference, outCount: LongByReference): Int
-    fun robot_bus_action_client_cancel(c: Pointer?, goalId: String?, data: ByteArray, len: Long, timeoutSecs: Double, outMsg: ActionMessageStruct): Int
+    fun robot_bus_action_client_send_goal(c: Pointer?, data: ByteArray, len: Long, goalId: String?, timeoutSecs: Double, feedback: ActionFeedbackCb?, user: Pointer?, outHandle: PointerByReference): Int
+    fun robot_bus_action_goal_handle_free(handle: Pointer?)
+    fun robot_bus_action_goal_handle_goal_id(handle: Pointer?): Pointer?
+    fun robot_bus_action_goal_handle_action_name(handle: Pointer?): Pointer?
+    fun robot_bus_action_goal_handle_wait_result(handle: Pointer?, timeoutSecs: Double, outMsg: ActionMessageStruct): Int
+    fun robot_bus_action_goal_handle_cancel(handle: Pointer?): Int
     fun robot_bus_context_new(): Pointer?
     fun robot_bus_context_free(c: Pointer?)
     fun robot_bus_context_clone(c: Pointer?): Pointer?
@@ -147,6 +151,9 @@ internal interface RobotBusC : Library {
             outCount: LongByReference,
             user: Pointer?,
         ): Int
+    }
+    fun interface ActionFeedbackCb : Callback {
+        fun invoke(message: Pointer?, user: Pointer?)
     }
     @Structure.FieldOrder("type", "boolValue", "integerValue", "doubleValue", "stringValue")
     class ParameterValueStruct : Structure {

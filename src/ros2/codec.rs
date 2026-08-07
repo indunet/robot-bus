@@ -7,13 +7,16 @@ use std::collections::HashMap;
 use std::sync::LazyLock;
 
 use prost::Message as ProstMessage;
-use rclrs::{DynamicMessage, MessageTypeName, SequenceValue, SequenceValueMut, SimpleValue, SimpleValueMut, Value, ValueMut};
+use rclrs::{
+    DynamicMessage, MessageTypeName, SequenceValue, SequenceValueMut, SimpleValue, SimpleValueMut,
+    Value, ValueMut,
+};
 use rosidl_runtime_rs::Sequence;
 
+use crate::BusError;
 use crate::foxglove_msgs::msg::v1::CompressedVideo as BusCompressedVideo;
 use crate::sensor_msgs::msg::v1::{Image as BusImage, Imu as BusImu};
 use crate::std_msgs::msg::v1::String as BusString;
-use crate::BusError;
 
 use super::convert;
 
@@ -39,12 +42,8 @@ pub trait TopicCodec: Send + Sync {
 
 static BUILTIN_CODECS: LazyLock<HashMap<&'static str, &'static dyn TopicCodec>> =
     LazyLock::new(|| {
-        let codecs: &[&'static dyn TopicCodec] = &[
-            &StringCodec,
-            &ImuCodec,
-            &ImageCodec,
-            &CompressedVideoCodec,
-        ];
+        let codecs: &[&'static dyn TopicCodec] =
+            &[&StringCodec, &ImuCodec, &ImageCodec, &CompressedVideoCodec];
         let mut map = HashMap::with_capacity(codecs.len());
         for c in codecs {
             map.insert(c.type_name(), *c);
@@ -256,10 +255,7 @@ mod tests {
         let bus = BusImage {
             header: Some(crate::std_msgs::msg::v1::Header {
                 frame_id: "cam".into(),
-                stamp: Some(crate::builtin_interfaces::msg::v1::Time {
-                    sec: 1,
-                    nanosec: 2,
-                }),
+                stamp: Some(crate::builtin_interfaces::msg::v1::Time { sec: 1, nanosec: 2 }),
             }),
             height: 2,
             width: 2,

@@ -5,8 +5,8 @@ mod peer;
 mod ports;
 
 pub use broker::{
-    build_client_reply, build_error_body, build_worker_cancel, build_worker_goal, run_loop,
-    WorkerRegistry,
+    WorkerRegistry, build_client_reply, build_error_body, build_worker_cancel, build_worker_goal,
+    run_loop,
 };
 pub use metrics::{ActionMetrics, ActionMetricsSnapshot, ActionSnapshot};
 pub use peer::ActionPeer;
@@ -16,11 +16,11 @@ pub use ports::{
     FRONTEND_PORT,
 };
 
-use anyhow::{Context, Result};
 use crate::shutdown;
 use crate::transports::{bind_all, format_endpoints};
-use std::sync::atomic::AtomicBool;
+use anyhow::{Context, Result};
 use std::sync::Arc;
+use std::sync::atomic::AtomicBool;
 use zmq::{Context as ZmqContext, Socket, SocketType};
 
 #[derive(Clone, Debug)]
@@ -129,8 +129,15 @@ pub fn run_with_shutdown_ctx(
         broker::run_loop(&frontend, &backend, &config, &shutdown, metrics.as_ref())
             .context("broker loop")?;
     } else {
-        bridge::run_federated(&context, frontend, backend, &config, &shutdown, metrics.as_ref())
-            .context("federated action broker loop")?;
+        bridge::run_federated(
+            &context,
+            frontend,
+            backend,
+            &config,
+            &shutdown,
+            metrics.as_ref(),
+        )
+        .context("federated action broker loop")?;
     }
     Ok(())
 }

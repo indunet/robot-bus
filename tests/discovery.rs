@@ -2,12 +2,10 @@
 
 mod support;
 
-use robot_bus::discovery::{DiscoverOpts, DEFAULT_MULTICAST_ADDR};
+use robot_bus::discovery::{DEFAULT_MULTICAST_ADDR, DiscoverOpts};
 use robot_bus::message_bus::{Publisher, Subscriber};
 use robot_bus::robot_bus_interface::msg::v1::TcpPorts;
-use robot_bus::{
-    discovery, Node, NodeOptions, RobotBusBroker, RobotBusConfig,
-};
+use robot_bus::{Node, NodeOptions, RobotBusBroker, RobotBusConfig, discovery};
 use std::thread;
 use std::time::Duration;
 use support::lock_brokers;
@@ -49,9 +47,7 @@ fn discover_tcp_then_pubsub() {
     }
     #[cfg(feature = "grpc")]
     {
-        config.grpc.listen = format!("127.0.0.1:{}", 25770 + offset)
-            .parse()
-            .unwrap();
+        config.grpc.listen = format!("127.0.0.1:{}", 25770 + offset).parse().unwrap();
     }
 
     let broker = RobotBusBroker::start(config).expect("start broker");
@@ -76,11 +72,10 @@ fn discover_tcp_then_pubsub() {
     sub.subscribe("disco/topic").expect("subscribe");
     let pub_ = Publisher::new(Some(&xsub)).expect("pub");
     thread::sleep(Duration::from_millis(150));
-    pub_.publish("disco/topic", b"hello-disco").expect("publish");
+    pub_.publish("disco/topic", b"hello-disco")
+        .expect("publish");
 
-    let (topic, payload) = sub
-        .receive(Some(Duration::from_secs(2)))
-        .expect("receive");
+    let (topic, payload) = sub.receive(Some(Duration::from_secs(2))).expect("receive");
     assert_eq!(topic, "disco/topic");
     assert_eq!(payload, b"hello-disco");
 

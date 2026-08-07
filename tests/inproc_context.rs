@@ -2,16 +2,16 @@
 
 mod support;
 
-use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::thread;
 use std::time::{Duration, Instant};
 
+#[cfg(feature = "console")]
+use robot_bus::ConsoleBrokerConfig;
 use robot_bus::{
     Context, HighWaterMark, Node, NodeOptions, Publisher, RobotBusBroker, RobotBusConfig,
 };
-#[cfg(feature = "console")]
-use robot_bus::ConsoleBrokerConfig;
 use support::lock_brokers;
 
 fn inproc_broker_config() -> RobotBusConfig {
@@ -43,8 +43,11 @@ fn inproc_pubsub_with_shared_context() {
     let hits_cb = Arc::clone(&hits);
 
     let mut sub = Node::inproc_with_context(ctx.clone(), "inproc-sub");
-    sub.set_stream_hwm(HighWaterMark { snd: 1000, rcv: 1000 })
-        .expect("set_stream_hwm");
+    sub.set_stream_hwm(HighWaterMark {
+        snd: 1000,
+        rcv: 1000,
+    })
+    .expect("set_stream_hwm");
     sub.create_subscription_raw(
         "/inproc/demo",
         Arc::new(move |_topic, payload| {
@@ -56,9 +59,7 @@ fn inproc_pubsub_with_shared_context() {
     .expect("subscribe");
 
     let shutdown = sub.shutdown_handle().expect("shutdown handle");
-    let xsub = NodeOptions::inproc()
-        .message_xsub_endpoint()
-        .expect("xsub");
+    let xsub = NodeOptions::inproc().message_xsub_endpoint().expect("xsub");
     let pub_ctx = ctx.clone();
     let hits_wait = Arc::clone(&hits);
     let worker = thread::spawn(move || {
@@ -66,7 +67,10 @@ fn inproc_pubsub_with_shared_context() {
         let publisher = Publisher::with_shared_context(
             &pub_ctx,
             Some(&xsub),
-            HighWaterMark { snd: 1000, rcv: 1000 },
+            HighWaterMark {
+                snd: 1000,
+                rcv: 1000,
+            },
         )
         .expect("publisher");
         let deadline = Instant::now() + Duration::from_secs(5);

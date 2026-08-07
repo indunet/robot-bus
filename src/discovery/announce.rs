@@ -1,7 +1,7 @@
 //! Periodic broker announce sender.
 
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::thread::{self, JoinHandle};
 use std::time::Duration;
 
@@ -9,7 +9,7 @@ use log::{debug, warn};
 
 use super::config::DiscoveryConfig;
 use super::net::{infer_advertise_host, multicast_sender};
-use super::packet::{encode_announce, BrokerAnnouncement};
+use super::packet::{BrokerAnnouncement, encode_announce};
 use crate::errors::Result;
 
 /// Payload assembled once at broker start (ports / paths already resolved).
@@ -43,7 +43,10 @@ impl Drop for AnnounceHandle {
 }
 
 /// Spawn a background thread that sends `payload` every `config.interval`.
-pub fn spawn_announcer(config: DiscoveryConfig, payload: AnnouncerPayload) -> Result<AnnounceHandle> {
+pub fn spawn_announcer(
+    config: DiscoveryConfig,
+    payload: AnnouncerPayload,
+) -> Result<AnnounceHandle> {
     let (sock, dest) = multicast_sender(config.multicast_addr, config.multicast_port)
         .map_err(|e| crate::errors::BusError::Protocol(format!("discovery sender: {e}")))?;
     let bytes = encode_announce(&payload.announcement)?;

@@ -147,23 +147,13 @@ fn service_and_action_metrics_via_console_api() {
 
     let svc_client = ServiceClient::new(Some("tcp://127.0.0.1:26662")).expect("svc client");
     let reply = svc_client
-        .call(
-            "svc.console",
-            b"ping",
-            None,
-            Some(Duration::from_secs(5)),
-        )
+        .call("svc.console", b"ping", None, Some(Duration::from_secs(5)))
         .expect("service call");
     assert_eq!(reply, b"echo:ping");
 
     let act_client = ActionClient::new(Some("tcp://127.0.0.1:26664")).expect("act client");
     let messages = act_client
-        .send_goal(
-            "act.console",
-            b"go",
-            None,
-            Some(Duration::from_secs(10)),
-        )
+        .send_goal("act.console", b"go", None, Some(Duration::from_secs(10)))
         .expect("action goal");
     assert!(!messages.is_empty());
 

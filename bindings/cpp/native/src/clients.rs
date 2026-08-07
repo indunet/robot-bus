@@ -1,20 +1,23 @@
 //! Topic publisher, service/action clients, and related handle C ABI.
 
+use std::ffi::CString;
 use std::os::raw::{c_char, c_int, c_void};
 use std::ptr;
 use std::slice;
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use robot_bus::action_bus::ActionKind;
 use robot_bus::runtime::{
     CallbackGroup, CallbackGroupType, NodeActionClientRaw as RustNodeActionClient,
-    NodeServiceClientRaw as RustNodeServiceClient, ShutdownHandle as RustShutdownHandle,
+    NodeServiceClientRaw as RustNodeServiceClient, RawActionFeedbackCallback,
+    RawGoalHandle as RustActionGoalHandle, ShutdownHandle as RustShutdownHandle,
     TimerHandle as RustTimerHandle, TopicPublisherRaw as RustTopicPublisher,
 };
 
 use crate::ffi::{
-    bytes_slice, bus_err, clear_error, cstr_opt, cstr_req, dup_bytes, dup_string, err, ok, set_error,
-    robot_bus_free_bytes, robot_bus_free_string,
+    bus_err, bytes_slice, clear_error, cstr_opt, dup_bytes, dup_string, err, ok,
+    robot_bus_free_bytes, robot_bus_free_string, set_error,
 };
 
 // --- Shutdown / Timer / CallbackGroup ---------------------------------------
@@ -110,6 +113,20 @@ pub(crate) struct RobotBusActionClient {
     pub(crate) inner: RustNodeActionClient,
 }
 
+pub(crate) struct RobotBusActionGoalHandle {
+    inner: RustActionGoalHandle,
+    feedback: Option<
+        Arc<
+            Mutex<
+                Option<(
+                    unsafe extern "C" fn(*const RobotBusActionMessage, *mut c_void),
+                    usize,
+                )>,
+            >,
+        >,
+    >,
+}
+
 #[repr(C)]
 pub(crate) struct RobotBusActionMessage {
     pub kind: *mut c_char,
@@ -133,6 +150,17 @@ fn free_action_message(m: &RobotBusActionMessage) {
     robot_bus_free_bytes(m.body, m.body_len);
     robot_bus_free_string(m.goal_id);
     robot_bus_free_string(m.action_name);
+}
+
+fn owned_action_message(message: &robot_bus::action_bus::ActionMessage) -> RobotBusActionMessage {
+    let (body, body_len) = dup_bytes(&message.body);
+    RobotBusActionMessage {
+        kind: dup_string(action_kind_str(message.kind)),
+        body,
+        body_len,
+        goal_id: dup_string(&message.goal_id),
+        action_name: dup_string(&message.action_name),
+    }
 }
 
 #[unsafe(no_mangle)]
@@ -270,10 +298,11 @@ pub extern "C" fn robot_bus_action_client_send_goal(
     len: usize,
     goal_id: *const c_char,
     timeout_secs: f64,
-    out_msgs: *mut *mut RobotBusActionMessage,
-    out_count: *mut usize,
+    feedback: RobotBusActionFeedbackCallback,
+    user: *mut c_void,
+    out_handle: *mut *mut RobotBusActionGoalHandle,
 ) -> c_int {
-    if c.is_null() || out_msgs.is_null() || out_count.is_null() {
+    if c.is_null() || out_handle.is_null() {
         return err("null argument");
     }
     let bytes = match bytes_slice(data, len) {
@@ -286,27 +315,117 @@ pub extern "C" fn robot_bus_action_client_send_goal(
     } else {
         Some(Duration::from_secs_f64(timeout_secs))
     };
-    match unsafe { &*c }.inner.send_goal(bytes, goal_id, timeout) {
-        Ok(messages) => {
-            let mut out: Vec<RobotBusActionMessage> = messages
-                .into_iter()
-                .map(|m| {
-                    let (body, body_len) = dup_bytes(&m.body);
-                    RobotBusActionMessage {
-                        kind: dup_string(action_kind_str(m.kind)),
-                        body,
-                        body_len,
-                        goal_id: dup_string(&m.goal_id),
-                        action_name: dup_string(&m.action_name),
+    let feedback_state =
+        feedback.map(|callback| Arc::new(Mutex::new(Some((callback, user as usize)))));
+    let feedback_callback: Option<RawActionFeedbackCallback> =
+        feedback_state.as_ref().map(|state| {
+            let state = Arc::clone(state);
+            Arc::new(move |message: &robot_bus::action_bus::ActionMessage| {
+                let kind = CString::new(action_kind_str(message.kind)).expect("static action kind");
+                let goal_id = CString::new(message.goal_id.as_str()).unwrap_or_default();
+                let action_name = CString::new(message.action_name.as_str()).unwrap_or_default();
+                let borrowed = RobotBusActionMessage {
+                    kind: kind.as_ptr() as *mut c_char,
+                    body: message.body.as_ptr() as *mut u8,
+                    body_len: message.body.len(),
+                    goal_id: goal_id.as_ptr() as *mut c_char,
+                    action_name: action_name.as_ptr() as *mut c_char,
+                };
+                if let Ok(target) = state.lock() {
+                    if let Some((callback, user)) = *target {
+                        unsafe { callback(&borrowed, user as *mut c_void) };
                     }
-                })
-                .collect();
-            let count = out.len();
-            let ptr = out.as_mut_ptr();
-            std::mem::forget(out);
+                }
+            }) as RawActionFeedbackCallback
+        });
+    match unsafe { &*c }
+        .inner
+        .send_goal(bytes, goal_id, timeout, feedback_callback)
+    {
+        Ok(inner) => {
             unsafe {
-                *out_msgs = ptr;
-                *out_count = count;
+                *out_handle = Box::into_raw(Box::new(RobotBusActionGoalHandle {
+                    inner,
+                    feedback: feedback_state,
+                }));
+            }
+            ok()
+        }
+        Err(e) => bus_err(e),
+    }
+}
+
+pub type RobotBusActionFeedbackCallback =
+    Option<unsafe extern "C" fn(message: *const RobotBusActionMessage, user: *mut c_void)>;
+
+#[unsafe(no_mangle)]
+pub extern "C" fn robot_bus_action_goal_handle_free(h: *mut RobotBusActionGoalHandle) {
+    if !h.is_null() {
+        unsafe {
+            let handle = Box::from_raw(h);
+            if let Some(feedback) = &handle.feedback {
+                if let Ok(mut target) = feedback.lock() {
+                    target.take();
+                }
+            }
+            drop(handle);
+        }
+    }
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn robot_bus_action_goal_handle_goal_id(
+    h: *const RobotBusActionGoalHandle,
+) -> *mut c_char {
+    if h.is_null() {
+        set_error("null action goal handle");
+        return ptr::null_mut();
+    }
+    clear_error();
+    dup_string(unsafe { &*h }.inner.goal_id())
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn robot_bus_action_goal_handle_action_name(
+    h: *const RobotBusActionGoalHandle,
+) -> *mut c_char {
+    if h.is_null() {
+        set_error("null action goal handle");
+        return ptr::null_mut();
+    }
+    clear_error();
+    dup_string(unsafe { &*h }.inner.action_name())
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn robot_bus_action_goal_handle_wait_result(
+    h: *mut RobotBusActionGoalHandle,
+    timeout_secs: f64,
+    out_msg: *mut RobotBusActionMessage,
+) -> c_int {
+    if h.is_null() || out_msg.is_null() {
+        return err("null argument");
+    }
+    let handle = unsafe { &*h }.inner.clone();
+    let result = if timeout_secs < 0.0 {
+        handle.wait_result()
+    } else {
+        let (tx, rx) = std::sync::mpsc::sync_channel(1);
+        std::thread::spawn(move || {
+            let _ = tx.send(handle.wait_result());
+        });
+        rx.recv_timeout(Duration::from_secs_f64(timeout_secs))
+            .map_err(|_| {
+                robot_bus::errors::BusError::Timeout(format!(
+                    "action result timed out after {timeout_secs}s"
+                ))
+            })
+            .and_then(|result| result)
+    };
+    match result {
+        Ok(message) => {
+            unsafe {
+                *out_msg = owned_action_message(&message);
             }
             ok()
         }
@@ -315,52 +434,21 @@ pub extern "C" fn robot_bus_action_client_send_goal(
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn robot_bus_action_client_cancel(
-    c: *mut RobotBusActionClient,
-    goal_id: *const c_char,
-    data: *const u8,
-    len: usize,
-    timeout_secs: f64,
-    out_msg: *mut RobotBusActionMessage,
-) -> c_int {
-    if c.is_null() || out_msg.is_null() {
-        return err("null argument");
+pub extern "C" fn robot_bus_action_goal_handle_cancel(h: *mut RobotBusActionGoalHandle) -> c_int {
+    if h.is_null() {
+        return err("null action goal handle");
     }
-    let goal_id = match cstr_req(goal_id) {
-        Ok(g) => g,
-        Err(e) => return e,
-    };
-    let bytes = match bytes_slice(data, len) {
-        Ok(b) => b,
-        Err(e) => return e,
-    };
-    let timeout = if timeout_secs < 0.0 {
-        None
-    } else {
-        Some(Duration::from_secs_f64(timeout_secs))
-    };
-    match unsafe { &*c }.inner.cancel(goal_id, bytes, timeout) {
-        Ok(m) => {
-            let (body, body_len) = dup_bytes(&m.body);
-            unsafe {
-                *out_msg = RobotBusActionMessage {
-                    kind: dup_string(action_kind_str(m.kind)),
-                    body,
-                    body_len,
-                    goal_id: dup_string(&m.goal_id),
-                    action_name: dup_string(&m.action_name),
-                };
-            }
-            ok()
-        }
+    match unsafe { &*h }.inner.cancel() {
+        Ok(()) => ok(),
         Err(e) => bus_err(e),
     }
 }
 
 // --- Callbacks --------------------------------------------------------------
 
-pub type RobotBusMsgCallback =
-    Option<unsafe extern "C" fn(topic: *const c_char, data: *const u8, len: usize, user: *mut c_void)>;
+pub type RobotBusMsgCallback = Option<
+    unsafe extern "C" fn(topic: *const c_char, data: *const u8, len: usize, user: *mut c_void),
+>;
 pub type RobotBusTimerCallback = Option<unsafe extern "C" fn(user: *mut c_void)>;
 pub type RobotBusServiceHandler = Option<
     unsafe extern "C" fn(
@@ -422,4 +510,3 @@ pub extern "C" fn robot_bus_action_phases_free(phases: *mut RobotBusActionPhase,
         drop(Vec::from_raw_parts(phases, count, count));
     }
 }
-

@@ -1,7 +1,7 @@
 //! Best-effort HTTP registration of pub/sub endpoints with the broker console topology.
 
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::thread;
 use std::time::Duration;
 
@@ -20,12 +20,7 @@ pub struct TopologyEndpointGuard {
 
 impl TopologyEndpointGuard {
     /// Register immediately and start a keep-alive refresh thread.
-    pub fn start(
-        console_url: Option<&str>,
-        node_name: &str,
-        kind: &str,
-        topic: &str,
-    ) -> Arc<Self> {
+    pub fn start(console_url: Option<&str>, node_name: &str, kind: &str, topic: &str) -> Arc<Self> {
         let endpoint_id = uuid::Uuid::new_v4().to_string();
         let console_owned = console_url.map(|s| s.to_string());
         post_register(

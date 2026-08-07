@@ -10,6 +10,40 @@ import org.junit.Test
 /** Typed pub-sub smoke against an ephemeral in-process broker (desktop native). */
 class TypedApiTest {
     @Test
+    fun actionGoalHandleStreamsFeedback() {
+        TestBus.start().use { bus ->
+            bus.makeNode("action-server").use { server ->
+                bus.makeNode("action-client").use { clientNode ->
+                    server.createActionServer(
+                        "/demo",
+                        ActionHandler { body ->
+                            listOf(
+                                ActionPhase("FEEDBACK", "step".toByteArray()),
+                                ActionPhase("RESULT", "done:${body.decodeToString()}".toByteArray()),
+                            )
+                        },
+                    )
+                    server.start()
+                    Thread.sleep(200)
+
+                    val feedback = AtomicReference<String?>()
+                    clientNode.createActionClient("/demo").use { client ->
+                        client.sendGoal("fly".toByteArray()) { message ->
+                            feedback.set(message.body.decodeToString())
+                        }.use { goal ->
+                            assertTrue(goal.goalId().isNotEmpty())
+                            assertEquals("done:fly", goal.result(3.0).body.decodeToString())
+                            assertEquals("step", feedback.get())
+                        }
+                    }
+                    server.shutdown()
+                    server.waitForShutdown()
+                }
+            }
+        }
+    }
+
+    @Test
     fun typedPubSubAgainstBroker() {
         TestBus.start().use { bus ->
             bus.makeNode("typed-pubsub").use { node ->

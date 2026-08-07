@@ -90,9 +90,11 @@ impl ActionMetrics {
     /// RESULT (success path) — decrement active, update EWMA duration.
     pub fn record_run_ok(&self, name: &str, goal_id: &[u8]) {
         let c = self.counters(name);
-        let _ = c.active.fetch_update(Ordering::Relaxed, Ordering::Relaxed, |v| {
-            Some(v.saturating_sub(1))
-        });
+        let _ = c
+            .active
+            .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |v| {
+                Some(v.saturating_sub(1))
+            });
         Self::touch(&c);
         let started = {
             let mut pending = self.pending.lock().unwrap_or_else(|e| e.into_inner());
@@ -121,9 +123,11 @@ impl ActionMetrics {
                 pending.remove(gid).is_some()
             };
             if had {
-                let _ = c.active.fetch_update(Ordering::Relaxed, Ordering::Relaxed, |v| {
-                    Some(v.saturating_sub(1))
-                });
+                let _ = c
+                    .active
+                    .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |v| {
+                        Some(v.saturating_sub(1))
+                    });
             }
         }
     }

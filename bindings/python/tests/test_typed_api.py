@@ -5,6 +5,8 @@ from __future__ import annotations
 from google.protobuf import wrappers_pb2
 
 from robot_bus._typed import (
+    TypedActionClient,
+    TypedActionGoalHandle,
     TypedServiceClient,
     TypedTopicPublisher,
     _decode,
@@ -31,6 +33,32 @@ class _FakeServiceClient:
         req = BoolValue()
         req.ParseFromString(body)
         return StringValue(value=f"ok:{req.value}").SerializeToString()
+
+
+class _FakeActionGoalHandle:
+    goal_id = "goal-1"
+    action_name = "typed-action"
+
+    def result(self, timeout=None) -> bytes:
+        return StringValue(value="done").SerializeToString()
+
+    def cancel(self) -> None:
+        self.cancelled = True
+
+
+class _FakeActionClient:
+    action_name = "typed-action"
+
+    def send_goal(
+        self, body, goal_id=None, timeout=None, feedback_callback=None
+    ):
+        goal = BoolValue()
+        goal.ParseFromString(body)
+        if feedback_callback is not None:
+            feedback_callback(
+                StringValue(value=f"step:{goal.value}").SerializeToString()
+            )
+        return _FakeActionGoalHandle()
 
 
 class _RawNode:
@@ -76,6 +104,21 @@ def test_typed_service_client_roundtrip() -> None:
     client = TypedServiceClient(_FakeServiceClient(), BoolValue, StringValue)
     resp = client.call(BoolValue(value=True), timeout=1.0)
     assert resp.value == "ok:True"
+
+
+def test_typed_action_goal_handle_roundtrip() -> None:
+    client = TypedActionClient(
+        _FakeActionClient(), BoolValue, StringValue, StringValue
+    )
+    feedback: list[str] = []
+    goal = client.send_goal(
+        BoolValue(value=True),
+        feedback_callback=lambda msg: feedback.append(msg.value),
+    )
+    assert isinstance(goal, TypedActionGoalHandle)
+    assert goal.goal_id == "goal-1"
+    assert feedback == ["step:True"]
+    assert goal.result(timeout=1.0).value == "done"
 
 
 def test_install_typed_node_api_publisher_and_subscription() -> None:
@@ -129,6 +172,7 @@ if __name__ == "__main__":
     test_typed_topic_publisher_roundtrip()
     test_typed_topic_publisher_rejects_wrong_type()
     test_typed_service_client_roundtrip()
+    test_typed_action_goal_handle_roundtrip()
     test_install_typed_node_api_publisher_and_subscription()
     test_install_typed_node_api_service()
     print("python typed api smoke ok")

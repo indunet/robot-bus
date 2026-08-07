@@ -16,7 +16,7 @@ use std::sync::Arc;
 use anyhow::{Context, Result};
 use axum::Router;
 use axum::body::Body;
-use axum::http::{header, StatusCode, Uri};
+use axum::http::{StatusCode, Uri, header};
 use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post};
 use rust_embed::Embed;
@@ -54,8 +54,8 @@ pub async fn serve_with_shutdown(
         .with_state(state);
 
     if !cors_origins.is_empty() {
-        use tower_http::cors::{AllowOrigin, CorsLayer};
         use axum::http::{HeaderValue, Method};
+        use tower_http::cors::{AllowOrigin, CorsLayer};
         let origins: Vec<HeaderValue> = cors_origins
             .iter()
             .filter_map(|o| HeaderValue::from_str(o).ok())
@@ -64,11 +64,7 @@ pub async fn serve_with_shutdown(
             let cors = CorsLayer::new()
                 .allow_origin(AllowOrigin::list(origins))
                 .allow_methods([Method::GET, Method::POST, Method::OPTIONS])
-                .allow_headers([
-                    header::CONTENT_TYPE,
-                    header::ACCEPT,
-                    header::AUTHORIZATION,
-                ]);
+                .allow_headers([header::CONTENT_TYPE, header::ACCEPT, header::AUTHORIZATION]);
             app = app.layer(cors);
             log::info!("robot_bus console CORS allowlist: {cors_origins:?}");
         }
@@ -134,9 +130,8 @@ fn try_asset(path: &str) -> Option<Response> {
 }
 
 fn asset_response(path: &str) -> Response {
-    try_asset(path).unwrap_or_else(|| {
-        (StatusCode::NOT_FOUND, "console asset not found").into_response()
-    })
+    try_asset(path)
+        .unwrap_or_else(|| (StatusCode::NOT_FOUND, "console asset not found").into_response())
 }
 
 #[cfg(test)]

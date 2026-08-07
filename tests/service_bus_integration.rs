@@ -3,16 +3,16 @@
 //! Each test spins up a real broker (in-process, ephemeral ports) plus a
 //! client (REQ) and worker(s) (DEALER), then verifies end-to-end routing.
 
-use robot_bus::broker::service_bus::ServiceBusConfig;
 use robot_bus::RobotBusBroker;
-use std::sync::atomic::{AtomicBool, Ordering};
+use robot_bus::broker::service_bus::ServiceBusConfig;
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::thread;
 use std::time::Duration;
 use zmq::{Context as ZmqContext, SocketType};
 
 mod support;
-use support::{ephemeral_robot_bus_config, lock_brokers, BrokerLockGuard};
+use support::{BrokerLockGuard, ephemeral_robot_bus_config, lock_brokers};
 
 /// Spawn all buses via [`RobotBusBroker::start`]; expose service endpoints.
 struct BrokerHandle {
@@ -107,10 +107,7 @@ impl Drop for WorkerHandle {
 /// Send a request and wait for a reply (with timeout).
 fn request_reply(client: &zmq::Socket, svc: &str, req_id: &str, body: &str) -> Vec<Vec<u8>> {
     client
-        .send_multipart(
-            [svc.as_bytes(), req_id.as_bytes(), body.as_bytes()],
-            0,
-        )
+        .send_multipart([svc.as_bytes(), req_id.as_bytes(), body.as_bytes()], 0)
         .expect("client send");
     client.set_rcvtimeo(2000).expect("set rcvtimeo");
     client.recv_multipart(0).expect("client recv")
@@ -264,13 +261,23 @@ fn client_timeout_then_second_call_ok() {
     // No worker initially — call with short timeout, then register worker and retry.
     let client = ServiceClient::new(Some(&broker.frontend_ep)).expect("client");
     let err = client
-        .call("svc.late", b"x", Some("t1"), Some(StdDuration::from_millis(200)))
+        .call(
+            "svc.late",
+            b"x",
+            Some("t1"),
+            Some(StdDuration::from_millis(200)),
+        )
         .expect_err("expected timeout");
     assert!(matches!(err, robot_bus::BusError::Timeout(_)), "{err:?}");
 
     let _worker = spawn_worker(&broker.backend_ep, "svc.late", "OK");
     let reply = client
-        .call("svc.late", b"y", Some("t2"), Some(StdDuration::from_secs(2)))
+        .call(
+            "svc.late",
+            b"y",
+            Some("t2"),
+            Some(StdDuration::from_secs(2)),
+        )
         .expect("second call after timeout");
     assert_eq!(reply, b"OK:y");
 }

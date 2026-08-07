@@ -88,4 +88,94 @@ describe("inproc shared Context", () => {
       broker.stop();
     }
   });
+
+  it("returns an action handle and streams feedback", async () => {
+    const native = await tryLoadNative();
+    if (!native?.Context || !native.RobotBusBroker || !native.Node) {
+      return;
+    }
+
+    const ctx = new native.Context();
+    const broker = native.RobotBusBroker.start(
+      {
+        messageXsubBind: `tcp://127.0.0.1:${await freePort()}`,
+        messageXpubBind: `tcp://127.0.0.1:${await freePort()}`,
+        serviceFrontendBind: `tcp://127.0.0.1:${await freePort()}`,
+        serviceBackendBind: `tcp://127.0.0.1:${await freePort()}`,
+        actionFrontendBind: `tcp://127.0.0.1:${await freePort()}`,
+        actionBackendBind: `tcp://127.0.0.1:${await freePort()}`,
+        grpcListen: `127.0.0.1:${await freePort()}`,
+        tcpOnly: false,
+        noConsole: true,
+      },
+      ctx,
+    );
+
+    const server = native.Node.inprocWithContext(ctx, "inproc-action-server");
+    try {
+      server.createActionServer("/inproc/action", (...args: Array<Buffer | null>) => {
+        const payload = args.at(-1);
+        assert.ok(payload);
+        if (payload.length === 1) {
+          return [
+            { phase: "FEEDBACK", body: Buffer.from([payload[0] + 1]) },
+            { phase: "RESULT", body: Buffer.from([payload[0] + 2]) },
+          ];
+        }
+        return [
+          { phase: "FEEDBACK", body: Buffer.from(`step:${payload.toString()}`) },
+          { phase: "RESULT", body: Buffer.from(`done:${payload.toString()}`) },
+        ];
+      });
+      server.start();
+      await sleep(150);
+
+      const feedback: string[] = [];
+      const clientNode = native.Node.inprocWithContext(ctx, "inproc-action-client");
+      const client = clientNode.createActionClient("/inproc/action");
+      const handle = client.sendGoal(Buffer.from("fly"), {
+        goalId: "native-goal-1",
+        timeoutSeconds: 5,
+        onFeedback: (event) => feedback.push(event.body.toString()),
+      });
+
+      assert.equal(handle.goalId, "native-goal-1");
+      assert.equal(handle.actionName, "/inproc/action");
+      const resultPromise = handle.result();
+      assert.ok(resultPromise instanceof Promise);
+
+      const result = await resultPromise;
+      assert.equal(result.kind, "RESULT");
+      assert.equal(result.body.toString(), "done:fly");
+      assert.deepEqual(feedback, ["step:fly"]);
+
+      const { Node } = await import("../src/index.node.js");
+      const byteType = {
+        typeName: "test.Byte",
+        create: (value: Partial<{ value: number }> = {}) => ({
+          value: value.value ?? 0,
+        }),
+        toBinary: (value: { value: number }) => new Uint8Array([value.value]),
+        fromBinary: (bytes: Uint8Array) => ({ value: bytes[0] }),
+      };
+      const typedFeedback: number[] = [];
+      const typedClient = new Node(clientNode).createActionClient(
+        "/inproc/action",
+        byteType,
+        byteType,
+        byteType,
+      );
+      const typedHandle = typedClient.sendGoal(
+        { value: 7 },
+        { onFeedback: (value) => typedFeedback.push(value.value) },
+      );
+      const typedResult = await typedHandle.result();
+      assert.deepEqual(typedFeedback, [8]);
+      assert.deepEqual(typedResult, { value: 9 });
+    } finally {
+      server.stop();
+      server.wait();
+      broker.stop();
+    }
+  });
 });

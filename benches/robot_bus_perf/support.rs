@@ -231,7 +231,9 @@ pub fn write_report(results: &[ScenarioResult], env_lines: &[String]) -> std::io
     md.push('\n');
 
     md.push_str("## 方法\n\n");
-    md.push_str("- 进程内 `RobotBusBroker`，`bind_all_transports = true`（tcp + ipc + inproc + grpc）。\n");
+    md.push_str(
+        "- 进程内 `RobotBusBroker`，`bind_all_transports = true`（tcp + ipc + inproc + grpc）。\n",
+    );
     md.push_str("- Console HTTP 关闭；message HWM=2048（仅 bench）；service/action HWM=64。\n");
     md.push_str("- Payload：64 字节 raw（前 8 字节为发送端 Unix 纳秒时间戳，用于延迟）。\n");
     md.push_str(&format!(
@@ -248,8 +250,12 @@ pub fn write_report(results: &[ScenarioResult], env_lines: &[String]) -> std::io
         env_usize("ROBOT_BUS_PERF_SVC_ITERS", 10_000),
         env_usize("ROBOT_BUS_PERF_ACT_ITERS", 5_000),
     ));
-    md.push_str("- ZMQ：共享 `Context` + `Node::tcp` / `ipc` / `inproc`；gRPC：`Node::grpc_at`。\n");
-    md.push_str("- inproc 与嵌入式 broker 必须共用同一 `Context`（ZeroMQ inproc 是 context-local）。\n");
+    md.push_str(
+        "- ZMQ：共享 `Context` + `Node::tcp` / `ipc` / `inproc`；gRPC：`Node::grpc_at`。\n",
+    );
+    md.push_str(
+        "- inproc 与嵌入式 broker 必须共用同一 `Context`（ZeroMQ inproc 是 context-local）。\n",
+    );
     md.push_str("- 指标为单机本机回环，机器相关，不作为 CI 门槛。\n\n");
 
     md.push_str("## 横比\n\n");
@@ -281,7 +287,7 @@ pub fn write_report(results: &[ScenarioResult], env_lines: &[String]) -> std::io
         cell_rpc(results, "tcp", "action send_goal"),
         cell_rpc(results, "ipc", "action send_goal"),
         cell_rpc(results, "inproc", "action send_goal"),
-        cell_rpc(results, "grpc", "action Run"),
+        cell_rpc(results, "grpc", "action SendGoal"),
     ));
 
     for group in ["tcp", "ipc", "inproc", "grpc"] {
@@ -327,7 +333,11 @@ pub fn write_report(results: &[ScenarioResult], env_lines: &[String]) -> std::io
     Ok(path)
 }
 
-fn find<'a>(results: &'a [ScenarioResult], transport: &str, scenario: &str) -> Option<&'a ScenarioResult> {
+fn find<'a>(
+    results: &'a [ScenarioResult],
+    transport: &str,
+    scenario: &str,
+) -> Option<&'a ScenarioResult> {
     results
         .iter()
         .find(|r| r.transport == transport && r.scenario == scenario)
@@ -345,7 +355,10 @@ fn cell_sub(results: &[ScenarioResult], transport: &str, scenario: &str) -> Stri
     match find(results, transport, scenario) {
         Some(r) if r.note.is_some() => "—".into(),
         Some(r) if r.kind == ScenarioKind::Message => {
-            format!("{:.0}/s ({:.1}% delivered)", r.subscribe_per_s, r.delivery_pct)
+            format!(
+                "{:.0}/s ({:.1}% delivered)",
+                r.subscribe_per_s, r.delivery_pct
+            )
         }
         Some(r) => format!("{:.0}/s ({:.0}%)", r.subscribe_per_s, r.delivery_pct),
         None => "—".into(),
@@ -434,11 +447,7 @@ fn sysctl_string(key: &str) -> Option<String> {
         return None;
     }
     let v = String::from_utf8_lossy(&out.stdout).trim().to_string();
-    if v.is_empty() {
-        None
-    } else {
-        Some(v)
-    }
+    if v.is_empty() { None } else { Some(v) }
 }
 
 fn sysctl_u64(key: &str) -> Option<u64> {

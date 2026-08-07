@@ -6,10 +6,8 @@ use std::sync::Arc;
 use std::thread;
 use std::time::Duration;
 
+use robot_bus::action::v1::{Fibonacci, FibonacciFeedback, FibonacciGoal, FibonacciResult};
 use robot_bus::action_bus::ActionKind;
-use robot_bus::action::v1::{
-    Fibonacci, FibonacciFeedback, FibonacciGoal, FibonacciResult,
-};
 use robot_bus::std_srvs::srv::v1::{SetBool, SetBoolRequest, SetBoolResponse};
 use robot_bus::{ActionOutcome, Node, NodeOptions, RobotBusBroker, SingleThreadedExecutor};
 use support::{ephemeral_robot_bus_config, lock_brokers};
@@ -39,11 +37,7 @@ fn node_service_client_echo_raw() {
         executor.add_node(&mut server).expect("add server");
 
         server
-            .create_service_raw(
-                "echo",
-                Arc::new(|body| [b"echo:", body].concat()),
-                None,
-            )
+            .create_service_raw("echo", Arc::new(|body| [b"echo:", body].concat()), None)
             .expect("create_service_raw");
 
         let client = client_node
@@ -97,10 +91,7 @@ fn node_service_client_set_bool_typed() {
         thread::spawn(move || {
             thread::sleep(Duration::from_millis(150));
             let resp = client
-                .call(
-                    &SetBoolRequest { data: true },
-                    Some(Duration::from_secs(5)),
-                )
+                .call(&SetBoolRequest { data: true }, Some(Duration::from_secs(5)))
                 .expect("call");
             assert!(resp.success);
             assert_eq!(resp.message, "set:true");
@@ -145,14 +136,33 @@ fn node_action_client_goal_raw() {
 
         thread::spawn(move || {
             thread::sleep(Duration::from_millis(150));
-            let messages = client
-                .send_goal(b"fly", None, Some(Duration::from_secs(10)))
+            let feedbacks = Arc::new(std::sync::Mutex::new(Vec::new()));
+            let callback_feedbacks = Arc::clone(&feedbacks);
+            let goal = client
+                .send_goal(
+                    b"fly",
+                    None,
+                    Some(Duration::from_secs(10)),
+                    Some(Arc::new(move |message: &robot_bus::ActionMessage| {
+                        callback_feedbacks
+                            .lock()
+                            .expect("feedback mutex")
+                            .push(message.body.clone());
+                    })),
+                )
                 .expect("send_goal");
+            assert_eq!(goal.action_name(), "demo");
+            assert!(!goal.goal_id().is_empty());
+            let messages = goal.collect().expect("collect");
             assert_eq!(messages.len(), 2);
             assert_eq!(messages[0].kind, ActionKind::Feedback);
             assert_eq!(messages[0].body, b"step-1");
             assert_eq!(messages[1].kind, ActionKind::Result);
             assert_eq!(messages[1].body, b"done:fly");
+            assert_eq!(
+                *feedbacks.lock().expect("feedback mutex"),
+                vec![b"step-1".to_vec()]
+            );
             handle.shutdown();
         });
 
@@ -211,7 +221,11 @@ fn node_action_client_fibonacci_typed() {
         thread::spawn(move || {
             thread::sleep(Duration::from_millis(150));
             let outcome = client
-                .send_goal(&FibonacciGoal { order: 5 }, None, Some(Duration::from_secs(10)))
+                .send_goal_and_wait(
+                    &FibonacciGoal { order: 5 },
+                    None,
+                    Some(Duration::from_secs(10)),
+                )
                 .expect("send_goal");
             assert_eq!(outcome.result.sequence, vec![0, 1, 1, 2, 3]);
             assert!(!outcome.feedbacks.is_empty());

@@ -128,7 +128,7 @@ pub fn builder_from_yaml(path: impl AsRef<Path>) -> Result<Ros2BridgeBuilder> {
         other => {
             return Err(BusError::Protocol(format!(
                 "robot_bus.transport must be tcp | ipc | discover, got {other:?}"
-            )))
+            )));
         }
     };
 

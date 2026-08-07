@@ -159,7 +159,7 @@ function layoutProcessNodes(
     return {
       id: p.id,
       type: 'process',
-      position: prevPos.get(p.id) ?? { x: 40 + col * 280, y: 36 + row * 190 },
+      position: prevPos.get(p.id) ?? { x: 40 + col * 350, y: 36 + row * 190 },
       data: {
         label: p.label,
         inputs: p.inputs,
@@ -204,7 +204,7 @@ const ProcessNode = memo(function ProcessNode({ data }: NodeProps) {
 
   return (
     <div
-      className="relative w-[218px] overflow-hidden border border-bus-cyan/45 bg-[#12171b]/95 shadow-[0_10px_30px_rgba(0,0,0,0.35)] text-bus-text font-mono"
+      className="relative w-[286px] overflow-hidden border border-bus-cyan/45 bg-[#12171b]/95 shadow-[0_10px_30px_rgba(0,0,0,0.35)] text-bus-text font-mono"
       style={{
         clipPath:
           'polygon(0 0, calc(100% - 12px) 0, 100% 12px, 100% 100%, 8px 100%, 0 calc(100% - 8px))',
@@ -238,7 +238,7 @@ const ProcessNode = memo(function ProcessNode({ data }: NodeProps) {
           {d.inputs.map((p) => (
             <div
               key={`in-${p.topic}`}
-              className="relative mx-1.5 flex min-h-[28px] items-center border-l-2 border-bus-green/35 bg-white/[0.025] py-1 pl-2 pr-1.5"
+              className="relative mx-1.5 grid min-h-[26px] grid-cols-[minmax(0,1fr)_96px_34px] items-center gap-2 border-l-2 border-bus-green/35 bg-white/[0.025] py-1 pl-2 pr-1.5"
             >
               <Handle
                 type="target"
@@ -247,17 +247,13 @@ const ProcessNode = memo(function ProcessNode({ data }: NodeProps) {
                 className="!-left-[11px] !h-2 !w-2 !border !border-[#0e1012] !bg-bus-green"
                 title={p.topic}
               />
-              <div className="min-w-0 flex-1">
-                <div className="truncate text-[10px] font-medium text-bus-text" title={p.topic}>
-                  {shortTopic(p.topic)}
-                </div>
-                {p.typeName && (
-                  <div className="truncate text-[8px] text-[#647786]" title={p.typeName}>
-                    {p.typeName}
-                  </div>
-                )}
+              <div className="truncate text-[10px] font-medium text-bus-text" title={p.topic}>
+                {shortTopic(p.topic)}
               </div>
-              <span className="ml-1 shrink-0 text-[8px] tabular-nums text-bus-muted">
+              <div className="truncate text-[8px] text-[#647786]" title={p.typeName}>
+                {p.typeName ?? '—'}
+              </div>
+              <span className="text-right text-[8px] tabular-nums text-bus-muted">
                 {Math.round(p.msgPerSec ?? 0)}/s
               </span>
             </div>
@@ -273,21 +269,17 @@ const ProcessNode = memo(function ProcessNode({ data }: NodeProps) {
           {d.outputs.map((p) => (
             <div
               key={`out-${p.topic}`}
-              className="relative mx-1.5 flex min-h-[28px] items-center justify-end border-r-2 border-bus-cyan/35 bg-bus-cyan/[0.035] py-1 pl-1.5 pr-2"
+              className="relative mx-1.5 grid min-h-[26px] grid-cols-[minmax(0,1fr)_96px_34px] items-center gap-2 border-r-2 border-bus-cyan/35 bg-bus-cyan/[0.035] py-1 pl-1.5 pr-2"
             >
-              <span className="mr-1 shrink-0 text-[8px] tabular-nums text-bus-muted">
+              <div className="truncate text-[10px] font-medium text-bus-cyan" title={p.topic}>
+                {shortTopic(p.topic)}
+              </div>
+              <div className="truncate text-[8px] text-[#647786]" title={p.typeName}>
+                {p.typeName ?? '—'}
+              </div>
+              <span className="text-right text-[8px] tabular-nums text-bus-muted">
                 {Math.round(p.msgPerSec ?? 0)}/s
               </span>
-              <div className="min-w-0 flex-1 text-right">
-                <div className="truncate text-[10px] font-medium text-bus-cyan" title={p.topic}>
-                  {shortTopic(p.topic)}
-                </div>
-                {p.typeName && (
-                  <div className="truncate text-[8px] text-[#647786]" title={p.typeName}>
-                    {p.typeName}
-                  </div>
-                )}
-              </div>
               <Handle
                 type="source"
                 position={Position.Right}

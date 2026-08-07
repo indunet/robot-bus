@@ -4,9 +4,9 @@
 //! `start` uses per-bus [`run_with_shutdown`](super::service_bus::run_with_shutdown) and does
 //! **not** install a process-wide Ctrl+C handler (unlike the blocking `run` helpers).
 
-use anyhow::{anyhow, Context, Result};
-use std::sync::atomic::{AtomicBool, Ordering};
+use anyhow::{Context, Result, anyhow};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::thread::{self, JoinHandle};
 use std::time::Duration;
 use zmq::Context as ZmqContext;
@@ -15,17 +15,19 @@ use super::action_bus::{self, ActionBusConfig, ActionMetrics};
 use super::message_bus::{self, BusConfig, MessageMetrics};
 use super::service_bus::{self, ServiceBusConfig, ServiceMetrics};
 use crate::discovery::{
-    resolve_advertise_host, spawn_announcer, tcp_port_from_bind, AnnounceHandle,
-    AnnouncerPayload, BrokerAnnouncement, DiscoveryConfig,
+    AnnounceHandle, AnnouncerPayload, BrokerAnnouncement, DiscoveryConfig, resolve_advertise_host,
+    spawn_announcer, tcp_port_from_bind,
 };
 use crate::generated::robot_bus_interface::msg::v1::TcpPorts;
 use crate::runtime::Context as BusContext;
 use crate::transports::IPC_DIR;
 
-#[cfg(feature = "grpc")]
-use crate::grpc::{serve_on_listener, GatewayConfig};
 #[cfg(feature = "console")]
-use crate::console::{serve_with_shutdown as serve_console_with_shutdown, BrokerEndpoints, ConsoleState};
+use crate::console::{
+    BrokerEndpoints, ConsoleState, serve_with_shutdown as serve_console_with_shutdown,
+};
+#[cfg(feature = "grpc")]
+use crate::grpc::{GatewayConfig, serve_on_listener};
 #[cfg(any(feature = "grpc", feature = "console"))]
 use std::net::SocketAddr;
 
@@ -473,8 +475,7 @@ impl RobotBusBroker {
         let (service_metrics, action_metrics) = (None, None);
         let service =
             ServiceBusBroker::start_with_zmq(zmq.clone(), config.service.clone(), service_metrics)?;
-        let action =
-            ActionBusBroker::start_with_zmq(zmq, config.action.clone(), action_metrics)?;
+        let action = ActionBusBroker::start_with_zmq(zmq, config.action.clone(), action_metrics)?;
 
         #[cfg(feature = "grpc")]
         let grpc = {
@@ -535,13 +536,17 @@ impl RobotBusBroker {
                 message_xpub: tcp_port_from_bind(&config.message.xpub_bind)
                     .unwrap_or(crate::transports::XPUB_PORT) as u32,
                 service_frontend: tcp_port_from_bind(&config.service.frontend_bind)
-                    .unwrap_or(crate::transports::SERVICE_FRONTEND_PORT) as u32,
+                    .unwrap_or(crate::transports::SERVICE_FRONTEND_PORT)
+                    as u32,
                 service_backend: tcp_port_from_bind(&config.service.backend_bind)
-                    .unwrap_or(crate::transports::SERVICE_BACKEND_PORT) as u32,
+                    .unwrap_or(crate::transports::SERVICE_BACKEND_PORT)
+                    as u32,
                 action_frontend: tcp_port_from_bind(&config.action.frontend_bind)
-                    .unwrap_or(crate::transports::ACTION_FRONTEND_PORT) as u32,
+                    .unwrap_or(crate::transports::ACTION_FRONTEND_PORT)
+                    as u32,
                 action_backend: tcp_port_from_bind(&config.action.backend_bind)
-                    .unwrap_or(crate::transports::ACTION_BACKEND_PORT) as u32,
+                    .unwrap_or(crate::transports::ACTION_BACKEND_PORT)
+                    as u32,
             };
             let grpc_url = {
                 #[cfg(feature = "grpc")]
@@ -585,11 +590,8 @@ impl RobotBusBroker {
                 console_url,
             };
             Some(
-                spawn_announcer(
-                    config.discovery.clone(),
-                    AnnouncerPayload { announcement },
-                )
-                .map_err(|e| anyhow!("start discovery announcer: {e}"))?,
+                spawn_announcer(config.discovery.clone(), AnnouncerPayload { announcement })
+                    .map_err(|e| anyhow!("start discovery announcer: {e}"))?,
             )
         } else {
             None

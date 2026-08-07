@@ -11,22 +11,22 @@ mod listen;
 mod net;
 mod packet;
 
-pub use announce::{spawn_announcer, AnnounceHandle, AnnouncerPayload};
 pub use announce::resolve_advertise_host;
+pub use announce::{AnnounceHandle, AnnouncerPayload, spawn_announcer};
 pub use config::{
-    DiscoveryConfig, DiscoverOpts, DEFAULT_DISCOVERY_INTERVAL, DEFAULT_DISCOVERY_PORT,
-    DEFAULT_DISCOVERY_TIMEOUT, DEFAULT_MULTICAST_ADDR, MAGIC, SCHEMA_VERSION,
+    DEFAULT_DISCOVERY_INTERVAL, DEFAULT_DISCOVERY_PORT, DEFAULT_DISCOVERY_TIMEOUT,
+    DEFAULT_MULTICAST_ADDR, DiscoverOpts, DiscoveryConfig, MAGIC, SCHEMA_VERSION,
 };
 pub use listen::wait;
 pub use net::tcp_port_from_bind;
-pub use packet::{decode_announce, encode_announce, try_parse_datagram, BrokerAnnouncement};
+pub use packet::{BrokerAnnouncement, decode_announce, encode_announce, try_parse_datagram};
 
 use crate::errors::{BusError, Result};
 use crate::runtime::NodeOptions;
 use crate::transports::{
-    ipc_endpoint_in, inproc_endpoint_with_prefix, tcp_endpoint, ACTION_BACKEND_CHANNEL,
-    ACTION_FRONTEND_CHANNEL, SERVICE_BACKEND_CHANNEL, SERVICE_FRONTEND_CHANNEL, XPUB_CHANNEL,
-    XSUB_CHANNEL,
+    ACTION_BACKEND_CHANNEL, ACTION_FRONTEND_CHANNEL, SERVICE_BACKEND_CHANNEL,
+    SERVICE_FRONTEND_CHANNEL, XPUB_CHANNEL, XSUB_CHANNEL, inproc_endpoint_with_prefix,
+    ipc_endpoint_in, tcp_endpoint,
 };
 
 impl BrokerAnnouncement {
@@ -54,9 +54,10 @@ impl BrokerAnnouncement {
     }
 
     fn apply_tcp(&self, opts: &mut NodeOptions) -> Result<()> {
-        let tcp = self.tcp.as_ref().ok_or_else(|| {
-            BusError::Protocol("discovery announce missing tcp ports".into())
-        })?;
+        let tcp = self
+            .tcp
+            .as_ref()
+            .ok_or_else(|| BusError::Protocol("discovery announce missing tcp ports".into()))?;
         opts.host = self.advertise_host.clone();
         if opts.message_xsub.is_none() {
             opts.message_xsub = Some(tcp_endpoint(
@@ -137,8 +138,10 @@ impl BrokerAnnouncement {
             opts.message_xpub = Some(inproc_endpoint_with_prefix(prefix, XPUB_CHANNEL));
         }
         if opts.service_frontend.is_none() {
-            opts.service_frontend =
-                Some(inproc_endpoint_with_prefix(prefix, SERVICE_FRONTEND_CHANNEL));
+            opts.service_frontend = Some(inproc_endpoint_with_prefix(
+                prefix,
+                SERVICE_FRONTEND_CHANNEL,
+            ));
         }
         if opts.service_backend.is_none() {
             opts.service_backend =
@@ -149,16 +152,16 @@ impl BrokerAnnouncement {
                 Some(inproc_endpoint_with_prefix(prefix, ACTION_FRONTEND_CHANNEL));
         }
         if opts.action_backend.is_none() {
-            opts.action_backend =
-                Some(inproc_endpoint_with_prefix(prefix, ACTION_BACKEND_CHANNEL));
+            opts.action_backend = Some(inproc_endpoint_with_prefix(prefix, ACTION_BACKEND_CHANNEL));
         }
         Ok(())
     }
 
     fn apply_grpc(&self, opts: &mut NodeOptions) -> Result<()> {
-        let url = self.grpc_url.as_deref().ok_or_else(|| {
-            BusError::Protocol("discovery announce has no grpc_url".into())
-        })?;
+        let url = self
+            .grpc_url
+            .as_deref()
+            .ok_or_else(|| BusError::Protocol("discovery announce has no grpc_url".into()))?;
         if opts.grpc_url.is_none() {
             opts.grpc_url = Some(url.to_string());
         }
@@ -167,9 +170,8 @@ impl BrokerAnnouncement {
 }
 
 fn port_u16(port: u32, name: &str) -> Result<u16> {
-    u16::try_from(port).map_err(|_| {
-        BusError::Protocol(format!("discovery announce invalid {name} port {port}"))
-    })
+    u16::try_from(port)
+        .map_err(|_| BusError::Protocol(format!("discovery announce invalid {name} port {port}")))
 }
 
 impl NodeOptions {

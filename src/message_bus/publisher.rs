@@ -5,9 +5,7 @@ use zmq::{Context as ZmqContext, Socket, SocketType};
 use crate::errors::Result;
 use crate::runtime::Context;
 use crate::transports;
-use crate::zmq_helpers::{
-    apply_publisher_options_with, wait_for_connection, HighWaterMark,
-};
+use crate::zmq_helpers::{HighWaterMark, apply_publisher_options_with, wait_for_connection};
 
 pub struct Publisher {
     endpoint: String,
@@ -74,8 +72,7 @@ impl Publisher {
     }
 
     pub fn publish(&self, topic: &str, payload: &[u8]) -> Result<()> {
-        self.socket
-            .send_multipart([topic.as_bytes(), payload], 0)?;
+        self.socket.send_multipart([topic.as_bytes(), payload], 0)?;
         Ok(())
     }
 }

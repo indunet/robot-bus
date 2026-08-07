@@ -26,6 +26,7 @@ typedef struct RobotBusCallbackGroup RobotBusCallbackGroup;
 typedef struct RobotBusTopicPublisher RobotBusTopicPublisher;
 typedef struct RobotBusServiceClient RobotBusServiceClient;
 typedef struct RobotBusActionClient RobotBusActionClient;
+typedef struct RobotBusActionGoalHandle RobotBusActionGoalHandle;
 typedef struct RobotBusNode RobotBusNode;
 typedef struct RobotBusSingleThreadedExecutor RobotBusSingleThreadedExecutor;
 typedef struct RobotBusMultiThreadedExecutor RobotBusMultiThreadedExecutor;
@@ -151,6 +152,11 @@ typedef int (*RobotBusServiceHandler)(const uint8_t *data, size_t len, uint8_t *
 typedef int (*RobotBusActionHandler)(const uint8_t *data, size_t len,
                                      RobotBusActionPhase **out_phases, size_t *out_count,
                                      void *user);
+/**
+ * Called synchronously on the goal's receive thread for each FEEDBACK event.
+ * The message and its fields are borrowed and valid only for the duration of the callback.
+ */
+typedef void (*RobotBusActionFeedbackCallback)(const RobotBusActionMessage *message, void *user);
 
 ROBOT_BUS_API const char *robot_bus_last_error(void);
 ROBOT_BUS_API void robot_bus_free_string(char *s);
@@ -205,12 +211,16 @@ ROBOT_BUS_API char *robot_bus_action_client_action_name(const RobotBusActionClie
 ROBOT_BUS_API int robot_bus_action_client_send_goal(RobotBusActionClient *c, const uint8_t *data,
                                                     size_t len, const char *goal_id,
                                                     double timeout_secs,
-                                                    RobotBusActionMessage **out_msgs,
-                                                    size_t *out_count);
-ROBOT_BUS_API int robot_bus_action_client_cancel(RobotBusActionClient *c, const char *goal_id,
-                                                 const uint8_t *data, size_t len,
-                                                 double timeout_secs,
-                                                 RobotBusActionMessage *out_msg);
+                                                    RobotBusActionFeedbackCallback feedback,
+                                                    void *user,
+                                                    RobotBusActionGoalHandle **out_handle);
+ROBOT_BUS_API void robot_bus_action_goal_handle_free(RobotBusActionGoalHandle *h);
+ROBOT_BUS_API char *robot_bus_action_goal_handle_goal_id(const RobotBusActionGoalHandle *h);
+ROBOT_BUS_API char *robot_bus_action_goal_handle_action_name(const RobotBusActionGoalHandle *h);
+ROBOT_BUS_API int robot_bus_action_goal_handle_wait_result(RobotBusActionGoalHandle *h,
+                                                           double timeout_secs,
+                                                           RobotBusActionMessage *out_msg);
+ROBOT_BUS_API int robot_bus_action_goal_handle_cancel(RobotBusActionGoalHandle *h);
 
 ROBOT_BUS_API RobotBusContext *robot_bus_context_new(void);
 ROBOT_BUS_API void robot_bus_context_free(RobotBusContext *c);

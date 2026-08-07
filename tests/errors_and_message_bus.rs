@@ -2,7 +2,7 @@ mod support;
 
 use std::time::Duration;
 
-use robot_bus::errors::{parse_error_body, BusError};
+use robot_bus::errors::{BusError, parse_error_body};
 use robot_bus::message_bus::{Publisher, Subscriber};
 use support::MessageProxy;
 
@@ -44,9 +44,7 @@ fn publish_subscribe_roundtrip() {
     sub.subscribe("demo.topic").expect("subscribe");
     std::thread::sleep(Duration::from_millis(150));
     pub_.publish("demo.topic", b"hello").expect("publish");
-    let (topic, payload) = sub
-        .receive(Some(Duration::from_secs(2)))
-        .expect("receive");
+    let (topic, payload) = sub.receive(Some(Duration::from_secs(2))).expect("receive");
     assert_eq!(topic, "demo.topic");
     assert_eq!(payload, b"hello");
 }
@@ -61,9 +59,7 @@ fn topic_filter() {
     std::thread::sleep(Duration::from_millis(150));
     pub_.publish("a.one", b"1").expect("publish a.one");
     pub_.publish("b.two", b"2").expect("publish b.two");
-    let (topic, payload) = sub
-        .receive(Some(Duration::from_secs(2)))
-        .expect("receive");
+    let (topic, payload) = sub.receive(Some(Duration::from_secs(2))).expect("receive");
     assert_eq!(topic, "a.one");
     assert_eq!(payload, b"1");
 }

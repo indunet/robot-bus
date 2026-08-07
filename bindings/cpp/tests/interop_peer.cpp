@@ -94,24 +94,18 @@ void run_act_client() {
   std::string goal_bytes;
   ROBOT_BUS_CHECK(goal.SerializeToString(&goal_bytes));
 
-  auto events = client.send_goal(goal_bytes, nullptr, 10.0);
-  bool got_result = false;
-  for (const auto &ev : events) {
-    if (ev.kind != "RESULT") {
-      continue;
-    }
-    robot_bus_interface::action::v1::FibonacciResult result;
-    ROBOT_BUS_CHECK(
-        result.ParseFromArray(ev.body.data(), static_cast<int>(ev.body.size())));
-    ROBOT_BUS_CHECK(result.sequence_size() == 5);
-    ROBOT_BUS_CHECK(result.sequence(0) == 0);
-    ROBOT_BUS_CHECK(result.sequence(1) == 1);
-    ROBOT_BUS_CHECK(result.sequence(2) == 1);
-    ROBOT_BUS_CHECK(result.sequence(3) == 2);
-    ROBOT_BUS_CHECK(result.sequence(4) == 3);
-    got_result = true;
-  }
-  ROBOT_BUS_CHECK(got_result);
+  auto handle = client.send_goal(goal_bytes, {}, nullptr, 10.0);
+  auto event = handle.wait_result(10.0);
+  ROBOT_BUS_CHECK(event.kind == "RESULT");
+  robot_bus_interface::action::v1::FibonacciResult result;
+  ROBOT_BUS_CHECK(
+      result.ParseFromArray(event.body.data(), static_cast<int>(event.body.size())));
+  ROBOT_BUS_CHECK(result.sequence_size() == 5);
+  ROBOT_BUS_CHECK(result.sequence(0) == 0);
+  ROBOT_BUS_CHECK(result.sequence(1) == 1);
+  ROBOT_BUS_CHECK(result.sequence(2) == 1);
+  ROBOT_BUS_CHECK(result.sequence(3) == 2);
+  ROBOT_BUS_CHECK(result.sequence(4) == 3);
   std::cout << "READY" << std::endl;
 }
 

@@ -5,9 +5,7 @@ use std::sync::{Arc, Barrier, Mutex};
 use std::thread;
 use std::time::{Duration, Instant};
 
-use robot_bus::{
-    CallbackGroupType, MultiThreadedExecutor, Node,
-};
+use robot_bus::{CallbackGroupType, MultiThreadedExecutor, Node};
 
 #[test]
 fn mutually_exclusive_group_serializes_timers() {

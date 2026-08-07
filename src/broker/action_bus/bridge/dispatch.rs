@@ -5,15 +5,15 @@ use std::collections::{HashMap, VecDeque};
 use std::time::{Duration, Instant};
 use zmq::Socket;
 
+use super::super::broker::{
+    GoalEntry, GoalReply, GoalTable, WorkerRegistry, build_client_reply, build_error_body,
+    build_worker_cancel, build_worker_goal, extend_hops, hop_contains,
+};
 use super::protocol::{
-    ERR_CANCELLED, ERR_NO_GOAL, ERR_NO_WORKER, ERR_WORKER_DIED, KIND_CANCEL, KIND_GOAL, KIND_RESULT,
-    MAX_PENDING,
+    ERR_CANCELLED, ERR_NO_GOAL, ERR_NO_WORKER, ERR_WORKER_DIED, KIND_CANCEL, KIND_GOAL,
+    KIND_RESULT, MAX_PENDING,
 };
 use super::remote::{PeerLink, PendingGoal, RemoteActions, RemoteRoute};
-use super::super::broker::{
-    build_client_reply, build_error_body, build_worker_cancel, build_worker_goal, extend_hops,
-    hop_contains, GoalEntry, GoalReply, GoalTable, WorkerRegistry,
-};
 
 pub(super) fn select_remote<'a>(
     remote: &'a RemoteActions,
@@ -89,7 +89,9 @@ pub(super) fn dispatch_goal(
             // so replies can always be matched — actually workers echo client_id.
             // We pass client_id as goal bookkeeping; deliver uses GoalTable by goal_id.
             let fwd = build_worker_goal(&worker_id, client_id, action, goal_id, body);
-            backend.send_multipart(fwd, 0).context("backend send goal")?;
+            backend
+                .send_multipart(fwd, 0)
+                .context("backend send goal")?;
             return Ok(());
         }
     }
@@ -194,13 +196,7 @@ pub(super) fn handle_cancel(
                 zmq::DONTWAIT,
             );
         } else if !entry.worker_identity.is_empty() {
-            let fwd = build_worker_cancel(
-                &entry.worker_identity,
-                client_id,
-                action,
-                goal_id,
-                body,
-            );
+            let fwd = build_worker_cancel(&entry.worker_identity, client_id, action, goal_id, body);
             backend
                 .send_multipart(fwd, 0)
                 .context("backend send cancel")?;
@@ -242,13 +238,7 @@ pub(super) fn deliver_goal_reply(
     };
     match &entry.reply {
         GoalReply::Frontend => {
-            let reply = build_client_reply(
-                &entry.client_identity,
-                action,
-                goal_id,
-                kind,
-                body,
-            );
+            let reply = build_client_reply(&entry.client_identity, action, goal_id, kind, body);
             frontend
                 .send_multipart(reply, 0)
                 .context("frontend send feedback/result")?;

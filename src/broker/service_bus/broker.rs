@@ -6,13 +6,13 @@
 
 use anyhow::{Context, Result};
 use std::collections::{HashMap, VecDeque};
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
 use zmq::Socket;
 
-use super::metrics::ServiceMetrics;
 use super::ServiceBusConfig;
+use super::metrics::ServiceMetrics;
 
 /// Worker control commands (UTF-8 bytes, never protobuf).
 const CMD_READY: &[u8] = b"READY";
@@ -295,10 +295,7 @@ impl WorkerRegistry {
     /// Snapshot of offerings suitable for advertising to peers.
     /// Each entry is `(service, origin_broker_id, hop_path, via_broker_id_or_empty)`.
     /// Local workers use `via=""`, `origin=self_id`, `hop=self_id`.
-    pub fn advertise_snapshot(
-        &self,
-        self_id: &str,
-    ) -> Vec<(String, String, String, String)> {
+    pub fn advertise_snapshot(&self, self_id: &str) -> Vec<(String, String, String, String)> {
         let mut out = Vec::new();
         for (svc, list) in &self.workers {
             for w in list {
@@ -470,11 +467,7 @@ impl InFlightTable {
 /// Extract the service_name from client→broker frames `[client_id][svc][req_id][body]`.
 pub fn parse_service_name(frames: &[Vec<u8>]) -> Option<&[u8]> {
     let svc = frames.get(1)?;
-    if svc.is_empty() {
-        None
-    } else {
-        Some(svc)
-    }
+    if svc.is_empty() { None } else { Some(svc) }
 }
 
 /// Build the 5-frame message the broker sends to a worker via the backend
@@ -546,8 +539,7 @@ pub fn run_loop(
     let mut pending: VecDeque<PendingRequest> = VecDeque::new();
     let mut in_flight = InFlightTable::new();
     let mut client_is_req: HashMap<Vec<u8>, bool> = HashMap::new();
-    let mut next_sweep =
-        Instant::now() + Duration::from_millis(config.heartbeat_interval_ms);
+    let mut next_sweep = Instant::now() + Duration::from_millis(config.heartbeat_interval_ms);
     let pending_timeout = Duration::from_millis(config.pending_timeout_ms);
     let max_pending = config.max_pending;
 
@@ -558,7 +550,10 @@ pub fn run_loop(
 
         let sweep_in = next_sweep.saturating_duration_since(Instant::now());
         let timeout_ms = (sweep_in.as_millis() as i64).min(POLL_CAP_MS).max(0);
-        let mut items = [frontend.as_poll_item(zmq::POLLIN), backend.as_poll_item(zmq::POLLIN)];
+        let mut items = [
+            frontend.as_poll_item(zmq::POLLIN),
+            backend.as_poll_item(zmq::POLLIN),
+        ];
         zmq::poll(&mut items, timeout_ms).context("poll")?;
 
         if items[0].get_revents().contains(zmq::POLLIN) {
@@ -685,7 +680,9 @@ fn handle_client_request(
             has_req_delim: has_delim,
         });
         let fwd = build_worker_forward(worker_id.as_slice(), client_id, svc, req_id, body);
-        backend.send_multipart(fwd, 0).context("backend send forward")?;
+        backend
+            .send_multipart(fwd, 0)
+            .context("backend send forward")?;
     } else if pending.len() < max_pending {
         pending.push_back(PendingRequest {
             client_identity: client_id.to_vec(),
@@ -701,7 +698,9 @@ fn handle_client_request(
         }
         let err = build_error_body(ERR_NO_WORKER, svc);
         let reply = build_client_reply(client_id, svc, req_id, &err, has_delim);
-        frontend.send_multipart(reply, 0).context("frontend send reject")?;
+        frontend
+            .send_multipart(reply, 0)
+            .context("frontend send reject")?;
     }
     Ok(())
 }
@@ -763,7 +762,9 @@ fn handle_worker_message(
                 .map(|e| e.has_req_delim)
                 .unwrap_or_else(|| client_is_req.get(client_id).copied().unwrap_or(false));
             let reply = build_client_reply(client_id, svc, req_id, body, has_delim);
-            frontend.send_multipart(reply, 0).context("frontend send reply")?;
+            frontend
+                .send_multipart(reply, 0)
+                .context("frontend send reply")?;
             Ok(())
         }
         _ => Ok(()), // unknown shape, drop
@@ -805,7 +806,9 @@ fn retry_pending(
                 &req.request_id,
                 &req.body,
             );
-            backend.send_multipart(fwd, 0).context("backend send pending forward")?;
+            backend
+                .send_multipart(fwd, 0)
+                .context("backend send pending forward")?;
         } else if now.duration_since(req.queued_at) > pending_timeout {
             if let Some(m) = metrics {
                 m.record_error(&svc_str);
@@ -983,7 +986,12 @@ mod tests {
         let reply = build_client_reply(b"cid", b"svc", b"rid", b"body", false);
         assert_eq!(
             reply,
-            vec![b"cid".to_vec(), b"svc".to_vec(), b"rid".to_vec(), b"body".to_vec()]
+            vec![
+                b"cid".to_vec(),
+                b"svc".to_vec(),
+                b"rid".to_vec(),
+                b"body".to_vec()
+            ]
         );
     }
 

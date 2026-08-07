@@ -76,18 +76,16 @@ fn validate_message(msg: BrokerAnnounce) -> Result<BrokerAnnouncement> {
             "discovery announce missing broker_id".into(),
         ));
     }
-    if msg.advertise_host.is_empty()
-        || msg.advertise_host == "0.0.0.0"
-        || msg.advertise_host == "*"
+    if msg.advertise_host.is_empty() || msg.advertise_host == "0.0.0.0" || msg.advertise_host == "*"
     {
         return Err(BusError::Protocol(format!(
             "discovery announce has non-connectable advertise_host {:?}",
             msg.advertise_host
         )));
     }
-    let tcp = msg.tcp.ok_or_else(|| {
-        BusError::Protocol("discovery announce missing tcp ports".into())
-    })?;
+    let tcp = msg
+        .tcp
+        .ok_or_else(|| BusError::Protocol("discovery announce missing tcp ports".into()))?;
     if tcp.message_xsub == 0
         || tcp.message_xpub == 0
         || tcp.service_frontend == 0
