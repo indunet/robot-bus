@@ -38,6 +38,93 @@ describe("GrpcNode capability guards", () => {
   });
 });
 
+describe("GrpcNode action client", () => {
+  it("uses one goal request and a server response stream", async () => {
+    const node = GrpcNode.grpc("test");
+    let request: {
+      actionName: string;
+      goal: Uint8Array;
+      goalId: string;
+      timeoutMs: number;
+    } | undefined;
+    (node as unknown as {
+      actionClient: {
+        sendGoal: (
+          input: typeof request,
+          options?: { abort?: AbortSignal },
+        ) => { responses: AsyncIterable<object> };
+      };
+    }).actionClient = {
+      sendGoal: (input) => {
+        request = input;
+        return {
+          responses: (async function* () {
+            yield {
+              actionName: input?.actionName ?? "",
+              goalId: input?.goalId ?? "",
+              kind: 2,
+              body: new Uint8Array([1]),
+            };
+            yield {
+              actionName: input?.actionName ?? "",
+              goalId: input?.goalId ?? "",
+              kind: 3,
+              body: new Uint8Array([2]),
+            };
+          })(),
+        };
+      },
+    };
+
+    const client = node.createActionClient("/act");
+    const events = await client.sendGoal(new Uint8Array([9]), "goal-1", 2);
+
+    assert.equal(request?.actionName, "/act");
+    assert.equal(request?.goalId, "goal-1");
+    assert.equal(request?.timeoutMs, 2_000);
+    assert.deepEqual(events.map((event) => event.kind), ["FEEDBACK", "RESULT"]);
+  });
+
+  it("cancels an active goal by aborting its response stream", async () => {
+    const node = GrpcNode.grpc("test");
+    let signal: AbortSignal | undefined;
+    (node as unknown as {
+      actionClient: {
+        sendGoal: (
+          input: object,
+          options?: { abort?: AbortSignal },
+        ) => { responses: AsyncIterable<object> };
+      };
+    }).actionClient = {
+      sendGoal: (_input, options) => {
+        signal = options?.abort;
+        return {
+          responses: (async function* () {
+            await new Promise<void>((_resolve, reject) => {
+              if (signal?.aborted) {
+                reject(new Error("aborted"));
+                return;
+              }
+              signal?.addEventListener("abort", () => reject(new Error("aborted")), {
+                once: true,
+              });
+            });
+            yield {};
+          })(),
+        };
+      },
+    };
+
+    const client = node.createActionClient("/act");
+    const pending = client.sendGoal(new Uint8Array(), "goal-cancel");
+    await client.cancel("goal-cancel");
+
+    assert.equal(signal?.aborted, true);
+    await assert.rejects(pending, /aborted/);
+    await assert.rejects(client.cancel("goal-cancel"), /no active goal/);
+  });
+});
+
 describe("GrpcNode console registration", () => {
   it("registers, refreshes, and unregisters browser topic endpoints", async () => {
     const originalFetch = globalThis.fetch;

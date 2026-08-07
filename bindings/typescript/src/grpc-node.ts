@@ -130,9 +130,8 @@ export class GrpcActionClient {
 
   async cancel(
     goalId: string,
-    body: Uint8Array = new Uint8Array(),
-  ): Promise<GrpcActionEvent> {
-    return this.node.cancelGoal(this.actionName, goalId, body);
+  ): Promise<void> {
+    return this.node.cancelGoal(this.actionName, goalId);
   }
 }
 
@@ -228,6 +227,7 @@ export class GrpcNode {
   private topologyTimer: ReturnType<typeof setInterval> | null = null;
   private topologyStarted = false;
   private abort: AbortController | null = null;
+  private readonly actionAborts = new Map<string, AbortController>();
   private running = false;
 
   private constructor(name: string, url: string, options: GrpcNodeOptions = {}) {
@@ -379,60 +379,52 @@ export class GrpcNode {
   ): Promise<GrpcActionEvent[]> {
     const timeoutMs =
       timeoutSeconds === undefined ? 0 : Math.max(0, Math.round(timeoutSeconds * 1000));
-    const call = this.actionClient.run({
-      abort: undefined as unknown as AbortSignal,
-    } as RpcOptions);
-
     const id =
       goalId ??
       (typeof crypto !== "undefined" && "randomUUID" in crypto
         ? crypto.randomUUID().replace(/-/g, "")
         : `goal-${Date.now()}`);
+    if (this.actionAborts.has(id)) {
+      throw new Error(`action goal '${id}' is already active`);
+    }
 
-    await call.requests.send({
-      msg: {
-        oneofKind: "goal",
-        goal: {
+    const controller = new AbortController();
+    this.actionAborts.set(id, controller);
+    try {
+      const call = this.actionClient.sendGoal(
+        {
           actionName,
           goal: body,
           goalId: id,
           timeoutMs,
         },
-      },
-    });
-    call.requests.complete();
+        { abort: controller.signal } as RpcOptions,
+      );
 
-    const out: GrpcActionEvent[] = [];
-    for await (const ev of call.responses) {
-      out.push(mapEvent(ev));
-      if (ev.kind === ActionKind.RESULT) {
-        break;
+      const out: GrpcActionEvent[] = [];
+      for await (const ev of call.responses) {
+        out.push(mapEvent(ev));
+        if (ev.kind === ActionKind.RESULT) {
+          break;
+        }
+      }
+      return out;
+    } finally {
+      if (this.actionAborts.get(id) === controller) {
+        this.actionAborts.delete(id);
       }
     }
-    return out;
   }
 
   async cancelGoal(
     actionName: string,
     goalId: string,
-    body: Uint8Array = new Uint8Array(),
-  ): Promise<GrpcActionEvent> {
-    const call = this.actionClient.run({} as RpcOptions);
-    await call.requests.send({
-      msg: {
-        oneofKind: "cancel",
-        cancel: {
-          actionName,
-          goalId,
-          body,
-        },
-      },
-    });
-    call.requests.complete();
-    for await (const ev of call.responses) {
-      return mapEvent(ev);
+  ): Promise<void> {
+    const controller = this.actionAborts.get(goalId);
+    if (!controller) {
+      throw new Error(`action '${actionName}' has no active goal '${goalId}'`);
     }
-    throw new Error(`action '${actionName}' cancel produced no events`);
+    controller.abort();
   }
 
   /** Start background subscribe streams (non-blocking). */
@@ -455,6 +447,10 @@ export class GrpcNode {
     this.running = false;
     this.abort?.abort();
     this.abort = null;
+    for (const controller of this.actionAborts.values()) {
+      controller.abort();
+    }
+    this.actionAborts.clear();
     this.stopTopologyRegistration();
   }
 

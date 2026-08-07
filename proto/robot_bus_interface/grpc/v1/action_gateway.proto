@@ -13,6 +13,10 @@ enum ActionKind {
 }
 
 service ActionGateway {
+  // Browser-compatible action call: one GOAL request followed by a finite
+  // FEEDBACK… / RESULT response stream.
+  rpc SendGoal(GoalCommand) returns (stream ActionEvent);
+
   // Bidirectional stream: client sends GOAL / CANCEL; server streams
   // FEEDBACK… / RESULT (and error status when the bus returns a failure).
   rpc Run(stream ActionClientMessage) returns (stream ActionEvent);
