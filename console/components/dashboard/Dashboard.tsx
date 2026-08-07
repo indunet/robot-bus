@@ -24,6 +24,7 @@ import TopicTable from './TopicTable'
 import ServiceActionTable from './ServiceActionTable'
 import EventStream from './EventStream'
 import TopologyView from './TopologyView'
+import TurtleWindows from './TurtleWindows'
 import ThroughputChart, {
   ServiceRateChart,
   ActionRateChart,
@@ -48,6 +49,7 @@ export default function Dashboard() {
   const [svcRate, setSvcRate] = useState(() => generateRateHistory(0))
   const [actRate, setActRate] = useState(() => generateRateHistory(0))
   const [activeTab, setActiveTab] = useState<Tab>('overview')
+  const [turtleWindows, setTurtleWindows] = useState({ sim: false, teleop: false })
   const seenLogIds = useRef(new Set<string>())
 
   const poll = useCallback(async () => {
@@ -107,7 +109,11 @@ export default function Dashboard() {
       <StatusBar broker={broker} />
 
       <div className="flex flex-1 min-h-0">
-        <Sidebar active={activeTab} onSelect={setActiveTab} />
+        <Sidebar
+          active={activeTab}
+          onSelect={setActiveTab}
+          onOpenTurtle={() => setTurtleWindows({ sim: true, teleop: true })}
+        />
 
         <main className="flex-1 overflow-y-auto p-3">
           {activeTab === 'overview' && (
@@ -137,6 +143,12 @@ export default function Dashboard() {
           )}
         </main>
       </div>
+      <TurtleWindows
+        simOpen={turtleWindows.sim}
+        teleopOpen={turtleWindows.teleop}
+        onCloseSim={() => setTurtleWindows((current) => ({ ...current, sim: false }))}
+        onCloseTeleop={() => setTurtleWindows((current) => ({ ...current, teleop: false }))}
+      />
     </div>
   )
 }

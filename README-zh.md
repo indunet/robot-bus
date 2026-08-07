@@ -41,7 +41,7 @@ Rust 核心留在仓库根目录（`Cargo.toml` + `src/`）。各语言 SDK 放�
 | [`src/`](src/)、`Cargo.toml` | Rust 核心（crates.io / maturin 入口） |
 | [`proto/`](proto/) | 契约源：ROS 风格 Protobuf → Rust / bindings 生成代码 |
 | [`bindings/`](bindings/) | 语言 SDK（Python、TypeScript、C++、Java、Android） |
-| [`console/`](console/) | Broker 监控控制台（Overview / Topics / Services / Actions / Topology / Logs；构建产物 → `assets/console/`，不入库） |
+| [`console/`](console/) | Broker 监控控制台，含小乌龟仿真/遥控页面（构建产物 → `assets/console/`，不入库） |
 | [`benches/`](benches/) | 性能压测：[`robot_bus_perf/`](benches/robot_bus_perf/)（`just perf`）、[`ros2_perf/`](benches/ros2_perf/)（`just perf-ros2`） |
 | [`tests/`](tests/) | Rust 集成测试 + 跨语言互通（`just test-interop`） |
 | [`docs/`](docs/) | API 文档与生成的性能报告 |

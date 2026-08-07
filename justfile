@@ -2,7 +2,8 @@
 # Install: https://github.com/casey/just
 #
 # Layout: Rust core at repo root; language SDKs under bindings/;
-# benches/; tests/ for interop; console/ is broker monitoring UI.
+# benches/; tests/ for interop; console/ is broker monitoring UI;
+# Console includes the turtle simulation and teleop pages.
 # Tool nodes / TF / Studio live in sibling repo robot-bus-tools.
 
 set shell := ["bash", "-eu", "-o", "pipefail", "-c"]

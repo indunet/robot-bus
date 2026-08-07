@@ -5,8 +5,20 @@ const brokerOrigin = process.env.ROBOT_BUS_BROKER_URL ?? 'http://127.0.0.1:15771
 const nextConfig = {
   // Static export → console/out/, synced into assets/console for rust-embed.
   output: 'export',
+  // The local SDK package contains generated protobuf TypeScript sources.
+  transpilePackages: ['robot-bus'],
   typescript: {
     ignoreBuildErrors: true,
+  },
+  webpack(config) {
+    // The workspace maps robot-bus to TypeScript sources whose ESM imports use
+    // emitted `.js` suffixes. Resolve those suffixes back to source files.
+    config.resolve.extensionAlias = {
+      ...config.resolve.extensionAlias,
+      '.js': ['.ts', '.tsx', '.js'],
+      '.mjs': ['.mts', '.mjs'],
+    }
+    return config
   },
   images: {
     unoptimized: true,

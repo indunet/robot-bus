@@ -8,6 +8,8 @@ export {
   GrpcNode as Node,
   GrpcServiceClient,
   GrpcActionClient,
+  GrpcTopicPublisher,
+  TypedGrpcTopicPublisher,
   TypedGrpcServiceClient,
   TypedGrpcActionClient,
   DEFAULT_GRPC_URL,
@@ -17,9 +19,3 @@ export {
 export { encode, decode, type MessageType } from "./typed.js";
 
 export const __version__ = "0.1.5";
-
-export function createPublisher(): never {
-  throw new Error(
-    "createPublisher is not available in the browser build. Use Node.js native binding.",
-  );
-}

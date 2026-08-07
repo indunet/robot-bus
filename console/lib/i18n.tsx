@@ -30,6 +30,9 @@ const en = {
   navEventsShort: 'EVT',
   navTopology: 'TOPOLOGY',
   navTopologyShort: 'TOPO',
+  navTurtleSim: 'TURTLE SIM',
+  navTurtleSimShort: 'SIM',
+  navTurtleWindows: 'OPEN TURTLE SIM + TELEOP',
 
   metricMsgS: 'MSG/S',
   metricBw: 'BW',
@@ -143,6 +146,9 @@ const zh: Record<MessageKey, string> = {
   navEventsShort: '事件',
   navTopology: '拓扑',
   navTopologyShort: '拓扑',
+  navTurtleSim: '小乌龟仿真',
+  navTurtleSimShort: '仿真',
+  navTurtleWindows: '打开小乌龟仿真与遥控浮窗',
 
   metricMsgS: 'MSG/S',
   metricBw: '带宽',

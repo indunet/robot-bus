@@ -1,8 +1,8 @@
 /**
  * Browser / gRPC-Web client Node facade.
  *
- * Mirrors Rust/Python `Node.grpc` / `Node.grpc_at`: subscribe, service call,
- * action run. Does not support publish, service/action servers, or local broker.
+ * Mirrors Rust/Python `Node.grpc` / `Node.grpc_at`: publish, subscribe, service
+ * call, action run. Does not support service/action servers or local broker.
  */
 
 import { GrpcWebFetchTransport } from "@protobuf-ts/grpcweb-transport";
@@ -17,6 +17,37 @@ import {
 import { decode, encode, type MessageType } from "./typed.js";
 
 export const DEFAULT_GRPC_URL = "http://127.0.0.1:15770";
+const DEFAULT_CONSOLE_URL = "http://127.0.0.1:15771";
+const DEFAULT_TOPOLOGY_REFRESH_MS = 10_000;
+
+export interface GrpcNodeOptions {
+  /** Console HTTP base URL. `null` disables topology and topic-type registration. */
+  consoleUrl?: string | null;
+  /** Topology lease refresh interval. Defaults to 10 seconds. */
+  topologyRefreshMs?: number;
+}
+
+type TopologyKind = "publisher" | "subscriber";
+
+interface TopologyEndpoint {
+  endpointId: string;
+  kind: TopologyKind;
+  topic: string;
+}
+
+function defaultConsoleUrl(): string {
+  if (typeof globalThis.location !== "undefined" && globalThis.location.origin) {
+    return globalThis.location.origin;
+  }
+  return DEFAULT_CONSOLE_URL;
+}
+
+function endpointId(): string {
+  if (typeof globalThis.crypto !== "undefined" && "randomUUID" in globalThis.crypto) {
+    return globalThis.crypto.randomUUID();
+  }
+  return `web-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+}
 
 export interface GrpcActionEvent {
   kind: "GOAL" | "FEEDBACK" | "RESULT" | "CANCEL" | "UNSPECIFIED";
@@ -151,6 +182,34 @@ export class TypedGrpcActionClient<
 
 type SubCallback = (topic: string, payload: Uint8Array) => void;
 
+/** Raw (bytes) publisher over MessageGateway.Publish. */
+export class GrpcTopicPublisher {
+  constructor(
+    private readonly node: GrpcNode,
+    readonly topic: string,
+  ) {}
+
+  async publish(payload: Uint8Array): Promise<void> {
+    await this.node.publishRaw(this.topic, payload);
+  }
+}
+
+/** Typed publisher: encodes protobuf then Publish. */
+export class TypedGrpcTopicPublisher<T extends object> {
+  constructor(
+    private readonly inner: GrpcTopicPublisher,
+    private readonly msgType: MessageType<T>,
+  ) {}
+
+  get topic(): string {
+    return this.inner.topic;
+  }
+
+  async publish(message: T): Promise<void> {
+    await this.inner.publish(encode(this.msgType, message));
+  }
+}
+
 /**
  * gRPC-Web client node (browser + Node without native addon).
  */
@@ -162,12 +221,23 @@ export class GrpcNode {
   private readonly serviceClient: ServiceGatewayClient;
   private readonly actionClient: ActionGatewayClient;
   private readonly subscriptions = new Map<string, SubCallback[]>();
+  private readonly consoleUrl: string | null;
+  private readonly topologyRefreshMs: number;
+  private readonly topologyEndpoints = new Map<string, TopologyEndpoint>();
+  private readonly topicTypes = new Map<string, string>();
+  private topologyTimer: ReturnType<typeof setInterval> | null = null;
+  private topologyStarted = false;
   private abort: AbortController | null = null;
   private running = false;
 
-  private constructor(name: string, url: string) {
+  private constructor(name: string, url: string, options: GrpcNodeOptions = {}) {
     this.name = name;
     this.url = url.replace(/\/$/, "");
+    this.consoleUrl =
+      options.consoleUrl === null
+        ? null
+        : (options.consoleUrl ?? defaultConsoleUrl()).replace(/\/$/, "");
+    this.topologyRefreshMs = Math.max(100, options.topologyRefreshMs ?? DEFAULT_TOPOLOGY_REFRESH_MS);
     this.transport = new GrpcWebFetchTransport({
       baseUrl: this.url,
       format: "binary",
@@ -177,16 +247,31 @@ export class GrpcNode {
     this.actionClient = new ActionGatewayClient(this.transport);
   }
 
-  static grpc(name: string): GrpcNode {
-    return new GrpcNode(name, DEFAULT_GRPC_URL);
+  static grpc(name: string, options?: GrpcNodeOptions): GrpcNode {
+    return new GrpcNode(name, DEFAULT_GRPC_URL, options);
   }
 
-  static grpcAt(name: string, url: string): GrpcNode {
-    return new GrpcNode(name, url);
+  static grpcAt(name: string, url: string, options?: GrpcNodeOptions): GrpcNode {
+    return new GrpcNode(name, url, options);
   }
 
-  createPublisher(_topic: string): never {
-    return unsupported("createPublisher");
+  createPublisher(topic: string): GrpcTopicPublisher;
+  createPublisher<T extends object>(
+    topic: string,
+    msgType: MessageType<T>,
+  ): TypedGrpcTopicPublisher<T>;
+  createPublisher<T extends object>(
+    topic: string,
+    msgType?: MessageType<T>,
+  ): GrpcTopicPublisher | TypedGrpcTopicPublisher<T> {
+    const raw = new GrpcTopicPublisher(this, topic);
+    this.trackEndpoint("publisher", topic);
+    if (msgType) {
+      this.topicTypes.set(topic, msgType.typeName);
+      if (this.topologyStarted) this.registerTopicType(topic, msgType.typeName);
+      return new TypedGrpcTopicPublisher(raw, msgType);
+    }
+    return raw;
   }
 
   createService(_serviceName: string, _handler: unknown): never {
@@ -197,25 +282,37 @@ export class GrpcNode {
     return unsupported("createActionServer");
   }
 
+  /** Unary Publish onto the message bus. */
+  async publishRaw(topic: string, payload: Uint8Array): Promise<void> {
+    await this.messageClient.publish({ topic, payload }).response;
+  }
+
   /**
    * Subscribe to a topic prefix. Callbacks fire after `spin()` / `start()` begins.
    */
-  createSubscription(
+  createSubscription(topic: string, callback: SubCallback): void;
+  createSubscription<T extends object>(
     topic: string,
-    callback: SubCallback,
-    msgType?: MessageType<object>,
+    callback: (topic: string, msg: T) => void,
+    msgType: MessageType<T>,
+  ): void;
+  createSubscription<T extends object>(
+    topic: string,
+    callback: SubCallback | ((topic: string, msg: T) => void),
+    msgType?: MessageType<T>,
   ): void {
     const wrapped: SubCallback = msgType
       ? (t, payload) => {
           const decoded = decode(msgType, payload);
           if (decoded) {
-            (callback as (topic: string, msg: object) => void)(t, decoded);
+            (callback as (topic: string, msg: T) => void)(t, decoded);
           }
         }
-      : callback;
+      : (callback as SubCallback);
     const list = this.subscriptions.get(topic) ?? [];
     list.push(wrapped);
     this.subscriptions.set(topic, list);
+    this.trackEndpoint("subscriber", topic);
   }
 
   createClient(serviceName: string): GrpcServiceClient;
@@ -342,6 +439,7 @@ export class GrpcNode {
   start(): void {
     if (this.running) return;
     this.running = true;
+    this.startTopologyRegistration();
     this.abort = new AbortController();
     for (const topic of this.subscriptions.keys()) {
       void this.pumpTopic(topic, this.abort.signal);
@@ -357,6 +455,68 @@ export class GrpcNode {
     this.running = false;
     this.abort?.abort();
     this.abort = null;
+    this.stopTopologyRegistration();
+  }
+
+  private trackEndpoint(kind: TopologyKind, topic: string): void {
+    const key = `${kind}:${topic}`;
+    if (this.topologyEndpoints.has(key)) return;
+    const endpoint = { endpointId: endpointId(), kind, topic };
+    this.topologyEndpoints.set(key, endpoint);
+    if (this.topologyStarted) this.registerEndpoint(endpoint);
+  }
+
+  private startTopologyRegistration(): void {
+    if (this.topologyStarted || !this.consoleUrl || typeof fetch === "undefined") return;
+    this.topologyStarted = true;
+    this.refreshTopology();
+    this.topologyTimer = setInterval(() => this.refreshTopology(), this.topologyRefreshMs);
+  }
+
+  private stopTopologyRegistration(): void {
+    if (!this.topologyStarted) return;
+    this.topologyStarted = false;
+    if (this.topologyTimer) clearInterval(this.topologyTimer);
+    this.topologyTimer = null;
+    for (const endpoint of this.topologyEndpoints.values()) {
+      this.postConsole("/api/v1/topology/unregister", {
+        endpointId: endpoint.endpointId,
+      });
+    }
+  }
+
+  private refreshTopology(): void {
+    for (const endpoint of this.topologyEndpoints.values()) {
+      this.registerEndpoint(endpoint);
+    }
+    for (const [topic, typeName] of this.topicTypes) {
+      this.registerTopicType(topic, typeName);
+    }
+  }
+
+  private registerEndpoint(endpoint: TopologyEndpoint): void {
+    this.postConsole("/api/v1/topology/register", {
+      endpointId: endpoint.endpointId,
+      nodeName: this.name,
+      kind: endpoint.kind,
+      topic: endpoint.topic,
+    });
+  }
+
+  private registerTopicType(topic: string, typeName: string): void {
+    this.postConsole("/api/v1/topics/register", { topic, typeName });
+  }
+
+  private postConsole(path: string, body: object): void {
+    if (!this.consoleUrl || typeof fetch === "undefined") return;
+    void fetch(`${this.consoleUrl}${path}`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(body),
+      keepalive: true,
+    }).catch(() => {
+      // Console introspection is best-effort and must not break message traffic.
+    });
   }
 
   private async pumpTopic(topic: string, signal: AbortSignal): Promise<void> {

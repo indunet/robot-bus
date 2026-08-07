@@ -199,7 +199,7 @@ jobs:
           cache: maven
           cache-dependency-path: bindings/java/pom.xml
       - name: Setup Android SDK / NDK
-        uses: android-actions/setup-android@v3
+        uses: android-actions/setup-android@v4
       - name: Install NDK 26
         run: |
           sdkmanager "ndk;26.3.11579264" "cmake;3.22.1"

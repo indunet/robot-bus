@@ -1,6 +1,14 @@
 'use client'
 
-import { LayoutDashboard, Radio, ScrollText, Cpu, Zap, Network } from 'lucide-react'
+import {
+  LayoutDashboard,
+  Radio,
+  ScrollText,
+  Cpu,
+  Zap,
+  Network,
+  Turtle,
+} from 'lucide-react'
 import { useI18n } from '@/lib/i18n'
 
 export type Tab =
@@ -14,9 +22,10 @@ export type Tab =
 interface Props {
   active: Tab
   onSelect: (tab: Tab) => void
+  onOpenTurtle: () => void
 }
 
-export default function Sidebar({ active, onSelect }: Props) {
+export default function Sidebar({ active, onSelect, onOpenTurtle }: Props) {
   const { t } = useI18n()
 
   const items: { id: Tab; label: string; short: string; icon: React.ReactNode }[] = [
@@ -45,6 +54,16 @@ export default function Sidebar({ active, onSelect }: Props) {
           <span className="font-mono text-[9px] tracking-widest">{item.short}</span>
         </button>
       ))}
+      <div className="w-8 border-t border-bus-border my-1" />
+      <button
+        type="button"
+        onClick={onOpenTurtle}
+        title={t('navTurtleWindows')}
+        className="relative w-12 h-12 flex flex-col items-center justify-center gap-0.5 rounded transition-colors text-bus-muted hover:text-bus-cyan hover:bg-bus-panel"
+      >
+        <Turtle size={17} />
+        <span className="font-mono text-[9px] tracking-widest">{t('navTurtleSimShort')}</span>
+      </button>
     </aside>
   )
 }
