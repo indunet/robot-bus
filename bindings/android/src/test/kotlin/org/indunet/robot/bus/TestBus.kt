@@ -38,46 +38,68 @@ internal class TestBus private constructor(
     }
 
     companion object {
+        private const val PORT_COUNT = 7
+        private const val MAX_START_ATTEMPTS = 5
+
         @JvmStatic
         @Throws(IOException::class)
         fun start(): TestBus {
-            val messageXsub = "tcp://127.0.0.1:${freePort()}"
-            val messageXpub = "tcp://127.0.0.1:${freePort()}"
-            val serviceFrontend = "tcp://127.0.0.1:${freePort()}"
-            val serviceBackend = "tcp://127.0.0.1:${freePort()}"
-            val actionFrontend = "tcp://127.0.0.1:${freePort()}"
-            val actionBackend = "tcp://127.0.0.1:${freePort()}"
-            val grpcListen = "127.0.0.1:${freePort()}"
-            val opts =
-                BrokerOptions(
-                    messageXsubBind = messageXsub,
-                    messageXpubBind = messageXpub,
-                    serviceFrontendBind = serviceFrontend,
-                    serviceBackendBind = serviceBackend,
-                    actionFrontendBind = actionFrontend,
-                    actionBackendBind = actionBackend,
-                    grpcListen = grpcListen,
-                    consoleListen = null,
-                    tcpOnly = true,
-                    noConsole = true,
-                )
-            return TestBus(
-                Broker(opts),
-                messageXsub,
-                messageXpub,
-                serviceFrontend,
-                serviceBackend,
-                actionFrontend,
-                actionBackend,
-                grpcListen,
-            )
+            repeat(MAX_START_ATTEMPTS) { attempt ->
+                // Reserve the complete set together so one TestBus never receives duplicate ports.
+                // The sockets must be released before the native broker binds, so retry the small
+                // remaining race with other processes.
+                val ports = reservePorts(PORT_COUNT)
+                val messageXsub = "tcp://127.0.0.1:${ports[0]}"
+                val messageXpub = "tcp://127.0.0.1:${ports[1]}"
+                val serviceFrontend = "tcp://127.0.0.1:${ports[2]}"
+                val serviceBackend = "tcp://127.0.0.1:${ports[3]}"
+                val actionFrontend = "tcp://127.0.0.1:${ports[4]}"
+                val actionBackend = "tcp://127.0.0.1:${ports[5]}"
+                val grpcListen = "127.0.0.1:${ports[6]}"
+                val opts =
+                    BrokerOptions(
+                        messageXsubBind = messageXsub,
+                        messageXpubBind = messageXpub,
+                        serviceFrontendBind = serviceFrontend,
+                        serviceBackendBind = serviceBackend,
+                        actionFrontendBind = actionFrontend,
+                        actionBackendBind = actionBackend,
+                        grpcListen = grpcListen,
+                        consoleListen = null,
+                        tcpOnly = true,
+                        noConsole = true,
+                    )
+                try {
+                    return TestBus(
+                        Broker(opts),
+                        messageXsub,
+                        messageXpub,
+                        serviceFrontend,
+                        serviceBackend,
+                        actionFrontend,
+                        actionBackend,
+                        grpcListen,
+                    )
+                } catch (failure: RobotBusException) {
+                    if (attempt == MAX_START_ATTEMPTS - 1) throw failure
+                }
+            }
+            error("unreachable")
         }
 
         @Throws(IOException::class)
-        private fun freePort(): Int =
-            ServerSocket(0).use { socket ->
-                socket.reuseAddress = true
-                socket.localPort
+        private fun reservePorts(count: Int): List<Int> {
+            val sockets = mutableListOf<ServerSocket>()
+            return try {
+                repeat(count) {
+                    sockets += ServerSocket(0).apply {
+                        reuseAddress = true
+                    }
+                }
+                sockets.map { it.localPort }
+            } finally {
+                sockets.forEach { it.close() }
             }
+        }
     }
 }

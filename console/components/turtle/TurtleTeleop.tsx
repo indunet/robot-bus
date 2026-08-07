@@ -162,10 +162,10 @@ export default function TurtleTeleop({ compact = false, autoFocus = false }: Pro
       onBlur={(event) => {
         if (!event.currentTarget.contains(event.relatedTarget)) stop()
       }}
-      className={`bg-bus-bg text-bus-text outline-none focus:ring-1 focus:ring-inset focus:ring-bus-cyan/40 ${compact ? 'h-full' : 'min-h-screen'}`}
+      className={`${compact ? 'h-full bg-transparent' : 'min-h-screen bg-bus-bg'} text-bus-text outline-none focus:ring-1 focus:ring-inset focus:ring-bus-cyan/40`}
     >
       <main className={`${compact ? 'p-2' : 'max-w-md mx-auto p-3'}`}>
-        <section className={`bg-bus-panel border border-bus-border rounded-sm ${compact ? 'p-3' : 'p-5'}`}>
+        <section className={`${compact ? 'bg-bus-panel/76' : 'bg-bus-panel'} border border-bus-border/90 rounded-sm ${compact ? 'p-3' : 'p-5'}`}>
           <div className="flex items-center justify-between gap-2">
             <h1 className="font-mono text-xs text-bus-cyan">{t('turtleTeleopTitle')}</h1>
             <span className={`font-mono text-[9px] ${status === 'ONLINE' ? 'text-bus-green' : 'text-bus-red'}`}>

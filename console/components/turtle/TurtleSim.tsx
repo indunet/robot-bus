@@ -117,9 +117,9 @@ export default function TurtleSim({ compact = false }: Props) {
         : t('turtleConnecting')
 
   return (
-    <div className={`bg-bus-bg text-bus-text ${compact ? 'h-full' : 'min-h-screen'}`}>
+    <div className={`${compact ? 'h-full bg-transparent' : 'min-h-screen bg-bus-bg'} text-bus-text`}>
       <div className={`grid gap-3 ${compact ? 'grid-cols-[minmax(0,1fr)_150px] p-2' : 'max-w-5xl mx-auto p-3 grid-cols-1 lg:grid-cols-[minmax(0,1fr)_240px]'}`}>
-        <section className="bg-bus-panel border border-bus-border rounded-sm p-2 flex items-center justify-center min-w-0">
+        <section className={`${compact ? 'bg-bus-panel/76' : 'bg-bus-panel'} border border-bus-border/90 rounded-sm p-2 flex items-center justify-center min-w-0`}>
           <canvas
             ref={canvasRef}
             width={640}
@@ -127,7 +127,7 @@ export default function TurtleSim({ compact = false }: Props) {
             className="w-full max-h-full aspect-square bg-[#101214] border border-bus-border"
           />
         </section>
-        <aside className={`bg-bus-panel border border-bus-border rounded-sm h-fit font-mono ${compact ? 'p-2' : 'p-4'}`}>
+        <aside className={`${compact ? 'bg-bus-panel/76' : 'bg-bus-panel'} border border-bus-border/90 rounded-sm h-fit font-mono ${compact ? 'p-2' : 'p-4'}`}>
           <div className="flex items-center justify-between gap-2 mb-3">
             <h1 className="text-xs text-bus-cyan">{t('turtlePoseTitle')}</h1>
             <span className={`text-[9px] ${status === 'ONLINE' ? 'text-bus-green' : 'text-bus-red'}`}>

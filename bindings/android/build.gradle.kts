@@ -53,6 +53,11 @@ dependencies {
     testImplementation("junit:junit:4.13.2")
 }
 
+// Both variants start native brokers on localhost; do not let their test JVMs compete for ports.
+tasks.matching { it.name == "testReleaseUnitTest" }.configureEach {
+    mustRunAfter("testDebugUnitTest")
+}
+
 mavenPublishing {
     configure(com.vanniktech.maven.publish.AndroidSingleVariantLibrary())
     publishToMavenCentral(com.vanniktech.maven.publish.SonatypeHost.CENTRAL_PORTAL)

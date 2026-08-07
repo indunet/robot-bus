@@ -60,7 +60,7 @@ export default function FloatingWindow({
       role="dialog"
       aria-label={title}
       onPointerDown={onBringToFront}
-      className="fixed flex flex-col overflow-hidden border border-bus-cyan-dim bg-bus-bg shadow-2xl rounded-sm opacity-95"
+      className="fixed flex flex-col overflow-hidden border border-bus-cyan-dim bg-bus-bg/82 shadow-[0_18px_48px_rgba(0,0,0,0.46)] backdrop-blur-md"
       style={{
         left: position.x,
         top: position.y,
@@ -70,15 +70,15 @@ export default function FloatingWindow({
         maxHeight: 'calc(100vh - 12px)',
         zIndex,
         clipPath:
-          'polygon(0 0, calc(100% - 16px) 0, 100% 16px, 100% 100%, 12px 100%, 0 calc(100% - 12px))',
+          'polygon(0 0, calc(100% - 12px) 0, 100% 12px, 100% 100%, 12px 100%, 0 calc(100% - 12px))',
       }}
     >
       <div aria-hidden="true" className="pointer-events-none absolute inset-0 z-20">
-        <span className="absolute left-0 top-0 h-[2px] w-20 bg-bus-cyan" />
-        <span className="absolute right-[-3px] top-[7px] h-px w-[23px] rotate-45 bg-bus-cyan-dim" />
-        <span className="absolute bottom-[5px] left-[-3px] h-px w-[18px] rotate-45 bg-bus-cyan-dim" />
-        <span className="absolute bottom-0 right-5 h-[2px] w-12 bg-bus-cyan/70" />
-        <span className="absolute right-0 top-16 h-10 w-[2px] bg-bus-cyan/50" />
+        <span className="absolute left-0 top-0 h-[2px] w-24 bg-gradient-to-r from-bus-cyan to-bus-cyan/20" />
+        <span className="absolute right-[-2px] top-[5px] h-px w-[17px] rotate-45 bg-bus-cyan" />
+        <span className="absolute bottom-[5px] left-[-2px] h-px w-[17px] rotate-45 bg-bus-cyan" />
+        <span className="absolute bottom-0 right-5 h-[2px] w-16 bg-gradient-to-l from-bus-cyan/80 to-transparent" />
+        <span className="absolute right-0 top-16 h-12 w-[2px] bg-gradient-to-b from-bus-cyan/60 to-transparent" />
       </div>
       <div
         onPointerDown={onPointerDown}
@@ -90,7 +90,7 @@ export default function FloatingWindow({
         onPointerCancel={() => {
           drag.current = null
         }}
-        className="h-8 shrink-0 flex items-center justify-between px-2 border-b border-bus-border bg-[#15191d] cursor-move select-none touch-none"
+        className="h-8 shrink-0 flex items-center justify-between px-2 border-b border-bus-border/80 bg-[#15191d]/72 backdrop-blur-md cursor-move select-none touch-none"
       >
         <span className="font-mono text-[10px] tracking-wider text-bus-cyan">{title}</span>
         <button
