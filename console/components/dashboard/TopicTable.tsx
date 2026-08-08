@@ -2,6 +2,7 @@
 
 import { type TopicInfo, fmtBytes, fmtNum } from '@/lib/mock-data'
 import { PanelHeader } from './BrokerOverview'
+import TruncateTip from './TruncateTip'
 import { LineChart, Line, ResponsiveContainer } from 'recharts'
 import { Radio } from 'lucide-react'
 import { fmtAgeLocalized, useI18n } from '@/lib/i18n'
@@ -34,6 +35,7 @@ export default function TopicTable({ topics, maxBodyHeight }: Props) {
         icon={<Radio size={14} />}
         title={t('topicsTitle')}
         sub={t('topicsActive', { n: topics.length })}
+        subClassName="text-bus-cyan"
       />
 
       <div className="overflow-x-auto flex-1 min-h-0">
@@ -42,7 +44,7 @@ export default function TopicTable({ topics, maxBodyHeight }: Props) {
             {headers.map((h, i) => (
               <span
                 key={`${h}-${i}`}
-                className={`font-mono text-xs text-bus-muted uppercase tracking-wider ${i > 0 ? 'text-right' : ''}`}
+                className={`font-mono text-xs text-bus-muted uppercase tracking-wider ${i > 1 ? 'text-right' : ''}`}
               >
                 {h}
               </span>
@@ -78,28 +80,23 @@ function TopicRow({ topic }: { topic: TopicInfo }) {
 
   const rateColor = isIdle ? 'text-bus-muted' : isHot ? 'text-bus-amber' : 'text-bus-cyan'
   const sparkColor = isIdle ? '#2a2f35' : isHot ? '#f59e0b' : '#00d4ff'
-  const rowBg = isIdle ? '' : 'hover:bg-[#1f2428]'
 
   return (
     <div
-      className={`grid ${COLS} items-center px-3 h-9 border-b border-[#1f2428] transition-colors cursor-default ${rowBg}`}
+      className={`grid ${COLS} items-center px-3 h-9 border-b border-[#1f2428] transition-colors cursor-default hover:bg-[#1f2428]`}
     >
       <div className="flex items-center gap-2 min-w-0">
         <span className={`w-2 h-2 rounded-full shrink-0 ${isIdle ? 'bg-bus-muted' : 'bg-bus-green pulse-green'}`} />
-        <span
-          className={`font-mono text-[13px] font-medium truncate ${isIdle ? 'text-bus-muted' : 'text-bus-text'}`}
-          title={topic.name}
-        >
-          {topic.name}
-        </span>
+        <TruncateTip
+          text={topic.name}
+          className={`font-mono text-[13px] font-medium ${isIdle ? 'text-bus-muted' : 'text-bus-text'}`}
+        />
       </div>
 
-      <span
-        className="font-mono text-[12px] text-[#6b8294] truncate"
-        title={topic.typeName || undefined}
-      >
-        {topic.typeName || '—'}
-      </span>
+      <TruncateTip
+        text={topic.typeName || undefined}
+        className="font-mono text-[12px] text-[#6b8294]"
+      />
 
       <div className="flex items-center justify-end gap-1.5">
         <div className="w-12 h-5">

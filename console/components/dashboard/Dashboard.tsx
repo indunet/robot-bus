@@ -98,12 +98,35 @@ export default function Dashboard() {
             />
           )}
           {activeTab === 'topology' && <TopologyView topology={topology} />}
-          {activeTab === 'topics' && <TopicTable topics={topics} />}
+          {activeTab === 'topics' && (
+            <div className="flex flex-col gap-3 flex-1 min-h-0">
+              <div className="h-[16rem] shrink-0">
+                <ThroughputChart data={throughput} />
+              </div>
+              <div className="flex-1 min-h-[12rem]">
+                <TopicTable topics={topics} />
+              </div>
+            </div>
+          )}
           {activeTab === 'services' && (
-            <ServiceActionTable services={services} actions={actions} mode="services" />
+            <div className="flex flex-col gap-3 flex-1 min-h-0">
+              <div className="h-[16rem] shrink-0">
+                <ServiceRateChart data={svcRate} />
+              </div>
+              <div className="flex-1 min-h-[12rem]">
+                <ServiceActionTable services={services} actions={actions} mode="services" />
+              </div>
+            </div>
           )}
           {activeTab === 'actions' && (
-            <ServiceActionTable services={services} actions={actions} mode="actions" />
+            <div className="flex flex-col gap-3 flex-1 min-h-0">
+              <div className="h-[16rem] shrink-0">
+                <ActionRateChart data={actRate} />
+              </div>
+              <div className="flex-1 min-h-[12rem]">
+                <ServiceActionTable services={services} actions={actions} mode="actions" />
+              </div>
+            </div>
           )}
           {activeTab === 'logs' && (
             <div className="flex-1 min-h-0">

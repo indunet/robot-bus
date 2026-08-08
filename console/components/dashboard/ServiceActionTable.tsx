@@ -54,6 +54,7 @@ function ServicesPanel({
         icon={<Cpu size={14} />}
         title={t('servicesTitle')}
         sub={t('servicesKnown', { n: services.length })}
+        subClassName="text-bus-amber"
       />
       <ColHeader
         cols={[t('colService'), t('colCallsS'), t('colCalls'), t('colWorkers'), t('colErr'), t('colP99'), t('colLast')]}
@@ -108,6 +109,7 @@ function ActionsPanel({
         icon={<GitBranch size={14} />}
         title={t('actionsTitle')}
         sub={t('actionsKnown', { n: actions.length })}
+        subClassName="text-bus-green"
       />
       <ColHeader
         cols={[t('colAction'), t('colRunsS'), t('colRuns'), t('colActive'), t('colErr'), t('colAvgDur'), t('colLast')]}

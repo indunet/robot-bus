@@ -138,7 +138,9 @@ export function resolveBusUrl(): string {
  */
 export function startConsoleBus(handlers: ConsoleBusHandlers): () => void {
   const url = resolveBusUrl()
-  const node = RobotBusNode.grpcAt('console_ui', url, { consoleUrl: null })
+  // Topology + topic-type registration enabled so console subscriptions show in
+  // Pub/Sub counts and fill TYPE for `/robot_bus/*` system topics.
+  const node = RobotBusNode.grpcAt('console_ui', url)
 
   node.createSubscription(consoleTopics.STATUS, (_t, msg) => {
     handlers.onStatus(mapStatus(msg))

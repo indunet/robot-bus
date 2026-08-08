@@ -342,6 +342,10 @@ export class GrpcNode {
     list.push(wrapped);
     this.subscriptions.set(topic, list);
     this.trackEndpoint("subscriber", topic);
+    if (msgType) {
+      this.topicTypes.set(topic, msgType.typeName);
+      if (this.topologyStarted) this.registerTopicType(topic, msgType.typeName);
+    }
   }
 
   createClient(serviceName: string): GrpcServiceClient;

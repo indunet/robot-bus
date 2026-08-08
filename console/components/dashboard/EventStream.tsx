@@ -114,13 +114,18 @@ export default function EventStream({ logs }: Props) {
         </div>
       </div>
 
-      <div ref={scrollContainerRef} className="flex-1 overflow-y-auto min-h-0 font-mono text-[13px]">
+      <div ref={scrollContainerRef} className="relative flex-1 overflow-y-auto min-h-0 font-mono text-[13px]">
         {visible.map((entry) => (
           <LogLine key={entry.id} entry={entry} dateLocale={dateLocale} />
         ))}
         {Array.from({ length: padRows }, (_, i) => (
-          <EmptyRow key={`pad-${i}`} hint={visible.length === 0 && i === 0 ? t('eventsEmpty') : undefined} />
+          <EmptyRow key={`pad-${i}`} />
         ))}
+        {visible.length === 0 && (
+          <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+            <span className="font-mono text-xs text-bus-muted">{t('eventsEmpty')}</span>
+          </div>
+        )}
         <div ref={bottomRef} />
       </div>
 
@@ -137,16 +142,16 @@ export default function EventStream({ logs }: Props) {
   )
 }
 
-function EmptyRow({ hint }: { hint?: string }) {
+function EmptyRow() {
   return (
     <div
-      aria-hidden={!hint}
+      aria-hidden
       className="flex items-start gap-2.5 px-3 py-1 border-b border-bus-panel/70 min-h-[28px]"
     >
       <span className="tabular-nums shrink-0 w-[96px]" />
       <span className="shrink-0 w-11" />
       <span className="shrink-0 w-[110px]" />
-      <span className="leading-relaxed text-bus-muted/40">{hint ?? ''}</span>
+      <span className="leading-relaxed" />
     </div>
   )
 }

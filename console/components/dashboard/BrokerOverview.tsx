@@ -45,10 +45,13 @@ export function PanelHeader({
   icon,
   title,
   sub,
+  subClassName = 'text-bus-muted',
 }: {
   icon?: React.ReactNode
   title: string
   sub?: string
+  /** Accent for count / status subtitle (default muted). */
+  subClassName?: string
 }) {
   return (
     <div className="flex items-center justify-between px-3 h-9 border-b border-bus-border">
@@ -60,7 +63,9 @@ export function PanelHeader({
         )}
         <span className="font-mono text-xs font-bold text-bus-text tracking-widest uppercase">{title}</span>
       </div>
-      {sub && <span className="font-mono text-xs text-bus-muted">{sub}</span>}
+      {sub && (
+        <span className={`font-mono text-xs font-medium tabular-nums ${subClassName}`}>{sub}</span>
+      )}
     </div>
   )
 }

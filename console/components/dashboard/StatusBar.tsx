@@ -147,7 +147,8 @@ function AddrChip({ label, addr }: { label: string; addr: string }) {
 }
 
 function LiveClock({ dateLocale }: { dateLocale: string }) {
-  const [time, setTime] = useState(() => new Date().toLocaleTimeString(dateLocale, { hour12: false }))
+  // Empty until mount — avoids SSR/client clock skew hydration mismatch.
+  const [time, setTime] = useState('')
   useEffect(() => {
     const tick = () => setTime(new Date().toLocaleTimeString(dateLocale, { hour12: false }))
     tick()
@@ -157,7 +158,7 @@ function LiveClock({ dateLocale }: { dateLocale: string }) {
   return (
     <span className="flex items-center gap-1.5 shrink-0">
       <Clock size={13} className="text-bus-muted" />
-      <span className="font-mono text-xs text-bus-muted tabular-nums">{time}</span>
+      <span className="font-mono text-xs text-bus-muted tabular-nums">{time || '--:--:--'}</span>
     </span>
   )
 }

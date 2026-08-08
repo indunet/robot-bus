@@ -27,9 +27,9 @@ function RateChart({ title, sub, seriesLabel, unit, stroke, gradientId, icon, da
   return (
     <section className="border border-bus-border bg-bus-panel rounded-sm h-full flex flex-col min-h-0">
       <PanelHeader icon={icon} title={title} sub={sub} />
-      <div className="flex-1 min-h-[7rem] px-2 pb-1 pt-1">
+      <div className="flex-1 min-h-[7rem] px-3 pb-2 pt-2">
         <ResponsiveContainer width="100%" height="100%">
-          <AreaChart data={data} margin={{ top: 4, right: 8, left: -16, bottom: 2 }}>
+          <AreaChart data={data} margin={{ top: 10, right: 8, left: 4, bottom: 12 }}>
             <defs>
               <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
                 <stop offset="0%" stopColor={stroke} stopOpacity={0.25} />
@@ -38,21 +38,23 @@ function RateChart({ title, sub, seriesLabel, unit, stroke, gradientId, icon, da
             </defs>
             <XAxis
               dataKey="t"
-              tick={{ fill: '#5a6370', fontSize: 10, fontFamily: 'monospace' }}
+              tick={{ fill: '#5a6370', fontSize: 11, fontFamily: 'monospace' }}
               tickLine={false}
               axisLine={false}
               interval="preserveStartEnd"
               minTickGap={28}
               angle={-35}
               textAnchor="end"
-              height={36}
-              tickMargin={4}
+              height={46}
+              tickMargin={6}
             />
             <YAxis
               tick={{ fill: '#5a6370', fontSize: 11, fontFamily: 'monospace' }}
               tickLine={false}
               axisLine={false}
-              width={40}
+              width={44}
+              allowDecimals={false}
+              tickFormatter={(v) => String(Math.round(Number(v)))}
             />
             <Tooltip
               contentStyle={{
@@ -64,7 +66,7 @@ function RateChart({ title, sub, seriesLabel, unit, stroke, gradientId, icon, da
                 color: '#c8ced6',
               }}
               labelStyle={{ color: '#5a6370' }}
-              formatter={(v) => [`${Number(v ?? 0)} ${unit}`, seriesLabel]}
+              formatter={(v) => [`${Math.round(Number(v ?? 0))} ${unit}`, seriesLabel]}
             />
             <Area
               type="monotone"

@@ -164,10 +164,8 @@ fn handle_message(state: &ConsoleState, topic: &str, payload: &[u8]) {
             if topic_name.is_empty() || type_name.is_empty() {
                 return;
             }
-            if console_topics::is_reserved_name(topic_name) {
-                log::warn!("reject topic type register on reserved topic {topic_name}");
-                return;
-            }
+            // Reserved `/robot_bus/*` topics are allowed: console UI and the
+            // status publisher need TYPE metadata for system snapshot channels.
             let previous = state.topic_types.register(topic_name, type_name);
             if previous.as_deref() != Some(type_name) {
                 state.events.emit(

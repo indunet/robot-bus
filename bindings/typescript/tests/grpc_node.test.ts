@@ -275,10 +275,11 @@ describe("GrpcNode console registration", () => {
         topologyRefreshMs: 100,
       });
       node.createPublisher("/typed", FakeType);
+      node.createSubscription("/cmd", () => {}, FakeType);
       node.start();
-      node.createSubscription("/cmd", () => {});
       await new Promise((resolve) => setTimeout(resolve, 120));
       node.shutdown();
+      // Publisher + subscriber topology and topic-type registrations.
       assert.ok(rpcCalls >= 1);
     } finally {
       globalThis.fetch = originalFetch;

@@ -1381,6 +1381,7 @@ impl Node {
     ///
     /// Decode failures are skipped (logged). `callback_group: None` uses the
     /// node's default mutually exclusive group.
+    /// Best-effort registers `topic → M::full_name()` with the broker console.
     pub fn create_subscription<M, F>(
         &mut self,
         topic: &str,
@@ -1388,7 +1389,7 @@ impl Node {
         callback_group: Option<&CallbackGroup>,
     ) -> Result<()>
     where
-        M: Message + Default + 'static,
+        M: Message + Name + Default + 'static,
         F: Fn(&str, M) + Send + Sync + 'static,
     {
         let group = callback_group
@@ -1398,7 +1399,15 @@ impl Node {
             Ok(msg) => callback(topic, msg),
             Err(err) => log::warn!("typed subscription decode failed: {err}"),
         });
-        self.create_subscription_raw(topic, cb, Some(&group))
+        self.create_subscription_raw(topic, cb, Some(&group))?;
+        topic_type_register::register_topic_type(
+            self.options.service_frontend.as_deref(),
+            &self.options.host,
+            &self.options.transport,
+            topic,
+            &M::full_name(),
+        );
+        Ok(())
     }
 
     /// Subscribe with a raw-bytes callback.
