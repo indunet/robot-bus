@@ -300,6 +300,9 @@ fn reserved_robot_bus_topics_stay_local() {
     broker_b.stop().expect("stop b");
 }
 
+/// HTTP discover needs the gRPC gateway listener (`GET /api/v1/discover`).
+/// Skip under `cargo test --no-default-features` where no API server is started.
+#[cfg(feature = "grpc")]
 #[test]
 fn federation_peer_via_api_discover() {
     let _guard = lock_brokers();
