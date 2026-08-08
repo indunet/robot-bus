@@ -126,7 +126,7 @@ fn bot_sim_session_starts_physics_and_stops_after_release() {
     }
     assert!(
         seen.load(Ordering::Relaxed),
-        "expected /bot1/pose from in-process bot_sim"
+        "expected /robot_bus/bot/pose from in-process bot_sim"
     );
 
     let running: serde_json::Value = ureq::get(&format!("{base}/api/v1/bot-sim"))

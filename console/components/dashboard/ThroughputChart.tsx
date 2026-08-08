@@ -1,11 +1,17 @@
 'use client'
 
+import { useMemo, useState, type ReactNode } from 'react'
 import { AreaChart, Area, XAxis, YAxis, ResponsiveContainer, Tooltip } from 'recharts'
 import { PanelHeader } from './BrokerOverview'
 import { BarChart2, Cpu, GitBranch } from 'lucide-react'
 import { useI18n } from '@/lib/i18n'
-import { formatHms } from '@/lib/utils'
-import type { ReactNode } from 'react'
+import { formatHms, formatMsTick } from '@/lib/utils'
+
+/** Max ring-buffer length — 10 min @ ~1 Hz console status. */
+export const RATE_HISTORY_MAX = 600
+
+export const RATE_WINDOWS = [1, 3, 5, 10] as const
+export type RateWindowMinutes = (typeof RATE_WINDOWS)[number]
 
 export interface RatePoint {
   t: string
@@ -14,22 +20,96 @@ export interface RatePoint {
 
 interface RateChartProps {
   title: string
-  sub: string
+  /** i18n key factory: receives selected window minutes. */
+  subForWindow: (minutes: RateWindowMinutes) => string
   seriesLabel: string
   unit: string
   stroke: string
   gradientId: string
   icon: ReactNode
   data: RatePoint[]
+  /** Show 1m/3m/5m/10m picker (topics / services / actions charts). */
+  showWindowPicker?: boolean
 }
 
-function RateChart({ title, sub, seriesLabel, unit, stroke, gradientId, icon, data }: RateChartProps) {
+function WindowPicker({
+  value,
+  onChange,
+  accent,
+}: {
+  value: RateWindowMinutes
+  onChange: (next: RateWindowMinutes) => void
+  accent: string
+}) {
+  return (
+    <div
+      role="radiogroup"
+      aria-label="chart window"
+      className="flex items-center gap-0.5 rounded-md border border-[#3a8fa3]/40 bg-[#0c1014]/90 p-0.5 shadow-[inset_0_1px_0_rgb(255_255_255_/06%)]"
+    >
+      {RATE_WINDOWS.map((mins) => {
+        const active = value === mins
+        return (
+          <button
+            key={mins}
+            type="button"
+            role="radio"
+            aria-checked={active}
+            onClick={() => onChange(mins)}
+            className={`relative h-6 min-w-[1.85rem] rounded-[4px] px-1.5 font-mono text-[10px] tabular-nums tracking-wide transition-all ${
+              active
+                ? 'text-[#0a0d0f] font-semibold'
+                : 'text-bus-muted hover:text-bus-text hover:bg-white/[0.05]'
+            }`}
+            style={
+              active
+                ? {
+                    backgroundColor: accent,
+                    boxShadow: `0 0 0 1px ${accent}55, 0 0 10px ${accent}33`,
+                  }
+                : undefined
+            }
+          >
+            {mins}m
+          </button>
+        )
+      })}
+    </div>
+  )
+}
+
+function RateChart({
+  title,
+  subForWindow,
+  seriesLabel,
+  unit,
+  stroke,
+  gradientId,
+  icon,
+  data,
+  showWindowPicker = true,
+}: RateChartProps) {
+  const [windowMin, setWindowMin] = useState<RateWindowMinutes>(1)
+  const view = useMemo(() => {
+    const n = windowMin * 60
+    return data.length <= n ? data : data.slice(data.length - n)
+  }, [data, windowMin])
+
   return (
     <section className="border border-bus-border bg-bus-panel rounded-sm h-full flex flex-col min-h-0">
-      <PanelHeader icon={icon} title={title} sub={sub} />
+      <PanelHeader
+        icon={icon}
+        title={title}
+        sub={subForWindow(windowMin)}
+        trailing={
+          showWindowPicker ? (
+            <WindowPicker value={windowMin} onChange={setWindowMin} accent={stroke} />
+          ) : undefined
+        }
+      />
       <div className="flex-1 min-h-[7rem] px-3 pb-2 pt-2">
         <ResponsiveContainer width="100%" height="100%">
-          <AreaChart data={data} margin={{ top: 10, right: 8, left: 4, bottom: 12 }}>
+          <AreaChart data={view} margin={{ top: 10, right: 8, left: 4, bottom: 12 }}>
             <defs>
               <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
                 <stop offset="0%" stopColor={stroke} stopOpacity={0.25} />
@@ -43,10 +123,9 @@ function RateChart({ title, sub, seriesLabel, unit, stroke, gradientId, icon, da
               axisLine={false}
               interval="preserveStartEnd"
               minTickGap={28}
-              angle={-35}
-              textAnchor="end"
-              height={46}
+              height={28}
               tickMargin={6}
+              tickFormatter={formatMsTick}
             />
             <YAxis
               tick={{ fill: '#5a6370', fontSize: 11, fontFamily: 'monospace' }}
@@ -85,57 +164,78 @@ function RateChart({ title, sub, seriesLabel, unit, stroke, gradientId, icon, da
 }
 
 /** Topic message throughput (msg/s). */
-export default function ThroughputChart({ data }: { data: RatePoint[] }) {
+export default function ThroughputChart({
+  data,
+  showWindowPicker = true,
+}: {
+  data: RatePoint[]
+  showWindowPicker?: boolean
+}) {
   const { t } = useI18n()
   return (
     <RateChart
       title={t('throughputTitle')}
-      sub={t('throughputSub')}
+      subForWindow={(m) => t('throughputSub', { n: m })}
       seriesLabel={t('throughputSeries')}
       unit="msg/s"
       stroke="#00d4ff"
       gradientId="gradCyan"
       icon={<BarChart2 size={14} />}
       data={data}
+      showWindowPicker={showWindowPicker}
     />
   )
 }
 
 /** Aggregate service call rate (calls/s). */
-export function ServiceRateChart({ data }: { data: RatePoint[] }) {
+export function ServiceRateChart({
+  data,
+  showWindowPicker = true,
+}: {
+  data: RatePoint[]
+  showWindowPicker?: boolean
+}) {
   const { t } = useI18n()
   return (
     <RateChart
       title={t('svcRateTitle')}
-      sub={t('svcRateSub')}
+      subForWindow={(m) => t('svcRateSub', { n: m })}
       seriesLabel={t('svcRateSeries')}
       unit="calls/s"
       stroke="#f5a623"
       gradientId="gradAmber"
       icon={<Cpu size={14} />}
       data={data}
+      showWindowPicker={showWindowPicker}
     />
   )
 }
 
 /** Aggregate action run rate (runs/s). */
-export function ActionRateChart({ data }: { data: RatePoint[] }) {
+export function ActionRateChart({
+  data,
+  showWindowPicker = true,
+}: {
+  data: RatePoint[]
+  showWindowPicker?: boolean
+}) {
   const { t } = useI18n()
   return (
     <RateChart
       title={t('actRateTitle')}
-      sub={t('actRateSub')}
+      subForWindow={(m) => t('actRateSub', { n: m })}
       seriesLabel={t('actRateSeries')}
       unit="runs/s"
       stroke="#3dd68c"
       gradientId="gradGreen"
       icon={<GitBranch size={14} />}
       data={data}
+      showWindowPicker={showWindowPicker}
     />
   )
 }
 
-/** Seed empty rate history (HH:MM:SS labels; live poll overwrites). */
+/** Seed empty rate history (HH:MM:SS labels for tooltips; axis shows MM:SS). */
 export function generateRateHistory(base = 0, len = 60): RatePoint[] {
   let v = base
   return Array.from({ length: len }, (_, i) => {
@@ -146,6 +246,17 @@ export function generateRateHistory(base = 0, len = 60): RatePoint[] {
       value: Math.round(v),
     }
   })
+}
+
+/** Append one sample; keep at most `maxLen` points (default 5 min @ 1 Hz). */
+export function appendRatePoint(
+  prev: RatePoint[],
+  label: string,
+  value: number,
+  maxLen = RATE_HISTORY_MAX,
+): RatePoint[] {
+  const next = [...prev, { t: label, value }]
+  return next.length > maxLen ? next.slice(next.length - maxLen) : next
 }
 
 /** @deprecated Prefer generateRateHistory */

@@ -334,7 +334,7 @@ cargo run --bin robot_bus_broker
 
 已对接 **与原生 gRPC / WebSocket RPC 同一端口**（`0.0.0.0:15770`）：Dashboard 是 TypeScript `GrpcNode`，经 `/ws` 订阅 `/robot_bus/*` 系统话题。`rbus` / 工具仍可用 REST 只读 shim（`GET /api/v1/...`）。拓扑与类型登记通过现有 service bus 上的可靠控制面服务（`/robot_bus/topology/register`、`/robot_bus/topic_type/register`）。领域可视化、Flow、LIVE / WHEP 在同级仓库 **[robot-bus-tools](https://github.com/indunet/robot-bus-tools)** 的 Studio。前端源码在 `console/`；只有生成的静态文件会编进带 `console` feature 的二进制。
 
-**机器人仿真双节点演示：** 进程内 [`src/bot_sim/`](src/bot_sim/) 负责物理（`SUB /bot1/cmd_vel` → `PUB /bot1/pose`），控制台打开 BOT SIM 会话时自动拉起；**BOT SIM** 面板（`bot_viz`）渲染位姿并调度能力（当前为键盘遥控）。共享世界，多人可看，遥控后写覆盖。
+**机器人仿真双节点演示：** 进程内 [`src/bot_sim/`](src/bot_sim/) 负责物理（`SUB /robot_bus/bot/cmd_vel` → `PUB /robot_bus/bot/pose`），控制台打开 BOT SIM 会话时自动拉起；**BOT SIM** 面板（`bot_viz`）渲染位姿并调度能力（当前为键盘遥控）。共享世界，多人可看，遥控后写覆盖。
 
 ## gRPC + 浏览器 WebSocket 网关
 

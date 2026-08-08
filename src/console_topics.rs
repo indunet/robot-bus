@@ -32,16 +32,29 @@ pub const CONTROL_SUBSCRIBE: &[&str] =
 /// Snapshot topics the broker status publisher emits.
 pub const SNAPSHOT_PUBLISH: &[&str] = &[STATUS, TOPICS, SERVICES, ACTIONS, TOPOLOGY, EVENTS];
 
+/// Built-in BOT SIM endpoints (`/robot_bus/bot/*`). Clients may pub/sub and call
+/// these; they remain under the reserved prefix so they show as system-owned.
+pub const BOT_PREFIX: &str = "/robot_bus/bot";
+
 /// True for names under the reserved console namespace (`/robot_bus` and `/robot_bus/*`).
 pub fn is_reserved_name(name: &str) -> bool {
     let name = name.trim();
     name == PREFIX || name.starts_with("/robot_bus/")
 }
 
+/// True for built-in bot demo names that clients are allowed to use.
+pub fn is_builtin_bot_name(name: &str) -> bool {
+    let name = name.trim();
+    name == BOT_PREFIX || name.starts_with("/robot_bus/bot/")
+}
+
 /// Reject user registration of reserved console topic / service / action names.
+///
+/// Snapshot / control-plane channels stay exclusive to the broker; `/robot_bus/bot/*`
+/// is exempt so teleop and nav clients can talk to the in-process bot_sim.
 pub fn check_not_reserved(name: &str) -> Result<()> {
     let name = name.trim();
-    if is_reserved_name(name) {
+    if is_reserved_name(name) && !is_builtin_bot_name(name) {
         return Err(BusError::ReservedName {
             name: name.to_string(),
         });
@@ -58,9 +71,15 @@ mod tests {
         assert!(is_reserved_name("/robot_bus"));
         assert!(is_reserved_name("/robot_bus/status"));
         assert!(is_reserved_name(" /robot_bus/topology/register "));
+        assert!(is_reserved_name("/robot_bus/bot/pose"));
         assert!(!is_reserved_name("/robot_bus_extra"));
         assert!(!is_reserved_name("/robot1/imu"));
         assert!(check_not_reserved("/robot_bus/topics").is_err());
+        assert!(check_not_reserved("/robot_bus/bot/cmd_vel").is_ok());
+        assert!(check_not_reserved("/robot_bus/bot/reset").is_ok());
         assert!(check_not_reserved("/ok").is_ok());
+        assert!(is_builtin_bot_name("/robot_bus/bot/pose"));
+        assert!(!is_builtin_bot_name("/robot_bus/status"));
+        assert!(!is_builtin_bot_name("/robot_bus/bot_extra"));
     }
 }

@@ -333,7 +333,7 @@ cargo run --bin robot_bus_broker
 
 Wired to the broker on the **same port** as native gRPC / WebSocket RPC (`0.0.0.0:15770`): the Dashboard is a TypeScript `GrpcNode` that subscribes to `/robot_bus/*` system topics over `/ws`. A thin REST shim (`GET /api/v1/...`) remains for `rbus` / tooling. Topology and topic-type registration use reliable control-plane services (`/robot_bus/topology/register`, `/robot_bus/topic_type/register`) through the existing service bus. Domain visualizers, Flow, and LIVE / WHEP live in **[robot-bus-tools](https://github.com/indunet/robot-bus-tools)** Studio. The frontend source lives in `console/`; only the generated static files are compiled into binaries with the `console` feature.
 
-**Bot demo (2 nodes):** in-process [`src/bot_sim/`](src/bot_sim/) owns physics (`SUB /bot1/cmd_vel` → `PUB /bot1/pose`) and starts when the console opens a BOT SIM session; the **BOT SIM** panel (`bot_viz`) renders pose and dispatches capabilities (keyboard teleop first). Shared world — multiple viewers, last-writer-wins teleop.
+**Bot demo (2 nodes):** in-process [`src/bot_sim/`](src/bot_sim/) owns physics (`SUB /robot_bus/bot/cmd_vel` → `PUB /robot_bus/bot/pose`) and starts when the console opens a BOT SIM session; the **BOT SIM** panel (`bot_viz`) renders pose and dispatches capabilities (keyboard teleop first). Shared world — multiple viewers, last-writer-wins teleop.
 
 ## gRPC + browser WebSocket gateway
 

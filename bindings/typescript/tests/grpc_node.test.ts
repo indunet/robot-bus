@@ -36,13 +36,22 @@ describe("coalesceSubscribeFilters", () => {
 
   it("keeps unrelated topics on separate streams", () => {
     assert.deepEqual(
-      coalesceSubscribeFilters(["/bot1/pose", "/robot_bus/status"]),
-      ["/bot1/pose", "/robot_bus/status"],
+      coalesceSubscribeFilters(["/robot1/imu", "/robot_bus/status"]),
+      ["/robot1/imu", "/robot_bus/status"],
     );
   });
 
   it("passes through a single topic", () => {
-    assert.deepEqual(coalesceSubscribeFilters(["/bot1/pose"]), ["/bot1/pose"]);
+    assert.deepEqual(coalesceSubscribeFilters(["/robot_bus/bot/pose"]), [
+      "/robot_bus/bot/pose",
+    ]);
+  });
+
+  it("coalesces bot demo topics with other /robot_bus/* snapshots", () => {
+    assert.deepEqual(
+      coalesceSubscribeFilters(["/robot_bus/bot/pose", "/robot_bus/status"]),
+      ["/robot_bus/"],
+    );
   });
 });
 

@@ -24,14 +24,11 @@ import BotWindows from './BotWindows'
 import ThroughputChart, {
   ServiceRateChart,
   ActionRateChart,
+  appendRatePoint,
   generateRateHistory,
   type RatePoint,
 } from './ThroughputChart'
 import { formatHms } from '@/lib/utils'
-
-function appendRatePoint(prev: RatePoint[], label: string, value: number): RatePoint[] {
-  return [...prev.slice(1), { t: label, value }]
-}
 
 export default function Dashboard() {
   const [broker, setBroker] = useState<BrokerInfo>(EMPTY_BROKER)
@@ -40,9 +37,9 @@ export default function Dashboard() {
   const [actions, setActions] = useState<ActionInfo[]>([])
   const [topology, setTopology] = useState<TopologyInfo>({ nodes: [], edges: [] })
   const [logs, setLogs] = useState<LogEntry[]>([])
-  const [throughput, setThroughput] = useState(() => generateRateHistory(0))
-  const [svcRate, setSvcRate] = useState(() => generateRateHistory(0))
-  const [actRate, setActRate] = useState(() => generateRateHistory(0))
+  const [throughput, setThroughput] = useState(() => generateRateHistory(0, 60))
+  const [svcRate, setSvcRate] = useState(() => generateRateHistory(0, 60))
+  const [actRate, setActRate] = useState(() => generateRateHistory(0, 60))
   const [activeTab, setActiveTab] = useState<Tab>('overview')
   const [botOpen, setBotOpen] = useState(false)
   const seenLogIds = useRef(new Set<string>())

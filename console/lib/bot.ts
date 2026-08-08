@@ -1,9 +1,20 @@
 import { resolveBusUrl } from '@/lib/console-bus'
 
-export const CMD_VEL_TOPIC = '/bot1/cmd_vel'
-export const POSE_TOPIC = '/bot1/pose'
+/** Built-in bot demo under the reserved `/robot_bus/*` namespace. */
+export const BOT_PREFIX = '/robot_bus/bot'
+export const CMD_VEL_TOPIC = '/robot_bus/bot/cmd_vel'
+export const POSE_TOPIC = '/robot_bus/bot/pose'
+export const POINT_NAV_ACTION = '/robot_bus/bot/point_navigation'
+export const MULTI_WAYPOINT_NAV_ACTION = '/robot_bus/bot/multi_waypoint_navigation'
+export const RESET_SERVICE = '/robot_bus/bot/reset'
 /** World extents shared with the in-process `bot_sim` (meters / arbitrary units). */
 export const WORLD_SIZE = 11
+/** Home pose used by `/robot_bus/bot/reset` (world center). */
+export const HOME_POSE: { x: number; y: number; theta: number } = {
+  x: WORLD_SIZE / 2,
+  y: WORLD_SIZE / 2,
+  theta: 0,
+}
 
 export type BotSimSessionInfo = {
   sessionId: string

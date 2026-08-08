@@ -96,7 +96,7 @@ export default function FloatingWindow({
       role="dialog"
       aria-label={title}
       onPointerDown={onBringToFront}
-      className="fixed flex flex-col overflow-hidden border border-bus-border bg-bus-panel/95 shadow-[0_1px_0_rgb(255_255_255_/10%)_inset,0_-1px_0_rgb(0_0_0_/28%)_inset,0_22px_48px_rgb(0_0_0_/42%),0_8px_18px_rgb(0_0_0_/28%),0_0_0_1px_rgb(0_212_255_/14%)] backdrop-blur-[8px]"
+      className="fixed flex flex-col overflow-hidden rounded-lg border border-[#3a8fa3]/45 bg-bus-panel/55 shadow-[0_1px_0_rgb(255_255_255_/06%)_inset,0_0_0_1px_rgb(0_183_216_/14%),0_0_28px_rgb(0_183_216_/08%),0_18px_40px_rgb(0_0_0_/40%),0_6px_14px_rgb(0_0_0_/25%)] backdrop-blur-md"
       style={{
         left: position.x,
         top: position.y,
@@ -105,32 +105,19 @@ export default function FloatingWindow({
         maxWidth: 'calc(100vw - 12px)',
         maxHeight: 'calc(100vh - 12px)',
         zIndex,
-        clipPath:
-          'polygon(0 0, calc(100% - 12px) 0, 100% 12px, 100% 100%, 12px 100%, 0 calc(100% - 12px))',
         transform: 'translateZ(0)',
       }}
     >
       <div
         aria-hidden="true"
-        className="pointer-events-none absolute inset-0 z-0 bg-gradient-to-br from-white/[0.03] via-transparent to-black/15"
+        className="pointer-events-none absolute inset-0 z-0 rounded-[inherit] bg-gradient-to-br from-bus-cyan/[0.03] via-transparent to-black/10"
       />
-      <div aria-hidden="true" className="pointer-events-none absolute inset-0 z-20">
-        <span className="absolute left-0 top-0 h-[2px] w-28 bg-gradient-to-r from-bus-cyan to-bus-cyan/10" />
-        <span className="absolute right-[-2px] top-[5px] h-px w-[17px] rotate-45 bg-bus-cyan" />
-        <span className="absolute bottom-[5px] left-[-2px] h-px w-[17px] rotate-45 bg-bus-cyan" />
-        <span className="absolute bottom-0 right-5 h-[2px] w-16 bg-gradient-to-l from-bus-cyan/80 to-transparent" />
-        <span className="absolute right-0 top-16 h-12 w-[2px] bg-gradient-to-b from-bus-cyan/60 to-transparent" />
-        <span className="absolute inset-x-0 top-0 h-px bg-white/30" />
-        <span className="absolute inset-y-0 left-0 w-px bg-white/12" />
-        <span className="absolute inset-y-0 right-0 w-px bg-black/30" />
-        <span className="absolute inset-x-0 bottom-0 h-px bg-black/35" />
-      </div>
       <div
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
         onPointerUp={(event) => endDrag(event)}
         onPointerCancel={() => endDrag()}
-        className="relative z-10 h-8 shrink-0 flex items-center justify-between px-2 border-b border-bus-border bg-bus-bg/90 cursor-move select-none touch-none shadow-[0_1px_0_rgb(255_255_255_/06%)_inset]"
+        className="relative z-10 h-8 shrink-0 flex items-center justify-between px-2.5 border-b border-[#3a8fa3]/28 bg-bus-bg/55 cursor-move select-none touch-none shadow-[0_1px_0_rgb(255_255_255_/05%)_inset]"
       >
         <span className="font-mono text-[10px] tracking-wider text-bus-cyan drop-shadow-[0_1px_2px_rgb(0_0_0_/55%)]">
           {title}
@@ -140,7 +127,7 @@ export default function FloatingWindow({
           aria-label={`Close ${title}`}
           onPointerDown={(event) => event.stopPropagation()}
           onClick={onClose}
-          className="w-6 h-6 flex items-center justify-center text-bus-muted hover:text-bus-red hover:bg-white/10 rounded-sm"
+          className="w-6 h-6 flex items-center justify-center text-bus-muted hover:text-bus-red hover:bg-white/10 rounded-md"
         >
           <X size={13} />
         </button>

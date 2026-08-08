@@ -114,6 +114,21 @@ export default function EventStream({ logs }: Props) {
         </div>
       </div>
 
+      <div className="flex items-center gap-2.5 px-3 h-8 border-b border-bus-border bg-bus-bg shrink-0">
+        <span className="font-mono text-xs text-bus-muted uppercase tracking-wider shrink-0 w-[96px]">
+          {t('colTime')}
+        </span>
+        <span className="font-mono text-xs text-bus-muted uppercase tracking-wider shrink-0 w-11">
+          {t('colLevel')}
+        </span>
+        <span className="font-mono text-xs text-bus-muted uppercase tracking-wider shrink-0 w-[110px]">
+          {t('colSource')}
+        </span>
+        <span className="font-mono text-xs text-bus-muted uppercase tracking-wider min-w-0">
+          {t('colMessage')}
+        </span>
+      </div>
+
       <div ref={scrollContainerRef} className="relative flex-1 overflow-y-auto min-h-0 font-mono text-[13px]">
         {visible.map((entry) => (
           <LogLine key={entry.id} entry={entry} dateLocale={dateLocale} />

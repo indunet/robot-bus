@@ -42,7 +42,7 @@ mod python_api;
 pub use action_bus::{ActionClient, ActionKind, ActionMessage, ActionWorker};
 pub use bot_sim::{
     BotSimEndpoints, BotSimHandle, BotSimManager, BotSimSession, BotSimStatus, CMD_VEL_TOPIC,
-    POSE_TOPIC, WORLD_SIZE,
+    MULTI_WAYPOINT_NAV_ACTION, POINT_NAV_ACTION, POSE_TOPIC, RESET_SERVICE, WORLD_SIZE,
 };
 pub use broker::{
     ActionPeer, DiscoveryConfig, MessagePeer, RobotBusBroker, RobotBusConfig, ServicePeer,

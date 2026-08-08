@@ -6,7 +6,7 @@ The sidebar **BOT** entry opens one **BOT SIM** floating window (also `/bot_sim/
 
 | Node | Where | Role |
 |------|---------|------|
-| `bot_sim` | broker (on session acquire) | Sim: SUB `/bot1/cmd_vel`, integrate pose, PUB `/bot1/pose` |
+| `bot_sim` | broker (on session acquire) | Sim: SUB `/robot_bus/bot/cmd_vel`, integrate pose, PUB `/robot_bus/bot/pose` |
 | `bot_viz` | console BOT SIM / `/bot_sim/` | Viz/ops: session + SUB pose + PUB cmd_vel |
 
 ```bash

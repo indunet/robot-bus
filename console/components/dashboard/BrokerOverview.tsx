@@ -67,26 +67,34 @@ export function PanelHeader({
   title,
   sub,
   subClassName = 'text-bus-muted',
+  trailing,
 }: {
   icon?: React.ReactNode
   title: string
   sub?: string
   /** Accent for count / status subtitle (default muted). */
   subClassName?: string
+  /** Optional controls on the right (e.g. window picker). */
+  trailing?: React.ReactNode
 }) {
   return (
-    <div className="flex items-center justify-between px-3 h-9 border-b border-bus-border">
-      <div className="flex items-center gap-2">
+    <div className="flex items-center justify-between gap-2 px-3 h-9 border-b border-bus-border">
+      <div className="flex items-center gap-2 min-w-0">
         {icon ? (
-          <span className="text-bus-cyan">{icon}</span>
+          <span className="text-bus-cyan shrink-0">{icon}</span>
         ) : (
-          <div className="w-0.5 h-4 bg-bus-cyan" />
+          <div className="w-0.5 h-4 bg-bus-cyan shrink-0" />
         )}
-        <span className="font-mono text-xs font-bold text-bus-text tracking-widest uppercase">{title}</span>
+        <span className="font-mono text-xs font-bold text-bus-text tracking-widest uppercase truncate">
+          {title}
+        </span>
       </div>
-      {sub && (
-        <span className={`font-mono text-xs font-medium tabular-nums ${subClassName}`}>{sub}</span>
-      )}
+      <div className="flex items-center gap-2 shrink-0">
+        {trailing}
+        {sub && (
+          <span className={`font-mono text-xs font-medium tabular-nums ${subClassName}`}>{sub}</span>
+        )}
+      </div>
     </div>
   )
 }

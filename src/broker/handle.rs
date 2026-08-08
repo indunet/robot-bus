@@ -527,6 +527,8 @@ impl RobotBusBroker {
             let bot_sim = BotSimManager::new(BotSimEndpoints {
                 message_xsub: bind_to_connect(&message.xsub_bind),
                 message_xpub: bind_to_connect(&message.xpub_bind),
+                service_backend: bind_to_connect(&service.backend_bind),
+                action_backend: bind_to_connect(&action.backend_bind),
             });
             Some(ConsoleState::new(
                 endpoints,
