@@ -1,6 +1,6 @@
 /**
  * Node.js entry: napi-rs native binding + typed helpers.
- * Also re-exports GrpcNode for pure gRPC-Web clients on Node without ZMQ.
+ * Also re-exports GrpcNode for pure WebSocket RPC clients on Node without ZMQ.
  */
 
 import { loadNative } from "./native.js";

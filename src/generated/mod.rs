@@ -172,6 +172,22 @@ pub mod action {
             type Feedback = FibonacciFeedback;
             type Result = FibonacciResult;
         }
+
+        /// 单点导航 (`robot_bus_interface/action/PointNavigation`).
+        pub struct PointNavigation;
+        impl Action for PointNavigation {
+            type Goal = PointNavigationGoal;
+            type Feedback = PointNavigationFeedback;
+            type Result = PointNavigationResult;
+        }
+
+        /// 多途经点导航 (`robot_bus_interface/action/MultiWaypointNavigation`).
+        pub struct MultiWaypointNavigation;
+        impl Action for MultiWaypointNavigation {
+            type Goal = MultiWaypointNavigationGoal;
+            type Feedback = MultiWaypointNavigationFeedback;
+            type Result = MultiWaypointNavigationResult;
+        }
     }
 }
 
@@ -180,6 +196,20 @@ pub mod robot_bus_interface {
     pub mod msg {
         pub mod v1 {
             include!("robot_bus_interface/msg/v1/_includes.rs");
+        }
+    }
+    pub mod srv {
+        pub mod v1 {
+            include!("robot_bus_interface/srv/v1/_includes.rs");
+
+            use crate::typed::Service;
+
+            /// 复位 (`robot_bus_interface/srv/Reset`).
+            pub struct Reset;
+            impl Service for Reset {
+                type Request = ResetRequest;
+                type Response = ResetResponse;
+            }
         }
     }
 }

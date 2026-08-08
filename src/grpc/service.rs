@@ -21,6 +21,31 @@ impl ServiceGatewayService {
             service_frontend: service_frontend.into(),
         }
     }
+
+    pub async fn call_service(&self, req: ServiceCallRequest) -> Result<Vec<u8>, Status> {
+        if req.service_name.is_empty() {
+            return Err(Status::invalid_argument("service_name is required"));
+        }
+
+        let frontend = self.service_frontend.clone();
+        let service_name = req.service_name;
+        let body = req.request;
+        let request_id = if req.request_id.is_empty() {
+            None
+        } else {
+            Some(req.request_id)
+        };
+        let timeout = timeout_from_ms(req.timeout_ms);
+
+        tokio::task::spawn_blocking(move || {
+            let client = ServiceClient::new(Some(&frontend)).map_err(bus_status)?;
+            client
+                .call(&service_name, &body, request_id.as_deref(), timeout)
+                .map_err(bus_status)
+        })
+        .await
+        .map_err(|err| Status::internal(format!("service call join: {err}")))?
+    }
 }
 
 fn bus_status(err: BusError) -> Status {
@@ -47,31 +72,7 @@ impl ServiceGateway for ServiceGatewayService {
         &self,
         request: Request<ServiceCallRequest>,
     ) -> Result<Response<ServiceCallResponse>, Status> {
-        let req = request.into_inner();
-        if req.service_name.is_empty() {
-            return Err(Status::invalid_argument("service_name is required"));
-        }
-
-        let frontend = self.service_frontend.clone();
-        let service_name = req.service_name;
-        let body = req.request;
-        let request_id = if req.request_id.is_empty() {
-            None
-        } else {
-            Some(req.request_id)
-        };
-        let timeout = timeout_from_ms(req.timeout_ms);
-
-        let response = tokio::task::spawn_blocking(move || {
-            let client = ServiceClient::new(Some(&frontend)).map_err(bus_status)?;
-            let response = client
-                .call(&service_name, &body, request_id.as_deref(), timeout)
-                .map_err(bus_status)?;
-            Ok::<_, Status>(response)
-        })
-        .await
-        .map_err(|err| Status::internal(format!("service call join: {err}")))??;
-
+        let response = self.call_service(request.into_inner()).await?;
         Ok(Response::new(ServiceCallResponse { response }))
     }
 }

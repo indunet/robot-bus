@@ -207,7 +207,7 @@ fn main() -> robot_bus::Result<()> {
 }
 ```
 
-以上为概念性 API，具体签名正在实现。gRPC 使用 `ActionGateway.SendGoal` 的一元请求 + server stream（`FEEDBACK` / `RESULT`）；取消即断开该流。ZMQ 取消则发送显式 `CANCEL` 帧。两种 transport 都不承诺服务端取消确认。
+以上为概念性 API，具体签名正在实现。`ActionGateway.SendGoal` 为一元请求 + server stream（`FEEDBACK` / `RESULT`）。浏览器 WebSocket 取消发显式 `CANCEL` 帧并继续等到 RESULT（真断连仍 cancel）；原生 gRPC 取消响应流；ZMQ 发显式 `CANCEL` 帧。均不承诺服务端确认。
 
 ---
 

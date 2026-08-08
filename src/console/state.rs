@@ -176,8 +176,8 @@ impl ConsoleState {
         if !state.endpoints.grpc.is_empty() {
             state.events.emit(
                 "INFO",
-                "grpc-web",
-                format!("gRPC gateway at {}", state.endpoints.grpc),
+                "grpc",
+                format!("gRPC + WebSocket (/ws) gateway at {}", state.endpoints.grpc),
             );
         }
         state

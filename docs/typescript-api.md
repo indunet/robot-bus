@@ -11,7 +11,7 @@ npm install robot-bus
 | 环境 | 入口 | 能力 |
 |------|------|------|
 | Node.js | napi-rs 原生扩展 | 完整 ZMQ Node（publish、service/action server、本地 broker） |
-| 浏览器 | gRPC-Web 客户端 | 订阅 / publish / 调 service / action（无 server） |
+| 浏览器 | WebSocket RPC（`/ws`） | 订阅 / publish / 调 service / action（无 server） |
 
 `console/` Web UI **不是**本 SDK。
 
@@ -47,7 +47,7 @@ const broker = RobotBusBroker.start({ domainId: 0, advertiseHost: "127.0.0.1" })
 const node = Node.discover("talker", { transport: "tcp", domainId: 0 });
 ```
 
-浏览器 gRPC-Web 入口无 UDP 发现，请用显式 `grpcUrl`。
+浏览器入口无 UDP 发现，请用显式 `grpcUrl`（HTTP 原点；SDK 会连 `ws://…/ws`）。
 
 跨 broker（federation）与 CLI 同款字符串约定：
 
@@ -156,13 +156,15 @@ const t = buf.lookupTransform("base_link", "camera", TransformStamped);
 
 离线：`createTfBuffer()` + `setTransformMsg`。见 `tests/tf_lookup.test.ts`。
 
-## 浏览器（gRPC-Web）
+## 浏览器（WebSocket RPC）
+
+浏览器客户端走 broker 的 **`/ws`**（类 gRPC over WebSocket，**一 RPC 一连接**），不再使用 gRPC-Web。
 
 ```ts
 import { Node } from "robot-bus";
 // bundler 自动解析到 browser 入口
 
-const node = Node.grpc("browser-client");
+const node = Node.grpc("browser-client"); // 默认 http://127.0.0.1:15770 → ws://127.0.0.1:15770/ws
 const pub = node.createPublisher("/robot1/cmd");
 await pub.publish(new TextEncoder().encode("go"));
 node.createSubscription("/robot1/imu", (topic, payload) => {
@@ -179,9 +181,22 @@ node.start(); // 或 node.spin()
 import { GrpcNode } from "robot-bus"; // Node 入口也导出 GrpcNode
 ```
 
+### WebSocket 帧（V1）
+
+路径：`ws://<host>:<port>/ws`（HTTPS 站点用 `wss://`）。每条连接承载一次 RPC：
+
+| type | 值 | 含义 |
+|------|----|------|
+| REQUEST | 1 | 首帧：method + protobuf 请求体 |
+| DATA | 2 | 响应 / 流消息 payload |
+| CANCEL | 3 | 客户端软取消（SendGoal：提交 cancel，连接保持至 RESULT；Subscribe：停订） |
+| TRAILER | 4 | `u32 status` + UTF-8 message（0 = OK） |
+
+method 示例：`robot_bus_interface.grpc.v1.MessageGateway/Subscribe`（以及 Publish / ServiceGateway/Call / ActionGateway/SendGoal）。业务 payload 与原生 gRPC 网关相同。
+
 ## Action GoalHandle
 
-Node.js（ZMQ）与浏览器（gRPC-Web）的 action client 采用同一套 ROS 2 风格语义：`sendGoal` 立即返回 `GoalHandle`，实时 feedback 交给 callback，result 独立等待。
+Node.js（ZMQ）与浏览器（WebSocket RPC）的 action client 采用同一套 ROS 2 风格语义：`sendGoal` 立即返回 `GoalHandle`，实时 feedback 交给 callback，result 独立等待。
 
 ```ts
 const action = node.createActionClient("/navigate");
@@ -205,7 +220,13 @@ const goal = action.sendGoal(goalMessage, {
 const result = await goal.result();
 ```
 
-`goal.cancel()` 的传输行为不同：gRPC / gRPC-Web 取消对应 goal 的 server stream；ZMQ 发送显式 `CANCEL` 帧。两者都不提供服务端取消确认。底层 gRPC RPC 为 `ActionGateway.SendGoal`：一元 goal request，服务端流式返回 `FEEDBACK`，最终返回 `RESULT`。
+`goal.cancel()` 传输行为：
+
+- **WebSocket RPC（浏览器）**：在同一条连接上发显式 **CANCEL** 帧，连接保持打开，继续收 `FEEDBACK` / `RESULT`（与 ZMQ 显式取消同语义）。若连接**真正断开**，服务端仍会提交 cancel 并放弃会话。
+- **原生 gRPC（HTTP/2）**：取消对应 goal 的 server stream（标准 gRPC 客户端取消）。
+- **ZMQ**：发送显式 `CANCEL` 帧。
+
+三者都不提供服务端取消确认。底层 RPC 为 `ActionGateway.SendGoal`：一元 goal request，服务端流式返回 `FEEDBACK`，最终返回 `RESULT`。
 
 ## Protobuf 消息
 

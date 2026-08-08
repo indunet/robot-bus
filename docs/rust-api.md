@@ -10,7 +10,7 @@ robot-bus = "0.1.6"
 
 ## Broker 启动
 
-运行示例前先起 broker（也可进程内嵌入，见下文）。默认一次启动 **message / service / action** 三条总线，每个 socket 同时 bind **tcp + ipc + inproc**，并启动 **grpc / grpc-web** 与 **console http**（控制台）。
+运行示例前先起 broker（也可进程内嵌入，见下文）。默认一次启动 **message / service / action** 三条总线，每个 socket 同时 bind **tcp + ipc + inproc**，并启动 **grpc / WebSocket RPC（`/ws`）** 与 **console http**（控制台）。
 
 ```bash
 cargo run --bin robot_bus_broker
@@ -29,8 +29,7 @@ cargo run --bin robot_bus_broker
 | service backend | `tcp://0.0.0.0:15663` | `ipc:///tmp/robot_bus/service_bus_backend.ipc` | `inproc://robot_bus/service_bus/backend` |
 | action frontend | `tcp://0.0.0.0:15664` | `ipc:///tmp/robot_bus/action_bus_frontend.ipc` | `inproc://robot_bus/action_bus/frontend` |
 | action backend | `tcp://0.0.0.0:15665` | `ipc:///tmp/robot_bus/action_bus_backend.ipc` | `inproc://robot_bus/action_bus/backend` |
-| grpc | `0.0.0.0:15770` | — | — |
-| grpc-web | `0.0.0.0:15770` | — | — |
+| grpc + WS `/ws` | `0.0.0.0:15770` | — | — |
 | console http | `0.0.0.0:15770` | — | — |
 | discovery (UDP multicast) | `239.255.76.67:15550` | — | — |
 
@@ -417,9 +416,9 @@ node.spin()?;
 
 ---
 
-## gRPC / gRPC-Web 网关
+## gRPC + 浏览器 WebSocket 网关
 
-由 `RobotBusBroker` / `robot_bus_broker` 一并启动（feature `grpc`，默认开启）。标准 gRPC 与 gRPC-Web **同端口**（默认 `0.0.0.0:15770`）。
+由 `RobotBusBroker` / `robot_bus_broker` 一并启动（feature `grpc`，默认开启）。**原生 gRPC**（HTTP/2）与浏览器 **WebSocket RPC**（`/ws`，一 RPC 一连接）**同端口**（默认 `0.0.0.0:15770`）。已移除 gRPC-Web。
 
 | RPC | 说明 |
 |-----|------|
@@ -428,7 +427,7 @@ node.spin()?;
 | `ServiceGateway.Call` | 一元：`service_name` + request bytes → response bytes |
 | `ActionGateway.SendGoal` | 一元 `GoalRequest` → server stream `ActionEvent`（实时 `FEEDBACK`，最终 `RESULT`） |
 
-gRPC action 的取消就是取消该 goal 的响应流，不另发 cancel RPC，也不表示服务端已确认；ZMQ transport 则由 GoalHandle 发显式 `CANCEL` 帧。
+gRPC action：原生 HTTP/2 客户端通过取消该 goal 的响应流发起取消；浏览器 WebSocket 路径发显式 `CANCEL` 帧并继续等到 `RESULT`，连接断开时仍会提交 cancel。ZMQ transport 由 GoalHandle 发显式 `CANCEL` 帧。均不表示服务端已确认。
 
 Subscribe 示例：
 
@@ -561,7 +560,7 @@ match result {
 - Service / action **不**做 broker 重启续传；调用方重试须使用新的 `request_id` / `goal_id`。
 - Service `call` 超时后 socket 已复位，同一 client 可继续调用。
 - Action `send_goal` 立即返回 GoalHandle；feedback 回调与 `result()` 等待彼此独立。
-- Action `cancel()` / result 超时后的清理均为 best-effort：gRPC 取消响应流，ZMQ 发显式 `CANCEL` 帧；不保证服务端确认。
+- Action `cancel()` / result 超时后的清理均为 best-effort：WebSocket 发显式 CANCEL 帧（断连仍会 cancel）；原生 gRPC 取消响应流；ZMQ 发显式 `CANCEL` 帧；不保证服务端确认。
 - Topic pub/sub 仍是 best-effort（无 ACK）。
 
 ## 工具节点：Image encoder

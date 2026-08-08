@@ -160,13 +160,13 @@ impl NodeOptions {
         }
     }
 
-    /// gRPC / gRPC-Web gateway on the local broker (`http://127.0.0.1:15770`).
+    /// gRPC gateway (native + browser WebSocket `/ws`) on the local broker (`http://127.0.0.1:15770`).
     #[cfg(feature = "grpc")]
     pub fn grpc() -> Self {
         Self::grpc_at(GrpcRuntime::default_url())
     }
 
-    /// gRPC / gRPC-Web gateway at `url` (e.g. `http://127.0.0.1:15770`).
+    /// gRPC gateway at `url` (e.g. `http://127.0.0.1:15770`); browsers use `ws(s)://…/ws`.
     #[cfg(feature = "grpc")]
     pub fn grpc_at(url: impl Into<String>) -> Self {
         let url = url.into();
@@ -713,8 +713,8 @@ impl RawGoalHandle {
 
     /// Best-effort cancellation with an opaque ZMQ cancel payload.
     ///
-    /// gRPC cancellation is represented by aborting the response stream, so the
-    /// body is ignored on that transport.
+    /// On native gRPC this aborts the response stream (body ignored). Browser
+    /// WebSocket clients send an explicit CANCEL frame instead.
     pub fn cancel_with_body(&self, body: &[u8]) -> Result<()> {
         self.inner.cancel(body)
     }

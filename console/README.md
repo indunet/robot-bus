@@ -15,7 +15,7 @@ cargo run --bin robot_bus_broker          # terminal 1
 ```
 
 Both Bot pages and the Dashboard use the in-repo TypeScript `GrpcNode` and connect to
-**same-origin** gRPC-Web (broker default `http://127.0.0.1:15770`).
+**same-origin** WebSocket RPC at `/ws` (broker default `http://127.0.0.1:15770` → `ws://127.0.0.1:15770/ws`).
 
 Monitoring data is published by the broker on system topics:
 
@@ -38,7 +38,8 @@ Domain visualizers, Flow plumbing, and LIVE / WHEP live in the sibling **[robot-
 
 ## Development (recommended)
 
-Start the broker, then hot-reload the frontend. `pnpm dev` proxies `/api/*` and gRPC-Web paths to the broker (default `http://127.0.0.1:15770`):
+Start the broker, then hot-reload the frontend. `pnpm dev` proxies `/api/*` to the broker;
+browser WebSocket RPC connects to the broker directly (default `ws://127.0.0.1:15770/ws`):
 
 ```bash
 # repo root
@@ -48,7 +49,7 @@ cargo run --bin robot_bus_broker
 cd console
 pnpm install
 pnpm dev
-# http://localhost:3020  (UI; gRPC/REST go to broker :15770 directly)
+# http://localhost:3020  (UI; WS/REST go to broker :15770 directly)
 ```
 
 Custom broker URL (Next rewrite + browser client):

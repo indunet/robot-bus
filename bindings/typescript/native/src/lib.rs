@@ -1388,7 +1388,7 @@ pub fn run_broker() -> Result<()> {
         inner: Some(broker),
     };
     println!(
-        "gRPC / gRPC-Web listening on http://{}",
+        "gRPC + WebSocket listening on http://{}",
         broker.grpc_listen()?
     );
     if let Some(addr) = broker.console_listen()? {

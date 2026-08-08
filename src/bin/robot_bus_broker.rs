@@ -30,7 +30,7 @@ fn run(config: RobotBusConfig) -> Result<()> {
 
     #[cfg(feature = "grpc")]
     println!(
-        "gRPC / gRPC-Web listening on http://{}",
+        "gRPC + WebSocket listening on http://{}",
         broker.grpc_listen()
     );
 

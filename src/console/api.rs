@@ -403,8 +403,16 @@ pub async fn bot_sim_status(Extension(state): Extension<Arc<ConsoleState>>) -> i
 }
 
 pub async fn bot_sim_session(Extension(state): Extension<Arc<ConsoleState>>) -> impl IntoResponse {
-    match state.bot_sim.acquire() {
-        Ok(session) => {
+    // `acquire` may block briefly while bot_sim publishes the first pose — keep it
+    // off the async worker so long-lived gateway streams stay responsive.
+    let acquired = tokio::task::spawn_blocking({
+        let bot_sim = Arc::clone(&state.bot_sim);
+        move || bot_sim.acquire()
+    })
+    .await;
+
+    match acquired {
+        Ok(Ok(session)) => {
             state.events.emit(
                 "INFO",
                 "bot_sim",
@@ -424,13 +432,25 @@ pub async fn bot_sim_session(Extension(state): Extension<Arc<ConsoleState>>) -> 
             )
                 .into_response()
         }
-        Err(err) => {
+        Ok(Err(err)) => {
             state
                 .events
                 .emit("ERROR", "bot_sim", format!("acquire failed: {err}"));
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(serde_json::json!({ "error": err.to_string() })),
+            )
+                .into_response()
+        }
+        Err(err) => {
+            state.events.emit(
+                "ERROR",
+                "bot_sim",
+                format!("acquire task join failed: {err}"),
+            );
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(serde_json::json!({ "error": "bot_sim acquire interrupted" })),
             )
                 .into_response()
         }

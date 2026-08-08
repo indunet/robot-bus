@@ -39,18 +39,18 @@ crate-type = ["cdylib", "rlib"]
 default = ["grpc", "console"]
 # Enable with maturin / `cargo build --features extension-module` for the Python module.
 extension-module = ["dep:pyo3", "pyo3/extension-module"]
-# gRPC / gRPC-Web gateway (started with RobotBusBroker; on by default).
+# gRPC / browser WebSocket gateway (started with RobotBusBroker; on by default).
 # Stubs are pre-generated (`just gen-rust`); no protoc at compile time.
 # axum is required so gRPC routes can share one listener with the console.
 grpc = [
     "dep:tokio",
     "dep:tonic",
     "dep:tonic-prost",
-    "dep:tonic-web",
     "dep:tower-http",
     "dep:tokio-stream",
     "dep:http",
     "dep:axum",
+    "dep:futures-util",
 ]
 # Embedded Web console (static UI + REST shim; same port as gRPC when both enabled).
 console = [
@@ -72,8 +72,9 @@ ros2-shim = ["ros2", "rclrs/use_ros_shim", "rosidl_runtime_rs/use_ros_shim"]
 anyhow = "1"
 rclrs = { version = "0.7", optional = true }
 rosidl_runtime_rs = { version = "0.6", optional = true }
-axum = { version = "0.8", optional = true, default-features = false, features = ["http1", "tokio", "query", "json"] }
+axum = { version = "0.8", optional = true, default-features = false, features = ["http1", "tokio", "query", "json", "ws"] }
 clap = { version = "4", features = ["derive"] }
+futures-util = { version = "0.3", optional = true, default-features = false, features = ["sink"] }
 http = { version = "1", optional = true }
 log = "0.4"
 mime_guess = { version = "2", optional = true }
@@ -90,22 +91,23 @@ tokio = { version = "1", optional = true, features = ["rt-multi-thread", "macros
 tokio-stream = { version = "0.1", optional = true, features = ["sync", "net"] }
 tonic = { version = "0.14", optional = true }
 tonic-prost = { version = "0.14", optional = true }
-tonic-web = { version = "0.14", optional = true }
 tower-http = { version = "0.6", optional = true, features = ["cors"] }
 ureq = { version = "2", default-features = false, features = ["json"] }
 uuid = { version = "1", features = ["v4"] }
 zmq = "0.10"
 
 [dev-dependencies]
+futures-util = { version = "0.3", default-features = false, features = ["sink"] }
 libc = "0.2"
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "sync", "time"] }
+tokio-tungstenite = "0.29"
 tonic = "0.14"
 tonic-prost = "0.14"
 tokio-stream = "0.1"
 
 [[test]]
-name = "grpc_gateway"
-path = "tests/grpc_gateway.rs"
+name = "grpc_ws"
+path = "tests/grpc_ws.rs"
 required-features = ["grpc"]
 
 [[test]]

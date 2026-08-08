@@ -125,15 +125,14 @@ function mapEvent(msg: ConsoleEvent): LogEntry {
 }
 
 const DEFAULT_BROKER_PORT = '15770'
-/** Next.js `pnpm dev` ports — browser gRPC-Web through the rewrite often fails ("Load failed"). */
+/** Next.js `pnpm dev` ports — browser WS RPC should hit the broker directly. */
 const DEV_UI_PORTS = new Set(['3000', '3020'])
 
 /**
- * Base URL for gRPC-Web + console REST.
+ * Base URL for WebSocket RPC + console REST.
  *
- * - Embedded console on the broker port → same origin.
- * - `pnpm dev` on :3020/:3000 → talk to the broker directly (same hostname, port 15770)
- *   because Next rewrites break some browser streaming fetches.
+ * - Embedded console on the broker port → same origin (SDK maps to `ws://…/ws`).
+ * - `pnpm dev` on :3020/:3000 → talk to the broker directly (same hostname, port 15770).
  */
 export function resolveBusUrl(): string {
   if (typeof window !== 'undefined' && window.location?.hostname) {

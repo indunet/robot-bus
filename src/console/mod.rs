@@ -1,4 +1,4 @@
-//! Embedded Web console: static assets + monitoring API (same port as gRPC-Web).
+//! Embedded Web console: static assets + monitoring API (same port as gRPC / WS).
 
 mod api;
 mod bus_publish;
@@ -66,8 +66,8 @@ pub async fn static_handler(uri: Uri) -> Response {
         return asset_response("index.html");
     }
 
-    // Do not SPA-fallback API or gRPC paths.
-    if path.starts_with("api/") || path.starts_with("robot_bus_interface.") {
+    // Do not SPA-fallback API, WebSocket RPC, or legacy gRPC path prefixes.
+    if path.starts_with("api/") || path == "ws" || path.starts_with("robot_bus_interface.") {
         return (StatusCode::NOT_FOUND, "not found").into_response();
     }
 

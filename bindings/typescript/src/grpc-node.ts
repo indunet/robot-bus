@@ -1,19 +1,24 @@
 /**
- * Browser / gRPC-Web client Node facade.
+ * Browser WebSocket RPC client Node facade.
  *
  * Mirrors Rust/Python `Node.grpc` / `Node.grpc_at`: publish, subscribe, service
  * call, action run. Does not support service/action servers or local broker.
+ * Transport is gRPC-over-WebSocket (`/ws`, one connection per RPC).
  */
 
-import { GrpcWebFetchTransport } from "@protobuf-ts/grpcweb-transport";
-import type { RpcOptions } from "@protobuf-ts/runtime-rpc";
-import { MessageGatewayClient } from "../generated/robot_bus_interface/grpc/v1/message_gateway.client.js";
-import { ServiceGatewayClient } from "../generated/robot_bus_interface/grpc/v1/service_gateway.client.js";
-import { ActionGatewayClient } from "../generated/robot_bus_interface/grpc/v1/action_gateway.client.js";
 import {
+  ActionEvent as PbActionEvent,
   ActionKind,
-  type ActionEvent as PbActionEvent,
+  GoalCommand,
 } from "../generated/robot_bus_interface/grpc/v1/action_gateway.js";
+import {
+  SubscribeRequest,
+  TopicMessage,
+} from "../generated/robot_bus_interface/grpc/v1/message_gateway.js";
+import {
+  ServiceCallRequest,
+  ServiceCallResponse,
+} from "../generated/robot_bus_interface/grpc/v1/service_gateway.js";
 import { decode, encode, type MessageType } from "./typed.js";
 import {
   TOPIC_TYPE_REGISTER,
@@ -25,6 +30,29 @@ import {
   TopologyUnregister,
   TopicTypeRegister,
 } from "../generated/robot_bus_interface/msg/v1/console_status.js";
+import {
+  METHOD_CALL,
+  METHOD_PUBLISH,
+  METHOD_SEND_GOAL,
+  METHOD_SUBSCRIBE,
+  wsServerStream as wsServerStreamDefault,
+  wsUnary as wsUnaryDefault,
+} from "./ws-rpc.js";
+
+type WsUnaryFn = typeof wsUnaryDefault;
+type WsServerStreamFn = typeof wsServerStreamDefault;
+
+let wsUnaryImpl: WsUnaryFn = wsUnaryDefault;
+let wsServerStreamImpl: WsServerStreamFn = wsServerStreamDefault;
+
+/** Test-only: swap WebSocket RPC helpers. Pass `undefined` to restore defaults. */
+export function __setWsRpcForTests(overrides?: {
+  unary?: WsUnaryFn;
+  serverStream?: WsServerStreamFn;
+}): void {
+  wsUnaryImpl = overrides?.unary ?? wsUnaryDefault;
+  wsServerStreamImpl = overrides?.serverStream ?? wsServerStreamDefault;
+}
 
 export const DEFAULT_GRPC_URL = "http://127.0.0.1:15770";
 const DEFAULT_TOPOLOGY_REFRESH_MS = 10_000;
@@ -32,8 +60,8 @@ const DEFAULT_TOPOLOGY_REFRESH_MS = 10_000;
 export interface GrpcNodeOptions {
   /**
    * When `null`, disables topology and topic-type registration.
-   * Otherwise registration uses the broker control-plane services via gRPC-Web
-   * (same gateway URL as this node). The option name is retained for API compat.
+   * Otherwise registration uses the broker control-plane services via WebSocket
+   * RPC (same gateway host as this node). The option name is retained for API compat.
    */
   consoleUrl?: string | null;
   /** Topology lease refresh interval. Defaults to 10 seconds. */
@@ -102,7 +130,7 @@ function kindFromPb(kind: ActionKind): GrpcActionEvent["kind"] {
 
 function unsupported(method: string): never {
   throw new Error(
-    `${method} is not available on the browser / gRPC-Web client. ` +
+    `${method} is not available on the browser / WebSocket RPC client. ` +
       "Use the Node.js native binding for publish, servers, and local broker.",
   );
 }
@@ -239,15 +267,11 @@ export class TypedGrpcTopicPublisher<T extends object> {
 }
 
 /**
- * gRPC-Web client node (browser + Node without native addon).
+ * Browser WebSocket RPC node (browser + Node without native addon).
  */
 export class GrpcNode {
   readonly name: string;
   readonly url: string;
-  private readonly transport: GrpcWebFetchTransport;
-  private readonly messageClient: MessageGatewayClient;
-  private readonly serviceClient: ServiceGatewayClient;
-  private readonly actionClient: ActionGatewayClient;
   private readonly subscriptions = new Map<string, SubCallback[]>();
   private readonly topologyEnabled: boolean;
   private readonly topologyRefreshMs: number;
@@ -256,9 +280,16 @@ export class GrpcNode {
   private topologyTimer: ReturnType<typeof setInterval> | null = null;
   private topologyStarted = false;
   private abort: AbortController | null = null;
-  private readonly actionAborts = new Map<
+  private readonly actionSessions = new Map<
     string,
-    { actionName: string; controller: AbortController }
+    {
+      actionName: string;
+      /** Soft CANCEL on the open WebSocket (keep waiting for RESULT). */
+      cancel: () => void;
+      /** Hard socket close / AbortSignal (true disconnect). */
+      close: () => void;
+      controller: AbortController;
+    }
   >();
   private running = false;
 
@@ -267,13 +298,6 @@ export class GrpcNode {
     this.url = url.replace(/\/$/, "");
     this.topologyEnabled = options.consoleUrl !== null;
     this.topologyRefreshMs = Math.max(100, options.topologyRefreshMs ?? DEFAULT_TOPOLOGY_REFRESH_MS);
-    this.transport = new GrpcWebFetchTransport({
-      baseUrl: this.url,
-      format: "binary",
-    });
-    this.messageClient = new MessageGatewayClient(this.transport);
-    this.serviceClient = new ServiceGatewayClient(this.transport);
-    this.actionClient = new ActionGatewayClient(this.transport);
   }
 
   static grpc(name: string, options?: GrpcNodeOptions): GrpcNode {
@@ -313,7 +337,10 @@ export class GrpcNode {
 
   /** Unary Publish onto the message bus. */
   async publishRaw(topic: string, payload: Uint8Array): Promise<void> {
-    await this.messageClient.publish({ topic, payload }).response;
+    const body = TopicMessage.toBinary(
+      TopicMessage.create({ topic, payload }),
+    );
+    await wsUnaryImpl(this.url, METHOD_PUBLISH, body);
   }
 
   /**
@@ -394,13 +421,16 @@ export class GrpcNode {
   ): Promise<Uint8Array> {
     const timeoutMs =
       timeoutSeconds === undefined ? 0 : Math.max(0, Math.round(timeoutSeconds * 1000));
-    const call = this.serviceClient.call({
-      serviceName,
-      request: body,
-      requestId: requestId ?? "",
-      timeoutMs,
-    });
-    const response = await call.response;
+    const req = ServiceCallRequest.toBinary(
+      ServiceCallRequest.create({
+        serviceName,
+        request: body,
+        requestId: requestId ?? "",
+        timeoutMs,
+      }),
+    );
+    const raw = await wsUnaryImpl(this.url, METHOD_CALL, req);
+    const response = ServiceCallResponse.fromBinary(raw);
     return response.response;
   }
 
@@ -418,41 +448,82 @@ export class GrpcNode {
       (typeof globalThis.crypto !== "undefined" && "randomUUID" in globalThis.crypto
         ? globalThis.crypto.randomUUID().replace(/-/g, "")
         : `goal-${Date.now()}`);
-    if (this.actionAborts.has(id)) {
+    if (this.actionSessions.has(id)) {
       throw new Error(`action goal '${id}' is already active`);
     }
 
     const controller = new AbortController();
-    this.actionAborts.set(id, { actionName, controller });
+    let softCancel = () => {
+      /* replaced once the WS stream exposes onControl */
+    };
+    let pendingSoftCancel = false;
+    const session = {
+      actionName,
+      cancel: () => {
+        pendingSoftCancel = true;
+        softCancel();
+      },
+      close: () => controller.abort(),
+      controller,
+    };
+    this.actionSessions.set(id, session);
     const result = (async (): Promise<GrpcActionEvent> => {
       try {
-        const call = this.actionClient.sendGoal(
-          {
+        const req = GoalCommand.toBinary(
+          GoalCommand.create({
             actionName,
             goal: body,
             goalId: id,
             timeoutMs,
-          },
-          { abort: controller.signal } as RpcOptions,
+          }),
         );
-
-        for await (const ev of call.responses) {
-          const event = mapEvent(ev);
-          if (ev.kind === ActionKind.FEEDBACK) {
-            try {
-              options.onFeedback?.(event);
-            } catch (err) {
-              console.error(`robot-bus action '${actionName}' feedback callback error`, err);
-            }
-          }
-          if (ev.kind === ActionKind.RESULT) {
-            return event;
-          }
+        let resultEvent: GrpcActionEvent | undefined;
+        await wsServerStreamImpl(
+          this.url,
+          METHOD_SEND_GOAL,
+          req,
+          {
+            onControl: (ctl) => {
+              softCancel = ctl.cancel;
+              session.cancel = () => {
+                pendingSoftCancel = true;
+                softCancel();
+              };
+              session.close = () => {
+                ctl.close();
+                if (!controller.signal.aborted) controller.abort();
+              };
+              if (pendingSoftCancel) softCancel();
+            },
+            onData: (payload) => {
+              const ev = PbActionEvent.fromBinary(payload);
+              const event = mapEvent(ev);
+              if (ev.kind === ActionKind.FEEDBACK) {
+                try {
+                  options.onFeedback?.(event);
+                } catch (err) {
+                  console.error(
+                    `robot-bus action '${actionName}' feedback callback error`,
+                    err,
+                  );
+                }
+              }
+              if (ev.kind === ActionKind.RESULT) {
+                resultEvent = event;
+              }
+            },
+          },
+          controller.signal,
+        );
+        if (!resultEvent) {
+          throw new Error(
+            `action '${actionName}' goal '${id}' completed without a result`,
+          );
         }
-        throw new Error(`action '${actionName}' goal '${id}' completed without a result`);
+        return resultEvent;
       } finally {
-        if (this.actionAborts.get(id)?.controller === controller) {
-          this.actionAborts.delete(id);
+        if (this.actionSessions.get(id)?.controller === controller) {
+          this.actionSessions.delete(id);
         }
       }
     })();
@@ -466,11 +537,12 @@ export class GrpcNode {
     actionName: string,
     goalId: string,
   ): Promise<void> {
-    const active = this.actionAborts.get(goalId);
+    const active = this.actionSessions.get(goalId);
     if (!active || active.actionName !== actionName) {
       throw new Error(`action '${actionName}' has no active goal '${goalId}'`);
     }
-    active.controller.abort();
+    // Soft cancel: CANCEL frame on the open WS; do not tear down the connection.
+    active.cancel();
   }
 
   /** Start background subscribe streams (non-blocking). */
@@ -479,8 +551,11 @@ export class GrpcNode {
     this.running = true;
     this.startTopologyRegistration();
     this.abort = new AbortController();
-    for (const topic of this.subscriptions.keys()) {
-      void this.pumpTopic(topic, this.abort.signal);
+    // Optional prefix coalesce reduces ZMQ SUB sockets; each filter is one WS.
+    for (const filter of coalesceSubscribeFilters([
+      ...this.subscriptions.keys(),
+    ])) {
+      void this.pumpTopic(filter, this.abort.signal);
     }
   }
 
@@ -493,10 +568,10 @@ export class GrpcNode {
     this.running = false;
     this.abort?.abort();
     this.abort = null;
-    for (const { controller } of this.actionAborts.values()) {
-      controller.abort();
+    for (const session of this.actionSessions.values()) {
+      session.close();
     }
-    this.actionAborts.clear();
+    this.actionSessions.clear();
     this.stopTopologyRegistration();
   }
 
@@ -569,27 +644,79 @@ export class GrpcNode {
     });
   }
 
-  private async pumpTopic(topic: string, signal: AbortSignal): Promise<void> {
+  private async pumpTopic(filter: string, signal: AbortSignal): Promise<void> {
     try {
-      const call = this.messageClient.subscribe(
-        { topic },
-        { abort: signal },
+      const req = SubscribeRequest.toBinary(
+        SubscribeRequest.create({ topic: filter }),
       );
-      for await (const msg of call.responses) {
-        const cbs = this.subscriptions.get(topic) ?? [];
-        for (const cb of cbs) {
-          try {
-            cb(msg.topic, msg.payload);
-          } catch (err) {
-            console.error("robot-bus subscription callback error", err);
-          }
-        }
-      }
+      await wsServerStreamImpl(
+        this.url,
+        METHOD_SUBSCRIBE,
+        req,
+        {
+          onData: (payload) => {
+            const msg = TopicMessage.fromBinary(payload);
+            const cbs: SubCallback[] = [];
+            const exact = this.subscriptions.get(msg.topic);
+            if (exact) cbs.push(...exact);
+            for (const [key, list] of this.subscriptions) {
+              if (
+                key !== msg.topic &&
+                key.endsWith("/") &&
+                msg.topic.startsWith(key)
+              ) {
+                cbs.push(...list);
+              }
+            }
+            for (const cb of cbs) {
+              try {
+                cb(msg.topic, msg.payload);
+              } catch (err) {
+                console.error("robot-bus subscription callback error", err);
+              }
+            }
+          },
+        },
+        signal,
+      );
     } catch (err) {
       if (signal.aborted) return;
-      console.error(`robot-bus subscribe '${topic}' failed`, err);
+      console.error(`robot-bus subscribe '${filter}' failed`, err);
     }
   }
+}
+
+/**
+ * Collapse related topic subscriptions onto one Subscribe filter (fewer WS + ZMQ SUBs).
+ * Unrelated topics keep one stream each.
+ *
+ * Exported for unit tests.
+ */
+export function coalesceSubscribeFilters(topics: string[]): string[] {
+  if (topics.length <= 1) return topics.slice();
+  let prefix = topics[0] ?? "";
+  for (let i = 1; i < topics.length; i += 1) {
+    const topic = topics[i] ?? "";
+    while (!topic.startsWith(prefix)) {
+      prefix = prefix.slice(0, -1);
+      if (!prefix) return topics.slice();
+    }
+  }
+  if (prefix.length < 5) return topics.slice();
+
+  // Prefer a directory-style prefix (`…/`) so we do not over-match siblings.
+  if (!prefix.endsWith("/")) {
+    const cut = prefix.lastIndexOf("/");
+    if (cut >= 0) {
+      const dir = prefix.slice(0, cut + 1);
+      if (dir.length >= 5 && topics.every((t) => t.startsWith(dir))) {
+        return [dir];
+      }
+    }
+    if (topics.every((t) => t === prefix)) return [prefix];
+    return topics.slice();
+  }
+  return [prefix];
 }
 
 function mapEvent(ev: PbActionEvent): GrpcActionEvent {

@@ -29,7 +29,7 @@ More API examples live under [`docs/`](docs/).
 | `runtime::Executor` | Low-level poll loop (usually wrapped by the executors below) |
 | `runtime::SingleThreadedExecutor` / `MultiThreadedExecutor` | Explicit executors (multi-node / parallel); a single node can `Node::spin` directly |
 | `runtime::Node` / `TopicPublisher` / `CallbackGroup` | Nodes, publishers, callback groups (mutually exclusive / reentrant) |
-| `grpc::` (default feature) | gRPC / gRPC-Web gateway (started with the broker) |
+| `grpc::` (default feature) | gRPC + browser WebSocket RPC gateway (started with the broker) |
 | `ros2::` (`ros2` feature) | In-process ROS 2 topic/service bridge (`Ros2Bridge`) |
 
 ### Repository layout
@@ -54,7 +54,7 @@ Rust core stays at the repo root (`Cargo.toml` + `src/`). Language SDKs live und
 Application code (Rust / Python / TypeScript / C++ / Java / Android)
   └── robot-bus SDK
               │
-              │ ZMQ (tcp / ipc / inproc) or gRPC / gRPC-Web
+              │ ZMQ (tcp / ipc / inproc) or gRPC / WebSocket RPC
               ▼
 robot_bus_broker process
 ```
@@ -105,7 +105,7 @@ let opts = NodeOptions::tcp().discover(DiscoverOpts {
 let mut node = Node::with_options("talker", opts);
 ```
 
-Same API shape in bindings: `Node.discover(...)` (Python / C++ / Java / Android / TypeScript Node.js). Browser gRPC-Web has no UDP discovery.
+Same API shape in bindings: `Node.discover(...)` (Python / C++ / Java / Android / TypeScript Node.js). Browser WebSocket clients have no UDP discovery.
 
 Python (ships a CLI entry after `pip install robot-bus`):
 
@@ -175,7 +175,7 @@ just ts-dev
 # equivalent: cd bindings/typescript && npm install && npm run build:native && npm run build:ts
 ```
 
-One npm package: Node.js uses napi-rs (full ZMQ API); browsers use gRPC-Web (subscribe / publish / service / action client). Bundlers pick the entry via `exports`. See [`docs/typescript-api.md`](docs/typescript-api.md).
+One npm package: Node.js uses napi-rs (full ZMQ API); browsers use WebSocket RPC on `/ws` (subscribe / publish / service / action client). Bundlers pick the entry via `exports`. See [`docs/typescript-api.md`](docs/typescript-api.md).
 
 ```ts
 import { Node } from "robot-bus";
@@ -186,7 +186,7 @@ const pub = node.createPublisher("/robot1/imu", Imu);
 node.createSubscription("/robot1/imu", (_t, imu) => console.log(imu), Imu);
 ```
 
-Browser / gRPC-only: `Node.grpc("client")` (the browser entry's `Node` is the gRPC-Web facade).
+Browser / gRPC-only: `Node.grpc("client")` (the browser entry's `Node` is the WebSocket RPC facade).
 
 ### Java / Android (Maven Central)
 
@@ -304,7 +304,7 @@ Defaults: message `STREAM(2/2)`, service `RPC(4/4)`, action `ACTION(8/8)`. Broke
 
 | Binary | Description |
 |------|------|
-| `robot_bus_broker` | Starts all three buses plus the gRPC / gRPC-Web gateway |
+| `robot_bus_broker` | Starts all three buses plus the gRPC / WebSocket RPC gateway |
 
 ## Web console (`console/`)
 
@@ -331,13 +331,13 @@ cargo run --bin robot_bus_broker
 
 `assets/console/` is **build output** (not committed). CI and release jobs run `just console` (or equivalent) before compiling with the `console` feature.
 
-Wired to the broker on the **same port** as gRPC-Web (`0.0.0.0:15770`): the Dashboard is a TypeScript `GrpcNode` that subscribes to `/robot_bus/*` system topics. A thin REST shim (`GET /api/v1/...`) remains for `rbus` / tooling. Topology and topic-type registration use reliable control-plane services (`/robot_bus/topology/register`, `/robot_bus/topic_type/register`) through the existing service bus. Domain visualizers, Flow, and LIVE / WHEP live in **[robot-bus-tools](https://github.com/indunet/robot-bus-tools)** Studio. The frontend source lives in `console/`; only the generated static files are compiled into binaries with the `console` feature.
+Wired to the broker on the **same port** as native gRPC / WebSocket RPC (`0.0.0.0:15770`): the Dashboard is a TypeScript `GrpcNode` that subscribes to `/robot_bus/*` system topics over `/ws`. A thin REST shim (`GET /api/v1/...`) remains for `rbus` / tooling. Topology and topic-type registration use reliable control-plane services (`/robot_bus/topology/register`, `/robot_bus/topic_type/register`) through the existing service bus. Domain visualizers, Flow, and LIVE / WHEP live in **[robot-bus-tools](https://github.com/indunet/robot-bus-tools)** Studio. The frontend source lives in `console/`; only the generated static files are compiled into binaries with the `console` feature.
 
 **Bot demo (2 nodes):** in-process [`src/bot_sim/`](src/bot_sim/) owns physics (`SUB /bot1/cmd_vel` → `PUB /bot1/pose`) and starts when the console opens a BOT SIM session; the **BOT SIM** panel (`bot_viz`) renders pose and dispatches capabilities (keyboard teleop first). Shared world — multiple viewers, last-writer-wins teleop.
 
-## gRPC / gRPC-Web gateway
+## gRPC + browser WebSocket gateway
 
-Started with `robot_bus_broker` / `RobotBusBroker::start`. Standard gRPC and gRPC-Web share the **same port** (default `0.0.0.0:15770`).
+Started with `robot_bus_broker` / `RobotBusBroker::start`. **Native gRPC** (HTTP/2) and **browser WebSocket RPC** (`/ws`, one connection per RPC) share the **same port** (default `0.0.0.0:15770`). There is no gRPC-Web layer.
 
 You can also attach via the Node API with `Node::grpc` / `Node::grpc_at` (client: subscribe / publish / call service / call action; see [`docs/rust-api.md`](docs/rust-api.md#grpc-模式-node客户端)).
 
@@ -348,7 +348,7 @@ You can also attach via the Node API with `Node::grpc` / `Node::grpc_at` (client
 | `ServiceGateway.Call` | Unary: `service_name` + request bytes → response bytes |
 | `ActionGateway.SendGoal` | Unary goal request followed by a server stream of `ActionEvent` values (`FEEDBACK`, then `RESULT`) |
 
-Action clients use a ROS 2–style `GoalHandle` in every language: `send_goal` / `sendGoal` returns the handle immediately, feedback is delivered to a callback as it arrives, and the result is awaited separately. `handle.cancel()` is best-effort and does not imply server confirmation: gRPC cancels the goal stream, while ZMQ sends an explicit `CANCEL` frame.
+Action clients use a ROS 2–style `GoalHandle` in every language: `send_goal` / `sendGoal` returns the handle immediately, feedback is delivered to a callback as it arrives, and the result is awaited separately. `handle.cancel()` is best-effort and does not imply server confirmation: WebSocket RPC sends an explicit `CANCEL` frame (connection stays open for `RESULT`; a true disconnect still cancels), native gRPC cancels the goal stream, and ZMQ sends an explicit `CANCEL` frame.
 
 ```bash
 cargo run --bin robot_bus_broker

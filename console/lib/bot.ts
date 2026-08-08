@@ -16,7 +16,7 @@ export type BotSimStatusInfo = {
   viewers: number
 }
 
-/** Same-origin gRPC-Web (single-port console + gateway). */
+/** Same-origin WebSocket RPC + REST (single-port console + gateway). */
 export async function resolveGrpcUrl(): Promise<string> {
   return resolveBusUrl()
 }

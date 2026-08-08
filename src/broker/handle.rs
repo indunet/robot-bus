@@ -218,7 +218,7 @@ impl Drop for ActionBusBroker {
     }
 }
 
-/// gRPC / gRPC-Web listen options (feature `grpc`, enabled by default).
+/// gRPC + browser WebSocket RPC listen options (feature `grpc`, enabled by default).
 #[cfg(feature = "grpc")]
 #[derive(Clone, Debug)]
 pub struct GrpcBrokerConfig {
@@ -240,7 +240,7 @@ impl Default for GrpcBrokerConfig {
 /// Embedded Web console HTTP options (feature `console`, enabled by default).
 ///
 /// When the `grpc` feature is also enabled, the console UI + REST API are served
-/// on [`GrpcBrokerConfig::listen`] instead — gRPC, gRPC-Web, and the console all
+/// on [`GrpcBrokerConfig::listen`] instead — gRPC, WebSocket RPC (`/ws`), and the console all
 /// share one port. `listen` here only takes effect when `grpc` is disabled (or
 /// this crate is built console-only).
 #[cfg(feature = "console")]
@@ -704,7 +704,7 @@ impl RobotBusBroker {
         })
     }
 
-    /// gRPC / gRPC-Web listen address (feature `grpc`).
+    /// gRPC + WebSocket RPC listen address (feature `grpc`).
     #[cfg(feature = "grpc")]
     pub fn grpc_listen(&self) -> SocketAddr {
         self.grpc.listen

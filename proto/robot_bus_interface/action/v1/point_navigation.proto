@@ -1,0 +1,22 @@
+syntax = "proto3";
+
+package robot_bus_interface.action.v1;
+
+import "geometry_msgs/msg/v1/pose2d.proto";
+
+// 单点导航 — planar (grid-map) goal: x, y, yaw (theta).
+message PointNavigationGoal {
+  geometry_msgs.msg.v1.Pose2D pose = 1;
+}
+
+message PointNavigationFeedback {
+  geometry_msgs.msg.v1.Pose2D current_pose = 1;
+  // Normalized path progress in [0, 1].
+  float progress = 2;
+}
+
+message PointNavigationResult {
+  bool success = 1;
+  // Human-readable detail; typically set on failure.
+  string msg = 2;
+}

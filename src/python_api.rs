@@ -1476,7 +1476,7 @@ fn run_broker(py: Python<'_>) -> PyResult<()> {
     };
     #[cfg(feature = "grpc")]
     println!(
-        "gRPC / gRPC-Web listening on http://{}",
+        "gRPC + WebSocket listening on http://{}",
         broker.grpc_listen()?
     );
     #[cfg(feature = "console")]

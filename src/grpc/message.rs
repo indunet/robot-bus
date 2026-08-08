@@ -45,25 +45,12 @@ impl MessageGatewayService {
         }
         Ok(())
     }
-}
 
-fn bus_status(err: BusError) -> Status {
-    match err {
-        BusError::Timeout(msg) => Status::deadline_exceeded(msg),
-        BusError::ReservedName { .. } => Status::invalid_argument(err.to_string()),
-        other => Status::internal(other.to_string()),
-    }
-}
-
-#[tonic::async_trait]
-impl MessageGateway for MessageGatewayService {
-    type SubscribeStream = SubscribeStream;
-
-    async fn subscribe(
+    /// Start a topic subscription; returns an mpsc that closes when the sender is dropped.
+    pub fn open_subscribe(
         &self,
-        request: Request<SubscribeRequest>,
-    ) -> Result<Response<Self::SubscribeStream>, Status> {
-        let topic = request.into_inner().topic;
+        topic: String,
+    ) -> Result<mpsc::Receiver<Result<TopicMessage, Status>>, Status> {
         let xpub = self.message_xpub.clone();
         let (tx, rx) = mpsc::channel::<Result<TopicMessage, Status>>(64);
 
@@ -108,15 +95,10 @@ impl MessageGateway for MessageGatewayService {
             })
             .map_err(|err| Status::internal(format!("spawn subscriber thread: {err}")))?;
 
-        let stream = ReceiverStream::new(rx);
-        Ok(Response::new(Box::pin(stream) as Self::SubscribeStream))
+        Ok(rx)
     }
 
-    async fn publish(
-        &self,
-        request: Request<TopicMessage>,
-    ) -> Result<Response<PublishResponse>, Status> {
-        let msg = request.into_inner();
+    pub async fn publish_message(&self, msg: TopicMessage) -> Result<(), Status> {
         if msg.topic.is_empty() {
             return Err(Status::invalid_argument("topic is required"));
         }
@@ -138,11 +120,41 @@ impl MessageGateway for MessageGatewayService {
                 .as_ref()
                 .ok_or_else(|| Status::internal("publisher missing after ensure"))?;
             pub_.publish(&topic, &payload).map_err(bus_status)?;
-            Ok::<_, Status>(PublishResponse {})
+            Ok::<_, Status>(())
         })
         .await
         .map_err(|err| Status::internal(format!("publish join: {err}")))??;
+        Ok(())
+    }
+}
 
+fn bus_status(err: BusError) -> Status {
+    match err {
+        BusError::Timeout(msg) => Status::deadline_exceeded(msg),
+        BusError::ReservedName { .. } => Status::invalid_argument(err.to_string()),
+        other => Status::internal(other.to_string()),
+    }
+}
+
+#[tonic::async_trait]
+impl MessageGateway for MessageGatewayService {
+    type SubscribeStream = SubscribeStream;
+
+    async fn subscribe(
+        &self,
+        request: Request<SubscribeRequest>,
+    ) -> Result<Response<Self::SubscribeStream>, Status> {
+        let topic = request.into_inner().topic;
+        let rx = self.open_subscribe(topic)?;
+        let stream = ReceiverStream::new(rx);
+        Ok(Response::new(Box::pin(stream) as Self::SubscribeStream))
+    }
+
+    async fn publish(
+        &self,
+        request: Request<TopicMessage>,
+    ) -> Result<Response<PublishResponse>, Status> {
+        self.publish_message(request.into_inner()).await?;
         Ok(Response::new(PublishResponse {}))
     }
 }

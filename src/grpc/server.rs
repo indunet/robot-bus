@@ -1,18 +1,15 @@
-//! HTTP server: native gRPC + gRPC-Web (+ optional console) on one port.
+//! HTTP server: native gRPC + browser WebSocket RPC (+ optional console) on one port.
 
 use std::future::Future;
 use std::net::SocketAddr;
-#[cfg(feature = "console")]
 use std::sync::Arc;
 
 use anyhow::{Context, Result};
-#[cfg(feature = "console")]
+use axum::Router;
 use axum::routing::get;
 use http::Method;
-use http::header::HeaderName;
 use tokio::net::TcpListener;
 use tonic::service::Routes;
-use tonic_web::GrpcWebLayer;
 use tower_http::cors::{AllowOrigin, Any, CorsLayer};
 
 use super::action::ActionGatewayService;
@@ -21,6 +18,7 @@ use super::pb::action_gateway_server::ActionGatewayServer;
 use super::pb::message_gateway_server::MessageGatewayServer;
 use super::pb::service_gateway_server::ServiceGatewayServer;
 use super::service::ServiceGatewayService;
+use super::ws::{WsGatewayState, ws_upgrade};
 
 #[cfg(feature = "console")]
 use crate::console::{self, ConsoleState};
@@ -92,7 +90,7 @@ pub async fn serve_on_listener(
     let with_console = false;
 
     log::info!(
-        "robot_bus gRPC gateway listening on http://{} (gRPC + gRPC-Web{}); \
+        "robot_bus gRPC gateway listening on http://{} (gRPC + WebSocket /ws{}); \
          message XPUB {}; message XSUB {}; service frontend {}; action frontend {}",
         config.listen,
         if with_console { " + console" } else { "" },
@@ -101,14 +99,23 @@ pub async fn serve_on_listener(
         config.service_frontend,
         config.action_frontend
     );
-    let app = Routes::default()
+
+    let ws_state = Arc::new(WsGatewayState {
+        message: message.clone(),
+        service: service.clone(),
+        action: action.clone(),
+    });
+
+    let grpc_router = Routes::default()
         .add_service(MessageGatewayServer::new(message))
         .add_service(ServiceGatewayServer::new(service))
         .add_service(ActionGatewayServer::new(action))
-        .into_axum_router()
-        // Only wrap gRPC routes — GrpcWebLayer returns 400 for plain HTTP/1.1
-        // (REST / static must stay outside this layer).
-        .layer(GrpcWebLayer::new());
+        .into_axum_router();
+
+    let app = Router::new()
+        .route("/ws", get(ws_upgrade))
+        .with_state(ws_state)
+        .merge(grpc_router);
 
     #[cfg(feature = "console")]
     let app = match config.console {
@@ -120,7 +127,7 @@ pub async fn serve_on_listener(
 
     let app = app.layer(cors);
 
-    // hyper auto HTTP/1 + HTTP/2 (native gRPC needs h2; browsers need HTTP/1 grpc-web).
+    // hyper auto HTTP/1 + HTTP/2 (native gRPC needs h2; browsers use WS on HTTP/1).
     axum::serve(listener, app)
         .with_graceful_shutdown(shutdown)
         .await
@@ -129,24 +136,11 @@ pub async fn serve_on_listener(
 }
 
 fn build_cors(origins: &[String]) -> Result<CorsLayer> {
-    // grpc-web clients need these headers exposed / allowed.
-    let grpc_headers = [
-        HeaderName::from_static("content-type"),
-        HeaderName::from_static("x-grpc-web"),
-        HeaderName::from_static("x-user-agent"),
-        HeaderName::from_static("grpc-timeout"),
-        HeaderName::from_static("grpc-status"),
-        HeaderName::from_static("grpc-message"),
-        HeaderName::from_static("grpc-encoding"),
-        HeaderName::from_static("grpc-accept-encoding"),
-    ];
-
     if origins.is_empty() {
         Ok(CorsLayer::new()
             .allow_origin(Any)
             .allow_methods([Method::GET, Method::POST, Method::DELETE, Method::OPTIONS])
-            .allow_headers(Any)
-            .expose_headers(grpc_headers))
+            .allow_headers(Any))
     } else {
         let parsed = origins
             .iter()
@@ -155,7 +149,6 @@ fn build_cors(origins: &[String]) -> Result<CorsLayer> {
         Ok(CorsLayer::new()
             .allow_origin(AllowOrigin::list(parsed))
             .allow_methods([Method::GET, Method::POST, Method::DELETE, Method::OPTIONS])
-            .allow_headers(Any)
-            .expose_headers(grpc_headers))
+            .allow_headers(Any))
     }
 }

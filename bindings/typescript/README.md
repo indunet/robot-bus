@@ -5,7 +5,7 @@ Hybrid npm package:
 | Environment | Entry | Capabilities |
 |-------------|-------|----------------|
 | Node.js | napi-rs native addon | Full ZMQ Node API (publish, servers, broker) |
-| Browser | gRPC-Web client | Subscribe / publish / service call / action (no servers) |
+| Browser | WebSocket RPC client | Subscribe / publish / service call / action (no servers) |
 
 Bundlers pick the right entry via `package.json` `exports` (`browser` vs default).
 

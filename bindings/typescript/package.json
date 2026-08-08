@@ -1,7 +1,7 @@
 {
   "name": "robot-bus",
   "version": "0.1.6",
-  "description": "robot-bus TypeScript SDK: Node (napi-rs / ZMQ) + browser (gRPC-Web client)",
+  "description": "robot-bus TypeScript SDK: Node (napi-rs / ZMQ) + browser (WebSocket RPC client)",
   "license": "Apache-2.0",
   "author": "deng_ran <deng_ran@aliyun.com>",
   "repository": {
@@ -60,7 +60,6 @@
     ]
   },
   "dependencies": {
-    "@protobuf-ts/grpcweb-transport": "^2.11.1",
     "@protobuf-ts/runtime": "^2.11.1",
     "@protobuf-ts/runtime-rpc": "^2.11.1"
   },
@@ -86,7 +85,8 @@
     "robotics",
     "zeromq",
     "protobuf",
-    "grpc-web",
+    "websocket",
+    "grpc",
     "ros"
   ]
 }

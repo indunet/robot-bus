@@ -5,7 +5,7 @@ const isProd = process.env.NODE_ENV === 'production'
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   // Static export only for `pnpm build` → assets/console / rust-embed.
-  // `next dev` must NOT set output:'export' or rewrites are ignored (gRPC 404).
+  // `next dev` must NOT set output:'export' or rewrites are ignored.
   ...(isProd ? { output: 'export' } : {}),
   // The local SDK package contains generated protobuf TypeScript sources.
   transpilePackages: ['robot-bus'],
@@ -27,20 +27,15 @@ const nextConfig = {
   },
 }
 
-// Under `next dev`, proxy REST + gRPC-Web to the broker (same-origin browser calls).
-// Use beforeFiles: dotted gRPC paths look like static files and skip afterFiles rewrites.
+// Under `pnpm dev`, proxy REST to the broker. Browser WebSocket RPC should talk
+// to the broker directly (`resolveBusUrl` → :15770/ws) — Next rewrites are unreliable for WS.
 if (!isProd) {
-  const grpcGateways = ['MessageGateway', 'ServiceGateway', 'ActionGateway']
   nextConfig.rewrites = async () => ({
     beforeFiles: [
       {
         source: '/api/:path*',
         destination: `${brokerOrigin}/api/:path*`,
       },
-      ...grpcGateways.map((gateway) => ({
-        source: `/robot_bus_interface.grpc.v1.${gateway}/:path*`,
-        destination: `${brokerOrigin}/robot_bus_interface.grpc.v1.${gateway}/:path*`,
-      })),
     ],
   })
 }

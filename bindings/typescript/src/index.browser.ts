@@ -1,5 +1,5 @@
 /**
- * Browser entry: gRPC-Web client only.
+ * Browser entry: WebSocket RPC client only.
  * Bundlers resolve this via package.json `exports.browser`.
  */
 

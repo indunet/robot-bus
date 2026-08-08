@@ -200,7 +200,7 @@ async fn action_send_goal_disconnect_submits_cancel() {
         let context = ZmqContext::new();
         let socket = context.socket(SocketType::DEALER).expect("create worker");
         socket
-            .set_identity(b"grpc-web-cancel-worker")
+            .set_identity(b"grpc-ws-cancel-worker")
             .expect("identity");
         socket.connect(&backend).expect("connect backend");
         socket
@@ -252,7 +252,7 @@ async fn action_send_goal_timeout_submits_cancel() {
         let context = ZmqContext::new();
         let socket = context.socket(SocketType::DEALER).expect("create worker");
         socket
-            .set_identity(b"grpc-web-timeout-worker")
+            .set_identity(b"grpc-ws-timeout-worker")
             .expect("identity");
         socket.connect(&backend).expect("connect backend");
         socket

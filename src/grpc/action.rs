@@ -1,4 +1,9 @@
 //! `ActionGateway` — unary goal requests with server-streaming action events.
+//!
+//! Intentional cancel (WebSocket `CANCEL` frame / explicit cancel channel) submits
+//! cancel on the action bus and **keeps** streaming until `RESULT`.
+//! True transport disconnect (drop of the event receiver) still submits cancel and
+//! abandons the session — the gRPC-Web-era fallback, kept as a safety net.
 
 use std::pin::Pin;
 use std::thread;
@@ -30,6 +35,13 @@ impl ActionGatewayService {
             action_frontend: action_frontend.into(),
         }
     }
+}
+
+/// Live SendGoal session: events plus an explicit cancel channel.
+pub struct SendGoalSession {
+    pub events: mpsc::Receiver<Result<ActionEvent, Status>>,
+    /// Soft cancel: submit CANCEL on the bus and keep waiting for RESULT.
+    pub cancel: mpsc::Sender<Vec<u8>>,
 }
 
 fn bus_status(err: BusError) -> Status {
@@ -73,6 +85,7 @@ fn run_goal(
     frontend: String,
     goal: GoalCommand,
     event_tx: mpsc::Sender<Result<ActionEvent, Status>>,
+    mut cancel_rx: mpsc::Receiver<Vec<u8>>,
 ) {
     let client = match ActionClient::new(Some(&frontend)) {
         Ok(client) => client,
@@ -95,15 +108,28 @@ fn run_goal(
         }
     };
     let deadline = timeout_from_ms(goal.timeout_ms).map(|duration| Instant::now() + duration);
+    let mut cancel_submitted = false;
 
     loop {
+        while let Ok(body) = cancel_rx.try_recv() {
+            if !cancel_submitted {
+                let _ = client.submit_cancel(&goal.action_name, &goal_id, &body);
+                cancel_submitted = true;
+            }
+        }
+
+        // True disconnect: consumer dropped the event receiver.
         if event_tx.is_closed() {
-            let _ = client.submit_cancel(&goal.action_name, &goal_id, b"");
+            if !cancel_submitted {
+                let _ = client.submit_cancel(&goal.action_name, &goal_id, b"");
+            }
             return;
         }
 
         if deadline.is_some_and(|deadline| Instant::now() >= deadline) {
-            let _ = client.submit_cancel(&goal.action_name, &goal_id, b"");
+            if !cancel_submitted {
+                let _ = client.submit_cancel(&goal.action_name, &goal_id, b"");
+            }
             let _ = event_tx.blocking_send(Err(Status::deadline_exceeded(
                 "action session timed out waiting for bus reply",
             )));
@@ -131,7 +157,8 @@ fn run_goal(
                     }
                 }
                 if event_tx.blocking_send(Ok(to_event(msg))).is_err() {
-                    if !is_result {
+                    // Disconnect mid-send: cancel unless RESULT already left the worker.
+                    if !is_result && !cancel_submitted {
                         let _ = client.submit_cancel(&goal.action_name, &goal_id, b"");
                     }
                     return;
@@ -157,19 +184,35 @@ impl ActionGateway for ActionGatewayService {
         &self,
         request: Request<GoalCommand>,
     ) -> Result<Response<Self::SendGoalStream>, Status> {
-        let goal = request.into_inner();
+        let session = self.open_send_goal(request.into_inner())?;
+        // Native gRPC is unary→server-stream: intentional cancel = drop the stream
+        // (client RPC cancellation). Soft-cancel channel is unused here.
+        drop(session.cancel);
+        let stream = ReceiverStream::new(session.events);
+        Ok(Response::new(Box::pin(stream) as Self::SendGoalStream))
+    }
+}
+
+impl ActionGatewayService {
+    /// Start a goal session.
+    ///
+    /// - Send on [`SendGoalSession::cancel`] for soft cancel (wait for RESULT).
+    /// - Drop [`SendGoalSession::events`] for hard disconnect cancel.
+    pub fn open_send_goal(&self, goal: GoalCommand) -> Result<SendGoalSession, Status> {
         if goal.action_name.is_empty() {
             return Err(Status::invalid_argument("action_name is required"));
         }
 
         let frontend = self.action_frontend.clone();
         let (event_tx, event_rx) = mpsc::channel::<Result<ActionEvent, Status>>(64);
+        let (cancel_tx, cancel_rx) = mpsc::channel::<Vec<u8>>(4);
         thread::Builder::new()
             .name("grpc-zmq-action-goal".into())
-            .spawn(move || run_goal(frontend, goal, event_tx))
+            .spawn(move || run_goal(frontend, goal, event_tx, cancel_rx))
             .map_err(|err| Status::internal(format!("spawn action goal thread: {err}")))?;
-
-        let stream = ReceiverStream::new(event_rx);
-        Ok(Response::new(Box::pin(stream) as Self::SendGoalStream))
+        Ok(SendGoalSession {
+            events: event_rx,
+            cancel: cancel_tx,
+        })
     }
 }

@@ -1,11 +1,50 @@
 import assert from "node:assert/strict";
-import { describe, it } from "node:test";
+import { afterEach, describe, it } from "node:test";
+import {
+  ActionEvent,
+  ActionKind,
+  GoalCommand,
+} from "../generated/robot_bus_interface/grpc/v1/action_gateway.js";
 import {
   GrpcNode,
   GrpcTopicPublisher,
   TypedGrpcTopicPublisher,
+  __setWsRpcForTests,
+  coalesceSubscribeFilters,
 } from "../src/grpc-node.js";
 import { encode, type MessageType } from "../src/typed.js";
+import type { ServerStreamHandlers } from "../src/ws-rpc.js";
+
+afterEach(() => {
+  __setWsRpcForTests();
+});
+
+describe("coalesceSubscribeFilters", () => {
+  it("multiplexes console /robot_bus/* topics onto one prefix stream", () => {
+    assert.deepEqual(
+      coalesceSubscribeFilters([
+        "/robot_bus/status",
+        "/robot_bus/topics",
+        "/robot_bus/services",
+        "/robot_bus/actions",
+        "/robot_bus/topology",
+        "/robot_bus/events",
+      ]),
+      ["/robot_bus/"],
+    );
+  });
+
+  it("keeps unrelated topics on separate streams", () => {
+    assert.deepEqual(
+      coalesceSubscribeFilters(["/bot1/pose", "/robot_bus/status"]),
+      ["/bot1/pose", "/robot_bus/status"],
+    );
+  });
+
+  it("passes through a single topic", () => {
+    assert.deepEqual(coalesceSubscribeFilters(["/bot1/pose"]), ["/bot1/pose"]);
+  });
+});
 
 describe("GrpcNode capability guards", () => {
   it("rejects service / action servers", () => {
@@ -40,47 +79,41 @@ describe("GrpcNode capability guards", () => {
 
 describe("GrpcNode action client", () => {
   it("returns a handle immediately and delivers feedback in real time", async () => {
-    const node = GrpcNode.grpc("test");
-    let request: {
-      actionName: string;
-      goal: Uint8Array;
-      goalId: string;
-      timeoutMs: number;
-    } | undefined;
+    let request: GoalCommand | undefined;
     let releaseResult: (() => void) | undefined;
     let feedbackDelivered = false;
-    (node as unknown as {
-      actionClient: {
-        sendGoal: (
-          input: typeof request,
-          options?: { abort?: AbortSignal },
-        ) => { responses: AsyncIterable<object> };
-      };
-    }).actionClient = {
-      sendGoal: (input) => {
-        request = input;
-        return {
-          responses: (async function* () {
-            yield {
-              actionName: input?.actionName ?? "",
-              goalId: input?.goalId ?? "",
-              kind: 2,
-              body: new Uint8Array([1]),
-            };
-            await new Promise<void>((resolve) => {
-              releaseResult = resolve;
-            });
-            yield {
-              actionName: input?.actionName ?? "",
-              goalId: input?.goalId ?? "",
-              kind: 3,
-              body: new Uint8Array([2]),
-            };
-          })(),
-        };
-      },
-    };
 
+    __setWsRpcForTests({
+      serverStream: async (_url, _method, req, handlers, _signal) => {
+        request = GoalCommand.fromBinary(req);
+        handlers.onData(
+          ActionEvent.toBinary(
+            ActionEvent.create({
+              actionName: request.actionName,
+              goalId: request.goalId,
+              kind: ActionKind.FEEDBACK,
+              body: new Uint8Array([1]),
+            }),
+          ),
+        );
+        await new Promise<void>((resolve) => {
+          releaseResult = resolve;
+        });
+        handlers.onData(
+          ActionEvent.toBinary(
+            ActionEvent.create({
+              actionName: request.actionName,
+              goalId: request.goalId,
+              kind: ActionKind.RESULT,
+              body: new Uint8Array([2]),
+            }),
+          ),
+        );
+        handlers.onTrailer?.(0, "");
+      },
+    });
+
+    const node = GrpcNode.grpc("test");
     const client = node.createActionClient("/act");
     const handle = client.sendGoal(new Uint8Array([9]), {
       goalId: "goal-1",
@@ -94,10 +127,10 @@ describe("GrpcNode action client", () => {
 
     assert.equal(handle.goalId, "goal-1");
     assert.equal(handle.actionName, "/act");
+    await new Promise((resolve) => setTimeout(resolve, 0));
     assert.equal(request?.actionName, "/act");
     assert.equal(request?.goalId, "goal-1");
     assert.equal(request?.timeoutMs, 2_000);
-    await new Promise((resolve) => setTimeout(resolve, 0));
     assert.equal(feedbackDelivered, true);
     releaseResult?.();
     const result = await handle.result();
@@ -106,29 +139,33 @@ describe("GrpcNode action client", () => {
   });
 
   it("decodes typed feedback and result as they arrive", async () => {
+    __setWsRpcForTests({
+      serverStream: async (_url, _method, _req, handlers) => {
+        handlers.onData(
+          ActionEvent.toBinary(
+            ActionEvent.create({
+              actionName: "/typed",
+              goalId: "typed-1",
+              kind: ActionKind.FEEDBACK,
+              body: new Uint8Array([7]),
+            }),
+          ),
+        );
+        handlers.onData(
+          ActionEvent.toBinary(
+            ActionEvent.create({
+              actionName: "/typed",
+              goalId: "typed-1",
+              kind: ActionKind.RESULT,
+              body: new Uint8Array([9]),
+            }),
+          ),
+        );
+        handlers.onTrailer?.(0, "");
+      },
+    });
+
     const node = GrpcNode.grpc("test");
-    (node as unknown as {
-      actionClient: {
-        sendGoal: () => { responses: AsyncIterable<object> };
-      };
-    }).actionClient = {
-      sendGoal: () => ({
-        responses: (async function* () {
-          yield {
-            actionName: "/typed",
-            goalId: "typed-1",
-            kind: 2,
-            body: new Uint8Array([7]),
-          };
-          yield {
-            actionName: "/typed",
-            goalId: "typed-1",
-            kind: 3,
-            body: new Uint8Array([9]),
-          };
-        })(),
-      }),
-    };
     const numberType = {
       typeName: "fake.v1.Number",
       create: (value?: { value?: number }) => ({ value: value?.value ?? 0 }),
@@ -148,96 +185,114 @@ describe("GrpcNode action client", () => {
   });
 
   it("cancels through the handle and deprecated client wrapper", async () => {
-    const node = GrpcNode.grpc("test");
-    const signals: AbortSignal[] = [];
-    (node as unknown as {
-      actionClient: {
-        sendGoal: (
-          input: object,
-          options?: { abort?: AbortSignal },
-        ) => { responses: AsyncIterable<object> };
-      };
-    }).actionClient = {
-      sendGoal: (_input, options) => {
-        const signal = options?.abort;
-        if (signal) signals.push(signal);
-        return {
-          responses: (async function* () {
-            await new Promise<void>((_resolve, reject) => {
-              if (signal?.aborted) {
-                reject(new Error("aborted"));
-                return;
-              }
-              signal?.addEventListener("abort", () => reject(new Error("aborted")), {
-                once: true,
-              });
-            });
-            yield {};
-          })(),
-        };
+    const cancels: Array<() => void> = [];
+    __setWsRpcForTests({
+      serverStream: async (_url, _method, _req, handlers) => {
+        let resolveDone: (() => void) | undefined;
+        const done = new Promise<void>((resolve) => {
+          resolveDone = resolve;
+        });
+        handlers.onControl?.({
+          cancel: () => {
+            cancels.push(() => undefined);
+            handlers.onData(
+              ActionEvent.toBinary(
+                ActionEvent.create({
+                  actionName: "/act",
+                  goalId: "goal-cancel-1",
+                  kind: ActionKind.RESULT,
+                  body: new TextEncoder().encode("cancelled"),
+                }),
+              ),
+            );
+            handlers.onTrailer?.(0, "");
+            resolveDone?.();
+          },
+          close: () => {
+            resolveDone?.();
+          },
+        });
+        await done;
       },
-    };
+    });
 
+    const node = GrpcNode.grpc("test");
     const client = node.createActionClient("/act");
     const first = client.sendGoal(new Uint8Array(), { goalId: "goal-cancel-1" });
+    await new Promise((r) => setTimeout(r, 0));
     await first.cancel();
-    assert.equal(signals[0]?.aborted, true);
-    await assert.rejects(first.result(), /aborted/);
+    assert.equal(cancels.length, 1);
+    const result = await first.result();
+    assert.equal(result.kind, "RESULT");
 
+    // Second goal: cancel via deprecated client wrapper; mock replies RESULT.
+    let secondCancel = 0;
+    __setWsRpcForTests({
+      serverStream: async (_url, _method, _req, handlers) => {
+        let resolveDone: (() => void) | undefined;
+        const done = new Promise<void>((resolve) => {
+          resolveDone = resolve;
+        });
+        handlers.onControl?.({
+          cancel: () => {
+            secondCancel += 1;
+            handlers.onData(
+              ActionEvent.toBinary(
+                ActionEvent.create({
+                  actionName: "/act",
+                  goalId: "goal-cancel-2",
+                  kind: ActionKind.RESULT,
+                  body: new Uint8Array(),
+                }),
+              ),
+            );
+            handlers.onTrailer?.(0, "");
+            resolveDone?.();
+          },
+          close: () => resolveDone?.(),
+        });
+        await done;
+      },
+    });
     const second = client.sendGoal(new Uint8Array(), { goalId: "goal-cancel-2" });
+    await new Promise((r) => setTimeout(r, 0));
     await client.cancel("goal-cancel-2");
-    assert.equal(signals[1]?.aborted, true);
-    await assert.rejects(second.result(), /aborted/);
+    assert.equal(secondCancel, 1);
+    await second.result();
     await assert.rejects(client.cancel("goal-cancel-2"), /no active goal/);
   });
 
   it("rejects result when the RPC stream fails", async () => {
+    __setWsRpcForTests({
+      serverStream: async () => {
+        throw new Error("rpc unavailable");
+      },
+    });
     const node = GrpcNode.grpc("test");
-    (node as unknown as {
-      actionClient: {
-        sendGoal: () => { responses: AsyncIterable<object> };
-      };
-    }).actionClient = {
-      sendGoal: () => ({
-        responses: (async function* () {
-          throw new Error("rpc unavailable");
-        })(),
-      }),
-    };
-
     const handle = node.createActionClient("/act").sendGoal(new Uint8Array());
     await assert.rejects(handle.result(), /rpc unavailable/);
   });
 
   it("rejects missing results and safely cleans duplicate and shutdown goals", async () => {
-    const node = GrpcNode.grpc("test");
     let signal: AbortSignal | undefined;
     let calls = 0;
-    (node as unknown as {
-      actionClient: {
-        sendGoal: (
-          input: object,
-          options?: { abort?: AbortSignal },
-        ) => { responses: AsyncIterable<object> };
-      };
-    }).actionClient = {
-      sendGoal: (_input, options) => {
+    __setWsRpcForTests({
+      serverStream: async (_url, _method, _req, handlers: ServerStreamHandlers, sig) => {
         calls += 1;
-        signal = options?.abort;
-        return {
-          responses: calls === 1
-            ? (async function* () {})()
-            : (async function* () {
-                await new Promise<void>((_resolve, reject) => {
-                  signal?.addEventListener("abort", () => reject(new Error("shutdown abort")), {
-                    once: true,
-                  });
-                });
-              })(),
-        };
+        signal = sig;
+        if (calls === 1) {
+          handlers.onTrailer?.(0, "");
+          return;
+        }
+        await new Promise<void>((_resolve, reject) => {
+          sig?.addEventListener("abort", () => reject(new Error("shutdown abort")), {
+            once: true,
+          });
+        });
       },
-    };
+    });
 
+    const node = GrpcNode.grpc("test");
     const client = node.createActionClient("/act");
     const missing = client.sendGoal(new Uint8Array(), { goalId: "reusable" });
     await assert.rejects(missing.result(), /without a result/);
@@ -254,70 +309,63 @@ describe("GrpcNode action client", () => {
 });
 
 describe("GrpcNode console registration", () => {
-  it("registers topology over gRPC control services without throwing", async () => {
-    const originalFetch = globalThis.fetch;
-    let rpcCalls = 0;
-    globalThis.fetch = (async (_input, _init) => {
-      rpcCalls += 1;
-      // grpc-web unary success framing is complex; return a transport error body
-      // and rely on best-effort catch inside GrpcNode.
-      return new Response(new Uint8Array(), { status: 200 });
-    }) as typeof fetch;
+  it("keeps topology registration best-effort when WS fails", async () => {
+    let unaryCalls = 0;
+    __setWsRpcForTests({
+      unary: async () => {
+        unaryCalls += 1;
+        throw new Error("gateway unavailable");
+      },
+      serverStream: async () => {
+        /* subscribe may also fail; ignore */
+      },
+    });
 
-    try {
-      const FakeType = {
-        typeName: "fake.v1.Msg",
-        create: (v?: object) => (v ?? {}) as object,
-        toBinary: () => new Uint8Array(),
-        fromBinary: () => ({}),
-      } as MessageType<object>;
-      const node = GrpcNode.grpcAt("web_test", "http://grpc.invalid", {
-        topologyRefreshMs: 100,
-      });
-      node.createPublisher("/typed", FakeType);
-      node.createSubscription("/cmd", () => {}, FakeType);
-      node.start();
-      await new Promise((resolve) => setTimeout(resolve, 120));
-      node.shutdown();
-      // Publisher + subscriber topology and topic-type registrations.
-      assert.ok(rpcCalls >= 1);
-    } finally {
-      globalThis.fetch = originalFetch;
-    }
+    const FakeType = {
+      typeName: "fake.v1.Msg",
+      create: (v?: object) => (v ?? {}) as object,
+      toBinary: () => new Uint8Array(),
+      fromBinary: () => ({}),
+    } as MessageType<object>;
+    const node = GrpcNode.grpcAt("web_test", "http://grpc.invalid", {
+      topologyRefreshMs: 100,
+    });
+    node.createPublisher("/typed", FakeType);
+    node.createSubscription("/cmd", () => {}, FakeType);
+    node.start();
+    await new Promise((resolve) => setTimeout(resolve, 120));
+    node.shutdown();
+    assert.ok(unaryCalls >= 1);
   });
 
   it("keeps registration failures best-effort", async () => {
-    const originalFetch = globalThis.fetch;
-    globalThis.fetch = (async () => {
-      throw new Error("gateway unavailable");
-    }) as typeof fetch;
-    try {
-      const node = GrpcNode.grpc("web_test");
-      node.createPublisher("/topic");
-      node.start();
-      await new Promise((resolve) => setTimeout(resolve, 0));
-      node.shutdown();
-    } finally {
-      globalThis.fetch = originalFetch;
-    }
+    __setWsRpcForTests({
+      unary: async () => {
+        throw new Error("gateway unavailable");
+      },
+      serverStream: async () => {},
+    });
+    const node = GrpcNode.grpc("web_test");
+    node.createPublisher("/topic");
+    node.start();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    node.shutdown();
   });
 
   it("can disable topology registration", async () => {
-    const originalFetch = globalThis.fetch;
-    let calls = 0;
-    globalThis.fetch = (async () => {
-      calls += 1;
-      throw new Error("should not be called");
-    }) as typeof fetch;
-    try {
-      const node = GrpcNode.grpc("web_test", { consoleUrl: null });
-      node.createPublisher("/topic");
-      node.start();
-      await new Promise((resolve) => setTimeout(resolve, 0));
-      node.shutdown();
-      assert.equal(calls, 0);
-    } finally {
-      globalThis.fetch = originalFetch;
-    }
+    let unaryCalls = 0;
+    __setWsRpcForTests({
+      unary: async () => {
+        unaryCalls += 1;
+        throw new Error("should not be called");
+      },
+      serverStream: async () => {},
+    });
+    const node = GrpcNode.grpc("web_test", { consoleUrl: null });
+    node.createPublisher("/topic");
+    node.start();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    node.shutdown();
+    assert.equal(unaryCalls, 0);
   });
 });

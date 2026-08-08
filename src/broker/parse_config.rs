@@ -298,7 +298,7 @@ Defaults:\n  \
 message  XSUB 15560 / XPUB 15561\n  \
 service  frontend 15662 / backend 15663\n  \
 action   frontend 15664 / backend 15665\n  \
-gRPC     0.0.0.0:15770 (gRPC + gRPC-Web + embedded Web UI)\n  \
+gRPC     0.0.0.0:15770 (gRPC + WS /ws + embedded Web UI)\n  \
 console  same port as gRPC (use --no-console to disable)\n\n\
 Message options:\n  \
 --message-xsub-bind ADDR       Publisher bind (alias: --xsub-bind)\n  \

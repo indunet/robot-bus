@@ -29,7 +29,7 @@
 | `runtime::Executor` | 底层 poll loop（一般用下面两个包装） |
 | `runtime::SingleThreadedExecutor` / `MultiThreadedExecutor` | 显式执行器（多节点 / 并行）；单节点可直接 `Node::spin` |
 | `runtime::Node` / `TopicPublisher` / `CallbackGroup` | 节点、publisher、callback group（互斥 / 可重入） |
-| `grpc::`（默认 feature） | gRPC / gRPC-Web 网关（随 broker 一起启动） |
+| `grpc::`（默认 feature） | gRPC + 浏览器 WebSocket RPC 网关（随 broker 一起启动） |
 | `ros2::`（`ros2` feature） | 进程内 ROS 2 话题/服务桥（`Ros2Bridge`） |
 
 ### 仓库布局
@@ -53,7 +53,7 @@ Rust 核心留在仓库根目录（`Cargo.toml` + `src/`）。各语言 SDK 放�
 业务代码 (Rust / Python / TypeScript / C++ / Java / Android)
   └── robot-bus SDK
               │
-              │ ZMQ (tcp / ipc / inproc) 或 gRPC / gRPC-Web
+              │ ZMQ (tcp / ipc / inproc) 或 gRPC / WebSocket RPC
               ▼
 robot_bus_broker 进程
 ```
@@ -104,7 +104,7 @@ let opts = NodeOptions::tcp().discover(DiscoverOpts {
 let mut node = Node::with_options("talker", opts);
 ```
 
-各语言绑定同款：`Node.discover(...)`（Python / C++ / Java / Android / TypeScript Node.js）。浏览器 gRPC-Web 无 UDP 发现。
+各语言绑定同款：`Node.discover(...)`（Python / C++ / Java / Android / TypeScript Node.js）。浏览器 WebSocket 客户端无 UDP 发现。
 
 同 domain 多 broker 时请指定 `broker_id`，否则发现会报错并列出候选 id。
 
@@ -176,7 +176,7 @@ just ts-dev
 # 等价：cd bindings/typescript && npm install && npm run build:native && npm run build:ts
 ```
 
-单一 npm 包：Node.js 走 napi-rs（完整 ZMQ API）；浏览器走 gRPC-Web（订阅 / publish / service / action）。bundler 通过 `exports` 自动选入口。详见 [`docs/typescript-api.md`](docs/typescript-api.md)。
+单一 npm 包：Node.js 走 napi-rs（完整 ZMQ API）；浏览器走 WebSocket RPC（`/ws`：订阅 / publish / service / action）。bundler 通过 `exports` 自动选入口。详见 [`docs/typescript-api.md`](docs/typescript-api.md)。
 
 ```ts
 import { Node } from "robot-bus";
@@ -187,7 +187,7 @@ const pub = node.createPublisher("/robot1/imu", Imu);
 node.createSubscription("/robot1/imu", (_t, imu) => console.log(imu), Imu);
 ```
 
-浏览器 / 纯 gRPC：`Node.grpc("client")`（browser 入口的 `Node` 即为 gRPC-Web facade）。
+浏览器 / 纯 gRPC：`Node.grpc("client")`（browser 入口的 `Node` 即为 WebSocket RPC facade）。
 
 ### Java / Android（Maven Central）
 
@@ -305,7 +305,7 @@ pub_.set_high_water_mark(HighWaterMark { snd: 10, rcv: 10 })?;
 
 | 二进制 | 说明 |
 |------|------|
-| `robot_bus_broker` | 一次启动三条总线 + gRPC / gRPC-Web 网关 |
+| `robot_bus_broker` | 一次启动三条总线 + gRPC / WebSocket RPC 网关 |
 
 ## Web 控制台（`console/`）
 
@@ -332,13 +332,13 @@ cargo run --bin robot_bus_broker
 
 `assets/console/` 是**构建产物**（不提交）。CI / 发布在带 `console` feature 编译前会先生成该目录。
 
-已对接 **与 gRPC-Web 同一端口**（`0.0.0.0:15770`）：Dashboard 是 TypeScript `GrpcNode`，订阅 `/robot_bus/*` 系统话题。`rbus` / 工具仍可用 REST 只读 shim（`GET /api/v1/...`）。拓扑与类型登记通过现有 service bus 上的可靠控制面服务（`/robot_bus/topology/register`、`/robot_bus/topic_type/register`）。领域可视化、Flow、LIVE / WHEP 在同级仓库 **[robot-bus-tools](https://github.com/indunet/robot-bus-tools)** 的 Studio。前端源码在 `console/`；只有生成的静态文件会编进带 `console` feature 的二进制。
+已对接 **与原生 gRPC / WebSocket RPC 同一端口**（`0.0.0.0:15770`）：Dashboard 是 TypeScript `GrpcNode`，经 `/ws` 订阅 `/robot_bus/*` 系统话题。`rbus` / 工具仍可用 REST 只读 shim（`GET /api/v1/...`）。拓扑与类型登记通过现有 service bus 上的可靠控制面服务（`/robot_bus/topology/register`、`/robot_bus/topic_type/register`）。领域可视化、Flow、LIVE / WHEP 在同级仓库 **[robot-bus-tools](https://github.com/indunet/robot-bus-tools)** 的 Studio。前端源码在 `console/`；只有生成的静态文件会编进带 `console` feature 的二进制。
 
 **机器人仿真双节点演示：** 进程内 [`src/bot_sim/`](src/bot_sim/) 负责物理（`SUB /bot1/cmd_vel` → `PUB /bot1/pose`），控制台打开 BOT SIM 会话时自动拉起；**BOT SIM** 面板（`bot_viz`）渲染位姿并调度能力（当前为键盘遥控）。共享世界，多人可看，遥控后写覆盖。
 
-## gRPC / gRPC-Web 网关
+## gRPC + 浏览器 WebSocket 网关
 
-随 `robot_bus_broker` / `RobotBusBroker::start` 一起启动；标准 gRPC 与 gRPC-Web **同端口**（默认 `0.0.0.0:15770`）。
+随 `robot_bus_broker` / `RobotBusBroker::start` 一起启动；**原生 gRPC**（HTTP/2）与 **浏览器 WebSocket RPC**（`/ws`，一 RPC 一连接）**同端口**（默认 `0.0.0.0:15770`）。已移除 gRPC-Web。
 
 也可用 `Node::grpc` / `Node::grpc_at` 以 Node API 接入网关（客户端：订阅 / publish / 调 service / 调 action，见 [`docs/rust-api.md`](docs/rust-api.md#grpc-模式-node客户端)）。
 
@@ -349,7 +349,7 @@ cargo run --bin robot_bus_broker
 | `ServiceGateway.Call` | 一元：`service_name` + request bytes → response bytes |
 | `ActionGateway.SendGoal` | 一元 goal 请求，随后由服务端流式返回 `ActionEvent`（`FEEDBACK`，最终为 `RESULT`） |
 
-各语言 action client 统一采用 ROS 2 风格 `GoalHandle`：`send_goal` / `sendGoal` 立即返回 handle，实时 feedback 交给回调，result 独立等待。`handle.cancel()` 是 best-effort 操作，不表示服务端已确认取消：gRPC 通过取消 goal 流实现，ZMQ 则发送显式 `CANCEL` 帧。
+各语言 action client 统一采用 ROS 2 风格 `GoalHandle`：`send_goal` / `sendGoal` 立即返回 handle，实时 feedback 交给回调，result 独立等待。`handle.cancel()` 是 best-effort 操作，不表示服务端已确认取消：浏览器 WebSocket 发显式 `CANCEL` 帧（连接保持至 `RESULT`；真断连仍会 cancel）；原生 gRPC 取消 goal 流；ZMQ 发送显式 `CANCEL` 帧。
 
 ```bash
 cargo run --bin robot_bus_broker
