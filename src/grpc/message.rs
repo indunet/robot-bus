@@ -2,8 +2,6 @@
 
 use std::pin::Pin;
 use std::sync::{Arc, Mutex};
-use std::thread;
-use std::time::Duration;
 
 use tokio::sync::mpsc;
 use tokio_stream::Stream;
@@ -11,27 +9,29 @@ use tokio_stream::wrappers::ReceiverStream;
 use tonic::{Request, Response, Status};
 
 use crate::errors::BusError;
-use crate::message_bus::{Publisher, Subscriber};
+use crate::message_bus::Publisher;
 
 use super::pb::message_gateway_server::MessageGateway;
 use super::pb::{PublishResponse, SubscribeRequest, TopicMessage};
+use super::sub_demux::SubDemux;
 
 type SubscribeStream = Pin<Box<dyn Stream<Item = Result<TopicMessage, Status>> + Send + 'static>>;
 
 #[derive(Clone)]
 pub struct MessageGatewayService {
-    message_xpub: String,
     message_xsub: String,
     /// Shared ZMQ PUB into the bus XSUB (lazy; reused across Publish RPCs).
     publisher: Arc<Mutex<Option<Publisher>>>,
+    demux: SubDemux,
 }
 
 impl MessageGatewayService {
     pub fn new(message_xpub: impl Into<String>, message_xsub: impl Into<String>) -> Self {
+        let message_xpub = message_xpub.into();
         Self {
-            message_xpub: message_xpub.into(),
             message_xsub: message_xsub.into(),
             publisher: Arc::new(Mutex::new(None)),
+            demux: SubDemux::new(message_xpub),
         }
     }
 
@@ -51,51 +51,7 @@ impl MessageGatewayService {
         &self,
         topic: String,
     ) -> Result<mpsc::Receiver<Result<TopicMessage, Status>>, Status> {
-        let xpub = self.message_xpub.clone();
-        let (tx, rx) = mpsc::channel::<Result<TopicMessage, Status>>(64);
-
-        thread::Builder::new()
-            .name("grpc-zmq-sub".into())
-            .spawn(move || {
-                let sub = match Subscriber::new(Some(&xpub)) {
-                    Ok(sub) => sub,
-                    Err(err) => {
-                        let _ = tx.blocking_send(Err(Status::unavailable(err.to_string())));
-                        return;
-                    }
-                };
-                if let Err(err) = sub.subscribe(&topic) {
-                    let _ = tx.blocking_send(Err(Status::internal(err.to_string())));
-                    return;
-                }
-
-                // Poll with a short timeout so drop of `tx` (client gone) can end the loop.
-                loop {
-                    match sub.receive(Some(Duration::from_millis(200))) {
-                        Ok((msg_topic, payload)) => {
-                            let msg = TopicMessage {
-                                topic: msg_topic,
-                                payload,
-                            };
-                            if tx.blocking_send(Ok(msg)).is_err() {
-                                break;
-                            }
-                        }
-                        Err(crate::errors::BusError::Timeout(_)) => {
-                            if tx.is_closed() {
-                                break;
-                            }
-                        }
-                        Err(err) => {
-                            let _ = tx.blocking_send(Err(Status::internal(err.to_string())));
-                            break;
-                        }
-                    }
-                }
-            })
-            .map_err(|err| Status::internal(format!("spawn subscriber thread: {err}")))?;
-
-        Ok(rx)
+        self.demux.open_subscribe(topic)
     }
 
     pub async fn publish_message(&self, msg: TopicMessage) -> Result<(), Status> {

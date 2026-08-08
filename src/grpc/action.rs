@@ -6,6 +6,7 @@
 //! abandons the session — the gRPC-Web-era fallback, kept as a safety net.
 
 use std::pin::Pin;
+use std::sync::Arc;
 use std::thread;
 use std::time::{Duration, Instant};
 
@@ -13,26 +14,38 @@ use tokio::sync::mpsc;
 use tokio_stream::Stream;
 use tokio_stream::wrappers::ReceiverStream;
 use tonic::{Request, Response, Status};
+use zmq::Context;
 
 use crate::action_bus::{ActionClient, ActionKind as WireKind, ActionMessage};
 use crate::errors::{BusError, parse_error_body};
+use crate::zmq_helpers::HighWaterMark;
 
 use super::pb::action_gateway_server::ActionGateway;
 use super::pb::{ActionEvent, ActionKind, GoalCommand};
 
 type SendGoalStream = Pin<Box<dyn Stream<Item = Result<ActionEvent, Status>> + Send + 'static>>;
 
-const POLL_TICK: Duration = Duration::from_millis(50);
+const POLL_TICK: Duration = Duration::from_millis(5);
 
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct ActionGatewayService {
     action_frontend: String,
+    context: Arc<Context>,
+}
+
+impl std::fmt::Debug for ActionGatewayService {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ActionGatewayService")
+            .field("action_frontend", &self.action_frontend)
+            .finish()
+    }
 }
 
 impl ActionGatewayService {
     pub fn new(action_frontend: impl Into<String>) -> Self {
         Self {
             action_frontend: action_frontend.into(),
+            context: Arc::new(Context::new()),
         }
     }
 }
@@ -82,12 +95,17 @@ fn to_event(msg: ActionMessage) -> ActionEvent {
 }
 
 fn run_goal(
+    context: Arc<Context>,
     frontend: String,
     goal: GoalCommand,
     event_tx: mpsc::Sender<Result<ActionEvent, Status>>,
     mut cancel_rx: mpsc::Receiver<Vec<u8>>,
 ) {
-    let client = match ActionClient::new(Some(&frontend)) {
+    let client = match ActionClient::with_context_hwm(
+        context.as_ref(),
+        Some(&frontend),
+        HighWaterMark::ACTION,
+    ) {
         Ok(client) => client,
         Err(err) => {
             let _ = event_tx.blocking_send(Err(bus_status(err)));
@@ -204,11 +222,12 @@ impl ActionGatewayService {
         }
 
         let frontend = self.action_frontend.clone();
+        let context = Arc::clone(&self.context);
         let (event_tx, event_rx) = mpsc::channel::<Result<ActionEvent, Status>>(64);
         let (cancel_tx, cancel_rx) = mpsc::channel::<Vec<u8>>(4);
         thread::Builder::new()
             .name("grpc-zmq-action-goal".into())
-            .spawn(move || run_goal(frontend, goal, event_tx, cancel_rx))
+            .spawn(move || run_goal(context, frontend, goal, event_tx, cancel_rx))
             .map_err(|err| Status::internal(format!("spawn action goal thread: {err}")))?;
         Ok(SendGoalSession {
             events: event_rx,

@@ -21,7 +21,7 @@ pub fn lock_broker() -> MutexGuard<'static, ()> {
 pub fn perf_broker_config() -> RobotBusConfig {
     let mut config = RobotBusConfig::default();
     // Deep enough that paced goodput trials are not HWM-drop dominated.
-    // Not a production default (STREAM default remains 2).
+    // Not a production default (STREAM default remains 8).
     config.message.snd_hwm = 2_048;
     config.message.rcv_hwm = 2_048;
     config.service.snd_hwm = 64;

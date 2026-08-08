@@ -28,6 +28,7 @@ use crate::runtime::registrations::MessageCallback;
 use crate::runtime::timers::{
     Timer, TimerCallback, TimerHandle, effective_poll_timeout_ms, tick_timers,
 };
+use crate::runtime::topic_callbacks::for_each_matching_callback;
 use tonic::transport::Channel;
 
 const DEFAULT_GRPC_URL: &str = "http://127.0.0.1:15770";
@@ -367,16 +368,15 @@ impl GrpcRuntime {
     }
 
     fn dispatch_topic(&self, topic: &str, payload: &[u8]) -> Result<()> {
-        let callbacks = {
-            let state = self.lock_state()?;
-            callbacks_for_topic(topic, &state.topic_callbacks)
-        };
-        for entry in callbacks {
+        let topic: Arc<str> = topic.into();
+        let payload: Arc<[u8]> = payload.to_vec().into();
+        let state = self.lock_state()?;
+        for_each_matching_callback(&topic, &state.topic_callbacks, |entry| {
             let callback = Arc::clone(&entry.callback);
-            let topic = topic.to_string();
-            let payload = payload.to_vec();
+            let topic = Arc::clone(&topic);
+            let payload = Arc::clone(&payload);
             entry.group.run(None, move || callback(&topic, &payload));
-        }
+        });
         Ok(())
     }
 
@@ -430,25 +430,6 @@ async fn run_subscribe_stream(url: &str, topic: &str, tx: &Sender<TopicEvent>) -
         }
     }
     Ok(())
-}
-
-fn callbacks_for_topic(
-    topic: &str,
-    topic_callbacks: &HashMap<String, Vec<SubscriptionCallback>>,
-) -> Vec<SubscriptionCallback> {
-    let mut matched = Vec::new();
-    let mut seen = HashSet::new();
-    for (pattern, callbacks) in topic_callbacks {
-        if topic == pattern.as_str() || (!pattern.is_empty() && topic.starts_with(pattern)) {
-            for entry in callbacks {
-                let ptr = Arc::as_ptr(&entry.callback) as *const ();
-                if seen.insert(ptr) {
-                    matched.push(entry.clone());
-                }
-            }
-        }
-    }
-    matched
 }
 
 fn timeout_ms_u32(timeout: Option<Duration>) -> u32 {

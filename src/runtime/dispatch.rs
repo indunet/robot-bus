@@ -11,6 +11,7 @@ use crate::runtime::registrations::{
     ActionClientRegistration, ActionRegistration, Registration, RegistrationKind,
     ServiceRegistration, SubRegistration,
 };
+use crate::runtime::topic_callbacks::for_each_matching_callback;
 use crate::runtime::worker_pool::WorkerPool;
 
 pub fn dispatch_registration(
@@ -48,7 +49,7 @@ pub fn dispatch_sub_message(
     topic_callbacks: &HashMap<String, Vec<SubscriptionCallback>>,
     worker_pool: Option<&WorkerPool>,
 ) {
-    let frames = match reg.socket.recv_multipart(0) {
+    let mut frames = match reg.socket.recv_multipart(0) {
         Ok(frames) => frames,
         Err(err) => {
             log::warn!("sub recv failed on {}: {err}", reg.endpoint);
@@ -63,34 +64,16 @@ pub fn dispatch_sub_message(
         );
         return;
     }
-    let topic = String::from_utf8_lossy(&frames[0]).into_owned();
-    let payload = frames[1].clone();
-    for entry in callbacks_for_topic(&topic, topic_callbacks) {
+    let payload_bytes = std::mem::take(&mut frames[1]);
+    let topic: Arc<str> = String::from_utf8_lossy(&frames[0]).into_owned().into();
+    let payload: Arc<[u8]> = payload_bytes.into();
+    for_each_matching_callback(&topic, topic_callbacks, |entry| {
         let callback = Arc::clone(&entry.callback);
         let group = entry.group.clone();
-        let topic = topic.clone();
-        let payload = payload.clone();
+        let topic = Arc::clone(&topic);
+        let payload = Arc::clone(&payload);
         group.run(worker_pool, move || callback(&topic, &payload));
-    }
-}
-
-fn callbacks_for_topic(
-    topic: &str,
-    topic_callbacks: &HashMap<String, Vec<SubscriptionCallback>>,
-) -> Vec<SubscriptionCallback> {
-    let mut matched = Vec::new();
-    let mut seen = std::collections::HashSet::new();
-    for (pattern, callbacks) in topic_callbacks {
-        if topic == pattern.as_str() || (!pattern.is_empty() && topic.starts_with(pattern)) {
-            for entry in callbacks {
-                let ptr = Arc::as_ptr(&entry.callback) as *const ();
-                if seen.insert(ptr) {
-                    matched.push(entry.clone());
-                }
-            }
-        }
-    }
-    matched
+    });
 }
 
 pub fn dispatch_service_request(
@@ -105,14 +88,10 @@ pub fn dispatch_service_request(
             return;
         }
     };
-    if frames.len() != 4 {
-        log::warn!("ignored service frame with count {}", frames.len());
+    let Ok([client_id, svc, req_id, body]) = <[Vec<u8>; 4]>::try_from(frames) else {
+        log::warn!("ignored service frame with unexpected count");
         return;
-    }
-    let client_id = frames[0].clone();
-    let svc = frames[1].clone();
-    let req_id = frames[2].clone();
-    let body = frames[3].clone();
+    };
     if String::from_utf8_lossy(&svc) != reg.service_name {
         log::warn!(
             "ignored request for service {:?}",
@@ -151,15 +130,12 @@ pub fn dispatch_action_message(
             return;
         }
     };
-    if frames.len() != 5 {
-        log::warn!("ignored action frame with count {}", frames.len());
+    let Ok([client_id, action_bytes, goal_id, kind, body]) = <[Vec<u8>; 5]>::try_from(frames)
+    else {
+        log::warn!("ignored action frame with unexpected count");
         return;
-    }
-    let client_id = frames[0].clone();
-    let action = String::from_utf8_lossy(&frames[1]);
-    let goal_id = frames[2].clone();
-    let kind = frames[3].clone();
-    let body = frames[4].clone();
+    };
+    let action = String::from_utf8_lossy(&action_bytes);
     if action != reg.action_name {
         log::warn!("ignored message for action {action:?}");
         return;
@@ -199,13 +175,13 @@ pub fn dispatch_action_client_message(reg: &mut ActionClientRegistration) {
             return;
         }
     };
-    if frames.len() != 4 {
-        log::warn!("ignored action client frame with count {}", frames.len());
+    let Ok([action_bytes, goal_bytes, kind_bytes, body]) = <[Vec<u8>; 4]>::try_from(frames) else {
+        log::warn!("ignored action client frame with unexpected count");
         return;
-    }
-    let action_name = String::from_utf8_lossy(&frames[0]).into_owned();
-    let goal_id = String::from_utf8_lossy(&frames[1]).into_owned();
-    let kind = match ActionKind::from_wire(&String::from_utf8_lossy(&frames[2])) {
+    };
+    let action_name = String::from_utf8_lossy(&action_bytes).into_owned();
+    let goal_id = String::from_utf8_lossy(&goal_bytes).into_owned();
+    let kind = match ActionKind::from_wire(&String::from_utf8_lossy(&kind_bytes)) {
         Ok(kind) => kind,
         Err(err) => {
             log::warn!("ignored action client kind: {err}");
@@ -216,7 +192,7 @@ pub fn dispatch_action_client_message(reg: &mut ActionClientRegistration) {
         action_name,
         goal_id: goal_id.clone(),
         kind,
-        body: frames[3].clone(),
+        body,
     };
     if let Some(callback) = reg.goal_callbacks.get(&goal_id) {
         callback(&message);

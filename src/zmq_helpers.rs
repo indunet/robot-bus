@@ -20,8 +20,8 @@ pub struct HighWaterMark {
 }
 
 impl HighWaterMark {
-    /// Message bus (PUB/SUB) defaults — keep queues short for low latency.
-    pub const STREAM: Self = Self { snd: 2, rcv: 2 };
+    /// Message bus (PUB/SUB) defaults — short queues for low latency, depth 8 for bursts.
+    pub const STREAM: Self = Self { snd: 8, rcv: 8 };
     /// Service bus (REQ/DEALER) defaults.
     pub const RPC: Self = Self { snd: 4, rcv: 4 };
     /// Action bus defaults.

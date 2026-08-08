@@ -8,6 +8,7 @@ pub mod action;
 pub mod message;
 pub mod server;
 pub mod service;
+pub mod sub_demux;
 pub mod ws;
 pub mod ws_frame;
 

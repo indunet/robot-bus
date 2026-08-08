@@ -301,7 +301,7 @@ let pub_ = Publisher::with_hwm(None, HighWaterMark::new(10, 10))?;
 pub_.set_high_water_mark(HighWaterMark { snd: 10, rcv: 10 })?;
 ```
 
-Defaults: message `STREAM(2/2)`, service `RPC(4/4)`, action `ACTION(8/8)`. Broker flags: `--snd-hwm` / `--rcv-hwm`.
+Defaults: message `STREAM(8/8)`, service `RPC(4/4)`, action `ACTION(8/8)`. Broker flags: `--snd-hwm` / `--rcv-hwm`.
 
 ## Binaries
 

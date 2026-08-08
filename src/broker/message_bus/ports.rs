@@ -13,5 +13,5 @@ pub const DEFAULT_XSUB_BIND: &str = "tcp://0.0.0.0:0";
 pub const DEFAULT_XPUB_BIND: &str = "tcp://0.0.0.0:0";
 
 /// Shallow ZMQ queues: prefer dropping over buffering for real-time streams.
-pub const DEFAULT_SND_HWM: i32 = 2;
-pub const DEFAULT_RCV_HWM: i32 = 2;
+pub const DEFAULT_SND_HWM: i32 = 8;
+pub const DEFAULT_RCV_HWM: i32 = 8;
