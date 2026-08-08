@@ -4,6 +4,9 @@
 //! pushes use `[topic][hop_path][payload]` where `hop_path` is a comma-separated
 //! list of `broker_id`s (loop prevention). Topic demand is tracked from XPUB
 //! subscription messages and used to filter pushes and sync peer SUBs.
+//!
+//! Reserved `/robot_bus` console / status topics stay local: they are never
+//! pushed to peers, never accepted from peers, and never mirrored as peer SUBs.
 
 use anyhow::{Context, Result};
 use std::collections::HashSet;
@@ -14,6 +17,7 @@ use zmq::{Context as ZmqContext, Socket, SocketType};
 use super::BusConfig;
 use super::metrics::MessageMetrics;
 use super::peer::MessagePeer;
+use crate::console_topics;
 
 const HOP_SEP: char = ',';
 
@@ -92,7 +96,7 @@ pub fn run_federated(
                     // Forward subscription upstream (XSUB filters publishers / peer PUBs).
                     xsub.send_multipart(frames.iter().map(|f| f.as_slice()), 0)
                         .context("forward subscription to XSUB")?;
-                    if changed {
+                    if changed && should_federate(&topic) {
                         sync_peer_subs(&peers, &topic, is_sub)?;
                     }
                 }
@@ -153,12 +157,15 @@ fn handle_xsub_frames(
         2 => {
             let topic = std::str::from_utf8(&frames[0]).unwrap_or("");
             deliver_local(xpub, &frames[0], &frames[1], topic, metrics)?;
-            if topic_wanted(subscribed, topic) {
+            if should_federate(topic) && topic_wanted(subscribed, topic) {
                 push_to_peers(peers, &frames[0], broker_id.as_bytes(), &frames[1])?;
             }
         }
         3 => {
             let topic = std::str::from_utf8(&frames[0]).unwrap_or("");
+            if !should_federate(topic) {
+                return Ok(());
+            }
             let hops = std::str::from_utf8(&frames[1]).unwrap_or("");
             if hop_contains(hops, broker_id) {
                 return Ok(());
@@ -243,6 +250,11 @@ fn topic_wanted(subscribed: &HashSet<String>, topic: &str) -> bool {
     subscribed.iter().any(|prefix| topic.starts_with(prefix))
 }
 
+/// Console / status namespace stays per-broker; do not federate `/robot_bus*`.
+fn should_federate(topic: &str) -> bool {
+    !console_topics::is_reserved_name(topic)
+}
+
 fn hop_contains(hops: &str, broker_id: &str) -> bool {
     hops.split(HOP_SEP).any(|h| h == broker_id)
 }
@@ -275,5 +287,16 @@ mod hop_tests {
         assert!(!topic_wanted(&s, "other"));
         s.insert(String::new());
         assert!(topic_wanted(&s, "other"));
+    }
+
+    #[test]
+    fn reserved_console_topics_are_not_federated() {
+        assert!(!should_federate("/robot_bus/status"));
+        assert!(!should_federate("/robot_bus/topics"));
+        assert!(!should_federate("/robot_bus/topology"));
+        assert!(!should_federate("/robot_bus/bot/pose"));
+        assert!(!should_federate("/robot_bus"));
+        assert!(should_federate("fleet/pose"));
+        assert!(should_federate("/robot1/imu"));
     }
 }

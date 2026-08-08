@@ -239,3 +239,60 @@ fn mesh_does_not_storm() {
     broker_a.stop().expect("stop a");
     broker_b.stop().expect("stop b");
 }
+
+#[test]
+fn reserved_robot_bus_topics_stay_local() {
+    let _guard = lock_brokers();
+    let ports = alloc_message_broker_ports(2);
+    let a = &ports[0];
+    let b = &ports[1];
+
+    let broker_a = RobotBusBroker::start(federated_bus_config("broker-a", vec![msg_peer(b)], a))
+        .expect("broker a");
+    let broker_b = RobotBusBroker::start(federated_bus_config("broker-b", vec![msg_peer(a)], b))
+        .expect("broker b");
+
+    thread::sleep(Duration::from_millis(100));
+
+    let sub_b = Subscriber::new(Some(&connect_addr(&broker_b.message.xpub_bind))).expect("sub b");
+    sub_b
+        .subscribe(robot_bus::console_topics::STATUS)
+        .expect("subscribe status");
+    sub_b.subscribe("fleet/pose").expect("subscribe pose");
+
+    let sub_a = Subscriber::new(Some(&connect_addr(&broker_a.message.xpub_bind))).expect("sub a");
+    sub_a
+        .subscribe(robot_bus::console_topics::STATUS)
+        .expect("subscribe local status");
+
+    // Demand must reach peers for the federated user topic.
+    thread::sleep(Duration::from_millis(300));
+
+    let pub_a = Publisher::new(Some(&connect_addr(&broker_a.message.xsub_bind))).expect("pub a");
+    thread::sleep(Duration::from_millis(100));
+
+    pub_a
+        .publish(robot_bus::console_topics::STATUS, b"status-a")
+        .expect("publish status");
+
+    assert_eq!(
+        recv_exact(&sub_a, b"status-a", Duration::from_secs(2)),
+        robot_bus::console_topics::STATUS,
+        "local console status must still deliver"
+    );
+    let leaked = count_matching(&sub_b, b"status-a", Duration::from_millis(500));
+    assert_eq!(
+        leaked, 0,
+        "reserved /robot_bus/status must not cross federation"
+    );
+
+    pub_a.publish("fleet/pose", b"from-a").expect("publish pose");
+    assert_eq!(
+        recv_exact(&sub_b, b"from-a", Duration::from_secs(2)),
+        "fleet/pose",
+        "user topics must still federate"
+    );
+
+    broker_a.stop().expect("stop a");
+    broker_b.stop().expect("stop b");
+}
