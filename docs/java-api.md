@@ -2,7 +2,7 @@
 
 ```bash
 # Maven Central (when published)
-# implementation("org.indunet:robot-bus:0.1.6")           // JVM
+# implementation("org.indunet:robot-bus:0.1.7")           // JVM
 
 # 本地：
 just java-dev       # gen-java + cargo FFI + mvn test

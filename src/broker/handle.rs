@@ -28,7 +28,6 @@ use crate::console::serve_with_shutdown as serve_console_with_shutdown;
 use crate::console::{BrokerEndpoints, ConsoleState, ControlPlaneHandle, StatusPublisherHandle};
 #[cfg(feature = "grpc")]
 use crate::grpc::{GatewayConfig, serve_on_listener};
-#[cfg(any(feature = "grpc", feature = "console"))]
 use std::net::SocketAddr;
 
 const STARTUP_SETTLE: Duration = Duration::from_millis(50);

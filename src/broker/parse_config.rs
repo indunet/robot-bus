@@ -515,12 +515,16 @@ mod tests {
 
     #[test]
     fn parses_api_listen_alias() {
-        let config = parse_robot_bus_config(&args(&["--api-listen", "127.0.0.1:15771"]))
-            .unwrap()
-            .expect("config");
+        let result = parse_robot_bus_config(&args(&["--api-listen", "127.0.0.1:15771"]));
         #[cfg(feature = "grpc")]
         {
+            let config = result.unwrap().expect("config");
             assert_eq!(config.grpc.listen.to_string(), "127.0.0.1:15771");
+        }
+        #[cfg(not(feature = "grpc"))]
+        {
+            let err = result.expect_err("--api-listen requires grpc");
+            assert!(err.to_string().contains("requires the `grpc` feature"));
         }
     }
 
