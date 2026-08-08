@@ -21,7 +21,7 @@ npm install robot-bus
 
 ```bash
 # Rust / Python CLI
-robot-bus-broker --grpc-listen 0.0.0.0:15770 --tcp-only
+robot-bus-broker --grpc-listen 0.0.0.0:15570 --tcp-only
 ```
 
 Node 进程内：
@@ -30,7 +30,7 @@ Node 进程内：
 import { RobotBusBroker } from "robot-bus";
 
 const broker = RobotBusBroker.start({
-  grpcListen: "0.0.0.0:15770",
+  grpcListen: "0.0.0.0:15570",
   tcpOnly: true,
   noConsole: true,
 });
@@ -119,7 +119,7 @@ gRPC 客户端模式（不启 ZMQ）：
 
 ```ts
 const node = Node.grpc("web-client");
-// 或 Node.grpcAt("web-client", "http://127.0.0.1:15770");
+// 或 Node.grpcAt("web-client", "http://127.0.0.1:15570");
 ```
 
 | 支持 | 不支持（gRPC 模式） |
@@ -164,7 +164,7 @@ const t = buf.lookupTransform("base_link", "camera", TransformStamped);
 import { Node } from "robot-bus";
 // bundler 自动解析到 browser 入口
 
-const node = Node.grpc("browser-client"); // 默认 http://127.0.0.1:15770 → ws://127.0.0.1:15770/ws
+const node = Node.grpc("browser-client"); // 默认 http://127.0.0.1:15570 → ws://127.0.0.1:15570/ws
 const pub = node.createPublisher("/robot1/cmd");
 await pub.publish(new TextEncoder().encode("go"));
 node.createSubscription("/robot1/imu", (topic, payload) => {

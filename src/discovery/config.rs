@@ -48,7 +48,7 @@ impl Default for DiscoveryConfig {
 /// Client-side discover options (HTTP against the broker API listen port).
 #[derive(Clone, Debug)]
 pub struct DiscoverOpts {
-    /// Broker API base URL, e.g. `http://127.0.0.1:15770` or `127.0.0.1:15770`.
+    /// Broker API base URL, e.g. `http://127.0.0.1:15570` or `127.0.0.1:15570`.
     pub api_url: String,
     /// When set, only accept this broker id.
     pub broker_id: Option<String>,

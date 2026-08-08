@@ -306,7 +306,7 @@ pub fn robot_bus_broker_help() -> &'static str {
 Usage:\n  robot_bus_broker [options]\n\n\
 Defaults:\n  \
 message / service / action TCP binds: 0.0.0.0:0 (OS assigns free ports)\n  \
-API listen 0.0.0.0:15770 (gRPC + WS /ws + discover REST + embedded Web UI)\n  \
+API listen 0.0.0.0:15570 (gRPC + WS /ws + discover REST + embedded Web UI)\n  \
 console  same port as API (use --no-console to disable UI; discover still on API)\n\n\
 Message options:\n  \
 --message-xsub-bind ADDR       Publisher bind (default tcp://0.0.0.0:0; alias: --xsub-bind)\n  \
@@ -351,7 +351,7 @@ Console options (feature `console`, default on):\n  \
 --console-cors-origin ORIGIN   Allow Studio/browser origin (repeatable)\n\n\
 --help, -h                     Show this help\n\n\
 Embed in code: robot_bus::RobotBusBroker::start(RobotBusConfig { ... }).\n\
-Clients: GET http://HOST:15770/api/v1/discover then connect to returned ZMQ endpoints.\n"
+Clients: GET http://HOST:15570/api/v1/discover then connect to returned ZMQ endpoints.\n"
 }
 
 /// Apply federation options shared by language bindings (CLI-compatible string forms).

@@ -43,7 +43,7 @@ pub struct GatewayConfig {
 impl Default for GatewayConfig {
     fn default() -> Self {
         Self {
-            listen: "0.0.0.0:15770".parse().expect("default listen"),
+            listen: "0.0.0.0:15570".parse().expect("default listen"),
             message_xpub: "tcp://127.0.0.1:15561".to_string(),
             message_xsub: "tcp://127.0.0.1:15560".to_string(),
             service_frontend: "tcp://127.0.0.1:15662".to_string(),

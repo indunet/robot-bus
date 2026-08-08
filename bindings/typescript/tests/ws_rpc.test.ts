@@ -31,8 +31,8 @@ describe("ws-rpc framing", () => {
   });
 
   it("maps http base URL to /ws", () => {
-    assert.equal(httpUrlToWsRpc("http://127.0.0.1:15770"), "ws://127.0.0.1:15770/ws");
+    assert.equal(httpUrlToWsRpc("http://127.0.0.1:15570"), "ws://127.0.0.1:15570/ws");
     assert.equal(httpUrlToWsRpc("https://example.com:443/"), "wss://example.com:443/ws");
-    assert.equal(httpUrlToWsRpc("ws://127.0.0.1:15770/ws"), "ws://127.0.0.1:15770/ws");
+    assert.equal(httpUrlToWsRpc("ws://127.0.0.1:15570/ws"), "ws://127.0.0.1:15570/ws");
   });
 });

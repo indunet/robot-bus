@@ -181,7 +181,7 @@ pub.publish(bytes);
 
 ```cpp
 auto node = robot_bus::Node::grpc("web-client");
-// 或 robot_bus::Node::grpc_at("web-client", "http://127.0.0.1:15770");
+// 或 robot_bus::Node::grpc_at("web-client", "http://127.0.0.1:15570");
 ```
 
 本地覆盖见 `bindings/cpp/tests/grpc_node.cpp`（`just test-cpp`）。

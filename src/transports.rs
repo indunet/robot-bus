@@ -24,7 +24,7 @@ pub const ACTION_BACKEND_CHANNEL: &str = "action_bus/backend";
 pub const IPC_DIR: &str = "/tmp/robot_bus";
 
 /// Default API listen port (gRPC + WS + console + discover).
-pub const DEFAULT_API_PORT: u16 = 15770;
+pub const DEFAULT_API_PORT: u16 = 15570;
 
 /// Options for multi-transport bind (tcp + optional inproc/ipc).
 #[derive(Clone, Debug)]
@@ -146,7 +146,7 @@ fn pick_endpoint(
         "tcp" => {
             if port == 0 {
                 return Err(
-                    "tcp endpoint port is 0; discover via the broker API (default http://127.0.0.1:15770/api/v1/discover) or set endpoints explicitly"
+                    "tcp endpoint port is 0; discover via the broker API (default http://127.0.0.1:15570/api/v1/discover) or set endpoints explicitly"
                         .into(),
                 );
             }

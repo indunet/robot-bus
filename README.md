@@ -71,14 +71,14 @@ Rust:
 
 ```bash
 cargo run --bin robot_bus_broker
-# API listen:           robot_bus_broker --api-listen 0.0.0.0:15770
+# API listen:           robot_bus_broker --api-listen 0.0.0.0:15570
 # advertise host:       robot_bus_broker --advertise-host 10.0.0.5
-# federation peer:      robot_bus_broker --peer 10.0.0.2:15770
+# federation peer:      robot_bus_broker --peer 10.0.0.2:15570
 ```
 
 ### Introspection CLI (`rbus`)
 
-Query the broker console HTTP API (default `http://127.0.0.1:15770`; override with `--url` or `ROBOT_BUS_BROKER_URL`):
+Query the broker console HTTP API (default `http://127.0.0.1:15570`; override with `--url` or `ROBOT_BUS_BROKER_URL`):
 
 ```bash
 cargo run --bin rbus -- topic list
@@ -92,7 +92,7 @@ cargo run --bin rbus -- status
 
 ### Broker discovery (HTTP API)
 
-Brokers expose `GET /api/v1/discover` on the API listen port (default `15770`, shared with gRPC / WS / console). The JSON lists connectable message/service/action endpoints (OS-assigned ports after bind `:0`) plus `brokerId` / `apiUrl`.
+Brokers expose `GET /api/v1/discover` on the API listen port (default `15570`, shared with gRPC / WS / console). The JSON lists connectable message/service/action endpoints (OS-assigned ports after bind `:0`) plus `brokerId` / `apiUrl`.
 
 Clients still **choose the transport** (`tcp` / `ipc` / `inproc` / `grpc`); discovery only fills host / paths / gRPC URL:
 
@@ -100,7 +100,7 @@ Clients still **choose the transport** (`tcp` / `ipc` / `inproc` / `grpc`); disc
 use robot_bus::{DiscoverOpts, Node, NodeOptions};
 
 let opts = NodeOptions::tcp().discover(DiscoverOpts {
-    api_url: "http://127.0.0.1:15770".into(),
+    api_url: "http://127.0.0.1:15570".into(),
     ..Default::default()
 })?;
 let mut node = Node::with_options("talker", opts);
@@ -311,7 +311,7 @@ Defaults: message `STREAM(8/8)`, service `RPC(4/4)`, action `ACTION(8/8)`. Broke
 
 ## Web console (`console/`)
 
-Optional broker monitoring UI: Overview, Topics, Services, Actions, Topology, and event logs. With the `console` feature (default), the broker serves an **embedded** static UI on `0.0.0.0:15770` after you build assets once.
+Optional broker monitoring UI: Overview, Topics, Services, Actions, Topology, and event logs. With the `console` feature (default), the broker serves an **embedded** static UI on `0.0.0.0:15570` after you build assets once.
 
 **Development (hot reload — preferred):**
 
@@ -328,19 +328,19 @@ cd console && pnpm install && pnpm dev
 ```bash
 just console          # pnpm build + sync → assets/console/ (gitignored)
 cargo run --bin robot_bus_broker
-# open http://localhost:15770
+# open http://localhost:15570
 # disable: cargo run --bin robot_bus_broker -- --no-console
 ```
 
 `assets/console/` is **build output** (not committed). CI and release jobs run `just console` (or equivalent) before compiling with the `console` feature.
 
-Wired to the broker on the **same port** as native gRPC / WebSocket RPC (`0.0.0.0:15770`): the Dashboard is a TypeScript `GrpcNode` that subscribes to `/robot_bus/*` system topics over `/ws`. A thin REST shim (`GET /api/v1/...`) remains for `rbus` / tooling. Topology and topic-type registration use reliable control-plane services (`/robot_bus/topology/register`, `/robot_bus/topic_type/register`) through the existing service bus. Domain visualizers, Flow, and LIVE / WHEP live in **[robot-bus-tools](https://github.com/indunet/robot-bus-tools)** Studio. The frontend source lives in `console/`; only the generated static files are compiled into binaries with the `console` feature.
+Wired to the broker on the **same port** as native gRPC / WebSocket RPC (`0.0.0.0:15570`): the Dashboard is a TypeScript `GrpcNode` that subscribes to `/robot_bus/*` system topics over `/ws`. A thin REST shim (`GET /api/v1/...`) remains for `rbus` / tooling. Topology and topic-type registration use reliable control-plane services (`/robot_bus/topology/register`, `/robot_bus/topic_type/register`) through the existing service bus. Domain visualizers, Flow, and LIVE / WHEP live in **[robot-bus-tools](https://github.com/indunet/robot-bus-tools)** Studio. The frontend source lives in `console/`; only the generated static files are compiled into binaries with the `console` feature.
 
 **Bot demo (2 nodes):** in-process [`src/bot_sim/`](src/bot_sim/) owns physics (`SUB /robot_bus/bot/cmd_vel` → `PUB /robot_bus/bot/pose`) and starts when the console opens a BOT SIM session; the **BOT SIM** panel (`bot_viz`) renders pose and dispatches capabilities (keyboard teleop first). Shared world — multiple viewers, last-writer-wins teleop.
 
 ## gRPC + browser WebSocket gateway
 
-Started with `robot_bus_broker` / `RobotBusBroker::start`. **Native gRPC** (HTTP/2) and **browser WebSocket RPC** (`/ws`, one connection per RPC) share the **same port** (default `0.0.0.0:15770`). There is no gRPC-Web layer.
+Started with `robot_bus_broker` / `RobotBusBroker::start`. **Native gRPC** (HTTP/2) and **browser WebSocket RPC** (`/ws`, one connection per RPC) share the **same port** (default `0.0.0.0:15570`). There is no gRPC-Web layer.
 
 You can also attach via the Node API with `Node::grpc` / `Node::grpc_at` (client: subscribe / publish / call service / call action; see [`docs/rust-api.md`](docs/rust-api.md#grpc-模式-node客户端)).
 
@@ -356,7 +356,7 @@ Action clients use a ROS 2–style `GoalHandle` in every language: `send_goal` /
 ```bash
 cargo run --bin robot_bus_broker
 # config: cargo run --bin robot_bus_broker -- --help
-# gRPC: http://0.0.0.0:15770
+# gRPC: http://0.0.0.0:15570
 ```
 
 In-process:
@@ -366,7 +366,7 @@ use robot_bus::{GrpcBrokerConfig, RobotBusBroker, RobotBusConfig};
 
 let broker = RobotBusBroker::start(RobotBusConfig {
     grpc: GrpcBrokerConfig {
-        listen: "0.0.0.0:15770".parse()?,
+        listen: "0.0.0.0:15570".parse()?,
         ..Default::default()
     },
     ..RobotBusConfig::default()

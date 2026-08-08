@@ -38,10 +38,10 @@ def test_grpc_constructors() -> None:
     node = robot_bus.Node.grpc("web")
     assert node.name == "web"
 
-    node2 = robot_bus.Node.grpc_at("web2", "http://10.0.0.1:15770")
+    node2 = robot_bus.Node.grpc_at("web2", "http://10.0.0.1:15570")
     assert node2.name == "web2"
 
-    node3 = robot_bus.Node("web3", transport="grpc", grpc_url="http://127.0.0.1:15770")
+    node3 = robot_bus.Node("web3", transport="grpc", grpc_url="http://127.0.0.1:15570")
     assert node3.name == "web3"
 
 

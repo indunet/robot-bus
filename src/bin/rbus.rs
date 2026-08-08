@@ -1,7 +1,7 @@
 //! `rbus` — ROS 2–style introspection CLI over the broker console HTTP API.
 //!
 //! Commands: `topic list|info`, `service list`, `action list`, `status`.
-//! Default console URL is `http://127.0.0.1:15770` (override with `--url` or
+//! Default console URL is `http://127.0.0.1:15570` (override with `--url` or
 //! `ROBOT_BUS_BROKER_URL`).
 
 use std::process::ExitCode;
@@ -10,7 +10,7 @@ use anyhow::{Context, Result, bail};
 use clap::{Parser, Subcommand};
 use serde::Deserialize;
 
-const DEFAULT_URL: &str = "http://127.0.0.1:15770";
+const DEFAULT_URL: &str = "http://127.0.0.1:15570";
 const ENV_BROKER_URL: &str = "ROBOT_BUS_BROKER_URL";
 
 #[derive(Parser, Debug)]
@@ -21,7 +21,7 @@ const ENV_BROKER_URL: &str = "ROBOT_BUS_BROKER_URL";
     long_about = None
 )]
 struct Cli {
-    /// Console base URL (default: ROBOT_BUS_BROKER_URL or http://127.0.0.1:15770)
+    /// Console base URL (default: ROBOT_BUS_BROKER_URL or http://127.0.0.1:15570)
     #[arg(long, global = true)]
     url: Option<String>,
 

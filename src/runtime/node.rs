@@ -64,7 +64,7 @@ use crate::zmq_helpers::HighWaterMark;
 pub struct NodeOptions {
     pub host: String,
     pub transport: String,
-    /// gRPC gateway base URL when `transport == "grpc"` (e.g. `http://127.0.0.1:15770`).
+    /// gRPC gateway base URL when `transport == "grpc"` (e.g. `http://127.0.0.1:15570`).
     pub grpc_url: Option<String>,
     /// Embedded console HTTP base URL (same origin as gRPC when co-located).
     /// Filled by discovery when the broker announces it. Used by `rbus` / introspection
@@ -160,13 +160,13 @@ impl NodeOptions {
         }
     }
 
-    /// gRPC gateway (native + browser WebSocket `/ws`) on the local broker (`http://127.0.0.1:15770`).
+    /// gRPC gateway (native + browser WebSocket `/ws`) on the local broker (`http://127.0.0.1:15570`).
     #[cfg(feature = "grpc")]
     pub fn grpc() -> Self {
         Self::grpc_at(GrpcRuntime::default_url())
     }
 
-    /// gRPC gateway at `url` (e.g. `http://127.0.0.1:15770`); browsers use `ws(s)://…/ws`.
+    /// gRPC gateway at `url` (e.g. `http://127.0.0.1:15570`); browsers use `ws(s)://…/ws`.
     #[cfg(feature = "grpc")]
     pub fn grpc_at(url: impl Into<String>) -> Self {
         let url = url.into();
@@ -217,7 +217,7 @@ impl NodeOptions {
             Some(ep) => Ok(ep.clone()),
             None => Err(BusError::Protocol(
                 "message_xsub unset; call NodeOptions::discover(DiscoverOpts::default()) \
-                 (GET http://127.0.0.1:15770/api/v1/discover) or set endpoints explicitly"
+                 (GET http://127.0.0.1:15570/api/v1/discover) or set endpoints explicitly"
                     .into(),
             )),
         }
@@ -1069,13 +1069,13 @@ impl Node {
         Self::with_context(context, name, NodeOptions::inproc_at(prefix))
     }
 
-    /// gRPC client node talking to the local broker gateway (`http://127.0.0.1:15770`).
+    /// gRPC client node talking to the local broker gateway (`http://127.0.0.1:15570`).
     #[cfg(feature = "grpc")]
     pub fn grpc(name: impl Into<String>) -> Self {
         Self::with_options(name, NodeOptions::grpc())
     }
 
-    /// gRPC client node talking to `url` (e.g. `http://127.0.0.1:15770`).
+    /// gRPC client node talking to `url` (e.g. `http://127.0.0.1:15570`).
     #[cfg(feature = "grpc")]
     pub fn grpc_at(name: impl Into<String>, url: impl Into<String>) -> Self {
         Self::with_options(name, NodeOptions::grpc_at(url))
@@ -1084,7 +1084,7 @@ impl Node {
     /// Create a node with explicit broker connection options (private ZMQ context).
     ///
     /// For `tcp` / `ipc` with unset endpoints, auto-discovers via
-    /// `http://{host}:15770/api/v1/discover` (host `localhost` → `127.0.0.1`).
+    /// `http://{host}:15570/api/v1/discover` (host `localhost` → `127.0.0.1`).
     pub fn with_options(name: impl Into<String>, options: NodeOptions) -> Self {
         Self::with_context(Context::new(), name, options)
     }
@@ -1982,11 +1982,11 @@ ros__parameters:
         {
             assert_eq!(Node::grpc("a").options().transport, "grpc");
             assert_eq!(
-                Node::grpc_at("a", "http://10.0.0.1:15770")
+                Node::grpc_at("a", "http://10.0.0.1:15570")
                     .options()
                     .grpc_url
                     .as_deref(),
-                Some("http://10.0.0.1:15770")
+                Some("http://10.0.0.1:15570")
             );
             assert!(
                 NodeOptions::grpc()

@@ -31,7 +31,7 @@ use crate::runtime::timers::{
 use crate::runtime::topic_callbacks::for_each_matching_callback;
 use tonic::transport::Channel;
 
-const DEFAULT_GRPC_URL: &str = "http://127.0.0.1:15770";
+const DEFAULT_GRPC_URL: &str = "http://127.0.0.1:15570";
 const DEFAULT_SPIN_TIMEOUT_MS: i64 = 250;
 
 #[derive(Debug)]

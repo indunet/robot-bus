@@ -10,15 +10,15 @@ robot-bus = "0.1.7"
 
 ## Broker 启动
 
-运行示例前先起 broker（也可进程内嵌入，见下文）。默认一次启动 **message / service / action** 三条总线；每条 TCP 默认 bind `…:0`（由操作系统分配空闲端口），并启动 **API**（gRPC / WebSocket RPC `/ws` / `GET /api/v1/discover` / console http），默认 `0.0.0.0:15770`。
+运行示例前先起 broker（也可进程内嵌入，见下文）。默认一次启动 **message / service / action** 三条总线；每条 TCP 默认 bind `…:0`（由操作系统分配空闲端口），并启动 **API**（gRPC / WebSocket RPC `/ws` / `GET /api/v1/discover` / console http），默认 `0.0.0.0:15570`。
 
 ```bash
 cargo run --bin robot_bus_broker
 # 查看参数：cargo run --bin robot_bus_broker -- --help
 # 只要 TCP：加 --tcp-only
-# API 口：--api-listen 0.0.0.0:15770（别名 --grpc-listen / --console-listen）
+# API 口：--api-listen 0.0.0.0:15570（别名 --grpc-listen / --console-listen）
 # 对外可达主机：--advertise-host HOST
-# 邦联：--peer 10.0.0.2:15770（对端 API 口；可重复）
+# 邦联：--peer 10.0.0.2:15570（对端 API 口；可重复）
 ```
 
 **默认端点：**
@@ -28,9 +28,9 @@ cargo run --bin robot_bus_broker
 | message XSUB / XPUB | `tcp://0.0.0.0:0`（启动后解析为实际端口） | `ipc:///tmp/robot_bus/<broker_id>/…` | `inproc://robot_bus/…` |
 | service FE / BE | `tcp://0.0.0.0:0` | 同上 | 同上 |
 | action FE / BE | `tcp://0.0.0.0:0` | 同上 | 同上 |
-| API（gRPC + WS + discover + console） | `0.0.0.0:15770` | — | — |
+| API（gRPC + WS + discover + console） | `0.0.0.0:15570` | — | — |
 
-仍可用 `--message-xsub-bind` 等手动固定总线端口。SDK 侧 `Node::new` 默认连本机 **tcp**，并在端点未填时自动对 `http://127.0.0.1:15770` 做 discover；`Node::ipc` / `Node::inproc` / `Node::grpc` 分别走对应传输。
+仍可用 `--message-xsub-bind` 等手动固定总线端口。SDK 侧 `Node::new` 默认连本机 **tcp**，并在端点未填时自动对 `http://127.0.0.1:15570` 做 discover；`Node::ipc` / `Node::inproc` / `Node::grpc` 分别走对应传输。
 
 ### HTTP 发现（填地址，不选传输）
 
@@ -40,7 +40,7 @@ cargo run --bin robot_bus_broker
 use robot_bus::{DiscoverOpts, Node, NodeOptions};
 
 let opts = NodeOptions::tcp().discover(DiscoverOpts {
-    api_url: "http://127.0.0.1:15770".into(),
+    api_url: "http://127.0.0.1:15570".into(),
     broker_id: None, // 可选过滤
     ..Default::default()
 })?;
@@ -126,7 +126,7 @@ ros__parameters:
 
 接近 ROS 2：`Node::new` → typed `create_publisher` / `create_subscription`（创建时绑定消息类型，自动 encode/decode）→ `node.spin()`。底层与 gRPC 仍传 opaque bytes。
 
-Typed `create_publisher::<M>` 会向 broker 控制面（service bus 服务 `/robot_bus/topic_type/register`）**best-effort** 登记 `topic → M::full_name()`（如 `sensor_msgs.msg.v1.Imu`）。登记失败只打日志，不影响 publish。`create_publisher_raw` 不登记。可用 `rbus topic list` / `rbus topic info /path` 查看（HTTP 默认 `http://127.0.0.1:15770`）。
+Typed `create_publisher::<M>` 会向 broker 控制面（service bus 服务 `/robot_bus/topic_type/register`）**best-effort** 登记 `topic → M::full_name()`（如 `sensor_msgs.msg.v1.Imu`）。登记失败只打日志，不影响 publish。`create_publisher_raw` 不登记。可用 `rbus topic list` / `rbus topic info /path` 查看（HTTP 默认 `http://127.0.0.1:15570`）。
 
 ```rust
 use std::sync::Arc;
@@ -382,7 +382,7 @@ use std::time::Duration;
 use robot_bus::Node;
 
 let mut node = Node::grpc("web-client");
-// 或 Node::grpc_at("web-client", "http://127.0.0.1:15770");
+// 或 Node::grpc_at("web-client", "http://127.0.0.1:15570");
 
 let pub_ = node.create_publisher_raw("/robot1/cmd")?;
 pub_.publish(b"go")?;
@@ -414,7 +414,7 @@ node.spin()?;
 
 ## gRPC + 浏览器 WebSocket 网关
 
-由 `RobotBusBroker` / `robot_bus_broker` 一并启动（feature `grpc`，默认开启）。**原生 gRPC**（HTTP/2）与浏览器 **WebSocket RPC**（`/ws`，一 RPC 一连接）**同端口**（默认 `0.0.0.0:15770`）。已移除 gRPC-Web。
+由 `RobotBusBroker` / `robot_bus_broker` 一并启动（feature `grpc`，默认开启）。**原生 gRPC**（HTTP/2）与浏览器 **WebSocket RPC**（`/ws`，一 RPC 一连接）**同端口**（默认 `0.0.0.0:15570`）。已移除 gRPC-Web。
 
 | RPC | 说明 |
 |-----|------|
@@ -434,7 +434,7 @@ use tonic::Request;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let mut client = MessageGatewayClient::connect("http://127.0.0.1:15770").await?;
+    let mut client = MessageGatewayClient::connect("http://127.0.0.1:15570").await?;
     let mut stream = client
         .subscribe(Request::new(SubscribeRequest {
             topic: "imu".into(),
@@ -460,7 +460,7 @@ use tonic::Request;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let mut client = MessageGatewayClient::connect("http://127.0.0.1:15770").await?;
+    let mut client = MessageGatewayClient::connect("http://127.0.0.1:15570").await?;
     client
         .publish(Request::new(TopicMessage {
             topic: "imu".into(),
@@ -482,7 +482,7 @@ use tokio_stream::StreamExt;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let mut svc = ServiceGatewayClient::connect("http://127.0.0.1:15770").await?;
+    let mut svc = ServiceGatewayClient::connect("http://127.0.0.1:15570").await?;
     let resp = svc
         .call(Request::new(ServiceCallRequest {
             service_name: "svc.echo".into(),
@@ -494,7 +494,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .into_inner();
     println!("service: {} bytes", resp.response.len());
 
-    let mut act = ActionGatewayClient::connect("http://127.0.0.1:15770").await?;
+    let mut act = ActionGatewayClient::connect("http://127.0.0.1:15570").await?;
     let mut stream = act
         .send_goal(Request::new(GoalRequest {
             action_name: "act.demo".into(),

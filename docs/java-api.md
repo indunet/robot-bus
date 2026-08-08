@@ -19,7 +19,7 @@ just java-dev       # gen-java + cargo FFI + mvn test
 
 ```bash
 robot-bus-broker
-# 或 robot-bus-broker --grpc-listen 0.0.0.0:15770 --tcp-only
+# 或 robot-bus-broker --grpc-listen 0.0.0.0:15570 --tcp-only
 ```
 
 进程内：
@@ -126,7 +126,7 @@ Node node = Node.discover("talker", "tcp", new DiscoverOpts(0));
 
 ```java
 Node node = Node.grpc("web-client");
-// 或 Node.grpcAt("web-client", "http://127.0.0.1:15770");
+// 或 Node.grpcAt("web-client", "http://127.0.0.1:15570");
 ```
 
 ### TF（坐标树）

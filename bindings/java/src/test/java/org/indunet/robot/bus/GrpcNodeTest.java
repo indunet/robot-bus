@@ -20,7 +20,7 @@ class GrpcNodeTest {
         try (Node node = Node.grpc("web")) {
             assertEquals("web", node.name());
         }
-        try (Node node = Node.grpcAt("web2", "http://10.0.0.1:15770")) {
+        try (Node node = Node.grpcAt("web2", "http://10.0.0.1:15570")) {
             assertEquals("web2", node.name());
         }
         try (Node node =
@@ -29,7 +29,7 @@ class GrpcNodeTest {
                         new NodeOptions(
                                 null,
                                 "grpc",
-                                "http://127.0.0.1:15770",
+                                "http://127.0.0.1:15570",
                                 null,
                                 null,
                                 null,

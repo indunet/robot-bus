@@ -1,7 +1,7 @@
 //! HTTP API broker discovery (control plane).
 //!
 //! Brokers expose [`GET /api/v1/discover`](crate::discovery::DiscoverResponse) on the
-//! API listen port (default `15770`). Clients fetch that JSON, then
+//! API listen port (default `15570`). Clients fetch that JSON, then
 //! [`BrokerAnnouncement::apply`] fills location fields on a user-chosen
 //! [`crate::NodeOptions`] transport (`tcp` / `ipc` / `inproc` / `grpc`).
 //!

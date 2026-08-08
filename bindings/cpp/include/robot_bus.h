@@ -87,7 +87,7 @@ typedef struct RobotBusBrokerOptions {
   uint32_t domain_id;
   /** Host clients should connect to (NULL → inferred). */
   const char *advertise_host;
-  /** API listen host:port (NULL → use grpc_listen / default 15770). */
+  /** API listen host:port (NULL → use grpc_listen / default 15570). */
   const char *api_listen;
   /** Federation peers as API URLs / host:port (GET /api/v1/discover). */
   const char *const *peers;
@@ -96,7 +96,7 @@ typedef struct RobotBusBrokerOptions {
 
 /** Client HTTP discovery options (NULL fields / 0 → defaults). */
 typedef struct RobotBusDiscoverOpts {
-  /** Broker API base URL, e.g. http://127.0.0.1:15770 (NULL → default). */
+  /** Broker API base URL, e.g. http://127.0.0.1:15570 (NULL → default). */
   const char *api_url;
   const char *broker_id;
   double timeout_secs;
@@ -369,7 +369,7 @@ ROBOT_BUS_API int robot_bus_ros2_bridge_builder_bus_ipc_at(RobotBusRos2BridgeBui
                                                            const char *dir);
 /**
  * HTTP discover (`GET /api/v1/discover`) then TCP.
- * `api_url` NULL → default `http://127.0.0.1:15770`; `timeout_secs` <= 0 uses the default;
+ * `api_url` NULL → default `http://127.0.0.1:15570`; `timeout_secs` <= 0 uses the default;
  * `broker_id` may be NULL.
  */
 ROBOT_BUS_API int robot_bus_ros2_bridge_builder_bus_discover(RobotBusRos2BridgeBuilder *b,

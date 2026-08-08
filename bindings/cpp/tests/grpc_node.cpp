@@ -51,7 +51,7 @@ int main() {
     ROBOT_BUS_CHECK(node.name() == "web");
   }
   {
-    auto node = robot_bus::Node::grpc_at("web2", "http://10.0.0.1:15770");
+    auto node = robot_bus::Node::grpc_at("web2", "http://10.0.0.1:15570");
     ROBOT_BUS_CHECK(node.name() == "web2");
   }
 

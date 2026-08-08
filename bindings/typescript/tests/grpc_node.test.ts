@@ -81,8 +81,8 @@ describe("GrpcNode capability guards", () => {
   });
 
   it("exposes grpc factory urls", () => {
-    assert.equal(GrpcNode.grpc("a").url, "http://127.0.0.1:15770");
-    assert.equal(GrpcNode.grpcAt("a", "http://example:15770/").url, "http://example:15770");
+    assert.equal(GrpcNode.grpc("a").url, "http://127.0.0.1:15570");
+    assert.equal(GrpcNode.grpcAt("a", "http://example:15570/").url, "http://example:15570");
   });
 });
 

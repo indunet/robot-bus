@@ -54,7 +54,7 @@ export function __setWsRpcForTests(overrides?: {
   wsServerStreamImpl = overrides?.serverStream ?? wsServerStreamDefault;
 }
 
-export const DEFAULT_GRPC_URL = "http://127.0.0.1:15770";
+export const DEFAULT_GRPC_URL = "http://127.0.0.1:15570";
 const DEFAULT_TOPOLOGY_REFRESH_MS = 10_000;
 
 export interface GrpcNodeOptions {

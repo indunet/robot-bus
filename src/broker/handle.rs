@@ -252,7 +252,7 @@ pub struct GrpcBrokerConfig {
 impl Default for GrpcBrokerConfig {
     fn default() -> Self {
         Self {
-            listen: "0.0.0.0:15770".parse().expect("default grpc listen"),
+            listen: "0.0.0.0:15570".parse().expect("default grpc listen"),
             cors_origins: Vec::new(),
         }
     }
@@ -281,7 +281,7 @@ impl Default for ConsoleBrokerConfig {
     fn default() -> Self {
         Self {
             enabled: true,
-            listen: "0.0.0.0:15770".parse().expect("default console listen"),
+            listen: "0.0.0.0:15570".parse().expect("default console listen"),
             cors_origins: Vec::new(),
         }
     }
@@ -529,7 +529,7 @@ impl RobotBusBroker {
             }
             #[cfg(all(not(feature = "grpc"), not(feature = "console")))]
             {
-                "0.0.0.0:15770"
+                "0.0.0.0:15570"
                     .parse::<SocketAddr>()
                     .expect("default api listen")
             }

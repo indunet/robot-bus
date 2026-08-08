@@ -76,7 +76,7 @@ cargo run --bin robot_bus_broker
 
 ### 自省 CLI（`rbus`）
 
-查询 broker console 的 HTTP API（默认 `http://127.0.0.1:15770`；可用 `--url` 或环境变量 `ROBOT_BUS_BROKER_URL` 覆盖）：
+查询 broker console 的 HTTP API（默认 `http://127.0.0.1:15570`；可用 `--url` 或环境变量 `ROBOT_BUS_BROKER_URL` 覆盖）：
 
 ```bash
 cargo run --bin rbus -- topic list
@@ -309,7 +309,7 @@ pub_.set_high_water_mark(HighWaterMark { snd: 10, rcv: 10 })?;
 
 ## Web 控制台（`console/`）
 
-可选 broker 监控前端：Overview、Topics、Services、Actions、Topology、事件日志。开启 `console` feature（默认）时，先构建一次静态资源后，broker 在 `0.0.0.0:15770` 提供**嵌入式** UI。
+可选 broker 监控前端：Overview、Topics、Services、Actions、Topology、事件日志。开启 `console` feature（默认）时，先构建一次静态资源后，broker 在 `0.0.0.0:15570` 提供**嵌入式** UI。
 
 **开发（热更新，推荐）：**
 
@@ -326,19 +326,19 @@ cd console && pnpm install && pnpm dev
 ```bash
 just console          # pnpm build + sync → assets/console/（已 gitignore）
 cargo run --bin robot_bus_broker
-# 打开 http://localhost:15770
+# 打开 http://localhost:15570
 # 关闭：cargo run --bin robot_bus_broker -- --no-console
 ```
 
 `assets/console/` 是**构建产物**（不提交）。CI / 发布在带 `console` feature 编译前会先生成该目录。
 
-已对接 **与原生 gRPC / WebSocket RPC 同一端口**（`0.0.0.0:15770`）：Dashboard 是 TypeScript `GrpcNode`，经 `/ws` 订阅 `/robot_bus/*` 系统话题。`rbus` / 工具仍可用 REST 只读 shim（`GET /api/v1/...`）。拓扑与类型登记通过现有 service bus 上的可靠控制面服务（`/robot_bus/topology/register`、`/robot_bus/topic_type/register`）。领域可视化、Flow、LIVE / WHEP 在同级仓库 **[robot-bus-tools](https://github.com/indunet/robot-bus-tools)** 的 Studio。前端源码在 `console/`；只有生成的静态文件会编进带 `console` feature 的二进制。
+已对接 **与原生 gRPC / WebSocket RPC 同一端口**（`0.0.0.0:15570`）：Dashboard 是 TypeScript `GrpcNode`，经 `/ws` 订阅 `/robot_bus/*` 系统话题。`rbus` / 工具仍可用 REST 只读 shim（`GET /api/v1/...`）。拓扑与类型登记通过现有 service bus 上的可靠控制面服务（`/robot_bus/topology/register`、`/robot_bus/topic_type/register`）。领域可视化、Flow、LIVE / WHEP 在同级仓库 **[robot-bus-tools](https://github.com/indunet/robot-bus-tools)** 的 Studio。前端源码在 `console/`；只有生成的静态文件会编进带 `console` feature 的二进制。
 
 **机器人仿真双节点演示：** 进程内 [`src/bot_sim/`](src/bot_sim/) 负责物理（`SUB /robot_bus/bot/cmd_vel` → `PUB /robot_bus/bot/pose`），控制台打开 BOT SIM 会话时自动拉起；**BOT SIM** 面板（`bot_viz`）渲染位姿并调度能力（当前为键盘遥控）。共享世界，多人可看，遥控后写覆盖。
 
 ## gRPC + 浏览器 WebSocket 网关
 
-随 `robot_bus_broker` / `RobotBusBroker::start` 一起启动；**原生 gRPC**（HTTP/2）与 **浏览器 WebSocket RPC**（`/ws`，一 RPC 一连接）**同端口**（默认 `0.0.0.0:15770`）。已移除 gRPC-Web。
+随 `robot_bus_broker` / `RobotBusBroker::start` 一起启动；**原生 gRPC**（HTTP/2）与 **浏览器 WebSocket RPC**（`/ws`，一 RPC 一连接）**同端口**（默认 `0.0.0.0:15570`）。已移除 gRPC-Web。
 
 也可用 `Node::grpc` / `Node::grpc_at` 以 Node API 接入网关（客户端：订阅 / publish / 调 service / 调 action，见 [`docs/rust-api.md`](docs/rust-api.md#grpc-模式-node客户端)）。
 
@@ -354,7 +354,7 @@ cargo run --bin robot_bus_broker
 ```bash
 cargo run --bin robot_bus_broker
 # 配置：cargo run --bin robot_bus_broker -- --help
-# gRPC: http://0.0.0.0:15770
+# gRPC: http://0.0.0.0:15570
 ```
 
 进程内：
@@ -364,7 +364,7 @@ use robot_bus::{GrpcBrokerConfig, RobotBusBroker, RobotBusConfig};
 
 let broker = RobotBusBroker::start(RobotBusConfig {
     grpc: GrpcBrokerConfig {
-        listen: "0.0.0.0:15770".parse()?,
+        listen: "0.0.0.0:15570".parse()?,
         ..Default::default()
     },
     ..RobotBusConfig::default()

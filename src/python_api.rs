@@ -801,7 +801,7 @@ impl PyNode {
         }
     }
 
-    /// gRPC client node talking to the local broker gateway (`http://127.0.0.1:15770`).
+    /// gRPC client node talking to the local broker gateway (`http://127.0.0.1:15570`).
     #[cfg(feature = "grpc")]
     #[classmethod]
     #[pyo3(signature = (name,))]
@@ -838,7 +838,7 @@ impl PyNode {
         })
     }
 
-    /// gRPC client node talking to `url` (e.g. `http://127.0.0.1:15770`).
+    /// gRPC client node talking to `url` (e.g. `http://127.0.0.1:15570`).
     #[cfg(feature = "grpc")]
     #[classmethod]
     #[pyo3(signature = (name, url))]

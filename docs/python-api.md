@@ -14,7 +14,7 @@ pip install robot-bus
 # 安装包后的 CLI
 robot-bus-broker
 robot-bus-broker --help
-robot-bus-broker --grpc-listen 0.0.0.0:15770 --tcp-only
+robot-bus-broker --grpc-listen 0.0.0.0:15570 --tcp-only
 ```
 
 或进程内（关键字参数覆盖默认 bind / HWM / 心跳 / gRPC）：
@@ -25,7 +25,7 @@ import robot_bus
 with robot_bus.RobotBusBroker.start(
     message_xsub_bind="tcp://127.0.0.1:15560",
     message_xpub_bind="tcp://127.0.0.1:15561",
-    grpc_listen="0.0.0.0:15770",
+    grpc_listen="0.0.0.0:15570",
     tcp_only=True,
 ) as broker:
     # broker.message_xsub_bind / message_xpub_bind / grpc_listen 等
@@ -178,7 +178,7 @@ t = buf.lookup_transform("base_link", "camera")
 import robot_bus
 
 node = robot_bus.Node.grpc("web-client")
-# 或 robot_bus.Node.grpc_at("web-client", "http://127.0.0.1:15770")
+# 或 robot_bus.Node.grpc_at("web-client", "http://127.0.0.1:15570")
 
 pub = node.create_publisher("/robot1/cmd")
 pub.publish(b"go")

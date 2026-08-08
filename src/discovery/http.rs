@@ -98,7 +98,7 @@ pub fn fetch_discover(api_base: &str, timeout: Duration) -> Result<DiscoverRespo
         .build();
     let resp = agent.get(&url).call().map_err(|e| {
         BusError::Protocol(format!(
-            "discover GET {url} failed: {e} (is the broker API listening? default --api-listen 0.0.0.0:15770)"
+            "discover GET {url} failed: {e} (is the broker API listening? default --api-listen 0.0.0.0:15570)"
         ))
     })?;
     resp.into_json::<DiscoverResponse>().map_err(|e| {
