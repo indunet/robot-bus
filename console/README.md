@@ -2,10 +2,19 @@
 
 Broker monitoring console: status, topic / service / action traffic, event logs, and live topology.
 
-The sidebar **BOT** entry opens the browser-based micro-robot simulation floating windows (also available as standalone pages):
+The sidebar **BOT** entry opens the browser bot nodes as floating windows (also available as standalone pages). Physics runs in a separate Rust process:
 
-- `/bot_sim/` — canvas simulation; subscribes `cmd_vel`, publishes `pose`
-- `/bot_teleop/` — WASD / arrow-key controller
+| Node | Process | Role |
+|------|---------|------|
+| `bot_sim` | `cargo run --example bot_sim` | SUB `/bot1/cmd_vel`, integrate pose, PUB `/bot1/pose` |
+| `bot_sim_viewer` | `/bot_sim/` | Canvas viewer — SUB pose only |
+| `bot_control_panel` | `/bot_teleop/` | WASD / arrow-key control — PUB cmd_vel |
+
+```bash
+cargo run --bin robot_bus_broker          # terminal 1
+cargo run --example bot_sim               # terminal 2  (or: just bot-sim)
+# open console BOT windows or /bot_sim + /bot_teleop
+```
 
 Both Bot pages and the Dashboard use the in-repo TypeScript `GrpcNode` and connect to
 **same-origin** gRPC-Web (broker default `http://127.0.0.1:15770`).

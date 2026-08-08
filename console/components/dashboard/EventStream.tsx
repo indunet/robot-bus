@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, useLayoutEffect } from 'react'
 import { type LogEntry, type LogLevel } from '@/lib/mock-data'
 import { Filter, Pause, Play, Trash2, Terminal } from 'lucide-react'
 import { useI18n } from '@/lib/i18n'
@@ -22,18 +22,22 @@ const LEVEL_BG: Record<LogLevel, string> = {
   ERROR: 'bg-bus-red/8',
 }
 
+/** Approx LogLine height (py-1 + 13px mono + border). */
+const ROW_HEIGHT_PX = 28
+
 export default function EventStream({ logs }: Props) {
   const { t, dateLocale } = useI18n()
   const [filter, setFilter] = useState<LogLevel | 'ALL'>('ALL')
   const [paused, setPaused] = useState(false)
   const [entries, setEntries] = useState<LogEntry[]>(logs)
+  const [padRows, setPadRows] = useState(0)
   const bottomRef = useRef<HTMLDivElement>(null)
+  const scrollContainerRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     if (!paused) setEntries(logs)
   }, [logs, paused])
 
-  const scrollContainerRef = useRef<HTMLDivElement>(null)
   useEffect(() => {
     if (!paused && scrollContainerRef.current) {
       scrollContainerRef.current.scrollTop = scrollContainerRef.current.scrollHeight
@@ -41,6 +45,22 @@ export default function EventStream({ logs }: Props) {
   }, [entries, paused])
 
   const visible = filter === 'ALL' ? entries : entries.filter((e) => e.level === filter)
+
+  useLayoutEffect(() => {
+    const el = scrollContainerRef.current
+    if (!el) return
+
+    const updatePad = () => {
+      const capacity = Math.max(0, Math.floor(el.clientHeight / ROW_HEIGHT_PX))
+      setPadRows(Math.max(0, capacity - visible.length))
+    }
+
+    updatePad()
+    const ro = new ResizeObserver(updatePad)
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [visible.length])
+
   const filterLabels = {
     ALL: t('filterAll'),
     DEBUG: 'DEBUG',
@@ -50,7 +70,7 @@ export default function EventStream({ logs }: Props) {
   } as const
 
   return (
-    <section className="border border-bus-border bg-bus-panel rounded-sm flex flex-col min-h-0">
+    <section className="border border-bus-border bg-bus-panel rounded-sm flex flex-col h-full min-h-0">
       <div className="flex items-center justify-between px-3 h-9 border-b border-bus-border shrink-0">
         <div className="flex items-center gap-2">
           <Terminal size={14} className="text-bus-cyan" />
@@ -95,15 +115,12 @@ export default function EventStream({ logs }: Props) {
       </div>
 
       <div ref={scrollContainerRef} className="flex-1 overflow-y-auto min-h-0 font-mono text-[13px]">
-        {visible.length === 0 ? (
-          <div className="flex items-center justify-center h-16 text-bus-muted text-[13px]">
-            {t('eventsEmpty')}
-          </div>
-        ) : (
-          visible.map((entry) => (
-            <LogLine key={entry.id} entry={entry} dateLocale={dateLocale} />
-          ))
-        )}
+        {visible.map((entry) => (
+          <LogLine key={entry.id} entry={entry} dateLocale={dateLocale} />
+        ))}
+        {Array.from({ length: padRows }, (_, i) => (
+          <EmptyRow key={`pad-${i}`} hint={visible.length === 0 && i === 0 ? t('eventsEmpty') : undefined} />
+        ))}
         <div ref={bottomRef} />
       </div>
 
@@ -120,6 +137,20 @@ export default function EventStream({ logs }: Props) {
   )
 }
 
+function EmptyRow({ hint }: { hint?: string }) {
+  return (
+    <div
+      aria-hidden={!hint}
+      className="flex items-start gap-2.5 px-3 py-1 border-b border-bus-panel/70 min-h-[28px]"
+    >
+      <span className="tabular-nums shrink-0 w-[96px]" />
+      <span className="shrink-0 w-11" />
+      <span className="shrink-0 w-[110px]" />
+      <span className="leading-relaxed text-bus-muted/40">{hint ?? ''}</span>
+    </div>
+  )
+}
+
 function LogLine({ entry, dateLocale }: { entry: LogEntry; dateLocale: string }) {
   const ts = new Date(entry.ts)
   const timeStr = ts.toLocaleTimeString(dateLocale, {
@@ -127,7 +158,7 @@ function LogLine({ entry, dateLocale }: { entry: LogEntry; dateLocale: string })
   }) + '.' + String(ts.getMilliseconds()).padStart(3, '0')
 
   return (
-    <div className={`flex items-start gap-2.5 px-3 py-1 border-b border-bus-panel hover:bg-[#1f2428] ${LEVEL_BG[entry.level]}`}>
+    <div className={`flex items-start gap-2.5 px-3 py-1 border-b border-bus-panel hover:bg-[#1f2428] min-h-[28px] ${LEVEL_BG[entry.level]}`}>
       <span className="text-bus-muted tabular-nums shrink-0 w-[96px]">{timeStr}</span>
       <span className={`${LEVEL_COLORS[entry.level]} font-bold shrink-0 w-11`}>{entry.level}</span>
       <span className="text-bus-cyan-dim shrink-0 w-[110px] truncate">{entry.source}</span>

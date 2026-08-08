@@ -60,7 +60,7 @@ export default function FloatingWindow({
       role="dialog"
       aria-label={title}
       onPointerDown={onBringToFront}
-      className="fixed flex flex-col overflow-hidden border border-white/14 bg-[rgb(16_20_24_/16%)] shadow-[0_1px_0_rgb(255_255_255_/18%)_inset,0_-1px_0_rgb(0_0_0_/30%)_inset,1px_0_0_rgb(255_255_255_/08%)_inset,-1px_0_0_rgb(0_0_0_/22%)_inset,0_28px_64px_rgb(0_0_0_/48%),0_10px_22px_rgb(0_0_0_/32%),0_0_0_1px_rgb(0_212_255_/22%)] backdrop-blur-[10px]"
+      className="fixed flex flex-col overflow-hidden border border-bus-border bg-bus-panel/95 shadow-[0_1px_0_rgb(255_255_255_/10%)_inset,0_-1px_0_rgb(0_0_0_/28%)_inset,0_22px_48px_rgb(0_0_0_/42%),0_8px_18px_rgb(0_0_0_/28%),0_0_0_1px_rgb(0_212_255_/14%)] backdrop-blur-[8px]"
       style={{
         left: position.x,
         top: position.y,
@@ -76,7 +76,7 @@ export default function FloatingWindow({
     >
       <div
         aria-hidden="true"
-        className="pointer-events-none absolute inset-0 z-0 bg-gradient-to-br from-white/[0.05] via-transparent to-black/10"
+        className="pointer-events-none absolute inset-0 z-0 bg-gradient-to-br from-white/[0.03] via-transparent to-black/15"
       />
       <div aria-hidden="true" className="pointer-events-none absolute inset-0 z-20">
         <span className="absolute left-0 top-0 h-[2px] w-28 bg-gradient-to-r from-bus-cyan to-bus-cyan/10" />
@@ -99,7 +99,7 @@ export default function FloatingWindow({
         onPointerCancel={() => {
           drag.current = null
         }}
-        className="relative z-10 h-8 shrink-0 flex items-center justify-between px-2 border-b border-white/10 bg-[rgb(18_22_26_/14%)] backdrop-blur-[8px] cursor-move select-none touch-none shadow-[0_1px_0_rgb(255_255_255_/10%)_inset]"
+        className="relative z-10 h-8 shrink-0 flex items-center justify-between px-2 border-b border-bus-border bg-bus-bg/90 cursor-move select-none touch-none shadow-[0_1px_0_rgb(255_255_255_/06%)_inset]"
       >
         <span className="font-mono text-[10px] tracking-wider text-bus-cyan drop-shadow-[0_1px_2px_rgb(0_0_0_/55%)]">
           {title}

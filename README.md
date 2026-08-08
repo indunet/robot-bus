@@ -41,7 +41,7 @@ Rust core stays at the repo root (`Cargo.toml` + `src/`). Language SDKs live und
 | [`src/`](src/), `Cargo.toml` | Rust core (crates.io / maturin entry) |
 | [`proto/`](proto/) | Contract source: ROS-style Protobuf → generated code for Rust / bindings |
 | [`bindings/`](bindings/) | Language SDKs (Python, TypeScript, C++, Java, Android) |
-| [`console/`](console/) | Broker console, including Bot Sim / Teleop pages (build → `assets/console/`) |
+| [`console/`](console/) | Broker console + bot viewer / control panel (build → `assets/console/`); pair with [`examples/bot_sim.rs`](examples/bot_sim.rs) |
 | sibling [`robot-bus-tools`](https://github.com/indunet/robot-bus-tools) | `rbus_*` nodes, TF library + language extensions, Robot Bus Studio |
 | [`benches/`](benches/) | Perf harnesses: [`robot_bus_perf/`](benches/robot_bus_perf/) (`just perf`), [`ros2_perf/`](benches/ros2_perf/) (`just perf-ros2`) |
 | [`tests/`](tests/) | Rust integration tests + cross-language interop (`just test-interop`) |
@@ -332,6 +332,8 @@ cargo run --bin robot_bus_broker
 `assets/console/` is **build output** (not committed). CI and release jobs run `just console` (or equivalent) before compiling with the `console` feature.
 
 Wired to the broker on the **same port** as gRPC-Web (`0.0.0.0:15770`): the Dashboard is a TypeScript `GrpcNode` that subscribes to `/_robot_bus/*` system topics. A thin REST shim (`GET /api/v1/...`) remains for `rbus` / tooling. Topology and topic-type registration use reliable control-plane services (`/_robot_bus/topology/register`, `/_robot_bus/topic_type/register`) through the existing service bus. Domain visualizers, Flow, and LIVE / WHEP live in **[robot-bus-tools](https://github.com/indunet/robot-bus-tools)** Studio. The frontend source lives in `console/`; only the generated static files are compiled into binaries with the `console` feature.
+
+**Bot demo (3 nodes):** Rust [`examples/bot_sim.rs`](examples/bot_sim.rs) owns physics (`SUB /bot1/cmd_vel` → `PUB /bot1/pose`); the console **viewer** (`bot_sim_viewer`) only renders pose; the **control panel** (`bot_control_panel`) publishes cmd_vel. Run `just bot-sim` alongside the broker, then open the sidebar BOT windows.
 
 ## gRPC / gRPC-Web gateway
 

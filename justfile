@@ -3,7 +3,7 @@
 #
 # Layout: Rust core at repo root; language SDKs under bindings/;
 # benches/; tests/ for interop; console/ is broker monitoring UI;
-# Console includes the turtle simulation and teleop pages.
+# Console bot viewer + control panel pair with examples/bot_sim.rs.
 # Tool nodes / TF / Studio live in sibling repo robot-bus-tools.
 
 set shell := ["bash", "-eu", "-o", "pipefail", "-c"]
@@ -105,6 +105,10 @@ test-cpp:
 # Build console UI into assets/console/ for rust-embed (gitignored; run before cargo with `console`)
 console:
 	./scripts/build_console.sh
+
+# Rust bot physics node (SUB /bot1/cmd_vel → PUB /bot1/pose). Needs a running broker.
+bot-sim:
+	cargo run --example bot_sim
 
 # Rust tests (default features)
 test-rust: gen-rust

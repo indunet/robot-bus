@@ -27,14 +27,13 @@ import ThroughputChart, {
   generateRateHistory,
   type RatePoint,
 } from './ThroughputChart'
-import { useI18n } from '@/lib/i18n'
+import { formatHms } from '@/lib/utils'
 
 function appendRatePoint(prev: RatePoint[], label: string, value: number): RatePoint[] {
   return [...prev.slice(1), { t: label, value }]
 }
 
 export default function Dashboard() {
-  const { dateLocale } = useI18n()
   const [broker, setBroker] = useState<BrokerInfo>(EMPTY_BROKER)
   const [topics, setTopics] = useState<TopicInfo[]>([])
   const [services, setServices] = useState<ServiceInfo[]>([])
@@ -47,19 +46,12 @@ export default function Dashboard() {
   const [activeTab, setActiveTab] = useState<Tab>('overview')
   const [botWindows, setBotWindows] = useState({ sim: false, teleop: false })
   const seenLogIds = useRef(new Set<string>())
-  const dateLocaleRef = useRef(dateLocale)
-  dateLocaleRef.current = dateLocale
 
   useEffect(() => {
     return startConsoleBus({
       onStatus: (status) => {
         setBroker(status)
-        const now = new Date()
-        const label = now.toLocaleTimeString(dateLocaleRef.current, {
-          minute: '2-digit',
-          second: '2-digit',
-          hour12: false,
-        })
+        const label = formatHms()
         setThroughput((prev) => appendRatePoint(prev, label, status.msgPerSec))
         setSvcRate((prev) => appendRatePoint(prev, label, status.svcCallsPerSec ?? 0))
         setActRate((prev) => appendRatePoint(prev, label, status.actRunsPerSec ?? 0))
@@ -92,7 +84,7 @@ export default function Dashboard() {
           onOpenBot={() => setBotWindows({ sim: true, teleop: true })}
         />
 
-        <main className="flex-1 overflow-y-auto p-3">
+        <main className="flex-1 min-h-0 overflow-y-auto p-3 flex flex-col">
           {activeTab === 'overview' && (
             <OverviewLayout
               broker={broker}
@@ -114,7 +106,7 @@ export default function Dashboard() {
             <ServiceActionTable services={services} actions={actions} mode="actions" />
           )}
           {activeTab === 'logs' && (
-            <div style={{ height: 'calc(100vh - 88px)' }}>
+            <div className="flex-1 min-h-0">
               <EventStream logs={logs} />
             </div>
           )}
@@ -152,8 +144,8 @@ function OverviewLayout({
   const listMax = '14rem'
 
   return (
-    <div className="flex flex-col gap-3">
-      <div className="grid grid-cols-1 lg:grid-cols-[1.15fr_0.85fr] gap-3 items-stretch">
+    <div className="flex flex-col gap-3 min-h-full flex-1">
+      <div className="grid grid-cols-1 lg:grid-cols-[1.15fr_0.85fr] gap-3 items-stretch shrink-0">
         <BrokerOverview broker={broker} />
         <OverviewStats
           broker={broker}
@@ -163,12 +155,12 @@ function OverviewLayout({
         />
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-[1.15fr_0.85fr] gap-3 items-stretch" style={{ minHeight: '16rem' }}>
+      <div className="grid grid-cols-1 lg:grid-cols-[1.15fr_0.85fr] gap-3 items-stretch shrink-0" style={{ minHeight: '16rem' }}>
         <TopicTable topics={topics} maxBodyHeight={listMax} />
         <ThroughputChart data={throughput} />
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-[1.15fr_0.85fr] gap-3 items-stretch" style={{ minHeight: '16rem' }}>
+      <div className="grid grid-cols-1 lg:grid-cols-[1.15fr_0.85fr] gap-3 items-stretch shrink-0" style={{ minHeight: '16rem' }}>
         <ServiceActionTable
           services={services}
           actions={actions}
@@ -178,7 +170,7 @@ function OverviewLayout({
         <ServiceRateChart data={svcRate} />
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-[1.15fr_0.85fr] gap-3 items-stretch" style={{ minHeight: '16rem' }}>
+      <div className="grid grid-cols-1 lg:grid-cols-[1.15fr_0.85fr] gap-3 items-stretch shrink-0" style={{ minHeight: '16rem' }}>
         <ServiceActionTable
           services={services}
           actions={actions}
@@ -188,7 +180,7 @@ function OverviewLayout({
         <ActionRateChart data={actRate} />
       </div>
 
-      <div style={{ height: '260px' }}>
+      <div className="flex-1 min-h-[14rem] flex flex-col">
         <EventStream logs={logs} />
       </div>
     </div>

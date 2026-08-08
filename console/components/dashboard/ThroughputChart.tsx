@@ -4,6 +4,7 @@ import { AreaChart, Area, XAxis, YAxis, ResponsiveContainer, Tooltip } from 'rec
 import { PanelHeader } from './BrokerOverview'
 import { BarChart2, Cpu, GitBranch } from 'lucide-react'
 import { useI18n } from '@/lib/i18n'
+import { formatHms } from '@/lib/utils'
 import type { ReactNode } from 'react'
 
 export interface RatePoint {
@@ -41,7 +42,7 @@ function RateChart({ title, sub, seriesLabel, unit, stroke, gradientId, icon, da
               tickLine={false}
               axisLine={false}
               interval="preserveStartEnd"
-              minTickGap={18}
+              minTickGap={28}
               angle={-35}
               textAnchor="end"
               height={36}
@@ -132,14 +133,14 @@ export function ActionRateChart({ data }: { data: RatePoint[] }) {
   )
 }
 
-/** Seed empty rate history (labels use en-US; live poll overwrites). */
+/** Seed empty rate history (HH:MM:SS labels; live poll overwrites). */
 export function generateRateHistory(base = 0, len = 60): RatePoint[] {
   let v = base
   return Array.from({ length: len }, (_, i) => {
     v = Math.max(0, v + (Math.random() - 0.5) * (base > 0 ? base * 0.2 : 0))
     const t = new Date(Date.now() - (len - i) * 1000)
     return {
-      t: t.toLocaleTimeString('en-US', { minute: '2-digit', second: '2-digit', hour12: false }),
+      t: formatHms(t),
       value: Math.round(v),
     }
   })

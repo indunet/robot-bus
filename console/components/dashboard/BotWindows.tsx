@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import BotSim from '@/components/bot/BotSim'
+import BotSimViewer from '@/components/bot/BotSimViewer'
 import BotTeleop from '@/components/bot/BotTeleop'
 import { useI18n } from '@/lib/i18n'
 import FloatingWindow, { type WindowPosition } from './FloatingWindow'
@@ -45,7 +45,7 @@ export default function BotWindows({
           onBringToFront={() => setFront('sim')}
           onClose={onCloseSim}
         >
-          <BotSim compact />
+          <BotSimViewer compact />
         </FloatingWindow>
       )}
       {teleopOpen && (

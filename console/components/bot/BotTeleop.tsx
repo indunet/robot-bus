@@ -79,8 +79,9 @@ export default function BotTeleop({ compact = false, autoFocus = false }: Props)
     void resolveGrpcUrl().then((url) => {
       if (disposed) return
       setGrpcUrl(url)
-      node = RobotBusNode.grpcAt('bot_teleop_node', url)
+      node = RobotBusNode.grpcAt('bot_control_panel', url)
       const publisher = node.createPublisher(CMD_VEL_TOPIC, Twist)
+      // Optional pose sub keeps the control panel visible on the topology graph.
       node.createSubscription(POSE_TOPIC, () => undefined, Pose2D)
       publishStopRef.current = () => {
         void publisher.publish(
@@ -165,7 +166,7 @@ export default function BotTeleop({ compact = false, autoFocus = false }: Props)
       className={`${compact ? 'h-full bg-transparent' : 'min-h-screen bg-bus-bg'} text-bus-text outline-none focus:ring-1 focus:ring-inset focus:ring-bus-cyan/40`}
     >
       <main className={`${compact ? 'p-2' : 'max-w-md mx-auto p-3'}`}>
-        <section className={`${compact ? 'bg-bus-panel/18' : 'bg-bus-panel'} border border-white/10 rounded-sm shadow-[0_1px_0_rgb(255_255_255_/08%)_inset] ${compact ? 'p-3' : 'p-5'}`}>
+        <section className={`${compact ? 'bg-bus-bg/55' : 'bg-bus-panel'} border border-bus-border rounded-sm shadow-[0_1px_0_rgb(255_255_255_/06%)_inset] ${compact ? 'p-3' : 'p-5'}`}>
           <div className="flex items-center justify-between gap-2">
             <h1 className="font-mono text-xs text-bus-cyan">{t('botTeleopTitle')}</h1>
             <span className={`font-mono text-[9px] ${status === 'ONLINE' ? 'text-bus-green' : 'text-bus-red'}`}>
