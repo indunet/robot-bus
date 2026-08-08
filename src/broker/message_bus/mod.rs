@@ -11,10 +11,11 @@ pub use ports::{
 };
 
 use crate::shutdown;
-use crate::transports::{bind_all, format_endpoints};
+use crate::transports::{BindAllOpts, bind_all, bind_tcp, format_endpoints};
 use anyhow::{Context, Result};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::mpsc::SyncSender;
 use std::thread;
 use std::time::Duration;
 use zmq::{Context as ZmqContext, Socket, SocketType};
@@ -30,6 +31,8 @@ pub struct BusConfig {
     pub rcv_hwm: i32,
     /// When true (default), also bind inproc + ipc aliases via [`bind_all`].
     pub bind_all_transports: bool,
+    /// IPC / inproc namespace for [`bind_all`] (ipc dir includes broker id).
+    pub bind_opts: BindAllOpts,
     /// Stable id for hop-path loop prevention. Empty → random UUID at start.
     pub broker_id: String,
     /// Static peers for topic federation (empty → plain `proxy_steerable`).
@@ -44,6 +47,7 @@ impl Default for BusConfig {
             snd_hwm: DEFAULT_SND_HWM,
             rcv_hwm: DEFAULT_RCV_HWM,
             bind_all_transports: true,
+            bind_opts: BindAllOpts::default(),
             broker_id: String::new(),
             peers: Vec::new(),
         }
@@ -78,6 +82,17 @@ pub fn run_with_shutdown_ctx(
     shutdown: Arc<AtomicBool>,
     metrics: Option<Arc<MessageMetrics>>,
 ) -> Result<()> {
+    run_with_shutdown_ctx_bound(context, config, shutdown, metrics, None)
+}
+
+/// Like [`run_with_shutdown_ctx`], optionally reporting resolved TCP binds via `bound_tx`.
+pub fn run_with_shutdown_ctx_bound(
+    context: ZmqContext,
+    config: BusConfig,
+    shutdown: Arc<AtomicBool>,
+    metrics: Option<Arc<MessageMetrics>>,
+    bound_tx: Option<SyncSender<(String, String)>>,
+) -> Result<()> {
     let xsub = context
         .socket(SocketType::XSUB)
         .context("create XSUB socket")?;
@@ -88,21 +103,22 @@ pub fn run_with_shutdown_ctx(
     apply_low_latency_options(&xsub, config.snd_hwm, config.rcv_hwm)?;
     apply_low_latency_options(&xpub, config.snd_hwm, config.rcv_hwm)?;
 
-    let (xsub_endpoints, xpub_endpoints) = if config.bind_all_transports {
-        (
-            bind_all(&xsub, &config.xsub_bind, ports::XSUB_CHANNEL)?,
-            bind_all(&xpub, &config.xpub_bind, ports::XPUB_CHANNEL)?,
-        )
-    } else {
-        xsub.bind(&config.xsub_bind)
-            .with_context(|| format!("bind {}", config.xsub_bind))?;
-        xpub.bind(&config.xpub_bind)
-            .with_context(|| format!("bind {}", config.xpub_bind))?;
-        (
-            vec![config.xsub_bind.clone()],
-            vec![config.xpub_bind.clone()],
-        )
-    };
+    let (resolved_xsub, xsub_endpoints, resolved_xpub, xpub_endpoints) =
+        if config.bind_all_transports {
+            let (rx, xsub_eps) =
+                bind_all(&xsub, &config.xsub_bind, ports::XSUB_CHANNEL, &config.bind_opts)?;
+            let (rp, xpub_eps) =
+                bind_all(&xpub, &config.xpub_bind, ports::XPUB_CHANNEL, &config.bind_opts)?;
+            (rx, xsub_eps, rp, xpub_eps)
+        } else {
+            let rx = bind_tcp(&xsub, &config.xsub_bind)?;
+            let rp = bind_tcp(&xpub, &config.xpub_bind)?;
+            (rx.clone(), vec![rx], rp.clone(), vec![rp])
+        };
+
+    if let Some(tx) = bound_tx {
+        let _ = tx.send((resolved_xsub, resolved_xpub));
+    }
 
     let federated = !config.peers.is_empty();
     println!(

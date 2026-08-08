@@ -3,7 +3,7 @@
 //! Publishers (PUB) connect to the XSUB side; subscribers (SUB) connect to the
 //! XPUB side. The proxy forwards multipart frames without parsing them.
 
-use robot_bus::transports::{bind_all, inproc_endpoint};
+use robot_bus::transports::{BindAllOpts, bind_all, inproc_endpoint};
 use std::thread;
 use std::time::Duration;
 use zmq::{Context as ZmqContext, SocketType};
@@ -153,8 +153,20 @@ fn inproc_forward_multipart() {
     let ctx = ZmqContext::new();
     let xsub = ctx.socket(SocketType::XSUB).expect("create XSUB");
     let xpub = ctx.socket(SocketType::XPUB).expect("create XPUB");
-    bind_all(&xsub, "tcp://127.0.0.1:0", XSUB_CH).expect("bind xsub");
-    bind_all(&xpub, "tcp://127.0.0.1:0", XPUB_CH).expect("bind xpub");
+    bind_all(
+        &xsub,
+        "tcp://127.0.0.1:0",
+        XSUB_CH,
+        &BindAllOpts::default(),
+    )
+    .expect("bind xsub");
+    bind_all(
+        &xpub,
+        "tcp://127.0.0.1:0",
+        XPUB_CH,
+        &BindAllOpts::default(),
+    )
+    .expect("bind xpub");
 
     let control = ctx.socket(SocketType::PAIR).expect("create control");
     control

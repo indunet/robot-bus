@@ -4,10 +4,7 @@ use std::os::raw::{c_char, c_int};
 use std::ptr;
 use std::time::Duration;
 
-use robot_bus::discovery::{
-    wait as discover_wait, DiscoverOpts as RustDiscoverOpts, DEFAULT_DISCOVERY_PORT,
-    DEFAULT_DISCOVERY_TIMEOUT, DEFAULT_MULTICAST_ADDR,
-};
+use robot_bus::discovery::{wait as discover_wait, DiscoverOpts as RustDiscoverOpts};
 use robot_bus::runtime::{
     Node as RustNode, NodeOptions as RustNodeOptions,
 };
@@ -204,10 +201,8 @@ pub extern "C" fn robot_bus_node_grpc_at(
 
 #[repr(C)]
 pub(crate) struct RobotBusDiscoverOpts {
-    pub domain_id: u32,
+    pub api_url: *const c_char,
     pub broker_id: *const c_char,
-    pub multicast_addr: *const c_char,
-    pub multicast_port: u16,
     pub timeout_secs: f64,
 }
 
@@ -230,26 +225,19 @@ fn parse_discover_opts(opts: *const RobotBusDiscoverOpts) -> Result<RustDiscover
         return Ok(out);
     }
     let o = unsafe { &*opts };
-    out.domain_id = o.domain_id;
+    if let Some(url) = cstr_opt(o.api_url) {
+        if !url.is_empty() {
+            out.api_url = url.to_string();
+        }
+    }
     if let Some(id) = cstr_opt(o.broker_id) {
         if !id.is_empty() {
             out.broker_id = Some(id.to_string());
         }
     }
-    if let Some(addr) = cstr_opt(o.multicast_addr) {
-        if !addr.is_empty() {
-            out.multicast_addr = addr.parse().map_err(|e| {
-                set_error(format!("invalid multicast_addr: {e}"));
-            })?;
-        }
-    }
-    if o.multicast_port != 0 {
-        out.multicast_port = o.multicast_port;
-    }
     if o.timeout_secs > 0.0 {
         out.timeout = Duration::from_secs_f64(o.timeout_secs);
     }
-    let _ = (DEFAULT_MULTICAST_ADDR, DEFAULT_DISCOVERY_PORT, DEFAULT_DISCOVERY_TIMEOUT);
     Ok(out)
 }
 

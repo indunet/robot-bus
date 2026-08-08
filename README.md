@@ -71,8 +71,9 @@ Rust:
 
 ```bash
 cargo run --bin robot_bus_broker
-# discovery / domain: robot_bus_broker --domain-id 0 --advertise-host 10.0.0.5
-# disable announce:     robot_bus_broker --no-discovery
+# API listen:           robot_bus_broker --api-listen 0.0.0.0:15770
+# advertise host:       robot_bus_broker --advertise-host 10.0.0.5
+# federation peer:      robot_bus_broker --peer 10.0.0.2:15770
 ```
 
 ### Introspection CLI (`rbus`)
@@ -89,9 +90,9 @@ cargo run --bin rbus -- status
 
 `topic list` prints `name` and registered protobuf type (or `-`). Types appear after a typed `create_publisher::<M>` registers with the console (before any traffic). Topics with only raw traffic and no registration still list with type `-`. Services / actions appear after a worker READY.
 
-### Broker discovery (UDP multicast)
+### Broker discovery (HTTP API)
 
-Brokers periodically announce on `239.255.76.67:15550` (away from ROS 2 / DDS `7400` / `239.255.0.1`). The UDP payload is a pure protobuf [`BrokerAnnounce`](proto/robot_bus_interface/msg/v1/announce.proto) (`magic` must be `RBUS`). Invalid packets are dropped.
+Brokers expose `GET /api/v1/discover` on the API listen port (default `15770`, shared with gRPC / WS / console). The JSON lists connectable message/service/action endpoints (OS-assigned ports after bind `:0`) plus `brokerId` / `apiUrl`.
 
 Clients still **choose the transport** (`tcp` / `ipc` / `inproc` / `grpc`); discovery only fills host / paths / gRPC URL:
 
@@ -99,13 +100,15 @@ Clients still **choose the transport** (`tcp` / `ipc` / `inproc` / `grpc`); disc
 use robot_bus::{DiscoverOpts, Node, NodeOptions};
 
 let opts = NodeOptions::tcp().discover(DiscoverOpts {
-    domain_id: 0,
+    api_url: "http://127.0.0.1:15770".into(),
     ..Default::default()
 })?;
 let mut node = Node::with_options("talker", opts);
 ```
 
-Same API shape in bindings: `Node.discover(...)` (Python / C++ / Java / Android / TypeScript Node.js). Browser WebSocket clients have no UDP discovery.
+Same API shape in bindings: `Node.discover(...)` (Python / C++ / Java / Android / TypeScript Node.js). Browser clients use the API URL / WebSocket directly.
+
+Federation: pass `--peer HOST:PORT` (peer API listen) so the local broker fetches the peer's discover map and wires ZMQ peers.
 
 Python (ships a CLI entry after `pip install robot-bus`):
 
@@ -377,9 +380,9 @@ Proto (package `robot_bus_interface.grpc.v1`, distinct from ROS `*.msg.v1` / `*.
 - [`service_gateway.proto`](proto/robot_bus_interface/grpc/v1/service_gateway.proto)
 - [`action_gateway.proto`](proto/robot_bus_interface/grpc/v1/action_gateway.proto)
 
-UDP discovery (`robot_bus_interface.msg.v1`):
+HTTP discovery (`GET /api/v1/discover` on the API listen port). Legacy protobuf schema:
 
-- [`announce.proto`](proto/robot_bus_interface/msg/v1/announce.proto)
+- [`announce.proto`](proto/robot_bus_interface/msg/v1/announce.proto) (UDP multicast path removed)
 
 ## Tool nodes, TF, and Studio
 

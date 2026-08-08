@@ -31,6 +31,8 @@ pub struct BrokerEndpoints {
     pub act_be: String,
     pub grpc: String,
     pub web: String,
+    /// Broker id + connectable endpoints for `GET /api/v1/discover`.
+    pub discover: crate::discovery::DiscoverResponse,
 }
 
 #[derive(Clone, Debug, Serialize)]

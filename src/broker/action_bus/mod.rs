@@ -17,10 +17,11 @@ pub use ports::{
 };
 
 use crate::shutdown;
-use crate::transports::{bind_all, format_endpoints};
+use crate::transports::{BindAllOpts, bind_all, bind_tcp, format_endpoints};
 use anyhow::{Context, Result};
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
+use std::sync::mpsc::SyncSender;
 use zmq::{Context as ZmqContext, Socket, SocketType};
 
 #[derive(Clone, Debug)]
@@ -37,6 +38,8 @@ pub struct ActionBusConfig {
     /// Tests that spawn many brokers on ephemeral TCP ports should set this
     /// false so they do not fight over the fixed `/tmp/robot_bus/*.ipc` paths.
     pub bind_all_transports: bool,
+    /// IPC / inproc namespace for [`bind_all`].
+    pub bind_opts: BindAllOpts,
     /// Stable id for hop-path loop prevention. Empty → random UUID at start.
     pub broker_id: String,
     /// Static peers for action federation (empty → plain dual-ROUTER loop).
@@ -54,6 +57,7 @@ impl Default for ActionBusConfig {
             heartbeat_timeout_ms: DEFAULT_HEARTBEAT_TIMEOUT_MS,
             pending_timeout_ms: DEFAULT_PENDING_TIMEOUT_MS,
             bind_all_transports: true,
+            bind_opts: BindAllOpts::default(),
             broker_id: String::new(),
             peers: Vec::new(),
         }
@@ -77,6 +81,17 @@ pub fn run_with_shutdown_ctx(
     shutdown: Arc<AtomicBool>,
     metrics: Option<Arc<ActionMetrics>>,
 ) -> Result<()> {
+    run_with_shutdown_ctx_bound(context, config, shutdown, metrics, None)
+}
+
+/// Like [`run_with_shutdown_ctx`], optionally reporting resolved TCP binds.
+pub fn run_with_shutdown_ctx_bound(
+    context: ZmqContext,
+    config: ActionBusConfig,
+    shutdown: Arc<AtomicBool>,
+    metrics: Option<Arc<ActionMetrics>>,
+    bound_tx: Option<SyncSender<(String, String)>>,
+) -> Result<()> {
     let frontend = context
         .socket(SocketType::ROUTER)
         .context("create frontend ROUTER")?;
@@ -87,23 +102,30 @@ pub fn run_with_shutdown_ctx(
     apply_low_latency_options(&frontend, config.snd_hwm, config.rcv_hwm)?;
     apply_low_latency_options(&backend, config.snd_hwm, config.rcv_hwm)?;
 
-    let (frontend_endpoints, backend_endpoints) = if config.bind_all_transports {
-        (
-            bind_all(&frontend, &config.frontend_bind, ports::FRONTEND_CHANNEL)?,
-            bind_all(&backend, &config.backend_bind, ports::BACKEND_CHANNEL)?,
-        )
-    } else {
-        frontend
-            .bind(&config.frontend_bind)
-            .with_context(|| format!("bind frontend {}", config.frontend_bind))?;
-        backend
-            .bind(&config.backend_bind)
-            .with_context(|| format!("bind backend {}", config.backend_bind))?;
-        (
-            vec![config.frontend_bind.clone()],
-            vec![config.backend_bind.clone()],
-        )
-    };
+    let (resolved_fe, frontend_endpoints, resolved_be, backend_endpoints) =
+        if config.bind_all_transports {
+            let (rfe, fe_eps) = bind_all(
+                &frontend,
+                &config.frontend_bind,
+                ports::FRONTEND_CHANNEL,
+                &config.bind_opts,
+            )?;
+            let (rbe, be_eps) = bind_all(
+                &backend,
+                &config.backend_bind,
+                ports::BACKEND_CHANNEL,
+                &config.bind_opts,
+            )?;
+            (rfe, fe_eps, rbe, be_eps)
+        } else {
+            let rfe = bind_tcp(&frontend, &config.frontend_bind)?;
+            let rbe = bind_tcp(&backend, &config.backend_bind)?;
+            (rfe.clone(), vec![rfe], rbe.clone(), vec![rbe])
+        };
+
+    if let Some(tx) = bound_tx {
+        let _ = tx.send((resolved_fe, resolved_be));
+    }
 
     println!(
         "action_bus_broker broker started\n  \

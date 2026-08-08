@@ -33,18 +33,21 @@ fn test_broker_config(
             xsub_bind: format!("tcp://127.0.0.1:{msg_xsub}"),
             xpub_bind: format!("tcp://127.0.0.1:{msg_xpub}"),
             bind_all_transports: false,
+            bind_opts: Default::default(),
             ..BusConfig::default()
         },
         service: ServiceBusConfig {
             frontend_bind: format!("tcp://127.0.0.1:{svc_fe}"),
             backend_bind: format!("tcp://127.0.0.1:{svc_be}"),
             bind_all_transports: false,
+            bind_opts: Default::default(),
             ..ServiceBusConfig::default()
         },
         action: ActionBusConfig {
             frontend_bind: format!("tcp://127.0.0.1:{act_fe}"),
             backend_bind: format!("tcp://127.0.0.1:{act_be}"),
             bind_all_transports: false,
+            bind_opts: Default::default(),
             ..ActionBusConfig::default()
         },
         discovery: DiscoveryConfig {

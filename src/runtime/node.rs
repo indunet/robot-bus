@@ -44,9 +44,8 @@ use crate::runtime::topology_register::TopologyEndpointGuard;
 use crate::service_bus::ServiceClient as BusServiceClient;
 use crate::transports::{
     ACTION_BACKEND_CHANNEL, ACTION_FRONTEND_CHANNEL, SERVICE_BACKEND_CHANNEL,
-    SERVICE_FRONTEND_CHANNEL, XPUB_CHANNEL, XSUB_CHANNEL, action_backend_endpoint,
-    action_frontend_endpoint, inproc_endpoint_with_prefix, ipc_endpoint_in, message_xpub_endpoint,
-    message_xsub_endpoint, service_backend_endpoint, service_frontend_endpoint,
+    SERVICE_FRONTEND_CHANNEL, XPUB_CHANNEL, XSUB_CHANNEL, inproc_endpoint_with_prefix,
+    ipc_endpoint_in,
 };
 use crate::typed::{Action, ActionOutcome, Service};
 use crate::zmq_helpers::HighWaterMark;
@@ -111,9 +110,10 @@ impl NodeOptions {
         Self::empty_endpoints(host, "tcp")
     }
 
-    /// IPC under the default directory (`/tmp/robot_bus`).
+    /// IPC under the default directory (`/tmp/robot_bus`). Prefer discover when the
+    /// broker uses a broker-id namespaced ipc dir.
     pub fn ipc() -> Self {
-        Self::empty_endpoints("localhost", "ipc")
+        Self::ipc_at(crate::transports::IPC_DIR)
     }
 
     /// IPC under a custom directory (must match the broker's ipc binds).
@@ -135,7 +135,7 @@ impl NodeOptions {
 
     /// Same-process `inproc://robot_bus/...` (default broker prefix).
     pub fn inproc() -> Self {
-        Self::empty_endpoints("localhost", "inproc")
+        Self::inproc_at("robot_bus")
     }
 
     /// Same-process endpoints under a custom prefix (must match the broker).
@@ -215,7 +215,11 @@ impl NodeOptions {
         self.require_zmq()?;
         match &self.message_xsub {
             Some(ep) => Ok(ep.clone()),
-            None => message_xsub_endpoint(&self.host, &self.transport).map_err(BusError::Protocol),
+            None => Err(BusError::Protocol(
+                "message_xsub unset; call NodeOptions::discover(DiscoverOpts::default()) \
+                 (GET http://127.0.0.1:15770/api/v1/discover) or set endpoints explicitly"
+                    .into(),
+            )),
         }
     }
 
@@ -223,7 +227,11 @@ impl NodeOptions {
         self.require_zmq()?;
         match &self.message_xpub {
             Some(ep) => Ok(ep.clone()),
-            None => message_xpub_endpoint(&self.host, &self.transport).map_err(BusError::Protocol),
+            None => Err(BusError::Protocol(
+                "message_xpub unset; call NodeOptions::discover(DiscoverOpts::default()) \
+                 or set endpoints explicitly"
+                    .into(),
+            )),
         }
     }
 
@@ -231,9 +239,10 @@ impl NodeOptions {
         self.require_zmq()?;
         match &self.service_frontend {
             Some(ep) => Ok(ep.clone()),
-            None => {
-                service_frontend_endpoint(&self.host, &self.transport).map_err(BusError::Protocol)
-            }
+            None => Err(BusError::Protocol(
+                "service_frontend unset; call NodeOptions::discover(…) or set endpoints explicitly"
+                    .into(),
+            )),
         }
     }
 
@@ -241,9 +250,10 @@ impl NodeOptions {
         self.require_zmq()?;
         match &self.service_backend {
             Some(ep) => Ok(ep.clone()),
-            None => {
-                service_backend_endpoint(&self.host, &self.transport).map_err(BusError::Protocol)
-            }
+            None => Err(BusError::Protocol(
+                "service_backend unset; call NodeOptions::discover(…) or set endpoints explicitly"
+                    .into(),
+            )),
         }
     }
 
@@ -251,9 +261,10 @@ impl NodeOptions {
         self.require_zmq()?;
         match &self.action_backend {
             Some(ep) => Ok(ep.clone()),
-            None => {
-                action_backend_endpoint(&self.host, &self.transport).map_err(BusError::Protocol)
-            }
+            None => Err(BusError::Protocol(
+                "action_backend unset; call NodeOptions::discover(…) or set endpoints explicitly"
+                    .into(),
+            )),
         }
     }
 
@@ -261,10 +272,23 @@ impl NodeOptions {
         self.require_zmq()?;
         match &self.action_frontend {
             Some(ep) => Ok(ep.clone()),
-            None => {
-                action_frontend_endpoint(&self.host, &self.transport).map_err(BusError::Protocol)
-            }
+            None => Err(BusError::Protocol(
+                "action_frontend unset; call NodeOptions::discover(…) or set endpoints explicitly"
+                    .into(),
+            )),
         }
+    }
+
+    /// True when ZMQ endpoint fields still need to be filled (e.g. via HTTP discover).
+    pub fn needs_endpoint_discover(&self) -> bool {
+        !self.is_grpc()
+            && self.message_xsub.is_none()
+            && self.message_xpub.is_none()
+            && self.service_frontend.is_none()
+            && self.service_backend.is_none()
+            && self.action_frontend.is_none()
+            && self.action_backend.is_none()
+            && self.transport != "inproc"
     }
 }
 
@@ -1058,12 +1082,26 @@ impl Node {
     }
 
     /// Create a node with explicit broker connection options (private ZMQ context).
+    ///
+    /// For `tcp` / `ipc` with unset endpoints, auto-discovers via
+    /// `http://{host}:15770/api/v1/discover` (host `localhost` → `127.0.0.1`).
     pub fn with_options(name: impl Into<String>, options: NodeOptions) -> Self {
         Self::with_context(Context::new(), name, options)
     }
 
     /// Create a node that shares `context` for all ZMQ sockets (required for inproc).
-    pub fn with_context(context: Context, name: impl Into<String>, options: NodeOptions) -> Self {
+    pub fn with_context(context: Context, name: impl Into<String>, mut options: NodeOptions) -> Self {
+        if options.needs_endpoint_discover() {
+            let discover_opts = crate::discovery::DiscoverOpts::for_host(&options.host);
+            match options.clone().discover(discover_opts) {
+                Ok(filled) => options = filled,
+                Err(err) => {
+                    log::warn!(
+                        "auto-discover failed for node (start broker / check --api-listen): {err}"
+                    );
+                }
+            }
+        }
         Self {
             name: name.into(),
             options,
@@ -1894,18 +1932,14 @@ ros__parameters:
     }
 
     #[test]
-    fn tcp_preset_defaults_to_localhost() {
+    fn tcp_preset_leaves_endpoints_for_discover() {
         let opts = NodeOptions::tcp();
         assert_eq!(opts.transport, "tcp");
-        assert_eq!(
-            opts.message_xsub_endpoint().unwrap(),
-            "tcp://localhost:15560"
-        );
+        assert!(opts.needs_endpoint_discover());
+        assert!(opts.message_xsub_endpoint().is_err());
         let remote = NodeOptions::tcp_at("10.0.0.5");
-        assert_eq!(
-            remote.message_xpub_endpoint().unwrap(),
-            "tcp://10.0.0.5:15561"
-        );
+        assert_eq!(remote.host, "10.0.0.5");
+        assert!(remote.needs_endpoint_discover());
     }
 
     #[test]
@@ -1924,6 +1958,7 @@ ros__parameters:
         );
 
         let inproc = NodeOptions::inproc();
+        assert!(!inproc.needs_endpoint_discover());
         assert_eq!(
             inproc.message_xpub_endpoint().unwrap(),
             "inproc://robot_bus/message_bus/xpub"
@@ -1963,9 +1998,24 @@ ros__parameters:
         }
     }
 
+    fn unit_node(name: &str) -> Node {
+        Node::with_options(
+            name,
+            NodeOptions {
+                message_xsub: Some("tcp://127.0.0.1:1".into()),
+                message_xpub: Some("tcp://127.0.0.1:2".into()),
+                service_frontend: Some("tcp://127.0.0.1:3".into()),
+                service_backend: Some("tcp://127.0.0.1:4".into()),
+                action_frontend: Some("tcp://127.0.0.1:5".into()),
+                action_backend: Some("tcp://127.0.0.1:6".into()),
+                ..NodeOptions::tcp()
+            },
+        )
+    }
+
     #[test]
     fn add_node_then_create_publisher() {
-        let mut node = Node::new("pilot");
+        let mut node = unit_node("pilot");
         let executor = SingleThreadedExecutor::new();
         executor.add_node(&mut node).unwrap();
         assert_eq!(node.name(), "pilot");
@@ -1975,7 +2025,7 @@ ros__parameters:
 
     #[test]
     fn subscription_auto_attaches_single_threaded_executor() {
-        let mut node = Node::new("pilot");
+        let mut node = unit_node("pilot");
         node.create_subscription_raw("/imu", Arc::new(|_, _| {}), None)
             .unwrap();
         assert!(node.executor_handle().is_some());
@@ -1984,7 +2034,7 @@ ros__parameters:
 
     #[test]
     fn spin_path_owns_single_threaded_executor() {
-        let mut node = Node::new("pilot");
+        let mut node = unit_node("pilot");
         // shutdown_handle / spin ensure the same lazy SingleThreadedExecutor.
         let _handle = node.shutdown_handle().unwrap();
         assert!(node.executor_handle().is_some());
@@ -1993,7 +2043,7 @@ ros__parameters:
 
     #[test]
     fn cannot_add_node_after_auto_attach() {
-        let mut node = Node::new("pilot");
+        let mut node = unit_node("pilot");
         node.create_subscription_raw("/imu", Arc::new(|_, _| {}), None)
             .unwrap();
         let executor = SingleThreadedExecutor::new();

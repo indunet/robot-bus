@@ -2,7 +2,7 @@
 
 use anyhow::{Context, Result, bail};
 
-use super::ports::{BACKEND_PORT, FRONTEND_PORT};
+use crate::transports::{SERVICE_BACKEND_PORT as BACKEND_PORT, SERVICE_FRONTEND_PORT as FRONTEND_PORT};
 
 /// Remote broker service-bus backend (workers / federation DEALERs connect here).
 #[derive(Clone, Debug, PartialEq, Eq)]

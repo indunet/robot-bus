@@ -47,6 +47,7 @@ pub fn parse_robot_bus_config(args: &[String]) -> Result<Option<RobotBusConfig>>
     }
 
     let mut config = RobotBusConfig::default();
+    let mut api_peers: Vec<String> = Vec::new();
     let mut i = 0;
     while i < args.len() {
         let arg = args[i].as_str();
@@ -82,6 +83,10 @@ pub fn parse_robot_bus_config(args: &[String]) -> Result<Option<RobotBusConfig>>
                     MessagePeer::from_xpub(value)
                         .with_context(|| format!("invalid --message-peer {value}"))?,
                 );
+            }
+            "--peer" => {
+                i += 1;
+                api_peers.push(require_arg(args, i, arg)?.to_string());
             }
 
             // --- service bus ---
@@ -199,7 +204,7 @@ pub fn parse_robot_bus_config(args: &[String]) -> Result<Option<RobotBusConfig>>
                 config.action.bind_all_transports = false;
             }
 
-            // --- discovery ---
+            // --- discovery (HTTP via API listen; advertise host only) ---
             "--domain-id" => {
                 i += 1;
                 config.discovery.domain_id = require_arg(args, i, arg)?
@@ -207,34 +212,35 @@ pub fn parse_robot_bus_config(args: &[String]) -> Result<Option<RobotBusConfig>>
                     .with_context(|| format!("invalid {arg}"))?;
             }
             "--no-discovery" => {
+                // Kept for compatibility; UDP announce is already removed.
                 config.discovery.enabled = false;
             }
             "--advertise-host" => {
                 i += 1;
                 config.discovery.advertise_host = Some(require_arg(args, i, arg)?.to_string());
             }
-            "--discovery-port" => {
+            "--discovery-port" | "--discovery-addr" => {
+                // Deprecated UDP flags: ignored with a soft warning via bail message
+                // that points users to --api-listen / --peer.
+                let _ = require_arg(args, i + 1, arg)?;
                 i += 1;
-                config.discovery.multicast_port = require_arg(args, i, arg)?
-                    .parse()
-                    .with_context(|| format!("invalid {arg}"))?;
-            }
-            "--discovery-addr" => {
-                i += 1;
-                let value = require_arg(args, i, arg)?;
-                config.discovery.multicast_addr = value
-                    .parse()
-                    .with_context(|| format!("invalid {arg} {value}"))?;
+                log::warn!(
+                    "{arg} is deprecated: UDP discovery was removed; use --api-listen and GET /api/v1/discover"
+                );
             }
 
-            // --- gRPC ---
+            // --- API listen (gRPC + WS + console + discover) ---
             #[cfg(feature = "grpc")]
-            "--grpc-listen" | "--listen" => {
+            "--api-listen" | "--grpc-listen" | "--listen" => {
                 i += 1;
                 let value = require_arg(args, i, arg)?;
                 config.grpc.listen = value
                     .parse::<SocketAddr>()
                     .with_context(|| format!("invalid {arg} {value}"))?;
+                #[cfg(feature = "console")]
+                {
+                    config.console.listen = config.grpc.listen;
+                }
             }
             #[cfg(feature = "grpc")]
             "--cors-origin" => {
@@ -245,7 +251,7 @@ pub fn parse_robot_bus_config(args: &[String]) -> Result<Option<RobotBusConfig>>
                     .push(require_arg(args, i, arg)?.to_string());
             }
             #[cfg(not(feature = "grpc"))]
-            "--grpc-listen" | "--listen" | "--cors-origin" => {
+            "--api-listen" | "--grpc-listen" | "--listen" | "--cors-origin" => {
                 bail!("{arg} requires the `grpc` feature");
             }
 
@@ -287,63 +293,65 @@ pub fn parse_robot_bus_config(args: &[String]) -> Result<Option<RobotBusConfig>>
         i += 1;
     }
 
+    if !api_peers.is_empty() {
+        super::federation::apply_api_peers(&mut config, &api_peers)?;
+    }
+
     Ok(Some(config))
 }
 
 /// Help text for `robot_bus_broker` / `robot-bus-broker`.
 pub fn robot_bus_broker_help() -> &'static str {
-    "robot_bus_broker — start all ZeroMQ buses + gRPC gateway + Web console in one process\n\n\
+    "robot_bus_broker — start all ZeroMQ buses + API gateway + Web console in one process\n\n\
 Usage:\n  robot_bus_broker [options]\n\n\
 Defaults:\n  \
-message  XSUB 15560 / XPUB 15561\n  \
-service  frontend 15662 / backend 15663\n  \
-action   frontend 15664 / backend 15665\n  \
-gRPC     0.0.0.0:15770 (gRPC + WS /ws + embedded Web UI)\n  \
-console  same port as gRPC (use --no-console to disable)\n\n\
+message / service / action TCP binds: 0.0.0.0:0 (OS assigns free ports)\n  \
+API listen 0.0.0.0:15770 (gRPC + WS /ws + discover REST + embedded Web UI)\n  \
+console  same port as API (use --no-console to disable UI; discover still on API)\n\n\
 Message options:\n  \
---message-xsub-bind ADDR       Publisher bind (alias: --xsub-bind)\n  \
---message-xpub-bind ADDR       Subscriber bind (alias: --xpub-bind)\n  \
+--message-xsub-bind ADDR       Publisher bind (default tcp://0.0.0.0:0; alias: --xsub-bind)\n  \
+--message-xpub-bind ADDR       Subscriber bind (default tcp://0.0.0.0:0; alias: --xpub-bind)\n  \
 --message-snd-hwm N            Message send HWM\n  \
 --message-rcv-hwm N            Message receive HWM\n  \
 --broker-id ID                 Hop-path id for message/service/action federation (default: random UUID)\n  \
---message-peer tcp://HOST:XPUB Peer broker XPUB (repeatable; XSUB = XPUB port - 1)\n\n\
+--message-peer tcp://HOST:XPUB Peer broker XPUB (advanced; XSUB = XPUB port - 1)\n  \
+--peer HOST:PORT               Federation peer via API listen (GET /api/v1/discover; repeatable)\n\n\
 Service options:\n  \
---service-frontend-bind ADDR   Client (REQ) bind\n  \
---service-backend-bind ADDR    Worker (DEALER) bind\n  \
+--service-frontend-bind ADDR   Client (REQ) bind (default :0)\n  \
+--service-backend-bind ADDR    Worker (DEALER) bind (default :0)\n  \
 --service-snd-hwm / --service-rcv-hwm N\n  \
 --service-heartbeat-interval-ms N\n  \
 --service-heartbeat-timeout-ms N\n  \
 --service-pending-timeout-ms N     NO_WORKER timeout for queued requests\n  \
 --service-max-pending N            Max queued requests before NO_WORKER\n  \
---service-peer [ID=]tcp://HOST:BE  Peer service backend (repeatable; optional ID= for hop-path)\n\n\
+--service-peer [ID=]tcp://HOST:BE  Peer service backend (advanced; optional ID=)\n\n\
 Action options:\n  \
---action-frontend-bind ADDR    Client (DEALER) bind\n  \
---action-backend-bind ADDR     Worker (DEALER) bind\n  \
+--action-frontend-bind ADDR    Client (DEALER) bind (default :0)\n  \
+--action-backend-bind ADDR     Worker (DEALER) bind (default :0)\n  \
 --action-snd-hwm / --action-rcv-hwm N\n  \
 --action-heartbeat-interval-ms N\n  \
 --action-heartbeat-timeout-ms N\n  \
 --action-pending-timeout-ms N  NO_WORKER timeout for queued goals\n  \
---action-peer [ID=]tcp://HOST:BE  Peer action backend (repeatable; optional ID= for hop-path)\n\n\
+--action-peer [ID=]tcp://HOST:BE  Peer action backend (advanced; optional ID=)\n\n\
 Shared bus options:\n  \
 --snd-hwm / --rcv-hwm N        Apply HWM to message + service + action\n  \
 --heartbeat-interval-ms N      Apply to service + action\n  \
 --heartbeat-timeout-ms N       Apply to service + action\n  \
 --tcp-only                     Bind TCP only (skip inproc/ipc aliases)\n\n\
-Discovery options (UDP multicast announce):\n  \
---domain-id N                  Discovery domain (default: 0)\n  \
+Discovery / advertise:\n  \
+--domain-id N                  Soft label returned in /api/v1/discover (default: 0)\n  \
 --advertise-host HOST          Host clients should connect to (default: inferred)\n  \
---discovery-addr ADDR          Multicast group (default: 239.255.76.67)\n  \
---discovery-port PORT          Multicast UDP port (default: 15550)\n  \
---no-discovery                 Do not announce on the discovery multicast group\n\n\
-gRPC options (feature `grpc`, default on):\n  \
---grpc-listen HOST:PORT        Listen address (alias: --listen)\n  \
+--no-discovery                 Compatibility no-op (UDP announce removed)\n\n\
+API options (feature `grpc`, default on):\n  \
+--api-listen HOST:PORT         API listen (aliases: --grpc-listen, --listen, --console-listen)\n  \
 --cors-origin ORIGIN           Allowed browser origin (repeatable)\n\n\
 Console options (feature `console`, default on):\n  \
---console-listen HOST:PORT     Alias of --grpc-listen (single-port UI + gRPC)\n  \
---no-console                   Do not start the Web console\n  \
+--console-listen HOST:PORT     Alias of --api-listen (single-port UI + API)\n  \
+--no-console                   Do not start the Web console UI\n  \
 --console-cors-origin ORIGIN   Allow Studio/browser origin (repeatable)\n\n\
 --help, -h                     Show this help\n\n\
-Embed in code: robot_bus::RobotBusBroker::start(RobotBusConfig { ... }).\n"
+Embed in code: robot_bus::RobotBusBroker::start(RobotBusConfig { ... }).\n\
+Clients: GET http://HOST:15770/api/v1/discover then connect to returned ZMQ endpoints.\n"
 }
 
 /// Apply federation options shared by language bindings (CLI-compatible string forms).
@@ -503,11 +511,17 @@ mod tests {
         assert!(!config.discovery.enabled);
         assert_eq!(config.discovery.domain_id, 3);
         assert_eq!(config.discovery.advertise_host.as_deref(), Some("10.0.0.5"));
-        assert_eq!(config.discovery.multicast_port, 45550);
-        assert_eq!(
-            config.discovery.multicast_addr,
-            "239.255.76.67".parse::<std::net::Ipv4Addr>().unwrap()
-        );
+    }
+
+    #[test]
+    fn parses_api_listen_alias() {
+        let config = parse_robot_bus_config(&args(&["--api-listen", "127.0.0.1:15771"]))
+            .unwrap()
+            .expect("config");
+        #[cfg(feature = "grpc")]
+        {
+            assert_eq!(config.grpc.listen.to_string(), "127.0.0.1:15771");
+        }
     }
 
     #[test]

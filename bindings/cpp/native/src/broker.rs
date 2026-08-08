@@ -42,8 +42,11 @@ pub(crate) struct RobotBusBrokerOptions {
     pub no_discovery: c_int,
     pub domain_id: u32,
     pub advertise_host: *const c_char,
-    pub discovery_addr: *const c_char,
-    pub discovery_port: u16,
+    /// API listen (`host:port`); alias of former grpc_listen when set.
+    pub api_listen: *const c_char,
+    /// Federation peers as API URLs / `host:port` (GET /api/v1/discover).
+    pub peers: *const *const c_char,
+    pub peer_count: usize,
 }
 
 #[unsafe(no_mangle)]
@@ -148,15 +151,19 @@ fn parse_broker_config(opts: *const RobotBusBrokerOptions) -> Result<RobotBusCon
             config.discovery.advertise_host = Some(v.to_string());
         }
     }
-    if let Some(v) = cstr_opt(o.discovery_addr) {
+    let api = cstr_opt(o.api_listen).or_else(|| cstr_opt(o.grpc_listen));
+    if let Some(v) = api {
         if !v.is_empty() {
-            config.discovery.multicast_addr = v.parse().map_err(|e| {
-                set_error(format!("invalid discovery_addr: {e}"));
+            config.grpc.listen = v.parse().map_err(|e| {
+                set_error(format!("invalid api_listen: {e}"));
             })?;
+            config.console.listen = config.grpc.listen;
         }
     }
-    if o.discovery_port != 0 {
-        config.discovery.multicast_port = o.discovery_port;
+    let peers = cstr_array(o.peers, o.peer_count)?;
+    if let Err(e) = robot_bus::apply_api_peers(&mut config, &peers) {
+        set_error(e.to_string());
+        return Err(());
     }
 
     Ok(config)

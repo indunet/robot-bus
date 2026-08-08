@@ -81,24 +81,24 @@ typedef struct RobotBusBrokerOptions {
   /** Peer action backends (`[id=]tcp://host:port`). Length: action_peer_count. */
   const char *const *action_peers;
   size_t action_peer_count;
-  /** When non-zero, do not send UDP discovery announces. */
+  /** When non-zero, compatibility no-op (UDP announce removed). */
   int no_discovery;
-  /** Discovery domain id (default 0). */
+  /** Soft label returned in /api/v1/discover (default 0). */
   uint32_t domain_id;
   /** Host clients should connect to (NULL → inferred). */
   const char *advertise_host;
-  /** Multicast group (NULL → 239.255.76.67). */
-  const char *discovery_addr;
-  /** Multicast UDP port (0 → 15550). */
-  uint16_t discovery_port;
+  /** API listen host:port (NULL → use grpc_listen / default 15770). */
+  const char *api_listen;
+  /** Federation peers as API URLs / host:port (GET /api/v1/discover). */
+  const char *const *peers;
+  size_t peer_count;
 } RobotBusBrokerOptions;
 
-/** Client UDP discovery options (NULL fields / 0 → defaults). */
+/** Client HTTP discovery options (NULL fields / 0 → defaults). */
 typedef struct RobotBusDiscoverOpts {
-  uint32_t domain_id;
+  /** Broker API base URL, e.g. http://127.0.0.1:15770 (NULL → default). */
+  const char *api_url;
   const char *broker_id;
-  const char *multicast_addr;
-  uint16_t multicast_port;
   double timeout_secs;
 } RobotBusDiscoverOpts;
 
@@ -237,7 +237,7 @@ ROBOT_BUS_API RobotBusNode *robot_bus_node_inproc_with_context(RobotBusContext *
 ROBOT_BUS_API RobotBusNode *robot_bus_node_grpc(const char *name);
 ROBOT_BUS_API RobotBusNode *robot_bus_node_grpc_at(const char *name, const char *url);
 /**
- * Discover a broker via UDP multicast, apply `transport` (`tcp`/`ipc`/`inproc`/`grpc`),
+ * Discover a broker via HTTP GET /api/v1/discover, apply `transport` (`tcp`/`ipc`/`inproc`/`grpc`),
  * and create a node. `opts` may be NULL (domain 0, default timeout).
  */
 ROBOT_BUS_API RobotBusNode *robot_bus_node_discover(const char *name, const char *transport,

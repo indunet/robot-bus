@@ -1,16 +1,15 @@
-//! Port defaults for the action bus broker.
+//! Action-bus bind defaults.
 //!
-//! Distinct from `message_bus` (15560/15561) and `service_bus` (15662/15663)
-//! to avoid collisions.
+//! TCP defaults use port `0` so the OS assigns a free port at bind time.
 
-pub const FRONTEND_PORT: u16 = 15664;
-pub const BACKEND_PORT: u16 = 15665;
+pub const FRONTEND_PORT: u16 = 0;
+pub const BACKEND_PORT: u16 = 0;
 
 pub const FRONTEND_CHANNEL: &str = "action_bus/frontend";
 pub const BACKEND_CHANNEL: &str = "action_bus/backend";
 
-pub const DEFAULT_FRONTEND_BIND: &str = "tcp://0.0.0.0:15664";
-pub const DEFAULT_BACKEND_BIND: &str = "tcp://0.0.0.0:15665";
+pub const DEFAULT_FRONTEND_BIND: &str = "tcp://0.0.0.0:0";
+pub const DEFAULT_BACKEND_BIND: &str = "tcp://0.0.0.0:0";
 
 /// Feedback streams can be bursty; allow a deeper queue than `message_bus`
 /// (which uses 2 to prefer dropping over buffering for real-time frames).

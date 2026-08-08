@@ -153,10 +153,8 @@ fn py_node_options(
 
 fn py_discover_options(
     transport: &str,
-    domain_id: u32,
+    api_url: Option<&str>,
     broker_id: Option<String>,
-    multicast_addr: Option<&str>,
-    multicast_port: Option<u16>,
     timeout: f64,
 ) -> PyResult<RustNodeOptions> {
     let base = match transport {
@@ -182,20 +180,12 @@ fn py_discover_options(
         }
     };
     let mut opts = RustDiscoverOpts {
-        domain_id,
         broker_id: broker_id.filter(|s| !s.is_empty()),
         ..Default::default()
     };
-    if let Some(addr) = multicast_addr {
-        if !addr.is_empty() {
-            opts.multicast_addr = addr
-                .parse()
-                .map_err(|e| PyRuntimeError::new_err(format!("invalid multicast_addr: {e}")))?;
-        }
-    }
-    if let Some(port) = multicast_port {
-        if port != 0 {
-            opts.multicast_port = port;
+    if let Some(url) = api_url {
+        if !url.is_empty() {
+            opts.api_url = url.to_string();
         }
     }
     if timeout > 0.0 {
@@ -821,7 +811,7 @@ impl PyNode {
         }
     }
 
-    /// Discover a broker via UDP multicast, then connect with `transport`.
+    /// Discover a broker via HTTP `GET /api/v1/discover`, then connect with `transport`.
     ///
     /// Transport is still chosen by the caller (`tcp` / `ipc` / `inproc` / `grpc`);
     /// discovery only fills host / paths / gRPC URL.
@@ -830,30 +820,19 @@ impl PyNode {
         name,
         transport="tcp",
         *,
-        domain_id=0,
+        api_url=None,
         broker_id=None,
-        multicast_addr=None,
-        multicast_port=None,
         timeout=3.0,
     ))]
     fn discover(
         _cls: &Bound<'_, PyType>,
         name: String,
         transport: &str,
-        domain_id: u32,
+        api_url: Option<&str>,
         broker_id: Option<String>,
-        multicast_addr: Option<&str>,
-        multicast_port: Option<u16>,
         timeout: f64,
     ) -> PyResult<Self> {
-        let options = py_discover_options(
-            transport,
-            domain_id,
-            broker_id,
-            multicast_addr,
-            multicast_port,
-            timeout,
-        )?;
+        let options = py_discover_options(transport, api_url, broker_id, timeout)?;
         Ok(Self {
             inner: RustNode::with_options(name, options),
         })
@@ -1163,8 +1142,8 @@ impl PyRobotBusBroker {
         domain_id = 0,
         no_discovery = false,
         advertise_host = None,
-        discovery_addr = None,
-        discovery_port = None,
+        api_listen = None,
+        peers = None,
     ))]
     fn start(
         context: Option<&PyContext>,
@@ -1203,8 +1182,8 @@ impl PyRobotBusBroker {
         domain_id: u32,
         no_discovery: bool,
         advertise_host: Option<String>,
-        discovery_addr: Option<String>,
-        discovery_port: Option<u16>,
+        api_listen: Option<String>,
+        peers: Option<Vec<String>>,
     ) -> PyResult<Self> {
         let mut config = RobotBusConfig::default();
 
@@ -1294,18 +1273,13 @@ impl PyRobotBusBroker {
 
         #[cfg(feature = "grpc")]
         {
-            if let Some(v) = grpc_listen {
-                config.grpc.listen = v
-                    .parse()
-                    .map_err(|e| PyRuntimeError::new_err(format!("invalid grpc_listen: {e}")))?;
-            }
             if let Some(v) = cors_origins {
                 config.grpc.cors_origins = v;
             }
         }
         #[cfg(not(feature = "grpc"))]
         {
-            let _ = (grpc_listen, cors_origins);
+            let _ = cors_origins;
         }
 
         #[cfg(feature = "console")]
@@ -1334,6 +1308,10 @@ impl PyRobotBusBroker {
         )
         .map_err(anyhow_err)?;
 
+        if let Some(peer_list) = peers {
+            crate::broker::apply_api_peers(&mut config, &peer_list).map_err(anyhow_err)?;
+        }
+
         if no_discovery {
             config.discovery.enabled = false;
         }
@@ -1343,16 +1321,23 @@ impl PyRobotBusBroker {
                 config.discovery.advertise_host = Some(v);
             }
         }
-        if let Some(v) = discovery_addr {
+        let listen = api_listen.or(grpc_listen);
+        if let Some(v) = listen {
             if !v.is_empty() {
-                config.discovery.multicast_addr = v
-                    .parse()
-                    .map_err(|e| PyRuntimeError::new_err(format!("invalid discovery_addr: {e}")))?;
-            }
-        }
-        if let Some(port) = discovery_port {
-            if port != 0 {
-                config.discovery.multicast_port = port;
+                #[cfg(feature = "grpc")]
+                {
+                    config.grpc.listen = v
+                        .parse()
+                        .map_err(|e| PyRuntimeError::new_err(format!("invalid api_listen: {e}")))?;
+                    #[cfg(feature = "console")]
+                    {
+                        config.console.listen = config.grpc.listen;
+                    }
+                }
+                #[cfg(not(feature = "grpc"))]
+                {
+                    let _ = v;
+                }
             }
         }
 

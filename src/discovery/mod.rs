@@ -1,24 +1,28 @@
-//! UDP multicast broker discovery (control plane).
+//! HTTP API broker discovery (control plane).
 //!
-//! Brokers periodically announce [`BrokerAnnouncement`] as a pure protobuf
-//! payload. Clients decode + validate (`magic` / `schema_version`), then
+//! Brokers expose [`GET /api/v1/discover`](crate::discovery::DiscoverResponse) on the
+//! API listen port (default `15770`). Clients fetch that JSON, then
 //! [`BrokerAnnouncement::apply`] fills location fields on a user-chosen
 //! [`crate::NodeOptions`] transport (`tcp` / `ipc` / `inproc` / `grpc`).
+//!
+//! UDP multicast announce is deprecated and no longer started by the broker.
 
-mod announce;
 mod config;
-mod listen;
+mod http;
 mod net;
 mod packet;
 
-pub use announce::resolve_advertise_host;
-pub use announce::{AnnounceHandle, AnnouncerPayload, spawn_announcer};
+#[allow(deprecated)]
 pub use config::{
-    DEFAULT_DISCOVERY_INTERVAL, DEFAULT_DISCOVERY_PORT, DEFAULT_DISCOVERY_TIMEOUT,
-    DEFAULT_MULTICAST_ADDR, DiscoverOpts, DiscoveryConfig, MAGIC, SCHEMA_VERSION,
+    DEFAULT_API_DISCOVER_PATH, DEFAULT_DISCOVERY_TIMEOUT, DEFAULT_MULTICAST_ADDR,
+    DiscoverOpts, DiscoveryConfig, MAGIC, SCHEMA_VERSION,
 };
-pub use listen::wait;
-pub use net::tcp_port_from_bind;
+#[allow(deprecated)]
+pub use config::DEFAULT_DISCOVERY_PORT;
+pub use http::{
+    DiscoverResponse, fetch_discover, normalize_api_base, rewrite_bind_host,
+};
+pub use net::{infer_advertise_host, resolve_advertise_host, tcp_port_from_bind};
 pub use packet::{BrokerAnnouncement, decode_announce, encode_announce, try_parse_datagram};
 
 use crate::errors::{BusError, Result};
@@ -28,6 +32,11 @@ use crate::transports::{
     SERVICE_FRONTEND_CHANNEL, XPUB_CHANNEL, XSUB_CHANNEL, inproc_endpoint_with_prefix,
     ipc_endpoint_in, tcp_endpoint,
 };
+
+/// Client wait: HTTP GET `/api/v1/discover` on the broker API port.
+pub fn wait(opts: DiscoverOpts) -> Result<BrokerAnnouncement> {
+    http::wait(opts)
+}
 
 impl BrokerAnnouncement {
     /// Fill location fields on `opts` while keeping the user's chosen transport.
@@ -161,7 +170,7 @@ impl BrokerAnnouncement {
         let url = self
             .grpc_url
             .as_deref()
-            .ok_or_else(|| BusError::Protocol("discovery announce has no grpc_url".into()))?;
+            .ok_or_else(|| BusError::Protocol("discovery announce has no grpc_url / apiUrl".into()))?;
         if opts.grpc_url.is_none() {
             opts.grpc_url = Some(url.to_string());
         }
@@ -175,7 +184,7 @@ fn port_u16(port: u32, name: &str) -> Result<u16> {
 }
 
 impl NodeOptions {
-    /// Wait for a broker announce, then apply it onto this options value.
+    /// Wait for a broker discover response, then apply it onto this options value.
     pub fn discover(self, opts: DiscoverOpts) -> Result<Self> {
         wait(opts)?.apply(self)
     }

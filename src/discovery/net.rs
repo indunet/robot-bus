@@ -1,44 +1,8 @@
-//! Multicast UDP socket helpers.
+//! Host inference and TCP bind parsing.
 
-use std::io;
-use std::net::{Ipv4Addr, SocketAddr, SocketAddrV4, UdpSocket};
-use std::time::Duration;
+use std::net::UdpSocket;
 
-use socket2::{Domain, Protocol, Socket, Type};
-
-/// Socket that joins `multicast_addr` on `port` for receiving announces.
-pub fn join_multicast_receiver(multicast_addr: Ipv4Addr, port: u16) -> io::Result<UdpSocket> {
-    let socket = Socket::new(Domain::IPV4, Type::DGRAM, Some(Protocol::UDP))?;
-    socket.set_reuse_address(true)?;
-    #[cfg(unix)]
-    {
-        let _ = socket.set_reuse_port(true);
-    }
-    socket.set_nonblocking(false)?;
-    let bind_addr = SocketAddrV4::new(Ipv4Addr::UNSPECIFIED, port);
-    socket.bind(&SocketAddr::from(bind_addr).into())?;
-    socket.join_multicast_v4(&multicast_addr, &Ipv4Addr::UNSPECIFIED)?;
-    socket.set_multicast_loop_v4(true)?;
-    Ok(socket.into())
-}
-
-/// Socket for sending announces to the multicast group.
-pub fn multicast_sender(
-    multicast_addr: Ipv4Addr,
-    port: u16,
-) -> io::Result<(UdpSocket, SocketAddr)> {
-    let socket = Socket::new(Domain::IPV4, Type::DGRAM, Some(Protocol::UDP))?;
-    socket.set_reuse_address(true)?;
-    socket.bind(&SocketAddr::from(SocketAddrV4::new(Ipv4Addr::UNSPECIFIED, 0)).into())?;
-    socket.set_multicast_loop_v4(true)?;
-    socket.set_multicast_ttl_v4(1)?;
-    let dest = SocketAddr::from(SocketAddrV4::new(multicast_addr, port));
-    Ok((socket.into(), dest))
-}
-
-pub fn set_read_timeout(sock: &UdpSocket, timeout: Option<Duration>) -> io::Result<()> {
-    sock.set_read_timeout(timeout)
-}
+use super::config::DiscoveryConfig;
 
 /// Best-effort non-loopback IPv4 for advertise_host; falls back to 127.0.0.1.
 pub fn infer_advertise_host() -> String {
@@ -56,6 +20,15 @@ pub fn infer_advertise_host() -> String {
         }
     }
     "127.0.0.1".to_string()
+}
+
+/// Resolve advertise host from config or inference.
+pub fn resolve_advertise_host(config: &DiscoveryConfig) -> String {
+    config
+        .advertise_host
+        .clone()
+        .filter(|s| !s.is_empty() && s != "0.0.0.0" && s != "*")
+        .unwrap_or_else(infer_advertise_host)
 }
 
 /// Parse TCP port from a ZMQ bind endpoint (`tcp://host:port`).

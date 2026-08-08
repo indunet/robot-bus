@@ -1,15 +1,15 @@
-//! Port defaults for the service bus broker.
+//! Service-bus bind defaults.
 //!
-//! Distinct from `message_bus` (15560/15561) to avoid collisions.
+//! TCP defaults use port `0` so the OS assigns a free port at bind time.
 
-pub const FRONTEND_PORT: u16 = 15662;
-pub const BACKEND_PORT: u16 = 15663;
+pub const FRONTEND_PORT: u16 = 0;
+pub const BACKEND_PORT: u16 = 0;
 
 pub const FRONTEND_CHANNEL: &str = "service_bus/frontend";
 pub const BACKEND_CHANNEL: &str = "service_bus/backend";
 
-pub const DEFAULT_FRONTEND_BIND: &str = "tcp://0.0.0.0:15662";
-pub const DEFAULT_BACKEND_BIND: &str = "tcp://0.0.0.0:15663";
+pub const DEFAULT_FRONTEND_BIND: &str = "tcp://0.0.0.0:0";
+pub const DEFAULT_BACKEND_BIND: &str = "tcp://0.0.0.0:0";
 
 /// Request/response traffic is not a real-time stream; allow a slightly deeper
 /// queue than `message_bus` (which uses 2 to prefer dropping over buffering).

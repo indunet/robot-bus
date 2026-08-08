@@ -15,12 +15,10 @@ use super::action_bus::{self, ActionBusConfig, ActionMetrics};
 use super::message_bus::{self, BusConfig, MessageMetrics};
 use super::service_bus::{self, ServiceBusConfig, ServiceMetrics};
 use crate::discovery::{
-    AnnounceHandle, AnnouncerPayload, BrokerAnnouncement, DiscoveryConfig, resolve_advertise_host,
-    spawn_announcer, tcp_port_from_bind,
+    DiscoverResponse, DiscoveryConfig, resolve_advertise_host, rewrite_bind_host,
 };
-use crate::generated::robot_bus_interface::msg::v1::TcpPorts;
 use crate::runtime::Context as BusContext;
-use crate::transports::IPC_DIR;
+use crate::transports::BindAllOpts;
 
 #[cfg(feature = "console")]
 use crate::bot_sim::{BotSimEndpoints, BotSimManager};
@@ -74,15 +72,23 @@ impl MessageBusBroker {
         config: BusConfig,
         metrics: Option<Arc<MessageMetrics>>,
     ) -> Result<Self> {
-        let xsub_bind = config.xsub_bind.clone();
-        let xpub_bind = config.xpub_bind.clone();
         // Always keep an Arc for `self.metrics` (console may read zeros if unused).
         let stored = metrics.clone().unwrap_or_else(MessageMetrics::new);
         let shutdown = Arc::new(AtomicBool::new(false));
         let shutdown_flag = shutdown.clone();
+        let (bound_tx, bound_rx) = std::sync::mpsc::sync_channel(1);
         let handle = thread::spawn(move || {
-            message_bus::run_with_shutdown_ctx(zmq, config, shutdown_flag, metrics)
+            message_bus::run_with_shutdown_ctx_bound(
+                zmq,
+                config,
+                shutdown_flag,
+                metrics,
+                Some(bound_tx),
+            )
         });
+        let (xsub_bind, xpub_bind) = bound_rx
+            .recv_timeout(Duration::from_secs(5))
+            .map_err(|_| anyhow!("message bus failed to report bound endpoints"))?;
         thread::sleep(STARTUP_SETTLE);
         Ok(Self {
             xsub_bind,
@@ -128,14 +134,22 @@ impl ServiceBusBroker {
         config: ServiceBusConfig,
         metrics: Option<Arc<ServiceMetrics>>,
     ) -> Result<Self> {
-        let frontend_bind = config.frontend_bind.clone();
-        let backend_bind = config.backend_bind.clone();
         let stored = metrics.clone().unwrap_or_else(ServiceMetrics::new);
         let shutdown = Arc::new(AtomicBool::new(false));
         let shutdown_flag = shutdown.clone();
+        let (bound_tx, bound_rx) = std::sync::mpsc::sync_channel(1);
         let handle = thread::spawn(move || {
-            service_bus::run_with_shutdown_ctx(zmq, config, shutdown_flag, metrics)
+            service_bus::run_with_shutdown_ctx_bound(
+                zmq,
+                config,
+                shutdown_flag,
+                metrics,
+                Some(bound_tx),
+            )
         });
+        let (frontend_bind, backend_bind) = bound_rx
+            .recv_timeout(Duration::from_secs(5))
+            .map_err(|_| anyhow!("service bus failed to report bound endpoints"))?;
         thread::sleep(STARTUP_SETTLE);
         Ok(Self {
             frontend_bind,
@@ -181,14 +195,22 @@ impl ActionBusBroker {
         config: ActionBusConfig,
         metrics: Option<Arc<ActionMetrics>>,
     ) -> Result<Self> {
-        let frontend_bind = config.frontend_bind.clone();
-        let backend_bind = config.backend_bind.clone();
         let stored = metrics.clone().unwrap_or_else(ActionMetrics::new);
         let shutdown = Arc::new(AtomicBool::new(false));
         let shutdown_flag = shutdown.clone();
+        let (bound_tx, bound_rx) = std::sync::mpsc::sync_channel(1);
         let handle = thread::spawn(move || {
-            action_bus::run_with_shutdown_ctx(zmq, config, shutdown_flag, metrics)
+            action_bus::run_with_shutdown_ctx_bound(
+                zmq,
+                config,
+                shutdown_flag,
+                metrics,
+                Some(bound_tx),
+            )
         });
+        let (frontend_bind, backend_bind) = bound_rx
+            .recv_timeout(Duration::from_secs(5))
+            .map_err(|_| anyhow!("action bus failed to report bound endpoints"))?;
         thread::sleep(STARTUP_SETTLE);
         Ok(Self {
             frontend_bind,
@@ -435,7 +457,6 @@ pub struct RobotBusBroker {
     pub message: MessageBusBroker,
     pub service: ServiceBusBroker,
     pub action: ActionBusBroker,
-    discovery: Option<AnnounceHandle>,
     #[cfg(feature = "grpc")]
     grpc: GrpcGatewayHandle,
     /// Console-only HTTP server; `None` when `grpc` is enabled (console shares its port)
@@ -450,6 +471,8 @@ pub struct RobotBusBroker {
     console_listen: Option<SocketAddr>,
     #[cfg(feature = "console")]
     bot_sim: Option<Arc<BotSimManager>>,
+    /// Snapshot served at `GET /api/v1/discover`.
+    pub discover: DiscoverResponse,
 }
 
 impl RobotBusBroker {
@@ -464,6 +487,12 @@ impl RobotBusBroker {
     /// Start buses using a shared [`crate::Context`] (required for inproc with SDK Nodes).
     pub fn start_with_context(context: BusContext, mut config: RobotBusConfig) -> Result<Self> {
         let broker_id = normalize_broker_id(&mut config);
+        let bind_opts = BindAllOpts::for_broker(&broker_id);
+        config.message.bind_opts = bind_opts.clone();
+        config.service.bind_opts = bind_opts.clone();
+        config.action.bind_opts = bind_opts.clone();
+
+        let advertise_host = resolve_advertise_host(&config.discovery);
         let zmq = context.clone_zmq();
         // Capture metrics only when the console will read them — otherwise keep
         // the message bus on a plain proxy_steerable with zero monitoring overhead.
@@ -489,6 +518,61 @@ impl RobotBusBroker {
         let service =
             ServiceBusBroker::start_with_zmq(zmq.clone(), config.service.clone(), service_metrics)?;
         let action = ActionBusBroker::start_with_zmq(zmq, config.action.clone(), action_metrics)?;
+
+        let api_listen = {
+            #[cfg(feature = "grpc")]
+            {
+                config.grpc.listen
+            }
+            #[cfg(all(not(feature = "grpc"), feature = "console"))]
+            {
+                config.console.listen
+            }
+            #[cfg(all(not(feature = "grpc"), not(feature = "console")))]
+            {
+                "0.0.0.0:15770"
+                    .parse::<SocketAddr>()
+                    .expect("default api listen")
+            }
+        };
+        let api_url = format!("http://{advertise_host}:{}", api_listen.port());
+        let msg_xsub = rewrite_bind_host(&message.xsub_bind, &advertise_host);
+        let msg_xpub = rewrite_bind_host(&message.xpub_bind, &advertise_host);
+        let svc_fe = rewrite_bind_host(&service.frontend_bind, &advertise_host);
+        let svc_be = rewrite_bind_host(&service.backend_bind, &advertise_host);
+        let act_fe = rewrite_bind_host(&action.frontend_bind, &advertise_host);
+        let act_be = rewrite_bind_host(&action.backend_bind, &advertise_host);
+        let discover = DiscoverResponse {
+            broker_id: broker_id.clone(),
+            domain_id: config.discovery.domain_id,
+            advertise_host: advertise_host.clone(),
+            api_url: api_url.clone(),
+            message_xsub: msg_xsub.clone(),
+            message_xpub: msg_xpub.clone(),
+            service_frontend: svc_fe.clone(),
+            service_backend: svc_be.clone(),
+            action_frontend: act_fe.clone(),
+            action_backend: act_be.clone(),
+            ipc_dir: config
+                .message
+                .bind_all_transports
+                .then(|| bind_opts.ipc_dir.clone()),
+            inproc_prefix: config
+                .message
+                .bind_all_transports
+                .then(|| bind_opts.inproc_prefix.clone()),
+            grpc_url: Some(api_url.clone()),
+            console_url: {
+                #[cfg(feature = "console")]
+                {
+                    config.console.enabled.then(|| api_url.clone())
+                }
+                #[cfg(not(feature = "console"))]
+                {
+                    None
+                }
+            },
+        };
 
         // Build console state before starting the gRPC gateway — when both features
         // are enabled, REST + static UI routes merge onto the same listener below.
@@ -523,6 +607,7 @@ impl RobotBusBroker {
                 act_be: action.backend_bind.clone(),
                 grpc: grpc_addr,
                 web: web_addr,
+                discover: discover.clone(),
             };
             let bot_sim = BotSimManager::new(BotSimEndpoints {
                 message_xsub: bind_to_connect(&message.xsub_bind),
@@ -550,6 +635,21 @@ impl RobotBusBroker {
                 service_frontend: bind_to_connect(&service.frontend_bind),
                 action_frontend: bind_to_connect(&action.frontend_bind),
                 cors_origins: config.grpc.cors_origins.clone(),
+                // When console is on, discover is served from console api_router.
+                discover: {
+                    #[cfg(feature = "console")]
+                    {
+                        if console_state.is_none() {
+                            Some(Arc::new(discover.clone()))
+                        } else {
+                            None
+                        }
+                    }
+                    #[cfg(not(feature = "console"))]
+                    {
+                        Some(Arc::new(discover.clone()))
+                    }
+                },
                 #[cfg(feature = "console")]
                 console: console_state.clone(),
             };
@@ -603,86 +703,6 @@ impl RobotBusBroker {
             None
         };
 
-        let discovery = if config.discovery.enabled {
-            let advertise_host = resolve_advertise_host(&config.discovery);
-            let bind_all = config.message.bind_all_transports;
-            let tcp = TcpPorts {
-                message_xsub: tcp_port_from_bind(&config.message.xsub_bind)
-                    .unwrap_or(crate::transports::XSUB_PORT) as u32,
-                message_xpub: tcp_port_from_bind(&config.message.xpub_bind)
-                    .unwrap_or(crate::transports::XPUB_PORT) as u32,
-                service_frontend: tcp_port_from_bind(&config.service.frontend_bind)
-                    .unwrap_or(crate::transports::SERVICE_FRONTEND_PORT)
-                    as u32,
-                service_backend: tcp_port_from_bind(&config.service.backend_bind)
-                    .unwrap_or(crate::transports::SERVICE_BACKEND_PORT)
-                    as u32,
-                action_frontend: tcp_port_from_bind(&config.action.frontend_bind)
-                    .unwrap_or(crate::transports::ACTION_FRONTEND_PORT)
-                    as u32,
-                action_backend: tcp_port_from_bind(&config.action.backend_bind)
-                    .unwrap_or(crate::transports::ACTION_BACKEND_PORT)
-                    as u32,
-            };
-            let grpc_url = {
-                #[cfg(feature = "grpc")]
-                {
-                    Some(format!(
-                        "http://{advertise_host}:{}",
-                        config.grpc.listen.port()
-                    ))
-                }
-                #[cfg(not(feature = "grpc"))]
-                {
-                    let _ = &advertise_host;
-                    None
-                }
-            };
-            let console_url = {
-                // When both features are enabled, the console shares the gRPC
-                // listener — reuse `grpc_url` instead of recomputing it.
-                #[cfg(all(feature = "console", feature = "grpc"))]
-                {
-                    if config.console.enabled {
-                        grpc_url.clone()
-                    } else {
-                        None
-                    }
-                }
-                #[cfg(all(feature = "console", not(feature = "grpc")))]
-                {
-                    if config.console.enabled {
-                        Some(format!(
-                            "http://{advertise_host}:{}",
-                            config.console.listen.port()
-                        ))
-                    } else {
-                        None
-                    }
-                }
-                #[cfg(not(feature = "console"))]
-                {
-                    None
-                }
-            };
-            let announcement = BrokerAnnouncement {
-                broker_id: broker_id.clone(),
-                domain_id: config.discovery.domain_id,
-                advertise_host,
-                tcp: Some(tcp),
-                ipc_dir: bind_all.then(|| IPC_DIR.to_string()),
-                inproc_prefix: bind_all.then(|| "robot_bus".to_string()),
-                grpc_url,
-                console_url,
-            };
-            Some(
-                spawn_announcer(config.discovery.clone(), AnnouncerPayload { announcement })
-                    .map_err(|e| anyhow!("start discovery announcer: {e}"))?,
-            )
-        } else {
-            None
-        };
-
         #[cfg(feature = "console")]
         let bot_sim = console_state.as_ref().map(|s| Arc::clone(&s.bot_sim));
 
@@ -690,7 +710,6 @@ impl RobotBusBroker {
             message,
             service,
             action,
-            discovery,
             #[cfg(feature = "grpc")]
             grpc,
             #[cfg(all(feature = "console", not(feature = "grpc")))]
@@ -703,6 +722,7 @@ impl RobotBusBroker {
             console_listen,
             #[cfg(feature = "console")]
             bot_sim,
+            discover,
         })
     }
 
@@ -729,11 +749,6 @@ impl RobotBusBroker {
 
     /// Stop all buses (and gRPC / console) and join their threads.
     pub fn stop(self) -> Result<()> {
-        // Stop in reverse start order; collect first error.
-        if let Some(d) = self.discovery {
-            d.stop();
-        }
-
         // Ask the console background threads to wind down before tearing down
         // the gateway they publish/subscribe through; give them a moment to
         // notice before we start joining anything.

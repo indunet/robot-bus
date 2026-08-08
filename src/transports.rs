@@ -1,10 +1,11 @@
 //! Multi-transport endpoints: TCP (remote), inproc (same process), ipc (local machine).
 
-use anyhow::{Context, Result};
+use anyhow::{Context, Result, bail};
 use std::fs;
 use std::path::Path;
 use zmq::Socket;
 
+/// Legacy fixed TCP ports (pre-ephemeral). Prefer discover / explicit binds.
 pub const XSUB_PORT: u16 = 15560;
 pub const XPUB_PORT: u16 = 15561;
 pub const SERVICE_FRONTEND_PORT: u16 = 15662;
@@ -21,6 +22,36 @@ pub const ACTION_BACKEND_CHANNEL: &str = "action_bus/backend";
 
 /// Directory for ipc endpoint files (`ipc:///tmp/robot_bus/*.ipc`).
 pub const IPC_DIR: &str = "/tmp/robot_bus";
+
+/// Default API listen port (gRPC + WS + console + discover).
+pub const DEFAULT_API_PORT: u16 = 15770;
+
+/// Options for multi-transport bind (tcp + optional inproc/ipc).
+#[derive(Clone, Debug)]
+pub struct BindAllOpts {
+    /// IPC directory (default [`IPC_DIR`]). Uniquify with broker id for multi-broker hosts.
+    pub ipc_dir: String,
+    /// Inproc prefix (default `robot_bus`).
+    pub inproc_prefix: String,
+}
+
+impl Default for BindAllOpts {
+    fn default() -> Self {
+        Self {
+            ipc_dir: IPC_DIR.to_string(),
+            inproc_prefix: "robot_bus".to_string(),
+        }
+    }
+}
+
+impl BindAllOpts {
+    pub fn for_broker(broker_id: &str) -> Self {
+        Self {
+            ipc_dir: format!("{IPC_DIR}/{broker_id}"),
+            inproc_prefix: "robot_bus".to_string(),
+        }
+    }
+}
 
 /// Stable in-process endpoint for a logical channel (e.g. `message_bus/xsub`).
 pub fn inproc_endpoint(channel: &str) -> String {
@@ -54,18 +85,50 @@ pub fn tcp_endpoint(host: &str, port: u16) -> String {
     format!("tcp://{host}:{port}")
 }
 
-/// Bind `tcp_endpoint` plus matching inproc/ipc endpoints on the same socket.
-pub fn bind_all(socket: &Socket, tcp_endpoint: &str, channel: &str) -> Result<Vec<String>> {
-    ensure_ipc_dir()?;
-    let endpoints = [
-        tcp_endpoint.to_string(),
-        inproc_endpoint(channel),
-        ipc_endpoint(channel),
-    ];
-    for ep in &endpoints {
-        socket.bind(ep).with_context(|| format!("bind {ep}"))?;
+/// Read the last bound endpoint (resolves `tcp://…:0` to the OS-assigned port).
+pub fn last_endpoint(socket: &Socket) -> Result<String> {
+    match socket
+        .get_last_endpoint()
+        .context("get_last_endpoint after bind")?
+    {
+        Ok(s) => Ok(s),
+        Err(_) => bail!("last endpoint is not valid UTF-8"),
     }
-    Ok(endpoints.to_vec())
+}
+
+/// Bind TCP (resolving `:0`), then matching inproc/ipc aliases on the same socket.
+///
+/// Returns `(resolved_tcp, all_endpoints)` where `resolved_tcp` is the concrete
+/// `tcp://…:port` after ephemeral allocation.
+pub fn bind_all(
+    socket: &Socket,
+    tcp_bind: &str,
+    channel: &str,
+    opts: &BindAllOpts,
+) -> Result<(String, Vec<String>)> {
+    ensure_ipc_dir(&opts.ipc_dir)?;
+    socket
+        .bind(tcp_bind)
+        .with_context(|| format!("bind {tcp_bind}"))?;
+    let resolved_tcp = last_endpoint(socket)?;
+    let inproc = inproc_endpoint_with_prefix(&opts.inproc_prefix, channel);
+    let ipc = ipc_endpoint_in(&opts.ipc_dir, channel);
+    socket
+        .bind(&inproc)
+        .with_context(|| format!("bind {inproc}"))?;
+    socket.bind(&ipc).with_context(|| format!("bind {ipc}"))?;
+    Ok((
+        resolved_tcp.clone(),
+        vec![resolved_tcp, inproc, ipc],
+    ))
+}
+
+/// Bind a single TCP endpoint and return the resolved address (`:0` → real port).
+pub fn bind_tcp(socket: &Socket, tcp_bind: &str) -> Result<String> {
+    socket
+        .bind(tcp_bind)
+        .with_context(|| format!("bind {tcp_bind}"))?;
+    last_endpoint(socket)
 }
 
 /// Format bound endpoints for startup logs.
@@ -80,13 +143,22 @@ fn pick_endpoint(
     transport: &str,
 ) -> std::result::Result<String, String> {
     match transport {
-        "tcp" => Ok(tcp_endpoint(host, port)),
+        "tcp" => {
+            if port == 0 {
+                return Err(
+                    "tcp endpoint port is 0; discover via the broker API (default http://127.0.0.1:15770/api/v1/discover) or set endpoints explicitly"
+                        .into(),
+                );
+            }
+            Ok(tcp_endpoint(host, port))
+        }
         "inproc" => Ok(inproc_endpoint(channel)),
         "ipc" => Ok(ipc_endpoint(channel)),
         other => Err(format!("unknown transport: {other:?}")),
     }
 }
 
+/// Legacy helper: fixed historical TCP ports. Prefer HTTP discover for ephemeral brokers.
 pub fn message_xsub_endpoint(host: &str, transport: &str) -> std::result::Result<String, String> {
     pick_endpoint(host, XSUB_PORT, XSUB_CHANNEL, transport)
 }
@@ -135,8 +207,8 @@ pub fn action_backend_endpoint(host: &str, transport: &str) -> std::result::Resu
     pick_endpoint(host, ACTION_BACKEND_PORT, ACTION_BACKEND_CHANNEL, transport)
 }
 
-fn ensure_ipc_dir() -> Result<()> {
-    fs::create_dir_all(Path::new(IPC_DIR)).context("create ipc directory")?;
+fn ensure_ipc_dir(dir: &str) -> Result<()> {
+    fs::create_dir_all(Path::new(dir)).with_context(|| format!("create ipc directory {dir}"))?;
     Ok(())
 }
 
@@ -178,5 +250,12 @@ mod tests {
             ipc_endpoint_in("/var/run/robot_bus", "message_bus/xsub"),
             "ipc:///var/run/robot_bus/message_bus_xsub.ipc"
         );
+    }
+
+    #[test]
+    fn broker_ipc_dir_is_namespaced() {
+        let opts = BindAllOpts::for_broker("abc");
+        assert_eq!(opts.ipc_dir, "/tmp/robot_bus/abc");
+        assert_eq!(opts.inproc_prefix, "robot_bus");
     }
 }

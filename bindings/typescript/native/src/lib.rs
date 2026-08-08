@@ -633,7 +633,7 @@ impl Node {
         }
     }
 
-    /// Discover a broker via UDP multicast, then connect with `transport`.
+    /// Discover a broker via HTTP `GET /api/v1/discover`, then connect with `transport`.
     #[napi(factory)]
     pub fn discover(name: String, options: Option<DiscoverNodeOptions>) -> Result<Self> {
         let o = options.unwrap_or_default();
@@ -648,20 +648,12 @@ impl Node {
             }
         };
         let mut opts = RustDiscoverOpts {
-            domain_id: o.domain_id.unwrap_or(0),
             broker_id: o.broker_id.filter(|s| !s.is_empty()),
             ..Default::default()
         };
-        if let Some(addr) = o.multicast_addr.as_deref() {
-            if !addr.is_empty() {
-                opts.multicast_addr = addr
-                    .parse()
-                    .map_err(|e| Error::from_reason(format!("invalid multicast_addr: {e}")))?;
-            }
-        }
-        if let Some(port) = o.multicast_port {
-            if port != 0 {
-                opts.multicast_port = port as u16;
+        if let Some(url) = o.api_url {
+            if !url.is_empty() {
+                opts.api_url = url;
             }
         }
         if let Some(timeout) = o.timeout_secs {
@@ -1117,10 +1109,8 @@ impl MultiThreadedExecutor {
 #[derive(Default)]
 pub struct DiscoverNodeOptions {
     pub transport: Option<String>,
-    pub domain_id: Option<u32>,
+    pub api_url: Option<String>,
     pub broker_id: Option<String>,
-    pub multicast_addr: Option<String>,
-    pub multicast_port: Option<u32>,
     pub timeout_secs: Option<f64>,
 }
 
@@ -1148,6 +1138,7 @@ pub struct BrokerStartOptions {
     pub heartbeat_interval_ms: Option<u32>,
     pub heartbeat_timeout_ms: Option<u32>,
     pub tcp_only: Option<bool>,
+    pub api_listen: Option<String>,
     pub grpc_listen: Option<String>,
     pub cors_origins: Option<Vec<String>>,
     pub console_listen: Option<String>,
@@ -1156,11 +1147,10 @@ pub struct BrokerStartOptions {
     pub message_peers: Option<Vec<String>>,
     pub service_peers: Option<Vec<String>>,
     pub action_peers: Option<Vec<String>>,
+    pub peers: Option<Vec<String>>,
     pub domain_id: Option<u32>,
     pub no_discovery: Option<bool>,
     pub advertise_host: Option<String>,
-    pub discovery_addr: Option<String>,
-    pub discovery_port: Option<u32>,
 }
 
 #[napi]
@@ -1251,11 +1241,6 @@ impl RobotBusBroker {
                 config.service.bind_all_transports = false;
                 config.action.bind_all_transports = false;
             }
-            if let Some(v) = o.grpc_listen {
-                config.grpc.listen = v
-                    .parse()
-                    .map_err(|e| Error::from_reason(format!("invalid grpc_listen: {e}")))?;
-            }
             if let Some(v) = o.cors_origins {
                 config.grpc.cors_origins = v;
             }
@@ -1276,6 +1261,9 @@ impl RobotBusBroker {
                 o.action_peers.as_deref().unwrap_or(&[]),
             )
             .map_err(anyhow_err)?;
+            if let Some(peers) = &o.peers {
+                robot_bus::apply_api_peers(&mut config, peers).map_err(anyhow_err)?;
+            }
             if o.no_discovery.unwrap_or(false) {
                 config.discovery.enabled = false;
             }
@@ -1287,16 +1275,12 @@ impl RobotBusBroker {
                     config.discovery.advertise_host = Some(v);
                 }
             }
-            if let Some(v) = o.discovery_addr {
+            if let Some(v) = o.api_listen.or(o.grpc_listen) {
                 if !v.is_empty() {
-                    config.discovery.multicast_addr = v.parse().map_err(|e| {
-                        Error::from_reason(format!("invalid discovery_addr: {e}"))
-                    })?;
-                }
-            }
-            if let Some(port) = o.discovery_port {
-                if port != 0 {
-                    config.discovery.multicast_port = port as u16;
+                    config.grpc.listen = v
+                        .parse()
+                        .map_err(|e| Error::from_reason(format!("invalid api_listen: {e}")))?;
+                    config.console.listen = config.grpc.listen;
                 }
             }
         }

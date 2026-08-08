@@ -157,6 +157,10 @@ pub async fn status(Extension(state): Extension<Arc<ConsoleState>>) -> impl Into
     })
 }
 
+pub async fn discover(Extension(state): Extension<Arc<ConsoleState>>) -> impl IntoResponse {
+    Json(state.endpoints.discover.clone())
+}
+
 pub async fn topics(Extension(state): Extension<Arc<ConsoleState>>) -> impl IntoResponse {
     Json(TopicsEnvelope {
         topics: merge_topics(&state),

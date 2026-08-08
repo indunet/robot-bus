@@ -10,50 +10,46 @@ robot-bus = "0.1.6"
 
 ## Broker 启动
 
-运行示例前先起 broker（也可进程内嵌入，见下文）。默认一次启动 **message / service / action** 三条总线，每个 socket 同时 bind **tcp + ipc + inproc**，并启动 **grpc / WebSocket RPC（`/ws`）** 与 **console http**（控制台）。
+运行示例前先起 broker（也可进程内嵌入，见下文）。默认一次启动 **message / service / action** 三条总线；每条 TCP 默认 bind `…:0`（由操作系统分配空闲端口），并启动 **API**（gRPC / WebSocket RPC `/ws` / `GET /api/v1/discover` / console http），默认 `0.0.0.0:15770`。
 
 ```bash
 cargo run --bin robot_bus_broker
 # 查看参数：cargo run --bin robot_bus_broker -- --help
 # 只要 TCP：加 --tcp-only
-# 发现：--domain-id N / --advertise-host HOST / --no-discovery
+# API 口：--api-listen 0.0.0.0:15770（别名 --grpc-listen / --console-listen）
+# 对外可达主机：--advertise-host HOST
+# 邦联：--peer 10.0.0.2:15770（对端 API 口；可重复）
 ```
 
 **默认端点：**
 
 | 角色 | tcp | ipc | inproc |
 |------|-----|-----|--------|
-| message XSUB | `tcp://0.0.0.0:15560` | `ipc:///tmp/robot_bus/message_bus_xsub.ipc` | `inproc://robot_bus/message_bus/xsub` |
-| message XPUB | `tcp://0.0.0.0:15561` | `ipc:///tmp/robot_bus/message_bus_xpub.ipc` | `inproc://robot_bus/message_bus/xpub` |
-| service frontend | `tcp://0.0.0.0:15662` | `ipc:///tmp/robot_bus/service_bus_frontend.ipc` | `inproc://robot_bus/service_bus/frontend` |
-| service backend | `tcp://0.0.0.0:15663` | `ipc:///tmp/robot_bus/service_bus_backend.ipc` | `inproc://robot_bus/service_bus/backend` |
-| action frontend | `tcp://0.0.0.0:15664` | `ipc:///tmp/robot_bus/action_bus_frontend.ipc` | `inproc://robot_bus/action_bus/frontend` |
-| action backend | `tcp://0.0.0.0:15665` | `ipc:///tmp/robot_bus/action_bus_backend.ipc` | `inproc://robot_bus/action_bus/backend` |
-| grpc + WS `/ws` | `0.0.0.0:15770` | — | — |
-| console http | `0.0.0.0:15770` | — | — |
-| discovery (UDP multicast) | `239.255.76.67:15550` | — | — |
+| message XSUB / XPUB | `tcp://0.0.0.0:0`（启动后解析为实际端口） | `ipc:///tmp/robot_bus/<broker_id>/…` | `inproc://robot_bus/…` |
+| service FE / BE | `tcp://0.0.0.0:0` | 同上 | 同上 |
+| action FE / BE | `tcp://0.0.0.0:0` | 同上 | 同上 |
+| API（gRPC + WS + discover + console） | `0.0.0.0:15770` | — | — |
 
-SDK 侧 `Node::new` 默认连本机 **tcp**（`localhost` + 上表端口）；`Node::ipc` / `Node::inproc` / `Node::grpc` 分别走对应传输。
+仍可用 `--message-xsub-bind` 等手动固定总线端口。SDK 侧 `Node::new` 默认连本机 **tcp**，并在端点未填时自动对 `http://127.0.0.1:15770` 做 discover；`Node::ipc` / `Node::inproc` / `Node::grpc` 分别走对应传输。
 
-### UDP 发现（填地址，不选传输）
+### HTTP 发现（填地址，不选传输）
 
-Broker 默认周期广播 protobuf `BrokerAnnounce`（`proto/robot_bus_interface/msg/v1/announce.proto`）。`decode` 失败或消息内 `magic != "RBUS"` 视为无效丢弃。与 ROS 2 DDS 发现端口段（`7400 + 250 * domainId`）互不冲突。
-
-传输方式仍由你指定；发现只填充位置：
+对已知 API 口请求 `GET /api/v1/discover`，拿到可连接的 ZMQ 端点。传输方式仍由你指定；发现只填充位置：
 
 ```rust
 use robot_bus::{DiscoverOpts, Node, NodeOptions};
 
-// tcp / ipc / inproc / grpc 均可；discover 只填 host / 路径 / URL
 let opts = NodeOptions::tcp().discover(DiscoverOpts {
-    domain_id: 0,
-    broker_id: None, // 同 domain 多于一个 broker 时必填
+    api_url: "http://127.0.0.1:15770".into(),
+    broker_id: None, // 可选过滤
     ..Default::default()
 })?;
 let mut node = Node::with_options("talker", opts);
 ```
 
 或分两步：`discovery::wait(opts)?` → `ann.apply(NodeOptions::grpc())?`。
+
+UDP 组播发现已移除。
 
 **同进程 inproc：** ZeroMQ 的 `inproc://` 是 context-local。嵌入式 broker 与 Node 必须共用同一个 [`Context`](../src/runtime/context.rs)：
 
@@ -69,7 +65,7 @@ broker.stop()?;
 
 `RobotBusBroker::start(config)` 仍可用（内部自建 Context）；跨进程 tcp/ipc 不要求共享。
 
-跨 broker（federation）：在 `RobotBusConfig` 的 message/service/action 上设置 `broker_id` 与 `peers`（`MessagePeer` / `ServicePeer` / `ActionPeer`），或 CLI `--broker-id` / `--message-peer` / `--service-peer` / `--action-peer`。各语言嵌入式 start API 使用同款字符串约定（见对应 `*-api.md`）。Message federation **不会**转发保留命名空间 `/robot_bus`（含 `/robot_bus/status`、topology、bot 等 console 系统 topic），避免多 broker 帮连时状态快照互相覆盖；用户业务 topic 仍按需推送。
+跨 broker（federation）：优先 `--peer HOST:PORT`（对端 API 口，内部会 `GET /api/v1/discover` 填齐 ZMQ peers），或在 `RobotBusConfig` 上设置 `broker_id` 与 `peers`（`MessagePeer` / `ServicePeer` / `ActionPeer`），或 CLI `--broker-id` / `--message-peer` / `--service-peer` / `--action-peer`。各语言嵌入式 start API 使用同款字符串约定（见对应 `*-api.md`）。Message federation **不会**转发保留命名空间 `/robot_bus`（含 `/robot_bus/status`、topology、bot 等 console 系统 topic），避免多 broker 帮连时状态快照互相覆盖；用户业务 topic 仍按需推送。
 
 **进程内嵌入**（不必单独起二进制）：
 
@@ -518,7 +514,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 Proto 包名：`robot_bus_interface.grpc.v1`。见 `proto/robot_bus_interface/grpc/v1/{message,service,action}_gateway.proto`。
 
-UDP 发现：`robot_bus_interface.msg.v1`，见 `proto/robot_bus_interface/msg/v1/announce.proto`。
+HTTP 发现：`GET /api/v1/discover`（JSON）；历史 protobuf `BrokerAnnounce` 仅作兼容编码辅助，UDP 组播路径已移除。
 
 ---
 

@@ -55,6 +55,7 @@ fn federated_action_config(
             xsub_bind: format!("tcp://127.0.0.1:{}", other[0]),
             xpub_bind: format!("tcp://127.0.0.1:{}", other[1]),
             bind_all_transports: false,
+            bind_opts: Default::default(),
             broker_id: broker_id.to_string(),
             ..BusConfig::default()
         },
@@ -62,6 +63,7 @@ fn federated_action_config(
             frontend_bind: format!("tcp://127.0.0.1:{}", other[2]),
             backend_bind: format!("tcp://127.0.0.1:{}", other[3]),
             bind_all_transports: false,
+            bind_opts: Default::default(),
             broker_id: broker_id.to_string(),
             ..ServiceBusConfig::default()
         },
@@ -69,6 +71,7 @@ fn federated_action_config(
             frontend_bind: format!("tcp://127.0.0.1:{}", ports.act_fe),
             backend_bind: format!("tcp://127.0.0.1:{}", ports.act_be),
             bind_all_transports: false,
+            bind_opts: Default::default(),
             broker_id: broker_id.to_string(),
             peers,
             heartbeat_interval_ms: 200,

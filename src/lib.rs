@@ -45,14 +45,18 @@ pub use bot_sim::{
     MULTI_WAYPOINT_NAV_ACTION, POINT_NAV_ACTION, POSE_TOPIC, RESET_SERVICE, WORLD_SIZE,
 };
 pub use broker::{
-    ActionPeer, DiscoveryConfig, MessagePeer, RobotBusBroker, RobotBusConfig, ServicePeer,
-    apply_federation_opts, parse_robot_bus_config, robot_bus_broker_help,
+    ActionPeer, DiscoveryConfig, FederationPeerEndpoints, MessagePeer, RobotBusBroker,
+    RobotBusConfig, ServicePeer, apply_api_peers, apply_federation_opts, parse_robot_bus_config,
+    resolve_peer_from_api, robot_bus_broker_help,
 };
 pub use discovery::{
-    BrokerAnnouncement, DEFAULT_DISCOVERY_PORT, DEFAULT_MULTICAST_ADDR, DiscoverOpts,
+    BrokerAnnouncement, DEFAULT_API_DISCOVER_PATH, DiscoverOpts, DiscoverResponse,
     MAGIC as DISCOVERY_MAGIC, SCHEMA_VERSION as DISCOVERY_SCHEMA_VERSION, decode_announce,
-    encode_announce, wait as discover_wait,
+    encode_announce, fetch_discover, wait as discover_wait,
 };
+
+#[allow(deprecated)]
+pub use discovery::{DEFAULT_DISCOVERY_PORT, DEFAULT_MULTICAST_ADDR};
 
 #[cfg(feature = "grpc")]
 pub use broker::GrpcBrokerConfig;
@@ -71,8 +75,8 @@ pub use runtime::{
 };
 pub use service_bus::{ServiceClient, ServiceWorker};
 pub use transports::{
-    action_backend_endpoint, action_frontend_endpoint, bind_all, format_endpoints, inproc_endpoint,
-    ipc_endpoint, message_xpub_endpoint, message_xsub_endpoint, service_backend_endpoint,
-    service_frontend_endpoint,
+    BindAllOpts, DEFAULT_API_PORT, action_backend_endpoint, action_frontend_endpoint, bind_all,
+    bind_tcp, format_endpoints, inproc_endpoint, ipc_endpoint, message_xpub_endpoint,
+    message_xsub_endpoint, service_backend_endpoint, service_frontend_endpoint,
 };
 pub use zmq_helpers::HighWaterMark;

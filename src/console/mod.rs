@@ -28,8 +28,8 @@ use rust_embed::Embed;
 use tokio::net::TcpListener;
 
 use api::{
-    actions, bot_sim_heartbeat, bot_sim_release, bot_sim_session, bot_sim_status, events, services,
-    status, topic_info, topics, topology,
+    actions, bot_sim_heartbeat, bot_sim_release, bot_sim_session, bot_sim_status, discover, events,
+    services, status, topic_info, topics, topology,
 };
 
 /// Compile-time embedded `assets/console/` (Next.js static export).
@@ -42,6 +42,7 @@ struct Assets;
 pub fn api_router(state: Arc<ConsoleState>) -> Router {
     Router::new()
         .route("/api/v1/status", get(status))
+        .route("/api/v1/discover", get(discover))
         .route("/api/v1/topics", get(topics))
         .route("/api/v1/topics/{*name}", get(topic_info))
         .route("/api/v1/topology", get(topology))

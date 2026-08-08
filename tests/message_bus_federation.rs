@@ -53,6 +53,7 @@ fn federated_bus_config(
             snd_hwm: 100,
             rcv_hwm: 100,
             bind_all_transports: false,
+            bind_opts: Default::default(),
             broker_id: broker_id.to_string(),
             peers,
         },
@@ -60,12 +61,14 @@ fn federated_bus_config(
             frontend_bind: format!("tcp://127.0.0.1:{}", other[0]),
             backend_bind: format!("tcp://127.0.0.1:{}", other[1]),
             bind_all_transports: false,
+            bind_opts: Default::default(),
             ..ServiceBusConfig::default()
         },
         action: ActionBusConfig {
             frontend_bind: format!("tcp://127.0.0.1:{}", other[2]),
             backend_bind: format!("tcp://127.0.0.1:{}", other[3]),
             bind_all_transports: false,
+            bind_opts: Default::default(),
             ..ActionBusConfig::default()
         },
         #[cfg(feature = "grpc")]
@@ -291,6 +294,73 @@ fn reserved_robot_bus_topics_stay_local() {
         recv_exact(&sub_b, b"from-a", Duration::from_secs(2)),
         "fleet/pose",
         "user topics must still federate"
+    );
+
+    broker_a.stop().expect("stop a");
+    broker_b.stop().expect("stop b");
+}
+
+#[test]
+fn federation_peer_via_api_discover() {
+    let _guard = lock_brokers();
+    let ports = alloc_message_broker_ports(2);
+    let a = &ports[0];
+    let b = &ports[1];
+
+    // Bring up both APIs (no federation yet) so each side can be discovered.
+    let mut cfg_a = federated_bus_config("api-peer-a", Vec::new(), a);
+    let mut cfg_b = federated_bus_config("api-peer-b", Vec::new(), b);
+    cfg_a.discovery.advertise_host = Some("127.0.0.1".into());
+    cfg_b.discovery.advertise_host = Some("127.0.0.1".into());
+    #[cfg(feature = "console")]
+    {
+        cfg_a.console.enabled = false;
+        cfg_b.console.enabled = false;
+    }
+    let broker_a = RobotBusBroker::start(cfg_a).expect("broker a");
+    let broker_b = RobotBusBroker::start(cfg_b).expect("broker b");
+    thread::sleep(Duration::from_millis(150));
+
+    let api_a = format!("127.0.0.1:{}", a.other[4]);
+    let api_b = format!("127.0.0.1:{}", b.other[4]);
+    let peer_a = robot_bus::resolve_peer_from_api(&api_a).expect("discover a");
+    let peer_b = robot_bus::resolve_peer_from_api(&api_b).expect("discover b");
+    assert_eq!(peer_a.broker_id, "api-peer-a");
+    assert_eq!(peer_b.broker_id, "api-peer-b");
+    assert_eq!(peer_a.message.xpub, format!("tcp://127.0.0.1:{}", a.xpub));
+    assert_eq!(peer_a.message.xsub, format!("tcp://127.0.0.1:{}", a.xsub));
+
+    broker_a.stop().expect("stop a");
+    broker_b.stop().expect("stop b");
+    thread::sleep(Duration::from_millis(100));
+
+    // Restart with bidirectional peers resolved from /api/v1/discover (not XPUB-1).
+    let broker_a = RobotBusBroker::start(federated_bus_config(
+        "api-peer-a",
+        vec![peer_b.message],
+        a,
+    ))
+    .expect("broker a federated");
+    let broker_b = RobotBusBroker::start(federated_bus_config(
+        "api-peer-b",
+        vec![peer_a.message],
+        b,
+    ))
+    .expect("broker b federated");
+    thread::sleep(Duration::from_millis(200));
+
+    let sub_b = Subscriber::new(Some(&connect_addr(&broker_b.message.xpub_bind))).expect("sub b");
+    sub_b.subscribe("fleet/api_peer").expect("subscribe");
+    thread::sleep(Duration::from_millis(300));
+
+    let pub_a = Publisher::new(Some(&connect_addr(&broker_a.message.xsub_bind))).expect("pub a");
+    thread::sleep(Duration::from_millis(100));
+    pub_a
+        .publish("fleet/api_peer", b"via-api")
+        .expect("publish");
+    assert_eq!(
+        recv_exact(&sub_b, b"via-api", Duration::from_secs(2)),
+        "fleet/api_peer"
     );
 
     broker_a.stop().expect("stop a");

@@ -287,20 +287,20 @@ impl Ros2BridgeBuilder {
         self
     }
 
-    /// Discover a broker (UDP), then connect over TCP.
-    pub fn bus_discover(self, domain_id: u32) -> Result<Self> {
-        self.bus_discover_ex(domain_id, None, None)
+    /// Discover a broker via HTTP API, then connect over TCP.
+    pub fn bus_discover(self, api_url: impl Into<String>) -> Result<Self> {
+        self.bus_discover_ex(api_url, None, None)
     }
 
     /// Discover with optional timeout (seconds) and broker id filter.
     pub fn bus_discover_ex(
         mut self,
-        domain_id: u32,
+        api_url: impl Into<String>,
         timeout_secs: Option<f64>,
         broker_id: Option<String>,
     ) -> Result<Self> {
         let mut opts = DiscoverOpts {
-            domain_id,
+            api_url: api_url.into(),
             ..Default::default()
         };
         if let Some(t) = timeout_secs {

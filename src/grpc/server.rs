@@ -22,6 +22,7 @@ use super::ws::{WsGatewayState, ws_upgrade};
 
 #[cfg(feature = "console")]
 use crate::console::{self, ConsoleState};
+use crate::discovery::DiscoverResponse;
 
 #[derive(Clone)]
 pub struct GatewayConfig {
@@ -32,6 +33,8 @@ pub struct GatewayConfig {
     pub action_frontend: String,
     /// When empty, allow any origin (local-dev default).
     pub cors_origins: Vec<String>,
+    /// Broker endpoint map for `GET /api/v1/discover` (always served when set).
+    pub discover: Option<Arc<DiscoverResponse>>,
     /// When set (feature `console`), serve REST + static UI on the same listener.
     #[cfg(feature = "console")]
     pub console: Option<Arc<ConsoleState>>,
@@ -41,15 +44,12 @@ impl Default for GatewayConfig {
     fn default() -> Self {
         Self {
             listen: "0.0.0.0:15770".parse().expect("default listen"),
-            message_xpub: crate::transports::message_xpub_endpoint("127.0.0.1", "tcp")
-                .unwrap_or_else(|_| "tcp://127.0.0.1:15561".to_string()),
-            message_xsub: crate::transports::message_xsub_endpoint("127.0.0.1", "tcp")
-                .unwrap_or_else(|_| "tcp://127.0.0.1:15560".to_string()),
-            service_frontend: crate::transports::service_frontend_endpoint("127.0.0.1", "tcp")
-                .unwrap_or_else(|_| "tcp://127.0.0.1:15662".to_string()),
-            action_frontend: crate::transports::action_frontend_endpoint("127.0.0.1", "tcp")
-                .unwrap_or_else(|_| "tcp://127.0.0.1:15664".to_string()),
+            message_xpub: "tcp://127.0.0.1:15561".to_string(),
+            message_xsub: "tcp://127.0.0.1:15560".to_string(),
+            service_frontend: "tcp://127.0.0.1:15662".to_string(),
+            action_frontend: "tcp://127.0.0.1:15664".to_string(),
             cors_origins: Vec::new(),
+            discover: None,
             #[cfg(feature = "console")]
             console: None,
         }
@@ -116,6 +116,18 @@ pub async fn serve_on_listener(
         .route("/ws", get(ws_upgrade))
         .with_state(ws_state)
         .merge(grpc_router);
+
+    let app = if let Some(disc) = config.discover.clone() {
+        app.route(
+            "/api/v1/discover",
+            get({
+                let disc = disc;
+                move || async move { axum::Json((*disc).clone()) }
+            }),
+        )
+    } else {
+        app
+    };
 
     #[cfg(feature = "console")]
     let app = match config.console {
