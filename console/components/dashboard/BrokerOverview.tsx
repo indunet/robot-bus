@@ -8,34 +8,55 @@ interface Props {
   broker: BrokerInfo
 }
 
-type BusEndpoint = { label: string; addr: string; alive: boolean }
+type BusEndpoint = { label: string; addr: string }
 
 export default function BrokerOverview({ broker }: Props) {
   const { t } = useI18n()
+  const connecting = broker.status === 'CONNECTING'
+  const offline = broker.status === 'OFFLINE'
 
   const buses: BusEndpoint[] = [
-    { label: 'MSG XSUB', addr: broker.msgBusXSub, alive: broker.status !== 'OFFLINE' },
-    { label: 'MSG XPUB', addr: broker.msgBusXPub, alive: broker.status !== 'OFFLINE' },
-    { label: 'SVC  FE',  addr: broker.svcFE,      alive: broker.status !== 'OFFLINE' },
-    { label: 'SVC  BE',  addr: broker.svcBE,      alive: broker.status !== 'OFFLINE' },
-    { label: 'ACT  FE',  addr: broker.actFE,       alive: broker.status !== 'OFFLINE' },
-    { label: 'ACT  BE',  addr: broker.actBE,       alive: broker.status !== 'OFFLINE' },
+    { label: 'MSG XSUB', addr: broker.msgBusXSub },
+    { label: 'MSG XPUB', addr: broker.msgBusXPub },
+    { label: 'SVC  FE', addr: broker.svcFE },
+    { label: 'SVC  BE', addr: broker.svcBE },
+    { label: 'ACT  FE', addr: broker.actFE },
+    { label: 'ACT  BE', addr: broker.actBE },
   ]
 
   return (
     <section className="border border-bus-border bg-bus-panel rounded-sm h-full">
       <PanelHeader icon={<Server size={14} />} title={t('brokerTitle')} sub={t('brokerSub')} />
       <div className="p-3 grid grid-cols-1 gap-1.5">
-        {buses.map((b) => (
-          <div key={b.label} className="flex items-center gap-2 h-7">
-            <span className={`w-2 h-2 rounded-full shrink-0 ${b.alive ? 'bg-bus-green pulse-green' : 'bg-bus-red pulse-red'}`} />
-            <span className="font-mono text-xs text-bus-muted w-[4.5rem] shrink-0">{b.label}</span>
-            <span className="font-mono text-xs text-bus-text flex-1 truncate">{b.addr}</span>
-            <span className={`font-mono text-xs ${b.alive ? 'text-bus-green' : 'text-bus-red'}`}>
-              {b.alive ? t('listen') : t('down')}
-            </span>
-          </div>
-        ))}
+        {buses.map((b) => {
+          const alive = !connecting && !offline
+          return (
+            <div key={b.label} className="flex items-center gap-2 h-7">
+              <span
+                className={`w-2 h-2 rounded-full shrink-0 ${
+                  connecting
+                    ? 'bg-bus-cyan pulse-cyan'
+                    : alive
+                      ? 'bg-bus-green pulse-green'
+                      : 'bg-bus-red pulse-red'
+                }`}
+              />
+              <span className="font-mono text-xs text-bus-muted w-[4.5rem] shrink-0">{b.label}</span>
+              {connecting ? (
+                <span className="flex-1 h-3 rounded-sm status-shimmer" aria-hidden />
+              ) : (
+                <span className="font-mono text-xs text-bus-text flex-1 truncate">{b.addr}</span>
+              )}
+              <span
+                className={`font-mono text-xs shrink-0 ${
+                  connecting ? 'text-bus-cyan' : alive ? 'text-bus-green' : 'text-bus-red'
+                }`}
+              >
+                {connecting ? t('loading') : alive ? t('listen') : t('down')}
+              </span>
+            </div>
+          )
+        })}
       </div>
     </section>
   )

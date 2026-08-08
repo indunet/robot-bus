@@ -44,7 +44,7 @@ export default function Dashboard() {
   const [svcRate, setSvcRate] = useState(() => generateRateHistory(0))
   const [actRate, setActRate] = useState(() => generateRateHistory(0))
   const [activeTab, setActiveTab] = useState<Tab>('overview')
-  const [botWindows, setBotWindows] = useState({ sim: false, teleop: false })
+  const [botOpen, setBotOpen] = useState(false)
   const seenLogIds = useRef(new Set<string>())
 
   useEffect(() => {
@@ -81,7 +81,7 @@ export default function Dashboard() {
         <Sidebar
           active={activeTab}
           onSelect={setActiveTab}
-          onOpenBot={() => setBotWindows({ sim: true, teleop: true })}
+          onOpenBot={() => setBotOpen(true)}
         />
 
         <main className="flex-1 min-h-0 overflow-y-auto p-3 flex flex-col">
@@ -135,12 +135,7 @@ export default function Dashboard() {
           )}
         </main>
       </div>
-      <BotWindows
-        simOpen={botWindows.sim}
-        teleopOpen={botWindows.teleop}
-        onCloseSim={() => setBotWindows((current) => ({ ...current, sim: false }))}
-        onCloseTeleop={() => setBotWindows((current) => ({ ...current, teleop: false }))}
-      />
+      <BotWindows open={botOpen} onClose={() => setBotOpen(false)} />
     </div>
   )
 }

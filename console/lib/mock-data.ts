@@ -1,6 +1,7 @@
 // Types + formatters for the console. Live data comes from `/robot_bus/*` via GrpcNode.
 
-export type BrokerStatus = 'ONLINE' | 'DEGRADED' | 'OFFLINE'
+/** `CONNECTING` = client placeholder before the first status message arrives. */
+export type BrokerStatus = 'CONNECTING' | 'ONLINE' | 'DEGRADED' | 'OFFLINE'
 
 export interface BrokerInfo {
   status: BrokerStatus
@@ -87,9 +88,9 @@ export interface LogEntry {
   message: string
 }
 
-/** Placeholder until status loads. */
+/** Placeholder until the first `/robot_bus/status` message arrives. */
 export const EMPTY_BROKER: BrokerInfo = {
-  status: 'OFFLINE',
+  status: 'CONNECTING',
   version: '—',
   uptime: 0,
   pid: 0,

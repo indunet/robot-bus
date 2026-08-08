@@ -8,6 +8,7 @@ use std::time::{Duration, Instant};
 use serde::Serialize;
 use tokio::sync::broadcast;
 
+use crate::bot_sim::BotSimManager;
 use crate::broker::action_bus::{ActionMetrics, ActionMetricsSnapshot};
 use crate::broker::message_bus::{MessageMetrics, MessageMetricsSnapshot};
 use crate::broker::service_bus::{ServiceMetrics, ServiceMetricsSnapshot};
@@ -125,6 +126,8 @@ pub struct ConsoleState {
     pub topic_types: Arc<TopicTypeRegistry>,
     pub topology: Arc<TopologyRegistry>,
     pub events: EventLog,
+    /// Lazy bot_sim singleton (started on first console BOT SIM session).
+    pub bot_sim: Arc<BotSimManager>,
     msg_rate: Mutex<Option<MsgRateSample>>,
     svc_rate: Mutex<Option<SvcRateSample>>,
     act_rate: Mutex<Option<ActRateSample>>,
@@ -136,6 +139,7 @@ impl ConsoleState {
         metrics: Arc<MessageMetrics>,
         service_metrics: Arc<ServiceMetrics>,
         action_metrics: Arc<ActionMetrics>,
+        bot_sim: Arc<BotSimManager>,
     ) -> Arc<Self> {
         let state = Arc::new(Self {
             started_at: Instant::now(),
@@ -148,6 +152,7 @@ impl ConsoleState {
             topic_types: TopicTypeRegistry::new(),
             topology: TopologyRegistry::new(),
             events: EventLog::new(),
+            bot_sim,
             msg_rate: Mutex::new(None),
             svc_rate: Mutex::new(None),
             act_rate: Mutex::new(None),

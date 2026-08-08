@@ -3,7 +3,7 @@
 #
 # Layout: Rust core at repo root; language SDKs under bindings/;
 # benches/; tests/ for interop; console/ is broker monitoring UI;
-# Console bot viewer + control panel pair with examples/bot_sim.rs.
+# Console BOT SIM panel pairs with in-process src/bot_sim (session-acquired).
 # Tool nodes / TF / Studio live in sibling repo robot-bus-tools.
 
 set shell := ["bash", "-eu", "-o", "pipefail", "-c"]
@@ -106,9 +106,10 @@ test-cpp:
 console:
 	./scripts/build_console.sh
 
-# Rust bot physics node (SUB /bot1/cmd_vel → PUB /bot1/pose). Needs a running broker.
+# BOT SIM is in-process now: open the console BOT window (POST /api/v1/bot-sim/session).
 bot-sim:
-	cargo run --example bot_sim
+	@echo "bot_sim runs inside robot_bus_broker when a console BOT SIM session is open."
+	@echo "Start the broker, then open the sidebar BOT window (or /bot_sim)."
 
 # Rust tests (default features)
 test-rust: gen-rust

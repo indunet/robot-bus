@@ -23,11 +23,14 @@ use axum::body::Body;
 use axum::extract::Extension;
 use axum::http::{StatusCode, Uri, header};
 use axum::response::{IntoResponse, Response};
-use axum::routing::get;
+use axum::routing::{delete, get, post};
 use rust_embed::Embed;
 use tokio::net::TcpListener;
 
-use api::{actions, events, services, status, topic_info, topics, topology};
+use api::{
+    actions, bot_sim_heartbeat, bot_sim_release, bot_sim_session, bot_sim_status, events, services,
+    status, topic_info, topics, topology,
+};
 
 /// Compile-time embedded `assets/console/` (Next.js static export).
 #[derive(Embed)]
@@ -45,6 +48,13 @@ pub fn api_router(state: Arc<ConsoleState>) -> Router {
         .route("/api/v1/services", get(services))
         .route("/api/v1/actions", get(actions))
         .route("/api/v1/events", get(events))
+        .route("/api/v1/bot-sim", get(bot_sim_status))
+        .route("/api/v1/bot-sim/session", post(bot_sim_session))
+        .route(
+            "/api/v1/bot-sim/session/{id}/heartbeat",
+            post(bot_sim_heartbeat),
+        )
+        .route("/api/v1/bot-sim/session/{id}", delete(bot_sim_release))
         .layer(Extension(state))
 }
 
@@ -100,7 +110,7 @@ pub async fn serve_with_shutdown(
         if !origins.is_empty() {
             let cors = CorsLayer::new()
                 .allow_origin(AllowOrigin::list(origins))
-                .allow_methods([Method::GET, Method::POST, Method::OPTIONS])
+                .allow_methods([Method::GET, Method::POST, Method::DELETE, Method::OPTIONS])
                 .allow_headers([header::CONTENT_TYPE, header::ACCEPT, header::AUTHORIZATION]);
             app = app.layer(cors);
             log::info!("robot_bus console CORS allowlist: {cors_origins:?}");

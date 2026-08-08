@@ -124,12 +124,29 @@ function mapEvent(msg: ConsoleEvent): LogEntry {
   }
 }
 
-/** Same-origin gRPC-Web URL (single-port console). */
+const DEFAULT_BROKER_PORT = '15770'
+/** Next.js `pnpm dev` ports — browser gRPC-Web through the rewrite often fails ("Load failed"). */
+const DEV_UI_PORTS = new Set(['3000', '3020'])
+
+/**
+ * Base URL for gRPC-Web + console REST.
+ *
+ * - Embedded console on the broker port → same origin.
+ * - `pnpm dev` on :3020/:3000 → talk to the broker directly (same hostname, port 15770)
+ *   because Next rewrites break some browser streaming fetches.
+ */
 export function resolveBusUrl(): string {
-  if (typeof window !== 'undefined' && window.location?.origin) {
+  if (typeof window !== 'undefined' && window.location?.hostname) {
+    const override = process.env.NEXT_PUBLIC_ROBOT_BUS_BROKER_URL
+    if (override) return override.replace(/\/$/, '')
+
+    const { protocol, hostname, port } = window.location
+    if (DEV_UI_PORTS.has(port || '')) {
+      return `${protocol}//${hostname}:${DEFAULT_BROKER_PORT}`
+    }
     return window.location.origin
   }
-  return 'http://127.0.0.1:15770'
+  return `http://127.0.0.1:${DEFAULT_BROKER_PORT}`
 }
 
 /**

@@ -1,6 +1,7 @@
 //! ZeroMQ message bus: broker routing and participant SDK.
 
 pub mod action_bus;
+pub mod bot_sim;
 pub mod broker;
 pub mod console_topics;
 pub mod discovery;
@@ -39,6 +40,10 @@ pub mod ros2;
 mod python_api;
 
 pub use action_bus::{ActionClient, ActionKind, ActionMessage, ActionWorker};
+pub use bot_sim::{
+    BotSimEndpoints, BotSimHandle, BotSimManager, BotSimSession, BotSimStatus, CMD_VEL_TOPIC,
+    POSE_TOPIC, WORLD_SIZE,
+};
 pub use broker::{
     ActionPeer, DiscoveryConfig, MessagePeer, RobotBusBroker, RobotBusConfig, ServicePeer,
     apply_federation_opts, parse_robot_bus_config, robot_bus_broker_help,

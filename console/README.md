@@ -2,18 +2,16 @@
 
 Broker monitoring console: status, topic / service / action traffic, event logs, and live topology.
 
-The sidebar **BOT** entry opens the browser bot nodes as floating windows (also available as standalone pages). Physics runs in a separate Rust process:
+The sidebar **BOT** entry opens one **BOT SIM** floating window (also `/bot_sim/`). Opening it acquires a console session that lazy-starts the in-process `bot_sim` inside the broker. Multiple browsers share one world (`cmd_vel` is last-writer-wins).
 
-| Node | Process | Role |
+| Node | Where | Role |
 |------|---------|------|
-| `bot_sim` | `cargo run --example bot_sim` | SUB `/bot1/cmd_vel`, integrate pose, PUB `/bot1/pose` |
-| `bot_sim_viewer` | `/bot_sim/` | Canvas viewer — SUB pose only |
-| `bot_control_panel` | `/bot_teleop/` | WASD / arrow-key control — PUB cmd_vel |
+| `bot_sim` | broker (on session acquire) | Sim: SUB `/bot1/cmd_vel`, integrate pose, PUB `/bot1/pose` |
+| `bot_viz` | console BOT SIM / `/bot_sim/` | Viz/ops: session + SUB pose + PUB cmd_vel |
 
 ```bash
 cargo run --bin robot_bus_broker          # terminal 1
-cargo run --example bot_sim               # terminal 2  (or: just bot-sim)
-# open console BOT windows or /bot_sim + /bot_teleop
+# open console BOT SIM window or /bot_sim  (starts bot_sim automatically)
 ```
 
 Both Bot pages and the Dashboard use the in-repo TypeScript `GrpcNode` and connect to
@@ -50,13 +48,15 @@ cargo run --bin robot_bus_broker
 cd console
 pnpm install
 pnpm dev
-# http://localhost:3000
+# http://localhost:3020  (UI; gRPC/REST go to broker :15770 directly)
 ```
 
-Custom broker URL:
+Custom broker URL (Next rewrite + browser client):
 
 ```bash
-ROBOT_BUS_BROKER_URL=http://127.0.0.1:25770 pnpm dev
+ROBOT_BUS_BROKER_URL=http://127.0.0.1:25770 \
+NEXT_PUBLIC_ROBOT_BUS_BROKER_URL=http://127.0.0.1:25770 \
+pnpm dev
 ```
 
 ## Embedded in the broker

@@ -120,6 +120,27 @@
 .pulse-green { animation: status-pulse 2s ease-in-out infinite; }
 .pulse-amber { animation: status-pulse 1.2s ease-in-out infinite; }
 .pulse-red   { animation: status-pulse 0.8s ease-in-out infinite; }
+.pulse-cyan  { animation: status-pulse 1.1s ease-in-out infinite; }
+
+/* Connecting / loading shimmer for endpoint rows */
+@keyframes status-shimmer {
+  0%   { background-position: 100% 0; }
+  100% { background-position: -100% 0; }
+}
+.status-shimmer {
+  background: linear-gradient(
+    90deg,
+    rgb(42 47 53 / 55%) 0%,
+    rgb(0 212 255 / 28%) 45%,
+    rgb(42 47 53 / 55%) 90%
+  );
+  background-size: 200% 100%;
+  animation: status-shimmer 1.35s ease-in-out infinite;
+}
+
+.connecting-dots[data-phase='1']::after { content: '.'; }
+.connecting-dots[data-phase='2']::after { content: '..'; }
+.connecting-dots[data-phase='3']::after { content: '...'; }
 
 /* 数值跳动动画 */
 @keyframes value-pop {

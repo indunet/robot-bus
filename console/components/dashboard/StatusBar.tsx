@@ -11,16 +11,31 @@ interface StatusBarProps {
 
 export default function StatusBar({ broker }: StatusBarProps) {
   const { t, locale, setLocale, dateLocale } = useI18n()
+  const connecting = broker.status === 'CONNECTING'
+  const [dotPhase, setDotPhase] = useState(1)
+
+  useEffect(() => {
+    if (!connecting) return
+    const id = setInterval(() => {
+      setDotPhase((phase) => (phase % 3) + 1)
+    }, 400)
+    return () => clearInterval(id)
+  }, [connecting])
 
   const statusColor =
     broker.status === 'ONLINE' ? 'text-bus-green' :
     broker.status === 'DEGRADED' ? 'text-bus-amber' :
+    broker.status === 'CONNECTING' ? 'text-bus-cyan' :
     'text-bus-red'
 
   const statusPulse =
     broker.status === 'ONLINE' ? 'pulse-green bg-bus-green' :
     broker.status === 'DEGRADED' ? 'pulse-amber bg-bus-amber' :
+    broker.status === 'CONNECTING' ? 'pulse-cyan bg-bus-cyan' :
     'pulse-red bg-bus-red'
+
+  const statusLabel =
+    broker.status === 'CONNECTING' ? t('connecting') : broker.status
 
   return (
     <header className="h-11 bg-[#0e1012] border-b border-bus-border flex items-center px-4 gap-6 shrink-0 overflow-x-auto">
@@ -29,14 +44,21 @@ export default function StatusBar({ broker }: StatusBarProps) {
         <span className="font-brand text-[15px] font-semibold tracking-[0.2em] text-bus-cyan uppercase leading-none">
           ROBOT-BUS
         </span>
-        <span className="font-mono text-xs text-bus-muted ml-0.5">v{broker.version}</span>
+        <span className="font-mono text-xs text-bus-muted ml-0.5">
+          {connecting ? 'v…' : `v${broker.version}`}
+        </span>
       </div>
 
       <div className="w-px h-5 bg-bus-border shrink-0" />
 
       <div className="flex items-center gap-1.5 shrink-0">
         <span className={`w-2.5 h-2.5 rounded-full ${statusPulse}`} />
-        <span className={`font-mono text-sm font-semibold ${statusColor}`}>{broker.status}</span>
+        <span className={`font-mono text-sm font-semibold ${statusColor}`}>
+          {statusLabel}
+          {connecting && (
+            <span className="connecting-dots inline-block w-4 text-left" data-phase={dotPhase} />
+          )}
+        </span>
       </div>
 
       <div className="w-px h-5 bg-bus-border shrink-0" />

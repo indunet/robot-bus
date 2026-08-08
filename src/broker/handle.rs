@@ -22,6 +22,8 @@ use crate::generated::robot_bus_interface::msg::v1::TcpPorts;
 use crate::runtime::Context as BusContext;
 use crate::transports::IPC_DIR;
 
+#[cfg(feature = "console")]
+use crate::bot_sim::{BotSimEndpoints, BotSimManager};
 #[cfg(all(feature = "console", not(feature = "grpc")))]
 use crate::console::serve_with_shutdown as serve_console_with_shutdown;
 #[cfg(feature = "console")]
@@ -446,6 +448,8 @@ pub struct RobotBusBroker {
     control_plane: Option<ControlPlaneHandle>,
     #[cfg(feature = "console")]
     console_listen: Option<SocketAddr>,
+    #[cfg(feature = "console")]
+    bot_sim: Option<Arc<BotSimManager>>,
 }
 
 impl RobotBusBroker {
@@ -520,11 +524,16 @@ impl RobotBusBroker {
                 grpc: grpc_addr,
                 web: web_addr,
             };
+            let bot_sim = BotSimManager::new(BotSimEndpoints {
+                message_xsub: bind_to_connect(&message.xsub_bind),
+                message_xpub: bind_to_connect(&message.xpub_bind),
+            });
             Some(ConsoleState::new(
                 endpoints,
                 message.metrics.clone(),
                 service.metrics.clone(),
                 action.metrics.clone(),
+                bot_sim,
             ))
         } else {
             None
@@ -672,6 +681,9 @@ impl RobotBusBroker {
             None
         };
 
+        #[cfg(feature = "console")]
+        let bot_sim = console_state.as_ref().map(|s| Arc::clone(&s.bot_sim));
+
         Ok(Self {
             message,
             service,
@@ -687,6 +699,8 @@ impl RobotBusBroker {
             control_plane,
             #[cfg(feature = "console")]
             console_listen,
+            #[cfg(feature = "console")]
+            bot_sim,
         })
     }
 
@@ -721,6 +735,10 @@ impl RobotBusBroker {
         // Ask the console background threads to wind down before tearing down
         // the gateway they publish/subscribe through; give them a moment to
         // notice before we start joining anything.
+        #[cfg(feature = "console")]
+        if let Some(bot_sim) = self.bot_sim.as_ref() {
+            bot_sim.shutdown();
+        }
         #[cfg(feature = "console")]
         if let Some(status_pub) = self.status_pub.as_ref() {
             status_pub.request_stop();

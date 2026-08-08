@@ -1,6 +1,6 @@
 'use client'
 
-import { useRef, type PointerEvent, type ReactNode } from 'react'
+import { useEffect, useRef, type PointerEvent, type ReactNode } from 'react'
 import { X } from 'lucide-react'
 
 export interface WindowPosition {
@@ -20,6 +20,12 @@ interface Props {
   onClose: () => void
 }
 
+function setDocumentDragLock(locked: boolean) {
+  document.body.style.userSelect = locked ? 'none' : ''
+  document.body.style.webkitUserSelect = locked ? 'none' : ''
+  if (locked) window.getSelection()?.removeAllRanges()
+}
+
 export default function FloatingWindow({
   title,
   children,
@@ -33,8 +39,37 @@ export default function FloatingWindow({
 }: Props) {
   const drag = useRef<{ pointerX: number; pointerY: number; x: number; y: number } | null>(null)
 
+  useEffect(() => {
+    return () => setDocumentDragLock(false)
+  }, [])
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return
+      event.preventDefault()
+      onClose()
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [onClose])
+
+  const endDrag = (event?: PointerEvent<HTMLDivElement>) => {
+    if (!drag.current) return
+    drag.current = null
+    setDocumentDragLock(false)
+    if (event) {
+      try {
+        event.currentTarget.releasePointerCapture(event.pointerId)
+      } catch {
+        // capture may already be released
+      }
+    }
+  }
+
   const onPointerDown = (event: PointerEvent<HTMLDivElement>) => {
     if (event.button !== 0) return
+    // Prevent native text/image selection while the window is dragged.
+    event.preventDefault()
     onBringToFront()
     drag.current = {
       pointerX: event.clientX,
@@ -42,6 +77,7 @@ export default function FloatingWindow({
       x: position.x,
       y: position.y,
     }
+    setDocumentDragLock(true)
     event.currentTarget.setPointerCapture(event.pointerId)
   }
 
@@ -92,13 +128,8 @@ export default function FloatingWindow({
       <div
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
-        onPointerUp={(event) => {
-          drag.current = null
-          event.currentTarget.releasePointerCapture(event.pointerId)
-        }}
-        onPointerCancel={() => {
-          drag.current = null
-        }}
+        onPointerUp={(event) => endDrag(event)}
+        onPointerCancel={() => endDrag()}
         className="relative z-10 h-8 shrink-0 flex items-center justify-between px-2 border-b border-bus-border bg-bus-bg/90 cursor-move select-none touch-none shadow-[0_1px_0_rgb(255_255_255_/06%)_inset]"
       >
         <span className="font-mono text-[10px] tracking-wider text-bus-cyan drop-shadow-[0_1px_2px_rgb(0_0_0_/55%)]">

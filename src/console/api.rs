@@ -378,3 +378,114 @@ fn event_from_dto(e: &LogEntryDto) -> Event {
         Err(_) => Event::default().data("serialize error"),
     }
 }
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct BotSimStatusResponse {
+    running: bool,
+    viewers: usize,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct BotSimSessionResponse {
+    session_id: String,
+    lease_ms: u64,
+    viewers: usize,
+}
+
+pub async fn bot_sim_status(Extension(state): Extension<Arc<ConsoleState>>) -> impl IntoResponse {
+    let st = state.bot_sim.status();
+    Json(BotSimStatusResponse {
+        running: st.running,
+        viewers: st.viewers,
+    })
+}
+
+pub async fn bot_sim_session(Extension(state): Extension<Arc<ConsoleState>>) -> impl IntoResponse {
+    match state.bot_sim.acquire() {
+        Ok(session) => {
+            state.events.emit(
+                "INFO",
+                "bot_sim",
+                format!(
+                    "session {} acquired (viewers={})",
+                    &session.session_id[..8.min(session.session_id.len())],
+                    session.viewers
+                ),
+            );
+            (
+                StatusCode::OK,
+                Json(BotSimSessionResponse {
+                    session_id: session.session_id,
+                    lease_ms: session.lease.as_millis() as u64,
+                    viewers: session.viewers,
+                }),
+            )
+                .into_response()
+        }
+        Err(err) => {
+            state
+                .events
+                .emit("ERROR", "bot_sim", format!("acquire failed: {err}"));
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(serde_json::json!({ "error": err.to_string() })),
+            )
+                .into_response()
+        }
+    }
+}
+
+pub async fn bot_sim_heartbeat(
+    Extension(state): Extension<Arc<ConsoleState>>,
+    Path(id): Path<String>,
+) -> impl IntoResponse {
+    match state.bot_sim.heartbeat(&id) {
+        Ok(session) => (
+            StatusCode::OK,
+            Json(BotSimSessionResponse {
+                session_id: session.session_id,
+                lease_ms: session.lease.as_millis() as u64,
+                viewers: session.viewers,
+            }),
+        )
+            .into_response(),
+        Err(_) => (
+            StatusCode::NOT_FOUND,
+            Json(serde_json::json!({ "error": "session not found" })),
+        )
+            .into_response(),
+    }
+}
+
+pub async fn bot_sim_release(
+    Extension(state): Extension<Arc<ConsoleState>>,
+    Path(id): Path<String>,
+) -> impl IntoResponse {
+    match state.bot_sim.release(&id) {
+        Ok(st) => {
+            state.events.emit(
+                "INFO",
+                "bot_sim",
+                format!(
+                    "session released (running={}, viewers={})",
+                    st.running, st.viewers
+                ),
+            );
+            (
+                StatusCode::OK,
+                Json(BotSimStatusResponse {
+                    running: st.running,
+                    viewers: st.viewers,
+                }),
+            )
+                .into_response()
+        }
+        Err(err) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(serde_json::json!({ "error": err.to_string() })),
+        )
+            .into_response(),
+    }
+}

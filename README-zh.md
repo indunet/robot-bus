@@ -41,7 +41,7 @@ Rust 核心留在仓库根目录（`Cargo.toml` + `src/`）。各语言 SDK 放�
 | [`src/`](src/)、`Cargo.toml` | Rust 核心（crates.io / maturin 入口） |
 | [`proto/`](proto/) | 契约源：ROS 风格 Protobuf → Rust / bindings 生成代码 |
 | [`bindings/`](bindings/) | 语言 SDK（Python、TypeScript、C++、Java、Android） |
-| [`console/`](console/) | Broker 监控控制台 + 小机器人视图/控制面板（构建产物 → `assets/console/`，不入库）；物理仿真见 [`examples/bot_sim.rs`](examples/bot_sim.rs) |
+| [`console/`](console/) | Broker 监控控制台 + 机器人仿真可视化/操作面板（构建产物 → `assets/console/`，不入库）；进程内仿真见 [`src/bot_sim/`](src/bot_sim/) |
 | [`benches/`](benches/) | 性能压测：[`robot_bus_perf/`](benches/robot_bus_perf/)（`just perf`）、[`ros2_perf/`](benches/ros2_perf/)（`just perf-ros2`） |
 | [`tests/`](tests/) | Rust 集成测试 + 跨语言互通（`just test-interop`） |
 | [`docs/`](docs/) | API 文档与生成的性能报告 |
@@ -334,7 +334,7 @@ cargo run --bin robot_bus_broker
 
 已对接 **与 gRPC-Web 同一端口**（`0.0.0.0:15770`）：Dashboard 是 TypeScript `GrpcNode`，订阅 `/robot_bus/*` 系统话题。`rbus` / 工具仍可用 REST 只读 shim（`GET /api/v1/...`）。拓扑与类型登记通过现有 service bus 上的可靠控制面服务（`/robot_bus/topology/register`、`/robot_bus/topic_type/register`）。领域可视化、Flow、LIVE / WHEP 在同级仓库 **[robot-bus-tools](https://github.com/indunet/robot-bus-tools)** 的 Studio。前端源码在 `console/`；只有生成的静态文件会编进带 `console` feature 的二进制。
 
-**小机器人三节点演示：** Rust [`examples/bot_sim.rs`](examples/bot_sim.rs) 负责物理（`SUB /bot1/cmd_vel` → `PUB /bot1/pose`）；控制台 **视图**（`bot_sim_viewer`）只渲染位姿；**控制面板**（`bot_control_panel`）发布速度指令。broker 起来后跑 `just bot-sim`，再打开侧栏 BOT 浮窗。
+**机器人仿真双节点演示：** 进程内 [`src/bot_sim/`](src/bot_sim/) 负责物理（`SUB /bot1/cmd_vel` → `PUB /bot1/pose`），控制台打开 BOT SIM 会话时自动拉起；**BOT SIM** 面板（`bot_viz`）渲染位姿并调度能力（当前为键盘遥控）。共享世界，多人可看，遥控后写覆盖。
 
 ## gRPC / gRPC-Web 网关
 

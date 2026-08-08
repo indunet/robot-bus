@@ -128,6 +128,11 @@ name = "topic_type_registry"
 path = "tests/topic_type_registry.rs"
 required-features = ["console", "grpc"]
 
+[[test]]
+name = "bot_sim_session"
+path = "tests/bot_sim_session.rs"
+required-features = ["console", "grpc"]
+
 [[bin]]
 name = "robot_bus_broker"
 path = "src/bin/robot_bus_broker.rs"

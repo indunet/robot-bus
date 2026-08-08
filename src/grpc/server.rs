@@ -144,7 +144,7 @@ fn build_cors(origins: &[String]) -> Result<CorsLayer> {
     if origins.is_empty() {
         Ok(CorsLayer::new()
             .allow_origin(Any)
-            .allow_methods([Method::GET, Method::POST, Method::OPTIONS])
+            .allow_methods([Method::GET, Method::POST, Method::DELETE, Method::OPTIONS])
             .allow_headers(Any)
             .expose_headers(grpc_headers))
     } else {
@@ -154,7 +154,7 @@ fn build_cors(origins: &[String]) -> Result<CorsLayer> {
             .collect::<Result<Vec<_>>>()?;
         Ok(CorsLayer::new()
             .allow_origin(AllowOrigin::list(parsed))
-            .allow_methods([Method::GET, Method::POST, Method::OPTIONS])
+            .allow_methods([Method::GET, Method::POST, Method::DELETE, Method::OPTIONS])
             .allow_headers(Any)
             .expose_headers(grpc_headers))
     }

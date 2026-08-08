@@ -1,67 +1,52 @@
 'use client'
 
-import { useState } from 'react'
-import BotSimViewer from '@/components/bot/BotSimViewer'
-import BotTeleop from '@/components/bot/BotTeleop'
+import { useEffect, useState } from 'react'
+import BotSimPanel from '@/components/bot/BotSimPanel'
 import { useI18n } from '@/lib/i18n'
 import FloatingWindow, { type WindowPosition } from './FloatingWindow'
 
+const WINDOW_WIDTH = 860
+const WINDOW_HEIGHT = 560
+
 interface Props {
-  simOpen: boolean
-  teleopOpen: boolean
-  onCloseSim: () => void
-  onCloseTeleop: () => void
+  open: boolean
+  onClose: () => void
 }
 
-function initialSimPosition(): WindowPosition {
-  return { x: Math.max(72, (typeof window === 'undefined' ? 1280 : window.innerWidth) - 1060), y: 74 }
+function centeredPosition(width: number, height: number): WindowPosition {
+  const vw = typeof window === 'undefined' ? 1280 : window.innerWidth
+  const vh = typeof window === 'undefined' ? 800 : window.innerHeight
+  return {
+    x: Math.max(0, Math.round((vw - Math.min(width, vw - 12)) / 2)),
+    y: Math.max(0, Math.round((vh - Math.min(height, vh - 12)) / 2)),
+  }
 }
 
-function initialTeleopPosition(): WindowPosition {
-  return { x: Math.max(84, (typeof window === 'undefined' ? 1280 : window.innerWidth) - 350), y: 104 }
-}
-
-export default function BotWindows({
-  simOpen,
-  teleopOpen,
-  onCloseSim,
-  onCloseTeleop,
-}: Props) {
+export default function BotWindows({ open, onClose }: Props) {
   const { t } = useI18n()
-  const [simPosition, setSimPosition] = useState(initialSimPosition)
-  const [teleopPosition, setTeleopPosition] = useState(initialTeleopPosition)
-  const [front, setFront] = useState<'sim' | 'teleop'>('teleop')
+  const [position, setPosition] = useState(() =>
+    centeredPosition(WINDOW_WIDTH, WINDOW_HEIGHT),
+  )
+
+  useEffect(() => {
+    if (!open) return
+    setPosition(centeredPosition(WINDOW_WIDTH, WINDOW_HEIGHT))
+  }, [open])
+
+  if (!open) return null
 
   return (
-    <>
-      {simOpen && (
-        <FloatingWindow
-          title={t('botSimWindowTitle')}
-          position={simPosition}
-          width={680}
-          height={500}
-          zIndex={front === 'sim' ? 51 : 50}
-          onPositionChange={setSimPosition}
-          onBringToFront={() => setFront('sim')}
-          onClose={onCloseSim}
-        >
-          <BotSimViewer compact />
-        </FloatingWindow>
-      )}
-      {teleopOpen && (
-        <FloatingWindow
-          title={t('botTeleopWindowTitle')}
-          position={teleopPosition}
-          width={330}
-          height={390}
-          zIndex={front === 'teleop' ? 51 : 50}
-          onPositionChange={setTeleopPosition}
-          onBringToFront={() => setFront('teleop')}
-          onClose={onCloseTeleop}
-        >
-          <BotTeleop compact autoFocus />
-        </FloatingWindow>
-      )}
-    </>
+    <FloatingWindow
+      title={t('botSimWindowTitle')}
+      position={position}
+      width={WINDOW_WIDTH}
+      height={WINDOW_HEIGHT}
+      zIndex={50}
+      onPositionChange={setPosition}
+      onBringToFront={() => {}}
+      onClose={onClose}
+    >
+      <BotSimPanel compact autoFocus />
+    </FloatingWindow>
   )
 }
