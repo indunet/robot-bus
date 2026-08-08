@@ -1,15 +1,27 @@
 //! HTTP discovery: wait for broker `/api/v1/discover` and connect via applied NodeOptions.
 
+#[cfg(feature = "grpc")]
 mod support;
 
-use robot_bus::discovery::DiscoverOpts;
-use robot_bus::message_bus::{Publisher, Subscriber};
 use robot_bus::robot_bus_interface::msg::v1::TcpPorts;
-use robot_bus::{Node, NodeOptions, RobotBusBroker, RobotBusConfig, discovery};
+use robot_bus::{NodeOptions, discovery};
+
+#[cfg(feature = "grpc")]
+use robot_bus::discovery::DiscoverOpts;
+#[cfg(feature = "grpc")]
+use robot_bus::message_bus::{Publisher, Subscriber};
+#[cfg(feature = "grpc")]
+use robot_bus::{Node, RobotBusBroker, RobotBusConfig};
+#[cfg(feature = "grpc")]
 use std::thread;
+#[cfg(feature = "grpc")]
 use std::time::Duration;
+#[cfg(feature = "grpc")]
 use support::{free_ports, lock_brokers};
 
+/// HTTP discover needs the gRPC gateway listener (`GET /api/v1/discover`).
+/// Skip under `cargo test --no-default-features` where no API server is started.
+#[cfg(feature = "grpc")]
 #[test]
 fn discover_tcp_then_pubsub() {
     let _guard = lock_brokers();
@@ -30,10 +42,7 @@ fn discover_tcp_then_pubsub() {
         // Discover is served from the gateway when console UI is off.
         config.console.enabled = false;
     }
-    #[cfg(feature = "grpc")]
-    {
-        config.grpc.listen = format!("127.0.0.1:{api_port}").parse().unwrap();
-    }
+    config.grpc.listen = format!("127.0.0.1:{api_port}").parse().unwrap();
 
     let broker = RobotBusBroker::start(config).expect("start broker");
     thread::sleep(Duration::from_millis(300));
