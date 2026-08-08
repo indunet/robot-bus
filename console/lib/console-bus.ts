@@ -133,7 +133,7 @@ export function resolveBusUrl(): string {
 }
 
 /**
- * Start a console GrpcNode that subscribes to `/_robot_bus/*` system topics.
+ * Start a console GrpcNode that subscribes to `/robot_bus/*` system topics.
  * Returns a dispose function.
  */
 export function startConsoleBus(handlers: ConsoleBusHandlers): () => void {

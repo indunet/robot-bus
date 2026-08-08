@@ -1,4 +1,4 @@
-//! Subscribe to `/_robot_bus/topology/*` and `/_robot_bus/topic_type/register`.
+//! Subscribe to `/robot_bus/topology/*` and `/robot_bus/topic_type/register`.
 
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -136,6 +136,10 @@ fn handle_message(state: &ConsoleState, topic: &str, payload: &[u8]) {
             if endpoint_id.is_empty() || node_name.is_empty() || topic_name.is_empty() {
                 return;
             }
+            if kind == EndpointKind::Publisher && console_topics::is_reserved_name(topic_name) {
+                log::warn!("reject topology publisher on reserved topic {topic_name}");
+                return;
+            }
             state
                 .topology
                 .register(endpoint_id, node_name, kind, topic_name);
@@ -158,6 +162,10 @@ fn handle_message(state: &ConsoleState, topic: &str, payload: &[u8]) {
             let topic_name = msg.topic.trim();
             let type_name = msg.type_name.trim();
             if topic_name.is_empty() || type_name.is_empty() {
+                return;
+            }
+            if console_topics::is_reserved_name(topic_name) {
+                log::warn!("reject topic type register on reserved topic {topic_name}");
                 return;
             }
             let previous = state.topic_types.register(topic_name, type_name);

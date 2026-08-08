@@ -1238,6 +1238,7 @@ impl Node {
         hwm: Option<HighWaterMark>,
     ) -> Result<TopicPublisherRaw> {
         let topic = topic.into();
+        crate::console_topics::check_not_reserved(&topic)?;
         let topology = Some(TopologyEndpointGuard::start(
             self.options.service_frontend.as_deref(),
             &self.options.host,
@@ -1501,6 +1502,7 @@ impl Node {
         handler: ServiceHandler,
         callback_group: Option<&CallbackGroup>,
     ) -> Result<NodeService> {
+        crate::console_topics::check_not_reserved(service_name)?;
         if self.options.is_grpc() {
             return Err(grpc_mode_unsupported("create_service"));
         }
@@ -1610,6 +1612,7 @@ impl Node {
         handler: ActionGoalHandler,
         callback_group: Option<&CallbackGroup>,
     ) -> Result<NodeActionServer> {
+        crate::console_topics::check_not_reserved(action_name)?;
         if self.options.is_grpc() {
             return Err(grpc_mode_unsupported("create_action_server"));
         }
@@ -1799,6 +1802,27 @@ mod tests {
 
     use super::*;
     use crate::runtime::SingleThreadedExecutor;
+
+    #[test]
+    fn rejects_reserved_console_names() {
+        let mut node = Node::new("pilot");
+        assert!(matches!(
+            node.create_publisher_raw("/robot_bus/status"),
+            Err(BusError::ReservedName { .. })
+        ));
+        assert!(matches!(
+            node.create_service_raw(
+                "/robot_bus/topology/register",
+                Arc::new(|_| Vec::new()),
+                None
+            ),
+            Err(BusError::ReservedName { .. })
+        ));
+        assert!(matches!(
+            node.create_action_server_raw("/robot_bus/actions", Arc::new(|_| Vec::new()), None),
+            Err(BusError::ReservedName { .. })
+        ));
+    }
 
     #[test]
     fn node_local_parameters() {

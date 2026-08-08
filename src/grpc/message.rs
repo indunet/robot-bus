@@ -50,6 +50,7 @@ impl MessageGatewayService {
 fn bus_status(err: BusError) -> Status {
     match err {
         BusError::Timeout(msg) => Status::deadline_exceeded(msg),
+        BusError::ReservedName { .. } => Status::invalid_argument(err.to_string()),
         other => Status::internal(other.to_string()),
     }
 }
@@ -118,6 +119,9 @@ impl MessageGateway for MessageGatewayService {
         let msg = request.into_inner();
         if msg.topic.is_empty() {
             return Err(Status::invalid_argument("topic is required"));
+        }
+        if let Err(err) = crate::console_topics::check_not_reserved(&msg.topic) {
+            return Err(bus_status(err));
         }
 
         let publisher = Arc::clone(&self.publisher);

@@ -21,12 +21,12 @@ Both Bot pages and the Dashboard use the in-repo TypeScript `GrpcNode` and conne
 
 Monitoring data is published by the broker on system topics:
 
-- `/_robot_bus/status`
-- `/_robot_bus/topics`
-- `/_robot_bus/services`
-- `/_robot_bus/actions`
-- `/_robot_bus/topology`
-- `/_robot_bus/events`
+- `/robot_bus/status`
+- `/robot_bus/topics`
+- `/robot_bus/services`
+- `/robot_bus/actions`
+- `/robot_bus/topology`
+- `/robot_bus/events`
 
 A REST shim remains for CLI tooling (`rbus`): `GET /api/v1/status|topics|services|actions|topology` and `SSE /api/v1/events`.
 
@@ -34,7 +34,7 @@ UI copy supports EN / 中文 (default EN; preference in `localStorage` key `robo
 
 ### Topology (read-only)
 
-Sidebar **TOPOLOGY**: pub/sub graph from best-effort control-plane service registration on `Node::create_publisher` / `create_subscription` (`/_robot_bus/topology/register` and `/_robot_bus/topic_type/register`). Endpoints expire after ~30s without refresh; crashed processes rely on TTL cleanup.
+Sidebar **TOPOLOGY**: pub/sub graph from best-effort control-plane service registration on `Node::create_publisher` / `create_subscription` (`/robot_bus/topology/register` and `/robot_bus/topic_type/register`). Endpoints expire after ~30s without refresh; crashed processes rely on TTL cleanup.
 
 Domain visualizers, Flow plumbing, and LIVE / WHEP live in the sibling **[robot-bus-tools](https://github.com/indunet/robot-bus-tools)** Studio — not in this console.
 

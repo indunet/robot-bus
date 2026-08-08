@@ -1,6 +1,6 @@
 syntax = "proto3";
 
-// Broker console monitoring snapshots published on `/_robot_bus/*` system topics.
+// Broker console monitoring snapshots published on `/robot_bus/*` system topics.
 package robot_bus_interface.msg.v1;
 
 message BrokerStatus {

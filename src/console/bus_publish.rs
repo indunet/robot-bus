@@ -1,4 +1,4 @@
-//! Build protobuf snapshots from [`ConsoleState`] for `/_robot_bus/*` topics.
+//! Build protobuf snapshots from [`ConsoleState`] for `/robot_bus/*` topics.
 
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;

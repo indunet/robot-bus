@@ -131,7 +131,7 @@ ros__parameters:
 
 接近 ROS 2：`Node::new` → typed `create_publisher` / `create_subscription`（创建时绑定消息类型，自动 encode/decode）→ `node.spin()`。底层与 gRPC 仍传 opaque bytes。
 
-Typed `create_publisher::<M>` 会向 broker 控制面（service bus 服务 `/_robot_bus/topic_type/register`）**best-effort** 登记 `topic → M::full_name()`（如 `sensor_msgs.msg.v1.Imu`）。登记失败只打日志，不影响 publish。`create_publisher_raw` 不登记。可用 `rbus topic list` / `rbus topic info /path` 查看（HTTP 默认 `http://127.0.0.1:15770`）。
+Typed `create_publisher::<M>` 会向 broker 控制面（service bus 服务 `/robot_bus/topic_type/register`）**best-effort** 登记 `topic → M::full_name()`（如 `sensor_msgs.msg.v1.Imu`）。登记失败只打日志，不影响 publish。`create_publisher_raw` 不登记。可用 `rbus topic list` / `rbus topic info /path` 查看（HTTP 默认 `http://127.0.0.1:15770`）。
 
 ```rust
 use std::sync::Arc;

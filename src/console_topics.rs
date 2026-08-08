@@ -1,24 +1,29 @@
 //! Fixed system topic names for broker console introspection.
 
+use crate::errors::{BusError, Result};
+
+/// Namespace for console snapshot topics and control-plane services.
+pub const PREFIX: &str = "/robot_bus";
+
 /// Periodic [`crate::robot_bus_interface::msg::v1::BrokerStatus`] snapshot.
-pub const STATUS: &str = "/_robot_bus/status";
+pub const STATUS: &str = "/robot_bus/status";
 /// Periodic [`crate::robot_bus_interface::msg::v1::TopicStatsList`] snapshot.
-pub const TOPICS: &str = "/_robot_bus/topics";
+pub const TOPICS: &str = "/robot_bus/topics";
 /// Periodic [`crate::robot_bus_interface::msg::v1::ServiceStatsList`] snapshot.
-pub const SERVICES: &str = "/_robot_bus/services";
+pub const SERVICES: &str = "/robot_bus/services";
 /// Periodic [`crate::robot_bus_interface::msg::v1::ActionStatsList`] snapshot.
-pub const ACTIONS: &str = "/_robot_bus/actions";
+pub const ACTIONS: &str = "/robot_bus/actions";
 /// Periodic [`crate::robot_bus_interface::msg::v1::TopologySnapshot`] snapshot.
-pub const TOPOLOGY: &str = "/_robot_bus/topology";
+pub const TOPOLOGY: &str = "/robot_bus/topology";
 /// Streaming [`crate::robot_bus_interface::msg::v1::ConsoleEvent`] log lines.
-pub const EVENTS: &str = "/_robot_bus/events";
+pub const EVENTS: &str = "/robot_bus/events";
 
 /// Client → broker: [`crate::robot_bus_interface::msg::v1::TopologyRegister`].
-pub const TOPOLOGY_REGISTER: &str = "/_robot_bus/topology/register";
+pub const TOPOLOGY_REGISTER: &str = "/robot_bus/topology/register";
 /// Client → broker: [`crate::robot_bus_interface::msg::v1::TopologyUnregister`].
-pub const TOPOLOGY_UNREGISTER: &str = "/_robot_bus/topology/unregister";
+pub const TOPOLOGY_UNREGISTER: &str = "/robot_bus/topology/unregister";
 /// Client → broker: [`crate::robot_bus_interface::msg::v1::TopicTypeRegister`].
-pub const TOPIC_TYPE_REGISTER: &str = "/_robot_bus/topic_type/register";
+pub const TOPIC_TYPE_REGISTER: &str = "/robot_bus/topic_type/register";
 
 /// All control-plane topics the broker control subscriber must join.
 pub const CONTROL_SUBSCRIBE: &[&str] =
@@ -26,3 +31,36 @@ pub const CONTROL_SUBSCRIBE: &[&str] =
 
 /// Snapshot topics the broker status publisher emits.
 pub const SNAPSHOT_PUBLISH: &[&str] = &[STATUS, TOPICS, SERVICES, ACTIONS, TOPOLOGY, EVENTS];
+
+/// True for names under the reserved console namespace (`/robot_bus` and `/robot_bus/*`).
+pub fn is_reserved_name(name: &str) -> bool {
+    let name = name.trim();
+    name == PREFIX || name.starts_with("/robot_bus/")
+}
+
+/// Reject user registration of reserved console topic / service / action names.
+pub fn check_not_reserved(name: &str) -> Result<()> {
+    let name = name.trim();
+    if is_reserved_name(name) {
+        return Err(BusError::ReservedName {
+            name: name.to_string(),
+        });
+    }
+    Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn reserved_namespace() {
+        assert!(is_reserved_name("/robot_bus"));
+        assert!(is_reserved_name("/robot_bus/status"));
+        assert!(is_reserved_name(" /robot_bus/topology/register "));
+        assert!(!is_reserved_name("/robot_bus_extra"));
+        assert!(!is_reserved_name("/robot1/imu"));
+        assert!(check_not_reserved("/robot_bus/topics").is_err());
+        assert!(check_not_reserved("/ok").is_ok());
+    }
+}

@@ -227,11 +227,6 @@ fn capture_metrics_loop(reader: Socket, metrics: Arc<MessageMetrics>, stop: Arc<
             let Some(topic) = frames.first().and_then(|f| std::str::from_utf8(f).ok()) else {
                 continue;
             };
-            // Console snapshot / control-plane traffic is internal bookkeeping,
-            // not user data — drain it but don't let it pollute topic metrics.
-            if topic.starts_with("/_robot_bus/") {
-                continue;
-            }
             let bytes: u64 = frames.iter().map(|f| f.len() as u64).sum();
             metrics.record(topic, bytes);
         }

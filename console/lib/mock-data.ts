@@ -1,4 +1,4 @@
-// Types + formatters for the console. Live data comes from `/_robot_bus/*` via GrpcNode.
+// Types + formatters for the console. Live data comes from `/robot_bus/*` via GrpcNode.
 
 export type BrokerStatus = 'ONLINE' | 'DEGRADED' | 'OFFLINE'
 
