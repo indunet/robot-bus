@@ -40,11 +40,15 @@ fn default_host() -> String {
 
 #[derive(Debug, Deserialize)]
 struct DiscoverSection {
-    #[serde(default)]
-    domain_id: u32,
+    #[serde(default = "default_api_url")]
+    api_url: String,
     #[serde(default = "default_timeout")]
     timeout: f64,
     broker_id: Option<String>,
+}
+
+fn default_api_url() -> String {
+    format!("http://127.0.0.1:{}", crate::transports::DEFAULT_API_PORT)
 }
 
 fn default_timeout() -> f64 {
@@ -120,10 +124,14 @@ pub fn builder_from_yaml(path: impl AsRef<Path>) -> Result<Ros2BridgeBuilder> {
             None => builder.bus_ipc(),
         },
         "discover" => {
-            let domain_id = rb.discover.as_ref().map(|d| d.domain_id).unwrap_or(0);
+            let api_url = rb
+                .discover
+                .as_ref()
+                .map(|d| d.api_url.clone())
+                .unwrap_or_else(default_api_url);
             let timeout = rb.discover.as_ref().map(|d| d.timeout);
             let broker_id = rb.discover.and_then(|d| d.broker_id);
-            builder.bus_discover_ex(domain_id, timeout, broker_id)?
+            builder.bus_discover_ex(api_url, timeout, broker_id)?
         }
         other => {
             return Err(BusError::Protocol(format!(

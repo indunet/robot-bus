@@ -368,10 +368,12 @@ ROBOT_BUS_API int robot_bus_ros2_bridge_builder_bus_ipc(RobotBusRos2BridgeBuilde
 ROBOT_BUS_API int robot_bus_ros2_bridge_builder_bus_ipc_at(RobotBusRos2BridgeBuilder *b,
                                                            const char *dir);
 /**
- * UDP discover then TCP. `timeout_secs` <= 0 uses the default; `broker_id` may be NULL.
+ * HTTP discover (`GET /api/v1/discover`) then TCP.
+ * `api_url` NULL → default `http://127.0.0.1:15770`; `timeout_secs` <= 0 uses the default;
+ * `broker_id` may be NULL.
  */
 ROBOT_BUS_API int robot_bus_ros2_bridge_builder_bus_discover(RobotBusRos2BridgeBuilder *b,
-                                                             uint32_t domain_id,
+                                                             const char *api_url,
                                                              double timeout_secs,
                                                              const char *broker_id);
 /**

@@ -164,7 +164,7 @@ mod imp {
     #[unsafe(no_mangle)]
     pub extern "C" fn robot_bus_ros2_bridge_builder_bus_discover(
         b: *mut RobotBusRos2BridgeBuilder,
-        domain_id: u32,
+        api_url: *const c_char,
         timeout_secs: f64,
         broker_id: *const c_char,
     ) -> c_int {
@@ -176,13 +176,16 @@ mod imp {
         } else {
             None
         };
+        let api_url = cstr_opt(api_url)
+            .map(|s| s.to_string())
+            .unwrap_or_else(|| robot_bus::DiscoverOpts::default().api_url);
         let broker_id = cstr_opt(broker_id).map(|s| s.to_string());
         let inner = unsafe { &mut *(b as *mut BuilderInner) };
         let builder = match take_builder(inner) {
             Ok(x) => x,
             Err(e) => return e,
         };
-        match builder.bus_discover_ex(domain_id, timeout, broker_id) {
+        match builder.bus_discover_ex(api_url, timeout, broker_id) {
             Ok(next) => {
                 inner.inner = Some(next);
                 ok()
@@ -460,7 +463,7 @@ mod imp {
     #[unsafe(no_mangle)]
     pub extern "C" fn robot_bus_ros2_bridge_builder_bus_discover(
         _b: *mut RobotBusRos2BridgeBuilder,
-        _domain_id: u32,
+        _api_url: *const c_char,
         _timeout_secs: f64,
         _broker_id: *const c_char,
     ) -> c_int {

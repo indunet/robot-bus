@@ -266,11 +266,13 @@ class Ros2BridgeBuilder {
     return std::move(*this);
   }
 
-  /// UDP discover then TCP. `timeout_secs <= 0` uses the default; empty broker_id = any.
-  Ros2BridgeBuilder &&bus_discover(uint32_t domain_id, double timeout_secs = 0.0,
+  /// HTTP discover then TCP. Empty `api_url` → default; `timeout_secs <= 0` uses the
+  /// default; empty broker_id = any.
+  Ros2BridgeBuilder &&bus_discover(const std::string &api_url = {},
+                                   double timeout_secs = 0.0,
                                    const std::string &broker_id = {}) && {
     check(robot_bus_ros2_bridge_builder_bus_discover(
-              b_, domain_id, timeout_secs,
+              b_, api_url.empty() ? nullptr : api_url.c_str(), timeout_secs,
               broker_id.empty() ? nullptr : broker_id.c_str()),
           "bus_discover");
     return std::move(*this);
