@@ -131,6 +131,11 @@ name = "tank_session"
 path = "tests/tank_session.rs"
 required-features = ["console", "ws"]
 
+[[test]]
+name = "ros2_bridge_service_smoke"
+path = "tests/ros2_bridge_service_smoke.rs"
+required-features = ["ws", "ros2"]
+
 [[bin]]
 name = "robot_bus_broker"
 path = "src/bin/robot_bus_broker.rs"

@@ -266,6 +266,7 @@ auto bridge = robot_bus::Ros2Bridge::New("ros_bridge")
     .add()
     .service("/reset", "/reset")
     .mapper(robot_bus::TriggerServiceMapper{})
+    .timeout(2.0)
     .direction(robot_bus::Direction::Ros2ToBus)
     .add()
     .service("/enable", "/enable")
@@ -284,9 +285,10 @@ bridge.spin_once(0.01);
 auto from_file = robot_bus::Ros2Bridge::from_yaml("bridge.yaml");
 ```
 
-Topic types use a **registry** (configure by type string): built-in `std_msgs/msg/String`, `sensor_msgs/msg/Imu`, `sensor_msgs/msg/Image`, `foxglove_msgs/msg/CompressedVideo`.  
-Service types: `std_srvs/srv/Trigger`, `std_srvs/srv/SetBool` (`Ros2ToBus` / `BusToRos2` only; default call timeout 5s).  
-Action types: `example_interfaces/action/Fibonacci` (`Ros2ToBus` / `BusToRos2` only; default goal timeout 30s).  
+Topic types use a **registry** (configure by type string): built-in `std_msgs/msg/String`, `sensor_msgs/msg/Imu`, `sensor_msgs/msg/Image`, `foxglove_msgs/msg/CompressedVideo`. Custom topics: inherit `TopicMapper` + `.mapper(shared_ptr)`.  
+Service / Action: same `.mapper(...)` shape as topics (builtin tags or `shared_ptr<ServiceMapper>` / `ActionMapper`). Until Track B dynamic RPC, only builtin type names are wired; convert methods are reserved. Use `.timeout(secs)` to override defaults (service 5s, action 30s).  
+Service types: `std_srvs/srv/Trigger`, `std_srvs/srv/SetBool` (`Ros2ToBus` / `BusToRos2` only).  
+Action types: `example_interfaces/action/Fibonacci` (`Ros2ToBus` / `BusToRos2` only).  
 `foxglove_msgs/msg/CompressedVideo` needs the `foxglove_msgs` ROS package installed.  
 Default `robot-bus` returns a clear error from these APIs (`robot_bus_last_error` / thrown `robot_bus::Error`).
 

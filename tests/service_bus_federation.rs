@@ -76,10 +76,10 @@ fn federated_service_config(
             ..ActionBusConfig::default()
         },
         #[cfg(feature = "ws")]
-        grpc: WsGatewayConfig {
+        ws: WsGatewayConfig {
             listen: format!("127.0.0.1:{}", other[4])
                 .parse()
-                .expect("grpc listen"),
+                .expect("ws listen"),
             cors_origins: Vec::new(),
         },
         discovery: DiscoveryConfig {
@@ -89,6 +89,7 @@ fn federated_service_config(
         #[cfg(feature = "console")]
         console: ConsoleBrokerConfig {
             enabled: false,
+            tank_enabled: false,
             listen: format!("127.0.0.1:{}", other[5])
                 .parse()
                 .expect("console listen"),

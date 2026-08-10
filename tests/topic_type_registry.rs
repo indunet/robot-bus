@@ -57,12 +57,13 @@ fn test_broker_config(
             enabled: false,
             ..DiscoveryConfig::default()
         },
-        grpc: WsGatewayConfig {
+        ws: WsGatewayConfig {
             listen: format!("127.0.0.1:{http}").parse().unwrap(),
             ..WsGatewayConfig::default()
         },
         console: ConsoleBrokerConfig {
             enabled: true,
+            tank_enabled: false,
             listen: format!("127.0.0.1:{http}").parse().unwrap(),
             cors_origins: vec![],
         },

@@ -109,6 +109,78 @@ class TopicMapper {
   virtual void bus_to_ros(const uint8_t *payload, size_t len, DynMsg &msg) = 0;
 };
 
+/// Service codec (same shape as TopicMapper). Until Track B (dynamic RPC), only
+/// `type_name()` is used and must match a library typed backend (`Trigger` /
+/// `SetBool`). Convert methods are reserved and not invoked.
+class ServiceMapper {
+ public:
+  virtual ~ServiceMapper() = default;
+  virtual const char *type_name() const = 0;
+  virtual std::vector<uint8_t> request_ros_to_bus(const DynMsg &msg) {
+    (void)msg;
+    throw Error(
+        "ServiceMapper::request_ros_to_bus requires Track B dynamic service support");
+  }
+  virtual void request_bus_to_ros(const uint8_t *payload, size_t len, DynMsg &msg) {
+    (void)payload;
+    (void)len;
+    (void)msg;
+    throw Error(
+        "ServiceMapper::request_bus_to_ros requires Track B dynamic service support");
+  }
+  virtual std::vector<uint8_t> response_ros_to_bus(const DynMsg &msg) {
+    (void)msg;
+    throw Error(
+        "ServiceMapper::response_ros_to_bus requires Track B dynamic service support");
+  }
+  virtual void response_bus_to_ros(const uint8_t *payload, size_t len, DynMsg &msg) {
+    (void)payload;
+    (void)len;
+    (void)msg;
+    throw Error(
+        "ServiceMapper::response_bus_to_ros requires Track B dynamic service support");
+  }
+};
+
+/// Action codec (Goal / Feedback / Result). Same Track B limitation as ServiceMapper.
+class ActionMapper {
+ public:
+  virtual ~ActionMapper() = default;
+  virtual const char *type_name() const = 0;
+  virtual std::vector<uint8_t> goal_ros_to_bus(const DynMsg &msg) {
+    (void)msg;
+    throw Error("ActionMapper::goal_ros_to_bus requires Track B dynamic action support");
+  }
+  virtual void goal_bus_to_ros(const uint8_t *payload, size_t len, DynMsg &msg) {
+    (void)payload;
+    (void)len;
+    (void)msg;
+    throw Error("ActionMapper::goal_bus_to_ros requires Track B dynamic action support");
+  }
+  virtual std::vector<uint8_t> feedback_ros_to_bus(const DynMsg &msg) {
+    (void)msg;
+    throw Error(
+        "ActionMapper::feedback_ros_to_bus requires Track B dynamic action support");
+  }
+  virtual void feedback_bus_to_ros(const uint8_t *payload, size_t len, DynMsg &msg) {
+    (void)payload;
+    (void)len;
+    (void)msg;
+    throw Error(
+        "ActionMapper::feedback_bus_to_ros requires Track B dynamic action support");
+  }
+  virtual std::vector<uint8_t> result_ros_to_bus(const DynMsg &msg) {
+    (void)msg;
+    throw Error("ActionMapper::result_ros_to_bus requires Track B dynamic action support");
+  }
+  virtual void result_bus_to_ros(const uint8_t *payload, size_t len, DynMsg &msg) {
+    (void)payload;
+    (void)len;
+    (void)msg;
+    throw Error("ActionMapper::result_bus_to_ros requires Track B dynamic action support");
+  }
+};
+
 /// Builtin topic/service/action type tag: `.mapper(StdMsgsStringMapper{})`.
 struct StdMsgsStringMapper {
   static constexpr const char *type_name = "std_msgs/msg/String";
@@ -286,7 +358,9 @@ class Ros2BridgeService {
         ros_service_(std::move(o.ros_service_)),
         bus_service_(std::move(o.bus_service_)),
         type_(std::move(o.type_)),
-        direction_(o.direction_) {
+        custom_(std::move(o.custom_)),
+        direction_(o.direction_),
+        timeout_secs_(o.timeout_secs_) {
     o.b_ = nullptr;
   }
 
@@ -298,24 +372,49 @@ class Ros2BridgeService {
       ros_service_ = std::move(o.ros_service_);
       bus_service_ = std::move(o.bus_service_);
       type_ = std::move(o.type_);
+      custom_ = std::move(o.custom_);
       direction_ = o.direction_;
+      timeout_secs_ = o.timeout_secs_;
     }
     return *this;
   }
 
   Ros2BridgeService &&type_name(std::string type) && {
     type_ = std::move(type);
+    custom_.reset();
     return std::move(*this);
   }
 
   template <typename T, typename = detail::BuiltinTypeName<T>>
   Ros2BridgeService &&mapper(T) && {
     type_ = T::type_name;
+    custom_.reset();
+    return std::move(*this);
+  }
+
+  /// Custom codec: same shape as TopicMapper. Until Track B, `type_name()` must be a
+  /// builtin (`std_srvs/srv/Trigger` / `SetBool`); convert methods are ignored.
+  Ros2BridgeService &&mapper(std::shared_ptr<ServiceMapper> m) && {
+    if (!m) {
+      throw Error("ros2 bridge service: null ServiceMapper");
+    }
+    const char *tn = m->type_name();
+    if (!tn || !*tn) {
+      throw Error("ros2 bridge service: ServiceMapper::type_name() empty");
+    }
+    type_ = tn;
+    custom_ = std::move(m);
     return std::move(*this);
   }
 
   Ros2BridgeService &&direction(Direction d) && {
     direction_ = d;
+    return std::move(*this);
+  }
+
+  /// Override default service call timeout (seconds). `<= 0` keeps library default.
+  Ros2BridgeService &&timeout(double secs) && {
+    timeout_secs_ = secs;
     return std::move(*this);
   }
 
@@ -327,7 +426,9 @@ class Ros2BridgeService {
   std::string ros_service_;
   std::string bus_service_;
   std::string type_;
+  std::shared_ptr<ServiceMapper> custom_;
   Direction direction_ = Direction::Ros2ToBus;
+  double timeout_secs_ = 0.0;
 };
 
 /// Intermediate action route configuration before `.add()`.
@@ -348,7 +449,9 @@ class Ros2BridgeAction {
         ros_action_(std::move(o.ros_action_)),
         bus_action_(std::move(o.bus_action_)),
         type_(std::move(o.type_)),
-        direction_(o.direction_) {
+        custom_(std::move(o.custom_)),
+        direction_(o.direction_),
+        timeout_secs_(o.timeout_secs_) {
     o.b_ = nullptr;
   }
 
@@ -360,24 +463,48 @@ class Ros2BridgeAction {
       ros_action_ = std::move(o.ros_action_);
       bus_action_ = std::move(o.bus_action_);
       type_ = std::move(o.type_);
+      custom_ = std::move(o.custom_);
       direction_ = o.direction_;
+      timeout_secs_ = o.timeout_secs_;
     }
     return *this;
   }
 
   Ros2BridgeAction &&type_name(std::string type) && {
     type_ = std::move(type);
+    custom_.reset();
     return std::move(*this);
   }
 
   template <typename T, typename = detail::BuiltinTypeName<T>>
   Ros2BridgeAction &&mapper(T) && {
     type_ = T::type_name;
+    custom_.reset();
+    return std::move(*this);
+  }
+
+  /// Custom codec: until Track B, `type_name()` must be a builtin (`Fibonacci`).
+  Ros2BridgeAction &&mapper(std::shared_ptr<ActionMapper> m) && {
+    if (!m) {
+      throw Error("ros2 bridge action: null ActionMapper");
+    }
+    const char *tn = m->type_name();
+    if (!tn || !*tn) {
+      throw Error("ros2 bridge action: ActionMapper::type_name() empty");
+    }
+    type_ = tn;
+    custom_ = std::move(m);
     return std::move(*this);
   }
 
   Ros2BridgeAction &&direction(Direction d) && {
     direction_ = d;
+    return std::move(*this);
+  }
+
+  /// Override default action goal timeout (seconds). `<= 0` keeps library default.
+  Ros2BridgeAction &&timeout(double secs) && {
+    timeout_secs_ = secs;
     return std::move(*this);
   }
 
@@ -389,7 +516,9 @@ class Ros2BridgeAction {
   std::string ros_action_;
   std::string bus_action_;
   std::string type_;
+  std::shared_ptr<ActionMapper> custom_;
   Direction direction_ = Direction::Ros2ToBus;
+  double timeout_secs_ = 0.0;
 };
 
 /// Fluent builder matching Rust `Ros2Bridge::new(...).bus_tcp(...).route(...).add()`.
@@ -604,8 +733,11 @@ inline Ros2BridgeBuilder Ros2BridgeService::add() && {
   if (type_.empty()) {
     throw Error("ros2 bridge service: call .mapper(...) or .type_name(\"pkg/srv/Type\") before .add()");
   }
-  check(robot_bus_ros2_bridge_builder_add_service(b_, ros_service_.c_str(), bus_service_.c_str(),
-                                                   type_.c_str(), static_cast<int>(direction_)),
+  // custom_ is retained only for API shape / lifetime until Track B; wiring uses type_.
+  (void)custom_;
+  check(robot_bus_ros2_bridge_builder_add_service_ex(
+            b_, ros_service_.c_str(), bus_service_.c_str(), type_.c_str(),
+            static_cast<int>(direction_), timeout_secs_),
         "add_service");
   RobotBusRos2BridgeBuilder *b = b_;
   b_ = nullptr;
@@ -616,8 +748,10 @@ inline Ros2BridgeBuilder Ros2BridgeAction::add() && {
   if (type_.empty()) {
     throw Error("ros2 bridge action: call .mapper(...) or .type_name(\"pkg/action/Type\") before .add()");
   }
-  check(robot_bus_ros2_bridge_builder_add_action(b_, ros_action_.c_str(), bus_action_.c_str(),
-                                                  type_.c_str(), static_cast<int>(direction_)),
+  (void)custom_;
+  check(robot_bus_ros2_bridge_builder_add_action_ex(
+            b_, ros_action_.c_str(), bus_action_.c_str(), type_.c_str(),
+            static_cast<int>(direction_), timeout_secs_),
         "add_action");
   RobotBusRos2BridgeBuilder *b = b_;
   b_ = nullptr;

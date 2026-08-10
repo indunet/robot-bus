@@ -457,6 +457,14 @@ ROBOT_BUS_API int robot_bus_ros2_bridge_builder_add_service(RobotBusRos2BridgeBu
                                                             const char *bus_service,
                                                             const char *type_name, int direction);
 /**
+ * Like `add_service` with call timeout. `timeout_secs` <= 0 uses the library default (5s).
+ */
+ROBOT_BUS_API int robot_bus_ros2_bridge_builder_add_service_ex(RobotBusRos2BridgeBuilder *b,
+                                                               const char *ros_service,
+                                                               const char *bus_service,
+                                                               const char *type_name, int direction,
+                                                               double timeout_secs);
+/**
  * Add an action bridge route.
  * `type_name`: `example_interfaces/action/Fibonacci`.
  * `direction`: ROBOT_BUS_ROUTE_DIR_ROS2_TO_BUS or ROBOT_BUS_ROUTE_DIR_BUS_TO_ROS2
@@ -466,6 +474,14 @@ ROBOT_BUS_API int robot_bus_ros2_bridge_builder_add_action(RobotBusRos2BridgeBui
                                                            const char *ros_action,
                                                            const char *bus_action,
                                                            const char *type_name, int direction);
+/**
+ * Like `add_action` with goal timeout. `timeout_secs` <= 0 uses the library default (30s).
+ */
+ROBOT_BUS_API int robot_bus_ros2_bridge_builder_add_action_ex(RobotBusRos2BridgeBuilder *b,
+                                                              const char *ros_action,
+                                                              const char *bus_action,
+                                                              const char *type_name, int direction,
+                                                              double timeout_secs);
 /** Build bridge; builder must still be freed with `robot_bus_ros2_bridge_builder_free`. */
 ROBOT_BUS_API RobotBusRos2Bridge *robot_bus_ros2_bridge_builder_build(
     RobotBusRos2BridgeBuilder *b);

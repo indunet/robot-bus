@@ -254,6 +254,25 @@ pub(crate) mod imp {
         type_name: *const c_char,
         direction: c_int,
     ) -> c_int {
+        robot_bus_ros2_bridge_builder_add_service_ex(
+            b,
+            ros_service,
+            bus_service,
+            type_name,
+            direction,
+            0.0,
+        )
+    }
+
+    #[unsafe(no_mangle)]
+    pub extern "C" fn robot_bus_ros2_bridge_builder_add_service_ex(
+        b: *mut RobotBusRos2BridgeBuilder,
+        ros_service: *const c_char,
+        bus_service: *const c_char,
+        type_name: *const c_char,
+        direction: c_int,
+        timeout_secs: f64,
+    ) -> c_int {
         if b.is_null() {
             return err("null Ros2Bridge builder");
         }
@@ -273,16 +292,22 @@ pub(crate) mod imp {
             Ok(d) => d,
             Err(e) => return e,
         };
+        let timeout = if timeout_secs > 0.0 {
+            Duration::from_secs_f64(timeout_secs)
+        } else {
+            robot_bus::ros2_bridge::SERVICE_CALL_TIMEOUT
+        };
         let inner = unsafe { &mut *(b as *mut BuilderInner) };
         let builder = match take_builder(inner) {
             Ok(x) => x,
             Err(e) => return e,
         };
-        match builder.add_service(
+        match builder.add_service_with_timeout(
             ros_service.to_string(),
             bus_service.to_string(),
             type_name.to_string(),
             direction,
+            timeout,
         ) {
             Ok(next) => {
                 inner.inner = Some(next);
@@ -299,6 +324,25 @@ pub(crate) mod imp {
         bus_action: *const c_char,
         type_name: *const c_char,
         direction: c_int,
+    ) -> c_int {
+        robot_bus_ros2_bridge_builder_add_action_ex(
+            b,
+            ros_action,
+            bus_action,
+            type_name,
+            direction,
+            0.0,
+        )
+    }
+
+    #[unsafe(no_mangle)]
+    pub extern "C" fn robot_bus_ros2_bridge_builder_add_action_ex(
+        b: *mut RobotBusRos2BridgeBuilder,
+        ros_action: *const c_char,
+        bus_action: *const c_char,
+        type_name: *const c_char,
+        direction: c_int,
+        timeout_secs: f64,
     ) -> c_int {
         if b.is_null() {
             return err("null Ros2Bridge builder");
@@ -319,16 +363,22 @@ pub(crate) mod imp {
             Ok(d) => d,
             Err(e) => return e,
         };
+        let timeout = if timeout_secs > 0.0 {
+            Duration::from_secs_f64(timeout_secs)
+        } else {
+            robot_bus::ros2_bridge::ACTION_CALL_TIMEOUT
+        };
         let inner = unsafe { &mut *(b as *mut BuilderInner) };
         let builder = match take_builder(inner) {
             Ok(x) => x,
             Err(e) => return e,
         };
-        match builder.add_action(
+        match builder.add_action_with_timeout(
             ros_action.to_string(),
             bus_action.to_string(),
             type_name.to_string(),
             direction,
+            timeout,
         ) {
             Ok(next) => {
                 inner.inner = Some(next);
@@ -488,12 +538,36 @@ mod imp {
     }
 
     #[unsafe(no_mangle)]
+    pub extern "C" fn robot_bus_ros2_bridge_builder_add_service_ex(
+        _b: *mut RobotBusRos2BridgeBuilder,
+        _ros_service: *const c_char,
+        _bus_service: *const c_char,
+        _type_name: *const c_char,
+        _direction: c_int,
+        _timeout_secs: f64,
+    ) -> c_int {
+        err(ROS2_UNAVAILABLE)
+    }
+
+    #[unsafe(no_mangle)]
     pub extern "C" fn robot_bus_ros2_bridge_builder_add_action(
         _b: *mut RobotBusRos2BridgeBuilder,
         _ros_action: *const c_char,
         _bus_action: *const c_char,
         _type_name: *const c_char,
         _direction: c_int,
+    ) -> c_int {
+        err(ROS2_UNAVAILABLE)
+    }
+
+    #[unsafe(no_mangle)]
+    pub extern "C" fn robot_bus_ros2_bridge_builder_add_action_ex(
+        _b: *mut RobotBusRos2BridgeBuilder,
+        _ros_action: *const c_char,
+        _bus_action: *const c_char,
+        _type_name: *const c_char,
+        _direction: c_int,
+        _timeout_secs: f64,
     ) -> c_int {
         err(ROS2_UNAVAILABLE)
     }

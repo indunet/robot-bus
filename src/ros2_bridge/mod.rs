@@ -4,14 +4,22 @@
 //! Everyday robot-bus builds leave this feature off.
 //!
 //! Attach a [`TopicMapper`] / [`ServiceMapper`] / [`ActionMapper`] on each route with
-//! `.mapper(...)`. Builtin mapper types live under [`mappers`] (e.g.
+//! `.mapper(...)`. Service/action mappers are **type codecs** (builtin ZST tags);
+//! the library owns typed ROS client/server wiring for known builtins. Arbitrary
+//! custom service/action codecs need dynamic RPC support (Track B) or a Rust
+//! `attach` override.
+//!
+//! Builtin mapper types live under [`mappers`] (e.g.
 //! [`mappers::std_msgs::string::StdMsgsStringMapper`]); YAML / C++ still resolve
 //! builtins by type-name string via `lookup_*`.
 
 mod builder;
+mod dynamic_rpc_spike;
 mod mapper;
 mod spin;
-mod vendor;
+mod typed_rpc;
+/// Typed ROS IDL bindings (std_srvs / example_interfaces) for the bridge.
+pub mod vendor;
 mod yaml;
 
 pub mod mappers;
@@ -19,6 +27,21 @@ pub mod mappers;
 /// DynamicMessage field helpers for implementing custom [`TopicMapper`]s.
 pub mod mapper_support {
     pub use super::mappers::common::*;
+}
+
+/// Library-owned typed service/action attach helpers (builtins + advanced Rust backends).
+pub mod typed_service {
+    pub use super::typed_rpc::{
+        attach_builtin_action, attach_builtin_service, attach_fibonacci, attach_set_bool,
+        attach_trigger,
+    };
+}
+
+/// Track B spike outcome (dynamic service wait-set feasibility).
+pub mod dynamic_rpc {
+    pub use super::dynamic_rpc_spike::{
+        DynamicServiceSpikeResult, SPIKE_RESULT, spike_summary,
+    };
 }
 
 pub use builder::{

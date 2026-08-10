@@ -42,6 +42,7 @@ pub(crate) struct ServiceRouteSpec {
     bus_service: String,
     mapper: Arc<dyn ServiceMapper>,
     direction: Direction,
+    timeout: Duration,
 }
 
 pub(crate) struct ActionRouteSpec {
@@ -49,6 +50,7 @@ pub(crate) struct ActionRouteSpec {
     bus_action: String,
     mapper: Arc<dyn ActionMapper>,
     direction: Direction,
+    timeout: Duration,
 }
 
 /// Fluent builder: `Ros2Bridge::new(...).bus_tcp(...).route(...).mapper(...).add().build()?`.
@@ -99,6 +101,7 @@ pub struct ServiceRouteBuilder {
     bus_service: String,
     mapper: Option<Arc<dyn ServiceMapper>>,
     direction: Direction,
+    timeout: Duration,
 }
 
 /// Intermediate action route configuration before [`ActionRouteBuilder::add`].
@@ -108,6 +111,7 @@ pub struct ActionRouteBuilder {
     bus_action: String,
     mapper: Option<Arc<dyn ActionMapper>>,
     direction: Direction,
+    timeout: Duration,
 }
 
 impl Ros2Bridge {
@@ -162,6 +166,13 @@ impl Ros2BridgeBuilder {
         self
     }
 
+    /// Override bus [`NodeOptions`] (tests / custom binds). Prefer `bus_tcp` /
+    /// `bus_discover` for normal use.
+    pub fn bus_options(mut self, options: NodeOptions) -> Self {
+        self.bus_options = options;
+        self
+    }
+
     /// Discover a broker via HTTP API, then connect over TCP.
     pub fn bus_discover(self, api_url: impl Into<String>) -> Result<Self> {
         self.bus_discover_ex(api_url, None, None)
@@ -207,6 +218,7 @@ impl Ros2BridgeBuilder {
             bus_service: bus_service.into(),
             mapper: None,
             direction: Direction::Ros2ToBus,
+            timeout: SERVICE_CALL_TIMEOUT,
         }
     }
 
@@ -221,6 +233,7 @@ impl Ros2BridgeBuilder {
             bus_action: bus_action.into(),
             mapper: None,
             direction: Direction::Ros2ToBus,
+            timeout: ACTION_CALL_TIMEOUT,
         }
     }
 
@@ -246,12 +259,14 @@ impl Ros2BridgeBuilder {
         bus_service: String,
         mapper: Arc<dyn ServiceMapper>,
         direction: Direction,
+        timeout: Duration,
     ) -> Result<Self> {
         self.services.push(ServiceRouteSpec {
             ros_service,
             bus_service,
             mapper,
             direction,
+            timeout,
         });
         Ok(self)
     }
@@ -262,12 +277,14 @@ impl Ros2BridgeBuilder {
         bus_action: String,
         mapper: Arc<dyn ActionMapper>,
         direction: Direction,
+        timeout: Duration,
     ) -> Result<Self> {
         self.actions.push(ActionRouteSpec {
             ros_action,
             bus_action,
             mapper,
             direction,
+            timeout,
         });
         Ok(self)
     }
@@ -309,8 +326,32 @@ impl Ros2BridgeBuilder {
         type_name: impl Into<String>,
         direction: Direction,
     ) -> Result<Self> {
+        self.add_service_with_timeout(
+            ros_service,
+            bus_service,
+            type_name,
+            direction,
+            SERVICE_CALL_TIMEOUT,
+        )
+    }
+
+    /// Like [`add_service`](Self::add_service) with an explicit call timeout.
+    pub fn add_service_with_timeout(
+        self,
+        ros_service: impl Into<String>,
+        bus_service: impl Into<String>,
+        type_name: impl Into<String>,
+        direction: Direction,
+        timeout: Duration,
+    ) -> Result<Self> {
         let mapper = service_bridges::lookup_service_mapper(&type_name.into())?;
-        self.push_service(ros_service.into(), bus_service.into(), mapper, direction)
+        self.push_service(
+            ros_service.into(),
+            bus_service.into(),
+            mapper,
+            direction,
+            timeout,
+        )
     }
 
     /// Add an action route by ROS type string (e.g. `example_interfaces/action/Fibonacci`).
@@ -321,8 +362,32 @@ impl Ros2BridgeBuilder {
         type_name: impl Into<String>,
         direction: Direction,
     ) -> Result<Self> {
+        self.add_action_with_timeout(
+            ros_action,
+            bus_action,
+            type_name,
+            direction,
+            ACTION_CALL_TIMEOUT,
+        )
+    }
+
+    /// Like [`add_action`](Self::add_action) with an explicit goal timeout.
+    pub fn add_action_with_timeout(
+        self,
+        ros_action: impl Into<String>,
+        bus_action: impl Into<String>,
+        type_name: impl Into<String>,
+        direction: Direction,
+        timeout: Duration,
+    ) -> Result<Self> {
         let mapper = action_bridges::lookup_action_mapper(&type_name.into())?;
-        self.push_action(ros_action.into(), bus_action.into(), mapper, direction)
+        self.push_action(
+            ros_action.into(),
+            bus_action.into(),
+            mapper,
+            direction,
+            timeout,
+        )
     }
 
     pub fn build(self) -> Result<Ros2Bridge> {
@@ -473,7 +538,7 @@ impl RouteBuilder {
 }
 
 impl ServiceRouteBuilder {
-    /// Attach a service mapper for this route (e.g. [`TriggerServiceMapper`] or custom).
+    /// Attach a service codec for this route (e.g. [`TriggerServiceMapper`] or custom).
     pub fn mapper(mut self, mapper: impl IntoServiceMapper) -> Self {
         self.mapper = Some(mapper.into_service_mapper());
         self
@@ -481,6 +546,12 @@ impl ServiceRouteBuilder {
 
     pub fn direction(mut self, direction: Direction) -> Self {
         self.direction = direction;
+        self
+    }
+
+    /// Override the default service call timeout ([`SERVICE_CALL_TIMEOUT`]).
+    pub fn timeout(mut self, timeout: Duration) -> Self {
+        self.timeout = timeout;
         self
     }
 
@@ -492,13 +563,18 @@ impl ServiceRouteBuilder {
                     .into(),
             )
         })?;
-        self.parent
-            .push_service(self.ros_service, self.bus_service, mapper, self.direction)
+        self.parent.push_service(
+            self.ros_service,
+            self.bus_service,
+            mapper,
+            self.direction,
+            self.timeout,
+        )
     }
 }
 
 impl ActionRouteBuilder {
-    /// Attach an action mapper for this route (e.g. [`FibonacciActionMapper`] or custom).
+    /// Attach an action codec for this route (e.g. [`FibonacciActionMapper`] or custom).
     pub fn mapper(mut self, mapper: impl IntoActionMapper) -> Self {
         self.mapper = Some(mapper.into_action_mapper());
         self
@@ -506,6 +582,12 @@ impl ActionRouteBuilder {
 
     pub fn direction(mut self, direction: Direction) -> Self {
         self.direction = direction;
+        self
+    }
+
+    /// Override the default action goal timeout ([`ACTION_CALL_TIMEOUT`]).
+    pub fn timeout(mut self, timeout: Duration) -> Self {
+        self.timeout = timeout;
         self
     }
 
@@ -517,8 +599,13 @@ impl ActionRouteBuilder {
                     .into(),
             )
         })?;
-        self.parent
-            .push_action(self.ros_action, self.bus_action, mapper, self.direction)
+        self.parent.push_action(
+            self.ros_action,
+            self.bus_action,
+            mapper,
+            self.direction,
+            self.timeout,
+        )
     }
 }
 
@@ -590,13 +677,13 @@ fn wire_service_route(
     route: &ServiceRouteSpec,
     ros_entities: &mut Vec<Box<dyn Any + Send + Sync>>,
 ) -> Result<()> {
-    route.mapper.wire(ServiceWireContext {
+    route.mapper.attach(ServiceWireContext {
         ros_node,
         bus_node,
         ros_service: route.ros_service.as_str(),
         bus_service: route.bus_service.as_str(),
         direction: route.direction,
-        timeout: SERVICE_CALL_TIMEOUT,
+        timeout: route.timeout,
         ros_entities,
     })
 }
@@ -607,13 +694,13 @@ fn wire_action_route(
     route: &ActionRouteSpec,
     ros_entities: &mut Vec<Box<dyn Any + Send + Sync>>,
 ) -> Result<()> {
-    route.mapper.wire(ActionWireContext {
+    route.mapper.attach(ActionWireContext {
         ros_node,
         bus_node,
         ros_action: route.ros_action.as_str(),
         bus_action: route.bus_action.as_str(),
         direction: route.direction,
-        timeout: ACTION_CALL_TIMEOUT,
+        timeout: route.timeout,
         ros_entities,
     })
 }
@@ -663,6 +750,26 @@ mod route_mapper_tests {
             .mapper(service_bridges::TriggerServiceMapper)
             .add()
             .expect("builtin service mapper object");
+    }
+
+    #[test]
+    fn builtin_service_timeout_override() {
+        Ros2Bridge::new("t")
+            .service("/a", "/a")
+            .mapper(service_bridges::TriggerServiceMapper)
+            .timeout(Duration::from_millis(250))
+            .add()
+            .expect("timeout should be accepted at add()");
+    }
+
+    #[test]
+    fn unknown_service_type_errors_with_track_b_hint() {
+        let err = Ros2Bridge::new("t")
+            .add_service("/a", "/a", "my_pkg/srv/Custom", Direction::Ros2ToBus)
+            .err()
+            .expect("should fail")
+            .to_string();
+        assert!(err.contains("unsupported") || err.contains("Track B"), "{err}");
     }
 
     #[test]

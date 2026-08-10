@@ -44,24 +44,28 @@ cargo run --bin robot_bus_broker    # 另开终端
 
 字段映射是宽松的：ROS 少某个字段就取 protobuf 默认值，多的字段忽略；数值宽度自动转换（ROS `int8[]` ↔ protobuf `repeated int32`、`uint8` ↔ `bool`）。
 
-### 服务（内置 + 可外挂）
+### 服务（内置 codec + 库接线）
 
-| ROS 类型 | Mapper | 默认调用超时 |
-|----------|--------|--------------|
-| `std_srvs/srv/Trigger` | `TriggerServiceMapper` | 5s |
+| ROS 类型 | Mapper（类型标签） | 默认调用超时 |
+|----------|-------------------|--------------|
+| `std_srvs/srv/Trigger` | `TriggerServiceMapper` | 5s（可用 `.timeout(...)` 覆盖） |
 | `std_srvs/srv/SetBool` | `SetBoolServiceMapper` | 5s |
 
-自定义：在该条 service 上 `.mapper(MyServiceMapper)`（实现 `ServiceMapper::wire`）。
+`ServiceMapper` 是 **codec 标签**（提供 `type_name`）；库通过 typed 后端创建 ROS client/server。可用 `.timeout(Duration)` 覆盖默认超时。
 
-### Action（内置 + 可外挂）
+### Action（内置 codec + 库接线）
 
-| ROS 类型 | Mapper | 默认 goal 超时 |
-|----------|--------|----------------|
-| `example_interfaces/action/Fibonacci` | `FibonacciActionMapper` | 30s |
+| ROS 类型 | Mapper（类型标签） | 默认 goal 超时 |
+|----------|-------------------|----------------|
+| `example_interfaces/action/Fibonacci` | `FibonacciActionMapper` | 30s（可用 `.timeout(...)` 覆盖） |
 
-自定义：在该条 action 上 `.mapper(MyActionMapper)`（实现 `ActionMapper::wire`）。
+rclrs **没有** dynamic service/action（升版本也不行）。因此：
 
-rclrs 没有 dynamic service/action，因此外挂 srv/action 时由你的 mapper 在 `wire` 里创建 typed ROS 实体；话题则可用 `DynamicMessage` + `mapper_support`。
+- **内置**：`.mapper(TriggerServiceMapper)` 等即可，库负责接线
+- **自定义 Rust**：可 `impl ServiceMapper` 并 **override `attach`**，在 `attach` 里用 `typed_service::attach_*` 风格自建 typed 实体；或调用 `typed_service::attach_trigger` 等 helper
+- **C++ / Python 任意自定义 srv/action**：API 形状已与 Topic 对齐，但 **运行时任意 `type_name` 尚不可用**（需 Track B：dynamic RPC / rclrs wait-set）；目前只能用内置类型名
+
+话题则可用 `DynamicMessage` + `mapper_support`，三端自定义 topic 已可用。
 
 ## 自定义类型（外挂，不改库源码）
 
@@ -70,7 +74,7 @@ rclrs 没有 dynamic service/action，因此外挂 srv/action 时由你的 mappe
 | 方式 | 用途 |
 |------|------|
 | `.mapper(StdMsgsStringMapper)` 等内置 ZST | 库内已有类型（见 `mappers/`） |
-| `.mapper(MyMapper)` | 自定义 |
+| `.mapper(MyMapper)` | 自定义（topic 全语言；srv/action 见上） |
 
 ### 自定义话题
 
@@ -98,16 +102,29 @@ let mut bridge = Ros2Bridge::new("ros_bridge")
 
 运行时仍需能 `source` 到该 ROS 包的 typesupport。
 
-### 自定义服务 / Action
+### 自定义服务 / Action（Rust typed `attach`）
 
-实现 `ServiceMapper` / `ActionMapper`，在 `wire(ctx)` 里用 `ctx.ros_node` / `ctx.bus_node` 按 `ctx.direction` 创建 typed client/server 并转发。然后：
+内置只需类型标签。高级 Rust 可 override `attach`（库已抽出接线到 `typed_service`）：
 
 ```rust
-.service("/foo", "/foo")
-    .mapper(MyFooServiceMapper)
+use robot_bus::ros2_bridge::{Direction, Ros2Bridge, ServiceMapper, ServiceWireContext, typed_service};
+
+struct MyTrigger;
+impl ServiceMapper for MyTrigger {
+    fn type_name(&self) -> &'static str { "std_srvs/srv/Trigger" }
+    // default attach → typed_service::attach_builtin_service
+}
+
+.service("/reset", "/reset")
+    .mapper(MyTrigger) // or TriggerServiceMapper
+    .timeout(std::time::Duration::from_secs(2))
     .direction(Direction::Ros2ToBus)
     .add()?
 ```
+
+任意新 ROS srv/action 类型的跨语言 codec（对齐 Topic 的 DynMsg FFI）依赖 Track B。**Track B spike 结论：当前 rclrs 下不可行**（`add_to_wait_set` / `NodeHandle::rcl_node` 为 `pub(crate)`；详见 `ros2_bridge::dynamic_rpc::spike_summary()`）。未知类型会报「no typed … backend / unsupported …」。
+
+C++ / Python：`.mapper` API **形状**已对齐 Topic（虚基类 / duck `type_name` + `.timeout(...)`）；自定义对象仅当 `type_name()` 为内置类型时走 typed 接线，convert 方法在 Track B 前不会被调用。
 
 ### YAML
 
@@ -264,7 +281,7 @@ bridge.spin()
 # 或: Ros2Bridge.from_yaml("bridge.yaml")
 ```
 
-自定义 **service / action** mapper 目前仍只能在 Rust 侧实现；Python / C++ 自定义仅覆盖 **topic**。
+Service / Action：Python / C++ 用内置类型标签（与 Topic 同形的 `.mapper(...)`），可用 `.timeout(secs)`。任意自定义 codec 的运行时接线需 Track B（当前 spike **blocked**）；对未知类型会报错。Rust 可 override `attach` 做 typed 后端。自定义 C++/Python 对象若 `type_name()` 命中内置则走 typed 接线（convert 方法暂不调用）。
 
 ## C++：链式 API
 
@@ -330,7 +347,8 @@ YAML schema 与 Rust 相同。更多包与链接说明见 [cpp-api.md](cpp-api.m
 3. **连不上 broker** — 先起 `robot_bus_broker`，或改用 `bus_discover("http://127.0.0.1:15570")`。
 4. **配了 `both`** — 话题 / 服务 / Action 都不支持，改成 `ros2_to_bus` 或 `bus_to_ros2`。
 5. **C++ `ros2_available() == false`** — 装的是无桥的 `robot-bus` 包，请换 `robot-bus-ros2-*`。
-6. **`unsupported ros2 bridge topic type "my_pkg/msg/Foo"`** — 内置表没有该类型。Rust：`impl TopicMapper` + `.mapper(...)`；C++：继承 `TopicMapper` + `.mapper(shared_ptr)`；Python：实现 `type_name` / `ros_to_bus` / `bus_to_ros` 的对象 + `.mapper(...)`（`DynMsg` 支持点路径）。YAML 无法单独挂自定义类型。自定义 **service/action** 目前仍只能在 Rust 侧实现。
+6. **`unsupported ros2 bridge topic type "my_pkg/msg/Foo"`** — 内置表没有该类型。Rust：`impl TopicMapper` + `.mapper(...)`；C++：继承 `TopicMapper` + `.mapper(shared_ptr)`；Python：实现 `type_name` / `ros_to_bus` / `bus_to_ros` 的对象 + `.mapper(...)`（`DynMsg` 支持点路径）。YAML 无法单独挂自定义类型。
+7. **`no typed service/action backend`** — srv/action 只有少量内置 codec；任意自定义需 Rust override `attach` 或等待 Track B（dynamic RPC）。C++/Python 目前只能用内置类型标签（`TriggerServiceMapper` 等）。
 7. **Python `ros2_available() == False`** — 当前扩展未带 `ros2` feature；用 `just python-dev-ros2`（先 source ROS）重装。
 8. **自定义类型 build 时报 typesupport / create DynamicMessage 失败** — ROS 包未安装或未 source；桥用反射，运行时必须能加载该消息的 typesupport。
 

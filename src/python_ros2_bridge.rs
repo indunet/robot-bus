@@ -300,6 +300,50 @@ fn topic_mapper_from_py(py: Python<'_>, arg: &Bound<'_, PyAny>) -> PyResult<Arc<
     }))
 }
 
+/// Resolve a service codec: type-name str, builtin tag str, or object with `type_name()`.
+///
+/// Custom convert methods (`request_ros_to_bus`, …) are accepted for API shape parity with
+/// topics, but until Track B only builtin typed backends are wired — unknown type names error.
+fn service_mapper_from_py(py: Python<'_>, arg: &Bound<'_, PyAny>) -> PyResult<String> {
+    let _ = py;
+    if let Ok(name) = arg.extract::<String>() {
+        let _ = lookup_service_mapper(&name).map_err(bus_err)?;
+        return Ok(name);
+    }
+    if !arg.hasattr("type_name")? {
+        return Err(PyRuntimeError::new_err(
+            "service mapper must be a type name str or an object with type_name()",
+        ));
+    }
+    let type_name: String = arg.call_method0("type_name")?.extract()?;
+    let _ = lookup_service_mapper(&type_name).map_err(|e| {
+        PyRuntimeError::new_err(format!(
+            "{e}; custom ServiceMapper convert methods need Track B dynamic service support"
+        ))
+    })?;
+    Ok(type_name)
+}
+
+fn action_mapper_from_py(py: Python<'_>, arg: &Bound<'_, PyAny>) -> PyResult<String> {
+    let _ = py;
+    if let Ok(name) = arg.extract::<String>() {
+        let _ = lookup_action_mapper(&name).map_err(bus_err)?;
+        return Ok(name);
+    }
+    if !arg.hasattr("type_name")? {
+        return Err(PyRuntimeError::new_err(
+            "action mapper must be a type name str or an object with type_name()",
+        ));
+    }
+    let type_name: String = arg.call_method0("type_name")?.extract()?;
+    let _ = lookup_action_mapper(&type_name).map_err(|e| {
+        PyRuntimeError::new_err(format!(
+            "{e}; custom ActionMapper convert methods need Track B dynamic action support"
+        ))
+    })?;
+    Ok(type_name)
+}
+
 #[pyclass(name = "Ros2BridgeBuilder", unsendable)]
 struct PyRos2BridgeBuilder {
     inner: Option<Ros2BridgeBuilder>,
@@ -398,6 +442,7 @@ impl PyRos2BridgeBuilder {
             bus_service,
             type_name: None,
             direction: Direction::Ros2ToBus,
+            timeout: None,
         })
     }
 
@@ -415,6 +460,7 @@ impl PyRos2BridgeBuilder {
             bus_action,
             type_name: None,
             direction: Direction::Ros2ToBus,
+            timeout: None,
         })
     }
 
@@ -551,13 +597,14 @@ struct PyServiceBuilder {
     bus_service: String,
     type_name: Option<String>,
     direction: Direction,
+    timeout: Option<Duration>,
 }
 
 #[pymethods]
 impl PyServiceBuilder {
-    fn mapper(slf: Py<Self>, py: Python<'_>, mapper: &str) -> PyResult<Py<Self>> {
-        let _ = lookup_service_mapper(mapper).map_err(bus_err)?;
-        slf.borrow_mut(py).type_name = Some(mapper.to_string());
+    fn mapper(slf: Py<Self>, py: Python<'_>, mapper: Bound<'_, PyAny>) -> PyResult<Py<Self>> {
+        let type_name = service_mapper_from_py(py, &mapper)?;
+        slf.borrow_mut(py).type_name = Some(type_name);
         Ok(slf)
     }
 
@@ -572,6 +619,14 @@ impl PyServiceBuilder {
         Ok(slf)
     }
 
+    fn timeout(slf: Py<Self>, py: Python<'_>, secs: f64) -> PyResult<Py<Self>> {
+        if secs <= 0.0 {
+            return Err(PyRuntimeError::new_err("timeout must be > 0 seconds"));
+        }
+        slf.borrow_mut(py).timeout = Some(Duration::from_secs_f64(secs));
+        Ok(slf)
+    }
+
     fn add(slf: Py<Self>, py: Python<'_>) -> PyResult<PyRos2BridgeBuilder> {
         let mut this = slf.borrow_mut(py);
         let parent = this
@@ -581,12 +636,16 @@ impl PyServiceBuilder {
         let type_name = this.type_name.take().ok_or_else(|| {
             PyRuntimeError::new_err("ros2 bridge service: call .mapper(...) before .add()")
         })?;
+        let timeout = this
+            .timeout
+            .unwrap_or(crate::ros2_bridge::SERVICE_CALL_TIMEOUT);
         let next = parent
-            .add_service(
+            .add_service_with_timeout(
                 this.ros_service.clone(),
                 this.bus_service.clone(),
                 type_name,
                 this.direction,
+                timeout,
             )
             .map_err(bus_err)?;
         Ok(PyRos2BridgeBuilder::from_inner(next))
@@ -600,13 +659,14 @@ struct PyActionBuilder {
     bus_action: String,
     type_name: Option<String>,
     direction: Direction,
+    timeout: Option<Duration>,
 }
 
 #[pymethods]
 impl PyActionBuilder {
-    fn mapper(slf: Py<Self>, py: Python<'_>, mapper: &str) -> PyResult<Py<Self>> {
-        let _ = lookup_action_mapper(mapper).map_err(bus_err)?;
-        slf.borrow_mut(py).type_name = Some(mapper.to_string());
+    fn mapper(slf: Py<Self>, py: Python<'_>, mapper: Bound<'_, PyAny>) -> PyResult<Py<Self>> {
+        let type_name = action_mapper_from_py(py, &mapper)?;
+        slf.borrow_mut(py).type_name = Some(type_name);
         Ok(slf)
     }
 
@@ -621,6 +681,14 @@ impl PyActionBuilder {
         Ok(slf)
     }
 
+    fn timeout(slf: Py<Self>, py: Python<'_>, secs: f64) -> PyResult<Py<Self>> {
+        if secs <= 0.0 {
+            return Err(PyRuntimeError::new_err("timeout must be > 0 seconds"));
+        }
+        slf.borrow_mut(py).timeout = Some(Duration::from_secs_f64(secs));
+        Ok(slf)
+    }
+
     fn add(slf: Py<Self>, py: Python<'_>) -> PyResult<PyRos2BridgeBuilder> {
         let mut this = slf.borrow_mut(py);
         let parent = this
@@ -630,12 +698,16 @@ impl PyActionBuilder {
         let type_name = this.type_name.take().ok_or_else(|| {
             PyRuntimeError::new_err("ros2 bridge action: call .mapper(...) before .add()")
         })?;
+        let timeout = this
+            .timeout
+            .unwrap_or(crate::ros2_bridge::ACTION_CALL_TIMEOUT);
         let next = parent
-            .add_action(
+            .add_action_with_timeout(
                 this.ros_action.clone(),
                 this.bus_action.clone(),
                 type_name,
                 this.direction,
+                timeout,
             )
             .map_err(bus_err)?;
         Ok(PyRos2BridgeBuilder::from_inner(next))

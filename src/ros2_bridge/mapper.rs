@@ -1,9 +1,11 @@
 //! Topic / service / action mapper traits and topic builtin registry.
 //!
 //! Topics use [`TopicMapper`] (DynamicMessage ↔ protobuf). Services / actions use
-//! [`ServiceMapper`] / [`ActionMapper`] (`wire` creates typed ROS entities) because
-//! rclrs has no dynamic service/action API. Builtin service/action tables live in
-//! [`super::mappers::service_bridges`] / [`super::mappers::action_bridges`].
+//! [`ServiceMapper`] / [`ActionMapper`] as **type codecs** (identify a ROS type;
+//! field converters live beside builtins). The library attaches typed ROS
+//! client/server entities for known builtins via [`super::typed_rpc`]. Arbitrary
+//! custom codecs need dynamic service/action support (Track B) or an `attach`
+//! override with a Rust typed backend.
 
 use std::any::Any;
 use std::collections::HashMap;
@@ -16,6 +18,7 @@ use crate::errors::{BusError, Result as BusResult};
 use crate::runtime::Node;
 
 use super::mappers::BUILTIN_MAPPER_LIST;
+use super::typed_rpc;
 
 type Result<T> = std::result::Result<T, BusError>;
 
@@ -43,7 +46,7 @@ pub trait TopicMapper: Send + Sync {
     fn bus_to_ros(&self, payload: &[u8]) -> Result<DynamicMessage>;
 }
 
-/// Context passed to [`ServiceMapper::wire`].
+/// Context passed to [`ServiceMapper::attach`] (library / advanced typed backends).
 pub struct ServiceWireContext<'a> {
     pub ros_node: &'a rclrs::Node,
     pub bus_node: &'a mut Node,
@@ -54,13 +57,22 @@ pub struct ServiceWireContext<'a> {
     pub ros_entities: &'a mut Vec<Box<dyn Any + Send + Sync>>,
 }
 
-/// Per-service bridge: user (or builtin) creates typed ROS srv entities and forwards to bus.
+/// Service type codec: identifies a ROS service type for library-owned wiring.
+///
+/// Builtin ZSTs (e.g. [`crate::ros2_bridge::TriggerServiceMapper`]) only implement
+/// [`type_name`](ServiceMapper::type_name); [`attach`](ServiceMapper::attach)
+/// defaults to the typed builtin backend. Override `attach` for a custom Rust
+/// typed backend. Arbitrary codecs without a typed backend need Track B.
 pub trait ServiceMapper: Send + Sync {
     fn type_name(&self) -> &str;
-    fn wire(&self, ctx: ServiceWireContext<'_>) -> BusResult<()>;
+
+    /// Attach ROS↔bus forwarding. Default: builtin typed backends by `type_name`.
+    fn attach(&self, ctx: ServiceWireContext<'_>) -> BusResult<()> {
+        typed_rpc::attach_builtin_service(self.type_name(), ctx)
+    }
 }
 
-/// Context passed to [`ActionMapper::wire`].
+/// Context passed to [`ActionMapper::attach`].
 pub struct ActionWireContext<'a> {
     pub ros_node: &'a rclrs::Node,
     pub bus_node: &'a mut Node,
@@ -71,10 +83,14 @@ pub struct ActionWireContext<'a> {
     pub ros_entities: &'a mut Vec<Box<dyn Any + Send + Sync>>,
 }
 
-/// Per-action bridge: user (or builtin) creates typed ROS action entities and forwards to bus.
+/// Action type codec: identifies a ROS action type for library-owned wiring.
 pub trait ActionMapper: Send + Sync {
     fn type_name(&self) -> &str;
-    fn wire(&self, ctx: ActionWireContext<'_>) -> BusResult<()>;
+
+    /// Attach ROS↔bus forwarding. Default: builtin typed backends by `type_name`.
+    fn attach(&self, ctx: ActionWireContext<'_>) -> BusResult<()> {
+        typed_rpc::attach_builtin_action(self.type_name(), ctx)
+    }
 }
 
 struct RefTopicMapper(&'static dyn TopicMapper);
@@ -123,7 +139,6 @@ pub fn registered_topic_types() -> Vec<&'static str> {
     v.sort_unstable();
     v
 }
-
 #[cfg(test)]
 mod tests {
     use super::*;

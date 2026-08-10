@@ -133,6 +133,7 @@ pub fn ephemeral_robot_bus_config() -> RobotBusConfig {
         #[cfg(feature = "console")]
         console: ConsoleBrokerConfig {
             enabled: false,
+            tank_enabled: false,
             listen: format!("127.0.0.1:{}", next())
                 .parse()
                 .expect("console listen"),

@@ -24,6 +24,9 @@ bindings/typescript/index.d.ts
 bindings/typescript/dist/
 bindings/typescript/native/target/
 bindings/typescript/native/Cargo.lock
+# TS binding uses npm (package-lock.json); ignore accidental pnpm artifacts
+bindings/typescript/pnpm-lock.yaml
+bindings/typescript/pnpm-workspace.yaml
 
 # C++ FFI / CMake build trees
 bindings/cpp/native/target/
