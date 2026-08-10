@@ -1,9 +1,9 @@
 /**
  * Browser WebSocket RPC client Node facade.
  *
- * Mirrors Rust/Python `Node.grpc` / `Node.grpc_at`: publish, subscribe, service
+ * Mirrors Rust/Python `Node.grpc` / `Node.ws_at`: publish, subscribe, service
  * call, action run. Does not support service/action servers or local broker.
- * Transport is gRPC-over-WebSocket (`/ws`, one connection per RPC).
+ * Transport is multiplexed WebSocket RPC (`/ws`, one connection many streams).
  */
 
 import {
@@ -35,29 +35,21 @@ import {
   METHOD_PUBLISH,
   METHOD_SEND_GOAL,
   METHOD_SUBSCRIBE,
-  wsServerStream as wsServerStreamDefault,
-  wsUnary as wsUnaryDefault,
+  WsSession,
 } from "./ws-rpc.js";
 
-type WsUnaryFn = typeof wsUnaryDefault;
-type WsServerStreamFn = typeof wsServerStreamDefault;
+/** Test-only hook (session factory). */
+let sessionFactory: ((url: string) => WsSession) | null = null;
 
-let wsUnaryImpl: WsUnaryFn = wsUnaryDefault;
-let wsServerStreamImpl: WsServerStreamFn = wsServerStreamDefault;
-
-/** Test-only: swap WebSocket RPC helpers. Pass `undefined` to restore defaults. */
-export function __setWsRpcForTests(overrides?: {
-  unary?: WsUnaryFn;
-  serverStream?: WsServerStreamFn;
-}): void {
-  wsUnaryImpl = overrides?.unary ?? wsUnaryDefault;
-  wsServerStreamImpl = overrides?.serverStream ?? wsServerStreamDefault;
+/** Test-only: inject a session factory. Pass `null` to restore. */
+export function __setWsRpcForTests(factory?: ((url: string) => WsSession) | null): void {
+  sessionFactory = factory ?? null;
 }
 
-export const DEFAULT_GRPC_URL = "http://127.0.0.1:15570";
+export const DEFAULT_WS_URL = "http://127.0.0.1:15570";
 const DEFAULT_TOPOLOGY_REFRESH_MS = 10_000;
 
-export interface GrpcNodeOptions {
+export interface WsNodeOptions {
   /**
    * When `null`, disables topology and topic-type registration.
    * Otherwise registration uses the broker control-plane services via WebSocket
@@ -83,20 +75,20 @@ function endpointId(): string {
   return `web-${Date.now()}-${Math.random().toString(16).slice(2)}`;
 }
 
-export interface GrpcActionEvent {
+export interface WsActionEvent {
   kind: "GOAL" | "FEEDBACK" | "RESULT" | "CANCEL" | "UNSPECIFIED";
   body: Uint8Array;
   goalId: string;
   actionName: string;
 }
 
-export interface GrpcSendGoalOptions<Feedback = GrpcActionEvent> {
+export interface WsSendGoalOptions<Feedback = WsActionEvent> {
   goalId?: string;
   timeoutSeconds?: number;
   onFeedback?: (feedback: Feedback) => void;
 }
 
-export class GrpcGoalHandle<Result> {
+export class WsGoalHandle<Result> {
   constructor(
     readonly goalId: string,
     readonly actionName: string,
@@ -113,7 +105,7 @@ export class GrpcGoalHandle<Result> {
   }
 }
 
-function kindFromPb(kind: ActionKind): GrpcActionEvent["kind"] {
+function kindFromPb(kind: ActionKind): WsActionEvent["kind"] {
   switch (kind) {
     case ActionKind.GOAL:
       return "GOAL";
@@ -135,9 +127,9 @@ function unsupported(method: string): never {
   );
 }
 
-export class GrpcServiceClient {
+export class WsServiceClient {
   constructor(
-    private readonly node: GrpcNode,
+    private readonly node: WsNode,
     readonly serviceName: string,
   ) {}
 
@@ -150,9 +142,9 @@ export class GrpcServiceClient {
   }
 }
 
-export class TypedGrpcServiceClient<Req extends object, Res extends object> {
+export class TypedWsServiceClient<Req extends object, Res extends object> {
   constructor(
-    private readonly inner: GrpcServiceClient,
+    private readonly inner: WsServiceClient,
     private readonly requestType: MessageType<Req>,
     private readonly responseType: MessageType<Res>,
   ) {}
@@ -171,16 +163,16 @@ export class TypedGrpcServiceClient<Req extends object, Res extends object> {
   }
 }
 
-export class GrpcActionClient {
+export class WsActionClient {
   constructor(
-    private readonly node: GrpcNode,
+    private readonly node: WsNode,
     readonly actionName: string,
   ) {}
 
   sendGoal(
     body: Uint8Array,
-    options: GrpcSendGoalOptions<GrpcActionEvent> = {},
-  ): GrpcGoalHandle<GrpcActionEvent> {
+    options: WsSendGoalOptions<WsActionEvent> = {},
+  ): WsGoalHandle<WsActionEvent> {
     return this.node.sendGoal(this.actionName, body, options);
   }
 
@@ -192,13 +184,13 @@ export class GrpcActionClient {
   }
 }
 
-export class TypedGrpcActionClient<
+export class TypedWsActionClient<
   Goal extends object,
   Feedback extends object,
   Result extends object,
 > {
   constructor(
-    private readonly inner: GrpcActionClient,
+    private readonly inner: WsActionClient,
     private readonly goalType: MessageType<Goal>,
     private readonly feedbackType: MessageType<Feedback>,
     private readonly resultType: MessageType<Result>,
@@ -210,8 +202,8 @@ export class TypedGrpcActionClient<
 
   sendGoal(
     goal: Goal,
-    options: GrpcSendGoalOptions<Feedback> = {},
-  ): GrpcGoalHandle<Result> {
+    options: WsSendGoalOptions<Feedback> = {},
+  ): WsGoalHandle<Result> {
     const raw = this.inner.sendGoal(encode(this.goalType, goal), {
       goalId: options.goalId,
       timeoutSeconds: options.timeoutSeconds,
@@ -232,16 +224,16 @@ export class TypedGrpcActionClient<
       }
       return decoded;
     });
-    return new GrpcGoalHandle(raw.goalId, raw.actionName, result, () => raw.cancel());
+    return new WsGoalHandle(raw.goalId, raw.actionName, result, () => raw.cancel());
   }
 }
 
 type SubCallback = (topic: string, payload: Uint8Array) => void;
 
 /** Raw (bytes) publisher over MessageGateway.Publish. */
-export class GrpcTopicPublisher {
+export class WsTopicPublisher {
   constructor(
-    private readonly node: GrpcNode,
+    private readonly node: WsNode,
     readonly topic: string,
   ) {}
 
@@ -251,9 +243,9 @@ export class GrpcTopicPublisher {
 }
 
 /** Typed publisher: encodes protobuf then Publish. */
-export class TypedGrpcTopicPublisher<T extends object> {
+export class TypedWsTopicPublisher<T extends object> {
   constructor(
-    private readonly inner: GrpcTopicPublisher,
+    private readonly inner: WsTopicPublisher,
     private readonly msgType: MessageType<T>,
   ) {}
 
@@ -269,7 +261,7 @@ export class TypedGrpcTopicPublisher<T extends object> {
 /**
  * Browser WebSocket RPC node (browser + Node without native addon).
  */
-export class GrpcNode {
+export class WsNode {
   readonly name: string;
   readonly url: string;
   private readonly subscriptions = new Map<string, SubCallback[]>();
@@ -292,37 +284,39 @@ export class GrpcNode {
     }
   >();
   private running = false;
+  private readonly session: WsSession;
 
-  private constructor(name: string, url: string, options: GrpcNodeOptions = {}) {
+  private constructor(name: string, url: string, options: WsNodeOptions = {}) {
     this.name = name;
     this.url = url.replace(/\/$/, "");
+    this.session = (sessionFactory ?? ((u) => new WsSession(u)))(this.url);
     this.topologyEnabled = options.consoleUrl !== null;
     this.topologyRefreshMs = Math.max(100, options.topologyRefreshMs ?? DEFAULT_TOPOLOGY_REFRESH_MS);
   }
 
-  static grpc(name: string, options?: GrpcNodeOptions): GrpcNode {
-    return new GrpcNode(name, DEFAULT_GRPC_URL, options);
+  static ws(name: string, options?: WsNodeOptions): WsNode {
+    return new WsNode(name, DEFAULT_WS_URL, options);
   }
 
-  static grpcAt(name: string, url: string, options?: GrpcNodeOptions): GrpcNode {
-    return new GrpcNode(name, url, options);
+  static wsAt(name: string, url: string, options?: WsNodeOptions): WsNode {
+    return new WsNode(name, url, options);
   }
 
-  createPublisher(topic: string): GrpcTopicPublisher;
+  createPublisher(topic: string): WsTopicPublisher;
   createPublisher<T extends object>(
     topic: string,
     msgType: MessageType<T>,
-  ): TypedGrpcTopicPublisher<T>;
+  ): TypedWsTopicPublisher<T>;
   createPublisher<T extends object>(
     topic: string,
     msgType?: MessageType<T>,
-  ): GrpcTopicPublisher | TypedGrpcTopicPublisher<T> {
-    const raw = new GrpcTopicPublisher(this, topic);
+  ): WsTopicPublisher | TypedWsTopicPublisher<T> {
+    const raw = new WsTopicPublisher(this, topic);
     this.trackEndpoint("publisher", topic);
     if (msgType) {
       this.topicTypes.set(topic, msgType.typeName);
       if (this.topologyStarted) this.registerTopicType(topic, msgType.typeName);
-      return new TypedGrpcTopicPublisher(raw, msgType);
+      return new TypedWsTopicPublisher(raw, msgType);
     }
     return raw;
   }
@@ -340,7 +334,7 @@ export class GrpcNode {
     const body = TopicMessage.toBinary(
       TopicMessage.create({ topic, payload }),
     );
-    await wsUnaryImpl(this.url, METHOD_PUBLISH, body);
+    await this.session.unary(METHOD_PUBLISH, body);
   }
 
   /**
@@ -375,40 +369,40 @@ export class GrpcNode {
     }
   }
 
-  createClient(serviceName: string): GrpcServiceClient;
+  createClient(serviceName: string): WsServiceClient;
   createClient<Req extends object, Res extends object>(
     serviceName: string,
     requestType: MessageType<Req>,
     responseType: MessageType<Res>,
-  ): TypedGrpcServiceClient<Req, Res>;
+  ): TypedWsServiceClient<Req, Res>;
   createClient(
     serviceName: string,
     requestType?: MessageType<object>,
     responseType?: MessageType<object>,
-  ): GrpcServiceClient | TypedGrpcServiceClient<object, object> {
-    const raw = new GrpcServiceClient(this, serviceName);
+  ): WsServiceClient | TypedWsServiceClient<object, object> {
+    const raw = new WsServiceClient(this, serviceName);
     if (requestType && responseType) {
-      return new TypedGrpcServiceClient(raw, requestType, responseType);
+      return new TypedWsServiceClient(raw, requestType, responseType);
     }
     return raw;
   }
 
-  createActionClient(actionName: string): GrpcActionClient;
+  createActionClient(actionName: string): WsActionClient;
   createActionClient<G extends object, F extends object, R extends object>(
     actionName: string,
     goalType: MessageType<G>,
     feedbackType: MessageType<F>,
     resultType: MessageType<R>,
-  ): TypedGrpcActionClient<G, F, R>;
+  ): TypedWsActionClient<G, F, R>;
   createActionClient(
     actionName: string,
     goalType?: MessageType<object>,
     feedbackType?: MessageType<object>,
     resultType?: MessageType<object>,
-  ): GrpcActionClient | TypedGrpcActionClient<object, object, object> {
-    const raw = new GrpcActionClient(this, actionName);
+  ): WsActionClient | TypedWsActionClient<object, object, object> {
+    const raw = new WsActionClient(this, actionName);
     if (goalType && feedbackType && resultType) {
-      return new TypedGrpcActionClient(raw, goalType, feedbackType, resultType);
+      return new TypedWsActionClient(raw, goalType, feedbackType, resultType);
     }
     return raw;
   }
@@ -429,7 +423,7 @@ export class GrpcNode {
         timeoutMs,
       }),
     );
-    const raw = await wsUnaryImpl(this.url, METHOD_CALL, req);
+    const raw = await this.session.unary(METHOD_CALL, req);
     const response = ServiceCallResponse.fromBinary(raw);
     return response.response;
   }
@@ -437,8 +431,8 @@ export class GrpcNode {
   sendGoal(
     actionName: string,
     body: Uint8Array,
-    options: GrpcSendGoalOptions<GrpcActionEvent> = {},
-  ): GrpcGoalHandle<GrpcActionEvent> {
+    options: WsSendGoalOptions<WsActionEvent> = {},
+  ): WsGoalHandle<WsActionEvent> {
     const timeoutMs =
       options.timeoutSeconds === undefined
         ? 0
@@ -467,7 +461,7 @@ export class GrpcNode {
       controller,
     };
     this.actionSessions.set(id, session);
-    const result = (async (): Promise<GrpcActionEvent> => {
+    const result = (async (): Promise<WsActionEvent> => {
       try {
         const req = GoalCommand.toBinary(
           GoalCommand.create({
@@ -477,24 +471,11 @@ export class GrpcNode {
             timeoutMs,
           }),
         );
-        let resultEvent: GrpcActionEvent | undefined;
-        await wsServerStreamImpl(
-          this.url,
+        let resultEvent: WsActionEvent | undefined;
+        const { control, done } = await this.session.serverStream(
           METHOD_SEND_GOAL,
           req,
           {
-            onControl: (ctl) => {
-              softCancel = ctl.cancel;
-              session.cancel = () => {
-                pendingSoftCancel = true;
-                softCancel();
-              };
-              session.close = () => {
-                ctl.close();
-                if (!controller.signal.aborted) controller.abort();
-              };
-              if (pendingSoftCancel) softCancel();
-            },
             onData: (payload) => {
               const ev = PbActionEvent.fromBinary(payload);
               const event = mapEvent(ev);
@@ -513,8 +494,18 @@ export class GrpcNode {
               }
             },
           },
-          controller.signal,
         );
+        softCancel = control.cancel;
+        session.cancel = () => {
+          pendingSoftCancel = true;
+          softCancel();
+        };
+        session.close = () => {
+          control.close();
+          if (!controller.signal.aborted) controller.abort();
+        };
+        if (pendingSoftCancel) softCancel();
+        await done;
         if (!resultEvent) {
           throw new Error(
             `action '${actionName}' goal '${id}' completed without a result`,
@@ -528,7 +519,7 @@ export class GrpcNode {
       }
     })();
 
-    return new GrpcGoalHandle(id, actionName, result, () =>
+    return new WsGoalHandle(id, actionName, result, () =>
       this.cancelGoal(actionName, id)
     );
   }
@@ -573,6 +564,7 @@ export class GrpcNode {
     }
     this.actionSessions.clear();
     this.stopTopologyRegistration();
+    this.session.close();
   }
 
   private trackEndpoint(kind: TopologyKind, topic: string): void {
@@ -649,8 +641,7 @@ export class GrpcNode {
       const req = SubscribeRequest.toBinary(
         SubscribeRequest.create({ topic: filter }),
       );
-      await wsServerStreamImpl(
-        this.url,
+      const { control, done } = await this.session.serverStream(
         METHOD_SUBSCRIBE,
         req,
         {
@@ -677,8 +668,14 @@ export class GrpcNode {
             }
           },
         },
-        signal,
       );
+      const onAbort = () => control.close();
+      signal.addEventListener("abort", onAbort, { once: true });
+      try {
+        await done;
+      } finally {
+        signal.removeEventListener("abort", onAbort);
+      }
     } catch (err) {
       if (signal.aborted) return;
       console.error(`robot-bus subscribe '${filter}' failed`, err);
@@ -719,7 +716,7 @@ export function coalesceSubscribeFilters(topics: string[]): string[] {
   return [prefix];
 }
 
-function mapEvent(ev: PbActionEvent): GrpcActionEvent {
+function mapEvent(ev: PbActionEvent): WsActionEvent {
   return {
     kind: kindFromPb(ev.kind),
     body: ev.body,
@@ -729,4 +726,4 @@ function mapEvent(ev: PbActionEvent): GrpcActionEvent {
 }
 
 /** Browser package entry alias. */
-export { GrpcNode as Node };
+export { WsNode as Node };

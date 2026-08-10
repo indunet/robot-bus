@@ -67,7 +67,7 @@ struct TestBus {
   std::string service_backend;
   std::string action_frontend;
   std::string action_backend;
-  std::string grpc_listen;
+  std::string api_listen;
   RobotBusBrokerOptions broker_opts{};
   std::unique_ptr<Broker> broker;
 
@@ -79,7 +79,7 @@ struct TestBus {
     bus.service_backend = "tcp://127.0.0.1:" + std::to_string(free_port());
     bus.action_frontend = "tcp://127.0.0.1:" + std::to_string(free_port());
     bus.action_backend = "tcp://127.0.0.1:" + std::to_string(free_port());
-    bus.grpc_listen = "127.0.0.1:" + std::to_string(free_port());
+    bus.api_listen = "127.0.0.1:" + std::to_string(free_port());
 
     bus.broker_opts.message_xsub_bind = bus.message_xsub.c_str();
     bus.broker_opts.message_xpub_bind = bus.message_xpub.c_str();
@@ -87,7 +87,7 @@ struct TestBus {
     bus.broker_opts.service_backend_bind = bus.service_backend.c_str();
     bus.broker_opts.action_frontend_bind = bus.action_frontend.c_str();
     bus.broker_opts.action_backend_bind = bus.action_backend.c_str();
-    bus.broker_opts.grpc_listen = bus.grpc_listen.c_str();
+    bus.broker_opts.api_listen = bus.api_listen.c_str();
     bus.broker_opts.console_listen = nullptr;
     bus.broker_opts.tcp_only = 1;
     bus.broker_opts.no_console = 1;
@@ -100,7 +100,7 @@ struct TestBus {
     RobotBusNodeOptions opts{};
     opts.host = nullptr;
     opts.transport = nullptr;
-    opts.grpc_url = nullptr;
+    opts.ws_url = nullptr;
     opts.message_xsub = message_xsub.c_str();
     opts.message_xpub = message_xpub.c_str();
     opts.service_frontend = service_frontend.c_str();

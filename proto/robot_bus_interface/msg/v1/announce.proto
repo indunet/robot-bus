@@ -17,8 +17,8 @@ message BrokerAnnounce {
   // Omitted when broker is --tcp-only.
   optional string ipc_dir = 7;
   optional string inproc_prefix = 8;
-  optional string grpc_url = 9;
-  // Embedded console HTTP base URL when enabled (same origin as grpc_url when co-located).
+  optional string ws_url = 9;
+  // Embedded console HTTP base URL when enabled (same origin as ws_url / api when co-located).
   optional string console_url = 10;
 }
 

@@ -26,7 +26,7 @@ def _inproc_binds() -> dict[str, object]:
         "service_backend_bind": f"tcp://127.0.0.1:{_free_port()}",
         "action_frontend_bind": f"tcp://127.0.0.1:{_free_port()}",
         "action_backend_bind": f"tcp://127.0.0.1:{_free_port()}",
-        "grpc_listen": f"127.0.0.1:{_free_port()}",
+        "api_listen": f"127.0.0.1:{_free_port()}",
         "tcp_only": False,
         "no_console": True,
     }

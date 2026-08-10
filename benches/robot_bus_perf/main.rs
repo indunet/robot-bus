@@ -106,12 +106,12 @@ fn main() {
         }
     }
 
-    let grpc_url = broker.grpc_url();
-    println!("=== grpc ({grpc_url}) ===");
-    results.push(bench_grpc_subscribe(&broker, &grpc_url));
+    let ws_url = broker.api_url();
+    println!("=== grpc ({ws_url}) ===");
+    results.push(bench_grpc_subscribe(&broker, &ws_url));
     if !only_message {
-        results.push(bench_grpc_service(&broker, &grpc_url, svc_iters));
-        results.push(bench_grpc_action(&broker, &grpc_url, act_iters));
+        results.push(bench_grpc_service(&broker, &ws_url, svc_iters));
+        results.push(bench_grpc_action(&broker, &ws_url, act_iters));
     }
 
     broker.stop().expect("stop broker");
@@ -688,7 +688,7 @@ fn bench_grpc_subscribe(broker: &RobotBusBroker, url: &str) -> ScenarioResult {
     let count = Arc::new(AtomicUsize::new(0));
     let record_latency = Arc::new(AtomicBool::new(true));
 
-    let mut node = Node::grpc_at("perf-grpc-sub", url);
+    let mut node = Node::ws_at("perf-grpc-sub", url);
     if let Err(err) = node.create_subscription_raw(
         topic,
         Arc::new({
@@ -822,7 +822,7 @@ fn bench_grpc_subscribe(broker: &RobotBusBroker, url: &str) -> ScenarioResult {
 fn bench_grpc_service(broker: &RobotBusBroker, url: &str, n: usize) -> ScenarioResult {
     let transport = "grpc";
     let scenario = "service Call";
-    let name = "perf.grpc.echo";
+    let name = "perf.ws.echo";
 
     let handler: Arc<dyn Fn(&[u8]) -> Vec<u8> + Send + Sync> = Arc::new(|body| body.to_vec());
     let worker = match WorkerThread::spawn_service(name, handler, &broker.service.backend_bind) {
@@ -831,7 +831,7 @@ fn bench_grpc_service(broker: &RobotBusBroker, url: &str, n: usize) -> ScenarioR
     };
     thread::sleep(Duration::from_millis(150));
 
-    let mut node = Node::grpc_at("perf-grpc-cli", url);
+    let mut node = Node::ws_at("perf-grpc-cli", url);
     let client = match node.create_client_raw(name) {
         Ok(c) => c,
         Err(err) => {
@@ -884,7 +884,7 @@ fn bench_grpc_service(broker: &RobotBusBroker, url: &str, n: usize) -> ScenarioR
 fn bench_grpc_action(broker: &RobotBusBroker, url: &str, n: usize) -> ScenarioResult {
     let transport = "grpc";
     let scenario = "action SendGoal";
-    let name = "perf.grpc.act";
+    let name = "perf.ws.act";
 
     let handler: Arc<dyn Fn(&[u8]) -> Vec<(String, Vec<u8>)> + Send + Sync> = Arc::new(|body| {
         vec![
@@ -898,7 +898,7 @@ fn bench_grpc_action(broker: &RobotBusBroker, url: &str, n: usize) -> ScenarioRe
     };
     thread::sleep(Duration::from_millis(150));
 
-    let mut node = Node::grpc_at("perf-grpc-act", url);
+    let mut node = Node::ws_at("perf-grpc-act", url);
     let client = match node.create_action_client_raw(name) {
         Ok(c) => c,
         Err(err) => {

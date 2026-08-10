@@ -50,7 +50,7 @@ struct EndpointBag {
     RobotBusNodeOptions opts{};
     opts.host = nullptr;
     opts.transport = nullptr;
-    opts.grpc_url = nullptr;
+    opts.ws_url = nullptr;
     opts.message_xsub = message_xsub.c_str();
     opts.message_xpub = message_xpub.c_str();
     opts.service_frontend = service_frontend.c_str();

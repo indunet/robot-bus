@@ -9,8 +9,8 @@ use std::time::{Duration, Instant};
 
 #[cfg(feature = "console")]
 use robot_bus::ConsoleBrokerConfig;
-#[cfg(feature = "grpc")]
-use robot_bus::GrpcBrokerConfig;
+#[cfg(feature = "ws")]
+use robot_bus::WsGatewayConfig;
 use robot_bus::action_bus::{ActionClient, ActionKind};
 use robot_bus::broker::action_bus::{ActionBusConfig, ActionPeer};
 use robot_bus::broker::message_bus::BusConfig;
@@ -79,8 +79,8 @@ fn federated_action_config(
             pending_timeout_ms: 3000,
             ..ActionBusConfig::default()
         },
-        #[cfg(feature = "grpc")]
-        grpc: GrpcBrokerConfig {
+        #[cfg(feature = "ws")]
+        grpc: WsGatewayConfig {
             listen: format!("127.0.0.1:{}", other[4])
                 .parse()
                 .expect("grpc listen"),

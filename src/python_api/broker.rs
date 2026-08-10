@@ -54,10 +54,11 @@ impl PyRobotBusBroker {
         heartbeat_interval_ms = None,
         heartbeat_timeout_ms = None,
         tcp_only = false,
-        grpc_listen = None,
+        api_listen = None,
         cors_origins = None,
         console_listen = None,
         no_console = false,
+        no_tank = false,
         broker_id = None,
         message_peers = None,
         service_peers = None,
@@ -65,7 +66,6 @@ impl PyRobotBusBroker {
         domain_id = 0,
         no_discovery = false,
         advertise_host = None,
-        api_listen = None,
         peers = None,
     ))]
     fn start(
@@ -94,10 +94,11 @@ impl PyRobotBusBroker {
         heartbeat_interval_ms: Option<u64>,
         heartbeat_timeout_ms: Option<u64>,
         tcp_only: bool,
-        grpc_listen: Option<String>,
+        api_listen: Option<String>,
         cors_origins: Option<Vec<String>>,
         console_listen: Option<String>,
         no_console: bool,
+        no_tank: bool,
         broker_id: Option<String>,
         message_peers: Option<Vec<String>>,
         service_peers: Option<Vec<String>>,
@@ -105,7 +106,6 @@ impl PyRobotBusBroker {
         domain_id: u32,
         no_discovery: bool,
         advertise_host: Option<String>,
-        api_listen: Option<String>,
         peers: Option<Vec<String>>,
     ) -> PyResult<Self> {
         let mut config = RobotBusConfig::default();
@@ -194,13 +194,13 @@ impl PyRobotBusBroker {
             config.action.bind_all_transports = false;
         }
 
-        #[cfg(feature = "grpc")]
+        #[cfg(feature = "ws")]
         {
             if let Some(v) = cors_origins {
-                config.grpc.cors_origins = v;
+                config.ws.cors_origins = v;
             }
         }
-        #[cfg(not(feature = "grpc"))]
+        #[cfg(not(feature = "ws"))]
         {
             let _ = cors_origins;
         }
@@ -209,6 +209,9 @@ impl PyRobotBusBroker {
         {
             if no_console {
                 config.console.enabled = false;
+            }
+            if no_tank {
+                config.console.tank_enabled = false;
             }
             if let Some(v) = console_listen {
                 config.console.listen = v
@@ -219,7 +222,7 @@ impl PyRobotBusBroker {
         }
         #[cfg(not(feature = "console"))]
         {
-            let _ = (console_listen, no_console);
+            let _ = (console_listen, no_console, no_tank);
         }
 
         apply_federation_opts(
@@ -244,20 +247,20 @@ impl PyRobotBusBroker {
                 config.discovery.advertise_host = Some(v);
             }
         }
-        let listen = api_listen.or(grpc_listen);
+        let listen = api_listen;
         if let Some(v) = listen {
             if !v.is_empty() {
-                #[cfg(feature = "grpc")]
+                #[cfg(feature = "ws")]
                 {
-                    config.grpc.listen = v
+                    config.ws.listen = v
                         .parse()
                         .map_err(|e| PyRuntimeError::new_err(format!("invalid api_listen: {e}")))?;
                     #[cfg(feature = "console")]
                     {
-                        config.console.listen = config.grpc.listen;
+                        config.console.listen = config.ws.listen;
                     }
                 }
-                #[cfg(not(feature = "grpc"))]
+                #[cfg(not(feature = "ws"))]
                 {
                     let _ = v;
                 }
@@ -326,10 +329,10 @@ impl PyRobotBusBroker {
         self.with_broker(|b| b.action.backend_bind.clone())
     }
 
-    #[cfg(feature = "grpc")]
+    #[cfg(feature = "ws")]
     #[getter]
-    fn grpc_listen(&self) -> PyResult<String> {
-        self.with_broker(|b| b.grpc_listen().to_string())
+    fn api_listen(&self) -> PyResult<String> {
+        self.with_broker(|b| b.api_listen().to_string())
     }
 
     #[cfg(feature = "console")]
@@ -382,10 +385,10 @@ pub(crate) fn run_broker(py: Python<'_>) -> PyResult<()> {
     let mut broker = PyRobotBusBroker {
         inner: Some(broker),
     };
-    #[cfg(feature = "grpc")]
+    #[cfg(feature = "ws")]
     println!(
         "gRPC + WebSocket listening on http://{}",
-        broker.grpc_listen()?
+        broker.api_listen()?
     );
     #[cfg(feature = "console")]
     if let Some(addr) = broker.console_listen()? {

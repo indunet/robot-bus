@@ -83,7 +83,7 @@ export declare class Node {
     name: string,
     host?: string,
     transport?: string,
-    grpcUrl?: string,
+    wsUrl?: string,
     messageXsub?: string,
     messageXpub?: string,
     serviceFrontend?: string,
@@ -100,7 +100,7 @@ export declare class Node {
     name: string,
     host?: string,
     transport?: string,
-    grpcUrl?: string,
+    wsUrl?: string,
     messageXsub?: string,
     messageXpub?: string,
     serviceFrontend?: string,
@@ -108,8 +108,8 @@ export declare class Node {
     actionBackend?: string,
     actionFrontend?: string,
   ): Node;
-  static grpc(name: string): Node;
-  static grpcAt(name: string, url: string): Node;
+  static ws(name: string): Node;
+  static wsAt(name: string, url: string): Node;
   static discover(name: string, options?: DiscoverNodeOptions): Node;
   readonly name: string;
   createCallbackGroup(kind: JsCallbackGroupType): JsCallbackGroup;
@@ -154,7 +154,7 @@ export declare class SingleThreadedExecutor {
     name: string,
     host?: string,
     transport?: string,
-    grpcUrl?: string,
+    wsUrl?: string,
     messageXsub?: string,
     messageXpub?: string,
     serviceFrontend?: string,
@@ -178,7 +178,7 @@ export declare class MultiThreadedExecutor {
     name: string,
     host?: string,
     transport?: string,
-    grpcUrl?: string,
+    wsUrl?: string,
     messageXsub?: string,
     messageXpub?: string,
     serviceFrontend?: string,

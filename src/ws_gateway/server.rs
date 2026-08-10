@@ -1,4 +1,4 @@
-//! HTTP server: native gRPC + browser WebSocket RPC (+ optional console) on one port.
+//! HTTP server: multiplexed WebSocket RPC (+ optional console) on one port.
 
 use std::future::Future;
 use std::net::SocketAddr;
@@ -9,14 +9,10 @@ use axum::Router;
 use axum::routing::get;
 use http::Method;
 use tokio::net::TcpListener;
-use tonic::service::Routes;
 use tower_http::cors::{AllowOrigin, Any, CorsLayer};
 
 use super::action::ActionGatewayService;
 use super::message::MessageGatewayService;
-use super::pb::action_gateway_server::ActionGatewayServer;
-use super::pb::message_gateway_server::MessageGatewayServer;
-use super::pb::service_gateway_server::ServiceGatewayServer;
 use super::service::ServiceGatewayService;
 use super::ws::{WsGatewayState, ws_upgrade};
 
@@ -68,7 +64,7 @@ pub async fn serve_with_shutdown(
     let listen = config.listen;
     let listener = TcpListener::bind(listen)
         .await
-        .with_context(|| format!("bind gRPC listen {listen}"))?;
+        .with_context(|| format!("bind API listen {listen}"))?;
     serve_on_listener(config, listener, shutdown).await
 }
 
@@ -90,7 +86,7 @@ pub async fn serve_on_listener(
     let with_console = false;
 
     log::info!(
-        "robot_bus gRPC gateway listening on http://{} (gRPC + WebSocket /ws{}); \
+        "robot_bus WebSocket RPC gateway listening on http://{} (/ws{}); \
          message XPUB {}; message XSUB {}; service frontend {}; action frontend {}",
         config.listen,
         if with_console { " + console" } else { "" },
@@ -101,21 +97,14 @@ pub async fn serve_on_listener(
     );
 
     let ws_state = Arc::new(WsGatewayState {
-        message: message.clone(),
-        service: service.clone(),
-        action: action.clone(),
+        message,
+        service,
+        action,
     });
-
-    let grpc_router = Routes::default()
-        .add_service(MessageGatewayServer::new(message))
-        .add_service(ServiceGatewayServer::new(service))
-        .add_service(ActionGatewayServer::new(action))
-        .into_axum_router();
 
     let app = Router::new()
         .route("/ws", get(ws_upgrade))
-        .with_state(ws_state)
-        .merge(grpc_router);
+        .with_state(ws_state);
 
     let app = if let Some(disc) = config.discover.clone() {
         app.route(
@@ -139,7 +128,6 @@ pub async fn serve_on_listener(
 
     let app = app.layer(cors);
 
-    // hyper auto HTTP/1 + HTTP/2 (native gRPC needs h2; browsers use WS on HTTP/1).
     axum::serve(listener, app)
         .with_graceful_shutdown(shutdown)
         .await

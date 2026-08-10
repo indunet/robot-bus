@@ -23,13 +23,14 @@ constructor(
     private val noDiscovery: Boolean = false,
     private val domainId: Int = 0,
     private val advertiseHost: String? = null,
-    private val discoveryAddr: String? = null,
-    private val discoveryPort: Int = 0,
+    private val peers: List<String>? = null,
+    private val noTank: Boolean = false,
 ) {
     /** Keep-alive for native `char**` peer arrays until [Broker] start returns. */
     private var messagePeersNative: StringArray? = null
     private var servicePeersNative: StringArray? = null
     private var actionPeersNative: StringArray? = null
+    private var peersNative: StringArray? = null
 
     fun getMessageXsubBind(): String? = messageXsubBind
 
@@ -51,6 +52,8 @@ constructor(
 
     fun isNoConsole(): Boolean = noConsole
 
+    fun isNoTank(): Boolean = noTank
+
     fun getBrokerId(): String? = brokerId
 
     fun getMessagePeers(): List<String> = messagePeers.orEmpty()
@@ -59,15 +62,13 @@ constructor(
 
     fun getActionPeers(): List<String> = actionPeers.orEmpty()
 
+    fun getPeers(): List<String> = peers.orEmpty()
+
     fun isNoDiscovery(): Boolean = noDiscovery
 
     fun getDomainId(): Int = domainId
 
     fun getAdvertiseHost(): String? = advertiseHost
-
-    fun getDiscoveryAddr(): String? = discoveryAddr
-
-    fun getDiscoveryPort(): Int = discoveryPort
 
     internal fun toNative(): RobotBusC.BrokerOptions {
         val o = RobotBusC.BrokerOptions()
@@ -77,7 +78,7 @@ constructor(
         o.serviceBackendBind = serviceBackendBind
         o.actionFrontendBind = actionFrontendBind
         o.actionBackendBind = actionBackendBind
-        o.grpcListen = grpcListen
+        o.apiListen = grpcListen
         o.consoleListen = consoleListen
         o.tcpOnly = if (tcpOnly) 1 else 0
         o.noConsole = if (noConsole) 1 else 0
@@ -100,8 +101,12 @@ constructor(
         o.noDiscovery = if (noDiscovery) 1 else 0
         o.domainId = domainId
         o.advertiseHost = advertiseHost
-        o.discoveryAddr = discoveryAddr
-        o.discoveryPort = (discoveryPort and 0xffff).toShort()
+        if (!peers.isNullOrEmpty()) {
+            peersNative = StringArray(peers.toTypedArray())
+            o.peers = peersNative
+            o.peerCount = peers.size.toLong()
+        }
+        o.noTank = if (noTank) 1 else 0
         o.write()
         return o
     }

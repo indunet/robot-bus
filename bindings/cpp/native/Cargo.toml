@@ -22,7 +22,7 @@ ros2-shim = ["ros2", "robot-bus/ros2-shim", "rclrs/use_ros_shim"]
 [dependencies]
 anyhow = "1"
 prost = "0.14"
-robot-bus = { path = "../../..", default-features = false, features = ["grpc", "console"] }
+robot-bus = { path = "../../..", default-features = false, features = ["ws", "console"] }
 rclrs = { version = "0.7", optional = true }
 uuid = { version = "1", features = ["v4"] }
 

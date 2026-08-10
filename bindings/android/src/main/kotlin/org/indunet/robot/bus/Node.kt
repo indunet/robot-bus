@@ -565,20 +565,20 @@ class Node : AutoCloseable {
             )
 
         @JvmStatic
-        fun grpc(name: String): Node =
+        fun ws(name: String): Node =
             Node(
                 Errors.checkPtr(
-                    RobotBusC.Holder.INSTANCE.robot_bus_node_grpc(name),
-                    "Node.grpc",
+                    RobotBusC.Holder.INSTANCE.robot_bus_node_ws(name),
+                    "Node.ws",
                 ),
             )
 
         @JvmStatic
-        fun grpcAt(name: String, url: String): Node =
+        fun wsAt(name: String, url: String): Node =
             Node(
                 Errors.checkPtr(
-                    RobotBusC.Holder.INSTANCE.robot_bus_node_grpc_at(name, url),
-                    "Node.grpcAt",
+                    RobotBusC.Holder.INSTANCE.robot_bus_node_ws_at(name, url),
+                    "Node.wsAt",
                 ),
             )
 

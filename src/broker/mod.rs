@@ -15,8 +15,8 @@ pub use message_bus::MessagePeer;
 pub use parse_config::{apply_federation_opts, parse_robot_bus_config, robot_bus_broker_help};
 pub use service_bus::ServicePeer;
 
-#[cfg(feature = "grpc")]
-pub use handle::GrpcBrokerConfig;
+#[cfg(feature = "ws")]
+pub use handle::WsGatewayConfig;
 
 #[cfg(feature = "console")]
 pub use handle::ConsoleBrokerConfig;

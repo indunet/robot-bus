@@ -64,7 +64,7 @@ final class TestBus implements AutoCloseable {
                 grpcListen);
     }
 
-    String grpcUrl() {
+    String wsUrl() {
         return "http://" + grpcListen;
     }
 

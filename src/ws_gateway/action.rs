@@ -3,27 +3,22 @@
 //! Intentional cancel (WebSocket `CANCEL` frame / explicit cancel channel) submits
 //! cancel on the action bus and **keeps** streaming until `RESULT`.
 //! True transport disconnect (drop of the event receiver) still submits cancel and
-//! abandons the session — the gRPC-Web-era fallback, kept as a safety net.
+//! abandons the session.
 
-use std::pin::Pin;
 use std::sync::Arc;
 use std::thread;
 use std::time::{Duration, Instant};
 
+use prost::Message as ProstMessage;
 use tokio::sync::mpsc;
-use tokio_stream::Stream;
-use tokio_stream::wrappers::ReceiverStream;
-use tonic::{Request, Response, Status};
 use zmq::Context;
 
 use crate::action_bus::{ActionClient, ActionKind as WireKind, ActionMessage};
 use crate::errors::{BusError, parse_error_body};
 use crate::zmq_helpers::HighWaterMark;
 
-use super::pb::action_gateway_server::ActionGateway;
 use super::pb::{ActionEvent, ActionKind, GoalCommand};
-
-type SendGoalStream = Pin<Box<dyn Stream<Item = Result<ActionEvent, Status>> + Send + 'static>>;
+use super::rpc_status::RpcStatus;
 
 const POLL_TICK: Duration = Duration::from_millis(5);
 
@@ -48,23 +43,52 @@ impl ActionGatewayService {
             context: Arc::new(Context::new()),
         }
     }
+
+    /// Start a goal session.
+    ///
+    /// - Send on [`SendGoalSession::cancel`] for soft cancel (wait for RESULT).
+    /// - Drop [`SendGoalSession::events`] for hard disconnect cancel.
+    pub fn open_send_goal(&self, goal: GoalCommand) -> Result<SendGoalSession, RpcStatus> {
+        if goal.action_name.is_empty() {
+            return Err(RpcStatus::invalid_argument("action_name is required"));
+        }
+
+        let frontend = self.action_frontend.clone();
+        let context = Arc::clone(&self.context);
+        let (event_tx, event_rx) = mpsc::channel::<Result<ActionEvent, RpcStatus>>(64);
+        let (cancel_tx, cancel_rx) = mpsc::channel::<Vec<u8>>(4);
+        thread::Builder::new()
+            .name("ws-zmq-action-goal".into())
+            .spawn(move || run_goal(context, frontend, goal, event_tx, cancel_rx))
+            .map_err(|err| RpcStatus::internal(format!("spawn action goal thread: {err}")))?;
+        Ok(SendGoalSession {
+            events: event_rx,
+            cancel: cancel_tx,
+        })
+    }
+
+    pub fn handle_send_goal(&self, payload: &[u8]) -> Result<SendGoalSession, RpcStatus> {
+        let goal = GoalCommand::decode(payload)
+            .map_err(|err| RpcStatus::invalid_argument(format!("decode GoalCommand: {err}")))?;
+        self.open_send_goal(goal)
+    }
 }
 
 /// Live SendGoal session: events plus an explicit cancel channel.
 pub struct SendGoalSession {
-    pub events: mpsc::Receiver<Result<ActionEvent, Status>>,
+    pub events: mpsc::Receiver<Result<ActionEvent, RpcStatus>>,
     /// Soft cancel: submit CANCEL on the bus and keep waiting for RESULT.
     pub cancel: mpsc::Sender<Vec<u8>>,
 }
 
-fn bus_status(err: BusError) -> Status {
+fn bus_status(err: BusError) -> RpcStatus {
     match err {
-        BusError::Timeout(msg) => Status::deadline_exceeded(msg),
-        BusError::NoWorker { name } => Status::unavailable(format!("no worker for '{name}'")),
-        BusError::WorkerDied { name } => Status::unavailable(format!("worker died for '{name}'")),
-        BusError::Cancelled { name } => Status::cancelled(format!("cancelled '{name}'")),
-        BusError::NoGoal { goal_id } => Status::not_found(format!("no goal '{goal_id}'")),
-        other => Status::internal(other.to_string()),
+        BusError::Timeout(msg) => RpcStatus::deadline_exceeded(msg),
+        BusError::NoWorker { name } => RpcStatus::unavailable(format!("no worker for '{name}'")),
+        BusError::WorkerDied { name } => RpcStatus::unavailable(format!("worker died for '{name}'")),
+        BusError::Cancelled { name } => RpcStatus::cancelled(format!("cancelled '{name}'")),
+        BusError::NoGoal { goal_id } => RpcStatus::not_found(format!("no goal '{goal_id}'")),
+        other => RpcStatus::internal(other.to_string()),
     }
 }
 
@@ -98,7 +122,7 @@ fn run_goal(
     context: Arc<Context>,
     frontend: String,
     goal: GoalCommand,
-    event_tx: mpsc::Sender<Result<ActionEvent, Status>>,
+    event_tx: mpsc::Sender<Result<ActionEvent, RpcStatus>>,
     mut cancel_rx: mpsc::Receiver<Vec<u8>>,
 ) {
     let client = match ActionClient::with_context_hwm(
@@ -136,7 +160,6 @@ fn run_goal(
             }
         }
 
-        // True disconnect: consumer dropped the event receiver.
         if event_tx.is_closed() {
             if !cancel_submitted {
                 let _ = client.submit_cancel(&goal.action_name, &goal_id, b"");
@@ -148,7 +171,7 @@ fn run_goal(
             if !cancel_submitted {
                 let _ = client.submit_cancel(&goal.action_name, &goal_id, b"");
             }
-            let _ = event_tx.blocking_send(Err(Status::deadline_exceeded(
+            let _ = event_tx.blocking_send(Err(RpcStatus::deadline_exceeded(
                 "action session timed out waiting for bus reply",
             )));
             return;
@@ -175,7 +198,6 @@ fn run_goal(
                     }
                 }
                 if event_tx.blocking_send(Ok(to_event(msg))).is_err() {
-                    // Disconnect mid-send: cancel unless RESULT already left the worker.
                     if !is_result && !cancel_submitted {
                         let _ = client.submit_cancel(&goal.action_name, &goal_id, b"");
                     }
@@ -191,47 +213,5 @@ fn run_goal(
                 return;
             }
         }
-    }
-}
-
-#[tonic::async_trait]
-impl ActionGateway for ActionGatewayService {
-    type SendGoalStream = SendGoalStream;
-
-    async fn send_goal(
-        &self,
-        request: Request<GoalCommand>,
-    ) -> Result<Response<Self::SendGoalStream>, Status> {
-        let session = self.open_send_goal(request.into_inner())?;
-        // Native gRPC is unary→server-stream: intentional cancel = drop the stream
-        // (client RPC cancellation). Soft-cancel channel is unused here.
-        drop(session.cancel);
-        let stream = ReceiverStream::new(session.events);
-        Ok(Response::new(Box::pin(stream) as Self::SendGoalStream))
-    }
-}
-
-impl ActionGatewayService {
-    /// Start a goal session.
-    ///
-    /// - Send on [`SendGoalSession::cancel`] for soft cancel (wait for RESULT).
-    /// - Drop [`SendGoalSession::events`] for hard disconnect cancel.
-    pub fn open_send_goal(&self, goal: GoalCommand) -> Result<SendGoalSession, Status> {
-        if goal.action_name.is_empty() {
-            return Err(Status::invalid_argument("action_name is required"));
-        }
-
-        let frontend = self.action_frontend.clone();
-        let context = Arc::clone(&self.context);
-        let (event_tx, event_rx) = mpsc::channel::<Result<ActionEvent, Status>>(64);
-        let (cancel_tx, cancel_rx) = mpsc::channel::<Vec<u8>>(4);
-        thread::Builder::new()
-            .name("grpc-zmq-action-goal".into())
-            .spawn(move || run_goal(context, frontend, goal, event_tx, cancel_rx))
-            .map_err(|err| Status::internal(format!("spawn action goal thread: {err}")))?;
-        Ok(SendGoalSession {
-            events: event_rx,
-            cancel: cancel_tx,
-        })
     }
 }

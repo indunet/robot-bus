@@ -448,14 +448,14 @@ class Node {
         "Node::with_context")));
   }
 
-  static Node grpc(std::string name) {
+  static Node ws(std::string name) {
     return Node(static_cast<RobotBusNode *>(
-        check_ptr(robot_bus_node_grpc(name.c_str()), "Node::grpc")));
+        check_ptr(robot_bus_node_ws(name.c_str()), "Node::ws")));
   }
 
-  static Node grpc_at(std::string name, const char *url) {
+  static Node ws_at(std::string name, const char *url) {
     return Node(static_cast<RobotBusNode *>(
-        check_ptr(robot_bus_node_grpc_at(name.c_str(), url), "Node::grpc_at")));
+        check_ptr(robot_bus_node_ws_at(name.c_str(), url), "Node::ws_at")));
   }
 
   /// Discover a broker (HTTP /api/v1/discover) then connect with the chosen transport.
@@ -780,8 +780,8 @@ class Broker {
     OwnedString s(robot_bus_broker_action_backend_bind(b_));
     return s.str();
   }
-  std::string grpc_listen() const {
-    OwnedString s(robot_bus_broker_grpc_listen(b_));
+  std::string api_listen() const {
+    OwnedString s(robot_bus_broker_api_listen(b_));
     return s.str();
   }
 

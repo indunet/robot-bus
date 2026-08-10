@@ -11,8 +11,8 @@ use std::time::Duration;
 
 #[cfg(feature = "console")]
 use robot_bus::ConsoleBrokerConfig;
-#[cfg(feature = "grpc")]
-use robot_bus::GrpcBrokerConfig;
+#[cfg(feature = "ws")]
+use robot_bus::WsGatewayConfig;
 use robot_bus::broker::action_bus::ActionBusConfig;
 use robot_bus::broker::message_bus::BusConfig;
 use robot_bus::broker::service_bus::ServiceBusConfig;
@@ -119,8 +119,8 @@ pub fn ephemeral_robot_bus_config() -> RobotBusConfig {
             bind_all_transports: false,
             ..ActionBusConfig::default()
         },
-        #[cfg(feature = "grpc")]
-        grpc: GrpcBrokerConfig {
+        #[cfg(feature = "ws")]
+        ws: WsGatewayConfig {
             listen: format!("127.0.0.1:{}", next())
                 .parse()
                 .expect("grpc listen"),

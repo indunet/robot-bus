@@ -113,8 +113,8 @@ Node node = Node.discover("talker", "tcp", new DiscoverOpts(0));
 // BrokerOptions(..., noDiscovery, domainId, advertiseHost, discoveryAddr, discoveryPort)
 ```
 
-### gRPC 模式 Node（客户端）
-`Node.grpc` / `Node.grpcAt` 经 broker gRPC 网关接入，不创建 ZMQ socket。
+### WebSocket RPC 模式 Node（客户端）
+`Node.grpc` / `Node.wsAt` 经 broker gRPC 网关接入，不创建 ZMQ socket。
 
 | 支持 | 不支持 |
 |------|--------|
@@ -125,8 +125,8 @@ Node node = Node.discover("talker", "tcp", new DiscoverOpts(0));
 | `createTimer`、`spin` / `shutdown` | |
 
 ```java
-Node node = Node.grpc("web-client");
-// 或 Node.grpcAt("web-client", "http://127.0.0.1:15570");
+Node node = Node.ws("web-client");
+// 或 Node.wsAt("web-client", "http://127.0.0.1:15570");
 ```
 
 ### TF（坐标树）
@@ -248,4 +248,4 @@ just java-install      # ~/.m2（仅 JVM；Android 不再需要）
 | `Broker` / `Broker(Context, …)` | 进程内 broker |
 | `SingleThreadedExecutor` / `MultiThreadedExecutor`（可传 `Context`） | 显式执行器 |
 
-gRPC 模式见上一节；底层 C ABI 与 C++ 共用 `librobot_bus_c`。Android 入口见 [`android-api.md`](android-api.md)。
+WebSocket RPC 模式见上一节；底层 C ABI 与 C++ 共用 `librobot_bus_c`。Android 入口见 [`android-api.md`](android-api.md)。

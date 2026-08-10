@@ -7,24 +7,49 @@ import {
   httpUrlToWsRpc,
 } from "../src/ws-rpc.js";
 
-describe("ws-rpc framing", () => {
-  it("round-trips REQUEST and TRAILER", () => {
+describe("ws-rpc framing V2", () => {
+  it("round-trips REQUEST / DATA / CANCEL / TRAILER with streamId", () => {
     const req = encodeFrame({
       type: "request",
+      streamId: 1,
       method: METHOD_PUBLISH,
       payload: new Uint8Array([1, 2, 3]),
     });
     const decoded = decodeFrame(req);
     assert.equal(decoded.type, "request");
     if (decoded.type === "request") {
+      assert.equal(decoded.streamId, 1);
       assert.equal(decoded.method, METHOD_PUBLISH);
       assert.deepEqual(Array.from(decoded.payload), [1, 2, 3]);
     }
 
-    const tr = encodeFrame({ type: "trailer", status: 0, message: "ok" });
+    const data = encodeFrame({
+      type: "data",
+      streamId: 3,
+      payload: new Uint8Array([9]),
+    });
+    const d = decodeFrame(data);
+    assert.equal(d.type, "data");
+    if (d.type === "data") {
+      assert.equal(d.streamId, 3);
+      assert.deepEqual(Array.from(d.payload), [9]);
+    }
+
+    const cancel = encodeFrame({ type: "cancel", streamId: 5 });
+    const c = decodeFrame(cancel);
+    assert.equal(c.type, "cancel");
+    if (c.type === "cancel") assert.equal(c.streamId, 5);
+
+    const tr = encodeFrame({
+      type: "trailer",
+      streamId: 7,
+      status: 0,
+      message: "ok",
+    });
     const t = decodeFrame(tr);
     assert.equal(t.type, "trailer");
     if (t.type === "trailer") {
+      assert.equal(t.streamId, 7);
       assert.equal(t.status, 0);
       assert.equal(t.message, "ok");
     }

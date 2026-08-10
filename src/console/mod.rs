@@ -28,7 +28,7 @@ use rust_embed::Embed;
 use tokio::net::TcpListener;
 
 use api::{
-    actions, bot_sim_heartbeat, bot_sim_release, bot_sim_session, bot_sim_status, discover, events,
+    actions, tank_heartbeat, tank_release, tank_session, tank_status, discover, events,
     services, status, topic_info, topics, topology,
 };
 
@@ -49,13 +49,13 @@ pub fn api_router(state: Arc<ConsoleState>) -> Router {
         .route("/api/v1/services", get(services))
         .route("/api/v1/actions", get(actions))
         .route("/api/v1/events", get(events))
-        .route("/api/v1/bot-sim", get(bot_sim_status))
-        .route("/api/v1/bot-sim/session", post(bot_sim_session))
+        .route("/api/v1/tank", get(tank_status))
+        .route("/api/v1/tank/session", post(tank_session))
         .route(
-            "/api/v1/bot-sim/session/{id}/heartbeat",
-            post(bot_sim_heartbeat),
+            "/api/v1/tank/session/{id}/heartbeat",
+            post(tank_heartbeat),
         )
-        .route("/api/v1/bot-sim/session/{id}", delete(bot_sim_release))
+        .route("/api/v1/tank/session/{id}", delete(tank_release))
         .layer(Extension(state))
 }
 

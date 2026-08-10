@@ -3,7 +3,7 @@
 #
 # Layout: Rust core at repo root; language SDKs under bindings/;
 # benches/; tests/ for interop; console/ is broker monitoring UI;
-# Console BOT SIM panel pairs with in-process src/bot_sim (session-acquired).
+# Console TANK panel pairs with in-process src/tank (session-acquired).
 # Tool nodes / TF / Studio live in sibling repo robot-bus-tools.
 
 set shell := ["bash", "-eu", "-o", "pipefail", "-c"]
@@ -110,10 +110,10 @@ test-cpp:
 console:
 	./scripts/build_console.sh
 
-# BOT SIM is in-process now: open the console BOT window (POST /api/v1/bot-sim/session).
-bot-sim:
-	@echo "bot_sim runs inside robot_bus_broker when a console BOT SIM session is open."
-	@echo "Start the broker, then open the sidebar BOT window (or /bot_sim)."
+# TANK is in-process now: open the console TANK window (POST /api/v1/tank/session).
+tank:
+	@echo "tank runs inside robot_bus_broker when a console TANK session is open."
+	@echo "Start the broker, then open the sidebar TANK window (or /tank)."
 
 # Rust tests (default features)
 test-rust: gen-rust
@@ -151,7 +151,7 @@ test-interop: gen-rust
 	if [[ -x .venv/bin/python ]]; then PY=.venv/bin/python; else PY=python3; fi
 	"$PY" tests/interop/run.py
 
-# TypeScript smoke tests (msgs + GrpcNode guards; inproc skips without native addon)
+# TypeScript smoke tests (msgs + WsNode guards; inproc skips without native addon)
 test-typescript: gen-typescript
 	cd bindings/typescript && npm test
 
@@ -164,7 +164,7 @@ ci: gen-all
 
 # Performance harness (release); writes docs/perf-report.md
 perf: gen-rust
-	cargo run --release --bin robot_bus_perf --features grpc
+	cargo run --release --bin robot_bus_perf --features ws
 
 # ROS 2 comparison benches (Docker container `ros2`); writes docs/ros2-perf-report.md
 perf-ros2:

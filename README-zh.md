@@ -41,7 +41,7 @@ Rust 核心留在仓库根目录（`Cargo.toml` + `src/`）。各语言 SDK 放�
 | [`src/`](src/)、`Cargo.toml` | Rust 核心（crates.io / maturin 入口） |
 | [`proto/`](proto/) | 契约源：ROS 风格 Protobuf → Rust / bindings 生成代码 |
 | [`bindings/`](bindings/) | 语言 SDK（Python、TypeScript、C++、Java、Android） |
-| [`console/`](console/) | Broker 监控控制台 + 机器人仿真可视化/操作面板（构建产物 → `assets/console/`，不入库）；进程内仿真见 [`src/bot_sim/`](src/bot_sim/) |
+| [`console/`](console/) | Broker 监控控制台 + 坦克可视化/操作面板（构建产物 → `assets/console/`，不入库）；进程内仿真见 [`src/tank/`](src/tank/) |
 | [`benches/`](benches/) | 性能压测：[`robot_bus_perf/`](benches/robot_bus_perf/)（`just perf`）、[`ros2_perf/`](benches/ros2_perf/)（`just perf-ros2`） |
 | [`tests/`](tests/) | Rust 集成测试 + 跨语言互通（`just test-interop`） |
 | [`docs/`](docs/) | API 文档与生成的性能报告 |
@@ -161,7 +161,7 @@ imu_pub.publish(Imu(linear_acceleration=Vector3(x=0.0, y=0.0, z=9.8)))
 
 （不传消息类型时仍为 raw bytes。多节点共享或需多线程 handler 时再用 `SingleThreadedExecutor` / `MultiThreadedExecutor` + `add_node`。）
 
-仅走 gRPC 网关时：`Node.grpc("name")` / `Node.grpc_at("name", "http://…")`（客户端：订阅 / publish / 调 service / action）。详见 [`docs/python-api.md`](docs/python-api.md)。
+仅走 gRPC 网关时：`Node.ws("name")` / `Node.ws_at("name", "http://…")`（客户端：订阅 / publish / 调 service / action）。详见 [`docs/python-api.md`](docs/python-api.md)。
 
 ### TypeScript
 
@@ -187,7 +187,7 @@ const pub = node.createPublisher("/robot1/imu", Imu);
 node.createSubscription("/robot1/imu", (_t, imu) => console.log(imu), Imu);
 ```
 
-浏览器 / 纯 gRPC：`Node.grpc("client")`（browser 入口的 `Node` 即为 WebSocket RPC facade）。
+浏览器 / 纯 gRPC：`Node.ws("client")`（browser 入口的 `Node` 即为 WebSocket RPC facade）。
 
 ### Java / Android（Maven Central）
 
@@ -243,7 +243,7 @@ robot-bus = { path = "../robot-bus" }
 
 语义接近 ROS 2：`Node::new` → typed `create_publisher` / `create_subscription` → `node.spin()`（自动挂 `SingleThreadedExecutor`）。
 
-仅走 gRPC 网关（不启 ZMQ）时用 `Node::grpc` / `Node::grpc_at`：可订阅、publish、调 service / action，不能当 server；详见 [`docs/rust-api.md`](docs/rust-api.md#grpc-模式-node客户端)。
+仅走 gRPC 网关（不启 ZMQ）时用 `Node::grpc` / `Node::ws_at`：可订阅、publish、调 service / action，不能当 server；详见 [`docs/rust-api.md`](docs/rust-api.md#grpc-模式-node客户端)。
 
 ```rust
 use std::sync::Arc;
@@ -328,19 +328,20 @@ just console          # pnpm build + sync → assets/console/（已 gitignore）
 cargo run --bin robot_bus_broker
 # 打开 http://localhost:15570
 # 关闭：cargo run --bin robot_bus_broker -- --no-console
+# 关闭坦克：cargo run --bin robot_bus_broker -- --no-tank
 ```
 
 `assets/console/` 是**构建产物**（不提交）。CI / 发布在带 `console` feature 编译前会先生成该目录。
 
-已对接 **与原生 gRPC / WebSocket RPC 同一端口**（`0.0.0.0:15570`）：Dashboard 是 TypeScript `GrpcNode`，经 `/ws` 订阅 `/robot_bus/*` 系统话题。`rbus` / 工具仍可用 REST 只读 shim（`GET /api/v1/...`）。拓扑与类型登记通过现有 service bus 上的可靠控制面服务（`/robot_bus/topology/register`、`/robot_bus/topic_type/register`）。领域可视化、Flow、LIVE / WHEP 在同级仓库 **[robot-bus-tools](https://github.com/indunet/robot-bus-tools)** 的 Studio。前端源码在 `console/`；只有生成的静态文件会编进带 `console` feature 的二进制。
+已对接 **与WebSocket RPC / WebSocket RPC 同一端口**（`0.0.0.0:15570`）：Dashboard 是 TypeScript `WsNode`，经 `/ws` 订阅 `/robot_bus/*` 系统话题。`rbus` / 工具仍可用 REST 只读 shim（`GET /api/v1/...`）。拓扑与类型登记通过现有 service bus 上的可靠控制面服务（`/robot_bus/topology/register`、`/robot_bus/topic_type/register`）。领域可视化、Flow、LIVE / WHEP 在同级仓库 **[robot-bus-tools](https://github.com/indunet/robot-bus-tools)** 的 Studio。前端源码在 `console/`；只有生成的静态文件会编进带 `console` feature 的二进制。
 
-**机器人仿真双节点演示：** 进程内 [`src/bot_sim/`](src/bot_sim/) 负责物理（`SUB /robot_bus/bot/cmd_vel` → `PUB /robot_bus/bot/pose`），控制台打开 BOT SIM 会话时自动拉起；**BOT SIM** 面板（`bot_viz`）渲染位姿并调度能力（当前为键盘遥控）。共享世界，多人可看，遥控后写覆盖。
+**坦克双节点演示：** 进程内 [`src/tank/`](src/tank/) 负责物理（`SUB /robot_bus/tank/cmd_vel` → `PUB /robot_bus/tank/pose`），控制台打开 TANK 会话时自动拉起；**TANK** 面板（`tank_viz`）渲染位姿并调度能力（当前为键盘遥控）。共享世界，多人可看，遥控后写覆盖。生产环境加 `--no-tank`（或绑定 `no_tank`）：侧栏入口隐藏，`GET /api/v1/tank` 返回 `enabled: false`。
 
 ## gRPC + 浏览器 WebSocket 网关
 
-随 `robot_bus_broker` / `RobotBusBroker::start` 一起启动；**原生 gRPC**（HTTP/2）与 **浏览器 WebSocket RPC**（`/ws`，一 RPC 一连接）**同端口**（默认 `0.0.0.0:15570`）。已移除 gRPC-Web。
+随 `robot_bus_broker` / `RobotBusBroker::start` 一起启动；**WebSocket RPC**（HTTP/2）与 **浏览器 WebSocket RPC**（`/ws`，一 RPC 一连接）**同端口**（默认 `0.0.0.0:15570`）。已移除 gRPC-Web。
 
-也可用 `Node::grpc` / `Node::grpc_at` 以 Node API 接入网关（客户端：订阅 / publish / 调 service / 调 action，见 [`docs/rust-api.md`](docs/rust-api.md#grpc-模式-node客户端)）。
+也可用 `Node::grpc` / `Node::ws_at` 以 Node API 接入网关（客户端：订阅 / publish / 调 service / 调 action，见 [`docs/rust-api.md`](docs/rust-api.md#grpc-模式-node客户端)）。
 
 | RPC | 语义 |
 |-----|------|
@@ -349,7 +350,7 @@ cargo run --bin robot_bus_broker
 | `ServiceGateway.Call` | 一元：`service_name` + request bytes → response bytes |
 | `ActionGateway.SendGoal` | 一元 goal 请求，随后由服务端流式返回 `ActionEvent`（`FEEDBACK`，最终为 `RESULT`） |
 
-各语言 action client 统一采用 ROS 2 风格 `GoalHandle`：`send_goal` / `sendGoal` 立即返回 handle，实时 feedback 交给回调，result 独立等待。`handle.cancel()` 是 best-effort 操作，不表示服务端已确认取消：浏览器 WebSocket 发显式 `CANCEL` 帧（连接保持至 `RESULT`；真断连仍会 cancel）；原生 gRPC 取消 goal 流；ZMQ 发送显式 `CANCEL` 帧。
+各语言 action client 统一采用 ROS 2 风格 `GoalHandle`：`send_goal` / `sendGoal` 立即返回 handle，实时 feedback 交给回调，result 独立等待。`handle.cancel()` 是 best-effort 操作，不表示服务端已确认取消：浏览器 WebSocket 发显式 `CANCEL` 帧（连接保持至 `RESULT`；真断连仍会 cancel）；WebSocket RPC 取消 goal 流；ZMQ 发送显式 `CANCEL` 帧。
 
 ```bash
 cargo run --bin robot_bus_broker
@@ -360,16 +361,16 @@ cargo run --bin robot_bus_broker
 进程内：
 
 ```rust
-use robot_bus::{GrpcBrokerConfig, RobotBusBroker, RobotBusConfig};
+use robot_bus::{WsGatewayConfig, RobotBusBroker, RobotBusConfig};
 
 let broker = RobotBusBroker::start(RobotBusConfig {
-    grpc: GrpcBrokerConfig {
+    grpc: WsGatewayConfig {
         listen: "0.0.0.0:15570".parse()?,
         ..Default::default()
     },
     ..RobotBusConfig::default()
 })?;
-let grpc = format!("http://{}", broker.grpc_listen());
+let grpc = format!("http://{}", broker.api_listen());
 ```
 
 Proto（包名 `robot_bus_interface.grpc.v1`，与 ROS `*.msg.v1` / `*.srv.v1` 区分）：
@@ -500,7 +501,7 @@ just perf-ros2      # ROS 2 对标，见 benches/ros2_perf/
 - 传输层 body 仍是 opaque bytes（含 gRPC 网关）；Rust Node SDK 在 create 时绑定类型并自动 encode/decode（`create_publisher::<M>` 等），也可用 `*_raw`；Python / TypeScript / **Java** 传入 protobuf 类型即可 typed（薄封装），省略类型则为 raw bytes
 - typed `create_publisher::<M>` 还会向 broker console **best-effort 登记** `topic → M::full_name()`（如 `sensor_msgs.msg.v1.Imu`），供 `rbus topic list` / `topic info` 展示；类型不在每条消息线上传输
 - **srv** 是一对 `*Request` / `*Response` message，不是 gRPC
-- **grpc**（`robot_bus`）是网关 RPC 契约，随 broker 启动（默认 feature `grpc`）
+- **grpc**（`robot_bus`）是网关 RPC 契约，随 broker 启动（默认 feature `ws`）
 - 消息在 `robot_bus` 命名空间下，**不占用** ROS 顶层 `sensor_msgs` 包名；编码是 protobuf，与 ROS CDR 不互通
 - 一键：`just gen-all`
 

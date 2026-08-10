@@ -47,17 +47,17 @@ int main() {
 
   // --- constructors ---
   {
-    auto node = robot_bus::Node::grpc("web");
+    auto node = robot_bus::Node::ws("web");
     ROBOT_BUS_CHECK(node.name() == "web");
   }
   {
-    auto node = robot_bus::Node::grpc_at("web2", "http://10.0.0.1:15570");
+    auto node = robot_bus::Node::ws_at("web2", "http://10.0.0.1:15570");
     ROBOT_BUS_CHECK(node.name() == "web2");
   }
 
   // --- capability guards (servers only; publish is supported) ---
   {
-    auto node = robot_bus::Node::grpc("only-client");
+    auto node = robot_bus::Node::ws("only-client");
     expect_not_supported("create_service", [&] {
       node.create_service("/svc", [](robot_bus::BytesView) { return std::vector<uint8_t>{}; });
     });
@@ -71,13 +71,13 @@ int main() {
   // --- publish via gRPC reaches ZMQ subscriber ---
   {
     auto bus = TestBus::start();
-    const std::string grpc_url = "http://" + bus.grpc_listen;
+    const std::string ws_url = "http://" + bus.api_listen;
 
     auto sub_node = bus.make_node("cpp_grpc_zmq_sub");
     std::atomic<bool> got{false};
     std::string got_topic;
     std::vector<uint8_t> got_payload;
-    sub_node.create_subscription("cpp.grpc.pub", [&](std::string_view topic, robot_bus::BytesView payload) {
+    sub_node.create_subscription("cpp.ws.pub", [&](std::string_view topic, robot_bus::BytesView payload) {
       got_topic = std::string(topic);
       got_payload.assign(payload.data, payload.data + payload.size);
       got = true;
@@ -85,13 +85,13 @@ int main() {
     sub_node.start();
     sleep_ms(200);
 
-    auto client = robot_bus::Node::grpc_at("grpc_pub", grpc_url.c_str());
-    auto pub = client.create_publisher("cpp.grpc.pub");
+    auto client = robot_bus::Node::ws_at("grpc_pub", ws_url.c_str());
+    auto pub = client.create_publisher("cpp.ws.pub");
     const std::string hello = "hello-from-cpp-grpc";
     pub.publish(hello);
 
     ROBOT_BUS_CHECK(wait_until([&] { return got.load(); }));
-    ROBOT_BUS_CHECK(got_topic == "cpp.grpc.pub");
+    ROBOT_BUS_CHECK(got_topic == "cpp.ws.pub");
     ROBOT_BUS_CHECK(std::string(got_payload.begin(), got_payload.end()) == hello);
 
     sub_node.shutdown();
@@ -103,10 +103,10 @@ int main() {
   // --- subscribe + service via gRPC ---
   {
     auto bus = TestBus::start();
-    const std::string grpc_url = "http://" + bus.grpc_listen;
+    const std::string ws_url = "http://" + bus.api_listen;
 
     auto pub_node = bus.make_node("cpp_grpc_pub");
-    auto pub = pub_node.create_publisher("cpp.grpc.topic");
+    auto pub = pub_node.create_publisher("cpp.ws.topic");
 
     auto server = bus.make_node("svc_server");
     server.create_service("svc.cpp_grpc_echo", [](robot_bus::BytesView body) {
@@ -119,11 +119,11 @@ int main() {
     server.start();
     sleep_ms(200);
 
-    auto client = robot_bus::Node::grpc_at("grpc_client", grpc_url.c_str());
+    auto client = robot_bus::Node::ws_at("grpc_client", ws_url.c_str());
     std::atomic<bool> got{false};
     std::string got_topic;
     std::vector<uint8_t> got_payload;
-    client.create_subscription("cpp.grpc.topic", [&](std::string_view topic, robot_bus::BytesView payload) {
+    client.create_subscription("cpp.ws.topic", [&](std::string_view topic, robot_bus::BytesView payload) {
       got_topic = std::string(topic);
       got_payload.assign(payload.data, payload.data + payload.size);
       got = true;
@@ -136,7 +136,7 @@ int main() {
       client.spin_once(0.05);
       return got.load();
     }));
-    ROBOT_BUS_CHECK(got_topic == "cpp.grpc.topic");
+    ROBOT_BUS_CHECK(got_topic == "cpp.ws.topic");
     ROBOT_BUS_CHECK(std::string(got_payload.begin(), got_payload.end()) == hello);
 
     auto svc = client.create_client("svc.cpp_grpc_echo");
@@ -152,7 +152,7 @@ int main() {
   // --- action client via gRPC ---
   {
     auto bus = TestBus::start();
-    const std::string grpc_url = "http://" + bus.grpc_listen;
+    const std::string ws_url = "http://" + bus.api_listen;
 
     auto server = bus.make_node("act_server");
     server.create_action_server("act.cpp_grpc_demo", [](robot_bus::BytesView body) {
@@ -169,7 +169,7 @@ int main() {
     server.start();
     sleep_ms(200);
 
-    auto client = robot_bus::Node::grpc_at("grpc_action", grpc_url.c_str());
+    auto client = robot_bus::Node::ws_at("grpc_action", ws_url.c_str());
     auto action = client.create_action_client("act.cpp_grpc_demo");
     std::vector<robot_bus::ActionMessage> feedback;
     auto handle = action.send_goal(

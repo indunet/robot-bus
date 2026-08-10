@@ -12,7 +12,7 @@ use robot_bus::broker::action_bus::ActionBusConfig;
 use robot_bus::broker::message_bus::BusConfig;
 use robot_bus::broker::service_bus::ServiceBusConfig;
 use robot_bus::broker::{
-    ConsoleBrokerConfig, DiscoveryConfig, GrpcBrokerConfig, RobotBusBroker, RobotBusConfig,
+    ConsoleBrokerConfig, DiscoveryConfig, WsGatewayConfig, RobotBusBroker, RobotBusConfig,
 };
 use robot_bus::sensor_msgs::msg::v1::Imu;
 use robot_bus::service_bus::ServiceClient;
@@ -57,9 +57,9 @@ fn test_broker_config(
             enabled: false,
             ..DiscoveryConfig::default()
         },
-        grpc: GrpcBrokerConfig {
+        grpc: WsGatewayConfig {
             listen: format!("127.0.0.1:{http}").parse().unwrap(),
-            ..GrpcBrokerConfig::default()
+            ..WsGatewayConfig::default()
         },
         console: ConsoleBrokerConfig {
             enabled: true,

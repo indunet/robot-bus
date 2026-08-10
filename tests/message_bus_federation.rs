@@ -7,8 +7,8 @@ use std::time::{Duration, Instant};
 
 #[cfg(feature = "console")]
 use robot_bus::ConsoleBrokerConfig;
-#[cfg(feature = "grpc")]
-use robot_bus::GrpcBrokerConfig;
+#[cfg(feature = "ws")]
+use robot_bus::WsGatewayConfig;
 use robot_bus::broker::action_bus::ActionBusConfig;
 use robot_bus::broker::message_bus::{BusConfig, MessagePeer};
 use robot_bus::broker::service_bus::ServiceBusConfig;
@@ -71,8 +71,8 @@ fn federated_bus_config(
             bind_opts: Default::default(),
             ..ActionBusConfig::default()
         },
-        #[cfg(feature = "grpc")]
-        grpc: GrpcBrokerConfig {
+        #[cfg(feature = "ws")]
+        grpc: WsGatewayConfig {
             listen: format!("127.0.0.1:{}", other[4])
                 .parse()
                 .expect("grpc listen"),
@@ -302,7 +302,7 @@ fn reserved_robot_bus_topics_stay_local() {
 
 /// HTTP discover needs the gRPC gateway listener (`GET /api/v1/discover`).
 /// Skip under `cargo test --no-default-features` where no API server is started.
-#[cfg(feature = "grpc")]
+#[cfg(feature = "ws")]
 #[test]
 fn federation_peer_via_api_discover() {
     let _guard = lock_brokers();

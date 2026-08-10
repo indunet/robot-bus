@@ -4,15 +4,15 @@ use std::collections::VecDeque;
 use std::sync::{Arc, Condvar, Mutex};
 use std::time::Duration;
 
-use tonic::{Request, Response, Status};
+use prost::Message as ProstMessage;
 use zmq::Context;
 
 use crate::errors::BusError;
 use crate::service_bus::ServiceClient;
 use crate::zmq_helpers::HighWaterMark;
 
-use super::pb::service_gateway_server::ServiceGateway;
 use super::pb::{ServiceCallRequest, ServiceCallResponse};
+use super::rpc_status::RpcStatus;
 
 const SERVICE_CLIENT_POOL_SIZE: usize = 8;
 
@@ -40,16 +40,16 @@ impl ServiceClientPool {
         })
     }
 
-    fn checkout(&self) -> Result<ServiceClient, Status> {
+    fn checkout(&self) -> Result<ServiceClient, RpcStatus> {
         let mut guard = self
             .state
             .lock()
-            .map_err(|_| Status::internal("service client pool mutex poisoned"))?;
+            .map_err(|_| RpcStatus::internal("service client pool mutex poisoned"))?;
         while guard.is_empty() {
             guard = self
                 .available
                 .wait(guard)
-                .map_err(|_| Status::internal("service client pool condvar poisoned"))?;
+                .map_err(|_| RpcStatus::internal("service client pool condvar poisoned"))?;
         }
         Ok(guard.pop_front().expect("non-empty after wait"))
     }
@@ -87,9 +87,9 @@ impl ServiceGatewayService {
         }
     }
 
-    pub async fn call_service(&self, req: ServiceCallRequest) -> Result<Vec<u8>, Status> {
+    pub async fn call_service(&self, req: ServiceCallRequest) -> Result<Vec<u8>, RpcStatus> {
         if req.service_name.is_empty() {
-            return Err(Status::invalid_argument("service_name is required"));
+            return Err(RpcStatus::invalid_argument("service_name is required"));
         }
 
         let pool = Arc::clone(&self.pool);
@@ -111,17 +111,25 @@ impl ServiceGatewayService {
             result
         })
         .await
-        .map_err(|err| Status::internal(format!("service call join: {err}")))?
+        .map_err(|err| RpcStatus::internal(format!("service call join: {err}")))?
+    }
+
+    pub async fn handle_call(&self, payload: &[u8]) -> Result<ServiceCallResponse, RpcStatus> {
+        let req = ServiceCallRequest::decode(payload).map_err(|err| {
+            RpcStatus::invalid_argument(format!("decode ServiceCallRequest: {err}"))
+        })?;
+        let response = self.call_service(req).await?;
+        Ok(ServiceCallResponse { response })
     }
 }
 
-fn bus_status(err: BusError) -> Status {
+fn bus_status(err: BusError) -> RpcStatus {
     match err {
-        BusError::Timeout(msg) => Status::deadline_exceeded(msg),
-        BusError::NoWorker { name } => Status::unavailable(format!("no worker for '{name}'")),
-        BusError::WorkerDied { name } => Status::unavailable(format!("worker died for '{name}'")),
-        BusError::Cancelled { name } => Status::cancelled(format!("cancelled '{name}'")),
-        other => Status::internal(other.to_string()),
+        BusError::Timeout(msg) => RpcStatus::deadline_exceeded(msg),
+        BusError::NoWorker { name } => RpcStatus::unavailable(format!("no worker for '{name}'")),
+        BusError::WorkerDied { name } => RpcStatus::unavailable(format!("worker died for '{name}'")),
+        BusError::Cancelled { name } => RpcStatus::cancelled(format!("cancelled '{name}'")),
+        other => RpcStatus::internal(other.to_string()),
     }
 }
 
@@ -130,16 +138,5 @@ fn timeout_from_ms(timeout_ms: u32) -> Option<Duration> {
         None
     } else {
         Some(Duration::from_millis(u64::from(timeout_ms)))
-    }
-}
-
-#[tonic::async_trait]
-impl ServiceGateway for ServiceGatewayService {
-    async fn call(
-        &self,
-        request: Request<ServiceCallRequest>,
-    ) -> Result<Response<ServiceCallResponse>, Status> {
-        let response = self.call_service(request.into_inner()).await?;
-        Ok(Response::new(ServiceCallResponse { response }))
     }
 }

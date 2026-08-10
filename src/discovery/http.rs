@@ -30,8 +30,6 @@ pub struct DiscoverResponse {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub inproc_prefix: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub grpc_url: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub console_url: Option<String>,
 }
 
@@ -52,10 +50,7 @@ impl DiscoverResponse {
             tcp: Some(tcp),
             ipc_dir: self.ipc_dir.clone(),
             inproc_prefix: self.inproc_prefix.clone(),
-            grpc_url: self
-                .grpc_url
-                .clone()
-                .or_else(|| Some(self.api_url.clone())),
+            ws_url: Some(self.api_url.clone()),
             console_url: self
                 .console_url
                 .clone()

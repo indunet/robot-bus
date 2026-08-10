@@ -38,7 +38,7 @@ export default function TopicTable({ topics, maxBodyHeight }: Props) {
         subClassName="text-bus-cyan"
       />
 
-      <div className="overflow-x-auto flex-1 min-h-0">
+      <div className="overflow-x-auto bus-scroll flex-1 min-h-0">
         <div className="min-w-[860px] h-full flex flex-col">
           <div className={`grid ${COLS} items-center px-3 h-8 border-b border-bus-border bg-bus-bg shrink-0`}>
             {headers.map((h, i) => (
@@ -52,7 +52,7 @@ export default function TopicTable({ topics, maxBodyHeight }: Props) {
           </div>
 
           <div
-            className="overflow-y-auto"
+            className="overflow-y-auto bus-scroll"
             style={maxBodyHeight ? { maxHeight: maxBodyHeight } : undefined}
           >
             {sorted.length === 0 ? (

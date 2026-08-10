@@ -42,7 +42,7 @@ int main() {
     opts.service_backend_bind = svc_be.c_str();
     opts.action_frontend_bind = act_fe.c_str();
     opts.action_backend_bind = act_be.c_str();
-    opts.grpc_listen = grpc.c_str();
+    opts.api_listen = grpc.c_str();
     opts.tcp_only = 1;
     opts.no_console = 1;
     opts.broker_id = "broker-a";

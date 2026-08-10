@@ -1,7 +1,7 @@
 //! ZeroMQ message bus: broker routing and participant SDK.
 
 pub mod action_bus;
-pub mod bot_sim;
+pub mod tank;
 pub mod broker;
 pub mod console_topics;
 pub mod discovery;
@@ -27,8 +27,8 @@ pub use generated::{
 };
 pub use typed::{Action, ActionOutcome, Service};
 
-#[cfg(feature = "grpc")]
-pub mod grpc;
+#[cfg(feature = "ws")]
+pub mod ws_gateway;
 
 #[cfg(feature = "console")]
 pub mod console;
@@ -43,8 +43,8 @@ mod python_api;
 mod python_ros2_bridge;
 
 pub use action_bus::{ActionClient, ActionKind, ActionMessage, ActionWorker};
-pub use bot_sim::{
-    BotSimEndpoints, BotSimHandle, BotSimManager, BotSimSession, BotSimStatus, CMD_VEL_TOPIC,
+pub use tank::{
+    TankEndpoints, TankHandle, TankManager, TankSession, TankStatus, CMD_VEL_TOPIC,
     MULTI_WAYPOINT_NAV_ACTION, POINT_NAV_ACTION, POSE_TOPIC, RESET_SERVICE, WORLD_SIZE,
 };
 pub use broker::{
@@ -61,8 +61,8 @@ pub use discovery::{
 #[allow(deprecated)]
 pub use discovery::{DEFAULT_DISCOVERY_PORT, DEFAULT_MULTICAST_ADDR};
 
-#[cfg(feature = "grpc")]
-pub use broker::GrpcBrokerConfig;
+#[cfg(feature = "ws")]
+pub use broker::WsGatewayConfig;
 
 #[cfg(feature = "console")]
 pub use broker::ConsoleBrokerConfig;

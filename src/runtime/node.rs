@@ -11,7 +11,7 @@
 //! Same-process **inproc** needs a shared [`crate::Context`] with the embedded
 //! broker: `RobotBusBroker::start_with_context` + [`Node::inproc_with_context`].
 //!
-//! gRPC client mode (feature `grpc`): [`Node::grpc`] connects to the broker
+//! gRPC client mode (feature `grpc`): [`Node::ws`] connects to the broker
 //! gateway only (subscribe / call service / call action). No ZMQ sockets;
 //! publisher and server APIs return an error.
 //!
@@ -33,8 +33,8 @@ use crate::runtime::callback_group::{CallbackGroup, CallbackGroupType};
 use crate::runtime::context::Context;
 use crate::runtime::executor::{Executor, ShutdownHandle};
 use crate::runtime::executors::{ExecutorHandle, SingleThreadedExecutor};
-#[cfg(feature = "grpc")]
-use crate::runtime::grpc_runtime::{GrpcClientContext, GrpcRuntime};
+#[cfg(feature = "ws")]
+use crate::runtime::ws_runtime::{WsClientContext, WsRuntime};
 use crate::runtime::parameters::{Parameter, ParameterStore, ParameterValue};
 use crate::runtime::queues::ActionMessageCallback;
 use crate::runtime::registrations::{ActionGoalHandler, MessageCallback, ServiceHandler};
@@ -58,14 +58,14 @@ use crate::zmq_helpers::HighWaterMark;
 /// every endpoint by hand. Explicit endpoint fields still override derived
 /// `transports::*` addresses when set.
 ///
-/// For gateway-only clients, use [`NodeOptions::grpc`] / [`Node::grpc`]
-/// (`transport = "grpc"`, `grpc_url` points at the broker gRPC listen address).
+/// For gateway-only clients, use [`NodeOptions::ws`] / [`Node::ws`]
+/// (`transport = "ws"`, `ws_url` points at the broker gRPC listen address).
 #[derive(Debug, Clone)]
 pub struct NodeOptions {
     pub host: String,
     pub transport: String,
-    /// gRPC gateway base URL when `transport == "grpc"` (e.g. `http://127.0.0.1:15570`).
-    pub grpc_url: Option<String>,
+    /// gRPC gateway base URL when `transport == "ws"` (e.g. `http://127.0.0.1:15570`).
+    pub ws_url: Option<String>,
     /// Embedded console HTTP base URL (same origin as gRPC when co-located).
     /// Filled by discovery when the broker announces it. Used by `rbus` / introspection
     /// clients; topology registration goes over the message bus.
@@ -89,7 +89,7 @@ impl NodeOptions {
         Self {
             host: host.into(),
             transport: transport.into(),
-            grpc_url: None,
+            ws_url: None,
             console_url: None,
             message_xsub: None,
             message_xpub: None,
@@ -122,7 +122,7 @@ impl NodeOptions {
         Self {
             host: "localhost".into(),
             transport: "ipc".into(),
-            grpc_url: None,
+            ws_url: None,
             console_url: None,
             message_xsub: Some(ipc_endpoint_in(dir, XSUB_CHANNEL)),
             message_xpub: Some(ipc_endpoint_in(dir, XPUB_CHANNEL)),
@@ -146,7 +146,7 @@ impl NodeOptions {
         Self {
             host: "localhost".into(),
             transport: "inproc".into(),
-            grpc_url: None,
+            ws_url: None,
             console_url: None,
             message_xsub: Some(inproc_endpoint_with_prefix(prefix, XSUB_CHANNEL)),
             message_xpub: Some(inproc_endpoint_with_prefix(prefix, XPUB_CHANNEL)),
@@ -161,19 +161,19 @@ impl NodeOptions {
     }
 
     /// gRPC gateway (native + browser WebSocket `/ws`) on the local broker (`http://127.0.0.1:15570`).
-    #[cfg(feature = "grpc")]
-    pub fn grpc() -> Self {
-        Self::grpc_at(GrpcRuntime::default_url())
+    #[cfg(feature = "ws")]
+    pub fn ws() -> Self {
+        Self::ws_at(WsRuntime::default_url())
     }
 
     /// gRPC gateway at `url` (e.g. `http://127.0.0.1:15570`); browsers use `ws(s)://…/ws`.
-    #[cfg(feature = "grpc")]
-    pub fn grpc_at(url: impl Into<String>) -> Self {
+    #[cfg(feature = "ws")]
+    pub fn ws_at(url: impl Into<String>) -> Self {
         let url = url.into();
         Self {
             host: "127.0.0.1".into(),
-            transport: "grpc".into(),
-            grpc_url: Some(url),
+            transport: "ws".into(),
+            ws_url: Some(url),
             console_url: None,
             message_xsub: None,
             message_xpub: None,
@@ -184,12 +184,12 @@ impl NodeOptions {
         }
     }
 
-    pub fn is_grpc(&self) -> bool {
-        self.transport == "grpc"
+    pub fn is_ws(&self) -> bool {
+        self.transport == "ws"
     }
 
     fn require_zmq(&self) -> Result<()> {
-        if self.is_grpc() {
+        if self.is_ws() {
             Err(BusError::Protocol(
                 "ZMQ endpoints are not available in gRPC node mode".into(),
             ))
@@ -198,17 +198,17 @@ impl NodeOptions {
         }
     }
 
-    #[cfg(feature = "grpc")]
-    pub fn resolved_grpc_url(&self) -> Result<String> {
-        if !self.is_grpc() {
+    #[cfg(feature = "ws")]
+    pub fn resolved_ws_url(&self) -> Result<String> {
+        if !self.is_ws() {
             return Err(BusError::Protocol(
-                "grpc_url is only valid when transport is \"grpc\"".into(),
+                "ws_url is only valid when transport is \"ws\"".into(),
             ));
         }
         Ok(self
-            .grpc_url
+            .ws_url
             .clone()
-            .unwrap_or_else(|| GrpcRuntime::default_url().to_string()))
+            .unwrap_or_else(|| WsRuntime::default_url().to_string()))
     }
 
     pub fn message_xsub_endpoint(&self) -> Result<String> {
@@ -281,7 +281,7 @@ impl NodeOptions {
 
     /// True when ZMQ endpoint fields still need to be filled (e.g. via HTTP discover).
     pub fn needs_endpoint_discover(&self) -> bool {
-        !self.is_grpc()
+        !self.is_ws()
             && self.message_xsub.is_none()
             && self.message_xpub.is_none()
             && self.service_frontend.is_none()
@@ -316,8 +316,8 @@ pub struct TopicPublisherRaw {
 #[derive(Clone)]
 enum TopicPublisherBackend {
     Zmq(Arc<BusPublisher>),
-    #[cfg(feature = "grpc")]
-    Grpc(GrpcClientContext),
+    #[cfg(feature = "ws")]
+    Ws(WsClientContext),
 }
 
 impl TopicPublisherRaw {
@@ -328,24 +328,24 @@ impl TopicPublisherRaw {
     pub fn publish(&self, payload: &[u8]) -> Result<()> {
         match &self.backend {
             TopicPublisherBackend::Zmq(inner) => inner.publish(&self.topic, payload),
-            #[cfg(feature = "grpc")]
-            TopicPublisherBackend::Grpc(ctx) => ctx.publish(&self.topic, payload),
+            #[cfg(feature = "ws")]
+            TopicPublisherBackend::Ws(ctx) => ctx.publish(&self.topic, payload),
         }
     }
 
     pub fn high_water_mark(&self) -> Result<HighWaterMark> {
         match &self.backend {
             TopicPublisherBackend::Zmq(inner) => inner.high_water_mark(),
-            #[cfg(feature = "grpc")]
-            TopicPublisherBackend::Grpc(_) => Ok(HighWaterMark::STREAM),
+            #[cfg(feature = "ws")]
+            TopicPublisherBackend::Ws(_) => Ok(HighWaterMark::STREAM),
         }
     }
 
     pub fn set_high_water_mark(&self, hwm: HighWaterMark) -> Result<()> {
         match &self.backend {
             TopicPublisherBackend::Zmq(inner) => inner.set_high_water_mark(hwm),
-            #[cfg(feature = "grpc")]
-            TopicPublisherBackend::Grpc(_) => Err(BusError::Protocol(
+            #[cfg(feature = "ws")]
+            TopicPublisherBackend::Ws(_) => Err(BusError::Protocol(
                 "set_high_water_mark is not available for gRPC publishers".into(),
             )),
         }
@@ -397,8 +397,8 @@ pub struct NodeServiceClientRaw {
 
 enum ServiceClientInner {
     Zmq(BusServiceClient),
-    #[cfg(feature = "grpc")]
-    Grpc(GrpcClientContext),
+    #[cfg(feature = "ws")]
+    Ws(WsClientContext),
 }
 
 impl NodeServiceClientRaw {
@@ -420,8 +420,8 @@ impl NodeServiceClientRaw {
             ServiceClientInner::Zmq(client) => {
                 client.call(&self.service_name, body, request_id, timeout)
             }
-            #[cfg(feature = "grpc")]
-            ServiceClientInner::Grpc(ctx) => {
+            #[cfg(feature = "ws")]
+            ServiceClientInner::Ws(ctx) => {
                 ctx.call_service(&self.service_name, body, request_id, timeout)
             }
         }
@@ -430,8 +430,8 @@ impl NodeServiceClientRaw {
     pub fn high_water_mark(&self) -> Result<HighWaterMark> {
         match &self.inner {
             ServiceClientInner::Zmq(client) => client.high_water_mark(),
-            #[cfg(feature = "grpc")]
-            ServiceClientInner::Grpc(_) => Err(BusError::Protocol(
+            #[cfg(feature = "ws")]
+            ServiceClientInner::Ws(_) => Err(BusError::Protocol(
                 "high_water_mark is not available in gRPC node mode".into(),
             )),
         }
@@ -440,8 +440,8 @@ impl NodeServiceClientRaw {
     pub fn set_high_water_mark(&self, hwm: HighWaterMark) -> Result<()> {
         match &self.inner {
             ServiceClientInner::Zmq(client) => client.set_high_water_mark(hwm),
-            #[cfg(feature = "grpc")]
-            ServiceClientInner::Grpc(_) => Err(BusError::Protocol(
+            #[cfg(feature = "ws")]
+            ServiceClientInner::Ws(_) => Err(BusError::Protocol(
                 "set_high_water_mark is not available in gRPC node mode".into(),
             )),
         }
@@ -616,8 +616,8 @@ fn spawn_zmq_goal(
 
 enum GoalControl {
     Zmq(Sender<GoalCommand>),
-    #[cfg(feature = "grpc")]
-    Grpc(tokio::task::AbortHandle),
+    #[cfg(feature = "ws")]
+    Ws(crate::runtime::ws_runtime::WsCancelHandle),
 }
 
 enum GoalCommand {
@@ -683,8 +683,8 @@ impl GoalHandleCore {
             GoalControl::Zmq(commands) => commands
                 .send(GoalCommand::Cancel(body.to_vec()))
                 .map_err(|_| BusError::Closed),
-            #[cfg(feature = "grpc")]
-            GoalControl::Grpc(abort) => {
+            #[cfg(feature = "ws")]
+            GoalControl::Ws(abort) => {
                 abort.abort();
                 Ok(())
             }
@@ -701,8 +701,8 @@ impl Drop for GoalHandleCore {
             GoalControl::Zmq(commands) => {
                 let _ = commands.send(GoalCommand::Cancel(Vec::new()));
             }
-            #[cfg(feature = "grpc")]
-            GoalControl::Grpc(abort) => abort.abort(),
+            #[cfg(feature = "ws")]
+            GoalControl::Ws(abort) => abort.abort(),
         }
     }
 }
@@ -795,8 +795,8 @@ enum ActionClientInner {
         endpoint: String,
         hwm: Mutex<HighWaterMark>,
     },
-    #[cfg(feature = "grpc")]
-    Grpc(GrpcClientContext),
+    #[cfg(feature = "ws")]
+    Ws(WsClientContext),
 }
 
 impl NodeActionClientRaw {
@@ -831,8 +831,8 @@ impl NodeActionClientRaw {
                     feedback_callback,
                 )
             }
-            #[cfg(feature = "grpc")]
-            ActionClientInner::Grpc(ctx) => ctx
+            #[cfg(feature = "ws")]
+            ActionClientInner::Ws(ctx) => ctx
                 .send_goal(&self.action_name, body, goal_id, timeout, feedback_callback)
                 .map(|session| RawGoalHandle {
                     inner: Arc::new(GoalHandleCore {
@@ -840,7 +840,7 @@ impl NodeActionClientRaw {
                         goal_id: session.goal_id,
                         events: Mutex::new(session.events),
                         messages: Mutex::new(Vec::new()),
-                        control: GoalControl::Grpc(session.abort),
+                        control: GoalControl::Ws(session.abort),
                         completed: AtomicBool::new(false),
                     }),
                 }),
@@ -873,8 +873,8 @@ impl NodeActionClientRaw {
                 .lock()
                 .map(|hwm| *hwm)
                 .map_err(|_| BusError::Protocol("action HWM mutex poisoned".into())),
-            #[cfg(feature = "grpc")]
-            ActionClientInner::Grpc(_) => Err(BusError::Protocol(
+            #[cfg(feature = "ws")]
+            ActionClientInner::Ws(_) => Err(BusError::Protocol(
                 "high_water_mark is not available in gRPC node mode".into(),
             )),
         }
@@ -888,8 +888,8 @@ impl NodeActionClientRaw {
                     .map_err(|_| BusError::Protocol("action HWM mutex poisoned".into()))? = hwm;
                 Ok(())
             }
-            #[cfg(feature = "grpc")]
-            ActionClientInner::Grpc(_) => Err(BusError::Protocol(
+            #[cfg(feature = "ws")]
+            ActionClientInner::Ws(_) => Err(BusError::Protocol(
                 "set_high_water_mark is not available in gRPC node mode".into(),
             )),
         }
@@ -995,7 +995,7 @@ impl<A: Action> NodeActionClient<A> {
 /// [`SingleThreadedExecutor::add_node`](crate::runtime::SingleThreadedExecutor::add_node)
 /// (or the multi-threaded variant) before `create_*` / `spin`.
 ///
-/// gRPC mode ([`Node::grpc`]): client-only over the broker gateway; does not
+/// gRPC mode ([`Node::ws`]): client-only over the broker gateway; does not
 /// attach to a ZMQ executor.
 pub struct Node {
     name: String,
@@ -1004,8 +1004,8 @@ pub struct Node {
     executor: Option<ExecutorHandle>,
     /// Keeps a lazily created [`SingleThreadedExecutor`] alive for the simple path.
     owned_executor: Option<SingleThreadedExecutor>,
-    #[cfg(feature = "grpc")]
-    grpc: Option<GrpcRuntime>,
+    #[cfg(feature = "ws")]
+    ws_runtime: Option<WsRuntime>,
     publisher: Option<Arc<BusPublisher>>,
     subscriber_connected: bool,
     default_callback_group: CallbackGroup,
@@ -1070,15 +1070,15 @@ impl Node {
     }
 
     /// gRPC client node talking to the local broker gateway (`http://127.0.0.1:15570`).
-    #[cfg(feature = "grpc")]
-    pub fn grpc(name: impl Into<String>) -> Self {
-        Self::with_options(name, NodeOptions::grpc())
+    #[cfg(feature = "ws")]
+    pub fn ws(name: impl Into<String>) -> Self {
+        Self::with_options(name, NodeOptions::ws())
     }
 
-    /// gRPC client node talking to `url` (e.g. `http://127.0.0.1:15570`).
-    #[cfg(feature = "grpc")]
-    pub fn grpc_at(name: impl Into<String>, url: impl Into<String>) -> Self {
-        Self::with_options(name, NodeOptions::grpc_at(url))
+    /// WebSocket RPC client node talking to `url` (e.g. `http://127.0.0.1:15570`).
+    #[cfg(feature = "ws")]
+    pub fn ws_at(name: impl Into<String>, url: impl Into<String>) -> Self {
+        Self::with_options(name, NodeOptions::ws_at(url))
     }
 
     /// Create a node with explicit broker connection options (private ZMQ context).
@@ -1108,8 +1108,8 @@ impl Node {
             context,
             executor: None,
             owned_executor: None,
-            #[cfg(feature = "grpc")]
-            grpc: None,
+            #[cfg(feature = "ws")]
+            ws_runtime: None,
             publisher: None,
             subscriber_connected: false,
             default_callback_group: CallbackGroup::mutually_exclusive(),
@@ -1124,7 +1124,7 @@ impl Node {
     }
 
     pub(crate) fn attach_executor(&mut self, handle: ExecutorHandle) -> Result<()> {
-        if self.options.is_grpc() {
+        if self.options.is_ws() {
             return Err(BusError::Protocol(
                 "gRPC node cannot attach to a ZMQ executor".into(),
             ));
@@ -1141,7 +1141,7 @@ impl Node {
     /// Return the attached executor, lazily creating a [`SingleThreadedExecutor`]
     /// when none was provided via [`add_node`](crate::runtime::SingleThreadedExecutor::add_node).
     fn ensure_executor(&mut self) -> Result<&ExecutorHandle> {
-        if self.options.is_grpc() {
+        if self.options.is_ws() {
             return Err(BusError::Protocol(
                 "gRPC node does not use a ZMQ executor; use spin() on the node directly".into(),
             ));
@@ -1158,18 +1158,18 @@ impl Node {
         self.ensure_executor()?.lock()
     }
 
-    #[cfg(feature = "grpc")]
-    fn ensure_grpc(&mut self) -> Result<&GrpcRuntime> {
-        if !self.options.is_grpc() {
+    #[cfg(feature = "ws")]
+    fn ensure_ws(&mut self) -> Result<&WsRuntime> {
+        if !self.options.is_ws() {
             return Err(BusError::Protocol(
-                "internal: ensure_grpc called on non-gRPC node".into(),
+                "internal: ensure_ws called on non-gRPC node".into(),
             ));
         }
-        if self.grpc.is_none() {
-            let url = self.options.resolved_grpc_url()?;
-            self.grpc = Some(GrpcRuntime::new(url)?);
+        if self.ws_runtime.is_none() {
+            let url = self.options.resolved_ws_url()?;
+            self.ws_runtime = Some(WsRuntime::new(url)?);
         }
-        Ok(self.grpc.as_ref().expect("grpc just created"))
+        Ok(self.ws_runtime.as_ref().expect("ws runtime just created"))
     }
 
     pub fn name(&self) -> &str {
@@ -1285,12 +1285,12 @@ impl Node {
             "publisher",
             &topic,
         ));
-        #[cfg(feature = "grpc")]
-        if self.options.is_grpc() {
+        #[cfg(feature = "ws")]
+        if self.options.is_ws() {
             let _ = hwm; // gRPC publish has no local ZMQ HWM
-            let grpc = self.ensure_grpc()?;
+            let grpc = self.ensure_ws()?;
             return Ok(TopicPublisherRaw {
-                backend: TopicPublisherBackend::Grpc(grpc.client_context()),
+                backend: TopicPublisherBackend::Ws(grpc.client_context()),
                 topic,
                 _topology: topology,
             });
@@ -1368,14 +1368,14 @@ impl Node {
     }
 
     pub fn stream_hwm(&mut self) -> Result<HighWaterMark> {
-        if self.options.is_grpc() {
+        if self.options.is_ws() {
             return Ok(HighWaterMark::STREAM);
         }
         Ok(self.lock_executor()?.stream_hwm())
     }
 
     pub fn set_stream_hwm(&mut self, hwm: HighWaterMark) -> Result<()> {
-        if self.options.is_grpc() {
+        if self.options.is_ws() {
             return Err(BusError::Protocol(
                 "set_stream_hwm is not available in gRPC node mode".into(),
             ));
@@ -1384,14 +1384,14 @@ impl Node {
     }
 
     pub fn rpc_hwm(&mut self) -> Result<HighWaterMark> {
-        if self.options.is_grpc() {
+        if self.options.is_ws() {
             return Ok(HighWaterMark::RPC);
         }
         Ok(self.lock_executor()?.rpc_hwm())
     }
 
     pub fn set_rpc_hwm(&mut self, hwm: HighWaterMark) -> Result<()> {
-        if self.options.is_grpc() {
+        if self.options.is_ws() {
             return Err(BusError::Protocol(
                 "set_rpc_hwm is not available in gRPC node mode".into(),
             ));
@@ -1400,14 +1400,14 @@ impl Node {
     }
 
     pub fn action_hwm(&mut self) -> Result<HighWaterMark> {
-        if self.options.is_grpc() {
+        if self.options.is_ws() {
             return Ok(HighWaterMark::ACTION);
         }
         Ok(self.lock_executor()?.action_hwm())
     }
 
     pub fn set_action_hwm(&mut self, hwm: HighWaterMark) -> Result<()> {
-        if self.options.is_grpc() {
+        if self.options.is_ws() {
             return Err(BusError::Protocol(
                 "set_action_hwm is not available in gRPC node mode".into(),
             ));
@@ -1466,9 +1466,9 @@ impl Node {
             "subscriber",
             topic,
         );
-        #[cfg(feature = "grpc")]
-        if self.options.is_grpc() {
-            self.ensure_grpc()?.subscribe(topic, callback, group)?;
+        #[cfg(feature = "ws")]
+        if self.options.is_ws() {
+            self.ensure_ws()?.subscribe(topic, callback, group)?;
             self.topology_subscriptions.push(topology);
             return Ok(());
         }
@@ -1479,7 +1479,7 @@ impl Node {
     }
 
     fn ensure_subscriber(&mut self) -> Result<()> {
-        if self.options.is_grpc() {
+        if self.options.is_ws() {
             return Err(BusError::Protocol(
                 "internal: ensure_subscriber on gRPC node".into(),
             ));
@@ -1504,17 +1504,17 @@ impl Node {
         let group = callback_group
             .cloned()
             .unwrap_or_else(|| self.default_callback_group.clone());
-        #[cfg(feature = "grpc")]
-        if self.options.is_grpc() {
-            return self.ensure_grpc()?.create_timer(period, callback, group);
+        #[cfg(feature = "ws")]
+        if self.options.is_ws() {
+            return self.ensure_ws()?.create_timer(period, callback, group);
         }
         self.lock_executor()?.create_timer(period, callback, group)
     }
 
     pub fn cancel_timer(&mut self, handle: TimerHandle) -> Result<()> {
-        #[cfg(feature = "grpc")]
-        if self.options.is_grpc() {
-            return self.ensure_grpc()?.cancel_timer(handle);
+        #[cfg(feature = "ws")]
+        if self.options.is_ws() {
+            return self.ensure_ws()?.cancel_timer(handle);
         }
         self.lock_executor()?.cancel_timer(handle)
     }
@@ -1550,7 +1550,7 @@ impl Node {
         callback_group: Option<&CallbackGroup>,
     ) -> Result<NodeService> {
         crate::console_topics::check_not_reserved(service_name)?;
-        if self.options.is_grpc() {
+        if self.options.is_ws() {
             return Err(grpc_mode_unsupported("create_service"));
         }
         let endpoint = self.options.service_backend_endpoint()?;
@@ -1594,11 +1594,11 @@ impl Node {
         service_name: impl Into<String>,
         hwm: HighWaterMark,
     ) -> Result<NodeServiceClientRaw> {
-        #[cfg(feature = "grpc")]
-        if self.options.is_grpc() {
-            let ctx = self.ensure_grpc()?.client_context();
+        #[cfg(feature = "ws")]
+        if self.options.is_ws() {
+            let ctx = self.ensure_ws()?.client_context();
             return Ok(NodeServiceClientRaw {
-                inner: ServiceClientInner::Grpc(ctx),
+                inner: ServiceClientInner::Ws(ctx),
                 service_name: service_name.into(),
             });
         }
@@ -1660,7 +1660,7 @@ impl Node {
         callback_group: Option<&CallbackGroup>,
     ) -> Result<NodeActionServer> {
         crate::console_topics::check_not_reserved(action_name)?;
-        if self.options.is_grpc() {
+        if self.options.is_ws() {
             return Err(grpc_mode_unsupported("create_action_server"));
         }
         let endpoint = self.options.action_backend_endpoint()?;
@@ -1704,11 +1704,11 @@ impl Node {
         action_name: impl Into<String>,
         hwm: HighWaterMark,
     ) -> Result<NodeActionClientRaw> {
-        #[cfg(feature = "grpc")]
-        if self.options.is_grpc() {
-            let ctx = self.ensure_grpc()?.client_context();
+        #[cfg(feature = "ws")]
+        if self.options.is_ws() {
+            let ctx = self.ensure_ws()?.client_context();
             return Ok(NodeActionClientRaw {
-                inner: ActionClientInner::Grpc(ctx),
+                inner: ActionClientInner::Ws(ctx),
                 action_name: action_name.into(),
             });
         }
@@ -1735,7 +1735,7 @@ impl Node {
 
     /// Connect the executor-owned action client used by callback-style [`send_goal`](Self::send_goal).
     pub fn connect_action_client(&mut self) -> Result<()> {
-        if self.options.is_grpc() {
+        if self.options.is_ws() {
             return Err(grpc_mode_unsupported(
                 "connect_action_client (use create_action_client)",
             ));
@@ -1753,7 +1753,7 @@ impl Node {
         callback: ActionMessageCallback,
         goal_id: Option<&str>,
     ) -> Result<String> {
-        if self.options.is_grpc() {
+        if self.options.is_ws() {
             return Err(grpc_mode_unsupported(
                 "send_goal (use create_action_client)",
             ));
@@ -1763,7 +1763,7 @@ impl Node {
     }
 
     pub fn cancel_goal(&mut self, action_name: &str, goal_id: &str, body: &[u8]) -> Result<()> {
-        if self.options.is_grpc() {
+        if self.options.is_ws() {
             return Err(grpc_mode_unsupported(
                 "cancel_goal (use create_action_client)",
             ));
@@ -1773,17 +1773,17 @@ impl Node {
     }
 
     pub fn shutdown_handle(&mut self) -> Result<ShutdownHandle> {
-        #[cfg(feature = "grpc")]
-        if self.options.is_grpc() {
-            return Ok(self.ensure_grpc()?.shutdown_handle());
+        #[cfg(feature = "ws")]
+        if self.options.is_ws() {
+            return Ok(self.ensure_ws()?.shutdown_handle());
         }
         self.ensure_executor()?.shutdown_handle()
     }
 
     pub fn shutdown(&mut self) -> Result<()> {
-        #[cfg(feature = "grpc")]
-        if self.options.is_grpc() {
-            self.ensure_grpc()?.shutdown();
+        #[cfg(feature = "ws")]
+        if self.options.is_ws() {
+            self.ensure_ws()?.shutdown();
             return Ok(());
         }
         self.ensure_executor()?.shutdown()
@@ -1796,47 +1796,47 @@ impl Node {
     ///
     /// In gRPC mode, drives subscription callbacks and timers over the gateway.
     pub fn spin_once(&mut self, timeout: Option<Duration>) -> Result<bool> {
-        #[cfg(feature = "grpc")]
-        if self.options.is_grpc() {
-            return self.ensure_grpc()?.spin_once(timeout);
+        #[cfg(feature = "ws")]
+        if self.options.is_ws() {
+            return self.ensure_ws()?.spin_once(timeout);
         }
         self.ensure_executor()?.spin_once(timeout)
     }
 
     pub fn spin_some(&mut self, timeout: Option<Duration>) -> Result<()> {
-        #[cfg(feature = "grpc")]
-        if self.options.is_grpc() {
-            return self.ensure_grpc()?.spin_some(timeout);
+        #[cfg(feature = "ws")]
+        if self.options.is_ws() {
+            return self.ensure_ws()?.spin_some(timeout);
         }
         self.ensure_executor()?.spin_some(timeout)
     }
 
     pub fn spin(&mut self) -> Result<()> {
-        #[cfg(feature = "grpc")]
-        if self.options.is_grpc() {
-            return self.ensure_grpc()?.spin();
+        #[cfg(feature = "ws")]
+        if self.options.is_ws() {
+            return self.ensure_ws()?.spin();
         }
         self.ensure_executor()?.spin()
     }
 
     pub fn start(&mut self) -> Result<()> {
-        if self.options.is_grpc() {
+        if self.options.is_ws() {
             return Err(grpc_mode_unsupported("start (use spin / spin_once)"));
         }
         self.ensure_executor()?.start()
     }
 
     pub fn stop(&mut self) -> Result<()> {
-        #[cfg(feature = "grpc")]
-        if self.options.is_grpc() {
-            self.ensure_grpc()?.shutdown();
+        #[cfg(feature = "ws")]
+        if self.options.is_ws() {
+            self.ensure_ws()?.shutdown();
             return Ok(());
         }
         self.ensure_executor()?.stop()
     }
 
     pub fn wait(&mut self) -> Result<()> {
-        if self.options.is_grpc() {
+        if self.options.is_ws() {
             return Ok(());
         }
         self.ensure_executor()?.wait()
@@ -1978,18 +1978,18 @@ ros__parameters:
         assert_eq!(Node::ipc("a").options().transport, "ipc");
         assert_eq!(Node::inproc("a").options().transport, "inproc");
         assert_eq!(Node::new("a").options().transport, "tcp");
-        #[cfg(feature = "grpc")]
+        #[cfg(feature = "ws")]
         {
-            assert_eq!(Node::grpc("a").options().transport, "grpc");
+            assert_eq!(Node::ws("a").options().transport, "ws");
             assert_eq!(
-                Node::grpc_at("a", "http://10.0.0.1:15570")
+                Node::ws_at("a", "http://10.0.0.1:15570")
                     .options()
-                    .grpc_url
+                    .ws_url
                     .as_deref(),
                 Some("http://10.0.0.1:15570")
             );
             assert!(
-                NodeOptions::grpc()
+                NodeOptions::ws()
                     .message_xpub_endpoint()
                     .unwrap_err()
                     .to_string()

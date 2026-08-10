@@ -23,18 +23,19 @@ public final class BrokerOptions {
     private final boolean noDiscovery;
     private final int domainId;
     private final String advertiseHost;
-    private final String discoveryAddr;
-    private final int discoveryPort;
+    private final List<String> peers;
+    private final boolean noTank;
 
     /** Keep-alive for native {@code char**} peer arrays until {@link Broker} start returns. */
     private transient StringArray messagePeersNative;
     private transient StringArray servicePeersNative;
     private transient StringArray actionPeersNative;
+    private transient StringArray peersNative;
 
     public BrokerOptions() {
         this(
                 null, null, null, null, null, null, null, null, false, false, null, null, null, null,
-                false, 0, null, null, 0);
+                false, 0, null, null, false);
     }
 
     public BrokerOptions(
@@ -67,7 +68,7 @@ public final class BrokerOptions {
                 0,
                 null,
                 null,
-                0);
+                false);
     }
 
     public BrokerOptions(
@@ -104,9 +105,11 @@ public final class BrokerOptions {
                 0,
                 null,
                 null,
-                0);
+                false);
     }
 
+    /** @deprecated Prefer the constructor with {@code peers} / {@code noTank}. */
+    @Deprecated
     public BrokerOptions(
             String messageXsubBind,
             String messageXpubBind,
@@ -127,6 +130,48 @@ public final class BrokerOptions {
             String advertiseHost,
             String discoveryAddr,
             int discoveryPort) {
+        this(
+                messageXsubBind,
+                messageXpubBind,
+                serviceFrontendBind,
+                serviceBackendBind,
+                actionFrontendBind,
+                actionBackendBind,
+                grpcListen != null ? grpcListen : discoveryAddr,
+                consoleListen,
+                tcpOnly,
+                noConsole,
+                brokerId,
+                messagePeers,
+                servicePeers,
+                actionPeers,
+                noDiscovery,
+                domainId,
+                advertiseHost,
+                null,
+                false);
+    }
+
+    public BrokerOptions(
+            String messageXsubBind,
+            String messageXpubBind,
+            String serviceFrontendBind,
+            String serviceBackendBind,
+            String actionFrontendBind,
+            String actionBackendBind,
+            String grpcListen,
+            String consoleListen,
+            boolean tcpOnly,
+            boolean noConsole,
+            String brokerId,
+            List<String> messagePeers,
+            List<String> servicePeers,
+            List<String> actionPeers,
+            boolean noDiscovery,
+            int domainId,
+            String advertiseHost,
+            List<String> peers,
+            boolean noTank) {
         this.messageXsubBind = messageXsubBind;
         this.messageXpubBind = messageXpubBind;
         this.serviceFrontendBind = serviceFrontendBind;
@@ -144,8 +189,8 @@ public final class BrokerOptions {
         this.noDiscovery = noDiscovery;
         this.domainId = domainId;
         this.advertiseHost = advertiseHost;
-        this.discoveryAddr = discoveryAddr;
-        this.discoveryPort = discoveryPort;
+        this.peers = peers;
+        this.noTank = noTank;
     }
 
     public String getMessageXsubBind() {
@@ -188,6 +233,10 @@ public final class BrokerOptions {
         return noConsole;
     }
 
+    public boolean isNoTank() {
+        return noTank;
+    }
+
     public String getBrokerId() {
         return brokerId;
     }
@@ -204,6 +253,10 @@ public final class BrokerOptions {
         return actionPeers == null ? Collections.emptyList() : actionPeers;
     }
 
+    public List<String> getPeers() {
+        return peers == null ? Collections.emptyList() : peers;
+    }
+
     public boolean isNoDiscovery() {
         return noDiscovery;
     }
@@ -216,14 +269,6 @@ public final class BrokerOptions {
         return advertiseHost;
     }
 
-    public String getDiscoveryAddr() {
-        return discoveryAddr;
-    }
-
-    public int getDiscoveryPort() {
-        return discoveryPort;
-    }
-
     RobotBusC.BrokerOptions toNative() {
         RobotBusC.BrokerOptions o = new RobotBusC.BrokerOptions();
         o.messageXsubBind = messageXsubBind;
@@ -232,7 +277,7 @@ public final class BrokerOptions {
         o.serviceBackendBind = serviceBackendBind;
         o.actionFrontendBind = actionFrontendBind;
         o.actionBackendBind = actionBackendBind;
-        o.grpcListen = grpcListen;
+        o.apiListen = grpcListen;
         o.consoleListen = consoleListen;
         o.tcpOnly = tcpOnly ? 1 : 0;
         o.noConsole = noConsole ? 1 : 0;
@@ -255,8 +300,12 @@ public final class BrokerOptions {
         o.noDiscovery = noDiscovery ? 1 : 0;
         o.domainId = domainId;
         o.advertiseHost = advertiseHost;
-        o.discoveryAddr = discoveryAddr;
-        o.discoveryPort = (short) (discoveryPort & 0xffff);
+        if (peers != null && !peers.isEmpty()) {
+            peersNative = new StringArray(peers.toArray(new String[0]));
+            o.peers = peersNative;
+            o.peerCount = peers.size();
+        }
+        o.noTank = noTank ? 1 : 0;
         o.write();
         return o;
     }

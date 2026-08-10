@@ -83,7 +83,7 @@ pub(crate) fn normalize_bind(addr: &str) -> String {
 pub(crate) fn node_options(
     host: &str,
     transport: &str,
-    grpc_url: Option<String>,
+    ws_url: Option<String>,
     message_xsub: Option<String>,
     message_xpub: Option<String>,
     service_frontend: Option<String>,
@@ -91,19 +91,19 @@ pub(crate) fn node_options(
     action_backend: Option<String>,
     action_frontend: Option<String>,
 ) -> Result<RustNodeOptions, c_int> {
-    if transport == "grpc" {
-        return Ok(match grpc_url {
-            Some(url) => RustNodeOptions::grpc_at(url),
-            None => RustNodeOptions::grpc(),
+    if transport == "ws" {
+        return Ok(match ws_url {
+            Some(url) => RustNodeOptions::ws_at(url),
+            None => RustNodeOptions::ws(),
         });
     }
-    if grpc_url.is_some() {
-        return Err(err("grpc_url is only valid when transport=\"grpc\""));
+    if ws_url.is_some() {
+        return Err(err("ws_url is only valid when transport=\"grpc\""));
     }
     Ok(RustNodeOptions {
         host: host.into(),
         transport: transport.into(),
-        grpc_url: None,
+        ws_url: None,
         console_url: None,
         message_xsub,
         message_xpub,

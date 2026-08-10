@@ -26,7 +26,7 @@ pub(crate) struct RobotBusNode {
 pub(crate) struct RobotBusNodeOptions {
     pub host: *const c_char,
     pub transport: *const c_char,
-    pub grpc_url: *const c_char,
+    pub ws_url: *const c_char,
     pub message_xsub: *const c_char,
     pub message_xpub: *const c_char,
     pub service_frontend: *const c_char,
@@ -45,7 +45,7 @@ pub(crate) fn parse_node_options(opts: *const RobotBusNodeOptions) -> Result<Rus
     node_options(
         host,
         transport,
-        cstr_opt(o.grpc_url).map(str::to_string),
+        cstr_opt(o.ws_url).map(str::to_string),
         cstr_opt(o.message_xsub).map(str::to_string),
         cstr_opt(o.message_xpub).map(str::to_string),
         cstr_opt(o.service_frontend).map(str::to_string),
@@ -169,19 +169,19 @@ pub extern "C" fn robot_bus_node_inproc_with_context(
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn robot_bus_node_grpc(name: *const c_char) -> *mut RobotBusNode {
+pub extern "C" fn robot_bus_node_ws(name: *const c_char) -> *mut RobotBusNode {
     clear_error();
     let name = match cstr_req(name) {
         Ok(n) => n.to_string(),
         Err(_) => return ptr::null_mut(),
     };
     Box::into_raw(Box::new(RobotBusNode {
-        inner: RustNode::grpc(name),
+        inner: RustNode::ws(name),
     }))
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn robot_bus_node_grpc_at(
+pub extern "C" fn robot_bus_node_ws_at(
     name: *const c_char,
     url: *const c_char,
 ) -> *mut RobotBusNode {
@@ -195,7 +195,7 @@ pub extern "C" fn robot_bus_node_grpc_at(
         Err(_) => return ptr::null_mut(),
     };
     Box::into_raw(Box::new(RobotBusNode {
-        inner: RustNode::grpc_at(name, url),
+        inner: RustNode::ws_at(name, url),
     }))
 }
 
@@ -210,7 +210,7 @@ pub(crate) struct RobotBusDiscoverOpts {
 pub(crate) struct RobotBusAppliedNodeOptions {
     pub host: *mut c_char,
     pub transport: *mut c_char,
-    pub grpc_url: *mut c_char,
+    pub ws_url: *mut c_char,
     pub message_xsub: *mut c_char,
     pub message_xpub: *mut c_char,
     pub service_frontend: *mut c_char,
@@ -246,7 +246,7 @@ fn transport_base_options(transport: &str) -> Result<RustNodeOptions, c_int> {
         "tcp" => Ok(RustNodeOptions::tcp()),
         "ipc" => Ok(RustNodeOptions::ipc()),
         "inproc" => Ok(RustNodeOptions::inproc()),
-        "grpc" => Ok(RustNodeOptions::grpc()),
+        "ws" => Ok(RustNodeOptions::ws()),
         other => Err(err(format!("unknown transport {other:?}"))),
     }
 }
@@ -311,8 +311,8 @@ pub extern "C" fn robot_bus_discover_node_options(
     unsafe {
         (*out).host = dup_string(&options.host);
         (*out).transport = dup_string(&options.transport);
-        (*out).grpc_url = options
-            .grpc_url
+        (*out).ws_url = options
+            .ws_url
             .as_deref()
             .map(dup_string)
             .unwrap_or(ptr::null_mut());
@@ -358,7 +358,7 @@ pub extern "C" fn robot_bus_applied_node_options_free(o: *mut RobotBusAppliedNod
     unsafe {
         robot_bus_free_string((*o).host);
         robot_bus_free_string((*o).transport);
-        robot_bus_free_string((*o).grpc_url);
+        robot_bus_free_string((*o).ws_url);
         robot_bus_free_string((*o).message_xsub);
         robot_bus_free_string((*o).message_xpub);
         robot_bus_free_string((*o).service_frontend);
@@ -367,7 +367,7 @@ pub extern "C" fn robot_bus_applied_node_options_free(o: *mut RobotBusAppliedNod
         robot_bus_free_string((*o).action_frontend);
         (*o).host = ptr::null_mut();
         (*o).transport = ptr::null_mut();
-        (*o).grpc_url = ptr::null_mut();
+        (*o).ws_url = ptr::null_mut();
         (*o).message_xsub = ptr::null_mut();
         (*o).message_xpub = ptr::null_mut();
         (*o).service_frontend = ptr::null_mut();

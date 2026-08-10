@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import BotSimPanel from '@/components/bot/BotSimPanel'
+import TankPanel from '@/components/tank/TankPanel'
 import { useI18n } from '@/lib/i18n'
 import FloatingWindow, { type WindowPosition } from './FloatingWindow'
 
@@ -22,7 +22,7 @@ function centeredPosition(width: number, height: number): WindowPosition {
   }
 }
 
-export default function BotWindows({ open, onClose }: Props) {
+export default function TankWindows({ open, onClose }: Props) {
   const { t } = useI18n()
   const [position, setPosition] = useState(() =>
     centeredPosition(WINDOW_WIDTH, WINDOW_HEIGHT),
@@ -37,7 +37,7 @@ export default function BotWindows({ open, onClose }: Props) {
 
   return (
     <FloatingWindow
-      title={t('botSimWindowTitle')}
+      title={t('tankWindowTitle')}
       position={position}
       width={WINDOW_WIDTH}
       height={WINDOW_HEIGHT}
@@ -46,7 +46,7 @@ export default function BotWindows({ open, onClose }: Props) {
       onBringToFront={() => {}}
       onClose={onClose}
     >
-      <BotSimPanel compact autoFocus />
+      <TankPanel compact autoFocus />
     </FloatingWindow>
   )
 }

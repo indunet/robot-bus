@@ -50,7 +50,7 @@ typedef struct RobotBusActionPhase {
 typedef struct RobotBusNodeOptions {
   const char *host;
   const char *transport;
-  const char *grpc_url;
+  const char *ws_url;
   const char *message_xsub;
   const char *message_xpub;
   const char *service_frontend;
@@ -66,7 +66,7 @@ typedef struct RobotBusBrokerOptions {
   const char *service_backend_bind;
   const char *action_frontend_bind;
   const char *action_backend_bind;
-  const char *grpc_listen;
+  const char *api_listen;
   const char *console_listen;
   int tcp_only;
   int no_console;
@@ -87,11 +87,11 @@ typedef struct RobotBusBrokerOptions {
   uint32_t domain_id;
   /** Host clients should connect to (NULL → inferred). */
   const char *advertise_host;
-  /** API listen host:port (NULL → use grpc_listen / default 15570). */
-  const char *api_listen;
   /** Federation peers as API URLs / host:port (GET /api/v1/discover). */
   const char *const *peers;
   size_t peer_count;
+  /** When non-zero, hide tank demo and reject /api/v1/tank/session. */
+  int no_tank;
 } RobotBusBrokerOptions;
 
 /** Client HTTP discovery options (NULL fields / 0 → defaults). */
@@ -109,7 +109,7 @@ typedef struct RobotBusDiscoverOpts {
 typedef struct RobotBusAppliedNodeOptions {
   char *host;
   char *transport;
-  char *grpc_url;
+  char *ws_url;
   char *message_xsub;
   char *message_xpub;
   char *service_frontend;
@@ -236,8 +236,8 @@ ROBOT_BUS_API RobotBusNode *robot_bus_node_ipc(const char *name, const char *pat
 ROBOT_BUS_API RobotBusNode *robot_bus_node_inproc(const char *name, const char *prefix);
 ROBOT_BUS_API RobotBusNode *robot_bus_node_inproc_with_context(RobotBusContext *ctx, const char *name,
                                                               const char *prefix);
-ROBOT_BUS_API RobotBusNode *robot_bus_node_grpc(const char *name);
-ROBOT_BUS_API RobotBusNode *robot_bus_node_grpc_at(const char *name, const char *url);
+ROBOT_BUS_API RobotBusNode *robot_bus_node_ws(const char *name);
+ROBOT_BUS_API RobotBusNode *robot_bus_node_ws_at(const char *name, const char *url);
 /**
  * Discover a broker via HTTP GET /api/v1/discover, apply `transport` (`tcp`/`ipc`/`inproc`/`grpc`),
  * and create a node. `opts` may be NULL (domain 0, default timeout).
@@ -343,7 +343,7 @@ ROBOT_BUS_API char *robot_bus_broker_service_frontend_bind(const RobotBusBroker 
 ROBOT_BUS_API char *robot_bus_broker_service_backend_bind(const RobotBusBroker *b);
 ROBOT_BUS_API char *robot_bus_broker_action_frontend_bind(const RobotBusBroker *b);
 ROBOT_BUS_API char *robot_bus_broker_action_backend_bind(const RobotBusBroker *b);
-ROBOT_BUS_API char *robot_bus_broker_grpc_listen(const RobotBusBroker *b);
+ROBOT_BUS_API char *robot_bus_broker_api_listen(const RobotBusBroker *b);
 ROBOT_BUS_API char *robot_bus_broker_console_listen(const RobotBusBroker *b);
 
 /** 1 if this lib was built with `--features ros2`, else 0. */

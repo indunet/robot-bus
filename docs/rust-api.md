@@ -77,7 +77,7 @@ let broker = RobotBusBroker::start(RobotBusConfig::default())?;
 broker.stop()?;
 ```
 
-典型流程：`Node::new` → `create_*` → `node.spin()`。多节点或需并行时再 `executor.add_node` + `executor.spin`。仅连 gRPC 网关时用 `Node::grpc` / `Node::grpc_at`（见下文「gRPC 模式 Node」）。
+典型流程：`Node::new` → `create_*` → `node.spin()`。多节点或需并行时再 `executor.add_node` + `executor.spin`。仅连 gRPC 网关时用 `Node::grpc` / `Node::ws_at`（见下文「WebSocket RPC 模式 Node」）。
 
 ---
 
@@ -364,7 +364,7 @@ Service / Action 同理（如 `create_client::<SetBool>`、`create_action_client
 
 ---
 
-## gRPC 模式 Node（客户端）
+## WebSocket RPC 模式 Node（客户端）
 
 `Node::grpc` / `NodeOptions::grpc` 通过 broker 的 gRPC 网关接入总线，**不创建 ZMQ socket**。API 仍是 `create_subscription` / `create_publisher` / `create_client` / `create_action_client` + `spin`，对调用方透明。
 
@@ -381,8 +381,8 @@ use std::sync::Arc;
 use std::time::Duration;
 use robot_bus::Node;
 
-let mut node = Node::grpc("web-client");
-// 或 Node::grpc_at("web-client", "http://127.0.0.1:15570");
+let mut node = Node::ws("web-client");
+// 或 Node::ws_at("web-client", "http://127.0.0.1:15570");
 
 let pub_ = node.create_publisher_raw("/robot1/cmd")?;
 pub_.publish(b"go")?;
@@ -414,7 +414,7 @@ node.spin()?;
 
 ## gRPC + 浏览器 WebSocket 网关
 
-由 `RobotBusBroker` / `robot_bus_broker` 一并启动（feature `grpc`，默认开启）。**原生 gRPC**（HTTP/2）与浏览器 **WebSocket RPC**（`/ws`，一 RPC 一连接）**同端口**（默认 `0.0.0.0:15570`）。已移除 gRPC-Web。
+由 `RobotBusBroker` / `robot_bus_broker` 一并启动（feature `ws`，默认开启）。**WebSocket RPC**（HTTP/2）与浏览器 **WebSocket RPC**（`/ws`，一 RPC 一连接）**同端口**（默认 `0.0.0.0:15570`）。已移除 gRPC-Web。
 
 | RPC | 说明 |
 |-----|------|
@@ -428,8 +428,8 @@ gRPC action：原生 HTTP/2 客户端通过取消该 goal 的响应流发起取�
 Subscribe 示例：
 
 ```rust
-use robot_bus::grpc::pb::message_gateway_client::MessageGatewayClient;
-use robot_bus::grpc::pb::SubscribeRequest;
+use robot_bus::ws_gateway::pb::message_gateway_client::MessageGatewayClient;
+use robot_bus::ws_gateway::pb::SubscribeRequest;
 use tonic::Request;
 
 #[tokio::main]
@@ -454,8 +454,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 Publish 示例：
 
 ```rust
-use robot_bus::grpc::pb::message_gateway_client::MessageGatewayClient;
-use robot_bus::grpc::pb::TopicMessage;
+use robot_bus::ws_gateway::pb::message_gateway_client::MessageGatewayClient;
+use robot_bus::ws_gateway::pb::TopicMessage;
 use tonic::Request;
 
 #[tokio::main]
@@ -474,9 +474,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 Service / Action 示例：
 
 ```rust
-use robot_bus::grpc::pb::action_gateway_client::ActionGatewayClient;
-use robot_bus::grpc::pb::service_gateway_client::ServiceGatewayClient;
-use robot_bus::grpc::pb::{ActionKind, GoalRequest, ServiceCallRequest};
+use robot_bus::ws_gateway::pb::action_gateway_client::ActionGatewayClient;
+use robot_bus::ws_gateway::pb::service_gateway_client::ServiceGatewayClient;
+use robot_bus::ws_gateway::pb::{ActionKind, GoalRequest, ServiceCallRequest};
 use tonic::Request;
 use tokio_stream::StreamExt;
 
@@ -529,7 +529,7 @@ use robot_bus::transports::{
     action_frontend_endpoint, action_backend_endpoint,
 };
 
-// transport: "tcp" | "ipc" | "inproc"（gRPC 模式用 Node::grpc，不经这些端点）
+// transport: "tcp" | "ipc" | "inproc"（WebSocket RPC 模式用 Node::grpc，不经这些端点）
 let ep = message_xpub_endpoint("localhost", "tcp")?;
 ```
 
@@ -556,7 +556,7 @@ match result {
 - Service / action **不**做 broker 重启续传；调用方重试须使用新的 `request_id` / `goal_id`。
 - Service `call` 超时后 socket 已复位，同一 client 可继续调用。
 - Action `send_goal` 立即返回 GoalHandle；feedback 回调与 `result()` 等待彼此独立。
-- Action `cancel()` / result 超时后的清理均为 best-effort：WebSocket 发显式 CANCEL 帧（断连仍会 cancel）；原生 gRPC 取消响应流；ZMQ 发显式 `CANCEL` 帧；不保证服务端确认。
+- Action `cancel()` / result 超时后的清理均为 best-effort：WebSocket 发显式 CANCEL 帧（断连仍会 cancel）；WebSocket RPC 取消响应流；ZMQ 发显式 `CANCEL` 帧；不保证服务端确认。
 - Topic pub/sub 仍是 best-effort（无 ACK）。
 
 ## 工具节点：Image encoder
@@ -629,4 +629,4 @@ let buf = listener.buffer();
 let t = buf.lock().unwrap().lookup_transform("base_link", "camera", None)?;
 ```
 
-不要默认多媒体依赖时：`cargo build --no-default-features --features grpc,console`。
+不要默认多媒体依赖时：`cargo build --no-default-features --features ws,console`。

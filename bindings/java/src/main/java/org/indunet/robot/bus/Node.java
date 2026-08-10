@@ -83,13 +83,13 @@ public final class Node implements AutoCloseable {
                         "Node.withContext"));
     }
 
-    public static Node grpc(String name) {
-        return new Node(Errors.checkPtr(RobotBusC.Holder.INSTANCE.robot_bus_node_grpc(name), "Node.grpc"));
+    public static Node ws(String name) {
+        return new Node(Errors.checkPtr(RobotBusC.Holder.INSTANCE.robot_bus_node_ws(name), "Node.ws"));
     }
 
-    public static Node grpcAt(String name, String url) {
+    public static Node wsAt(String name, String url) {
         return new Node(
-                Errors.checkPtr(RobotBusC.Holder.INSTANCE.robot_bus_node_grpc_at(name, url), "Node.grpcAt"));
+                Errors.checkPtr(RobotBusC.Holder.INSTANCE.robot_bus_node_ws_at(name, url), "Node.wsAt"));
     }
 
     /** Discover a broker via UDP multicast, then connect with {@code transport}. */

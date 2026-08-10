@@ -140,7 +140,7 @@ pub async fn status(Extension(state): Extension<Arc<ConsoleState>>) -> impl Into
         version: state.version.to_string(),
         uptime: state.uptime_secs(),
         pid: state.pid,
-        grpc_addr: state.endpoints.grpc.clone(),
+        grpc_addr: state.endpoints.ws.clone(),
         web_addr: state.endpoints.web.clone(),
         msg_bus_x_sub: state.endpoints.msg_xsub.clone(),
         msg_bus_x_pub: state.endpoints.msg_xpub.clone(),
@@ -385,33 +385,46 @@ fn event_from_dto(e: &LogEntryDto) -> Event {
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
-struct BotSimStatusResponse {
+struct TankStatusResponse {
+    /// False when broker was started with `--no-tank` (menu hidden / acquire rejected).
+    enabled: bool,
     running: bool,
     viewers: usize,
 }
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
-struct BotSimSessionResponse {
+struct TankSessionResponse {
     session_id: String,
     lease_ms: u64,
     viewers: usize,
 }
 
-pub async fn bot_sim_status(Extension(state): Extension<Arc<ConsoleState>>) -> impl IntoResponse {
-    let st = state.bot_sim.status();
-    Json(BotSimStatusResponse {
-        running: st.running,
-        viewers: st.viewers,
+pub async fn tank_status(Extension(state): Extension<Arc<ConsoleState>>) -> impl IntoResponse {
+    let st = state.tank.status();
+    Json(TankStatusResponse {
+        enabled: state.tank_enabled,
+        running: st.running && state.tank_enabled,
+        viewers: if state.tank_enabled { st.viewers } else { 0 },
     })
 }
 
-pub async fn bot_sim_session(Extension(state): Extension<Arc<ConsoleState>>) -> impl IntoResponse {
-    // `acquire` may block briefly while bot_sim publishes the first pose — keep it
+pub async fn tank_session(Extension(state): Extension<Arc<ConsoleState>>) -> impl IntoResponse {
+    if !state.tank_enabled {
+        return (
+            StatusCode::FORBIDDEN,
+            Json(serde_json::json!({
+                "error": "tank disabled",
+                "enabled": false,
+            })),
+        )
+            .into_response();
+    }
+    // `acquire` may block briefly while tank publishes the first pose — keep it
     // off the async worker so long-lived gateway streams stay responsive.
     let acquired = tokio::task::spawn_blocking({
-        let bot_sim = Arc::clone(&state.bot_sim);
-        move || bot_sim.acquire()
+        let tank = Arc::clone(&state.tank);
+        move || tank.acquire()
     })
     .await;
 
@@ -419,7 +432,7 @@ pub async fn bot_sim_session(Extension(state): Extension<Arc<ConsoleState>>) -> 
         Ok(Ok(session)) => {
             state.events.emit(
                 "INFO",
-                "bot_sim",
+                "tank",
                 format!(
                     "session {} acquired (viewers={})",
                     &session.session_id[..8.min(session.session_id.len())],
@@ -428,7 +441,7 @@ pub async fn bot_sim_session(Extension(state): Extension<Arc<ConsoleState>>) -> 
             );
             (
                 StatusCode::OK,
-                Json(BotSimSessionResponse {
+                Json(TankSessionResponse {
                     session_id: session.session_id,
                     lease_ms: session.lease.as_millis() as u64,
                     viewers: session.viewers,
@@ -439,7 +452,7 @@ pub async fn bot_sim_session(Extension(state): Extension<Arc<ConsoleState>>) -> 
         Ok(Err(err)) => {
             state
                 .events
-                .emit("ERROR", "bot_sim", format!("acquire failed: {err}"));
+                .emit("ERROR", "tank", format!("acquire failed: {err}"));
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(serde_json::json!({ "error": err.to_string() })),
@@ -449,26 +462,26 @@ pub async fn bot_sim_session(Extension(state): Extension<Arc<ConsoleState>>) -> 
         Err(err) => {
             state.events.emit(
                 "ERROR",
-                "bot_sim",
+                "tank",
                 format!("acquire task join failed: {err}"),
             );
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
-                Json(serde_json::json!({ "error": "bot_sim acquire interrupted" })),
+                Json(serde_json::json!({ "error": "tank acquire interrupted" })),
             )
                 .into_response()
         }
     }
 }
 
-pub async fn bot_sim_heartbeat(
+pub async fn tank_heartbeat(
     Extension(state): Extension<Arc<ConsoleState>>,
     Path(id): Path<String>,
 ) -> impl IntoResponse {
-    match state.bot_sim.heartbeat(&id) {
+    match state.tank.heartbeat(&id) {
         Ok(session) => (
             StatusCode::OK,
-            Json(BotSimSessionResponse {
+            Json(TankSessionResponse {
                 session_id: session.session_id,
                 lease_ms: session.lease.as_millis() as u64,
                 viewers: session.viewers,
@@ -483,15 +496,15 @@ pub async fn bot_sim_heartbeat(
     }
 }
 
-pub async fn bot_sim_release(
+pub async fn tank_release(
     Extension(state): Extension<Arc<ConsoleState>>,
     Path(id): Path<String>,
 ) -> impl IntoResponse {
-    match state.bot_sim.release(&id) {
+    match state.tank.release(&id) {
         Ok(st) => {
             state.events.emit(
                 "INFO",
-                "bot_sim",
+                "tank",
                 format!(
                     "session released (running={}, viewers={})",
                     st.running, st.viewers
@@ -499,9 +512,10 @@ pub async fn bot_sim_release(
             );
             (
                 StatusCode::OK,
-                Json(BotSimStatusResponse {
-                    running: st.running,
-                    viewers: st.viewers,
+                Json(TankStatusResponse {
+                    enabled: state.tank_enabled,
+                    running: st.running && state.tank_enabled,
+                    viewers: if state.tank_enabled { st.viewers } else { 0 },
                 }),
             )
                 .into_response()

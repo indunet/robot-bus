@@ -1,4 +1,4 @@
-//! In-process differential-drive bot simulation (`bot_sim`).
+//! In-process differential-drive tank simulation (`tank`).
 //!
 //! Subscribes [`CMD_VEL_TOPIC`], integrates pose on an 11×11 world, and publishes
 //! [`POSE_TOPIC`] at 20 Hz. Also serves:
@@ -29,17 +29,19 @@ use crate::robot_bus_interface::srv::v1::{Reset, ResetRequest, ResetResponse};
 use crate::runtime::{CallbackGroupType, Context, MultiThreadedExecutor, Node, NodeOptions};
 use crate::{ActionOutcome, BusError, Result};
 
-/// Built-in bot demo namespace under the reserved `/robot_bus/*` prefix.
-pub const BOT_PREFIX: &str = "/robot_bus/bot";
-pub const CMD_VEL_TOPIC: &str = "/robot_bus/bot/cmd_vel";
-pub const POSE_TOPIC: &str = "/robot_bus/bot/pose";
-pub const POINT_NAV_ACTION: &str = "/robot_bus/bot/point_navigation";
-pub const MULTI_WAYPOINT_NAV_ACTION: &str = "/robot_bus/bot/multi_waypoint_navigation";
-pub const RESET_SERVICE: &str = "/robot_bus/bot/reset";
+/// Built-in tank demo namespace under the reserved `/robot_bus/*` prefix.
+pub const TANK_PREFIX: &str = "/robot_bus/tank";
+pub const CMD_VEL_TOPIC: &str = "/robot_bus/tank/cmd_vel";
+pub const POSE_TOPIC: &str = "/robot_bus/tank/pose";
+pub const POINT_NAV_ACTION: &str = "/robot_bus/tank/point_navigation";
+pub const MULTI_WAYPOINT_NAV_ACTION: &str = "/robot_bus/tank/multi_waypoint_navigation";
+pub const RESET_SERVICE: &str = "/robot_bus/tank/reset";
 pub const WORLD_SIZE: f64 = 11.0;
 
 const TICK: Duration = Duration::from_millis(50);
-const CMD_TIMEOUT: Duration = Duration::from_millis(400);
+/// Deadman only: if cmd_vel stops arriving (client crash / drop), coast this long then halt.
+/// Normal teleop publishes an explicit zero on key-up — do not rely on this for stop feel.
+const CMD_TIMEOUT: Duration = Duration::from_millis(100);
 const NAV_LINEAR: f64 = 1.5;
 const NAV_ANGULAR: f64 = 2.2;
 const POS_TOL: f64 = 0.08;
@@ -51,7 +53,7 @@ pub const DEFAULT_STOP_GRACE: Duration = Duration::from_secs(2);
 
 /// Connect endpoints for the message / service / action buses (client-side).
 #[derive(Clone, Debug)]
-pub struct BotSimEndpoints {
+pub struct TankEndpoints {
     pub message_xsub: String,
     pub message_xpub: String,
     pub service_backend: String,
@@ -108,28 +110,28 @@ impl SimState {
 }
 
 /// Background physics node handle.
-pub struct BotSimHandle {
+pub struct TankHandle {
     stop: Arc<AtomicBool>,
     ready: Arc<AtomicBool>,
     join: Option<JoinHandle<()>>,
 }
 
-impl BotSimHandle {
-    /// Spawn `bot_sim` on a dedicated thread (publisher stays thread-local).
-    pub fn start(endpoints: BotSimEndpoints) -> Result<Self> {
+impl TankHandle {
+    /// Spawn `tank` on a dedicated thread (publisher stays thread-local).
+    pub fn start(endpoints: TankEndpoints) -> Result<Self> {
         let stop = Arc::new(AtomicBool::new(false));
         let ready = Arc::new(AtomicBool::new(false));
         let stop_flag = Arc::clone(&stop);
         let ready_flag = Arc::clone(&ready);
         let join = thread::Builder::new()
-            .name("robot-bus-bot-sim".into())
+            .name("robot-bus-tank".into())
             .spawn(move || {
                 if let Err(err) = run_loop(endpoints, stop_flag, ready_flag) {
-                    eprintln!("bot_sim exited: {err}");
-                    log::error!("bot_sim exited: {err}");
+                    eprintln!("tank exited: {err}");
+                    log::error!("tank exited: {err}");
                 }
             })
-            .map_err(|e| BusError::Protocol(format!("spawn bot_sim: {e}")))?;
+            .map_err(|e| BusError::Protocol(format!("spawn tank: {e}")))?;
         Ok(Self {
             stop,
             ready,
@@ -161,7 +163,7 @@ impl BotSimHandle {
     }
 }
 
-impl Drop for BotSimHandle {
+impl Drop for TankHandle {
     fn drop(&mut self) {
         self.stop.store(true, Ordering::Relaxed);
         if let Some(handle) = self.join.take() {
@@ -171,7 +173,7 @@ impl Drop for BotSimHandle {
 }
 
 fn run_loop(
-    endpoints: BotSimEndpoints,
+    endpoints: TankEndpoints,
     stop: Arc<AtomicBool>,
     ready: Arc<AtomicBool>,
 ) -> Result<()> {
@@ -184,7 +186,7 @@ fn run_loop(
     let context = Context::new();
     // Worker pool so long-running nav actions don't block the pose tick.
     let executor = MultiThreadedExecutor::with_context(context.clone(), 4);
-    let mut node = Node::with_context(context, "bot_sim", opts);
+    let mut node = Node::with_context(context, "tank", opts);
     executor.add_node(&mut node)?;
 
     let pose_pub = node.create_publisher::<Pose2D>(POSE_TOPIC)?;
@@ -195,7 +197,7 @@ fn run_loop(
         node.create_subscription::<Twist, _>(
             CMD_VEL_TOPIC,
             move |_topic, twist| {
-                let mut s = state.lock().expect("bot_sim state");
+                let mut s = state.lock().expect("tank state");
                 if s.navigating {
                     return;
                 }
@@ -214,7 +216,7 @@ fn run_loop(
         node.create_service::<Reset, _>(
             RESET_SERVICE,
             move |_req: ResetRequest| {
-                let mut s = state.lock().expect("bot_sim state");
+                let mut s = state.lock().expect("tank state");
                 s.snap_home();
                 ResetResponse {
                     success: true,
@@ -298,13 +300,13 @@ fn run_loop(
     }
 
     eprintln!(
-        "bot_sim online — SUB {CMD_VEL_TOPIC} → PUB {POSE_TOPIC}; \
+        "tank online — SUB {CMD_VEL_TOPIC} → PUB {POSE_TOPIC}; \
          actions {POINT_NAV_ACTION}, {MULTI_WAYPOINT_NAV_ACTION}; \
          service {RESET_SERVICE} (tick {}ms)",
         TICK.as_millis()
     );
     log::info!(
-        "bot_sim online — SUB {CMD_VEL_TOPIC} → PUB {POSE_TOPIC}; \
+        "tank online — SUB {CMD_VEL_TOPIC} → PUB {POSE_TOPIC}; \
          actions {POINT_NAV_ACTION}, {MULTI_WAYPOINT_NAV_ACTION}; \
          service {RESET_SERVICE} (tick {}ms)",
         TICK.as_millis()
@@ -322,7 +324,7 @@ fn run_loop(
         last_tick = now;
 
         let pose = {
-            let mut s = state.lock().expect("bot_sim state");
+            let mut s = state.lock().expect("tank state");
             if !s.navigating {
                 if now.duration_since(s.last_cmd) > CMD_TIMEOUT {
                     s.linear = 0.0;
@@ -336,19 +338,19 @@ fn run_loop(
         };
 
         if let Err(err) = pose_pub.publish(&pose) {
-            log::warn!("bot_sim: publish {POSE_TOPIC} failed: {err}");
+            log::warn!("tank: publish {POSE_TOPIC} failed: {err}");
         } else {
             ready.store(true, Ordering::Relaxed);
         }
     }
 
     let _ = node.shutdown();
-    log::info!("bot_sim stopped");
+    log::info!("tank stopped");
     Ok(())
 }
 
 fn abort_navigation(state: &Arc<Mutex<SimState>>) {
-    let mut s = state.lock().expect("bot_sim state");
+    let mut s = state.lock().expect("tank state");
     s.abort_token = s.abort_token.wrapping_add(1);
     s.navigating = false;
     s.linear = 0.0;
@@ -361,7 +363,7 @@ fn navigate_waypoints(
     waypoints: &[(f64, f64, f64)],
 ) -> (bool, String, Vec<(Pose2D, f32)>) {
     let token = {
-        let mut s = state.lock().expect("bot_sim state");
+        let mut s = state.lock().expect("tank state");
         s.abort_token = s.abort_token.wrapping_add(1);
         let token = s.abort_token;
         s.navigating = true;
@@ -393,7 +395,7 @@ fn navigate_waypoints(
     }
 
     {
-        let mut s = state.lock().expect("bot_sim state");
+        let mut s = state.lock().expect("tank state");
         if s.abort_token == token {
             s.navigating = false;
             s.linear = 0.0;
@@ -403,7 +405,7 @@ fn navigate_waypoints(
 
     if ok {
         feedbacks.push({
-            let s = state.lock().expect("bot_sim state");
+            let s = state.lock().expect("tank state");
             (s.pose(), 1.0)
         });
     }
@@ -420,7 +422,7 @@ fn drive_to_pose(
     mut on_progress: impl FnMut(Pose2D, f32),
 ) -> std::result::Result<(), String> {
     let start = {
-        let s = state.lock().expect("bot_sim state");
+        let s = state.lock().expect("tank state");
         if s.abort_token != token {
             return Err("aborted".into());
         }
@@ -432,7 +434,7 @@ fn drive_to_pose(
     let mut step: u32 = 0;
     loop {
         let (pose, phase_done, local_progress) = {
-            let mut s = state.lock().expect("bot_sim state");
+            let mut s = state.lock().expect("tank state");
             if s.abort_token != token {
                 return Err("aborted".into());
             }
@@ -501,7 +503,7 @@ fn angle_diff(from: f64, to: f64) -> f64 {
 
 /// Result of creating a viewer/control session.
 #[derive(Clone, Debug)]
-pub struct BotSimSession {
+pub struct TankSession {
     pub session_id: String,
     pub lease: Duration,
     pub viewers: usize,
@@ -509,32 +511,32 @@ pub struct BotSimSession {
 
 /// Snapshot for status APIs.
 #[derive(Clone, Debug)]
-pub struct BotSimStatus {
+pub struct TankStatus {
     pub running: bool,
     pub viewers: usize,
 }
 
 struct ManagerInner {
-    handle: Option<BotSimHandle>,
+    handle: Option<TankHandle>,
     sessions: HashMap<String, Instant>,
     stop_after: Option<Instant>,
 }
 
 /// Ref-counted session manager: first acquire starts sim, last release (+ grace) stops it.
-pub struct BotSimManager {
-    endpoints: BotSimEndpoints,
+pub struct TankManager {
+    endpoints: TankEndpoints,
     lease: Duration,
     stop_grace: Duration,
     inner: Mutex<ManagerInner>,
 }
 
-impl BotSimManager {
-    pub fn new(endpoints: BotSimEndpoints) -> Arc<Self> {
+impl TankManager {
+    pub fn new(endpoints: TankEndpoints) -> Arc<Self> {
         Self::with_timing(endpoints, DEFAULT_LEASE, DEFAULT_STOP_GRACE)
     }
 
     pub fn with_timing(
-        endpoints: BotSimEndpoints,
+        endpoints: TankEndpoints,
         lease: Duration,
         stop_grace: Duration,
     ) -> Arc<Self> {
@@ -554,12 +556,12 @@ impl BotSimManager {
         self.lease
     }
 
-    pub fn acquire(&self) -> Result<BotSimSession> {
+    pub fn acquire(&self) -> Result<TankSession> {
         let mut inner = self.inner.lock().unwrap_or_else(|e| e.into_inner());
         self.sweep_locked(&mut inner)?;
 
         if inner.handle.is_none() {
-            let handle = BotSimHandle::start(self.endpoints.clone())?;
+            let handle = TankHandle::start(self.endpoints.clone())?;
             inner.handle = Some(handle);
             inner.stop_after = None;
         }
@@ -581,48 +583,48 @@ impl BotSimManager {
             }
         }
 
-        Ok(BotSimSession {
+        Ok(TankSession {
             session_id,
             lease: self.lease,
             viewers,
         })
     }
 
-    pub fn heartbeat(&self, session_id: &str) -> Result<BotSimSession> {
+    pub fn heartbeat(&self, session_id: &str) -> Result<TankSession> {
         let mut inner = self.inner.lock().unwrap_or_else(|e| e.into_inner());
         self.sweep_locked(&mut inner)?;
         match inner.sessions.get_mut(session_id) {
             Some(last) => {
                 *last = Instant::now();
-                Ok(BotSimSession {
+                Ok(TankSession {
                     session_id: session_id.to_string(),
                     lease: self.lease,
                     viewers: inner.sessions.len(),
                 })
             }
             None => Err(BusError::Protocol(format!(
-                "bot_sim session not found: {session_id}"
+                "tank session not found: {session_id}"
             ))),
         }
     }
 
-    pub fn release(&self, session_id: &str) -> Result<BotSimStatus> {
+    pub fn release(&self, session_id: &str) -> Result<TankStatus> {
         let mut inner = self.inner.lock().unwrap_or_else(|e| e.into_inner());
         inner.sessions.remove(session_id);
         if inner.sessions.is_empty() {
             inner.stop_after = Some(Instant::now() + self.stop_grace);
         }
         self.sweep_locked(&mut inner)?;
-        Ok(BotSimStatus {
+        Ok(TankStatus {
             running: inner.handle.is_some(),
             viewers: inner.sessions.len(),
         })
     }
 
-    pub fn status(&self) -> BotSimStatus {
+    pub fn status(&self) -> TankStatus {
         let mut inner = self.inner.lock().unwrap_or_else(|e| e.into_inner());
         let _ = self.sweep_locked(&mut inner);
-        BotSimStatus {
+        TankStatus {
             running: inner.handle.is_some(),
             viewers: inner.sessions.len(),
         }
@@ -672,8 +674,8 @@ mod tests {
 
     #[test]
     fn manager_tracks_sessions_without_bus() {
-        let mgr = BotSimManager::with_timing(
-            BotSimEndpoints {
+        let mgr = TankManager::with_timing(
+            TankEndpoints {
                 message_xsub: "tcp://127.0.0.1:1".into(),
                 message_xpub: "tcp://127.0.0.1:1".into(),
                 service_backend: "tcp://127.0.0.1:1".into(),

@@ -14,7 +14,7 @@ internal class TestBus private constructor(
     val actionBackend: String,
     val grpcListen: String,
 ) : AutoCloseable {
-    fun grpcUrl(): String = "http://$grpcListen"
+    fun wsUrl(): String = "http://$grpcListen"
 
     fun makeNode(name: String): Node =
         Node(
@@ -22,7 +22,7 @@ internal class TestBus private constructor(
             NodeOptions(
                 host = null,
                 transport = "tcp",
-                grpcUrl = null,
+                wsUrl = null,
                 messageXsub = messageXsub,
                 messageXpub = messageXpub,
                 serviceFrontend = serviceFrontend,

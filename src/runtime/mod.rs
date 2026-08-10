@@ -9,8 +9,8 @@ mod context;
 mod dispatch;
 mod executor;
 mod executors;
-#[cfg(feature = "grpc")]
-mod grpc_runtime;
+#[cfg(feature = "ws")]
+mod ws_runtime;
 mod node;
 mod parameters;
 mod queues;

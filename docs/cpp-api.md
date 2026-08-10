@@ -84,7 +84,7 @@ robot_bus_broker
 #include <robot_bus/Node.hpp>
 
 robot_bus::Broker broker;  // default binds
-// broker.message_xsub_bind() / grpc_listen() …
+// broker.message_xsub_bind() / api_listen() …
 ```
 
 跨 broker（federation）通过 `RobotBusBrokerOptions`（与 CLI 同款字符串）：
@@ -170,7 +170,7 @@ pub.publish(bytes);
 
 ### gRPC mode Node（客户端）
 
-`Node::grpc` / `Node::grpc_at` 经 broker gRPC 网关接入，不创建 ZMQ socket。
+`Node::grpc` / `Node::ws_at` 经 broker gRPC 网关接入，不创建 ZMQ socket。
 
 | 支持 | 不支持 |
 |------|--------|
@@ -180,8 +180,8 @@ pub.publish(bytes);
 | `create_timer`、`spin` / `spin_once` / `shutdown` | — |
 
 ```cpp
-auto node = robot_bus::Node::grpc("web-client");
-// 或 robot_bus::Node::grpc_at("web-client", "http://127.0.0.1:15570");
+auto node = robot_bus::Node::ws("web-client");
+// 或 robot_bus::Node::ws_at("web-client", "http://127.0.0.1:15570");
 ```
 
 本地覆盖见 `bindings/cpp/tests/grpc_node.cpp`（`just test-cpp`）。

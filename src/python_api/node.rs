@@ -31,7 +31,7 @@ impl PyNode {
         name,
         host="localhost",
         transport="tcp",
-        grpc_url=None,
+        ws_url=None,
         message_xsub=None,
         message_xpub=None,
         service_frontend=None,
@@ -43,7 +43,7 @@ impl PyNode {
         name: String,
         host: &str,
         transport: &str,
-        grpc_url: Option<String>,
+        ws_url: Option<String>,
         message_xsub: Option<String>,
         message_xpub: Option<String>,
         service_frontend: Option<String>,
@@ -57,7 +57,7 @@ impl PyNode {
                 py_node_options(
                     host,
                     transport,
-                    grpc_url,
+                    ws_url,
                     message_xsub,
                     message_xpub,
                     service_frontend,
@@ -124,12 +124,12 @@ impl PyNode {
     }
 
     /// gRPC client node talking to the local broker gateway (`http://127.0.0.1:15570`).
-    #[cfg(feature = "grpc")]
+    #[cfg(feature = "ws")]
     #[classmethod]
     #[pyo3(signature = (name,))]
-    fn grpc(_cls: &Bound<'_, PyType>, name: String) -> Self {
+    fn ws(_cls: &Bound<'_, PyType>, name: String) -> Self {
         Self {
-            inner: RustNode::grpc(name),
+            inner: RustNode::ws(name),
         }
     }
 
@@ -161,12 +161,12 @@ impl PyNode {
     }
 
     /// gRPC client node talking to `url` (e.g. `http://127.0.0.1:15570`).
-    #[cfg(feature = "grpc")]
+    #[cfg(feature = "ws")]
     #[classmethod]
     #[pyo3(signature = (name, url))]
-    fn grpc_at(_cls: &Bound<'_, PyType>, name: String, url: &str) -> Self {
+    fn ws_at(_cls: &Bound<'_, PyType>, name: String, url: &str) -> Self {
         Self {
-            inner: RustNode::grpc_at(name, url),
+            inner: RustNode::ws_at(name, url),
         }
     }
 

@@ -33,18 +33,18 @@ import {
   POSE_TOPIC,
   RESET_SERVICE,
   WORLD_SIZE,
-  acquireBotSimSession,
-  heartbeatBotSimSession,
-  releaseBotSimSession,
+  acquireTankSession,
+  heartbeatTankSession,
+  releaseTankSession,
   resolveGrpcUrl,
-} from '@/lib/bot'
+} from '@/lib/tank'
 
 const MAX_TRAIL_POINTS = 4000
 const LINEAR_SPEED = 1.5
 const ANGULAR_SPEED = 1.8
-const BOT_SPRITE_SRC = '/bot-rover.svg'
-const BOT_SPRITE_SIZE_M = 1.25
-/** Pose older than this ⇒ Rust `bot_sim` treated as offline. */
+const TANK_SPRITE_SRC = '/bot-rover.svg'
+const TANK_SPRITE_SIZE_M = 1.25
+/** Pose older than this ⇒ Rust `tank` treated as offline. */
 const SIM_STALE_MS = 1500
 
 type Pose = { x: number; y: number; theta: number }
@@ -118,13 +118,14 @@ interface Props {
 }
 
 /** Browser viz / ops panel — one node: SUB pose, PUB cmd_vel, action/service clients. */
-export default function BotSimPanel({ compact = false, autoFocus = false }: Props) {
+export default function TankPanel({ compact = false, autoFocus = false }: Props) {
   const { t } = useI18n()
   const rootRef = useRef<HTMLDivElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const spriteRef = useRef<HTMLImageElement | null>(null)
   const pressedRef = useRef(new Set<Direction>())
   const publishStopRef = useRef<(() => void) | null>(null)
+  const publishNowRef = useRef<((linear: number, angular: number) => void) | null>(null)
   const velocityRef = useRef({ linear: 0, angular: 0 })
   const lastPoseAtRef = useRef(0)
   const forcePublishRef = useRef(false)
@@ -173,7 +174,7 @@ export default function BotSimPanel({ compact = false, autoFocus = false }: Prop
   const [simOnline, setSimOnline] = useState(false)
   const [sessionReady, setSessionReady] = useState(false)
   const [viewers, setViewers] = useState(0)
-  const [grpcUrl, setGrpcUrl] = useState('—')
+  const [wsUrl, setGrpcUrl] = useState('—')
   const [waypoints, setWaypoints] = useState<Pose[]>([])
   const [pointGoal, setPointGoal] = useState<Pose | null>(null)
   const [navPhase, setNavPhase] = useState<NavPhase>('idle')
@@ -218,11 +219,19 @@ export default function BotSimPanel({ compact = false, autoFocus = false }: Prop
     if (pressedRef.current.has(direction)) return
     pressedRef.current.add(direction)
     recompute()
+    flushCmd()
   }
 
   const release = (direction: Direction) => {
     if (!pressedRef.current.delete(direction)) return
     recompute()
+    flushCmd()
+  }
+
+  const flushCmd = () => {
+    forcePublishRef.current = true
+    const { linear, angular } = velocityRef.current
+    publishNowRef.current?.(linear, angular)
   }
 
   const stop = () => {
@@ -235,8 +244,7 @@ export default function BotSimPanel({ compact = false, autoFocus = false }: Prop
     }
     pressedRef.current.clear()
     recompute()
-    forcePublishRef.current = true
-    publishStopRef.current?.()
+    flushCmd()
   }
 
   const dropGoalHandle = () => {
@@ -270,7 +278,7 @@ export default function BotSimPanel({ compact = false, autoFocus = false }: Prop
     let frame = 0
     let pubTimer: ReturnType<typeof setInterval> | undefined
     let heartbeatTimer: ReturnType<typeof setInterval> | undefined
-    let node: ReturnType<typeof RobotBusNode.grpcAt> | undefined
+    let node: ReturnType<typeof RobotBusNode.wsAt> | undefined
     let sessionId: string | undefined
     const current = { ...HOME_POSE }
     trailRef.current = [{ x: current.x, y: current.y }]
@@ -292,17 +300,17 @@ export default function BotSimPanel({ compact = false, autoFocus = false }: Prop
       spriteRef.current = img
       dirtyRef.current = true
     }
-    img.src = BOT_SPRITE_SRC
+    img.src = TANK_SPRITE_SRC
     spriteRef.current = img
 
     void (async () => {
-      let session: Awaited<ReturnType<typeof acquireBotSimSession>> | undefined
+      let session: Awaited<ReturnType<typeof acquireTankSession>> | undefined
       for (let attempt = 0; attempt < 5 && !disposed; attempt += 1) {
         try {
-          session = await acquireBotSimSession()
+          session = await acquireTankSession()
           break
         } catch (err) {
-          console.warn('bot_sim session acquire failed', err)
+          console.warn('tank session acquire failed', err)
           await new Promise((r) => setTimeout(r, 300 * (attempt + 1)))
         }
       }
@@ -311,7 +319,7 @@ export default function BotSimPanel({ compact = false, autoFocus = false }: Prop
         return
       }
       if (disposed) {
-        await releaseBotSimSession(session.sessionId)
+        await releaseTankSession(session.sessionId)
         return
       }
       sessionId = session.sessionId
@@ -320,12 +328,12 @@ export default function BotSimPanel({ compact = false, autoFocus = false }: Prop
       const beatMs = Math.max(2000, Math.floor(session.leaseMs / 3))
       heartbeatTimer = setInterval(() => {
         if (!sessionId) return
-        void heartbeatBotSimSession(sessionId)
+        void heartbeatTankSession(sessionId)
           .then((s) => {
             if (!disposed) setViewers(s.viewers)
           })
           .catch((err) => {
-            console.warn('bot_sim heartbeat failed', err)
+            console.warn('tank heartbeat failed', err)
           })
       }, beatMs)
 
@@ -333,7 +341,7 @@ export default function BotSimPanel({ compact = false, autoFocus = false }: Prop
       if (disposed) return
       setGrpcUrl(url)
 
-      node = RobotBusNode.grpcAt('bot_viz', url)
+      node = RobotBusNode.wsAt('tank_viz', url)
       const publisher = node.createPublisher(CMD_VEL_TOPIC, Twist)
       const publishTwist = (linear: number, angular: number) =>
         publisher
@@ -350,8 +358,11 @@ export default function BotSimPanel({ compact = false, autoFocus = false }: Prop
             if (!disposed) setBusOk(false)
           })
 
+      publishNowRef.current = (linear, angular) => {
+        void publishTwist(linear, angular)
+      }
       publishStopRef.current = () => {
-        void publishTwist(0, 0)
+        publishNowRef.current?.(0, 0)
       }
 
       pointNavRef.current = node.createActionClient(
@@ -458,11 +469,12 @@ export default function BotSimPanel({ compact = false, autoFocus = false }: Prop
       velocityRef.current = { linear: 0, angular: 0 }
       publishStopRef.current?.()
       publishStopRef.current = null
+      publishNowRef.current = null
       pointNavRef.current = null
       multiNavRef.current = null
       resetClientRef.current = null
       node?.shutdown()
-      if (sessionId) void releaseBotSimSession(sessionId)
+      if (sessionId) void releaseTankSession(sessionId)
       window.removeEventListener('blur', onWindowBlur)
       spriteRef.current = null
     }
@@ -563,7 +575,7 @@ export default function BotSimPanel({ compact = false, autoFocus = false }: Prop
           setNavProgress(100)
         } else {
           setNavPhaseBoth('failed')
-          setNavDetail(result.msg || t('botNavFailed'))
+          setNavDetail(result.msg || t('tankNavFailed'))
         }
       })
       .catch((err: unknown) => {
@@ -571,7 +583,7 @@ export default function BotSimPanel({ compact = false, autoFocus = false }: Prop
         cancelNavRef.current = null
         navPlanRef.current = null
         setNavPhaseBoth('failed')
-        setNavDetail(err instanceof Error ? err.message : t('botNavFailed'))
+        setNavDetail(err instanceof Error ? err.message : t('tankNavFailed'))
       })
   }
 
@@ -614,7 +626,7 @@ export default function BotSimPanel({ compact = false, autoFocus = false }: Prop
           syncOverlay(goals, goals.length - 1, 'multi_waypoint')
         } else {
           setNavPhaseBoth('failed')
-          setNavDetail(result.msg || t('botNavFailed'))
+          setNavDetail(result.msg || t('tankNavFailed'))
         }
       })
       .catch((err: unknown) => {
@@ -622,7 +634,7 @@ export default function BotSimPanel({ compact = false, autoFocus = false }: Prop
         cancelNavRef.current = null
         navPlanRef.current = null
         setNavPhaseBoth('failed')
-        setNavDetail(err instanceof Error ? err.message : t('botNavFailed'))
+        setNavDetail(err instanceof Error ? err.message : t('tankNavFailed'))
       })
   }
 
@@ -718,13 +730,13 @@ export default function BotSimPanel({ compact = false, autoFocus = false }: Prop
       .call(ResetRequest.create({}), 5)
       .then((res) => {
         if (!res.success) {
-          setNavDetail(res.msg || t('botNavFailed'))
+          setNavDetail(res.msg || t('tankNavFailed'))
         } else {
           clearTrail()
         }
       })
       .catch((err: unknown) => {
-        setNavDetail(err instanceof Error ? err.message : t('botNavFailed'))
+        setNavDetail(err instanceof Error ? err.message : t('tankNavFailed'))
       })
       .finally(() => setResetting(false))
   }
@@ -737,34 +749,34 @@ export default function BotSimPanel({ compact = false, autoFocus = false }: Prop
   }
 
   const busLabel =
-    busOk === null ? t('botConnecting') : busOk ? t('botBusOk') : t('botBusError')
+    busOk === null ? t('tankConnecting') : busOk ? t('tankBusOk') : t('tankBusError')
   const simLabel = simOnline
-    ? t('botSimOnline')
+    ? t('tankOnline')
     : sessionReady
-      ? t('botSimHint')
-      : t('botSimStarting')
+      ? t('tankHint')
+      : t('tankStarting')
   const hint =
     busOk === false
-      ? t('botBusHint')
+      ? t('tankBusHint')
       : !simOnline
         ? sessionReady
-          ? t('botSimHint')
-          : t('botSimStarting')
-        : t('botSharedHint')
+          ? t('tankHint')
+          : t('tankStarting')
+        : t('tankSharedHint')
 
   const navStatusLabel =
     navPhase === 'running'
-      ? t('botNavRunning', { p: navProgress })
+      ? t('tankNavRunning', { p: navProgress })
       : navPhase === 'done'
-        ? t('botNavDone')
+        ? t('tankNavDone')
         : navPhase === 'failed'
-          ? navDetail || t('botNavFailed')
-          : t('botNavIdle')
+          ? navDetail || t('tankNavFailed')
+          : t('tankNavIdle')
 
   const capabilities: { id: Capability; label: string }[] = [
-    { id: 'keyboard', label: t('botCapKeyboard') },
-    { id: 'point_nav', label: t('botCapPointNav') },
-    { id: 'multi_waypoint', label: t('botCapMultiNav') },
+    { id: 'keyboard', label: t('tankCapKeyboard') },
+    { id: 'point_nav', label: t('tankCapPointNav') },
+    { id: 'multi_waypoint', label: t('tankCapMultiNav') },
   ]
 
   return (
@@ -804,10 +816,10 @@ export default function BotSimPanel({ compact = false, autoFocus = false }: Prop
           className={`${compact ? 'bg-bus-bg/25' : 'bg-bus-panel'} border border-bus-border rounded-sm font-mono shadow-[0_1px_0_rgb(255_255_255_/06%)_inset] flex flex-col min-h-0 overflow-auto ${compact ? 'p-2' : 'p-4'}`}
         >
           <div className="mb-3">
-            <h1 className="text-xs text-bus-cyan mb-2">{t('botCapabilitiesTitle')}</h1>
+            <h1 className="text-xs text-bus-cyan mb-2">{t('tankCapabilitiesTitle')}</h1>
             <div className="grid grid-cols-2 gap-1.5 text-[9px]">
               <div className="flex items-center justify-between gap-1 border border-bus-border rounded-sm px-1.5 py-1">
-                <span className="text-bus-muted">{t('botBusLabel')}</span>
+                <span className="text-bus-muted">{t('tankBusLabel')}</span>
                 <span
                   className={
                     busOk === null
@@ -821,7 +833,7 @@ export default function BotSimPanel({ compact = false, autoFocus = false }: Prop
                 </span>
               </div>
               <div className="flex items-center justify-between gap-1 border border-bus-border rounded-sm px-1.5 py-1">
-                <span className="text-bus-muted">{t('botSimLabel')}</span>
+                <span className="text-bus-muted">{t('tankLabel')}</span>
                 <span
                   className={
                     simOnline ? 'text-bus-green' : sessionReady ? 'text-bus-cyan' : 'text-bus-amber'
@@ -837,7 +849,7 @@ export default function BotSimPanel({ compact = false, autoFocus = false }: Prop
               }`}
             >
               {hint}
-              {viewers > 0 ? ` · ${t('botViewers', { n: viewers })}` : ''}
+              {viewers > 0 ? ` · ${t('tankViewers', { n: viewers })}` : ''}
             </p>
           </div>
 
@@ -864,7 +876,7 @@ export default function BotSimPanel({ compact = false, autoFocus = false }: Prop
 
           {capability === 'keyboard' && (
             <div className="border-t border-bus-border pt-3">
-              <p className="text-[10px] leading-5 text-bus-muted mb-2">{t('botArrowHelp')}</p>
+              <p className="text-[10px] leading-5 text-bus-muted mb-2">{t('tankArrowHelp')}</p>
               <div className="grid grid-cols-3 gap-2 mx-auto max-w-[200px] mb-3">
                 {KEY_BUTTONS.map(({ direction, label, className }) => (
                   <button
@@ -897,14 +909,14 @@ export default function BotSimPanel({ compact = false, autoFocus = false }: Prop
 
           {capability === 'point_nav' && (
             <div className="border-t border-bus-border pt-3 text-[10px] leading-5">
-              <p className="text-bus-muted mb-2">{t('botCapPointNavHelp')}</p>
+              <p className="text-bus-muted mb-2">{t('tankCapPointNavHelp')}</p>
               {pointGoal && (
                 <dl className="grid grid-cols-2 gap-y-1 text-[11px] mb-2">
                   <dt className="text-bus-muted">goal.x</dt>
                   <dd className="text-right">{pointGoal.x.toFixed(2)}</dd>
                   <dt className="text-bus-muted">goal.y</dt>
                   <dd className="text-right">{pointGoal.y.toFixed(2)}</dd>
-                  <dt className="text-bus-muted">{t('botNavTheta')}</dt>
+                  <dt className="text-bus-muted">{t('tankNavTheta')}</dt>
                   <dd className="text-right">{pointGoal.theta.toFixed(2)}</dd>
                 </dl>
               )}
@@ -914,13 +926,13 @@ export default function BotSimPanel({ compact = false, autoFocus = false }: Prop
                 onClick={runPointNav}
                 className="w-full h-8 mb-2 border border-bus-border rounded-sm text-[11px] bg-[#1f2428] hover:border-bus-cyan hover:text-bus-cyan disabled:opacity-40"
               >
-                {t('botNavGo')}
+                {t('tankNavGo')}
               </button>
               <NavProgress
                 phase={navPhase}
                 progress={navProgress}
                 label={navStatusLabel}
-                progressLabel={t('botNavProgress')}
+                progressLabel={t('tankNavProgress')}
               />
               {navPhase === 'running' && (
                 <button
@@ -928,7 +940,7 @@ export default function BotSimPanel({ compact = false, autoFocus = false }: Prop
                   onClick={cancelRunningNav}
                   className="mt-2 w-full h-8 border border-bus-border rounded-sm text-[11px] bg-[#1f2428] hover:border-bus-amber hover:text-bus-amber"
                 >
-                  {t('botNavCancel')}
+                  {t('tankNavCancel')}
                 </button>
               )}
             </div>
@@ -936,15 +948,15 @@ export default function BotSimPanel({ compact = false, autoFocus = false }: Prop
 
           {capability === 'multi_waypoint' && (
             <div className="border-t border-bus-border pt-3 text-[10px] leading-5">
-              <p className="text-bus-muted mb-2">{t('botCapMultiNavHelp')}</p>
-              <p className="text-[11px] mb-2">{t('botNavWaypoints', { n: waypoints.length })}</p>
+              <p className="text-bus-muted mb-2">{t('tankCapMultiNavHelp')}</p>
+              <p className="text-[11px] mb-2">{t('tankNavWaypoints', { n: waypoints.length })}</p>
               {waypoints.length > 0 && (
                 <dl className="grid grid-cols-2 gap-y-1 text-[11px] mb-2">
                   <dt className="text-bus-muted">last.x</dt>
                   <dd className="text-right">{waypoints[waypoints.length - 1].x.toFixed(2)}</dd>
                   <dt className="text-bus-muted">last.y</dt>
                   <dd className="text-right">{waypoints[waypoints.length - 1].y.toFixed(2)}</dd>
-                  <dt className="text-bus-muted">{t('botNavTheta')}</dt>
+                  <dt className="text-bus-muted">{t('tankNavTheta')}</dt>
                   <dd className="text-right">{waypoints[waypoints.length - 1].theta.toFixed(2)}</dd>
                 </dl>
               )}
@@ -955,7 +967,7 @@ export default function BotSimPanel({ compact = false, autoFocus = false }: Prop
                   onClick={runMultiNav}
                   className="h-8 border border-bus-border rounded-sm text-[11px] bg-[#1f2428] hover:border-bus-cyan hover:text-bus-cyan disabled:opacity-40"
                 >
-                  {t('botNavGo')}
+                  {t('tankNavGo')}
                 </button>
                 <button
                   type="button"
@@ -969,7 +981,7 @@ export default function BotSimPanel({ compact = false, autoFocus = false }: Prop
                   }}
                   className="h-8 border border-bus-border rounded-sm text-[11px] bg-[#1f2428] hover:border-bus-cyan-dim disabled:opacity-40"
                 >
-                  {t('botNavUndo')}
+                  {t('tankNavUndo')}
                 </button>
                 <button
                   type="button"
@@ -980,14 +992,14 @@ export default function BotSimPanel({ compact = false, autoFocus = false }: Prop
                   }}
                   className="h-8 border border-bus-border rounded-sm text-[11px] bg-[#1f2428] hover:border-bus-amber disabled:opacity-40"
                 >
-                  {t('botNavClear')}
+                  {t('tankNavClear')}
                 </button>
               </div>
               <NavProgress
                 phase={navPhase}
                 progress={navProgress}
                 label={navStatusLabel}
-                progressLabel={t('botNavProgress')}
+                progressLabel={t('tankNavProgress')}
               />
               {navPhase === 'running' && (
                 <button
@@ -995,7 +1007,7 @@ export default function BotSimPanel({ compact = false, autoFocus = false }: Prop
                   onClick={cancelRunningNav}
                   className="mt-2 w-full h-8 border border-bus-border rounded-sm text-[11px] bg-[#1f2428] hover:border-bus-amber hover:text-bus-amber"
                 >
-                  {t('botNavCancel')}
+                  {t('tankNavCancel')}
                 </button>
               )}
             </div>
@@ -1003,15 +1015,15 @@ export default function BotSimPanel({ compact = false, autoFocus = false }: Prop
 
           <div className="mt-auto pt-3 border-t border-bus-border">
             <div className="flex items-center justify-between gap-2 mb-1.5">
-              <div className="text-[10px] text-bus-muted">{t('botPoseTitle')}</div>
+              <div className="text-[10px] text-bus-muted">{t('tankPoseTitle')}</div>
               <button
                 type="button"
                 disabled={resetting || !sessionReady}
-                title={t('botResetHint')}
+                title={t('tankResetHint')}
                 onClick={onReset}
                 className="h-6 px-2 border border-bus-border rounded-sm text-[10px] bg-[#1f2428] hover:border-bus-amber hover:text-bus-amber disabled:opacity-40"
               >
-                {resetting ? t('botResetting') : t('botReset')}
+                {resetting ? t('tankResetting') : t('tankReset')}
               </button>
             </div>
             <dl className="grid grid-cols-2 gap-y-1 text-[11px] mb-3">
@@ -1024,17 +1036,17 @@ export default function BotSimPanel({ compact = false, autoFocus = false }: Prop
             </dl>
             <div className="text-[9px] leading-4 text-bus-muted break-all">
               <div>
-                {t('botSubscribe')} {POSE_TOPIC}
+                {t('tankSubscribe')} {POSE_TOPIC}
               </div>
               <div>
-                {t('botPublish')} {CMD_VEL_TOPIC}
+                {t('tankPublish')} {CMD_VEL_TOPIC}
               </div>
               <div className="mt-1 text-bus-muted/80">ACT {POINT_NAV_ACTION}</div>
               <div className="text-bus-muted/80">ACT {MULTI_WAYPOINT_NAV_ACTION}</div>
               <div className="text-bus-muted/80">SRV {RESET_SERVICE}</div>
-              <div className="mt-1 text-bus-muted/80">{t('botViewerHint')}</div>
-              <div className="mt-1 text-bus-muted/80">bot_viz ↔ bot_sim</div>
-              {!compact && <div className="mt-2">{grpcUrl}</div>}
+              <div className="mt-1 text-bus-muted/80">{t('tankViewerHint')}</div>
+              <div className="mt-1 text-bus-muted/80">tank_viz ↔ tank</div>
+              {!compact && <div className="mt-2">{wsUrl}</div>}
             </div>
           </div>
         </aside>
@@ -1179,7 +1191,7 @@ function drawWorld(
 
   const x = pose.x * scale
   const y = height - pose.y * scale
-  const size = BOT_SPRITE_SIZE_M * scale
+  const size = TANK_SPRITE_SIZE_M * scale
   ctx.save()
   ctx.translate(x, y)
   // Canvas Y is down; world Y is up — negate theta so heading matches motion.
@@ -1187,13 +1199,13 @@ function drawWorld(
   if (sprite?.complete && sprite.naturalWidth > 0) {
     ctx.drawImage(sprite, -size / 2, -size / 2, size, size)
   } else {
-    drawBotFallback(ctx, size)
+    drawTankFallback(ctx, size)
   }
   ctx.restore()
 }
 
 /** Simple top-down rover used until the SVG sprite loads. */
-function drawBotFallback(ctx: CanvasRenderingContext2D, size: number) {
+function drawTankFallback(ctx: CanvasRenderingContext2D, size: number) {
   const u = size / 2
   ctx.fillStyle = 'rgba(0,0,0,0.35)'
   ctx.beginPath()

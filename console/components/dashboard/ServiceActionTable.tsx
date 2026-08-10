@@ -60,7 +60,7 @@ function ServicesPanel({
         cols={[t('colService'), t('colCallsS'), t('colCalls'), t('colWorkers'), t('colErr'), t('colP99'), t('colLast')]}
         widths={grid}
       />
-      <div className="overflow-y-auto" style={maxBodyHeight ? { maxHeight: maxBodyHeight } : undefined}>
+      <div className="overflow-y-auto bus-scroll" style={maxBodyHeight ? { maxHeight: maxBodyHeight } : undefined}>
         {sorted.length === 0 ? (
           <EmptyRow text={t('servicesEmpty')} />
         ) : (
@@ -115,7 +115,7 @@ function ActionsPanel({
         cols={[t('colAction'), t('colRunsS'), t('colRuns'), t('colActive'), t('colErr'), t('colAvgDur'), t('colLast')]}
         widths={grid}
       />
-      <div className="overflow-y-auto" style={maxBodyHeight ? { maxHeight: maxBodyHeight } : undefined}>
+      <div className="overflow-y-auto bus-scroll" style={maxBodyHeight ? { maxHeight: maxBodyHeight } : undefined}>
         {sorted.length === 0 ? (
           <EmptyRow text={t('actionsEmpty')} />
         ) : (

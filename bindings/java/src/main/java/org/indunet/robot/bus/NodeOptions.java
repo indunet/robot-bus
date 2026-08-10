@@ -4,7 +4,7 @@ package org.indunet.robot.bus;
 public final class NodeOptions {
     private final String host;
     private final String transport;
-    private final String grpcUrl;
+    private final String wsUrl;
     private final String messageXsub;
     private final String messageXpub;
     private final String serviceFrontend;
@@ -19,7 +19,7 @@ public final class NodeOptions {
     public NodeOptions(
             String host,
             String transport,
-            String grpcUrl,
+            String wsUrl,
             String messageXsub,
             String messageXpub,
             String serviceFrontend,
@@ -28,7 +28,7 @@ public final class NodeOptions {
             String actionFrontend) {
         this.host = host;
         this.transport = transport;
-        this.grpcUrl = grpcUrl;
+        this.wsUrl = wsUrl;
         this.messageXsub = messageXsub;
         this.messageXpub = messageXpub;
         this.serviceFrontend = serviceFrontend;
@@ -46,7 +46,7 @@ public final class NodeOptions {
     }
 
     public String getGrpcUrl() {
-        return grpcUrl;
+        return wsUrl;
     }
 
     public String getMessageXsub() {
@@ -85,7 +85,7 @@ public final class NodeOptions {
             return new NodeOptions(
                     ptrString(out.host) != null ? ptrString(out.host) : "localhost",
                     ptrString(out.transport) != null ? ptrString(out.transport) : transport,
-                    ptrString(out.grpcUrl),
+                    ptrString(out.wsUrl),
                     ptrString(out.messageXsub),
                     ptrString(out.messageXpub),
                     ptrString(out.serviceFrontend),
@@ -105,7 +105,7 @@ public final class NodeOptions {
         RobotBusC.NodeOptions o = new RobotBusC.NodeOptions();
         o.host = host;
         o.transport = transport;
-        o.grpcUrl = grpcUrl;
+        o.wsUrl = wsUrl;
         o.messageXsub = messageXsub;
         o.messageXpub = messageXpub;
         o.serviceFrontend = serviceFrontend;

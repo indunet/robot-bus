@@ -1,6 +1,6 @@
-//! Browser WebSocket RPC smoke tests (one WS = one RPC).
+//! Multiplexed WebSocket RPC smoke tests (V2: stream_id).
 
-#![cfg(feature = "grpc")]
+#![cfg(feature = "ws")]
 
 mod support;
 
@@ -11,8 +11,8 @@ use std::time::Duration;
 
 use futures_util::{SinkExt, StreamExt};
 use prost::Message as ProstMessage;
-use robot_bus::grpc::pb::{ActionEvent, ActionKind, GoalCommand, SubscribeRequest, TopicMessage};
-use robot_bus::grpc::ws_frame::{
+use robot_bus::ws_gateway::pb::{ActionEvent, ActionKind, GoalCommand, SubscribeRequest, TopicMessage};
+use robot_bus::ws_gateway::ws_frame::{
     Frame, METHOD_PUBLISH, METHOD_SEND_GOAL, METHOD_SUBSCRIBE, decode_frame, encode_frame,
 };
 use robot_bus::{Publisher, RobotBusBroker, Subscriber};
@@ -30,7 +30,7 @@ fn start_bus() -> (support::BrokerLockGuard, RobotBusBroker) {
 #[tokio::test]
 async fn ws_publish_reaches_zmq_subscriber() {
     let (_guard, broker) = start_bus();
-    let listen = broker.grpc_listen();
+    let listen = broker.api_listen();
 
     let sub = Subscriber::new(Some(&broker.message.xpub_bind)).expect("subscriber");
     sub.subscribe("ws.pub").expect("subscribe");
@@ -45,6 +45,7 @@ async fn ws_publish_reaches_zmq_subscriber() {
     }
     .encode_to_vec();
     let req = encode_frame(&Frame::Request {
+        stream_id: 1,
         method: METHOD_PUBLISH.to_string(),
         payload,
     })
@@ -85,7 +86,7 @@ async fn ws_publish_reaches_zmq_subscriber() {
 #[tokio::test]
 async fn ws_subscribe_receives_published_payload() {
     let (_guard, broker) = start_bus();
-    let listen = broker.grpc_listen();
+    let listen = broker.api_listen();
 
     let url = format!("ws://{listen}/ws");
     let (mut ws, _) = connect_async(&url).await.expect("ws connect");
@@ -95,6 +96,7 @@ async fn ws_subscribe_receives_published_payload() {
     }
     .encode_to_vec();
     let req = encode_frame(&Frame::Request {
+        stream_id: 1,
         method: METHOD_SUBSCRIBE.to_string(),
         payload,
     })
@@ -118,7 +120,7 @@ async fn ws_subscribe_receives_published_payload() {
         let Message::Binary(bin) = msg else {
             continue;
         };
-        if let Frame::Data { payload } = decode_frame(&bin).expect("decode") {
+        if let Frame::Data { payload, .. } = decode_frame(&bin).expect("decode") {
             let tm = TopicMessage::decode(payload.as_slice()).expect("topic message");
             assert_eq!(tm.topic, "ws.sub");
             assert_eq!(tm.payload, b"hello-ws");
@@ -134,7 +136,7 @@ async fn ws_subscribe_receives_published_payload() {
 #[tokio::test]
 async fn ws_send_goal_soft_cancel_keeps_connection_for_result() {
     let (_guard, broker) = start_bus();
-    let listen = broker.grpc_listen();
+    let listen = broker.api_listen();
     let backend = broker.action.backend_bind.clone();
     let cancel_seen = Arc::new(AtomicBool::new(false));
     let flag = cancel_seen.clone();
@@ -188,6 +190,7 @@ async fn ws_send_goal_soft_cancel_keeps_connection_for_result() {
     .encode_to_vec();
     ws.send(Message::Binary(
         encode_frame(&Frame::Request {
+        stream_id: 1,
             method: METHOD_SEND_GOAL.to_string(),
             payload,
         })
@@ -199,7 +202,7 @@ async fn ws_send_goal_soft_cancel_keeps_connection_for_result() {
 
     tokio::time::sleep(Duration::from_millis(150)).await;
     ws.send(Message::Binary(
-        encode_frame(&Frame::Cancel).unwrap().into(),
+        encode_frame(&Frame::Cancel { stream_id: 1 }).unwrap().into(),
     ))
     .await
     .expect("send CANCEL");
@@ -215,7 +218,7 @@ async fn ws_send_goal_soft_cancel_keeps_connection_for_result() {
             continue;
         };
         match decode_frame(&bin).expect("decode") {
-            Frame::Data { payload } => {
+            Frame::Data { payload, .. } => {
                 let ev = ActionEvent::decode(payload.as_slice()).expect("event");
                 if ev.kind == i32::from(ActionKind::Result) {
                     assert_eq!(ev.body, b"cancelled-ok");
@@ -241,7 +244,7 @@ async fn ws_send_goal_soft_cancel_keeps_connection_for_result() {
 #[tokio::test]
 async fn ws_send_goal_disconnect_still_submits_cancel() {
     let (_guard, broker) = start_bus();
-    let listen = broker.grpc_listen();
+    let listen = broker.api_listen();
     let backend = broker.action.backend_bind.clone();
     let cancel_seen = Arc::new(AtomicBool::new(false));
     let flag = cancel_seen.clone();
@@ -276,6 +279,7 @@ async fn ws_send_goal_disconnect_still_submits_cancel() {
     .encode_to_vec();
     ws.send(Message::Binary(
         encode_frame(&Frame::Request {
+        stream_id: 1,
             method: METHOD_SEND_GOAL.to_string(),
             payload,
         })
@@ -297,5 +301,80 @@ async fn ws_send_goal_disconnect_still_submits_cancel() {
     .expect("worker did not observe cancel after disconnect");
 
     worker.join().expect("join worker");
+    broker.stop().expect("stop");
+}
+
+#[tokio::test]
+async fn ws_multiplex_two_streams_on_one_connection() {
+    let (_guard, broker) = start_bus();
+    let listen = broker.api_listen();
+    let url = format!("ws://{listen}/ws");
+    let (mut ws, _) = connect_async(&url).await.expect("ws connect");
+
+    let sub_req = SubscribeRequest {
+        topic: "mux.a".into(),
+    }
+    .encode_to_vec();
+    ws.send(Message::Binary(
+        encode_frame(&Frame::Request {
+            stream_id: 1,
+            method: METHOD_SUBSCRIBE.to_string(),
+            payload: sub_req,
+        })
+        .unwrap()
+        .into(),
+    ))
+    .await
+    .expect("subscribe");
+
+    tokio::time::sleep(Duration::from_millis(200)).await;
+
+    let pub_payload = TopicMessage {
+        topic: "mux.a".into(),
+        payload: b"mux-hi".to_vec(),
+    }
+    .encode_to_vec();
+    ws.send(Message::Binary(
+        encode_frame(&Frame::Request {
+            stream_id: 3,
+            method: METHOD_PUBLISH.to_string(),
+            payload: pub_payload,
+        })
+        .unwrap()
+        .into(),
+    ))
+    .await
+    .expect("publish");
+
+    let mut saw_pub_trailer = false;
+    let mut saw_sub_data = false;
+    for _ in 0..20 {
+        let msg = tokio::time::timeout(Duration::from_secs(3), ws.next())
+            .await
+            .expect("timeout")
+            .expect("ws closed")
+            .expect("ws error");
+        let Message::Binary(bin) = msg else {
+            continue;
+        };
+        match decode_frame(&bin).expect("decode") {
+            Frame::Data { stream_id, payload } if stream_id == 1 => {
+                let msg = TopicMessage::decode(payload.as_slice()).expect("topic");
+                assert_eq!(msg.payload, b"mux-hi");
+                saw_sub_data = true;
+            }
+            Frame::Trailer {
+                stream_id, status, ..
+            } if stream_id == 3 => {
+                assert_eq!(status, 0);
+                saw_pub_trailer = true;
+            }
+            _ => {}
+        }
+        if saw_pub_trailer && saw_sub_data {
+            break;
+        }
+    }
+    assert!(saw_pub_trailer && saw_sub_data, "multiplex pub+sub failed");
     broker.stop().expect("stop");
 }

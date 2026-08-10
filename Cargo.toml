@@ -19,7 +19,7 @@ authors = ["deng_ran <deng_ran@aliyun.com>"]
 repository = "https://github.com/indunet/robot-bus"
 readme = "README.md"
 autobenches = false
-# Force-include gitignored pre-generated prost/tonic stubs when present at
+# Force-include gitignored pre-generated prost stubs when present at
 # `cargo package` / publish time (run `just gen-rust` first).
 include = [
     "/Cargo.toml",
@@ -36,23 +36,22 @@ name = "robot_bus"
 crate-type = ["cdylib", "rlib"]
 
 [features]
-default = ["grpc", "console"]
+default = ["ws", "console"]
 # Enable with maturin / `cargo build --features extension-module` for the Python module.
 extension-module = ["dep:pyo3", "pyo3/extension-module"]
-# gRPC / browser WebSocket gateway (started with RobotBusBroker; on by default).
-# Stubs are pre-generated (`just gen-rust`); no protoc at compile time.
-# axum is required so gRPC routes can share one listener with the console.
-grpc = [
+# Multiplexed WebSocket RPC gateway (started with RobotBusBroker; on by default).
+# Payload stubs are pre-generated (`just gen-rust`); no protoc at compile time.
+# axum shares one listener with the console when both features are enabled.
+ws = [
     "dep:tokio",
-    "dep:tonic",
-    "dep:tonic-prost",
     "dep:tower-http",
     "dep:tokio-stream",
     "dep:http",
     "dep:axum",
     "dep:futures-util",
+    "dep:tokio-tungstenite",
 ]
-# Embedded Web console (static UI + REST shim; same port as gRPC when both enabled).
+# Embedded Web console (static UI + REST shim; same port as WS gateway when both enabled).
 console = [
     "dep:tokio",
     "dep:tokio-stream",
@@ -87,10 +86,9 @@ serde_json = "1"
 serde_yaml = "0.9"
 socket2 = { version = "0.6.5", features = ["all"] }
 thiserror = "2"
-tokio = { version = "1", optional = true, features = ["rt-multi-thread", "macros", "net", "sync", "time", "signal"] }
+tokio = { version = "1", optional = true, features = ["rt-multi-thread", "macros", "net", "sync", "time", "signal", "io-util"] }
 tokio-stream = { version = "0.1", optional = true, features = ["sync", "net"] }
-tonic = { version = "0.14", optional = true }
-tonic-prost = { version = "0.14", optional = true }
+tokio-tungstenite = { version = "0.29", optional = true }
 tower-http = { version = "0.6", optional = true, features = ["cors"] }
 ureq = { version = "2", default-features = false, features = ["json"] }
 uuid = { version = "1", features = ["v4"] }
@@ -101,39 +99,37 @@ futures-util = { version = "0.3", default-features = false, features = ["sink"] 
 libc = "0.2"
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "sync", "time"] }
 tokio-tungstenite = "0.29"
-tonic = "0.14"
-tonic-prost = "0.14"
 tokio-stream = "0.1"
 
 [[test]]
-name = "grpc_ws"
-path = "tests/grpc_ws.rs"
-required-features = ["grpc"]
+name = "ws_rpc"
+path = "tests/ws_rpc.rs"
+required-features = ["ws"]
 
 [[test]]
-name = "grpc_node"
-path = "tests/grpc_node.rs"
-required-features = ["grpc"]
+name = "ws_node"
+path = "tests/ws_node.rs"
+required-features = ["ws"]
 
 [[test]]
 name = "console_metrics_smoke"
 path = "tests/console_metrics_smoke.rs"
-required-features = ["console", "grpc"]
+required-features = ["console", "ws"]
 
 [[test]]
 name = "rbus_cli_smoke"
 path = "tests/rbus_cli_smoke.rs"
-required-features = ["console", "grpc"]
+required-features = ["console", "ws"]
 
 [[test]]
 name = "topic_type_registry"
 path = "tests/topic_type_registry.rs"
-required-features = ["console", "grpc"]
+required-features = ["console", "ws"]
 
 [[test]]
-name = "bot_sim_session"
-path = "tests/bot_sim_session.rs"
-required-features = ["console", "grpc"]
+name = "tank_session"
+path = "tests/tank_session.rs"
+required-features = ["console", "ws"]
 
 [[bin]]
 name = "robot_bus_broker"
@@ -150,7 +146,7 @@ path = "src/bin/robot_bus_interop.rs"
 [[bin]]
 name = "robot_bus_perf"
 path = "benches/robot_bus_perf/main.rs"
-required-features = ["grpc"]
+required-features = ["ws"]
 
 [package.metadata.docs.rs]
-features = ["grpc", "console"]
+features = ["ws", "console"]

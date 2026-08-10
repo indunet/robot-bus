@@ -168,11 +168,11 @@ impl BrokerAnnouncement {
 
     fn apply_grpc(&self, opts: &mut NodeOptions) -> Result<()> {
         let url = self
-            .grpc_url
+            .ws_url
             .as_deref()
-            .ok_or_else(|| BusError::Protocol("discovery announce has no grpc_url / apiUrl".into()))?;
-        if opts.grpc_url.is_none() {
-            opts.grpc_url = Some(url.to_string());
+            .ok_or_else(|| BusError::Protocol("discovery announce has no ws_url / apiUrl".into()))?;
+        if opts.ws_url.is_none() {
+            opts.ws_url = Some(url.to_string());
         }
         Ok(())
     }

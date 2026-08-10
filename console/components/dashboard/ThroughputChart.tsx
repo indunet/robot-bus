@@ -109,7 +109,7 @@ function RateChart({
       />
       <div className="flex-1 min-h-[7rem] px-3 pb-2 pt-2">
         <ResponsiveContainer width="100%" height="100%">
-          <AreaChart data={view} margin={{ top: 10, right: 8, left: 4, bottom: 12 }}>
+          <AreaChart data={view} margin={{ top: 10, right: 8, left: 4, bottom: 4 }}>
             <defs>
               <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
                 <stop offset="0%" stopColor={stroke} stopOpacity={0.25} />
@@ -118,13 +118,15 @@ function RateChart({
             </defs>
             <XAxis
               dataKey="t"
-              tick={{ fill: '#5a6370', fontSize: 11, fontFamily: 'monospace' }}
+              tick={{ fill: '#5a6370', fontSize: 10, fontFamily: 'monospace' }}
               tickLine={false}
               axisLine={false}
               interval="preserveStartEnd"
               minTickGap={28}
-              height={28}
-              tickMargin={6}
+              height={36}
+              tickMargin={8}
+              angle={-28}
+              textAnchor="end"
               tickFormatter={formatMsTick}
             />
             <YAxis

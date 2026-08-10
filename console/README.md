@@ -2,19 +2,19 @@
 
 Broker monitoring console: status, topic / service / action traffic, event logs, and live topology.
 
-The sidebar **BOT** entry opens one **BOT SIM** floating window (also `/bot_sim/`). Opening it acquires a console session that lazy-starts the in-process `bot_sim` inside the broker. Multiple browsers share one world (`cmd_vel` is last-writer-wins).
+The sidebar **TANK** entry opens one **TANK** floating window (also `/tank/`). Opening it acquires a console session that lazy-starts the in-process `tank` inside the broker. Multiple browsers share one world (`cmd_vel` is last-writer-wins).
 
 | Node | Where | Role |
 |------|---------|------|
-| `bot_sim` | broker (on session acquire) | Sim: SUB `/robot_bus/bot/cmd_vel`, integrate pose, PUB `/robot_bus/bot/pose` |
-| `bot_viz` | console BOT SIM / `/bot_sim/` | Viz/ops: session + SUB pose + PUB cmd_vel |
+| `tank` | broker (on session acquire) | Sim: SUB `/robot_bus/tank/cmd_vel`, integrate pose, PUB `/robot_bus/tank/pose` |
+| `tank_viz` | console TANK / `/tank/` | Viz/ops: session + SUB pose + PUB cmd_vel |
 
 ```bash
 cargo run --bin robot_bus_broker          # terminal 1
-# open console BOT SIM window or /bot_sim  (starts bot_sim automatically)
+# open console TANK window or /tank  (starts tank automatically)
 ```
 
-Both Bot pages and the Dashboard use the in-repo TypeScript `GrpcNode` and connect to
+Both Tank pages and the Dashboard use the in-repo TypeScript `WsNode` and connect to
 **same-origin** WebSocket RPC at `/ws` (broker default `http://127.0.0.1:15570` → `ws://127.0.0.1:15570/ws`).
 
 Monitoring data is published by the broker on system topics:

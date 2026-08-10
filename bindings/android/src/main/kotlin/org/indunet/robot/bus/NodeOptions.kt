@@ -6,7 +6,7 @@ class NodeOptions
 constructor(
     private val host: String? = "localhost",
     private val transport: String? = "tcp",
-    private val grpcUrl: String? = null,
+    private val wsUrl: String? = null,
     private val messageXsub: String? = null,
     private val messageXpub: String? = null,
     private val serviceFrontend: String? = null,
@@ -18,7 +18,7 @@ constructor(
 
     fun getTransport(): String? = transport
 
-    fun getGrpcUrl(): String? = grpcUrl
+    fun getGrpcUrl(): String? = wsUrl
 
     fun getMessageXsub(): String? = messageXsub
 
@@ -52,7 +52,7 @@ constructor(
                 return NodeOptions(
                     host = ptrString(out.host) ?: "localhost",
                     transport = ptrString(out.transport) ?: transport,
-                    grpcUrl = ptrString(out.grpcUrl),
+                    wsUrl = ptrString(out.wsUrl),
                     messageXsub = ptrString(out.messageXsub),
                     messageXpub = ptrString(out.messageXpub),
                     serviceFrontend = ptrString(out.serviceFrontend),
@@ -70,7 +70,7 @@ constructor(
         val o = RobotBusC.NodeOptions()
         o.host = host
         o.transport = transport
-        o.grpcUrl = grpcUrl
+        o.wsUrl = wsUrl
         o.messageXsub = messageXsub
         o.messageXpub = messageXpub
         o.serviceFrontend = serviceFrontend

@@ -294,7 +294,7 @@ mod hop_tests {
         assert!(!should_federate("/robot_bus/status"));
         assert!(!should_federate("/robot_bus/topics"));
         assert!(!should_federate("/robot_bus/topology"));
-        assert!(!should_federate("/robot_bus/bot/pose"));
+        assert!(!should_federate("/robot_bus/tank/pose"));
         assert!(!should_federate("/robot_bus"));
         assert!(should_federate("fleet/pose"));
         assert!(should_federate("/robot1/imu"));

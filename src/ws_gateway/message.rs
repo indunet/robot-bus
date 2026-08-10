@@ -1,21 +1,15 @@
 //! `MessageGateway` — Subscribe (SUB→XPUB) and Publish (PUB→XSUB).
 
-use std::pin::Pin;
 use std::sync::{Arc, Mutex};
 
 use tokio::sync::mpsc;
-use tokio_stream::Stream;
-use tokio_stream::wrappers::ReceiverStream;
-use tonic::{Request, Response, Status};
 
 use crate::errors::BusError;
 use crate::message_bus::Publisher;
 
-use super::pb::message_gateway_server::MessageGateway;
 use super::pb::{PublishResponse, SubscribeRequest, TopicMessage};
+use super::rpc_status::RpcStatus;
 use super::sub_demux::SubDemux;
-
-type SubscribeStream = Pin<Box<dyn Stream<Item = Result<TopicMessage, Status>> + Send + 'static>>;
 
 #[derive(Clone)]
 pub struct MessageGatewayService {
@@ -35,10 +29,10 @@ impl MessageGatewayService {
         }
     }
 
-    fn ensure_publisher(publisher: &Mutex<Option<Publisher>>, xsub: &str) -> Result<(), Status> {
+    fn ensure_publisher(publisher: &Mutex<Option<Publisher>>, xsub: &str) -> Result<(), RpcStatus> {
         let mut guard = publisher
             .lock()
-            .map_err(|_| Status::internal("publisher mutex poisoned"))?;
+            .map_err(|_| RpcStatus::internal("publisher mutex poisoned"))?;
         if guard.is_none() {
             let pub_ = Publisher::new(Some(xsub)).map_err(bus_status)?;
             *guard = Some(pub_);
@@ -50,13 +44,13 @@ impl MessageGatewayService {
     pub fn open_subscribe(
         &self,
         topic: String,
-    ) -> Result<mpsc::Receiver<Result<TopicMessage, Status>>, Status> {
+    ) -> Result<mpsc::Receiver<Result<TopicMessage, RpcStatus>>, RpcStatus> {
         self.demux.open_subscribe(topic)
     }
 
-    pub async fn publish_message(&self, msg: TopicMessage) -> Result<(), Status> {
+    pub async fn publish_message(&self, msg: TopicMessage) -> Result<(), RpcStatus> {
         if msg.topic.is_empty() {
-            return Err(Status::invalid_argument("topic is required"));
+            return Err(RpcStatus::invalid_argument("topic is required"));
         }
         if let Err(err) = crate::console_topics::check_not_reserved(&msg.topic) {
             return Err(bus_status(err));
@@ -71,46 +65,44 @@ impl MessageGatewayService {
             Self::ensure_publisher(&publisher, &xsub)?;
             let guard = publisher
                 .lock()
-                .map_err(|_| Status::internal("publisher mutex poisoned"))?;
+                .map_err(|_| RpcStatus::internal("publisher mutex poisoned"))?;
             let pub_ = guard
                 .as_ref()
-                .ok_or_else(|| Status::internal("publisher missing after ensure"))?;
+                .ok_or_else(|| RpcStatus::internal("publisher missing after ensure"))?;
             pub_.publish(&topic, &payload).map_err(bus_status)?;
-            Ok::<_, Status>(())
+            Ok::<_, RpcStatus>(())
         })
         .await
-        .map_err(|err| Status::internal(format!("publish join: {err}")))??;
+        .map_err(|err| RpcStatus::internal(format!("publish join: {err}")))??;
         Ok(())
     }
+
+    /// Decode + publish; used by the WebSocket gateway.
+    pub async fn handle_publish(&self, payload: &[u8]) -> Result<PublishResponse, RpcStatus> {
+        use prost::Message as ProstMessage;
+        let msg = TopicMessage::decode(payload)
+            .map_err(|err| RpcStatus::invalid_argument(format!("decode TopicMessage: {err}")))?;
+        self.publish_message(msg).await?;
+        Ok(PublishResponse {})
+    }
+
+    pub fn handle_subscribe_request(
+        &self,
+        payload: &[u8],
+    ) -> Result<(String, mpsc::Receiver<Result<TopicMessage, RpcStatus>>), RpcStatus> {
+        use prost::Message as ProstMessage;
+        let req = SubscribeRequest::decode(payload).map_err(|err| {
+            RpcStatus::invalid_argument(format!("decode SubscribeRequest: {err}"))
+        })?;
+        let rx = self.open_subscribe(req.topic.clone())?;
+        Ok((req.topic, rx))
+    }
 }
 
-fn bus_status(err: BusError) -> Status {
+fn bus_status(err: BusError) -> RpcStatus {
     match err {
-        BusError::Timeout(msg) => Status::deadline_exceeded(msg),
-        BusError::ReservedName { .. } => Status::invalid_argument(err.to_string()),
-        other => Status::internal(other.to_string()),
-    }
-}
-
-#[tonic::async_trait]
-impl MessageGateway for MessageGatewayService {
-    type SubscribeStream = SubscribeStream;
-
-    async fn subscribe(
-        &self,
-        request: Request<SubscribeRequest>,
-    ) -> Result<Response<Self::SubscribeStream>, Status> {
-        let topic = request.into_inner().topic;
-        let rx = self.open_subscribe(topic)?;
-        let stream = ReceiverStream::new(rx);
-        Ok(Response::new(Box::pin(stream) as Self::SubscribeStream))
-    }
-
-    async fn publish(
-        &self,
-        request: Request<TopicMessage>,
-    ) -> Result<Response<PublishResponse>, Status> {
-        self.publish_message(request.into_inner()).await?;
-        Ok(Response::new(PublishResponse {}))
+        BusError::Timeout(msg) => RpcStatus::deadline_exceeded(msg),
+        BusError::ReservedName { .. } => RpcStatus::invalid_argument(err.to_string()),
+        other => RpcStatus::internal(other.to_string()),
     }
 }

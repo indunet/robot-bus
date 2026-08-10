@@ -8,7 +8,7 @@ use std::time::{Duration, Instant};
 use serde::Serialize;
 use tokio::sync::broadcast;
 
-use crate::bot_sim::BotSimManager;
+use crate::tank::TankManager;
 use crate::broker::action_bus::{ActionMetrics, ActionMetricsSnapshot};
 use crate::broker::message_bus::{MessageMetrics, MessageMetricsSnapshot};
 use crate::broker::service_bus::{ServiceMetrics, ServiceMetricsSnapshot};
@@ -29,7 +29,7 @@ pub struct BrokerEndpoints {
     pub svc_be: String,
     pub act_fe: String,
     pub act_be: String,
-    pub grpc: String,
+    pub ws: String,
     pub web: String,
     /// Broker id + connectable endpoints for `GET /api/v1/discover`.
     pub discover: crate::discovery::DiscoverResponse,
@@ -128,8 +128,10 @@ pub struct ConsoleState {
     pub topic_types: Arc<TopicTypeRegistry>,
     pub topology: Arc<TopologyRegistry>,
     pub events: EventLog,
-    /// Lazy bot_sim singleton (started on first console BOT SIM session).
-    pub bot_sim: Arc<BotSimManager>,
+    /// Lazy tank singleton (started on first console TANK session).
+    pub tank: Arc<TankManager>,
+    /// When false, tank UI/API acquire is disabled (`--no-tank`).
+    pub tank_enabled: bool,
     msg_rate: Mutex<Option<MsgRateSample>>,
     svc_rate: Mutex<Option<SvcRateSample>>,
     act_rate: Mutex<Option<ActRateSample>>,
@@ -141,7 +143,8 @@ impl ConsoleState {
         metrics: Arc<MessageMetrics>,
         service_metrics: Arc<ServiceMetrics>,
         action_metrics: Arc<ActionMetrics>,
-        bot_sim: Arc<BotSimManager>,
+        tank: Arc<TankManager>,
+        tank_enabled: bool,
     ) -> Arc<Self> {
         let state = Arc::new(Self {
             started_at: Instant::now(),
@@ -154,7 +157,8 @@ impl ConsoleState {
             topic_types: TopicTypeRegistry::new(),
             topology: TopologyRegistry::new(),
             events: EventLog::new(),
-            bot_sim,
+            tank,
+            tank_enabled,
             msg_rate: Mutex::new(None),
             svc_rate: Mutex::new(None),
             act_rate: Mutex::new(None),
@@ -175,11 +179,18 @@ impl ConsoleState {
                 state.endpoints.msg_xsub, state.endpoints.msg_xpub
             ),
         );
-        if !state.endpoints.grpc.is_empty() {
+        if !state.endpoints.ws.is_empty() {
             state.events.emit(
                 "INFO",
-                "grpc",
-                format!("gRPC + WebSocket (/ws) gateway at {}", state.endpoints.grpc),
+                "ws",
+                format!("WebSocket RPC (/ws) gateway at {}", state.endpoints.ws),
+            );
+        }
+        if !state.tank_enabled {
+            state.events.emit(
+                "INFO",
+                "tank",
+                "tank demo disabled (--no-tank); console menu hidden",
             );
         }
         state

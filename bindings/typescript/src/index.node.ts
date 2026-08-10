@@ -1,6 +1,6 @@
 /**
  * Node.js entry: napi-rs native binding + typed helpers.
- * Also re-exports GrpcNode for pure WebSocket RPC clients on Node without ZMQ.
+ * Also re-exports WsNode for pure WebSocket RPC clients on Node without ZMQ.
  */
 
 import { loadNative } from "./native.js";
@@ -17,16 +17,16 @@ export * from "./native-types.js";
 export { encode, decode, type MessageType } from "./typed.js";
 export * as consoleTopics from "./console-topics.js";
 export {
-  GrpcNode,
-  GrpcServiceClient,
-  GrpcActionClient,
-  GrpcGoalHandle,
-  TypedGrpcServiceClient,
-  TypedGrpcActionClient,
-  DEFAULT_GRPC_URL,
-  type GrpcActionEvent,
-  type GrpcSendGoalOptions,
-} from "./grpc-node.js";
+  WsNode,
+  WsServiceClient,
+  WsActionClient,
+  WsGoalHandle,
+  TypedWsServiceClient,
+  TypedWsActionClient,
+  DEFAULT_WS_URL,
+  type WsActionEvent,
+  type WsSendGoalOptions,
+} from "./ws-node.js";
 
 const native = loadNative();
 
@@ -166,7 +166,7 @@ export class Node {
     name: string,
     host?: string,
     transport?: string,
-    grpcUrl?: string,
+    wsUrl?: string,
     messageXsub?: string,
     messageXpub?: string,
     serviceFrontend?: string,
@@ -179,7 +179,7 @@ export class Node {
     nameOrInner: string | NativeNode,
     host?: string,
     transport?: string,
-    grpcUrl?: string,
+    wsUrl?: string,
     messageXsub?: string,
     messageXpub?: string,
     serviceFrontend?: string,
@@ -192,7 +192,7 @@ export class Node {
         nameOrInner,
         host,
         transport,
-        grpcUrl,
+        wsUrl,
         messageXsub,
         messageXpub,
         serviceFrontend,
@@ -230,7 +230,7 @@ export class Node {
     name: string,
     host?: string,
     transport?: string,
-    grpcUrl?: string,
+    wsUrl?: string,
     messageXsub?: string,
     messageXpub?: string,
     serviceFrontend?: string,
@@ -244,7 +244,7 @@ export class Node {
         name,
         host,
         transport,
-        grpcUrl,
+        wsUrl,
         messageXsub,
         messageXpub,
         serviceFrontend,
@@ -255,12 +255,12 @@ export class Node {
     );
   }
 
-  static grpc(name: string): Node {
-    return new Node(native.Node.grpc(name));
+  static ws(name: string): Node {
+    return new Node(native.Node.ws(name));
   }
 
-  static grpcAt(name: string, url: string): Node {
-    return new Node(native.Node.grpcAt(name, url));
+  static wsAt(name: string, url: string): Node {
+    return new Node(native.Node.wsAt(name, url));
   }
 
   static discover(

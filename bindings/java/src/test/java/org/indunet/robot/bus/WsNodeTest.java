@@ -14,13 +14,13 @@ import org.junit.jupiter.api.Test;
  * gRPC-mode Node tests aligned with Python {@code test_grpc_node.py} /
  * TypeScript {@code grpc_node.test.ts}.
  */
-class GrpcNodeTest {
+class WsNodeTest {
     @Test
     void grpcConstructors() {
-        try (Node node = Node.grpc("web")) {
+        try (Node node = Node.ws("web")) {
             assertEquals("web", node.name());
         }
-        try (Node node = Node.grpcAt("web2", "http://10.0.0.1:15570")) {
+        try (Node node = Node.wsAt("web2", "http://10.0.0.1:15570")) {
             assertEquals("web2", node.name());
         }
         try (Node node =
@@ -42,7 +42,7 @@ class GrpcNodeTest {
 
     @Test
     void grpcNodeRejectsServers() {
-        try (Node node = Node.grpc("only-client")) {
+        try (Node node = Node.ws("only-client")) {
             RobotBusException svc =
                     assertThrows(
                             RobotBusException.class,
@@ -61,15 +61,15 @@ class GrpcNodeTest {
     void grpcNodePublish() throws Exception {
         try (TestBus bus = TestBus.start();
                 Subscriber sub = new Subscriber(bus.messageXpub);
-                Node client = Node.grpcAt("grpc_pub", bus.grpcUrl())) {
-            sub.subscribe("java.grpc.pub");
+                Node client = Node.wsAt("grpc_pub", bus.wsUrl())) {
+            sub.subscribe("java.ws.pub");
             Thread.sleep(200);
 
-            TopicPublisher pub = client.createPublisher("java.grpc.pub");
+            TopicPublisher pub = client.createPublisher("java.ws.pub");
             pub.publish("from-java-grpc".getBytes(StandardCharsets.UTF_8));
 
             TopicMessage msg = sub.receive(3.0);
-            assertEquals("java.grpc.pub", msg.getTopic());
+            assertEquals("java.ws.pub", msg.getTopic());
             assertEquals("from-java-grpc", new String(msg.getPayload(), StandardCharsets.UTF_8));
         }
     }
@@ -79,7 +79,7 @@ class GrpcNodeTest {
         try (TestBus bus = TestBus.start();
                 Publisher pub = new Publisher(bus.messageXsub);
                 Node server = bus.makeNode("svc_server");
-                Node client = Node.grpcAt("grpc_client", bus.grpcUrl())) {
+                Node client = Node.wsAt("grpc_client", bus.wsUrl())) {
             server.createService("svc.java_grpc_echo", body -> {
                 byte[] prefix = "echo:".getBytes(StandardCharsets.UTF_8);
                 byte[] out = new byte[prefix.length + body.length];
@@ -93,14 +93,14 @@ class GrpcNodeTest {
             AtomicReference<String> gotTopic = new AtomicReference<>();
             AtomicReference<byte[]> gotPayload = new AtomicReference<>();
             client.createSubscription(
-                    "java.grpc.topic",
+                    "java.ws.topic",
                     (topic, payload) -> {
                         gotTopic.set(topic);
                         gotPayload.set(payload);
                     });
             Thread.sleep(300);
 
-            pub.publish("java.grpc.topic", "hello-java-grpc".getBytes(StandardCharsets.UTF_8));
+            pub.publish("java.ws.topic", "hello-java-grpc".getBytes(StandardCharsets.UTF_8));
             assertTrue(
                     waitUntil(
                             () -> {
@@ -108,7 +108,7 @@ class GrpcNodeTest {
                                 return gotPayload.get() != null;
                             },
                             5000));
-            assertEquals("java.grpc.topic", gotTopic.get());
+            assertEquals("java.ws.topic", gotTopic.get());
             assertEquals(
                     "hello-java-grpc", new String(gotPayload.get(), StandardCharsets.UTF_8));
 
@@ -126,7 +126,7 @@ class GrpcNodeTest {
     void grpcNodeActionClient() throws Exception {
         try (TestBus bus = TestBus.start();
                 Node server = bus.makeNode("act_server");
-                Node client = Node.grpcAt("grpc_action", bus.grpcUrl())) {
+                Node client = Node.wsAt("grpc_action", bus.wsUrl())) {
             server.createActionServer(
                     "act.java_grpc_demo",
                     body -> {

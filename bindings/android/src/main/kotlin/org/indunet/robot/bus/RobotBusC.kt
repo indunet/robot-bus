@@ -60,8 +60,8 @@ internal interface RobotBusC : Library {
     fun robot_bus_node_ipc(name: String?, path: String?): Pointer?
     fun robot_bus_node_inproc(name: String?, prefix: String?): Pointer?
     fun robot_bus_node_inproc_with_context(ctx: Pointer?, name: String?, prefix: String?): Pointer?
-    fun robot_bus_node_grpc(name: String?): Pointer?
-    fun robot_bus_node_grpc_at(name: String?, url: String?): Pointer?
+    fun robot_bus_node_ws(name: String?): Pointer?
+    fun robot_bus_node_ws_at(name: String?, url: String?): Pointer?
     fun robot_bus_node_discover(name: String?, transport: String?, opts: DiscoverOpts?): Pointer?
     fun robot_bus_discover_node_options(transport: String?, opts: DiscoverOpts?, out: AppliedNodeOptions): Int
     fun robot_bus_applied_node_options_free(o: AppliedNodeOptions?)
@@ -123,7 +123,7 @@ internal interface RobotBusC : Library {
     fun robot_bus_broker_service_backend_bind(b: Pointer?): Pointer?
     fun robot_bus_broker_action_frontend_bind(b: Pointer?): Pointer?
     fun robot_bus_broker_action_backend_bind(b: Pointer?): Pointer?
-    fun robot_bus_broker_grpc_listen(b: Pointer?): Pointer?
+    fun robot_bus_broker_api_listen(b: Pointer?): Pointer?
     fun robot_bus_broker_console_listen(b: Pointer?): Pointer?
     fun interface MsgCb : Callback {
         fun invoke(topic: String?, data: Pointer?, len: Long, user: Pointer?)
@@ -173,9 +173,9 @@ internal interface RobotBusC : Library {
             read()
         }
     }
-    @Structure.FieldOrder("host","transport","grpcUrl","messageXsub","messageXpub","serviceFrontend","serviceBackend","actionBackend","actionFrontend")
-    class NodeOptions : Structure() { @JvmField var host:String?=null; @JvmField var transport:String?=null; @JvmField var grpcUrl:String?=null; @JvmField var messageXsub:String?=null; @JvmField var messageXpub:String?=null; @JvmField var serviceFrontend:String?=null; @JvmField var serviceBackend:String?=null; @JvmField var actionBackend:String?=null; @JvmField var actionFrontend:String?=null }
-    @Structure.FieldOrder("messageXsubBind","messageXpubBind","serviceFrontendBind","serviceBackendBind","actionFrontendBind","actionBackendBind","grpcListen","consoleListen","tcpOnly","noConsole","brokerId","messagePeers","messagePeerCount","servicePeers","servicePeerCount","actionPeers","actionPeerCount","noDiscovery","domainId","advertiseHost","discoveryAddr","discoveryPort")
+    @Structure.FieldOrder("host","transport","wsUrl","messageXsub","messageXpub","serviceFrontend","serviceBackend","actionBackend","actionFrontend")
+    class NodeOptions : Structure() { @JvmField var host:String?=null; @JvmField var transport:String?=null; @JvmField var wsUrl:String?=null; @JvmField var messageXsub:String?=null; @JvmField var messageXpub:String?=null; @JvmField var serviceFrontend:String?=null; @JvmField var serviceBackend:String?=null; @JvmField var actionBackend:String?=null; @JvmField var actionFrontend:String?=null }
+    @Structure.FieldOrder("messageXsubBind","messageXpubBind","serviceFrontendBind","serviceBackendBind","actionFrontendBind","actionBackendBind","apiListen","consoleListen","tcpOnly","noConsole","brokerId","messagePeers","messagePeerCount","servicePeers","servicePeerCount","actionPeers","actionPeerCount","noDiscovery","domainId","advertiseHost","peers","peerCount","noTank")
     class BrokerOptions : Structure() {
         @JvmField var messageXsubBind: String? = null
         @JvmField var messageXpubBind: String? = null
@@ -183,7 +183,7 @@ internal interface RobotBusC : Library {
         @JvmField var serviceBackendBind: String? = null
         @JvmField var actionFrontendBind: String? = null
         @JvmField var actionBackendBind: String? = null
-        @JvmField var grpcListen: String? = null
+        @JvmField var apiListen: String? = null
         @JvmField var consoleListen: String? = null
         @JvmField var tcpOnly = 0
         @JvmField var noConsole = 0
@@ -197,8 +197,9 @@ internal interface RobotBusC : Library {
         @JvmField var noDiscovery = 0
         @JvmField var domainId = 0
         @JvmField var advertiseHost: String? = null
-        @JvmField var discoveryAddr: String? = null
-        @JvmField var discoveryPort: Short = 0
+        @JvmField var peers: Pointer? = null
+        @JvmField var peerCount = 0L
+        @JvmField var noTank = 0
     }
     @Structure.FieldOrder("domainId","brokerId","multicastAddr","multicastPort","timeoutSecs")
     class DiscoverOpts : Structure() {
@@ -208,11 +209,11 @@ internal interface RobotBusC : Library {
         @JvmField var multicastPort: Short = 0
         @JvmField var timeoutSecs = 0.0
     }
-    @Structure.FieldOrder("host","transport","grpcUrl","messageXsub","messageXpub","serviceFrontend","serviceBackend","actionBackend","actionFrontend")
+    @Structure.FieldOrder("host","transport","wsUrl","messageXsub","messageXpub","serviceFrontend","serviceBackend","actionBackend","actionFrontend")
     class AppliedNodeOptions : Structure() {
         @JvmField var host: Pointer? = null
         @JvmField var transport: Pointer? = null
-        @JvmField var grpcUrl: Pointer? = null
+        @JvmField var wsUrl: Pointer? = null
         @JvmField var messageXsub: Pointer? = null
         @JvmField var messageXpub: Pointer? = null
         @JvmField var serviceFrontend: Pointer? = null

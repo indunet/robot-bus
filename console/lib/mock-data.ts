@@ -1,4 +1,4 @@
-// Types + formatters for the console. Live data comes from `/robot_bus/*` via GrpcNode.
+// Types + formatters for the console. Live data comes from `/robot_bus/*` via WsNode.
 
 /** `CONNECTING` = client placeholder before the first status message arrives. */
 export type BrokerStatus = 'CONNECTING' | 'ONLINE' | 'DEGRADED' | 'OFFLINE'

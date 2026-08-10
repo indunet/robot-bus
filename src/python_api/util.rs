@@ -91,7 +91,7 @@ pub(crate) fn action_message_to_py(
 pub(crate) fn py_node_options(
     host: &str,
     transport: &str,
-    grpc_url: Option<String>,
+    ws_url: Option<String>,
     message_xsub: Option<String>,
     message_xpub: Option<String>,
     service_frontend: Option<String>,
@@ -99,31 +99,31 @@ pub(crate) fn py_node_options(
     action_backend: Option<String>,
     action_frontend: Option<String>,
 ) -> PyResult<crate::runtime::NodeOptions> {
-    if transport == "grpc" {
-        #[cfg(feature = "grpc")]
+    if transport == "ws" {
+        #[cfg(feature = "ws")]
         {
-            return Ok(match grpc_url {
-                Some(url) => RustNodeOptions::grpc_at(url),
-                None => RustNodeOptions::grpc(),
+            return Ok(match ws_url {
+                Some(url) => RustNodeOptions::ws_at(url),
+                None => RustNodeOptions::ws(),
             });
         }
-        #[cfg(not(feature = "grpc"))]
+        #[cfg(not(feature = "ws"))]
         {
-            let _ = grpc_url;
+            let _ = ws_url;
             return Err(PyRuntimeError::new_err(
                 "transport=\"grpc\" requires the grpc feature",
             ));
         }
     }
-    if grpc_url.is_some() {
+    if ws_url.is_some() {
         return Err(PyRuntimeError::new_err(
-            "grpc_url is only valid when transport=\"grpc\"",
+            "ws_url is only valid when transport=\"grpc\"",
         ));
     }
     Ok(crate::runtime::NodeOptions {
         host: host.into(),
         transport: transport.into(),
-        grpc_url: None,
+        ws_url: None,
         console_url: None,
         message_xsub,
         message_xpub,
@@ -144,12 +144,12 @@ pub(crate) fn py_discover_options(
         "tcp" => RustNodeOptions::tcp(),
         "ipc" => RustNodeOptions::ipc(),
         "inproc" => RustNodeOptions::inproc(),
-        "grpc" => {
-            #[cfg(feature = "grpc")]
+        "ws" => {
+            #[cfg(feature = "ws")]
             {
-                RustNodeOptions::grpc()
+                RustNodeOptions::ws()
             }
-            #[cfg(not(feature = "grpc"))]
+            #[cfg(not(feature = "ws"))]
             {
                 return Err(PyRuntimeError::new_err(
                     "transport=\"grpc\" requires the grpc feature",

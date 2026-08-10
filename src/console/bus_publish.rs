@@ -24,7 +24,7 @@ pub fn encode_status(state: &ConsoleState) -> Vec<u8> {
         version: state.version.to_string(),
         uptime: state.uptime_secs(),
         pid: state.pid,
-        grpc_addr: state.endpoints.grpc.clone(),
+        grpc_addr: state.endpoints.ws.clone(),
         web_addr: state.endpoints.web.clone(),
         msg_bus_x_sub: state.endpoints.msg_xsub.clone(),
         msg_bus_x_pub: state.endpoints.msg_xpub.clone(),

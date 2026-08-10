@@ -7,7 +7,7 @@ use std::thread;
 use std::time::Duration;
 
 use tokio::sync::mpsc;
-use tonic::Status;
+use super::rpc_status::RpcStatus;
 
 use crate::message_bus::Subscriber;
 
@@ -16,7 +16,7 @@ use super::pb::TopicMessage;
 const WATCHER_CAPACITY: usize = 64;
 const POLL_TIMEOUT: Duration = Duration::from_millis(200);
 
-type WatcherTx = mpsc::Sender<Result<TopicMessage, Status>>;
+type WatcherTx = mpsc::Sender<Result<TopicMessage, RpcStatus>>;
 
 struct Watcher {
     id: u64,
@@ -65,12 +65,12 @@ impl SubDemux {
         }
     }
 
-    fn ensure_started(&self) -> Result<(), Status> {
+    fn ensure_started(&self) -> Result<(), RpcStatus> {
         let mut guard = self
             .inner
             .control_tx
             .lock()
-            .map_err(|_| Status::internal("sub demux control mutex poisoned"))?;
+            .map_err(|_| RpcStatus::internal("sub demux control mutex poisoned"))?;
         if guard.is_some() {
             return Ok(());
         }
@@ -78,9 +78,9 @@ impl SubDemux {
         let state = Arc::clone(&self.inner.state);
         let xpub = self.inner.xpub.clone();
         thread::Builder::new()
-            .name("grpc-zmq-sub-demux".into())
+            .name("ws-zmq-sub-demux".into())
             .spawn(move || demux_loop(xpub, state, rx))
-            .map_err(|err| Status::internal(format!("spawn sub demux: {err}")))?;
+            .map_err(|err| RpcStatus::internal(format!("spawn sub demux: {err}")))?;
         *guard = Some(tx);
         Ok(())
     }
@@ -88,7 +88,7 @@ impl SubDemux {
     pub fn open_subscribe(
         &self,
         topic: String,
-    ) -> Result<mpsc::Receiver<Result<TopicMessage, Status>>, Status> {
+    ) -> Result<mpsc::Receiver<Result<TopicMessage, RpcStatus>>, RpcStatus> {
         self.ensure_started()?;
         let (tx, rx) = mpsc::channel(WATCHER_CAPACITY);
         let id = self.inner.next_id.fetch_add(1, Ordering::Relaxed);
@@ -97,10 +97,10 @@ impl SubDemux {
                 .inner
                 .control_tx
                 .lock()
-                .map_err(|_| Status::internal("sub demux control mutex poisoned"))?;
+                .map_err(|_| RpcStatus::internal("sub demux control mutex poisoned"))?;
             guard
                 .as_ref()
-                .ok_or_else(|| Status::internal("sub demux not started"))?
+                .ok_or_else(|| RpcStatus::internal("sub demux not started"))?
                 .clone()
         };
         control
@@ -109,7 +109,7 @@ impl SubDemux {
                 id,
                 tx,
             })
-            .map_err(|_| Status::internal("sub demux control channel closed"))?;
+            .map_err(|_| RpcStatus::internal("sub demux control channel closed"))?;
         Ok(rx)
     }
 }
@@ -140,7 +140,7 @@ fn demux_loop(
             log::error!("sub demux failed to connect: {err}");
             while let Ok(cmd) = control_rx.recv() {
                 if let Control::Add { tx, .. } = cmd {
-                    let _ = tx.blocking_send(Err(Status::unavailable(err.to_string())));
+                    let _ = tx.blocking_send(Err(RpcStatus::unavailable(err.to_string())));
                 }
             }
             return;
@@ -210,7 +210,7 @@ fn demux_loop(
                 };
                 for watchers in guard.filters.values() {
                     for w in watchers {
-                        let _ = w.tx.try_send(Err(Status::internal(err.to_string())));
+                        let _ = w.tx.try_send(Err(RpcStatus::internal(err.to_string())));
                     }
                 }
                 guard.filters.clear();

@@ -51,7 +51,7 @@ fn main() {
                  \n\
                  For UI hot-reload during development, use `cd console && pnpm dev`\n\
                  (proxies /api to the broker) instead of rebuilding assets every time.\n\
-                 Or build without the UI: cargo build --no-default-features --features grpc"
+                 Or build without the UI: cargo build --no-default-features --features ws"
             );
         }
     }

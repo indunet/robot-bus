@@ -73,7 +73,7 @@ fn parameter_value_to_js(env: &Env, value: ParameterValue) -> Result<Unknown> {
 fn node_options(
     host: &str,
     transport: &str,
-    grpc_url: Option<String>,
+    ws_url: Option<String>,
     message_xsub: Option<String>,
     message_xpub: Option<String>,
     service_frontend: Option<String>,
@@ -81,21 +81,21 @@ fn node_options(
     action_backend: Option<String>,
     action_frontend: Option<String>,
 ) -> Result<RustNodeOptions> {
-    if transport == "grpc" {
-        return Ok(match grpc_url {
-            Some(url) => RustNodeOptions::grpc_at(url),
-            None => RustNodeOptions::grpc(),
+    if transport == "ws" {
+        return Ok(match ws_url {
+            Some(url) => RustNodeOptions::ws_at(url),
+            None => RustNodeOptions::ws(),
         });
     }
-    if grpc_url.is_some() {
+    if ws_url.is_some() {
         return Err(Error::from_reason(
-            "grpc_url is only valid when transport=\"grpc\"",
+            "ws_url is only valid when transport=\"grpc\"",
         ));
     }
     Ok(RustNodeOptions {
         host: host.into(),
         transport: transport.into(),
-        grpc_url: None,
+        ws_url: None,
         console_url: None,
         message_xsub,
         message_xpub,
@@ -509,7 +509,7 @@ impl Node {
         name: String,
         host: Option<String>,
         transport: Option<String>,
-        grpc_url: Option<String>,
+        ws_url: Option<String>,
         message_xsub: Option<String>,
         message_xpub: Option<String>,
         service_frontend: Option<String>,
@@ -525,7 +525,7 @@ impl Node {
                 node_options(
                     &host,
                     &transport,
-                    grpc_url,
+                    ws_url,
                     message_xsub,
                     message_xpub,
                     service_frontend,
@@ -590,7 +590,7 @@ impl Node {
         name: String,
         host: Option<String>,
         transport: Option<String>,
-        grpc_url: Option<String>,
+        ws_url: Option<String>,
         message_xsub: Option<String>,
         message_xpub: Option<String>,
         service_frontend: Option<String>,
@@ -607,7 +607,7 @@ impl Node {
                 node_options(
                     &host,
                     &transport,
-                    grpc_url,
+                    ws_url,
                     message_xsub,
                     message_xpub,
                     service_frontend,
@@ -620,16 +620,16 @@ impl Node {
     }
 
     #[napi(factory)]
-    pub fn grpc(name: String) -> Self {
+    pub fn ws(name: String) -> Self {
         Self {
-            inner: RustNode::grpc(name),
+            inner: RustNode::ws(name),
         }
     }
 
     #[napi(factory)]
-    pub fn grpc_at(name: String, url: String) -> Self {
+    pub fn ws_at(name: String, url: String) -> Self {
         Self {
-            inner: RustNode::grpc_at(name, url),
+            inner: RustNode::ws_at(name, url),
         }
     }
 
@@ -642,7 +642,7 @@ impl Node {
             "tcp" => RustNodeOptions::tcp(),
             "ipc" => RustNodeOptions::ipc(),
             "inproc" => RustNodeOptions::inproc(),
-            "grpc" => RustNodeOptions::grpc(),
+            "ws" => RustNodeOptions::ws(),
             other => {
                 return Err(Error::from_reason(format!("unknown transport {other:?}")));
             }
@@ -955,7 +955,7 @@ impl SingleThreadedExecutor {
         name: String,
         host: Option<String>,
         transport: Option<String>,
-        grpc_url: Option<String>,
+        ws_url: Option<String>,
         message_xsub: Option<String>,
         message_xpub: Option<String>,
         service_frontend: Option<String>,
@@ -968,7 +968,7 @@ impl SingleThreadedExecutor {
         let options = node_options(
             &host,
             &transport,
-            grpc_url,
+            ws_url,
             message_xsub,
             message_xpub,
             service_frontend,
@@ -1052,7 +1052,7 @@ impl MultiThreadedExecutor {
         name: String,
         host: Option<String>,
         transport: Option<String>,
-        grpc_url: Option<String>,
+        ws_url: Option<String>,
         message_xsub: Option<String>,
         message_xpub: Option<String>,
         service_frontend: Option<String>,
@@ -1065,7 +1065,7 @@ impl MultiThreadedExecutor {
         let options = node_options(
             &host,
             &transport,
-            grpc_url,
+            ws_url,
             message_xsub,
             message_xpub,
             service_frontend,
@@ -1139,10 +1139,10 @@ pub struct BrokerStartOptions {
     pub heartbeat_timeout_ms: Option<u32>,
     pub tcp_only: Option<bool>,
     pub api_listen: Option<String>,
-    pub grpc_listen: Option<String>,
     pub cors_origins: Option<Vec<String>>,
     pub console_listen: Option<String>,
     pub no_console: Option<bool>,
+    pub no_tank: Option<bool>,
     pub broker_id: Option<String>,
     pub message_peers: Option<Vec<String>>,
     pub service_peers: Option<Vec<String>>,
@@ -1242,10 +1242,13 @@ impl RobotBusBroker {
                 config.action.bind_all_transports = false;
             }
             if let Some(v) = o.cors_origins {
-                config.grpc.cors_origins = v;
+                config.ws.cors_origins = v;
             }
             if o.no_console.unwrap_or(false) {
                 config.console.enabled = false;
+            }
+            if o.no_tank.unwrap_or(false) {
+                config.console.tank_enabled = false;
             }
             if let Some(v) = o.console_listen {
                 config.console.listen = v
@@ -1275,12 +1278,12 @@ impl RobotBusBroker {
                     config.discovery.advertise_host = Some(v);
                 }
             }
-            if let Some(v) = o.api_listen.or(o.grpc_listen) {
+            if let Some(v) = o.api_listen.or(o.api_listen) {
                 if !v.is_empty() {
-                    config.grpc.listen = v
+                    config.ws.listen = v
                         .parse()
                         .map_err(|e| Error::from_reason(format!("invalid api_listen: {e}")))?;
-                    config.console.listen = config.grpc.listen;
+                    config.console.listen = config.ws.listen;
                 }
             }
         }
@@ -1341,8 +1344,8 @@ impl RobotBusBroker {
     }
 
     #[napi(getter)]
-    pub fn grpc_listen(&self) -> Result<String> {
-        self.with_broker(|b| b.grpc_listen().to_string())
+    pub fn api_listen(&self) -> Result<String> {
+        self.with_broker(|b| b.api_listen().to_string())
     }
 
     #[napi(getter)]
@@ -1373,7 +1376,7 @@ pub fn run_broker() -> Result<()> {
     };
     println!(
         "gRPC + WebSocket listening on http://{}",
-        broker.grpc_listen()?
+        broker.api_listen()?
     );
     if let Some(addr) = broker.console_listen()? {
         println!("Web console listening on http://{addr}");

@@ -28,10 +28,10 @@ fn run(config: RobotBusConfig) -> Result<()> {
     println!("robot_bus_broker starting message + service + action buses + gRPC + console…");
     let broker = RobotBusBroker::start(config)?;
 
-    #[cfg(feature = "grpc")]
+    #[cfg(feature = "ws")]
     println!(
         "gRPC + WebSocket listening on http://{}",
-        broker.grpc_listen()
+        broker.api_listen()
     );
 
     #[cfg(feature = "console")]

@@ -21,13 +21,13 @@ benches/robot_bus_perf/
 ```bash
 just perf
 # 或
-cargo run --release --bin robot_bus_perf --features grpc
+cargo run --release --bin robot_bus_perf --features ws
 ```
 
 仅 message：
 
 ```bash
-ROBOT_BUS_PERF_ONLY=message cargo run --release --bin robot_bus_perf --features grpc
+ROBOT_BUS_PERF_ONLY=message cargo run --release --bin robot_bus_perf --features ws
 ```
 
 常用环境变量：

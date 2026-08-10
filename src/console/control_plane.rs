@@ -138,7 +138,7 @@ fn handle_message(state: &ConsoleState, topic: &str, payload: &[u8]) {
             }
             if kind == EndpointKind::Publisher
                 && console_topics::is_reserved_name(topic_name)
-                && !console_topics::is_builtin_bot_name(topic_name)
+                && !console_topics::is_builtin_tank_name(topic_name)
             {
                 log::warn!("reject topology publisher on reserved topic {topic_name}");
                 return;

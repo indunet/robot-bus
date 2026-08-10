@@ -134,7 +134,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
     fs::remove_dir_all(&tmp)?;
 
-    // gRPC gateway stubs (tonic) → src/generated/robot_bus_interface/grpc/v1/
+    // Gateway payload messages (prost only; transport is multiplexed WebSocket).
+    // → src/generated/robot_bus_interface/grpc/v1/messages.inc.rs
     let grpc_dir = out_root.join("robot_bus_interface/grpc/v1");
     fs::create_dir_all(&grpc_dir)?;
     let gateways = [
@@ -142,24 +143,35 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         PathBuf::from("proto/robot_bus_interface/grpc/v1/service_gateway.proto"),
         PathBuf::from("proto/robot_bus_interface/grpc/v1/action_gateway.proto"),
     ];
-    tonic_prost_build::configure()
-        .build_server(true)
-        .build_client(true)
-        .out_dir(&grpc_dir)
-        .compile_protos(&gateways, &[proto_root])?;
-
-    let grpc_pkg = grpc_dir.join("robot_bus_interface.grpc.v1.rs");
-    let grpc_out = grpc_dir.join("mod.inc.rs");
-    if !grpc_pkg.exists() {
-        return Err("tonic did not write robot_bus_interface.grpc.v1.rs".into());
+    let grpc_tmp = grpc_dir.join(".tmp_prost");
+    if grpc_tmp.is_dir() {
+        fs::remove_dir_all(&grpc_tmp)?;
     }
-    fs::rename(&grpc_pkg, &grpc_out)?;
+    fs::create_dir_all(&grpc_tmp)?;
+    prost_build::Config::new()
+        .out_dir(&grpc_tmp)
+        .compile_protos(&gateways, &[proto_root])?;
+    let grpc_pkg = grpc_tmp.join("robot_bus_interface.grpc.v1.rs");
+    if !grpc_pkg.exists() {
+        return Err("prost did not write robot_bus_interface.grpc.v1.rs".into());
+    }
+    let mut body = String::from(
+        "// @generated messages-only for WebSocket gateway (no tonic).\n",
+    );
+    body.push_str(&fs::read_to_string(&grpc_pkg)?);
+    fs::write(grpc_dir.join("messages.inc.rs"), body)?;
+    // Keep mod.inc.rs as a thin alias for older include paths.
+    fs::write(
+        grpc_dir.join("mod.inc.rs"),
+        "// @generated — prefer messages.inc.rs (prost-only)\ninclude!(\"messages.inc.rs\");\n",
+    )?;
+    fs::remove_dir_all(&grpc_tmp)?;
 
     println!(
         "generated {file_count} per-proto stub(s) under {}/<pkg>/{{msg|srv|action}}/v1/",
         out_root.display()
     );
-    println!("generated grpc stub → {}/", grpc_dir.display());
+    println!("generated gateway messages → {}/messages.inc.rs", grpc_dir.display());
     Ok(())
 }
 

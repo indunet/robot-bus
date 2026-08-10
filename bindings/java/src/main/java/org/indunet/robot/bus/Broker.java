@@ -65,7 +65,7 @@ public final class Broker implements AutoCloseable {
     }
 
     public String grpcListen() {
-        return NativeUtils.takeCString(RobotBusC.Holder.INSTANCE.robot_bus_broker_grpc_listen(ptr));
+        return NativeUtils.takeCString(RobotBusC.Holder.INSTANCE.robot_bus_broker_api_listen(ptr));
     }
 
     public String consoleListen() {

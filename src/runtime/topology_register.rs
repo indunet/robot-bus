@@ -90,7 +90,7 @@ fn resolve_service_frontend(explicit: Option<&str>, host: &str, transport: &str)
             return Some(t.to_string());
         }
     }
-    if transport == "grpc" {
+    if transport == "ws" {
         return transports::service_frontend_endpoint("127.0.0.1", "tcp").ok();
     }
     transports::service_frontend_endpoint(host, transport).ok()

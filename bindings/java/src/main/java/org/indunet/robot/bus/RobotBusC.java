@@ -136,9 +136,9 @@ interface RobotBusC extends Library {
 
     Pointer robot_bus_node_inproc_with_context(Pointer ctx, String name, String prefix);
 
-    Pointer robot_bus_node_grpc(String name);
+    Pointer robot_bus_node_ws(String name);
 
-    Pointer robot_bus_node_grpc_at(String name, String url);
+    Pointer robot_bus_node_ws_at(String name, String url);
 
     Pointer robot_bus_node_discover(String name, String transport, DiscoverOpts opts);
 
@@ -266,7 +266,7 @@ interface RobotBusC extends Library {
 
     Pointer robot_bus_broker_action_backend_bind(Pointer b);
 
-    Pointer robot_bus_broker_grpc_listen(Pointer b);
+    Pointer robot_bus_broker_api_listen(Pointer b);
 
     Pointer robot_bus_broker_console_listen(Pointer b);
 
@@ -343,7 +343,7 @@ interface RobotBusC extends Library {
     @Structure.FieldOrder({
         "host",
         "transport",
-        "grpcUrl",
+        "wsUrl",
         "messageXsub",
         "messageXpub",
         "serviceFrontend",
@@ -354,7 +354,7 @@ interface RobotBusC extends Library {
     class NodeOptions extends Structure {
         public String host;
         public String transport;
-        public String grpcUrl;
+        public String wsUrl;
         public String messageXsub;
         public String messageXpub;
         public String serviceFrontend;
@@ -370,7 +370,7 @@ interface RobotBusC extends Library {
         "serviceBackendBind",
         "actionFrontendBind",
         "actionBackendBind",
-        "grpcListen",
+        "apiListen",
         "consoleListen",
         "tcpOnly",
         "noConsole",
@@ -384,8 +384,9 @@ interface RobotBusC extends Library {
         "noDiscovery",
         "domainId",
         "advertiseHost",
-        "discoveryAddr",
-        "discoveryPort"
+        "peers",
+        "peerCount",
+        "noTank"
     })
     class BrokerOptions extends Structure {
         public String messageXsubBind;
@@ -394,7 +395,7 @@ interface RobotBusC extends Library {
         public String serviceBackendBind;
         public String actionFrontendBind;
         public String actionBackendBind;
-        public String grpcListen;
+        public String apiListen;
         public String consoleListen;
         public int tcpOnly;
         public int noConsole;
@@ -408,8 +409,9 @@ interface RobotBusC extends Library {
         public int noDiscovery;
         public int domainId;
         public String advertiseHost;
-        public String discoveryAddr;
-        public short discoveryPort;
+        public Pointer peers;
+        public long peerCount;
+        public int noTank;
     }
 
     @Structure.FieldOrder({
@@ -430,7 +432,7 @@ interface RobotBusC extends Library {
     @Structure.FieldOrder({
         "host",
         "transport",
-        "grpcUrl",
+        "wsUrl",
         "messageXsub",
         "messageXpub",
         "serviceFrontend",
@@ -441,7 +443,7 @@ interface RobotBusC extends Library {
     class AppliedNodeOptions extends Structure {
         public Pointer host;
         public Pointer transport;
-        public Pointer grpcUrl;
+        public Pointer wsUrl;
         public Pointer messageXsub;
         public Pointer messageXpub;
         public Pointer serviceFrontend;

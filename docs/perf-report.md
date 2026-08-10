@@ -15,7 +15,7 @@
 - Message **吞吐（主指标）**：按目标速率限速发送约 1.0s（可用 `ROBOT_BUS_PERF_GOODPUT_TRIAL_MSGS` 改为固定条数），**二分搜索**丢包率 ≤ 1.0% 且发送窗口内 pub/sub 均 ≥90% 目标速率的最大可持续速率（max goodput）。
 - Message **延迟**：另做 5000 次限速抽样（发一条等收到再发），测单程时延。
 - Service / action：各 10000 / 5000 次（`ROBOT_BUS_PERF_SVC_ITERS` / `ROBOT_BUS_PERF_ACT_ITERS`）；延迟为每次 call / send_goal 本地计时。
-- ZMQ：共享 `Context` + `Node::tcp` / `ipc` / `inproc`；gRPC：`Node::grpc_at`。
+- ZMQ：共享 `Context` + `Node::tcp` / `ipc` / `inproc`；gRPC：`Node::ws_at`。
 - inproc 与嵌入式 broker 必须共用同一 `Context`（ZeroMQ inproc 是 context-local）。
 - 指标为单机本机回环，机器相关，不作为 CI 门槛。
 
@@ -60,5 +60,5 @@ message 为 **max goodput**（丢包阈值内的最大可持续订阅速率）�
 just perf
 # 或
 cargo run --release --bin robot_bus_perf
-# 仅 message：ROBOT_BUS_PERF_ONLY=message cargo run --release --bin robot_bus_perf --features grpc
+# 仅 message：ROBOT_BUS_PERF_ONLY=message cargo run --release --bin robot_bus_perf --features ws
 ```

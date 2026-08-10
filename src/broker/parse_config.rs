@@ -9,7 +9,7 @@ use super::action_bus::ActionPeer;
 use super::message_bus::MessagePeer;
 use super::service_bus::ServicePeer;
 
-#[cfg(any(feature = "grpc", feature = "console"))]
+#[cfg(any(feature = "ws", feature = "console"))]
 use std::net::SocketAddr;
 
 fn normalize_tcp_bind(addr: &str) -> String {
@@ -230,27 +230,27 @@ pub fn parse_robot_bus_config(args: &[String]) -> Result<Option<RobotBusConfig>>
             }
 
             // --- API listen (gRPC + WS + console + discover) ---
-            #[cfg(feature = "grpc")]
+            #[cfg(feature = "ws")]
             "--api-listen" | "--grpc-listen" | "--listen" => {
                 i += 1;
                 let value = require_arg(args, i, arg)?;
-                config.grpc.listen = value
+                config.ws.listen = value
                     .parse::<SocketAddr>()
                     .with_context(|| format!("invalid {arg} {value}"))?;
                 #[cfg(feature = "console")]
                 {
-                    config.console.listen = config.grpc.listen;
+                    config.console.listen = config.ws.listen;
                 }
             }
-            #[cfg(feature = "grpc")]
+            #[cfg(feature = "ws")]
             "--cors-origin" => {
                 i += 1;
                 config
-                    .grpc
+                    .ws
                     .cors_origins
                     .push(require_arg(args, i, arg)?.to_string());
             }
-            #[cfg(not(feature = "grpc"))]
+            #[cfg(not(feature = "ws"))]
             "--api-listen" | "--grpc-listen" | "--listen" | "--cors-origin" => {
                 bail!("{arg} requires the `grpc` feature");
             }
@@ -266,14 +266,18 @@ pub fn parse_robot_bus_config(args: &[String]) -> Result<Option<RobotBusConfig>>
                 config.console.listen = addr;
                 config.console.enabled = true;
                 // Single-port: console is co-located with gRPC when both features are on.
-                #[cfg(feature = "grpc")]
+                #[cfg(feature = "ws")]
                 {
-                    config.grpc.listen = addr;
+                    config.ws.listen = addr;
                 }
             }
             #[cfg(feature = "console")]
             "--no-console" => {
                 config.console.enabled = false;
+            }
+            #[cfg(feature = "console")]
+            "--no-tank" => {
+                config.console.tank_enabled = false;
             }
             #[cfg(feature = "console")]
             "--console-cors-origin" => {
@@ -284,7 +288,7 @@ pub fn parse_robot_bus_config(args: &[String]) -> Result<Option<RobotBusConfig>>
                     .push(require_arg(args, i, arg)?.to_string());
             }
             #[cfg(not(feature = "console"))]
-            "--console-listen" | "--no-console" | "--console-cors-origin" => {
+            "--console-listen" | "--no-console" | "--no-tank" | "--console-cors-origin" => {
                 bail!("{arg} requires the `console` feature");
             }
 
@@ -348,6 +352,7 @@ API options (feature `grpc`, default on):\n  \
 Console options (feature `console`, default on):\n  \
 --console-listen HOST:PORT     Alias of --api-listen (single-port UI + API)\n  \
 --no-console                   Do not start the Web console UI\n  \
+--no-tank                      Hide tank demo in console; reject /api/v1/tank/session\n  \
 --console-cors-origin ORIGIN   Allow Studio/browser origin (repeatable)\n\n\
 --help, -h                     Show this help\n\n\
 Embed in code: robot_bus::RobotBusBroker::start(RobotBusConfig { ... }).\n\
@@ -427,7 +432,7 @@ mod tests {
             "16",
             "--tcp-only",
         ]);
-        #[cfg(feature = "grpc")]
+        #[cfg(feature = "ws")]
         {
             argv.extend(args(&[
                 "--grpc-listen",
@@ -447,10 +452,10 @@ mod tests {
         assert!(!config.message.bind_all_transports);
         assert!(!config.service.bind_all_transports);
         assert!(!config.action.bind_all_transports);
-        #[cfg(feature = "grpc")]
+        #[cfg(feature = "ws")]
         {
-            assert_eq!(config.grpc.listen.to_string(), "127.0.0.1:20070");
-            assert_eq!(config.grpc.cors_origins, vec!["http://localhost:3000"]);
+            assert_eq!(config.ws.listen.to_string(), "127.0.0.1:20070");
+            assert_eq!(config.ws.cors_origins, vec!["http://localhost:3000"]);
         }
     }
 
@@ -462,13 +467,19 @@ mod tests {
             .expect("config");
         assert!(config.console.enabled);
         assert_eq!(config.console.listen.to_string(), "127.0.0.1:25771");
-        #[cfg(feature = "grpc")]
-        assert_eq!(config.grpc.listen.to_string(), "127.0.0.1:25771");
+        #[cfg(feature = "ws")]
+        assert_eq!(config.ws.listen.to_string(), "127.0.0.1:25771");
 
         let config = parse_robot_bus_config(&args(&["--no-console"]))
             .unwrap()
             .expect("config");
         assert!(!config.console.enabled);
+
+        let config = parse_robot_bus_config(&args(&["--no-tank"]))
+            .unwrap()
+            .expect("config");
+        assert!(config.console.enabled);
+        assert!(!config.console.tank_enabled);
     }
 
     #[test]
@@ -516,12 +527,12 @@ mod tests {
     #[test]
     fn parses_api_listen_alias() {
         let result = parse_robot_bus_config(&args(&["--api-listen", "127.0.0.1:15771"]));
-        #[cfg(feature = "grpc")]
+        #[cfg(feature = "ws")]
         {
             let config = result.unwrap().expect("config");
-            assert_eq!(config.grpc.listen.to_string(), "127.0.0.1:15771");
+            assert_eq!(config.ws.listen.to_string(), "127.0.0.1:15771");
         }
-        #[cfg(not(feature = "grpc"))]
+        #[cfg(not(feature = "ws"))]
         {
             let err = result.expect_err("--api-listen requires grpc");
             assert!(err.to_string().contains("requires the `grpc` feature"));

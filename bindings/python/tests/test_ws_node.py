@@ -2,7 +2,7 @@
 
 Run after: just python-dev
   (or: cd bindings/python && maturin develop --features extension-module,grpc)
-  .venv/bin/python bindings/python/tests/test_grpc_node.py
+  .venv/bin/python bindings/python/tests/test_ws_node.py
 """
 
 from __future__ import annotations
@@ -26,7 +26,7 @@ def _ephemeral_binds() -> dict[str, object]:
         "service_backend_bind": f"tcp://127.0.0.1:{_free_port()}",
         "action_frontend_bind": f"tcp://127.0.0.1:{_free_port()}",
         "action_backend_bind": f"tcp://127.0.0.1:{_free_port()}",
-        "grpc_listen": f"127.0.0.1:{_free_port()}",
+        "api_listen": f"127.0.0.1:{_free_port()}",
         "tcp_only": True,
         "no_console": True,
     }
@@ -35,20 +35,20 @@ def _ephemeral_binds() -> dict[str, object]:
 def test_grpc_constructors() -> None:
     import robot_bus
 
-    node = robot_bus.Node.grpc("web")
+    node = robot_bus.Node.ws("web")
     assert node.name == "web"
 
-    node2 = robot_bus.Node.grpc_at("web2", "http://10.0.0.1:15570")
+    node2 = robot_bus.Node.ws_at("web2", "http://10.0.0.1:15570")
     assert node2.name == "web2"
 
-    node3 = robot_bus.Node("web3", transport="grpc", grpc_url="http://127.0.0.1:15570")
+    node3 = robot_bus.Node("web3", transport="grpc", ws_url="http://127.0.0.1:15570")
     assert node3.name == "web3"
 
 
-def test_grpc_node_rejects_servers() -> None:
+def test_ws_node_rejects_servers() -> None:
     import robot_bus
 
-    node = robot_bus.Node.grpc("only-client")
+    node = robot_bus.Node.ws("only-client")
     try:
         node.create_service("/svc", lambda _body: b"")
     except RuntimeError as err:
@@ -57,28 +57,28 @@ def test_grpc_node_rejects_servers() -> None:
         raise AssertionError("expected create_service to fail")
 
 
-def test_grpc_node_publish() -> None:
+def test_ws_node_publish() -> None:
     import robot_bus
 
     with robot_bus.RobotBusBroker.start(**_ephemeral_binds()) as broker:
-        grpc_url = f"http://{broker.grpc_listen}"
+        ws_url = f"http://{broker.api_listen}"
         sub = robot_bus.Subscriber(broker.message_xpub_bind)
-        sub.subscribe("py.grpc.pub")
+        sub.subscribe("py.ws.pub")
         time.sleep(0.2)
 
-        node = robot_bus.Node.grpc_at("grpc_pub", grpc_url)
-        pub = node.create_publisher("py.grpc.pub")
+        node = robot_bus.Node.ws_at("grpc_pub", ws_url)
+        pub = node.create_publisher("py.ws.pub")
         pub.publish(b"from-py-grpc")
 
         topic, payload = sub.receive(timeout=3.0)
-        assert topic == "py.grpc.pub"
+        assert topic == "py.ws.pub"
         assert bytes(payload) == b"from-py-grpc"
 
-def test_grpc_node_subscribe_and_service() -> None:
+def test_ws_node_subscribe_and_service() -> None:
     import robot_bus
 
     with robot_bus.RobotBusBroker.start(**_ephemeral_binds()) as broker:
-        grpc_url = f"http://{broker.grpc_listen}"
+        ws_url = f"http://{broker.api_listen}"
 
         pub = robot_bus.Publisher(broker.message_xsub_bind)
         server = robot_bus.Node(
@@ -94,21 +94,21 @@ def test_grpc_node_subscribe_and_service() -> None:
         time.sleep(0.2)
 
         got: list[tuple[str, bytes]] = []
-        client = robot_bus.Node.grpc_at("grpc_client", grpc_url)
+        client = robot_bus.Node.ws_at("grpc_client", ws_url)
 
         def on_msg(topic: str, payload: bytes) -> None:
             got.append((topic, bytes(payload)))
 
-        client.create_subscription("py.grpc.topic", on_msg)
+        client.create_subscription("py.ws.topic", on_msg)
         time.sleep(0.3)
 
-        pub.publish("py.grpc.topic", b"hello-py-grpc")
+        pub.publish("py.ws.topic", b"hello-py-grpc")
         deadline = time.time() + 5.0
         while not got and time.time() < deadline:
             client.spin_once(0.05)
 
         assert got, "subscription callback did not fire"
-        assert got[0][0] == "py.grpc.topic"
+        assert got[0][0] == "py.ws.topic"
         assert got[0][1] == b"hello-py-grpc"
 
         svc = client.create_client("svc.py_grpc_echo")
@@ -120,11 +120,11 @@ def test_grpc_node_subscribe_and_service() -> None:
         server.wait()
 
 
-def test_grpc_node_action_client() -> None:
+def test_ws_node_action_client() -> None:
     import robot_bus
 
     with robot_bus.RobotBusBroker.start(**_ephemeral_binds()) as broker:
-        grpc_url = f"http://{broker.grpc_listen}"
+        ws_url = f"http://{broker.api_listen}"
 
         server = robot_bus.Node(
             "act_server",
@@ -143,7 +143,7 @@ def test_grpc_node_action_client() -> None:
         server.start()
         time.sleep(0.2)
 
-        client = robot_bus.Node.grpc_at("grpc_action", grpc_url)
+        client = robot_bus.Node.ws_at("grpc_action", ws_url)
         action = client.create_action_client("act.py_grpc_demo")
         feedback: list[bytes] = []
         goal = action.send_goal(
@@ -170,14 +170,14 @@ def main() -> int:
         return 0
 
     if not hasattr(robot_bus.Node, "grpc"):
-        print("skip: Node.grpc not available (rebuild with --features grpc)", file=sys.stderr)
+        print("skip: Node.ws not available (rebuild with --features ws)", file=sys.stderr)
         return 0
 
     test_grpc_constructors()
-    test_grpc_node_rejects_servers()
-    test_grpc_node_publish()
-    test_grpc_node_subscribe_and_service()
-    test_grpc_node_action_client()
+    test_ws_node_rejects_servers()
+    test_ws_node_publish()
+    test_ws_node_subscribe_and_service()
+    test_ws_node_action_client()
     print("ok")
     return 0
 

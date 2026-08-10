@@ -8,6 +8,7 @@ import {
   Zap,
   Network,
   Bot,
+  BookOpen,
 } from 'lucide-react'
 import { useI18n } from '@/lib/i18n'
 
@@ -18,14 +19,17 @@ export type Tab =
   | 'actions'
   | 'logs'
   | 'topology'
+  | 'docs'
 
 interface Props {
   active: Tab
   onSelect: (tab: Tab) => void
-  onOpenBot: () => void
+  onOpenTank: () => void
+  /** When false, the TANK button is hidden (`--no-tank`). Default true. */
+  tankEnabled?: boolean
 }
 
-export default function Sidebar({ active, onSelect, onOpenBot }: Props) {
+export default function Sidebar({ active, onSelect, onOpenTank, tankEnabled = true }: Props) {
   const { t } = useI18n()
 
   const items: { id: Tab; label: string; short: string; icon: React.ReactNode }[] = [
@@ -35,6 +39,7 @@ export default function Sidebar({ active, onSelect, onOpenBot }: Props) {
     { id: 'services', label: t('navServices'), short: t('navServicesShort'), icon: <Cpu size={16} /> },
     { id: 'actions', label: t('navActions'), short: t('navActionsShort'), icon: <Zap size={16} /> },
     { id: 'logs', label: t('navEvents'), short: t('navEventsShort'), icon: <ScrollText size={16} /> },
+    { id: 'docs', label: t('navDocs'), short: t('navDocsShort'), icon: <BookOpen size={16} /> },
   ]
 
   return (
@@ -54,16 +59,20 @@ export default function Sidebar({ active, onSelect, onOpenBot }: Props) {
           <span className="font-mono text-[9px] tracking-widest">{item.short}</span>
         </button>
       ))}
-      <div className="w-8 border-t border-bus-border my-1" />
-      <button
-        type="button"
-        onClick={onOpenBot}
-        title={t('navBotWindows')}
-        className="relative w-12 h-12 flex flex-col items-center justify-center gap-0.5 rounded transition-colors text-bus-muted hover:text-bus-cyan hover:bg-bus-panel"
-      >
-        <Bot size={17} />
-        <span className="font-mono text-[9px] tracking-widest">{t('navBotSimShort')}</span>
-      </button>
+      {tankEnabled && (
+        <>
+          <div className="w-8 border-t border-bus-border my-1" />
+          <button
+            type="button"
+            onClick={onOpenTank}
+            title={t('navTankWindows')}
+            className="relative w-12 h-12 flex flex-col items-center justify-center gap-0.5 rounded transition-colors text-bus-muted hover:text-bus-cyan hover:bg-bus-panel"
+          >
+            <Bot size={17} />
+            <span className="font-mono text-[9px] tracking-widest">{t('navTankShort')}</span>
+          </button>
+        </>
+      )}
     </aside>
   )
 }

@@ -149,14 +149,14 @@ export function resolveBusUrl(): string {
 }
 
 /**
- * Start a console GrpcNode that subscribes to `/robot_bus/*` system topics.
+ * Start a console WsNode that subscribes to `/robot_bus/*` system topics.
  * Returns a dispose function.
  */
 export function startConsoleBus(handlers: ConsoleBusHandlers): () => void {
   const url = resolveBusUrl()
   // Topology + topic-type registration enabled so console subscriptions show in
   // Pub/Sub counts and fill TYPE for `/robot_bus/*` system topics.
-  const node = RobotBusNode.grpcAt('console_ui', url)
+  const node = RobotBusNode.wsAt('console_ui', url)
 
   node.createSubscription(consoleTopics.STATUS, (_t, msg) => {
     handlers.onStatus(mapStatus(msg))

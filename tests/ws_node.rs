@@ -1,4 +1,4 @@
-#![cfg(feature = "grpc")]
+#![cfg(feature = "ws")]
 
 mod support;
 
@@ -16,20 +16,20 @@ fn start_bus() -> (support::BrokerLockGuard, RobotBusBroker) {
     (guard, broker)
 }
 
-fn grpc_url(broker: &RobotBusBroker) -> String {
-    broker.grpc_url()
+fn ws_url(broker: &RobotBusBroker) -> String {
+    broker.api_url()
 }
 
 #[test]
-fn grpc_node_subscribe_receives_published_payload() {
+fn ws_node_subscribe_receives_published_payload() {
     let (_guard, broker) = start_bus();
-    let url = grpc_url(&broker);
+    let url = ws_url(&broker);
 
     let got = Arc::new(Mutex::new(None::<(String, Vec<u8>)>));
     let got_cb = Arc::clone(&got);
-    let mut node = Node::grpc_at("grpc-sub", &url);
+    let mut node = Node::ws_at("ws-sub", &url);
     node.create_subscription_raw(
-        "grpc.node.topic",
+        "ws.node.topic",
         Arc::new(move |topic, payload| {
             *got_cb.lock().unwrap() = Some((topic.to_string(), payload.to_vec()));
         }),
@@ -41,7 +41,7 @@ fn grpc_node_subscribe_receives_published_payload() {
     thread::sleep(Duration::from_millis(300));
 
     let pub_ = Publisher::new(Some(&broker.message.xsub_bind)).expect("publisher");
-    pub_.publish("grpc.node.topic", b"hello-grpc-node")
+    pub_.publish("ws.node.topic", b"hello-ws-node")
         .expect("publish");
 
     let deadline = std::time::Instant::now() + Duration::from_secs(5);
@@ -51,26 +51,26 @@ fn grpc_node_subscribe_receives_published_payload() {
     }
 
     let (topic, payload) = got.lock().unwrap().clone().expect("callback fired");
-    assert_eq!(topic, "grpc.node.topic");
-    assert_eq!(payload, b"hello-grpc-node");
+    assert_eq!(topic, "ws.node.topic");
+    assert_eq!(payload, b"hello-ws-node");
     broker.stop().expect("stop");
 }
 
 #[test]
-fn grpc_node_service_call_echoes_payload() {
+fn ws_node_service_call_echoes_payload() {
     let (_guard, broker) = start_bus();
-    let url = grpc_url(&broker);
+    let url = ws_url(&broker);
 
     let handler: Arc<dyn Fn(&[u8]) -> Vec<u8> + Send + Sync> =
         Arc::new(|body| [b"echo:", body].concat());
     let worker =
-        WorkerThread::spawn_service("svc.grpc_node_echo", handler, &broker.service.backend_bind)
+        WorkerThread::spawn_service("svc.ws_node_echo", handler, &broker.service.backend_bind)
             .expect("worker");
     thread::sleep(Duration::from_millis(100));
 
-    let mut node = Node::grpc_at("grpc-client", &url);
+    let mut node = Node::ws_at("ws-client", &url);
     let client = node
-        .create_client_raw("svc.grpc_node_echo")
+        .create_client_raw("svc.ws_node_echo")
         .expect("create_client");
     let resp = client
         .call(b"ping", Some(Duration::from_secs(3)))
@@ -82,9 +82,9 @@ fn grpc_node_service_call_echoes_payload() {
 }
 
 #[test]
-fn grpc_node_action_client_streams_feedback_then_result() {
+fn ws_node_action_client_streams_feedback_then_result() {
     let (_guard, broker) = start_bus();
-    let url = grpc_url(&broker);
+    let url = ws_url(&broker);
 
     let handler: Arc<dyn Fn(&[u8]) -> Vec<(String, Vec<u8>)> + Send + Sync> = Arc::new(|body| {
         vec![
@@ -94,13 +94,13 @@ fn grpc_node_action_client_streams_feedback_then_result() {
         ]
     });
     let worker =
-        WorkerThread::spawn_action("act.grpc_node_demo", handler, &broker.action.backend_bind)
+        WorkerThread::spawn_action("act.ws_node_demo", handler, &broker.action.backend_bind)
             .expect("worker");
     thread::sleep(Duration::from_millis(100));
 
-    let mut node = Node::grpc_at("grpc-action", &url);
+    let mut node = Node::ws_at("grpc-action", &url);
     let client = node
-        .create_action_client_raw("act.grpc_node_demo")
+        .create_action_client_raw("act.ws_node_demo")
         .expect("create_action_client");
     let feedbacks = Arc::new(Mutex::new(Vec::new()));
     let callback_feedbacks = Arc::clone(&feedbacks);
@@ -117,7 +117,7 @@ fn grpc_node_action_client_streams_feedback_then_result() {
             })),
         )
         .expect("send_goal");
-    assert_eq!(goal.action_name(), "act.grpc_node_demo");
+    assert_eq!(goal.action_name(), "act.ws_node_demo");
     assert!(!goal.goal_id().is_empty());
     let messages = goal.collect().expect("collect");
 
@@ -138,29 +138,29 @@ fn grpc_node_action_client_streams_feedback_then_result() {
 }
 
 #[test]
-fn grpc_node_publish_reaches_zmq_subscriber() {
+fn ws_node_publish_reaches_zmq_subscriber() {
     let (_guard, broker) = start_bus();
-    let url = grpc_url(&broker);
+    let url = ws_url(&broker);
 
     let sub = robot_bus::Subscriber::new(Some(&broker.message.xpub_bind)).expect("subscriber");
-    sub.subscribe("grpc.node.pub").expect("subscribe");
+    sub.subscribe("ws.node.pub").expect("subscribe");
     thread::sleep(Duration::from_millis(200));
 
-    let mut node = Node::grpc_at("grpc-pub", &url);
+    let mut node = Node::ws_at("grpc-pub", &url);
     let pub_ = node
-        .create_publisher_raw("grpc.node.pub")
+        .create_publisher_raw("ws.node.pub")
         .expect("create_publisher");
     pub_.publish(b"hello-from-grpc-node").expect("publish");
 
     let (topic, payload) = sub.receive(Some(Duration::from_secs(3))).expect("receive");
-    assert_eq!(topic, "grpc.node.pub");
+    assert_eq!(topic, "ws.node.pub");
     assert_eq!(payload, b"hello-from-grpc-node");
     broker.stop().expect("stop");
 }
 
 #[test]
-fn grpc_node_rejects_service_and_action_server() {
-    let mut node = Node::grpc("grpc-only");
+fn ws_node_rejects_service_and_action_server() {
+    let mut node = Node::ws("grpc-only");
     assert!(
         node.create_service_raw("/svc", Arc::new(|_| Vec::new()), None)
             .is_err()

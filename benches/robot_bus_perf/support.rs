@@ -251,7 +251,7 @@ pub fn write_report(results: &[ScenarioResult], env_lines: &[String]) -> std::io
         env_usize("ROBOT_BUS_PERF_ACT_ITERS", 5_000),
     ));
     md.push_str(
-        "- ZMQ：共享 `Context` + `Node::tcp` / `ipc` / `inproc`；gRPC：`Node::grpc_at`。\n",
+        "- ZMQ：共享 `Context` + `Node::tcp` / `ipc` / `inproc`；gRPC：`Node::ws_at`。\n",
     );
     md.push_str(
         "- inproc 与嵌入式 broker 必须共用同一 `Context`（ZeroMQ inproc 是 context-local）。\n",
@@ -326,7 +326,7 @@ pub fn write_report(results: &[ScenarioResult], env_lines: &[String]) -> std::io
 
     md.push_str("## 复现\n\n");
     md.push_str("```bash\njust perf\n# 或\ncargo run --release --bin robot_bus_perf\n");
-    md.push_str("# 仅 message：ROBOT_BUS_PERF_ONLY=message cargo run --release --bin robot_bus_perf --features grpc\n");
+    md.push_str("# 仅 message：ROBOT_BUS_PERF_ONLY=message cargo run --release --bin robot_bus_perf --features ws\n");
     md.push_str("```\n");
 
     fs::write(&path, md)?;

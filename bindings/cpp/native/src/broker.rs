@@ -24,7 +24,7 @@ pub(crate) struct RobotBusBrokerOptions {
     pub service_backend_bind: *const c_char,
     pub action_frontend_bind: *const c_char,
     pub action_backend_bind: *const c_char,
-    pub grpc_listen: *const c_char,
+    pub api_listen: *const c_char,
     pub console_listen: *const c_char,
     pub tcp_only: c_int,
     pub no_console: c_int,
@@ -42,11 +42,11 @@ pub(crate) struct RobotBusBrokerOptions {
     pub no_discovery: c_int,
     pub domain_id: u32,
     pub advertise_host: *const c_char,
-    /// API listen (`host:port`); alias of former grpc_listen when set.
-    pub api_listen: *const c_char,
     /// Federation peers as API URLs / `host:port` (GET /api/v1/discover).
     pub peers: *const *const c_char,
     pub peer_count: usize,
+    /// When non-zero, hide tank demo and reject tank session acquire.
+    pub no_tank: c_int,
 }
 
 #[unsafe(no_mangle)]
@@ -103,17 +103,20 @@ fn parse_broker_config(opts: *const RobotBusBrokerOptions) -> Result<RobotBusCon
         config.service.bind_all_transports = false;
         config.action.bind_all_transports = false;
     }
-    if let Some(v) = cstr_opt(o.grpc_listen) {
+    if let Some(v) = cstr_opt(o.api_listen) {
         match v.parse() {
-            Ok(addr) => config.grpc.listen = addr,
+            Ok(addr) => config.ws.listen = addr,
             Err(e) => {
-                set_error(format!("invalid grpc_listen: {e}"));
+                set_error(format!("invalid api_listen: {e}"));
                 return Err(());
             }
         }
     }
     if o.no_console != 0 {
         config.console.enabled = false;
+    }
+    if o.no_tank != 0 {
+        config.console.tank_enabled = false;
     }
     if let Some(v) = cstr_opt(o.console_listen) {
         match v.parse() {
@@ -151,13 +154,13 @@ fn parse_broker_config(opts: *const RobotBusBrokerOptions) -> Result<RobotBusCon
             config.discovery.advertise_host = Some(v.to_string());
         }
     }
-    let api = cstr_opt(o.api_listen).or_else(|| cstr_opt(o.grpc_listen));
+    let api = cstr_opt(o.api_listen);
     if let Some(v) = api {
         if !v.is_empty() {
-            config.grpc.listen = v.parse().map_err(|e| {
+            config.ws.listen = v.parse().map_err(|e| {
                 set_error(format!("invalid api_listen: {e}"));
             })?;
-            config.console.listen = config.grpc.listen;
+            config.console.listen = config.ws.listen;
         }
     }
     let peers = cstr_array(o.peers, o.peer_count)?;
@@ -307,11 +310,11 @@ pub extern "C" fn robot_bus_broker_action_backend_bind(b: *const RobotBusBroker)
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn robot_bus_broker_grpc_listen(b: *const RobotBusBroker) -> *mut c_char {
+pub extern "C" fn robot_bus_broker_api_listen(b: *const RobotBusBroker) -> *mut c_char {
     match broker_ref(b) {
         Ok(inner) => {
             clear_error();
-            dup_string(&inner.grpc_listen().to_string())
+            dup_string(&inner.api_listen().to_string())
         }
         Err(_) => ptr::null_mut(),
     }

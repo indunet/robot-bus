@@ -1,7 +1,9 @@
 /**
- * Browser gRPC-over-WebSocket (V1: one WebSocket = one RPC).
+ * Multiplexed WebSocket RPC (V2: one connection, many streams).
  *
- * Frame layout matches Rust `src/grpc/ws_frame.rs` (little-endian).
+ * Frame layout matches Rust `src/grpc/ws_frame.rs` (little-endian):
+ * - REQUEST: type | stream_id | method_len | method | payload_len | payload
+ * - DATA/CANCEL/TRAILER: type | stream_id | …
  */
 
 export const FRAME_REQUEST = 1;
@@ -18,10 +20,10 @@ export const METHOD_SEND_GOAL =
   "robot_bus_interface.grpc.v1.ActionGateway/SendGoal";
 
 export type WsFrame =
-  | { type: "request"; method: string; payload: Uint8Array }
-  | { type: "data"; payload: Uint8Array }
-  | { type: "cancel" }
-  | { type: "trailer"; status: number; message: string };
+  | { type: "request"; streamId: number; method: string; payload: Uint8Array }
+  | { type: "data"; streamId: number; payload: Uint8Array }
+  | { type: "cancel"; streamId: number }
+  | { type: "trailer"; streamId: number; status: number; message: string };
 
 function concatBytes(chunks: Uint8Array[]): Uint8Array {
   let len = 0;
@@ -54,6 +56,7 @@ export function encodeFrame(frame: WsFrame): Uint8Array {
       const method = enc.encode(frame.method);
       return concatBytes([
         new Uint8Array([FRAME_REQUEST]),
+        u32le(frame.streamId),
         u16le(method.length),
         method,
         u32le(frame.payload.length),
@@ -63,16 +66,22 @@ export function encodeFrame(frame: WsFrame): Uint8Array {
     case "data":
       return concatBytes([
         new Uint8Array([FRAME_DATA]),
+        u32le(frame.streamId),
         u32le(frame.payload.length),
         frame.payload,
       ]);
     case "cancel":
-      return concatBytes([new Uint8Array([FRAME_CANCEL]), u32le(0)]);
+      return concatBytes([
+        new Uint8Array([FRAME_CANCEL]),
+        u32le(frame.streamId),
+        u32le(0),
+      ]);
     case "trailer": {
       const msg = enc.encode(frame.message);
       const payload = concatBytes([u32le(frame.status), msg]);
       return concatBytes([
         new Uint8Array([FRAME_TRAILER]),
+        u32le(frame.streamId),
         u32le(payload.length),
         payload,
       ]);
@@ -81,13 +90,14 @@ export function encodeFrame(frame: WsFrame): Uint8Array {
 }
 
 export function decodeFrame(bytes: Uint8Array): WsFrame {
-  if (bytes.length < 1) throw new Error("truncated websocket frame");
+  if (bytes.length < 5) throw new Error("truncated websocket frame");
   const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
   const ty = bytes[0]!;
+  const streamId = view.getUint32(1, true);
   if (ty === FRAME_REQUEST) {
-    if (bytes.length < 3) throw new Error("truncated REQUEST");
-    const methodLen = view.getUint16(1, true);
-    const methodStart = 3;
+    if (bytes.length < 7) throw new Error("truncated REQUEST");
+    const methodLen = view.getUint16(5, true);
+    const methodStart = 7;
     const methodEnd = methodStart + methodLen;
     if (bytes.length < methodEnd + 4) throw new Error("truncated REQUEST");
     const method = new TextDecoder().decode(bytes.subarray(methodStart, methodEnd));
@@ -97,36 +107,37 @@ export function decodeFrame(bytes: Uint8Array): WsFrame {
     if (bytes.length < payloadEnd) throw new Error("truncated REQUEST payload");
     return {
       type: "request",
+      streamId,
       method,
       payload: bytes.subarray(payloadStart, payloadEnd),
     };
   }
   if (ty === FRAME_DATA) {
-    if (bytes.length < 5) throw new Error("truncated DATA");
-    const payloadLen = view.getUint32(1, true);
-    const payloadStart = 5;
+    if (bytes.length < 9) throw new Error("truncated DATA");
+    const payloadLen = view.getUint32(5, true);
+    const payloadStart = 9;
     const payloadEnd = payloadStart + payloadLen;
     if (bytes.length < payloadEnd) throw new Error("truncated DATA payload");
-    return { type: "data", payload: bytes.subarray(payloadStart, payloadEnd) };
+    return {
+      type: "data",
+      streamId,
+      payload: bytes.subarray(payloadStart, payloadEnd),
+    };
   }
-  if (ty === FRAME_CANCEL) return { type: "cancel" };
+  if (ty === FRAME_CANCEL) return { type: "cancel", streamId };
   if (ty === FRAME_TRAILER) {
-    if (bytes.length < 5) throw new Error("truncated TRAILER");
-    const payloadLen = view.getUint32(1, true);
-    const payloadStart = 5;
+    if (bytes.length < 9) throw new Error("truncated TRAILER");
+    const payloadLen = view.getUint32(5, true);
+    const payloadStart = 9;
     const payloadEnd = payloadStart + payloadLen;
     if (bytes.length < payloadEnd || payloadLen < 4) {
       throw new Error("truncated TRAILER payload");
     }
-    const status = new DataView(
-      bytes.buffer,
-      bytes.byteOffset + payloadStart,
-      4,
-    ).getUint32(0, true);
+    const status = view.getUint32(payloadStart, true);
     const message = new TextDecoder().decode(
       bytes.subarray(payloadStart + 4, payloadEnd),
     );
-    return { type: "trailer", status, message };
+    return { type: "trailer", streamId, status, message };
   }
   throw new Error(`unknown frame type ${ty}`);
 }
@@ -156,194 +167,231 @@ export class WsRpcError extends Error {
   }
 }
 
-function openSocket(wsUrl: string, signal?: AbortSignal): Promise<WebSocket> {
-  return new Promise((resolve, reject) => {
-    if (signal?.aborted) {
-      reject(new DOMException("Aborted", "AbortError"));
-      return;
-    }
-    const ws = new WebSocket(wsUrl);
-    ws.binaryType = "arraybuffer";
-    const onAbort = () => {
-      try {
-        ws.close();
-      } catch {
-        /* ignore */
-      }
-      reject(new DOMException("Aborted", "AbortError"));
-    };
-    signal?.addEventListener("abort", onAbort, { once: true });
-    ws.onopen = () => {
-      signal?.removeEventListener("abort", onAbort);
-      resolve(ws);
-    };
-    ws.onerror = () => {
-      signal?.removeEventListener("abort", onAbort);
-      reject(new Error(`websocket error connecting to ${wsUrl}`));
-    };
-  });
-}
+type StreamHandlers = {
+  onData?: (payload: Uint8Array) => void;
+  onTrailer?: (status: number, message: string) => void;
+  resolve?: (payload: Uint8Array | undefined) => void;
+  reject?: (err: Error) => void;
+};
 
-function waitBinary(ws: WebSocket, signal?: AbortSignal): Promise<Uint8Array | null> {
-  return new Promise((resolve, reject) => {
-    if (signal?.aborted) {
-      reject(new DOMException("Aborted", "AbortError"));
+/** One multiplexed WebSocket session (shared by a WsNode). */
+export class WsSession {
+  private ws: WebSocket | null = null;
+  private connecting: Promise<WebSocket> | null = null;
+  private nextStreamId = 1;
+  private readonly streams = new Map<number, StreamHandlers>();
+  private closed = false;
+
+  constructor(readonly httpBaseUrl: string) {}
+
+  private allocStreamId(): number {
+    const id = this.nextStreamId;
+    this.nextStreamId += 2;
+    return id;
+  }
+
+  private async ensureSocket(): Promise<WebSocket> {
+    if (this.closed) throw new Error("websocket session closed");
+    if (this.ws && this.ws.readyState === WebSocket.OPEN) return this.ws;
+    if (this.connecting) return this.connecting;
+    const wsUrl = httpUrlToWsRpc(this.httpBaseUrl);
+    this.connecting = new Promise<WebSocket>((resolve, reject) => {
+      const ws = new WebSocket(wsUrl);
+      ws.binaryType = "arraybuffer";
+      ws.onopen = () => {
+        this.ws = ws;
+        this.connecting = null;
+        resolve(ws);
+      };
+      ws.onerror = () => {
+        this.connecting = null;
+        reject(new Error(`websocket error connecting to ${wsUrl}`));
+      };
+      ws.onclose = () => {
+        this.ws = null;
+        for (const [, h] of this.streams) {
+          h.reject?.(new Error("websocket closed"));
+        }
+        this.streams.clear();
+      };
+      ws.onmessage = (ev) => {
+        const bin =
+          ev.data instanceof ArrayBuffer
+            ? new Uint8Array(ev.data)
+            : ev.data instanceof Blob
+              ? null
+              : null;
+        if (bin) {
+          this.onBinary(bin);
+          return;
+        }
+        if (ev.data instanceof Blob) {
+          void ev.data.arrayBuffer().then((buf) => this.onBinary(new Uint8Array(buf)));
+        }
+      };
+    });
+    return this.connecting;
+  }
+
+  private onBinary(bin: Uint8Array): void {
+    let frame: WsFrame;
+    try {
+      frame = decodeFrame(bin);
+    } catch {
       return;
     }
-    const onAbort = () => {
-      cleanup();
-      try {
-        ws.close();
-      } catch {
-        /* ignore */
-      }
-      reject(new DOMException("Aborted", "AbortError"));
-    };
-    const onMessage = (ev: MessageEvent) => {
-      cleanup();
-      if (ev.data instanceof ArrayBuffer) {
-        resolve(new Uint8Array(ev.data));
-      } else if (ev.data instanceof Blob) {
-        void ev.data.arrayBuffer().then((buf) => resolve(new Uint8Array(buf)), reject);
+    const handlers = this.streams.get(frame.streamId);
+    if (!handlers) return;
+    if (frame.type === "data") {
+      handlers.onData?.(frame.payload);
+      (handlers as { _data?: Uint8Array })._data = frame.payload;
+    } else if (frame.type === "trailer") {
+      this.streams.delete(frame.streamId);
+      handlers.onTrailer?.(frame.status, frame.message);
+      if (frame.status !== 0) {
+        handlers.reject?.(new WsRpcError(frame.status, frame.message));
       } else {
-        reject(new Error("expected binary websocket message"));
+        handlers.resolve?.(
+          (handlers as { _data?: Uint8Array })._data,
+        );
       }
+    }
+  }
+
+  async unary(method: string, requestPayload: Uint8Array): Promise<Uint8Array> {
+    const ws = await this.ensureSocket();
+    const streamId = this.allocStreamId();
+    return new Promise<Uint8Array>((resolve, reject) => {
+      this.streams.set(streamId, {
+        resolve: (data) => {
+          if (!data) reject(new Error(`rpc ${method} trailer without DATA`));
+          else resolve(data);
+        },
+        reject,
+      });
+      ws.send(
+        encodeFrame({
+          type: "request",
+          streamId,
+          method,
+          payload: requestPayload,
+        }),
+      );
+    });
+  }
+
+  async serverStream(
+    method: string,
+    requestPayload: Uint8Array,
+    handlers: {
+      onData: (payload: Uint8Array) => void;
+      onTrailer?: (status: number, message: string) => void;
+    },
+  ): Promise<{
+    control: WsServerStreamControl;
+    done: Promise<void>;
+  }> {
+    const ws = await this.ensureSocket();
+    const streamId = this.allocStreamId();
+    let settleDone!: () => void;
+    let settleErr!: (err: Error) => void;
+    const done = new Promise<void>((resolve, reject) => {
+      settleDone = resolve;
+      settleErr = reject;
+    });
+    this.streams.set(streamId, {
+      onData: handlers.onData,
+      onTrailer: (status, message) => {
+        handlers.onTrailer?.(status, message);
+        if (status !== 0) {
+          settleErr(new WsRpcError(status, message));
+        } else {
+          settleDone();
+        }
+      },
+      reject: (err) => settleErr(err),
+      resolve: () => settleDone(),
+    });
+    ws.send(
+      encodeFrame({
+        type: "request",
+        streamId,
+        method,
+        payload: requestPayload,
+      }),
+    );
+    const control: WsServerStreamControl = {
+      cancel: () => {
+        if (ws.readyState === WebSocket.OPEN) {
+          ws.send(encodeFrame({ type: "cancel", streamId }));
+        }
+      },
+      close: () => {
+        this.streams.delete(streamId);
+        if (ws.readyState === WebSocket.OPEN) {
+          ws.send(encodeFrame({ type: "cancel", streamId }));
+        }
+        settleDone();
+      },
     };
-    const onClose = () => {
-      cleanup();
-      resolve(null);
-    };
-    const onError = () => {
-      cleanup();
-      reject(new Error("websocket error"));
-    };
-    const cleanup = () => {
-      signal?.removeEventListener("abort", onAbort);
-      ws.removeEventListener("message", onMessage);
-      ws.removeEventListener("close", onClose);
-      ws.removeEventListener("error", onError);
-    };
-    signal?.addEventListener("abort", onAbort, { once: true });
-    ws.addEventListener("message", onMessage);
-    ws.addEventListener("close", onClose);
-    ws.addEventListener("error", onError);
-  });
+    return { control, done };
+  }
+
+  close(): void {
+    this.closed = true;
+    try {
+      this.ws?.close();
+    } catch {
+      /* ignore */
+    }
+    this.ws = null;
+  }
 }
 
-/** Unary RPC: REQUEST → DATA → TRAILER → close. */
+export type WsServerStreamControl = {
+  cancel: () => void;
+  close: () => void;
+};
+
+/** @deprecated Prefer WsSession; kept for tests that open one-shot RPCs. */
 export async function wsUnary(
   httpBaseUrl: string,
   method: string,
   requestPayload: Uint8Array,
-  signal?: AbortSignal,
+  _signal?: AbortSignal,
 ): Promise<Uint8Array> {
-  const ws = await openSocket(httpUrlToWsRpc(httpBaseUrl), signal);
+  const session = new WsSession(httpBaseUrl);
   try {
-    ws.send(
-      encodeFrame({ type: "request", method, payload: requestPayload }),
-    );
-    let data: Uint8Array | undefined;
-    for (;;) {
-      const bin = await waitBinary(ws, signal);
-      if (!bin) {
-        if (data) return data;
-        throw new Error(`rpc ${method} closed without response`);
-      }
-      const frame = decodeFrame(bin);
-      if (frame.type === "data") {
-        data = frame.payload;
-      } else if (frame.type === "trailer") {
-        if (frame.status !== 0) {
-          throw new WsRpcError(frame.status, frame.message);
-        }
-        if (!data) throw new Error(`rpc ${method} trailer without DATA`);
-        return data;
-      }
-    }
+    return await session.unary(method, requestPayload);
   } finally {
-    try {
-      ws.close();
-    } catch {
-      /* ignore */
-    }
+    session.close();
   }
 }
 
 export type ServerStreamHandlers = {
   onData: (payload: Uint8Array) => void;
   onTrailer?: (status: number, message: string) => void;
-  /** Soft cancel (SendGoal): send CANCEL, keep reading until RESULT/trailer. */
   onControl?: (control: WsServerStreamControl) => void;
 };
 
-export type WsServerStreamControl = {
-  /** Soft cancel: send CANCEL frame; do not close the socket. */
-  cancel: () => void;
-  /** Hard close: tear down the socket (server treats as disconnect). */
-  close: () => void;
-};
-
-/**
- * Server-streaming RPC.
- *
- * - Soft `control.cancel()`: CANCEL frame only (action intentional cancel).
- * - Hard `control.close()` / `AbortSignal`: close the socket (true disconnect).
- * - Successful completion does not send CANCEL.
- */
+/** @deprecated Prefer WsSession.serverStream. */
 export async function wsServerStream(
   httpBaseUrl: string,
   method: string,
   requestPayload: Uint8Array,
   handlers: ServerStreamHandlers,
-  signal?: AbortSignal,
+  _signal?: AbortSignal,
 ): Promise<void> {
-  const ws = await openSocket(httpUrlToWsRpc(httpBaseUrl), signal);
-  let closed = false;
-  const close = () => {
-    if (closed) return;
-    closed = true;
-    try {
-      ws.close();
-    } catch {
-      /* ignore */
-    }
-  };
-  const cancel = () => {
-    try {
-      if (ws.readyState === WebSocket.OPEN) {
-        ws.send(encodeFrame({ type: "cancel" }));
-      }
-    } catch {
-      /* ignore */
-    }
-  };
-  handlers.onControl?.({ cancel, close });
-  const onAbort = () => close();
-  signal?.addEventListener("abort", onAbort, { once: true });
-
+  const session = new WsSession(httpBaseUrl);
   try {
-    ws.send(
-      encodeFrame({ type: "request", method, payload: requestPayload }),
+    const { control, done } = await session.serverStream(
+      method,
+      requestPayload,
+      handlers,
     );
-    for (;;) {
-      const bin = await waitBinary(ws, signal);
-      if (!bin) {
-        handlers.onTrailer?.(0, "");
-        return;
-      }
-      const frame = decodeFrame(bin);
-      if (frame.type === "data") {
-        handlers.onData(frame.payload);
-      } else if (frame.type === "trailer") {
-        handlers.onTrailer?.(frame.status, frame.message);
-        if (frame.status !== 0) {
-          throw new WsRpcError(frame.status, frame.message);
-        }
-        return;
-      }
-    }
+    handlers.onControl?.(control);
+    await done;
   } finally {
-    signal?.removeEventListener("abort", onAbort);
-    close();
+    session.close();
   }
 }

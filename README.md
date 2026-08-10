@@ -29,7 +29,7 @@ More API examples live under [`docs/`](docs/).
 | `runtime::Executor` | Low-level poll loop (usually wrapped by the executors below) |
 | `runtime::SingleThreadedExecutor` / `MultiThreadedExecutor` | Explicit executors (multi-node / parallel); a single node can `Node::spin` directly |
 | `runtime::Node` / `TopicPublisher` / `CallbackGroup` | Nodes, publishers, callback groups (mutually exclusive / reentrant) |
-| `grpc::` (default feature) | gRPC + browser WebSocket RPC gateway (started with the broker) |
+| `ws_gateway::` (default feature `ws`) | Multiplexed WebSocket RPC gateway (started with the broker) |
 | `ros2_bridge::` (`ros2` feature) | In-process ROS 2 topic/service bridge (`Ros2Bridge`) |
 
 ### Repository layout
@@ -41,7 +41,7 @@ Rust core stays at the repo root (`Cargo.toml` + `src/`). Language SDKs live und
 | [`src/`](src/), `Cargo.toml` | Rust core (crates.io / maturin entry) |
 | [`proto/`](proto/) | Contract source: ROS-style Protobuf → generated code for Rust / bindings |
 | [`bindings/`](bindings/) | Language SDKs (Python, TypeScript, C++, Java, Android) |
-| [`console/`](console/) | Broker console + BOT SIM viz/ops panel (build → `assets/console/`); in-process sim in [`src/bot_sim/`](src/bot_sim/) |
+| [`console/`](console/) | Broker console + TANK viz/ops panel (build → `assets/console/`); in-process sim in [`src/tank/`](src/tank/) |
 | sibling [`robot-bus-tools`](https://github.com/indunet/robot-bus-tools) | `rbus_*` nodes, TF library + language extensions, Robot Bus Studio |
 | [`benches/`](benches/) | Perf harnesses: [`robot_bus_perf/`](benches/robot_bus_perf/) (`just perf`), [`ros2_perf/`](benches/ros2_perf/) (`just perf-ros2`) |
 | [`tests/`](tests/) | Rust integration tests + cross-language interop (`just test-interop`) |
@@ -54,7 +54,7 @@ Rust core stays at the repo root (`Cargo.toml` + `src/`). Language SDKs live und
 Application code (Rust / Python / TypeScript / C++ / Java / Android)
   └── robot-bus SDK
               │
-              │ ZMQ (tcp / ipc / inproc) or gRPC / WebSocket RPC
+              │ ZMQ (tcp / ipc / inproc) or WebSocket RPC
               ▼
 robot_bus_broker process
 ```
@@ -92,9 +92,9 @@ cargo run --bin rbus -- status
 
 ### Broker discovery (HTTP API)
 
-Brokers expose `GET /api/v1/discover` on the API listen port (default `15570`, shared with gRPC / WS / console). The JSON lists connectable message/service/action endpoints (OS-assigned ports after bind `:0`) plus `brokerId` / `apiUrl`.
+Brokers expose `GET /api/v1/discover` on the API listen port (default `15570`, shared with WS gateway / console). The JSON lists connectable message/service/action endpoints (OS-assigned ports after bind `:0`) plus `brokerId` / `apiUrl`.
 
-Clients still **choose the transport** (`tcp` / `ipc` / `inproc` / `grpc`); discovery only fills host / paths / gRPC URL:
+Clients still **choose the transport** (`tcp` / `ipc` / `inproc` / `ws`); discovery only fills host / paths / API URL:
 
 ```rust
 use robot_bus::{DiscoverOpts, Node, NodeOptions};
@@ -163,7 +163,7 @@ imu_pub.publish(Imu(linear_acceleration=Vector3(x=0.0, y=0.0, z=9.8)))
 
 (Omit the message type for raw bytes. Use `SingleThreadedExecutor` / `MultiThreadedExecutor` + `add_node` when sharing nodes or needing multi-threaded handlers.)
 
-gRPC-only gateway clients: `Node.grpc("name")` / `Node.grpc_at("name", "http://…")` (subscribe / publish / call service / action). See [`docs/python-api.md`](docs/python-api.md).
+WebSocket RPC gateway clients: `Node.ws("name")` / `Node.ws_at("name", "http://…")` (subscribe / publish / call service / action). See [`docs/python-api.md`](docs/python-api.md).
 
 ### TypeScript
 
@@ -189,7 +189,7 @@ const pub = node.createPublisher("/robot1/imu", Imu);
 node.createSubscription("/robot1/imu", (_t, imu) => console.log(imu), Imu);
 ```
 
-Browser / gRPC-only: `Node.grpc("client")` (the browser entry's `Node` is the WebSocket RPC facade).
+Browser / WS-only: `Node.ws("client")` (the browser entry's `Node` is the WebSocket RPC facade).
 
 ### Java / Android (Maven Central)
 
@@ -245,7 +245,7 @@ robot-bus = { path = "../robot-bus" }
 
 Semantics mirror ROS 2: `Node::new` → typed `create_publisher` / `create_subscription` → `node.spin()` (auto-attaches a `SingleThreadedExecutor`).
 
-gRPC-only (no ZMQ): `Node::grpc` / `Node::grpc_at` — subscribe, publish, and call service / action, but cannot act as a server; see [`docs/rust-api.md`](docs/rust-api.md#grpc-模式-node客户端).
+WS-only (no ZMQ): `Node::ws` / `Node::ws_at` — subscribe, publish, and call service / action, but cannot act as a server; see [`docs/rust-api.md`](docs/rust-api.md#grpc-模式-node客户端).
 
 ```rust
 use std::sync::Arc;
@@ -307,7 +307,7 @@ Defaults: message `STREAM(8/8)`, service `RPC(4/4)`, action `ACTION(8/8)`. Broke
 
 | Binary | Description |
 |------|------|
-| `robot_bus_broker` | Starts all three buses plus the gRPC / WebSocket RPC gateway |
+| `robot_bus_broker` | Starts all three buses plus the WebSocket RPC gateway |
 
 ## Web console (`console/`)
 
@@ -330,19 +330,20 @@ just console          # pnpm build + sync → assets/console/ (gitignored)
 cargo run --bin robot_bus_broker
 # open http://localhost:15570
 # disable: cargo run --bin robot_bus_broker -- --no-console
+# disable tank: cargo run --bin robot_bus_broker -- --no-tank
 ```
 
 `assets/console/` is **build output** (not committed). CI and release jobs run `just console` (or equivalent) before compiling with the `console` feature.
 
-Wired to the broker on the **same port** as native gRPC / WebSocket RPC (`0.0.0.0:15570`): the Dashboard is a TypeScript `GrpcNode` that subscribes to `/robot_bus/*` system topics over `/ws`. A thin REST shim (`GET /api/v1/...`) remains for `rbus` / tooling. Topology and topic-type registration use reliable control-plane services (`/robot_bus/topology/register`, `/robot_bus/topic_type/register`) through the existing service bus. Domain visualizers, Flow, and LIVE / WHEP live in **[robot-bus-tools](https://github.com/indunet/robot-bus-tools)** Studio. The frontend source lives in `console/`; only the generated static files are compiled into binaries with the `console` feature.
+Wired to the broker on the **same port** as WebSocket RPC (`0.0.0.0:15570`): the Dashboard is a TypeScript `WsNode` that subscribes to `/robot_bus/*` system topics over `/ws`. A thin REST shim (`GET /api/v1/...`) remains for `rbus` / tooling. Topology and topic-type registration use reliable control-plane services (`/robot_bus/topology/register`, `/robot_bus/topic_type/register`) through the existing service bus. Domain visualizers, Flow, and LIVE / WHEP live in **[robot-bus-tools](https://github.com/indunet/robot-bus-tools)** Studio. The frontend source lives in `console/`; only the generated static files are compiled into binaries with the `console` feature.
 
-**Bot demo (2 nodes):** in-process [`src/bot_sim/`](src/bot_sim/) owns physics (`SUB /robot_bus/bot/cmd_vel` → `PUB /robot_bus/bot/pose`) and starts when the console opens a BOT SIM session; the **BOT SIM** panel (`bot_viz`) renders pose and dispatches capabilities (keyboard teleop first). Shared world — multiple viewers, last-writer-wins teleop.
+**Tank demo (2 nodes):** in-process [`src/tank/`](src/tank/) owns physics (`SUB /robot_bus/tank/cmd_vel` → `PUB /robot_bus/tank/pose`) and starts when the console opens a TANK session; the **TANK** panel (`tank_viz`) renders pose and dispatches capabilities (keyboard teleop first). Shared world — multiple viewers, last-writer-wins teleop. Production: `--no-tank` (or binding `no_tank`) hides the sidebar entry and makes `GET /api/v1/tank` report `enabled: false`.
 
-## gRPC + browser WebSocket gateway
+## Multiplexed WebSocket RPC gateway
 
-Started with `robot_bus_broker` / `RobotBusBroker::start`. **Native gRPC** (HTTP/2) and **browser WebSocket RPC** (`/ws`, one connection per RPC) share the **same port** (default `0.0.0.0:15570`). There is no gRPC-Web layer.
+Started with `robot_bus_broker` / `RobotBusBroker::start`. **All remote clients** (native SDKs + browsers) use multiplexed WebSocket RPC on `/ws` (V2: one connection, many streams) on the **same port** as the console / discover API (default `0.0.0.0:15570`). Native gRPC/HTTP2 has been removed.
 
-You can also attach via the Node API with `Node::grpc` / `Node::grpc_at` (client: subscribe / publish / call service / call action; see [`docs/rust-api.md`](docs/rust-api.md#grpc-模式-node客户端)).
+You can also attach via the Node API with `Node::ws` / `Node::ws_at` (client: subscribe / publish / call service / call action; see [`docs/rust-api.md`](docs/rust-api.md#grpc-模式-node客户端)).
 
 | RPC | Semantics |
 |-----|------|
@@ -351,27 +352,27 @@ You can also attach via the Node API with `Node::grpc` / `Node::grpc_at` (client
 | `ServiceGateway.Call` | Unary: `service_name` + request bytes → response bytes |
 | `ActionGateway.SendGoal` | Unary goal request followed by a server stream of `ActionEvent` values (`FEEDBACK`, then `RESULT`) |
 
-Action clients use a ROS 2–style `GoalHandle` in every language: `send_goal` / `sendGoal` returns the handle immediately, feedback is delivered to a callback as it arrives, and the result is awaited separately. `handle.cancel()` is best-effort and does not imply server confirmation: WebSocket RPC sends an explicit `CANCEL` frame (connection stays open for `RESULT`; a true disconnect still cancels), native gRPC cancels the goal stream, and ZMQ sends an explicit `CANCEL` frame.
+Action clients use a ROS 2–style `GoalHandle` in every language: `send_goal` / `sendGoal` returns the handle immediately, feedback is delivered to a callback as it arrives, and the result is awaited separately. `handle.cancel()` is best-effort and does not imply server confirmation: WebSocket RPC sends an explicit `CANCEL` frame (connection stays open for `RESULT`; a true disconnect still cancels), WebSocket RPC sends an explicit `CANCEL` frame (same as browsers), and ZMQ sends an explicit `CANCEL` frame.
 
 ```bash
 cargo run --bin robot_bus_broker
 # config: cargo run --bin robot_bus_broker -- --help
-# gRPC: http://0.0.0.0:15570
+# API / WS: http://0.0.0.0:15570
 ```
 
 In-process:
 
 ```rust
-use robot_bus::{GrpcBrokerConfig, RobotBusBroker, RobotBusConfig};
+use robot_bus::{WsGatewayConfig, RobotBusBroker, RobotBusConfig};
 
 let broker = RobotBusBroker::start(RobotBusConfig {
-    grpc: GrpcBrokerConfig {
+    grpc: WsGatewayConfig {
         listen: "0.0.0.0:15570".parse()?,
         ..Default::default()
     },
     ..RobotBusConfig::default()
 })?;
-let grpc = format!("http://{}", broker.grpc_listen());
+let grpc = format!("http://{}", broker.api_listen());
 ```
 
 Proto (package `robot_bus_interface.grpc.v1`, distinct from ROS `*.msg.v1` / `*.srv.v1`):

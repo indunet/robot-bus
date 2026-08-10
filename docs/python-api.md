@@ -26,10 +26,10 @@ import robot_bus
 with robot_bus.RobotBusBroker.start(
     message_xsub_bind="tcp://127.0.0.1:15560",
     message_xpub_bind="tcp://127.0.0.1:15561",
-    grpc_listen="0.0.0.0:15570",
+    api_listen="0.0.0.0:15570",
     tcp_only=True,
 ) as broker:
-    # broker.message_xsub_bind / message_xpub_bind / grpc_listen 等
+    # broker.message_xsub_bind / message_xpub_bind / api_listen 等
     pass
 ```
 
@@ -101,7 +101,7 @@ node.load_parameters_from_yaml_file("config/pilot.yaml")
 
 接近 ROS 2：`Node(...)` → `create_publisher` / `create_subscription` → `node.spin()`。单节点时无需手写 Executor（内部自动挂 `SingleThreadedExecutor`）。
 
-仅走 gRPC 网关时用 `Node.grpc` / `Node.grpc_at`（或 `transport="grpc"`）：可订阅、publish、调 service / action，不能当 server；见下文「gRPC 模式 Node」。
+仅走 gRPC 网关时用 `Node.grpc` / `Node.ws_at`（或 `transport="grpc"`）：可订阅、publish、调 service / action，不能当 server；见下文「WebSocket RPC 模式 Node」。
 
 Python 主推 **typed**（创建时传入 protobuf 类，自动 `SerializeToString` / `ParseFromString`）；不传类型则仍为 raw bytes。底层与 Rust 一样走 opaque bytes（纯 Python 薄封装，因 PyO3 无法映射 Rust 泛型）。
 
@@ -163,9 +163,9 @@ t = buf.lookup_transform("base_link", "camera")
 
 离线可用 `TfBuffer()` + `set_transform_msg`。见 `tests/test_tf_lookup.py`。
 
-### gRPC 模式 Node（客户端）
+### WebSocket RPC 模式 Node（客户端）
 
-`Node.grpc` / `Node.grpc_at`（或 `Node(..., transport="grpc", grpc_url=...)`）经 broker gRPC 网关接入，不创建 ZMQ socket。
+`Node.grpc` / `Node.ws_at`（或 `Node(..., transport="grpc", ws_url=...)`）经 broker gRPC 网关接入，不创建 ZMQ socket。
 
 | 支持 | 不支持 |
 |------|--------|
@@ -178,8 +178,8 @@ t = buf.lookup_transform("base_link", "camera")
 ```python
 import robot_bus
 
-node = robot_bus.Node.grpc("web-client")
-# 或 robot_bus.Node.grpc_at("web-client", "http://127.0.0.1:15570")
+node = robot_bus.Node.ws("web-client")
+# 或 robot_bus.Node.ws_at("web-client", "http://127.0.0.1:15570")
 
 pub = node.create_publisher("/robot1/cmd")
 pub.publish(b"go")
@@ -370,8 +370,8 @@ print(robot_bus.__version__)
 
 | 符号 | 说明 |
 |------|------|
-| `Node(name, host=..., transport=..., grpc_url=..., message_xsub=..., …)` | 建节点；首次 `create_*` / `spin` 时自动挂 `SingleThreadedExecutor` |
-| `Node.tcp` / `Node.ipc` / `Node.inproc` / `Node.inproc_with_context` / `Node.grpc` / `Node.grpc_at` / `Node.discover` | 传输预设（gRPC 为客户端模式；同进程 inproc 用 `inproc_with_context`；`discover` 只填地址） |
+| `Node(name, host=..., transport=..., ws_url=..., message_xsub=..., …)` | 建节点；首次 `create_*` / `spin` 时自动挂 `SingleThreadedExecutor` |
+| `Node.tcp` / `Node.ipc` / `Node.inproc` / `Node.inproc_with_context` / `Node.grpc` / `Node.ws_at` / `Node.discover` | 传输预设（gRPC 为客户端模式；同进程 inproc 用 `inproc_with_context`；`discover` 只填地址） |
 | `Node.declare_parameter` / `get_parameter` / `set_parameter` / `has_parameter` / `list_parameters` | 本节点本地参数（`bool` / `int` / `float` / `str`） |
 | `Node.load_parameters_from_yaml_str` / `load_parameters_from_yaml_file` | 从 YAML 加载 / 覆盖参数 |
 | `node.spin()` / `spin_once` / `shutdown` | 驱动回调（ROS 2 式简单路径） |
@@ -393,4 +393,4 @@ print(robot_bus.__version__)
 | `run_broker()` | 阻塞 CLI 入口 |
 | `ShutdownHandle` / `TimerHandle` | spin 与定时器控制 |
 
-gRPC 模式 Node 见上一节；底层网关 RPC 也可直接用 Rust tonic 客户端（[rust-api.md](rust-api.md)）。
+WebSocket RPC 模式 Node 见上一节；底层网关 RPC 也可直接用 Rust tonic 客户端（[rust-api.md](rust-api.md)）。
