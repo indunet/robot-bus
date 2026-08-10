@@ -92,47 +92,59 @@ export default function FloatingWindow({
   }
 
   return (
-    <section
-      role="dialog"
-      aria-label={title}
-      onPointerDown={onBringToFront}
-      className="fixed flex flex-col overflow-hidden rounded-lg border border-[#3a8fa3]/45 bg-bus-panel/55 shadow-[0_1px_0_rgb(255_255_255_/06%)_inset,0_0_0_1px_rgb(0_183_216_/14%),0_0_28px_rgb(0_183_216_/08%),0_18px_40px_rgb(0_0_0_/40%),0_6px_14px_rgb(0_0_0_/25%)] backdrop-blur-md"
-      style={{
-        left: position.x,
-        top: position.y,
-        width,
-        height,
-        maxWidth: 'calc(100vw - 12px)',
-        maxHeight: 'calc(100vh - 12px)',
-        zIndex,
-        transform: 'translateZ(0)',
-      }}
-    >
+    <>
       <div
         aria-hidden="true"
-        className="pointer-events-none absolute inset-0 z-0 rounded-[inherit] bg-gradient-to-br from-bus-cyan/[0.03] via-transparent to-black/10"
+        className="fixed inset-0 bg-black/40 backdrop-blur-[2px]"
+        style={{ zIndex: Math.max(1, zIndex - 1) }}
+        onPointerDown={(event) => {
+          event.preventDefault()
+          onClose()
+        }}
       />
-      <div
-        onPointerDown={onPointerDown}
-        onPointerMove={onPointerMove}
-        onPointerUp={(event) => endDrag(event)}
-        onPointerCancel={() => endDrag()}
-        className="relative z-10 h-8 shrink-0 flex items-center justify-between px-2.5 border-b border-[#3a8fa3]/28 bg-bus-bg/55 cursor-move select-none touch-none shadow-[0_1px_0_rgb(255_255_255_/05%)_inset]"
+      <section
+        role="dialog"
+        aria-label={title}
+        aria-modal="true"
+        onPointerDown={onBringToFront}
+        className="fixed flex flex-col overflow-hidden rounded-lg border border-[#3a8fa3]/50 bg-bus-panel/90 shadow-[0_1px_0_rgb(255_255_255_/06%)_inset,0_0_0_1px_rgb(0_183_216_/18%),0_0_32px_rgb(0_183_216_/10%),0_28px_56px_rgb(0_0_0_/55%),0_10px_20px_rgb(0_0_0_/35%)] backdrop-blur-md"
+        style={{
+          left: position.x,
+          top: position.y,
+          width,
+          height,
+          maxWidth: 'calc(100vw - 12px)',
+          maxHeight: 'calc(100vh - 12px)',
+          zIndex,
+          transform: 'translateZ(0)',
+        }}
       >
-        <span className="font-mono text-[10px] tracking-wider text-bus-cyan drop-shadow-[0_1px_2px_rgb(0_0_0_/55%)]">
-          {title}
-        </span>
-        <button
-          type="button"
-          aria-label={`Close ${title}`}
-          onPointerDown={(event) => event.stopPropagation()}
-          onClick={onClose}
-          className="w-6 h-6 flex items-center justify-center text-bus-muted hover:text-bus-red hover:bg-white/10 rounded-md"
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-0 z-0 rounded-[inherit] bg-gradient-to-br from-bus-cyan/[0.04] via-transparent to-black/15"
+        />
+        <div
+          onPointerDown={onPointerDown}
+          onPointerMove={onPointerMove}
+          onPointerUp={(event) => endDrag(event)}
+          onPointerCancel={() => endDrag()}
+          className="relative z-10 h-8 shrink-0 flex items-center justify-between px-2.5 border-b border-[#3a8fa3]/28 bg-bus-bg/70 cursor-move select-none touch-none shadow-[0_1px_0_rgb(255_255_255_/05%)_inset]"
         >
-          <X size={13} />
-        </button>
-      </div>
-      <div className="relative z-10 flex-1 min-h-0 overflow-auto">{children}</div>
-    </section>
+          <span className="font-mono text-[10px] tracking-wider text-bus-cyan drop-shadow-[0_1px_2px_rgb(0_0_0_/55%)]">
+            {title}
+          </span>
+          <button
+            type="button"
+            aria-label={`Close ${title}`}
+            onPointerDown={(event) => event.stopPropagation()}
+            onClick={onClose}
+            className="w-6 h-6 flex items-center justify-center text-bus-muted hover:text-bus-red hover:bg-white/10 rounded-md"
+          >
+            <X size={13} />
+          </button>
+        </div>
+        <div className="relative z-10 flex-1 min-h-0 overflow-auto">{children}</div>
+      </section>
+    </>
   )
 }
