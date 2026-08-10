@@ -1223,16 +1223,22 @@ function drawBotFallback(ctx: CanvasRenderingContext2D, size: number) {
   ctx.beginPath()
   ctx.arc(-u * 0.05, 0, u * 0.22, 0, Math.PI * 2)
   ctx.fill()
-  // rounded nose
-  ctx.fillStyle = '#f59e0b'
-  ctx.beginPath()
-  ctx.moveTo(u * 0.4, -u * 0.22)
-  ctx.lineTo(u * 0.55, -u * 0.22)
-  ctx.arc(u * 0.55, 0, u * 0.22, -Math.PI / 2, Math.PI / 2, false)
-  ctx.lineTo(u * 0.4, u * 0.22)
-  ctx.closePath()
-  ctx.fill()
+  // tank barrel (heading)
   ctx.strokeStyle = '#fbbf24'
   ctx.lineWidth = 1
+  ctx.fillStyle = '#c9892a'
+  ctx.beginPath()
+  ctx.roundRect(u * 0.35, -u * 0.14, u * 0.2, u * 0.28, u * 0.04)
+  ctx.fill()
+  ctx.stroke()
+  ctx.fillStyle = '#f59e0b'
+  ctx.beginPath()
+  ctx.roundRect(u * 0.5, -u * 0.08, u * 0.35, u * 0.16, u * 0.04)
+  ctx.fill()
+  ctx.stroke()
+  ctx.fillStyle = '#d97706'
+  ctx.beginPath()
+  ctx.roundRect(u * 0.82, -u * 0.11, u * 0.12, u * 0.22, u * 0.03)
+  ctx.fill()
   ctx.stroke()
 }

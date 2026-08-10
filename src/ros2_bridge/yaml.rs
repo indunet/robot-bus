@@ -7,8 +7,8 @@ use serde::Deserialize;
 
 use crate::errors::{BusError, Result};
 
-use super::builder::{ActKind, Direction, Ros2Bridge, Ros2BridgeBuilder, SrvKind};
-use super::codec;
+use super::builder::{Ros2Bridge, Ros2BridgeBuilder};
+use super::mapper::Direction;
 
 #[derive(Debug, Deserialize)]
 struct FileConfig {
@@ -86,11 +86,11 @@ struct ActionSection {
 }
 
 fn default_direction() -> String {
-    "both".into()
+    "ros2_to_bus".into()
 }
 
 fn default_service_direction() -> String {
-    "ros_to_bus".into()
+    "ros2_to_bus".into()
 }
 
 pub fn builder_from_yaml(path: impl AsRef<Path>) -> Result<Ros2BridgeBuilder> {
@@ -100,7 +100,11 @@ pub fn builder_from_yaml(path: impl AsRef<Path>) -> Result<Ros2BridgeBuilder> {
             path.as_ref().display()
         ))
     })?;
-    let cfg: FileConfig = serde_yaml::from_str(&text)
+    builder_from_yaml_str(&text)
+}
+
+fn builder_from_yaml_str(text: &str) -> Result<Ros2BridgeBuilder> {
+    let cfg: FileConfig = serde_yaml::from_str(text)
         .map_err(|e| BusError::Protocol(format!("parse ros2 bridge yaml: {e}")))?;
 
     if cfg.routes.is_empty() && cfg.services.is_empty() && cfg.actions.is_empty() {
@@ -141,29 +145,23 @@ pub fn builder_from_yaml(path: impl AsRef<Path>) -> Result<Ros2BridgeBuilder> {
     };
 
     for (i, route) in cfg.routes.into_iter().enumerate() {
-        codec::lookup_topic_codec(&route.type_name)
-            .map_err(|e| BusError::Protocol(format!("routes[{i}]: {e}")))?;
         let direction = parse_direction(&route.direction)?;
         builder = builder
-            .push_route(route.ros_topic, route.bus_topic, route.type_name, direction)
+            .add_route(route.ros_topic, route.bus_topic, route.type_name, direction)
             .map_err(|e| BusError::Protocol(format!("routes[{i}]: {e}")))?;
     }
 
     for (i, svc) in cfg.services.into_iter().enumerate() {
-        let kind = SrvKind::parse(&svc.type_name)
-            .map_err(|e| BusError::Protocol(format!("services[{i}]: {e}")))?;
         let direction = parse_service_direction(&svc.direction)?;
         builder = builder
-            .push_service(svc.ros_service, svc.bus_service, kind, direction)
+            .add_service(svc.ros_service, svc.bus_service, svc.type_name, direction)
             .map_err(|e| BusError::Protocol(format!("services[{i}]: {e}")))?;
     }
 
     for (i, act) in cfg.actions.into_iter().enumerate() {
-        let kind = ActKind::parse(&act.type_name)
-            .map_err(|e| BusError::Protocol(format!("actions[{i}]: {e}")))?;
         let direction = parse_action_direction(&act.direction)?;
         builder = builder
-            .push_action(act.ros_action, act.bus_action, kind, direction)
+            .add_action(act.ros_action, act.bus_action, act.type_name, direction)
             .map_err(|e| BusError::Protocol(format!("actions[{i}]: {e}")))?;
     }
 
@@ -172,37 +170,73 @@ pub fn builder_from_yaml(path: impl AsRef<Path>) -> Result<Ros2BridgeBuilder> {
 
 fn parse_direction(s: &str) -> Result<Direction> {
     match s {
-        "ros_to_bus" => Ok(Direction::RosToBus),
-        "bus_to_ros" => Ok(Direction::BusToRos),
-        "both" => Ok(Direction::Both),
+        "ros2_to_bus" => Ok(Direction::Ros2ToBus),
+        "bus_to_ros2" => Ok(Direction::BusToRos2),
+        "both" => Err(BusError::Protocol(
+            "topic direction must be ros2_to_bus | bus_to_ros2 (both is not supported)".into(),
+        )),
         other => Err(BusError::Protocol(format!(
-            "direction must be ros_to_bus | bus_to_ros | both, got {other:?}"
+            "direction must be ros2_to_bus | bus_to_ros2, got {other:?}"
         ))),
     }
 }
 
 fn parse_service_direction(s: &str) -> Result<Direction> {
     match s {
-        "ros_to_bus" => Ok(Direction::RosToBus),
-        "bus_to_ros" => Ok(Direction::BusToRos),
+        "ros2_to_bus" => Ok(Direction::Ros2ToBus),
+        "bus_to_ros2" => Ok(Direction::BusToRos2),
         "both" => Err(BusError::Protocol(
-            "service direction must be ros_to_bus | bus_to_ros (both is not supported)".into(),
+            "service direction must be ros2_to_bus | bus_to_ros2 (both is not supported)".into(),
         )),
         other => Err(BusError::Protocol(format!(
-            "service direction must be ros_to_bus | bus_to_ros, got {other:?}"
+            "service direction must be ros2_to_bus | bus_to_ros2, got {other:?}"
         ))),
     }
 }
 
 fn parse_action_direction(s: &str) -> Result<Direction> {
     match s {
-        "ros_to_bus" => Ok(Direction::RosToBus),
-        "bus_to_ros" => Ok(Direction::BusToRos),
+        "ros2_to_bus" => Ok(Direction::Ros2ToBus),
+        "bus_to_ros2" => Ok(Direction::BusToRos2),
         "both" => Err(BusError::Protocol(
-            "action direction must be ros_to_bus | bus_to_ros (both is not supported)".into(),
+            "action direction must be ros2_to_bus | bus_to_ros2 (both is not supported)".into(),
         )),
         other => Err(BusError::Protocol(format!(
-            "action direction must be ros_to_bus | bus_to_ros, got {other:?}"
+            "action direction must be ros2_to_bus | bus_to_ros2, got {other:?}"
         ))),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parses_camera_h264_bridge_yaml() {
+        // Image → bus, H.264 CompressedVideo ← bus (needs rbus_image_encoder at runtime).
+        let yaml = r#"
+robot_bus:
+  transport: tcp
+  host: localhost
+
+routes:
+  - ros_topic: /camera/image_raw
+    bus_topic: /camera/image_raw
+    type: sensor_msgs/msg/Image
+    direction: ros2_to_bus
+  - ros_topic: /camera/video
+    bus_topic: /camera/video
+    type: foxglove_msgs/msg/CompressedVideo
+    direction: bus_to_ros2
+"#;
+        builder_from_yaml_str(yaml).expect("camera h264 yaml should parse");
+    }
+
+    #[test]
+    fn rejects_empty_yaml() {
+        let err = builder_from_yaml_str("robot_bus:\n  transport: tcp\n")
+            .err()
+            .expect("empty routes should fail");
+        assert!(err.to_string().contains("at least one"), "{err}");
     }
 }

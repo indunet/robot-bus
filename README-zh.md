@@ -30,7 +30,7 @@
 | `runtime::SingleThreadedExecutor` / `MultiThreadedExecutor` | 显式执行器（多节点 / 并行）；单节点可直接 `Node::spin` |
 | `runtime::Node` / `TopicPublisher` / `CallbackGroup` | 节点、publisher、callback group（互斥 / 可重入） |
 | `grpc::`（默认 feature） | gRPC + 浏览器 WebSocket RPC 网关（随 broker 一起启动） |
-| `ros2::`（`ros2` feature） | 进程内 ROS 2 话题/服务桥（`Ros2Bridge`） |
+| `ros2_bridge::`（`ros2` feature） | 进程内 ROS 2 话题/服务桥（`Ros2Bridge`） |
 
 ### 仓库布局
 
@@ -60,7 +60,7 @@ robot_bus_broker 进程
 
 ### 可选 ROS 2 桥（Rust feature）
 
-日常开发 **不必安装 ROS 2**。进程内与 ROS 2 图互通时，开启 Cargo feature **`ros2`**，使用 `robot_bus::ros2::Ros2Bridge`（链式 API 或 YAML）。官方支持：**Humble**、**Jazzy**（需 source 对应发行版并链接 `rclrs`）。C++ 另有 `robot-bus-ros2-humble` / `…-jazzy` 包，依赖系统 ROS，**不**把 `rcl` 打进安装包。见 [ROS 2 桥](#ros-2-桥-feature-ros2)。
+日常开发 **不必安装 ROS 2**。进程内与 ROS 2 图互通时，开启 Cargo feature **`ros2`**，使用 `robot_bus::ros2_bridge::Ros2Bridge`（链式 API 或 YAML）。官方支持：**Humble**、**Jazzy**（需 source 对应发行版并链接 `rclrs`）。C++ 另有 `robot-bus-ros2-humble` / `…-jazzy` 包，依赖系统 ROS，**不**把 `rcl` 打进安装包。见 [ROS 2 桥](#ros-2-桥-feature-ros2)。
 
 ## 快速开始
 
@@ -396,7 +396,7 @@ cd studio && pnpm install && pnpm dev   # http://127.0.0.1:15772
 
 ## ROS 2 桥（`feature = "ros2"`）
 
-进程内话题**与**服务桥：`robot_bus::ros2::Ros2Bridge`（链式 API 或 YAML）。**默认不启用** — 核心 SDK / crates.io / maturin 仍免 ROS。
+进程内话题**与**服务桥：`robot_bus::ros2_bridge::Ros2Bridge`（链式 API 或 YAML）。**默认不启用** — 核心 SDK / crates.io / maturin 仍免 ROS。
 
 **官方支持的 ROS 2 发行版：** **Humble**、**Jazzy**。其它发行版：source 后本机自建（best-effort）。
 
@@ -406,38 +406,40 @@ cd studio && pnpm install && pnpm dev   # http://127.0.0.1:15772
 | 环境 | Source **Humble** 或 **Jazzy** 以便链接 `rcl`；主 CI **不**开此 feature |
 | C++ 包 | `robot-bus`（无桥）与 `robot-bus-ros2-humble` / `robot-bus-ros2-jazzy`（互斥，**仅 Linux DEB** — Windows MSI / macOS PKG 只有核心 stub）。包内 **不 vendor** `rcl`/RMW/DDS — 需安装系统 ROS 并 `source /opt/ros/<distro>/setup.bash` |
 | Broker | 可达的 `robot_bus_broker`（tcp/ipc 或 `bus_discover`） |
-| 话题类型 | **注册表** — YAML/API 用类型字符串配置（非写死枚举）。内置：`std_msgs/msg/String`、`sensor_msgs/msg/Imu`、`sensor_msgs/msg/Image`、`foxglove_msgs/msg/CompressedVideo`。扩展：实现 `TopicCodec` 并注册 |
-| 服务类型 | `std_srvs/srv/Trigger`、`std_srvs/srv/SetBool`（仅 `ros_to_bus` / `bus_to_ros`；默认调用超时 5s） |
-| Action 类型 | `example_interfaces/action/Fibonacci`（仅 `ros_to_bus` / `bus_to_ros`；默认 goal 超时 30s） |
+| 话题类型 | **注册表** — YAML/API 用类型字符串配置（非写死枚举）。覆盖 [`proto/`](proto) 中所有有 ROS 2 对应物的消息（`std_msgs`、`geometry_msgs`、`sensor_msgs`、`nav_msgs`、`nav2_msgs`、`tf2_msgs`、`control_msgs`、`visualization_msgs`、`foxglove_msgs` 等），不含总线内部的 `robot_bus_interface`。清单见 `registered_topic_types()`；新增类型：`src/ros2_bridge/mappers/<pkg>/<msg>.rs` |
+| 服务类型 | `std_srvs/srv/Trigger`、`std_srvs/srv/SetBool`（仅 `ros2_to_bus` / `bus_to_ros2`；默认调用超时 5s） |
+| Action 类型 | `example_interfaces/action/Fibonacci`（仅 `ros2_to_bus` / `bus_to_ros2`；默认 goal 超时 30s） |
 
 ```rust
-use robot_bus::ros2::{Direction, Ros2Bridge};
+use robot_bus::ros2_bridge::{
+    Direction, FibonacciActionMapper, Ros2Bridge, SensorMsgsImageMapper, SetBoolServiceMapper,
+    StdMsgsStringMapper, TriggerServiceMapper,
+};
 
 let mut bridge = Ros2Bridge::new("ros_bridge")
     .bus_tcp("localhost")
     .route("/chatter", "/chatter")
-        .string()
-        .direction(Direction::Both)
+        .mapper(StdMsgsStringMapper)
+        .direction(Direction::Ros2ToBus)
         .add()?
     .route("/camera/image_raw", "/camera/image_raw")
-        .type_name("sensor_msgs/msg/Image")
-        .direction(Direction::RosToBus)
+        .mapper(SensorMsgsImageMapper)
+        .direction(Direction::Ros2ToBus)
         .add()?
     .service("/reset", "/reset")
-        .trigger()
-        .direction(Direction::RosToBus)
+        .mapper(TriggerServiceMapper)
+        .direction(Direction::Ros2ToBus)
         .add()?
     .service("/enable", "/enable")
-        .set_bool()
-        .direction(Direction::BusToRos)
+        .mapper(SetBoolServiceMapper)
+        .direction(Direction::BusToRos2)
         .add()?
     .build()?;
 bridge.spin()?;
 // 或: Ros2Bridge::from_yaml("bridge.yaml")?.spin()?;
-// 相机→H264 示例 YAML: src/ros2/example_camera_h264.yaml
 ```
 
-`foxglove_msgs/msg/CompressedVideo` 需系统已安装 `foxglove_msgs`（DynamicMessage 依赖类型支持）。
+登记 ≠ 一定能跑：桥通过 `DynamicMessage` 反射解析类型，运行时仍需系统装了对应 ROS 包（例如 `foxglove_msgs/msg/CompressedVideo` 需要 `foxglove_msgs`）。
 
 C++（安装对应的 **Linux** `robot-bus-ros2-*` 并 source ROS 后）：
 
@@ -447,24 +449,23 @@ C++（安装对应的 **Linux** `robot-bus-ros2-*` 并 source ROS 后）：
 auto bridge = robot_bus::Ros2Bridge::New("ros_bridge")
     .bus_tcp("localhost")
     .route("/chatter", "/chatter")
-    .string()
-    .direction(robot_bus::Ros2Direction::Both)
+    .mapper(robot_bus::StdMsgsStringMapper{})
+    .direction(robot_bus::Direction::Ros2ToBus)
     .add()
     .route("/camera/image_raw", "/camera/image_raw")
-    .type_name("sensor_msgs/msg/Image")
-    .direction(robot_bus::Ros2Direction::RosToBus)
+    .mapper(robot_bus::SensorMsgsImageMapper{})
+    .direction(robot_bus::Direction::Ros2ToBus)
     .add()
     .service("/reset", "/reset")
-    .trigger()
-    .direction(robot_bus::Ros2Direction::RosToBus)
+    .mapper(robot_bus::TriggerServiceMapper{})
+    .direction(robot_bus::Direction::Ros2ToBus)
     .add()
     .build();
 bridge.spin();
 // 或: robot_bus::Ros2Bridge::from_yaml("bridge.yaml").spin();
-// 相机→H264 示例: src/ros2/example_camera_h264.yaml
 ```
 
-详见 [`docs/cpp-api.md`](docs/cpp-api.md)；本机构建可用 `just cpp-dev-ros2`。
+完整用法见 [`docs/ros2-bridge.md`](docs/ros2-bridge.md)。C++ 包与本机构建见 [`docs/cpp-api.md`](docs/cpp-api.md)（`just cpp-dev-ros2`）。
 
 ## 测试
 

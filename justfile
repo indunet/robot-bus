@@ -41,6 +41,10 @@ gen-all: gen-rust proto gen-typescript gen-cpp gen-java gen-android
 python-dev: proto gen-rust
 	cd bindings/python && maturin develop --features extension-module,grpc --no-default-features
 
+# Same as python-dev, plus in-process Ros2Bridge (source Humble/Jazzy first)
+python-dev-ros2: proto gen-rust
+	cd bindings/python && maturin develop --features extension-module,grpc,ros2 --no-default-features
+
 # Build TypeScript native addon + JS bundle
 ts-dev: gen-typescript gen-rust
 	cd bindings/typescript && npm install && npm run build:native && npm run build:ts
@@ -170,5 +174,6 @@ perf-ros2:
 check-ros2-shim:
 	RUSTFLAGS='--cfg ros_distro="humble"' cargo check --features ros2-shim
 	RUSTFLAGS='--cfg ros_distro="humble"' cargo check --manifest-path bindings/cpp/native/Cargo.toml --features ros2-shim
+	RUSTFLAGS='--cfg ros_distro="humble"' cargo check --lib --no-default-features --features extension-module,grpc,ros2-shim
 
 # Tool nodes moved to sibling repo robot-bus-tools.

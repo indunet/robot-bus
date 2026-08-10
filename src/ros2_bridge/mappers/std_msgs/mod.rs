@@ -1,0 +1,31 @@
+//! Topic mappers for `std_msgs/msg/*`.
+
+pub mod bool;
+pub mod byte;
+pub mod byte_multi_array;
+pub mod color_rgba;
+pub mod empty;
+pub mod float32;
+pub mod float32_multi_array;
+pub mod float64;
+pub mod float64_multi_array;
+pub mod header;
+pub mod int16;
+pub mod int16_multi_array;
+pub mod int32;
+pub mod int32_multi_array;
+pub mod int64;
+pub mod int64_multi_array;
+pub mod int8;
+pub mod int8_multi_array;
+pub mod multi_array_dimension;
+pub mod multi_array_layout;
+pub mod string;
+pub mod uint16;
+pub mod uint16_multi_array;
+pub mod uint32;
+pub mod uint32_multi_array;
+pub mod uint64;
+pub mod uint64_multi_array;
+pub mod uint8;
+pub mod uint8_multi_array;

@@ -20,6 +20,14 @@ pub(crate) fn set_error(msg: impl AsRef<str>) {
     LAST_ERROR.with(|slot| *slot.borrow_mut() = Some(c));
 }
 
+pub(crate) fn last_error_message() -> Option<String> {
+    LAST_ERROR.with(|slot| {
+        slot.borrow()
+            .as_ref()
+            .map(|s| s.to_string_lossy().into_owned())
+    })
+}
+
 pub(crate) fn clear_error() {
     LAST_ERROR.with(|slot| *slot.borrow_mut() = None);
 }
@@ -114,6 +122,15 @@ pub extern "C" fn robot_bus_last_error() -> *const c_char {
         Some(s) => s.as_ptr(),
         None => ptr::null(),
     })
+}
+
+/// Set the thread-local last error string (for C++ mapper callbacks).
+#[unsafe(no_mangle)]
+pub extern "C" fn robot_bus_set_error(msg: *const c_char) {
+    match cstr_opt(msg) {
+        Some(m) => set_error(m),
+        None => set_error("error"),
+    }
 }
 
 #[unsafe(no_mangle)]

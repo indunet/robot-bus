@@ -11,7 +11,8 @@ use crate::{err, set_error};
 #[cfg(feature = "ros2")]
 use crate::{bus_err, clear_error, cstr_opt, cstr_req, ok};
 
-const ROS2_UNAVAILABLE: &str = "ROS 2 bridge unavailable: install robot-bus-cpp-ros2-humble \
+#[cfg_attr(feature = "ros2", allow(dead_code))]
+pub(crate) const ROS2_UNAVAILABLE: &str = "ROS 2 bridge unavailable: install robot-bus-cpp-ros2-humble \
 or robot-bus-cpp-ros2-jazzy (matching your ROS distro), or rebuild robot_bus_c with \
 --features ros2 after sourcing ROS 2";
 
@@ -25,14 +26,17 @@ pub struct RobotBusRos2Bridge {
     _private: [u8; 0],
 }
 
+#[path = "ros2_topic_mapper_ffi.rs"]
+mod topic_mapper_ffi;
+
 #[cfg(feature = "ros2")]
-mod imp {
+pub(crate) mod imp {
     use super::*;
     use std::time::Duration;
 
-    use robot_bus::ros2::{ActKind, Direction, Ros2Bridge, Ros2BridgeBuilder, SrvKind};
+    use robot_bus::ros2_bridge::{Direction, Ros2Bridge, Ros2BridgeBuilder};
 
-    pub struct BuilderInner {
+    pub(crate) struct BuilderInner {
         pub inner: Option<Ros2BridgeBuilder>,
     }
 
@@ -40,18 +44,17 @@ mod imp {
         pub bridge: Ros2Bridge,
     }
 
-    fn parse_direction(d: c_int) -> Result<Direction, c_int> {
+    pub(crate) fn parse_direction(d: c_int) -> Result<Direction, c_int> {
         match d {
-            0 => Ok(Direction::RosToBus),
-            1 => Ok(Direction::BusToRos),
-            2 => Ok(Direction::Both),
+            0 => Ok(Direction::Ros2ToBus),
+            1 => Ok(Direction::BusToRos2),
             other => Err(err(format!(
-                "invalid ros2 direction {other}; use ROBOT_BUS_ROS2_DIR_* (0/1/2)"
+                "invalid ros2 direction {other}; use ROBOT_BUS_ROUTE_DIR_ROS2_TO_BUS (0) or BUS_TO_ROS2 (1)"
             ))),
         }
     }
 
-    fn take_builder(b: &mut BuilderInner) -> Result<Ros2BridgeBuilder, c_int> {
+    pub(crate) fn take_builder(b: &mut BuilderInner) -> Result<Ros2BridgeBuilder, c_int> {
         b.inner
             .take()
             .ok_or_else(|| err("Ros2Bridge builder already consumed"))
@@ -266,10 +269,6 @@ mod imp {
             Ok(t) => t,
             Err(e) => return e,
         };
-        let kind = match SrvKind::parse(type_name) {
-            Ok(k) => k,
-            Err(e) => return bus_err(e),
-        };
         let direction = match parse_direction(direction) {
             Ok(d) => d,
             Err(e) => return e,
@@ -282,7 +281,7 @@ mod imp {
         match builder.add_service(
             ros_service.to_string(),
             bus_service.to_string(),
-            kind,
+            type_name.to_string(),
             direction,
         ) {
             Ok(next) => {
@@ -316,10 +315,6 @@ mod imp {
             Ok(t) => t,
             Err(e) => return e,
         };
-        let kind = match ActKind::parse(type_name) {
-            Ok(k) => k,
-            Err(e) => return bus_err(e),
-        };
         let direction = match parse_direction(direction) {
             Ok(d) => d,
             Err(e) => return e,
@@ -332,7 +327,7 @@ mod imp {
         match builder.add_action(
             ros_action.to_string(),
             bus_action.to_string(),
-            kind,
+            type_name.to_string(),
             direction,
         ) {
             Ok(next) => {

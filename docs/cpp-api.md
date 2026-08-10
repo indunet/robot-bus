@@ -246,6 +246,8 @@ Repo layout: generated sources (gitignored) live under `bindings/cpp/generated/r
 
 ## ROS 2 bridge (`Ros2Bridge`)
 
+Full usage (Rust + C++ + YAML): [`ros2-bridge.md`](ros2-bridge.md).
+
 Supported distros for **prebuilt** packages: **Humble** and **Jazzy** (**Linux DEBs only** — Windows MSI / macOS PKG ship core SDK with stub `Ros2Bridge` APIs). Headers ship in all packages; only ros2-* libs implement the bridge.
 
 ```cpp
@@ -255,24 +257,24 @@ Supported distros for **prebuilt** packages: **Humble** and **Jazzy** (**Linux D
 auto bridge = robot_bus::Ros2Bridge::New("ros_bridge")
     .bus_tcp("localhost")
     .route("/chatter", "/chatter")
-    .string()
-    .direction(robot_bus::Ros2Direction::Both)
+    .mapper(robot_bus::StdMsgsStringMapper{})
+    .direction(robot_bus::Direction::Ros2ToBus)
     .add()
     .route("/camera/image_raw", "/camera/image_raw")
-    .type_name("sensor_msgs/msg/Image")
-    .direction(robot_bus::Ros2Direction::RosToBus)
+    .mapper(robot_bus::SensorMsgsImageMapper{})
+    .direction(robot_bus::Direction::Ros2ToBus)
     .add()
     .service("/reset", "/reset")
-    .trigger()
-    .direction(robot_bus::Ros2Direction::RosToBus)
+    .mapper(robot_bus::TriggerServiceMapper{})
+    .direction(robot_bus::Direction::Ros2ToBus)
     .add()
     .service("/enable", "/enable")
-    .set_bool()
-    .direction(robot_bus::Ros2Direction::BusToRos)
+    .mapper(robot_bus::SetBoolServiceMapper{})
+    .direction(robot_bus::Direction::BusToRos2)
     .add()
     .action("/fibonacci", "/fibonacci")
-    .fibonacci()
-    .direction(robot_bus::Ros2Direction::RosToBus)
+    .mapper(robot_bus::FibonacciActionMapper{})
+    .direction(robot_bus::Direction::Ros2ToBus)
     .add()
     .build();
 bridge.spin_once(0.01);
@@ -280,12 +282,11 @@ bridge.spin_once(0.01);
 
 // Or YAML (same schema as Rust Ros2Bridge::from_yaml)
 auto from_file = robot_bus::Ros2Bridge::from_yaml("bridge.yaml");
-// Camera→H264 example: src/ros2/example_camera_h264.yaml
 ```
 
 Topic types use a **registry** (configure by type string): built-in `std_msgs/msg/String`, `sensor_msgs/msg/Imu`, `sensor_msgs/msg/Image`, `foxglove_msgs/msg/CompressedVideo`.  
-Service types: `std_srvs/srv/Trigger`, `std_srvs/srv/SetBool` (`RosToBus` / `BusToRos` only; default call timeout 5s).  
-Action types: `example_interfaces/action/Fibonacci` (`RosToBus` / `BusToRos` only; default goal timeout 30s).  
+Service types: `std_srvs/srv/Trigger`, `std_srvs/srv/SetBool` (`Ros2ToBus` / `BusToRos2` only; default call timeout 5s).  
+Action types: `example_interfaces/action/Fibonacci` (`Ros2ToBus` / `BusToRos2` only; default goal timeout 30s).  
 `foxglove_msgs/msg/CompressedVideo` needs the `foxglove_msgs` ROS package installed.  
 Default `robot-bus` returns a clear error from these APIs (`robot_bus_last_error` / thrown `robot_bus::Error`).
 

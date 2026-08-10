@@ -1,5 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" fill="none">
-  <!-- Top-down differential-drive rover; +X (nose) points right. Transparent background. -->
+  <!-- Top-down tracked bot (tank-like); +X (barrel) points right. Transparent background. -->
   <g transform="translate(64 64)">
     <ellipse cx="1" cy="2" rx="34" ry="22" fill="#000" opacity="0.28"/>
     <!-- tracks: warmer rubber so they read on dark map; tucked close to chassis -->
@@ -17,13 +17,9 @@
     <!-- sensor dome -->
     <circle cx="-2" cy="0" r="11" fill="#d8faff" stroke="#9af0ff" stroke-width="1.5"/>
     <circle cx="-2" cy="0" r="5" fill="#00b7d8" opacity="0.7"/>
-    <!-- rounded nose (heading) -->
-    <path
-      d="M18 -12 H28 A12 12 0 0 1 28 12 H18 Z"
-      fill="#f59e0b"
-      stroke="#fbbf24"
-      stroke-width="1"
-      stroke-linejoin="round"
-    />
+    <!-- tank barrel (heading) -->
+    <rect x="18" y="-7" width="10" height="14" rx="2" fill="#c9892a" stroke="#fbbf24" stroke-width="1"/>
+    <rect x="26" y="-4" width="18" height="8" rx="2" fill="#f59e0b" stroke="#fbbf24" stroke-width="1"/>
+    <rect x="42" y="-5.5" width="6" height="11" rx="1.5" fill="#d97706" stroke="#fbbf24" stroke-width="1"/>
   </g>
 </svg>

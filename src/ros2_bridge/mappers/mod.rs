@@ -1,0 +1,248 @@
+//! Per-type topic mappers, organized as `mappers/<pkg>/<msg>.rs`.
+//!
+//! Shared field accessors live in [`common`]; service/action helpers used by
+//! the bridge builder live in [`service`] / [`action`].
+
+pub mod action;
+pub mod action_bridges;
+pub mod common;
+pub mod service;
+pub mod service_bridges;
+
+pub mod action_msgs;
+pub mod apriltag_msgs;
+pub mod builtin_interfaces;
+pub mod control_msgs;
+pub mod diagnostic_msgs;
+pub mod foxglove_msgs;
+pub mod geometry_msgs;
+pub mod nav2_msgs;
+pub mod nav_msgs;
+pub mod sensor_msgs;
+pub mod shape_msgs;
+pub mod std_msgs;
+pub mod stereo_msgs;
+pub mod tf2_msgs;
+pub mod trajectory_msgs;
+pub mod unique_identifier_msgs;
+pub mod visualization_msgs;
+
+use crate::ros2_bridge::mapper::TopicMapper;
+
+/// All built-in topic mappers (one entry per ROS message type).
+pub(crate) static BUILTIN_MAPPER_LIST: &[&'static dyn TopicMapper] = &[
+    &action_msgs::goal_info::ActionMsgsGoalInfoMapper, // action_msgs/msg/GoalInfo
+    &action_msgs::goal_status::ActionMsgsGoalStatusMapper, // action_msgs/msg/GoalStatus
+    &action_msgs::goal_status_array::ActionMsgsGoalStatusArrayMapper, // action_msgs/msg/GoalStatusArray
+    &apriltag_msgs::april_tag_detection::ApriltagMsgsAprilTagDetectionMapper, // apriltag_msgs/msg/AprilTagDetection
+    &apriltag_msgs::april_tag_detection_array::ApriltagMsgsAprilTagDetectionArrayMapper, // apriltag_msgs/msg/AprilTagDetectionArray
+    &apriltag_msgs::point::ApriltagMsgsPointMapper, // apriltag_msgs/msg/Point
+    &builtin_interfaces::duration::BuiltinInterfacesDurationMapper, // builtin_interfaces/msg/Duration
+    &builtin_interfaces::time::BuiltinInterfacesTimeMapper, // builtin_interfaces/msg/Time
+    &control_msgs::admittance_controller_state::ControlMsgsAdmittanceControllerStateMapper, // control_msgs/msg/AdmittanceControllerState
+    &control_msgs::dynamic_interface_group_values::ControlMsgsDynamicInterfaceGroupValuesMapper, // control_msgs/msg/DynamicInterfaceGroupValues
+    &control_msgs::dynamic_joint_state::ControlMsgsDynamicJointStateMapper, // control_msgs/msg/DynamicJointState
+    &control_msgs::gripper_command::ControlMsgsGripperCommandMapper, // control_msgs/msg/GripperCommand
+    &control_msgs::interface_value::ControlMsgsInterfaceValueMapper, // control_msgs/msg/InterfaceValue
+    &control_msgs::joint_component_tolerance::ControlMsgsJointComponentToleranceMapper, // control_msgs/msg/JointComponentTolerance
+    &control_msgs::joint_controller_state::ControlMsgsJointControllerStateMapper, // control_msgs/msg/JointControllerState
+    &control_msgs::joint_jog::ControlMsgsJointJogMapper, // control_msgs/msg/JointJog
+    &control_msgs::joint_tolerance::ControlMsgsJointToleranceMapper, // control_msgs/msg/JointTolerance
+    &control_msgs::joint_trajectory_controller_state::ControlMsgsJointTrajectoryControllerStateMapper, // control_msgs/msg/JointTrajectoryControllerState
+    &control_msgs::mecanum_drive_controller_state::ControlMsgsMecanumDriveControllerStateMapper, // control_msgs/msg/MecanumDriveControllerState
+    &control_msgs::motion_argument::ControlMsgsMotionArgumentMapper, // control_msgs/msg/MotionArgument
+    &control_msgs::motion_primitive::ControlMsgsMotionPrimitiveMapper, // control_msgs/msg/MotionPrimitive
+    &control_msgs::motion_primitive_sequence::ControlMsgsMotionPrimitiveSequenceMapper, // control_msgs/msg/MotionPrimitiveSequence
+    &control_msgs::multi_dof_command::ControlMsgsMultiDofCommandMapper, // control_msgs/msg/MultiDOFCommand
+    &control_msgs::multi_dof_state_stamped::ControlMsgsMultiDofStateStampedMapper, // control_msgs/msg/MultiDOFStateStamped
+    &control_msgs::pid_state::ControlMsgsPidStateMapper, // control_msgs/msg/PidState
+    &control_msgs::single_dof_state::ControlMsgsSingleDofStateMapper, // control_msgs/msg/SingleDOFState
+    &control_msgs::single_dof_state_stamped::ControlMsgsSingleDofStateStampedMapper, // control_msgs/msg/SingleDOFStateStamped
+    &control_msgs::steering_controller_status::ControlMsgsSteeringControllerStatusMapper, // control_msgs/msg/SteeringControllerStatus
+    &diagnostic_msgs::diagnostic_array::DiagnosticMsgsDiagnosticArrayMapper, // diagnostic_msgs/msg/DiagnosticArray
+    &diagnostic_msgs::diagnostic_status::DiagnosticMsgsDiagnosticStatusMapper, // diagnostic_msgs/msg/DiagnosticStatus
+    &diagnostic_msgs::key_value::DiagnosticMsgsKeyValueMapper, // diagnostic_msgs/msg/KeyValue
+    &foxglove_msgs::arrow_primitive::FoxgloveMsgsArrowPrimitiveMapper, // foxglove_msgs/msg/ArrowPrimitive
+    &foxglove_msgs::camera_calibration::FoxgloveMsgsCameraCalibrationMapper, // foxglove_msgs/msg/CameraCalibration
+    &foxglove_msgs::circle_annotation::FoxgloveMsgsCircleAnnotationMapper, // foxglove_msgs/msg/CircleAnnotation
+    &foxglove_msgs::color::FoxgloveMsgsColorMapper, // foxglove_msgs/msg/Color
+    &foxglove_msgs::compressed_audio::FoxgloveMsgsCompressedAudioMapper, // foxglove_msgs/msg/CompressedAudio
+    &foxglove_msgs::compressed_image::FoxgloveMsgsCompressedImageMapper, // foxglove_msgs/msg/CompressedImage
+    &foxglove_msgs::compressed_point_cloud::FoxgloveMsgsCompressedPointCloudMapper, // foxglove_msgs/msg/CompressedPointCloud
+    &foxglove_msgs::compressed_video::FoxgloveMsgsCompressedVideoMapper, // foxglove_msgs/msg/CompressedVideo
+    &foxglove_msgs::cube_primitive::FoxgloveMsgsCubePrimitiveMapper, // foxglove_msgs/msg/CubePrimitive
+    &foxglove_msgs::cylinder_primitive::FoxgloveMsgsCylinderPrimitiveMapper, // foxglove_msgs/msg/CylinderPrimitive
+    &foxglove_msgs::event::FoxgloveMsgsEventMapper, // foxglove_msgs/msg/Event
+    &foxglove_msgs::frame_transform::FoxgloveMsgsFrameTransformMapper, // foxglove_msgs/msg/FrameTransform
+    &foxglove_msgs::frame_transforms::FoxgloveMsgsFrameTransformsMapper, // foxglove_msgs/msg/FrameTransforms
+    &foxglove_msgs::geo_json::FoxgloveMsgsGeoJsonMapper, // foxglove_msgs/msg/GeoJSON
+    &foxglove_msgs::grid::FoxgloveMsgsGridMapper, // foxglove_msgs/msg/Grid
+    &foxglove_msgs::image_annotations::FoxgloveMsgsImageAnnotationsMapper, // foxglove_msgs/msg/ImageAnnotations
+    &foxglove_msgs::joint_state::FoxgloveMsgsJointStateMapper, // foxglove_msgs/msg/JointState
+    &foxglove_msgs::joint_states::FoxgloveMsgsJointStatesMapper, // foxglove_msgs/msg/JointStates
+    &foxglove_msgs::key_value_pair::FoxgloveMsgsKeyValuePairMapper, // foxglove_msgs/msg/KeyValuePair
+    &foxglove_msgs::laser_scan::FoxgloveMsgsLaserScanMapper, // foxglove_msgs/msg/LaserScan
+    &foxglove_msgs::line_primitive::FoxgloveMsgsLinePrimitiveMapper, // foxglove_msgs/msg/LinePrimitive
+    &foxglove_msgs::location_fix::FoxgloveMsgsLocationFixMapper, // foxglove_msgs/msg/LocationFix
+    &foxglove_msgs::location_fixes::FoxgloveMsgsLocationFixesMapper, // foxglove_msgs/msg/LocationFixes
+    &foxglove_msgs::log::FoxgloveMsgsLogMapper, // foxglove_msgs/msg/Log
+    &foxglove_msgs::model_primitive::FoxgloveMsgsModelPrimitiveMapper, // foxglove_msgs/msg/ModelPrimitive
+    &foxglove_msgs::odometry::FoxgloveMsgsOdometryMapper, // foxglove_msgs/msg/Odometry
+    &foxglove_msgs::packed_element_field::FoxgloveMsgsPackedElementFieldMapper, // foxglove_msgs/msg/PackedElementField
+    &foxglove_msgs::point2::FoxgloveMsgsPoint2Mapper, // foxglove_msgs/msg/Point2
+    &foxglove_msgs::point3::FoxgloveMsgsPoint3Mapper, // foxglove_msgs/msg/Point3
+    &foxglove_msgs::point3_in_frame::FoxgloveMsgsPoint3InFrameMapper, // foxglove_msgs/msg/Point3InFrame
+    &foxglove_msgs::point_cloud::FoxgloveMsgsPointCloudMapper, // foxglove_msgs/msg/PointCloud
+    &foxglove_msgs::points_annotation::FoxgloveMsgsPointsAnnotationMapper, // foxglove_msgs/msg/PointsAnnotation
+    &foxglove_msgs::pose::FoxgloveMsgsPoseMapper, // foxglove_msgs/msg/Pose
+    &foxglove_msgs::pose_in_frame::FoxgloveMsgsPoseInFrameMapper, // foxglove_msgs/msg/PoseInFrame
+    &foxglove_msgs::poses_in_frame::FoxgloveMsgsPosesInFrameMapper, // foxglove_msgs/msg/PosesInFrame
+    &foxglove_msgs::quaternion::FoxgloveMsgsQuaternionMapper, // foxglove_msgs/msg/Quaternion
+    &foxglove_msgs::raw_audio::FoxgloveMsgsRawAudioMapper, // foxglove_msgs/msg/RawAudio
+    &foxglove_msgs::raw_image::FoxgloveMsgsRawImageMapper, // foxglove_msgs/msg/RawImage
+    &foxglove_msgs::scene_entity::FoxgloveMsgsSceneEntityMapper, // foxglove_msgs/msg/SceneEntity
+    &foxglove_msgs::scene_entity_deletion::FoxgloveMsgsSceneEntityDeletionMapper, // foxglove_msgs/msg/SceneEntityDeletion
+    &foxglove_msgs::scene_update::FoxgloveMsgsSceneUpdateMapper, // foxglove_msgs/msg/SceneUpdate
+    &foxglove_msgs::sphere_primitive::FoxgloveMsgsSpherePrimitiveMapper, // foxglove_msgs/msg/SpherePrimitive
+    &foxglove_msgs::text_annotation::FoxgloveMsgsTextAnnotationMapper, // foxglove_msgs/msg/TextAnnotation
+    &foxglove_msgs::text_primitive::FoxgloveMsgsTextPrimitiveMapper, // foxglove_msgs/msg/TextPrimitive
+    &foxglove_msgs::triangle_list_primitive::FoxgloveMsgsTriangleListPrimitiveMapper, // foxglove_msgs/msg/TriangleListPrimitive
+    &foxglove_msgs::vector2::FoxgloveMsgsVector2Mapper, // foxglove_msgs/msg/Vector2
+    &foxglove_msgs::vector3::FoxgloveMsgsVector3Mapper, // foxglove_msgs/msg/Vector3
+    &foxglove_msgs::voxel_grid::FoxgloveMsgsVoxelGridMapper, // foxglove_msgs/msg/VoxelGrid
+    &geometry_msgs::accel::GeometryMsgsAccelMapper, // geometry_msgs/msg/Accel
+    &geometry_msgs::accel_stamped::GeometryMsgsAccelStampedMapper, // geometry_msgs/msg/AccelStamped
+    &geometry_msgs::accel_with_covariance::GeometryMsgsAccelWithCovarianceMapper, // geometry_msgs/msg/AccelWithCovariance
+    &geometry_msgs::accel_with_covariance_stamped::GeometryMsgsAccelWithCovarianceStampedMapper, // geometry_msgs/msg/AccelWithCovarianceStamped
+    &geometry_msgs::inertia::GeometryMsgsInertiaMapper, // geometry_msgs/msg/Inertia
+    &geometry_msgs::inertia_stamped::GeometryMsgsInertiaStampedMapper, // geometry_msgs/msg/InertiaStamped
+    &geometry_msgs::point::GeometryMsgsPointMapper, // geometry_msgs/msg/Point
+    &geometry_msgs::point32::GeometryMsgsPoint32Mapper, // geometry_msgs/msg/Point32
+    &geometry_msgs::point_stamped::GeometryMsgsPointStampedMapper, // geometry_msgs/msg/PointStamped
+    &geometry_msgs::polygon::GeometryMsgsPolygonMapper, // geometry_msgs/msg/Polygon
+    &geometry_msgs::polygon_instance::GeometryMsgsPolygonInstanceMapper, // geometry_msgs/msg/PolygonInstance
+    &geometry_msgs::polygon_instance_stamped::GeometryMsgsPolygonInstanceStampedMapper, // geometry_msgs/msg/PolygonInstanceStamped
+    &geometry_msgs::polygon_stamped::GeometryMsgsPolygonStampedMapper, // geometry_msgs/msg/PolygonStamped
+    &geometry_msgs::pose::GeometryMsgsPoseMapper, // geometry_msgs/msg/Pose
+    &geometry_msgs::pose2_d::GeometryMsgsPose2DMapper, // geometry_msgs/msg/Pose2D
+    &geometry_msgs::pose_array::GeometryMsgsPoseArrayMapper, // geometry_msgs/msg/PoseArray
+    &geometry_msgs::pose_stamped::GeometryMsgsPoseStampedMapper, // geometry_msgs/msg/PoseStamped
+    &geometry_msgs::pose_with_covariance::GeometryMsgsPoseWithCovarianceMapper, // geometry_msgs/msg/PoseWithCovariance
+    &geometry_msgs::pose_with_covariance_stamped::GeometryMsgsPoseWithCovarianceStampedMapper, // geometry_msgs/msg/PoseWithCovarianceStamped
+    &geometry_msgs::quaternion::GeometryMsgsQuaternionMapper, // geometry_msgs/msg/Quaternion
+    &geometry_msgs::quaternion_stamped::GeometryMsgsQuaternionStampedMapper, // geometry_msgs/msg/QuaternionStamped
+    &geometry_msgs::transform::GeometryMsgsTransformMapper, // geometry_msgs/msg/Transform
+    &geometry_msgs::transform_stamped::GeometryMsgsTransformStampedMapper, // geometry_msgs/msg/TransformStamped
+    &geometry_msgs::twist::GeometryMsgsTwistMapper, // geometry_msgs/msg/Twist
+    &geometry_msgs::twist_stamped::GeometryMsgsTwistStampedMapper, // geometry_msgs/msg/TwistStamped
+    &geometry_msgs::twist_with_covariance::GeometryMsgsTwistWithCovarianceMapper, // geometry_msgs/msg/TwistWithCovariance
+    &geometry_msgs::twist_with_covariance_stamped::GeometryMsgsTwistWithCovarianceStampedMapper, // geometry_msgs/msg/TwistWithCovarianceStamped
+    &geometry_msgs::vector3::GeometryMsgsVector3Mapper, // geometry_msgs/msg/Vector3
+    &geometry_msgs::vector3_stamped::GeometryMsgsVector3StampedMapper, // geometry_msgs/msg/Vector3Stamped
+    &geometry_msgs::velocity_stamped::GeometryMsgsVelocityStampedMapper, // geometry_msgs/msg/VelocityStamped
+    &geometry_msgs::velocity_with_covariance_stamped::GeometryMsgsVelocityWithCovarianceStampedMapper, // geometry_msgs/msg/VelocityWithCovarianceStamped
+    &geometry_msgs::wrench::GeometryMsgsWrenchMapper, // geometry_msgs/msg/Wrench
+    &geometry_msgs::wrench_stamped::GeometryMsgsWrenchStampedMapper, // geometry_msgs/msg/WrenchStamped
+    &nav2_msgs::behavior_tree_log::Nav2MsgsBehaviorTreeLogMapper, // nav2_msgs/msg/BehaviorTreeLog
+    &nav2_msgs::behavior_tree_status_change::Nav2MsgsBehaviorTreeStatusChangeMapper, // nav2_msgs/msg/BehaviorTreeStatusChange
+    &nav2_msgs::collision_monitor_state::Nav2MsgsCollisionMonitorStateMapper, // nav2_msgs/msg/CollisionMonitorState
+    &nav2_msgs::costmap::Nav2MsgsCostmapMapper, // nav2_msgs/msg/Costmap
+    &nav2_msgs::costmap_filter_info::Nav2MsgsCostmapFilterInfoMapper, // nav2_msgs/msg/CostmapFilterInfo
+    &nav2_msgs::costmap_meta_data::Nav2MsgsCostmapMetaDataMapper, // nav2_msgs/msg/CostmapMetaData
+    &nav2_msgs::edge_cost::Nav2MsgsEdgeCostMapper, // nav2_msgs/msg/EdgeCost
+    &nav2_msgs::missed_waypoint::Nav2MsgsMissedWaypointMapper, // nav2_msgs/msg/MissedWaypoint
+    &nav2_msgs::particle::Nav2MsgsParticleMapper, // nav2_msgs/msg/Particle
+    &nav2_msgs::particle_cloud::Nav2MsgsParticleCloudMapper, // nav2_msgs/msg/ParticleCloud
+    &nav2_msgs::route::Nav2MsgsRouteMapper, // nav2_msgs/msg/Route
+    &nav2_msgs::route_edge::Nav2MsgsRouteEdgeMapper, // nav2_msgs/msg/RouteEdge
+    &nav2_msgs::route_node::Nav2MsgsRouteNodeMapper, // nav2_msgs/msg/RouteNode
+    &nav2_msgs::speed_limit::Nav2MsgsSpeedLimitMapper, // nav2_msgs/msg/SpeedLimit
+    &nav2_msgs::voxel_grid::Nav2MsgsVoxelGridMapper, // nav2_msgs/msg/VoxelGrid
+    &nav_msgs::goals::NavMsgsGoalsMapper, // nav_msgs/msg/Goals
+    &nav_msgs::grid_cells::NavMsgsGridCellsMapper, // nav_msgs/msg/GridCells
+    &nav_msgs::map_meta_data::NavMsgsMapMetaDataMapper, // nav_msgs/msg/MapMetaData
+    &nav_msgs::occupancy_grid::NavMsgsOccupancyGridMapper, // nav_msgs/msg/OccupancyGrid
+    &nav_msgs::odometry::NavMsgsOdometryMapper, // nav_msgs/msg/Odometry
+    &nav_msgs::path::NavMsgsPathMapper, // nav_msgs/msg/Path
+    &nav_msgs::trajectory::NavMsgsTrajectoryMapper, // nav_msgs/msg/Trajectory
+    &nav_msgs::trajectory_point::NavMsgsTrajectoryPointMapper, // nav_msgs/msg/TrajectoryPoint
+    &sensor_msgs::battery_state::SensorMsgsBatteryStateMapper, // sensor_msgs/msg/BatteryState
+    &sensor_msgs::camera_info::SensorMsgsCameraInfoMapper, // sensor_msgs/msg/CameraInfo
+    &sensor_msgs::channel_float32::SensorMsgsChannelFloat32Mapper, // sensor_msgs/msg/ChannelFloat32
+    &sensor_msgs::compressed_image::SensorMsgsCompressedImageMapper, // sensor_msgs/msg/CompressedImage
+    &sensor_msgs::fluid_pressure::SensorMsgsFluidPressureMapper, // sensor_msgs/msg/FluidPressure
+    &sensor_msgs::illuminance::SensorMsgsIlluminanceMapper, // sensor_msgs/msg/Illuminance
+    &sensor_msgs::image::SensorMsgsImageMapper, // sensor_msgs/msg/Image
+    &sensor_msgs::imu::SensorMsgsImuMapper, // sensor_msgs/msg/Imu
+    &sensor_msgs::joint_state::SensorMsgsJointStateMapper, // sensor_msgs/msg/JointState
+    &sensor_msgs::joy::SensorMsgsJoyMapper, // sensor_msgs/msg/Joy
+    &sensor_msgs::joy_feedback::SensorMsgsJoyFeedbackMapper, // sensor_msgs/msg/JoyFeedback
+    &sensor_msgs::joy_feedback_array::SensorMsgsJoyFeedbackArrayMapper, // sensor_msgs/msg/JoyFeedbackArray
+    &sensor_msgs::laser_echo::SensorMsgsLaserEchoMapper, // sensor_msgs/msg/LaserEcho
+    &sensor_msgs::laser_scan::SensorMsgsLaserScanMapper, // sensor_msgs/msg/LaserScan
+    &sensor_msgs::magnetic_field::SensorMsgsMagneticFieldMapper, // sensor_msgs/msg/MagneticField
+    &sensor_msgs::multi_dof_joint_state::SensorMsgsMultiDofJointStateMapper, // sensor_msgs/msg/MultiDOFJointState
+    &sensor_msgs::multi_echo_laser_scan::SensorMsgsMultiEchoLaserScanMapper, // sensor_msgs/msg/MultiEchoLaserScan
+    &sensor_msgs::nav_sat_fix::SensorMsgsNavSatFixMapper, // sensor_msgs/msg/NavSatFix
+    &sensor_msgs::nav_sat_status::SensorMsgsNavSatStatusMapper, // sensor_msgs/msg/NavSatStatus
+    &sensor_msgs::point_cloud::SensorMsgsPointCloudMapper, // sensor_msgs/msg/PointCloud
+    &sensor_msgs::point_cloud2::SensorMsgsPointCloud2Mapper, // sensor_msgs/msg/PointCloud2
+    &sensor_msgs::point_field::SensorMsgsPointFieldMapper, // sensor_msgs/msg/PointField
+    &sensor_msgs::range::SensorMsgsRangeMapper, // sensor_msgs/msg/Range
+    &sensor_msgs::region_of_interest::SensorMsgsRegionOfInterestMapper, // sensor_msgs/msg/RegionOfInterest
+    &sensor_msgs::relative_humidity::SensorMsgsRelativeHumidityMapper, // sensor_msgs/msg/RelativeHumidity
+    &sensor_msgs::temperature::SensorMsgsTemperatureMapper, // sensor_msgs/msg/Temperature
+    &sensor_msgs::time_reference::SensorMsgsTimeReferenceMapper, // sensor_msgs/msg/TimeReference
+    &shape_msgs::mesh::ShapeMsgsMeshMapper, // shape_msgs/msg/Mesh
+    &shape_msgs::mesh_triangle::ShapeMsgsMeshTriangleMapper, // shape_msgs/msg/MeshTriangle
+    &shape_msgs::plane::ShapeMsgsPlaneMapper, // shape_msgs/msg/Plane
+    &shape_msgs::solid_primitive::ShapeMsgsSolidPrimitiveMapper, // shape_msgs/msg/SolidPrimitive
+    &std_msgs::bool::StdMsgsBoolMapper, // std_msgs/msg/Bool
+    &std_msgs::byte::StdMsgsByteMapper, // std_msgs/msg/Byte
+    &std_msgs::byte_multi_array::StdMsgsByteMultiArrayMapper, // std_msgs/msg/ByteMultiArray
+    &std_msgs::color_rgba::StdMsgsColorRgbaMapper, // std_msgs/msg/ColorRGBA
+    &std_msgs::empty::StdMsgsEmptyMapper, // std_msgs/msg/Empty
+    &std_msgs::float32::StdMsgsFloat32Mapper, // std_msgs/msg/Float32
+    &std_msgs::float32_multi_array::StdMsgsFloat32MultiArrayMapper, // std_msgs/msg/Float32MultiArray
+    &std_msgs::float64::StdMsgsFloat64Mapper, // std_msgs/msg/Float64
+    &std_msgs::float64_multi_array::StdMsgsFloat64MultiArrayMapper, // std_msgs/msg/Float64MultiArray
+    &std_msgs::header::StdMsgsHeaderMapper, // std_msgs/msg/Header
+    &std_msgs::int16::StdMsgsInt16Mapper, // std_msgs/msg/Int16
+    &std_msgs::int16_multi_array::StdMsgsInt16MultiArrayMapper, // std_msgs/msg/Int16MultiArray
+    &std_msgs::int32::StdMsgsInt32Mapper, // std_msgs/msg/Int32
+    &std_msgs::int32_multi_array::StdMsgsInt32MultiArrayMapper, // std_msgs/msg/Int32MultiArray
+    &std_msgs::int64::StdMsgsInt64Mapper, // std_msgs/msg/Int64
+    &std_msgs::int64_multi_array::StdMsgsInt64MultiArrayMapper, // std_msgs/msg/Int64MultiArray
+    &std_msgs::int8::StdMsgsInt8Mapper, // std_msgs/msg/Int8
+    &std_msgs::int8_multi_array::StdMsgsInt8MultiArrayMapper, // std_msgs/msg/Int8MultiArray
+    &std_msgs::multi_array_dimension::StdMsgsMultiArrayDimensionMapper, // std_msgs/msg/MultiArrayDimension
+    &std_msgs::multi_array_layout::StdMsgsMultiArrayLayoutMapper, // std_msgs/msg/MultiArrayLayout
+    &std_msgs::string::StdMsgsStringMapper, // std_msgs/msg/String
+    &std_msgs::uint16::StdMsgsUInt16Mapper, // std_msgs/msg/UInt16
+    &std_msgs::uint16_multi_array::StdMsgsUInt16MultiArrayMapper, // std_msgs/msg/UInt16MultiArray
+    &std_msgs::uint32::StdMsgsUInt32Mapper, // std_msgs/msg/UInt32
+    &std_msgs::uint32_multi_array::StdMsgsUInt32MultiArrayMapper, // std_msgs/msg/UInt32MultiArray
+    &std_msgs::uint64::StdMsgsUInt64Mapper, // std_msgs/msg/UInt64
+    &std_msgs::uint64_multi_array::StdMsgsUInt64MultiArrayMapper, // std_msgs/msg/UInt64MultiArray
+    &std_msgs::uint8::StdMsgsUInt8Mapper, // std_msgs/msg/UInt8
+    &std_msgs::uint8_multi_array::StdMsgsUInt8MultiArrayMapper, // std_msgs/msg/UInt8MultiArray
+    &stereo_msgs::disparity_image::StereoMsgsDisparityImageMapper, // stereo_msgs/msg/DisparityImage
+    &tf2_msgs::tf_message::Tf2MsgsTfMessageMapper, // tf2_msgs/msg/TFMessage
+    &trajectory_msgs::joint_trajectory::TrajectoryMsgsJointTrajectoryMapper, // trajectory_msgs/msg/JointTrajectory
+    &trajectory_msgs::joint_trajectory_point::TrajectoryMsgsJointTrajectoryPointMapper, // trajectory_msgs/msg/JointTrajectoryPoint
+    &trajectory_msgs::multi_dof_joint_trajectory::TrajectoryMsgsMultiDofJointTrajectoryMapper, // trajectory_msgs/msg/MultiDOFJointTrajectory
+    &trajectory_msgs::multi_dof_joint_trajectory_point::TrajectoryMsgsMultiDofJointTrajectoryPointMapper, // trajectory_msgs/msg/MultiDOFJointTrajectoryPoint
+    &unique_identifier_msgs::uuid::UniqueIdentifierMsgsUuidMapper, // unique_identifier_msgs/msg/UUID
+    &visualization_msgs::image_marker::VisualizationMsgsImageMarkerMapper, // visualization_msgs/msg/ImageMarker
+    &visualization_msgs::interactive_marker::VisualizationMsgsInteractiveMarkerMapper, // visualization_msgs/msg/InteractiveMarker
+    &visualization_msgs::interactive_marker_control::VisualizationMsgsInteractiveMarkerControlMapper, // visualization_msgs/msg/InteractiveMarkerControl
+    &visualization_msgs::interactive_marker_feedback::VisualizationMsgsInteractiveMarkerFeedbackMapper, // visualization_msgs/msg/InteractiveMarkerFeedback
+    &visualization_msgs::interactive_marker_init::VisualizationMsgsInteractiveMarkerInitMapper, // visualization_msgs/msg/InteractiveMarkerInit
+    &visualization_msgs::interactive_marker_pose::VisualizationMsgsInteractiveMarkerPoseMapper, // visualization_msgs/msg/InteractiveMarkerPose
+    &visualization_msgs::interactive_marker_update::VisualizationMsgsInteractiveMarkerUpdateMapper, // visualization_msgs/msg/InteractiveMarkerUpdate
+    &visualization_msgs::marker::VisualizationMsgsMarkerMapper, // visualization_msgs/msg/Marker
+    &visualization_msgs::marker_array::VisualizationMsgsMarkerArrayMapper, // visualization_msgs/msg/MarkerArray
+    &visualization_msgs::menu_entry::VisualizationMsgsMenuEntryMapper, // visualization_msgs/msg/MenuEntry
+    &visualization_msgs::mesh_file::VisualizationMsgsMeshFileMapper, // visualization_msgs/msg/MeshFile
+    &visualization_msgs::uv_coordinate::VisualizationMsgsUvCoordinateMapper, // visualization_msgs/msg/UVCoordinate
+];

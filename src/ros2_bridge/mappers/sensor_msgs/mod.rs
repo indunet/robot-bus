@@ -1,0 +1,29 @@
+//! Topic mappers for `sensor_msgs/msg/*`.
+
+pub mod battery_state;
+pub mod camera_info;
+pub mod channel_float32;
+pub mod compressed_image;
+pub mod fluid_pressure;
+pub mod illuminance;
+pub mod image;
+pub mod imu;
+pub mod joint_state;
+pub mod joy;
+pub mod joy_feedback;
+pub mod joy_feedback_array;
+pub mod laser_echo;
+pub mod laser_scan;
+pub mod magnetic_field;
+pub mod multi_dof_joint_state;
+pub mod multi_echo_laser_scan;
+pub mod nav_sat_fix;
+pub mod nav_sat_status;
+pub mod point_cloud;
+pub mod point_cloud2;
+pub mod point_field;
+pub mod range;
+pub mod region_of_interest;
+pub mod relative_humidity;
+pub mod temperature;
+pub mod time_reference;

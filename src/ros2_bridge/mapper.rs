@@ -1,257 +1,191 @@
-//! Topic type registry: map ROS type strings → [`TopicCodec`] converters.
+//! Topic / service / action mapper traits and topic builtin registry.
 //!
-//! Add a new bridged topic type by implementing [`TopicCodec`] and registering it in
-//! [`BUILTIN_CODECS`]. Builder / YAML / wire paths do not need per-type match arms.
+//! Topics use [`TopicMapper`] (DynamicMessage ↔ protobuf). Services / actions use
+//! [`ServiceMapper`] / [`ActionMapper`] (`wire` creates typed ROS entities) because
+//! rclrs has no dynamic service/action API. Builtin service/action tables live in
+//! [`super::mappers::service_bridges`] / [`super::mappers::action_bridges`].
 
+use std::any::Any;
 use std::collections::HashMap;
-use std::sync::LazyLock;
+use std::sync::{Arc, LazyLock};
+use std::time::Duration;
 
-use prost::Message as ProstMessage;
-use rclrs::{
-    DynamicMessage, MessageTypeName, SequenceValue, SequenceValueMut, SimpleValue, SimpleValueMut,
-    Value, ValueMut,
-};
-use rosidl_runtime_rs::Sequence;
+use rclrs::{DynamicMessage, MessageTypeName};
 
-use crate::BusError;
-use crate::foxglove_msgs::msg::v1::CompressedVideo as BusCompressedVideo;
-use crate::sensor_msgs::msg::v1::{Image as BusImage, Imu as BusImu};
-use crate::std_msgs::msg::v1::String as BusString;
+use crate::errors::{BusError, Result as BusResult};
+use crate::runtime::Node;
 
-use super::convert;
+use super::mappers::BUILTIN_MAPPER_LIST;
 
 type Result<T> = std::result::Result<T, BusError>;
 
-fn err(msg: impl Into<String>) -> BusError {
-    BusError::Protocol(msg.into())
+/// Topic / service / action bridge direction.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Direction {
+    Ros2ToBus,
+    BusToRos2,
 }
 
-/// Bidirectional converter between ROS [`DynamicMessage`] and bus protobuf bytes.
-pub trait TopicCodec: Send + Sync {
+/// Bidirectional mapper between ROS [`DynamicMessage`] and bus protobuf bytes.
+pub trait TopicMapper: Send + Sync {
     /// Full ROS type name, e.g. `sensor_msgs/msg/Image`.
-    fn type_name(&self) -> &'static str;
+    ///
+    /// Builtin mappers return a `'static` string; FFI / owned wrappers may return
+    /// a borrow of an owned `String`.
+    fn type_name(&self) -> &str;
 
     fn ros_type(&self) -> MessageTypeName {
         MessageTypeName::try_from(self.type_name())
-            .expect("TopicCodec::type_name must be package/msg/Type")
+            .expect("TopicMapper::type_name must be package/msg/Type")
     }
 
     fn ros_to_bus(&self, msg: &DynamicMessage) -> Result<Vec<u8>>;
     fn bus_to_ros(&self, payload: &[u8]) -> Result<DynamicMessage>;
 }
 
-static BUILTIN_CODECS: LazyLock<HashMap<&'static str, &'static dyn TopicCodec>> =
+/// Context passed to [`ServiceMapper::wire`].
+pub struct ServiceWireContext<'a> {
+    pub ros_node: &'a rclrs::Node,
+    pub bus_node: &'a mut Node,
+    pub ros_service: &'a str,
+    pub bus_service: &'a str,
+    pub direction: Direction,
+    pub timeout: Duration,
+    pub ros_entities: &'a mut Vec<Box<dyn Any + Send + Sync>>,
+}
+
+/// Per-service bridge: user (or builtin) creates typed ROS srv entities and forwards to bus.
+pub trait ServiceMapper: Send + Sync {
+    fn type_name(&self) -> &str;
+    fn wire(&self, ctx: ServiceWireContext<'_>) -> BusResult<()>;
+}
+
+/// Context passed to [`ActionMapper::wire`].
+pub struct ActionWireContext<'a> {
+    pub ros_node: &'a rclrs::Node,
+    pub bus_node: &'a mut Node,
+    pub ros_action: &'a str,
+    pub bus_action: &'a str,
+    pub direction: Direction,
+    pub timeout: Duration,
+    pub ros_entities: &'a mut Vec<Box<dyn Any + Send + Sync>>,
+}
+
+/// Per-action bridge: user (or builtin) creates typed ROS action entities and forwards to bus.
+pub trait ActionMapper: Send + Sync {
+    fn type_name(&self) -> &str;
+    fn wire(&self, ctx: ActionWireContext<'_>) -> BusResult<()>;
+}
+
+struct RefTopicMapper(&'static dyn TopicMapper);
+
+impl TopicMapper for RefTopicMapper {
+    fn type_name(&self) -> &'static str {
+        self.0.type_name()
+    }
+    fn ros_to_bus(&self, msg: &DynamicMessage) -> Result<Vec<u8>> {
+        self.0.ros_to_bus(msg)
+    }
+    fn bus_to_ros(&self, payload: &[u8]) -> Result<DynamicMessage> {
+        self.0.bus_to_ros(payload)
+    }
+}
+
+static BUILTIN_MAPPERS: LazyLock<HashMap<&'static str, &'static dyn TopicMapper>> =
     LazyLock::new(|| {
-        let codecs: &[&'static dyn TopicCodec] =
-            &[&StringCodec, &ImuCodec, &ImageCodec, &CompressedVideoCodec];
-        let mut map = HashMap::with_capacity(codecs.len());
-        for c in codecs {
-            map.insert(c.type_name(), *c);
+        let mut map = HashMap::with_capacity(BUILTIN_MAPPER_LIST.len());
+        for m in BUILTIN_MAPPER_LIST {
+            map.insert(m.type_name(), *m);
         }
         map
     });
 
-/// Look up a registered topic codec by ROS type string.
-pub fn lookup_topic_codec(type_name: &str) -> Result<&'static dyn TopicCodec> {
-    BUILTIN_CODECS.get(type_name).copied().ok_or_else(|| {
-        let mut supported: Vec<&'static str> = BUILTIN_CODECS.keys().copied().collect();
-        supported.sort_unstable();
+/// Look up a registered topic mapper by ROS type string.
+pub fn lookup_topic_mapper(type_name: &str) -> Result<&'static dyn TopicMapper> {
+    BUILTIN_MAPPERS.get(type_name).copied().ok_or_else(|| {
         BusError::Protocol(format!(
-            "unsupported ros2 bridge topic type {type_name:?}; registered: {}",
-            supported.join(", ")
+            "unsupported ros2 bridge topic type {type_name:?}; \
+             registered types mirror proto/*/msg/v1 ({} total), see registered_topic_types(); \
+             for custom types use .mapper(...) on the route",
+            BUILTIN_MAPPERS.len()
         ))
     })
 }
 
+/// Builtin topic mapper as [`Arc`] (for per-route storage alongside custom mappers).
+pub fn lookup_topic_mapper_arc(type_name: &str) -> Result<Arc<dyn TopicMapper>> {
+    Ok(Arc::new(RefTopicMapper(lookup_topic_mapper(type_name)?)))
+}
+
 /// Sorted list of registered topic type names (for docs / errors).
 pub fn registered_topic_types() -> Vec<&'static str> {
-    let mut v: Vec<&'static str> = BUILTIN_CODECS.keys().copied().collect();
+    let mut v: Vec<&'static str> = BUILTIN_MAPPERS.keys().copied().collect();
     v.sort_unstable();
     v
-}
-
-// --- String ---
-
-struct StringCodec;
-
-impl TopicCodec for StringCodec {
-    fn type_name(&self) -> &'static str {
-        "std_msgs/msg/String"
-    }
-
-    fn ros_to_bus(&self, msg: &DynamicMessage) -> Result<Vec<u8>> {
-        Ok(convert::string_dyn_to_bus(msg)?.encode_to_vec())
-    }
-
-    fn bus_to_ros(&self, payload: &[u8]) -> Result<DynamicMessage> {
-        let bus = BusString::decode(payload).map_err(|e| err(format!("decode String: {e}")))?;
-        convert::string_bus_to_dyn(&bus)
-    }
-}
-
-// --- Imu ---
-
-struct ImuCodec;
-
-impl TopicCodec for ImuCodec {
-    fn type_name(&self) -> &'static str {
-        "sensor_msgs/msg/Imu"
-    }
-
-    fn ros_to_bus(&self, msg: &DynamicMessage) -> Result<Vec<u8>> {
-        Ok(convert::imu_dyn_to_bus(msg)?.encode_to_vec())
-    }
-
-    fn bus_to_ros(&self, payload: &[u8]) -> Result<DynamicMessage> {
-        let bus = BusImu::decode(payload).map_err(|e| err(format!("decode Imu: {e}")))?;
-        convert::imu_bus_to_dyn(&bus)
-    }
-}
-
-// --- Image ---
-
-struct ImageCodec;
-
-impl TopicCodec for ImageCodec {
-    fn type_name(&self) -> &'static str {
-        "sensor_msgs/msg/Image"
-    }
-
-    fn ros_to_bus(&self, msg: &DynamicMessage) -> Result<Vec<u8>> {
-        Ok(convert::image_dyn_to_bus(msg)?.encode_to_vec())
-    }
-
-    fn bus_to_ros(&self, payload: &[u8]) -> Result<DynamicMessage> {
-        let bus = BusImage::decode(payload).map_err(|e| err(format!("decode Image: {e}")))?;
-        convert::image_bus_to_dyn(&bus)
-    }
-}
-
-// --- CompressedVideo ---
-
-struct CompressedVideoCodec;
-
-impl TopicCodec for CompressedVideoCodec {
-    fn type_name(&self) -> &'static str {
-        "foxglove_msgs/msg/CompressedVideo"
-    }
-
-    fn ros_to_bus(&self, msg: &DynamicMessage) -> Result<Vec<u8>> {
-        Ok(convert::compressed_video_dyn_to_bus(msg)?.encode_to_vec())
-    }
-
-    fn bus_to_ros(&self, payload: &[u8]) -> Result<DynamicMessage> {
-        let bus = BusCompressedVideo::decode(payload)
-            .map_err(|e| err(format!("decode CompressedVideo: {e}")))?;
-        convert::compressed_video_bus_to_dyn(&bus)
-    }
-}
-
-/// Helpers used by convert + tests for reading/writing `uint8[]` / `octet[]` fields.
-pub(crate) fn read_byte_sequence(msg: &DynamicMessage, field: &str) -> Result<Vec<u8>> {
-    match msg.get(field) {
-        Some(Value::Sequence(SequenceValue::Uint8Sequence(seq)))
-        | Some(Value::Sequence(SequenceValue::OctetSequence(seq)))
-        | Some(Value::Sequence(SequenceValue::CharSequence(seq))) => Ok(seq.as_slice().to_vec()),
-        other => Err(err(format!(
-            "expected uint8[] field `{field}`, got {other:?}"
-        ))),
-    }
-}
-
-pub(crate) fn write_byte_sequence(
-    msg: &mut DynamicMessage,
-    field: &str,
-    data: &[u8],
-) -> Result<()> {
-    match msg.get_mut(field) {
-        Some(ValueMut::Sequence(SequenceValueMut::Uint8Sequence(seq)))
-        | Some(ValueMut::Sequence(SequenceValueMut::OctetSequence(seq)))
-        | Some(ValueMut::Sequence(SequenceValueMut::CharSequence(seq))) => {
-            *seq = Sequence::from(data);
-            Ok(())
-        }
-        other => Err(err(format!(
-            "expected mut uint8[] field `{field}`, got {other:?}"
-        ))),
-    }
-}
-
-pub(crate) fn read_bool_or_u8(msg: &DynamicMessage, field: &str) -> Result<bool> {
-    match msg.get(field) {
-        Some(Value::Simple(SimpleValue::Boolean(v))) => Ok(*v),
-        Some(Value::Simple(SimpleValue::Uint8(v))) | Some(Value::Simple(SimpleValue::Octet(v))) => {
-            Ok(*v != 0)
-        }
-        other => Err(err(format!(
-            "expected bool/uint8 field `{field}`, got {other:?}"
-        ))),
-    }
-}
-
-pub(crate) fn write_bool_as_u8(msg: &mut DynamicMessage, field: &str, value: bool) -> Result<()> {
-    let byte = u8::from(value);
-    match msg.get_mut(field) {
-        Some(ValueMut::Simple(SimpleValueMut::Boolean(v))) => {
-            *v = value;
-            Ok(())
-        }
-        Some(ValueMut::Simple(SimpleValueMut::Uint8(v)))
-        | Some(ValueMut::Simple(SimpleValueMut::Octet(v))) => {
-            *v = byte;
-            Ok(())
-        }
-        other => Err(err(format!(
-            "expected mut bool/uint8 field `{field}`, got {other:?}"
-        ))),
-    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::foxglove_msgs::msg::v1::CompressedVideo as BusCompressedVideo;
+    use crate::sensor_msgs::msg::v1::Image as BusImage;
+    use prost::Message as ProstMessage;
     use prost_types::Timestamp;
 
     #[test]
-    fn registry_lists_four_builtins() {
+    fn registry_covers_proto_message_types() {
         let types = registered_topic_types();
-        assert_eq!(
-            types,
-            vec![
-                "foxglove_msgs/msg/CompressedVideo",
-                "sensor_msgs/msg/Image",
-                "sensor_msgs/msg/Imu",
-                "std_msgs/msg/String",
-            ]
+        assert!(
+            types.len() >= 150,
+            "expected the registry to mirror proto/*/msg/v1, got {}",
+            types.len()
+        );
+        for expected in [
+            "builtin_interfaces/msg/Time",
+            "foxglove_msgs/msg/CompressedVideo",
+            "geometry_msgs/msg/PoseStamped",
+            "geometry_msgs/msg/Twist",
+            "nav_msgs/msg/OccupancyGrid",
+            "nav_msgs/msg/Odometry",
+            "nav_msgs/msg/Path",
+            "sensor_msgs/msg/CompressedImage",
+            "sensor_msgs/msg/Image",
+            "sensor_msgs/msg/Imu",
+            "sensor_msgs/msg/JointState",
+            "sensor_msgs/msg/LaserScan",
+            "sensor_msgs/msg/PointCloud2",
+            "std_msgs/msg/String",
+            "tf2_msgs/msg/TFMessage",
+            "visualization_msgs/msg/MarkerArray",
+        ] {
+            assert!(types.contains(&expected), "{expected} not registered");
+        }
+        assert!(
+            !types.iter().any(|t| t.starts_with("robot_bus_interface/")),
+            "bus-internal types must stay out of the ROS registry"
         );
     }
 
     #[test]
-    fn lookup_unknown_lists_supported() {
-        let Err(e) = lookup_topic_codec("std_msgs/msg/Empty") else {
-            panic!("expected lookup failure");
-        };
-        let err = e.to_string();
-        assert!(err.contains("unsupported"));
-        assert!(err.contains("sensor_msgs/msg/Image"));
-        assert!(err.contains("foxglove_msgs/msg/CompressedVideo"));
-    }
-
-    #[test]
-    fn lookup_known_types() {
-        for t in [
-            "std_msgs/msg/String",
-            "sensor_msgs/msg/Imu",
-            "sensor_msgs/msg/Image",
-            "foxglove_msgs/msg/CompressedVideo",
-        ] {
-            assert_eq!(lookup_topic_codec(t).unwrap().type_name(), t);
+    fn registry_keys_match_mapper_type_names() {
+        for t in registered_topic_types() {
+            assert_eq!(lookup_topic_mapper(t).unwrap().type_name(), t);
         }
     }
 
     #[test]
+    fn lookup_unknown_reports_unsupported() {
+        let Err(e) = lookup_topic_mapper("my_pkg/msg/Foo") else {
+            panic!("expected lookup failure");
+        };
+        let err = e.to_string();
+        assert!(err.contains("unsupported"));
+        assert!(err.contains("my_pkg/msg/Foo"));
+    }
+
+    #[test]
     fn image_roundtrip_when_typesupport_available() {
-        let codec = lookup_topic_codec("sensor_msgs/msg/Image").unwrap();
+        let mapper = lookup_topic_mapper("sensor_msgs/msg/Image").unwrap();
         let bus = BusImage {
             header: Some(crate::std_msgs::msg::v1::Header {
                 frame_id: "cam".into(),
@@ -264,11 +198,11 @@ mod tests {
             step: 6,
             data: vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12],
         };
-        let Ok(dyn_msg) = codec.bus_to_ros(&bus.encode_to_vec()) else {
+        let Ok(dyn_msg) = mapper.bus_to_ros(&bus.encode_to_vec()) else {
             // No ROS type support in this environment (e.g. ros2-shim).
             return;
         };
-        let back = BusImage::decode(codec.ros_to_bus(&dyn_msg).unwrap().as_slice()).unwrap();
+        let back = BusImage::decode(mapper.ros_to_bus(&dyn_msg).unwrap().as_slice()).unwrap();
         assert_eq!(back.height, 2);
         assert_eq!(back.width, 2);
         assert_eq!(back.encoding, "rgb8");
@@ -280,7 +214,7 @@ mod tests {
 
     #[test]
     fn compressed_video_roundtrip_when_typesupport_available() {
-        let codec = lookup_topic_codec("foxglove_msgs/msg/CompressedVideo").unwrap();
+        let mapper = lookup_topic_mapper("foxglove_msgs/msg/CompressedVideo").unwrap();
         let bus = BusCompressedVideo {
             timestamp: Some(Timestamp {
                 seconds: 10,
@@ -290,16 +224,122 @@ mod tests {
             data: vec![0x00, 0x00, 0x00, 0x01, 0x67],
             format: "h264".into(),
         };
-        let Ok(dyn_msg) = codec.bus_to_ros(&bus.encode_to_vec()) else {
+        let Ok(dyn_msg) = mapper.bus_to_ros(&bus.encode_to_vec()) else {
             return;
         };
         let back =
-            BusCompressedVideo::decode(codec.ros_to_bus(&dyn_msg).unwrap().as_slice()).unwrap();
+            BusCompressedVideo::decode(mapper.ros_to_bus(&dyn_msg).unwrap().as_slice()).unwrap();
         assert_eq!(back.frame_id, "cam");
         assert_eq!(back.format, "h264");
         assert_eq!(back.data, bus.data);
         let ts = back.timestamp.unwrap();
         assert_eq!(ts.seconds, 10);
         assert_eq!(ts.nanos, 20);
+    }
+
+    #[test]
+    fn point_cloud2_roundtrip_when_typesupport_available() {
+        let mapper = lookup_topic_mapper("sensor_msgs/msg/PointCloud2").unwrap();
+        let bus = crate::sensor_msgs::msg::v1::PointCloud2 {
+            header: Some(crate::std_msgs::msg::v1::Header {
+                frame_id: "lidar".into(),
+                stamp: None,
+            }),
+            height: 1,
+            width: 2,
+            fields: vec![crate::sensor_msgs::msg::v1::PointField {
+                name: "x".into(),
+                offset: 0,
+                datatype: 7,
+                count: 1,
+            }],
+            is_bigendian: false,
+            point_step: 4,
+            row_step: 8,
+            data: vec![1, 2, 3, 4, 5, 6, 7, 8],
+            is_dense: true,
+        };
+        let Ok(dyn_msg) = mapper.bus_to_ros(&bus.encode_to_vec()) else {
+            return;
+        };
+        let back = crate::sensor_msgs::msg::v1::PointCloud2::decode(
+            mapper.ros_to_bus(&dyn_msg).unwrap().as_slice(),
+        )
+        .unwrap();
+        assert_eq!(back.width, 2);
+        assert_eq!(back.data, bus.data);
+        assert_eq!(back.fields.len(), 1);
+        assert_eq!(back.fields[0].name, "x");
+        assert!(back.is_dense);
+    }
+
+    #[test]
+    fn occupancy_grid_roundtrip_when_typesupport_available() {
+        let mapper = lookup_topic_mapper("nav_msgs/msg/OccupancyGrid").unwrap();
+        let bus = crate::nav_msgs::msg::v1::OccupancyGrid {
+            header: None,
+            info: Some(crate::nav_msgs::msg::v1::MapMetaData {
+                map_load_time: None,
+                resolution: 0.05,
+                width: 2,
+                height: 2,
+                origin: None,
+            }),
+            // int8[] on the ROS side: negative "unknown" cells must survive widening.
+            data: vec![-1, 0, 50, 100],
+        };
+        let Ok(dyn_msg) = mapper.bus_to_ros(&bus.encode_to_vec()) else {
+            return;
+        };
+        let back = crate::nav_msgs::msg::v1::OccupancyGrid::decode(
+            mapper.ros_to_bus(&dyn_msg).unwrap().as_slice(),
+        )
+        .unwrap();
+        assert_eq!(back.data, vec![-1, 0, 50, 100]);
+        assert_eq!(back.info.unwrap().width, 2);
+    }
+
+    #[test]
+    fn path_roundtrip_when_typesupport_available() {
+        let mapper = lookup_topic_mapper("nav_msgs/msg/Path").unwrap();
+        let pose = crate::geometry_msgs::msg::v1::PoseStamped {
+            header: Some(crate::std_msgs::msg::v1::Header {
+                frame_id: "map".into(),
+                stamp: None,
+            }),
+            pose: Some(crate::geometry_msgs::msg::v1::Pose {
+                position: Some(crate::geometry_msgs::msg::v1::Point {
+                    x: 1.0,
+                    y: 2.0,
+                    z: 3.0,
+                }),
+                orientation: Some(crate::geometry_msgs::msg::v1::Quaternion {
+                    x: 0.0,
+                    y: 0.0,
+                    z: 0.0,
+                    w: 1.0,
+                }),
+            }),
+        };
+        let bus = crate::nav_msgs::msg::v1::Path {
+            header: None,
+            poses: vec![pose.clone(), pose],
+        };
+        let Ok(dyn_msg) = mapper.bus_to_ros(&bus.encode_to_vec()) else {
+            return;
+        };
+        let back =
+            crate::nav_msgs::msg::v1::Path::decode(mapper.ros_to_bus(&dyn_msg).unwrap().as_slice())
+                .unwrap();
+        assert_eq!(back.poses.len(), 2);
+        let position = back.poses[0]
+            .pose
+            .as_ref()
+            .unwrap()
+            .position
+            .as_ref()
+            .unwrap();
+        assert_eq!(position.x, 1.0);
+        assert_eq!(position.z, 3.0);
     }
 }

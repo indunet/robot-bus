@@ -3,21 +3,37 @@
 //! Requires a sourced ROS 2 distribution so `rclrs` can link against `rcl`.
 //! Everyday robot-bus builds leave this feature off.
 //!
-//! Topic routes are configured by ROS type string and resolved through the
-//! [`codec`] topic registry (not a hardcoded enum). Add a type by implementing
-//! [`TopicCodec`] and registering it in the builtin table.
+//! Attach a [`TopicMapper`] / [`ServiceMapper`] / [`ActionMapper`] on each route with
+//! `.mapper(...)`. Builtin mapper types live under [`mappers`] (e.g.
+//! [`mappers::std_msgs::string::StdMsgsStringMapper`]); YAML / C++ still resolve
+//! builtins by type-name string via `lookup_*`.
 
 mod builder;
-mod codec;
-mod convert;
-mod echo;
+mod mapper;
 mod spin;
 mod vendor;
 mod yaml;
 
+pub mod mappers;
+
+/// DynamicMessage field helpers for implementing custom [`TopicMapper`]s.
+pub mod mapper_support {
+    pub use super::mappers::common::*;
+}
+
 pub use builder::{
-    ACTION_CALL_TIMEOUT, ActKind, ActionRouteBuilder, Direction, Ros2Bridge, Ros2BridgeBuilder,
-    RouteBuilder, SERVICE_CALL_TIMEOUT, ServiceRouteBuilder, SrvKind,
+    ACTION_CALL_TIMEOUT, ActionRouteBuilder, IntoActionMapper, IntoServiceMapper, IntoTopicMapper,
+    Ros2Bridge, Ros2BridgeBuilder, RouteBuilder, SERVICE_CALL_TIMEOUT, ServiceRouteBuilder,
 };
-pub use codec::{TopicCodec, lookup_topic_codec, registered_topic_types};
-pub use echo::EchoFilter;
+pub use mapper::{
+    ActionMapper, ActionWireContext, Direction, ServiceMapper, ServiceWireContext, TopicMapper,
+    lookup_topic_mapper, lookup_topic_mapper_arc, registered_topic_types,
+};
+pub use mappers::action_bridges::{FibonacciActionMapper, lookup_action_mapper};
+pub use mappers::service_bridges::{
+    SetBoolServiceMapper, TriggerServiceMapper, lookup_service_mapper,
+};
+
+// Common builtins re-exported for short imports in examples.
+pub use mappers::sensor_msgs::image::SensorMsgsImageMapper;
+pub use mappers::std_msgs::string::StdMsgsStringMapper;

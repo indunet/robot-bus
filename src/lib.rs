@@ -34,10 +34,13 @@ pub mod grpc;
 pub mod console;
 
 #[cfg(feature = "ros2")]
-pub mod ros2;
+pub mod ros2_bridge;
 
 #[cfg(feature = "extension-module")]
 mod python_api;
+
+#[cfg(all(feature = "extension-module", feature = "ros2"))]
+mod python_ros2_bridge;
 
 pub use action_bus::{ActionClient, ActionKind, ActionMessage, ActionWorker};
 pub use bot_sim::{

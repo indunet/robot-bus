@@ -159,6 +159,8 @@ typedef int (*RobotBusActionHandler)(const uint8_t *data, size_t len,
 typedef void (*RobotBusActionFeedbackCallback)(const RobotBusActionMessage *message, void *user);
 
 ROBOT_BUS_API const char *robot_bus_last_error(void);
+/** Set thread-local last error (usable from C++ TopicMapper callbacks). */
+ROBOT_BUS_API void robot_bus_set_error(const char *msg);
 ROBOT_BUS_API void robot_bus_free_string(char *s);
 ROBOT_BUS_API void robot_bus_free_bytes(uint8_t *data, size_t len);
 ROBOT_BUS_API uint8_t *robot_bus_alloc_bytes(size_t len);
@@ -350,9 +352,9 @@ ROBOT_BUS_API int robot_bus_ros2_available(void);
 typedef struct RobotBusRos2BridgeBuilder RobotBusRos2BridgeBuilder;
 typedef struct RobotBusRos2Bridge RobotBusRos2Bridge;
 
-#define ROBOT_BUS_ROS2_DIR_ROS_TO_BUS 0
-#define ROBOT_BUS_ROS2_DIR_BUS_TO_ROS 1
-#define ROBOT_BUS_ROS2_DIR_BOTH 2
+#define ROBOT_BUS_ROUTE_DIR_ROS2_TO_BUS 0
+#define ROBOT_BUS_ROUTE_DIR_BUS_TO_ROS2 1
+/* ROBOT_BUS_ROUTE_DIR_BOTH removed: topic routes are one-way only (0 or 1). */
 
 /**
  * Load bridge from YAML (see docs). Returns NULL on error (`robot_bus_last_error`).
@@ -378,16 +380,76 @@ ROBOT_BUS_API int robot_bus_ros2_bridge_builder_bus_discover(RobotBusRos2BridgeB
                                                              const char *broker_id);
 /**
  * `type_name`: `std_msgs/msg/String` or `sensor_msgs/msg/Imu`.
- * `direction`: ROBOT_BUS_ROS2_DIR_*.
+ * `direction`: ROBOT_BUS_ROUTE_DIR_*.
  */
 ROBOT_BUS_API int robot_bus_ros2_bridge_builder_add_route(RobotBusRos2BridgeBuilder *b,
                                                           const char *ros_topic,
                                                           const char *bus_topic,
                                                           const char *type_name, int direction);
+
+/**
+ * Opaque DynamicMessage handle passed into C++ topic mapper callbacks.
+ * Valid only for the duration of the callback. Field paths may use dots for nesting
+ * (e.g. `header.frame_id`).
+ */
+typedef struct RobotBusRos2DynMsg RobotBusRos2DynMsg;
+
+/**
+ * ROS→bus: allocate `*out_bus` with `robot_bus_alloc_bytes`, set `*out_len`, return 0.
+ * On failure return non-zero (optionally `robot_bus_set_error` first).
+ */
+typedef int (*RobotBusRos2TopicRosToBusFn)(const RobotBusRos2DynMsg *ros_msg, uint8_t **out_bus,
+                                          size_t *out_len, void *user);
+/** Bus→ROS: fill `ros_msg` (already empty of `type_name`), return 0 on success. */
+typedef int (*RobotBusRos2TopicBusToRosFn)(const uint8_t *bus_payload, size_t bus_len,
+                                          RobotBusRos2DynMsg *ros_msg, void *user);
+typedef void (*RobotBusRos2TopicMapperDropFn)(void *user);
+
+typedef struct RobotBusRos2TopicMapperVtable {
+  const char *type_name;
+  RobotBusRos2TopicRosToBusFn ros_to_bus;
+  RobotBusRos2TopicBusToRosFn bus_to_ros;
+  RobotBusRos2TopicMapperDropFn drop_user; /* nullable */
+  void *user;
+} RobotBusRos2TopicMapperVtable;
+
+/**
+ * Add a topic route with a custom mapper vtable (C++ TopicMapper).
+ * The vtable is copied; `type_name` string is copied; `user`/`drop_user` live until the bridge
+ * (or builder) is destroyed.
+ */
+ROBOT_BUS_API int robot_bus_ros2_bridge_builder_add_route_mapper(
+    RobotBusRos2BridgeBuilder *b, const char *ros_topic, const char *bus_topic,
+    const RobotBusRos2TopicMapperVtable *mapper, int direction);
+
+ROBOT_BUS_API int robot_bus_ros2_dyn_msg_has_field(const RobotBusRos2DynMsg *msg,
+                                                    const char *field_path);
+ROBOT_BUS_API int robot_bus_ros2_dyn_msg_get_string(const RobotBusRos2DynMsg *msg,
+                                                     const char *field_path, char **out);
+ROBOT_BUS_API int robot_bus_ros2_dyn_msg_set_string(RobotBusRos2DynMsg *msg, const char *field_path,
+                                                     const char *value);
+ROBOT_BUS_API int robot_bus_ros2_dyn_msg_get_bool(const RobotBusRos2DynMsg *msg,
+                                                   const char *field_path, int *out);
+ROBOT_BUS_API int robot_bus_ros2_dyn_msg_set_bool(RobotBusRos2DynMsg *msg, const char *field_path,
+                                                   int value);
+ROBOT_BUS_API int robot_bus_ros2_dyn_msg_get_i64(const RobotBusRos2DynMsg *msg,
+                                                  const char *field_path, int64_t *out);
+ROBOT_BUS_API int robot_bus_ros2_dyn_msg_set_i64(RobotBusRos2DynMsg *msg, const char *field_path,
+                                                  int64_t value);
+ROBOT_BUS_API int robot_bus_ros2_dyn_msg_get_f64(const RobotBusRos2DynMsg *msg,
+                                                  const char *field_path, double *out);
+ROBOT_BUS_API int robot_bus_ros2_dyn_msg_set_f64(RobotBusRos2DynMsg *msg, const char *field_path,
+                                                  double value);
+ROBOT_BUS_API int robot_bus_ros2_dyn_msg_get_bytes(const RobotBusRos2DynMsg *msg,
+                                                    const char *field_path, uint8_t **out_data,
+                                                    size_t *out_len);
+ROBOT_BUS_API int robot_bus_ros2_dyn_msg_set_bytes(RobotBusRos2DynMsg *msg, const char *field_path,
+                                                    const uint8_t *data, size_t len);
+
 /**
  * Add a service bridge route.
  * `type_name`: `std_srvs/srv/Trigger` or `std_srvs/srv/SetBool`.
- * `direction`: ROBOT_BUS_ROS2_DIR_ROS_TO_BUS or ROBOT_BUS_ROS2_DIR_BUS_TO_ROS
+ * `direction`: ROBOT_BUS_ROUTE_DIR_ROS2_TO_BUS or ROBOT_BUS_ROUTE_DIR_BUS_TO_ROS2
  * (BOTH is rejected).
  */
 ROBOT_BUS_API int robot_bus_ros2_bridge_builder_add_service(RobotBusRos2BridgeBuilder *b,
@@ -397,7 +459,7 @@ ROBOT_BUS_API int robot_bus_ros2_bridge_builder_add_service(RobotBusRos2BridgeBu
 /**
  * Add an action bridge route.
  * `type_name`: `example_interfaces/action/Fibonacci`.
- * `direction`: ROBOT_BUS_ROS2_DIR_ROS_TO_BUS or ROBOT_BUS_ROS2_DIR_BUS_TO_ROS
+ * `direction`: ROBOT_BUS_ROUTE_DIR_ROS2_TO_BUS or ROBOT_BUS_ROUTE_DIR_BUS_TO_ROS2
  * (BOTH is rejected).
  */
 ROBOT_BUS_API int robot_bus_ros2_bridge_builder_add_action(RobotBusRos2BridgeBuilder *b,

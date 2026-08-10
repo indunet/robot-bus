@@ -1,0 +1,35 @@
+//! Topic mappers for `geometry_msgs/msg/*`.
+
+pub mod accel;
+pub mod accel_stamped;
+pub mod accel_with_covariance;
+pub mod accel_with_covariance_stamped;
+pub mod inertia;
+pub mod inertia_stamped;
+pub mod point;
+pub mod point32;
+pub mod point_stamped;
+pub mod polygon;
+pub mod polygon_instance;
+pub mod polygon_instance_stamped;
+pub mod polygon_stamped;
+pub mod pose;
+pub mod pose2_d;
+pub mod pose_array;
+pub mod pose_stamped;
+pub mod pose_with_covariance;
+pub mod pose_with_covariance_stamped;
+pub mod quaternion;
+pub mod quaternion_stamped;
+pub mod transform;
+pub mod transform_stamped;
+pub mod twist;
+pub mod twist_stamped;
+pub mod twist_with_covariance;
+pub mod twist_with_covariance_stamped;
+pub mod vector3;
+pub mod vector3_stamped;
+pub mod velocity_stamped;
+pub mod velocity_with_covariance_stamped;
+pub mod wrench;
+pub mod wrench_stamped;

@@ -4,6 +4,7 @@
 pip install robot-bus
 # 本地：just python-dev
 # 等价：cd bindings/python && maturin develop --features extension-module,grpc
+# ROS 2 bridge：source ROS 后 just python-dev-ros2（见 docs/ros2-bridge.md）
 ```
 
 ## Broker 启动
