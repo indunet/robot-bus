@@ -7,11 +7,11 @@
 | 概念 | ROS 2 Humble（rclrs） | robot-bus |
 |------|------------------------|-----------|
 | 运行时 | DDS（需 `ros2` / daemon） | 先起 `robot_bus_broker`（或进程内嵌入） |
-| 入口 | `Context` → `Node` → `rclrs::spin` | `Context` → `Node` / `RobotBusBroker::start_with_context`（tcp/ipc 仍可用无 Context 的 `Node::new`） |
+| 入口 | `Context` → `Node` → `rclrs::spin` | **推荐** `Context` → `Node::with_context`；tcp/ipc 仍可用便捷的 `Node::new`（私有 Context） |
 | 消息 | `.msg` / `.srv` / `.action` 生成类型 | crate 内 protobuf（如 `sensor_msgs::msg::v1::Imu`） |
-| QoS | `QOS_PROFILE_DEFAULT` 等 | 无 ROS QoS；可用 HWM |
+| QoS | `QOS_PROFILE_DEFAULT` 等 | Topic：`QosProfile::keep_last(depth)` → HWM；固定 best-effort。Service / action 暂不接 QoS |
 | 回调组 | Worker / callback group（较新 API） | `CallbackGroupType::MutuallyExclusive` / `Reentrant` |
-| 参数 | `declare_parameter` / `get_parameter`（可远程 / YAML / CLI） | Node 本地 `declare` / `get` / `set` / `list` + YAML 加载（标量；无远程 / CLI） |
+| 参数 | `declare_parameter` / `get_parameter` → Parameter；`set_parameter(Parameter)`；`list_parameters(prefixes, depth)`（可远程 / YAML / CLI） | 同形本地 API（`Parameter` + `as_*` + 批量 get/set）；YAML 加载；无远程 / CLI |
 
 ---
 
@@ -36,23 +36,25 @@ fn main() -> Result<(), rclrs::RclrsError> {
 use robot_bus::{Context, Node};
 
 fn main() -> robot_bus::Result<()> {
-    // tcp/ipc: Node::new is fine (private context).
-    let mut node = Node::new("pilot");
+    let context = Context::new();
+    let mut node = Node::with_context(&context, "pilot");
     // create_* ...
     node.spin()?; // 内部用 SingleThreadedExecutor
     Ok(())
 }
 ```
 
-同进程 **inproc** 时必须共享 Context：
+便捷写法（私有 Context，适合单节点 tcp/ipc）：`Node::new("pilot")`。
+
+同进程 **inproc** 时必须与嵌入式 broker 共享同一 Context：
 
 ```rust
 use robot_bus::{Context, Node, RobotBusBroker, RobotBusConfig};
 
 fn main() -> anyhow::Result<()> {
     let ctx = Context::new();
-    let broker = RobotBusBroker::start_with_context(ctx.clone(), RobotBusConfig::default())?;
-    let mut node = Node::inproc_with_context(ctx, "pilot");
+    let broker = RobotBusBroker::start_with_context(&ctx, RobotBusConfig::default())?;
+    let mut node = Node::inproc_with_context(&ctx, "pilot");
     // create_* ...
     node.spin()?;
     broker.stop()?;
@@ -94,14 +96,19 @@ fn main() -> Result<(), rclrs::RclrsError> {
 
 ```rust
 use robot_bus::sensor_msgs::msg::v1::Imu;
-use robot_bus::Node;
+use robot_bus::{Context, Node, QosProfile};
 
 fn main() -> robot_bus::Result<()> {
-    let mut node = Node::new("talker");
+    let ctx = Context::new();
+    let mut node = Node::with_context(&ctx, "talker");
 
-    let publisher = node.create_publisher::<Imu>("/robot1/imu")?;
-    node.create_subscription::<Imu, _>(
+    let publisher = node.create_publisher_with_qos::<Imu>(
         "/robot1/imu",
+        QosProfile::keep_last(10),
+    )?;
+    node.create_subscription_with_qos::<Imu, _>(
+        "/robot1/imu",
+        QosProfile::keep_last(10),
         |_topic, imu| {
             println!("angular_z={:?}", imu.angular_velocity);
         },
@@ -114,7 +121,7 @@ fn main() -> robot_bus::Result<()> {
 }
 ```
 
-要点：rclrs 创建时要带 QoS；robot-bus 第三个参数是 callback group。topic 名 robot-bus 按传入原样使用（建议写全路径）。
+要点：rclrs 创建时要带完整 QoS；robot-bus 的 `QosProfile` **仅对 topic 生效**，且只兑现 KeepLast depth（→ 发送/接收 HWM），reliability 固定 best-effort。不传 QoS 的 `create_publisher` / `create_subscription` 仍可用（不改动已有 HWM）。第三个参数是 callback group。topic 名按传入原样使用（建议写全路径）。
 
 ---
 
@@ -251,9 +258,9 @@ node.spin()?;
 
 | 场景 | rclrs | robot-bus |
 |------|-------|-----------|
-| 建节点 | `Node::new(&context, "name")` | `Node::new("name")` |
-| 发布 | `create_publisher::<T>(topic, qos)` | `create_publisher::<T>(topic)` |
-| 订阅 | `create_subscription(topic, qos, cb)` | `create_subscription(topic, cb, group)` |
+| 建节点 | `Node::new(&context, "name")` | `Node::with_context(&context, "name")`（或便捷 `Node::new("name")`） |
+| 发布 | `create_publisher::<T>(topic, qos)` | `create_publisher_with_qos::<T>(topic, qos)`（或无 QoS 的 `create_publisher`） |
+| 订阅 | `create_subscription(topic, qos, cb)` | `create_subscription_with_qos(topic, qos, cb, group)`（或无 QoS 的 `create_subscription`） |
 | 服务端 | `create_service::<S, _>(name, cb)` | `create_service::<S, _>(name, cb, group)` |
 | 客户端 | `create_client::<S>(name)` + `call` | `create_client::<S>(name)` + `call(..., timeout)` |
 | Action 服务端 | `create_action_server` | `create_action_server::<A, _>(..., group)` |

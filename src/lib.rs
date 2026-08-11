@@ -69,7 +69,8 @@ pub use runtime::{
     ActionGoalHandler, CallbackGroup, CallbackGroupType, Context, Executor, ExecutorHandle,
     GoalHandle, MessageCallback, MultiThreadedExecutor, Node, NodeActionClient,
     NodeActionClientRaw, NodeActionServer, NodeOptions, NodeService, NodeServiceClient,
-    NodeServiceClientRaw, Parameter, ParameterValue, RawActionFeedbackCallback, RawGoalHandle,
+    NodeServiceClientRaw, Parameter, ParameterValue, QOS_PROFILE_DEFAULT, QosProfile,
+    ListParametersResult, PARAMETER_DEPTH_RECURSIVE, RawActionFeedbackCallback, RawGoalHandle,
     ServiceHandler, ShutdownHandle, SingleThreadedExecutor, TimerCallback, TimerHandle,
     TopicPublisher, TopicPublisherRaw,
 };

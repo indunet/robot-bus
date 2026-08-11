@@ -49,7 +49,7 @@ pub fn options_for(transport: &str) -> NodeOptions {
 
 /// Node sharing `context` (required for inproc with the embedded broker).
 pub fn node_for(context: &Context, name: impl Into<String>, transport: &str) -> Node {
-    Node::with_context(context.clone(), name, options_for(transport))
+    Node::with_context_options(context, name, options_for(transport))
 }
 
 pub fn now_ns() -> u64 {

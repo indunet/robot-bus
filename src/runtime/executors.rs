@@ -53,7 +53,7 @@ impl ExecutorHandle {
         options: NodeOptions,
     ) -> Result<Node> {
         let context = self.lock()?.context().clone();
-        let mut node = Node::with_context(context, name, options);
+        let mut node = Node::with_context_options(&context, name, options);
         self.add_node(&mut node)?;
         Ok(node)
     }
@@ -61,11 +61,11 @@ impl ExecutorHandle {
     /// Convenience: shared-context node + [`add_node`](Self::add_node).
     pub fn create_node_with_context(
         &self,
-        context: Context,
+        context: &Context,
         name: impl Into<String>,
         options: NodeOptions,
     ) -> Result<Node> {
-        let mut node = Node::with_context(context, name, options);
+        let mut node = Node::with_context_options(context, name, options);
         self.add_node(&mut node)?;
         Ok(node)
     }
@@ -154,7 +154,7 @@ impl SingleThreadedExecutor {
 
     pub fn create_node_with_context(
         &self,
-        context: Context,
+        context: &Context,
         name: impl Into<String>,
         options: NodeOptions,
     ) -> Result<Node> {
@@ -242,7 +242,7 @@ impl MultiThreadedExecutor {
 
     pub fn create_node_with_context(
         &self,
-        context: Context,
+        context: &Context,
         name: impl Into<String>,
         options: NodeOptions,
     ) -> Result<Node> {

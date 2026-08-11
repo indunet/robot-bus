@@ -36,13 +36,13 @@ fn inproc_pubsub_with_shared_context() {
     let _guard = lock_brokers();
     let ctx = Context::new();
     let broker =
-        RobotBusBroker::start_with_context(ctx.clone(), inproc_broker_config()).expect("broker");
+        RobotBusBroker::start_with_context(&ctx, inproc_broker_config()).expect("broker");
     thread::sleep(Duration::from_millis(150));
 
     let hits = Arc::new(AtomicUsize::new(0));
     let hits_cb = Arc::clone(&hits);
 
-    let mut sub = Node::inproc_with_context(ctx.clone(), "inproc-sub");
+    let mut sub = Node::inproc_with_context(&ctx, "inproc-sub");
     sub.set_stream_hwm(HighWaterMark {
         snd: 1000,
         rcv: 1000,

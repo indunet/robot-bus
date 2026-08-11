@@ -1,5 +1,347 @@
 English | [中文](../zh/ros2-bridge.md)
 
-# ROS 2 Bridge
+# ROS 2 Bridge (`ros2_bridge`)
 
-> English version coming soon. See the [Chinese version](../zh/ros2-bridge.md) for now.
+In-process bridge between **ROS 2** and **robot-bus**: Topic / Service / Action.
+
+## Architecture: native per language
+
+| Language | ROS client | Entry | Notes |
+|----------|------------|-------|-------|
+| **Rust** | `rclrs` | `robot_bus::ros2_bridge` (Cargo feature **`ros2`**) | Topics can use `DynamicMessage`; service/action use typed `attach` |
+| **Python** | **`rclpy`** | `robot_bus.ros2_bridge` | Pure Python, **not** via Rust FFI / `rclrs` |
+| **C++** | **`rclcpp`** | `<robot_bus/ros2_bridge.hpp>` + `robot_bus_ros2_bridge` | Native C++, **not** via Rust FFI / `rclrs` |
+
+```text
+Python:  rclpy  ──mapper──► robot_bus.Node
+C++:     rclcpp ──mapper──► robot_bus::Node
+Rust:    rclrs  ──mapper──► robot_bus::Node
+```
+
+**Why per language:** ROS service/action can only be created with compile-time concrete types (`create_service<T>`, etc.). `rclrs` has no dynamic service API like topics (string-based creation). If C++/Python only pass type names to Rust, `T` won't match. Each language therefore creates ROS entities with concrete types on its side, then forwards via its own bus `Node`.
+
+| Supported | Not supported |
+|-----------|---------------|
+| Topic / Service / Action | YAML-configured bridge |
+| `.mapper(concrete object)` in code | Mounting routes via type-name string lookup |
+| User-defined mappers (concrete types per language) | Cross-language "string-only" universal bridge |
+
+Official releases: **Humble**, **Jazzy**.
+
+---
+
+## Prerequisites
+
+```bash
+source /opt/ros/humble/setup.bash   # or jazzy
+cargo run --bin robot_bus_broker    # or installed robot-bus-broker
+```
+
+| Language | Dependencies |
+|----------|--------------|
+| Common | Reachable broker (tcp / ipc / discover) |
+| Rust | `robot-bus = { features = ["ros2"] }` |
+| Python | `robot_bus` + system **`rclpy`** (`just python-dev` / `python-dev-ros2`) |
+| C++ | `robot-bus-ros2-humble` or `…-jazzy`, or `just cpp-dev-ros2` (`-DROBOT_BUS_ROS2=ON`, links **rclcpp**) |
+
+`ros2_available()`:
+
+- **Python**: whether `import rclpy` succeeds
+- **C++**: whether `robot_bus_ros2_bridge` was linked with `ROBOT_BUS_HAS_ROS2`
+- **Rust FFI / default C ABI**: always false (bridge is not in FFI)
+
+---
+
+## Unified contract (code only)
+
+Direction (`Direction`): `Ros2ToBus` (default) or `BusToRos2`; **`both` is not allowed**.
+
+```text
+Ros2Bridge.new / New / new(name)
+  .bus_tcp(...) | .bus_ipc() | .bus_discover(...)
+  .route(ros, bus).mapper(...).direction(...).add()
+  .service(ros, bus).mapper(...).timeout(...).direction(...).add()
+  .action(ros, bus).mapper(...).timeout(...).direction(...).add()
+  .build()
+  .spin() | .spin_once(...)
+```
+
+- Default timeouts: service **5s**, action goal **30s**
+- **No** `from_yaml`; **no** `add_route(..., "pkg/msg/Type", ...)`
+
+### Phase-1 built-in mappers (objects, not strings)
+
+| Kind | Mapper | ROS type |
+|------|--------|----------|
+| Topic | `StdMsgsStringMapper` | `std_msgs/msg/String` |
+| Topic | `SensorMsgsImageMapper` | `sensor_msgs/msg/Image` |
+| Service | `TriggerServiceMapper` | `std_srvs/srv/Trigger` |
+| Service | `SetBoolServiceMapper` | `std_srvs/srv/SetBool` |
+| Action | `FibonacciActionMapper` | `example_interfaces/action/Fibonacci` |
+
+Rust also has a full topic mapper registry (`src/ros2_bridge/mappers/`); mounting routes still requires `.mapper(concrete type)`; `lookup_topic_mapper` / `registered_topic_types` are for introspection only, not for mounting routes.
+
+---
+
+## User-defined service / action: yes
+
+**Yes.** Once you have the concrete ROS type in your language, you only write **field ↔ bus protobuf conversion**; the library handles `create_service` / client wiring.
+
+| | Works? |
+|--|--------|
+| Python: duck-typed convert methods + `.mapper(MyFoo())` | **Yes** |
+| Rust: `impl TypedServiceMapper` / `TypedActionMapper` | **Yes** |
+| C++: `TypedServiceMapper<Derived, RosSrv>` CRTP + `.mapper(shared_ptr)` | **Yes** (requires `ROBOT_BUS_HAS_ROS2`) |
+| YAML / type-name strings only | **No** |
+
+Advanced: you can still override `ServiceMapper::attach` / `ActionMapper::attach` directly (special QoS, etc.).
+
+Below uses a custom `my_pkg/srv/AddTwoInts` + matching protobuf (field names illustrative).
+
+### Python: custom Service mapper
+
+The bridge calls: `ros_srv_type()`, `ros_req_to_bus` / `bus_req_to_ros`, `ros_resp_to_bus` / `bus_resp_to_ros`.
+
+```python
+# from my_pkg.srv import AddTwoInts
+# from my_robot.pb.add_two_ints_pb2 import AddTwoIntsRequest, AddTwoIntsResponse
+
+class AddTwoIntsServiceMapper:
+    def type_name(self) -> str:
+        return "my_pkg/srv/AddTwoInts"
+
+    def ros_srv_type(self):
+        return AddTwoInts
+
+    def ros_req_to_bus(self, req) -> bytes:
+        return AddTwoIntsRequest(a=int(req.a), b=int(req.b)).SerializeToString()
+
+    def bus_req_to_ros(self, payload: bytes):
+        bus = AddTwoIntsRequest()
+        bus.ParseFromString(payload)
+        out = AddTwoInts.Request()
+        out.a = int(bus.a)
+        out.b = int(bus.b)
+        return out
+
+    def ros_resp_to_bus(self, resp) -> bytes:
+        return AddTwoIntsResponse(sum=int(resp.sum)).SerializeToString()
+
+    def bus_resp_to_ros(self, payload: bytes):
+        bus = AddTwoIntsResponse()
+        bus.ParseFromString(payload)
+        out = AddTwoInts.Response()
+        out.sum = int(bus.sum)
+        return out
+
+bridge = (
+    Ros2Bridge.new("bridge")
+    .bus_tcp("localhost")
+    .service("/add_two_ints", "/add_two_ints")
+    .mapper(AddTwoIntsServiceMapper())
+    .direction(Direction.Ros2ToBus)
+    .timeout(5.0)
+    .add()
+    .build()
+)
+```
+
+Action: `ros_action_type()` + `ros_goal_to_bus` / `bus_goal_to_ros` / feedback / result (see [`mappers/fibonacci.py`](../../bindings/python/robot_bus/ros2_bridge/mappers/fibonacci.py)).
+
+### Rust: custom Service (`TypedServiceMapper`)
+
+```rust
+use prost::Message as ProstMessage;
+use robot_bus::ros2_bridge::TypedServiceMapper;
+// use my_pkg::srv::AddTwoInts;
+// use my_robot::pb::{AddTwoIntsRequest, AddTwoIntsResponse};
+
+#[derive(Clone)]
+struct AddTwoIntsServiceMapper;
+
+impl TypedServiceMapper for AddTwoIntsServiceMapper {
+    type Ros = my_pkg::srv::AddTwoInts;
+
+    fn type_name(&self) -> &str {
+        "my_pkg/srv/AddTwoInts"
+    }
+
+    fn ros_req_to_bus(&self, req: &Self::Ros::Request) -> robot_bus::Result<Vec<u8>> {
+        Ok(AddTwoIntsRequest { a: req.a, b: req.b }.encode_to_vec())
+    }
+
+    fn bus_req_to_ros(&self, payload: &[u8]) -> robot_bus::Result<Self::Ros::Request> {
+        let bus = AddTwoIntsRequest::decode(payload)?;
+        Ok(Self::Ros::Request { a: bus.a, b: bus.b })
+    }
+
+    fn ros_resp_to_bus(&self, resp: &Self::Ros::Response) -> robot_bus::Result<Vec<u8>> {
+        Ok(AddTwoIntsResponse { sum: resp.sum }.encode_to_vec())
+    }
+
+    fn bus_resp_to_ros(&self, payload: &[u8]) -> robot_bus::Result<Self::Ros::Response> {
+        let bus = AddTwoIntsResponse::decode(payload)?;
+        Ok(Self::Ros::Response { sum: bus.sum })
+    }
+}
+
+// .service("/add", "/add").mapper(AddTwoIntsServiceMapper).add()?
+```
+
+Action: `impl TypedActionMapper` (`type Ros = …` + six-way goal/feedback/result conversion). The library's `wire_typed_*` handles wiring.
+
+### C++: custom Service (`TypedServiceMapper` CRTP)
+
+Built-ins use ZSTs: `.mapper(TriggerServiceMapper{})`. Custom mappers inherit CRTP, implement conversion only; the library auto `attach` / `retain`.
+
+```cpp
+#include <robot_bus/ros2_bridge.hpp>
+// #include <my_pkg/srv/add_two_ints.hpp>
+// #include "add_two_ints.pb.h"
+
+struct AddTwoIntsServiceMapper
+    : robot_bus::TypedServiceMapper<AddTwoIntsServiceMapper, my_pkg::srv::AddTwoInts> {
+  const char *type_name() const override { return "my_pkg/srv/AddTwoInts"; }
+
+  std::vector<uint8_t> ros_req_to_bus(const Request &req) const { /* … */ }
+  Request bus_req_to_ros(robot_bus::BytesView body) const { /* … */ }
+  std::vector<uint8_t> ros_resp_to_bus(const Response &resp) const { /* … */ }
+  Response bus_resp_to_ros(robot_bus::BytesView body) const { /* … */ }
+};
+
+// .service("/add", "/add")
+//     .mapper(std::make_shared<AddTwoIntsServiceMapper>())
+//     .direction(robot_bus::Direction::Ros2ToBus)
+//     .add()
+```
+
+Topic / Action: `TypedTopicMapper` / `TypedActionMapper` (see [`ros2_bridge_typed.hpp`](../../bindings/cpp/include/robot_bus/ros2_bridge_typed.hpp)).
+
+---
+
+## Rust (`rclrs`)
+
+```rust
+use robot_bus::ros2_bridge::{
+    Direction, Ros2Bridge, StdMsgsStringMapper, TriggerServiceMapper,
+};
+
+fn main() -> robot_bus::Result<()> {
+    let mut bridge = Ros2Bridge::new("ros_bridge")
+        .bus_tcp("localhost")
+        .route("/chatter", "/chatter")
+            .mapper(StdMsgsStringMapper)
+            .direction(Direction::Ros2ToBus)
+            .add()?
+        .service("/reset", "/reset")
+            .mapper(TriggerServiceMapper)
+            .timeout(std::time::Duration::from_secs(3))
+            .add()?
+        .build()?;
+    bridge.spin()?;
+    Ok(())
+}
+```
+
+- Custom topic: `impl TopicMapper` + `mapper_support` (`DynamicMessage`)
+- Custom service/action: `TypedServiceMapper` / `TypedActionMapper` (see "User-defined" above)
+- Modules: `typed_service` (`wire_typed_*` / `attach_*`), `dynamic_rpc::spike_summary()`
+
+---
+
+## Python (`rclpy`)
+
+Implementation directory: [`bindings/python/robot_bus/ros2_bridge/`](../../bindings/python/robot_bus/ros2_bridge/) (pure Python).
+
+```bash
+source /opt/ros/humble/setup.bash
+just python-dev-ros2   # or just python-dev; requires local rclpy
+```
+
+```python
+import robot_bus
+from robot_bus.ros2_bridge import (
+    Direction,
+    Ros2Bridge,
+    StdMsgsStringMapper,
+    TriggerServiceMapper,
+)
+
+assert robot_bus.ros2_available()  # import rclpy succeeds
+
+bridge = (
+    Ros2Bridge.new("ros_bridge")
+    .bus_tcp("localhost")
+    .route("/chatter", "/chatter")
+    .mapper(StdMsgsStringMapper())
+    .direction(Direction.Ros2ToBus)
+    .add()
+    .service("/reset", "/reset")
+    .mapper(TriggerServiceMapper())
+    .add()
+    .build()
+)
+bridge.spin()
+```
+
+- ROS side: `rclpy` node + executor (background thread spin)
+- Bus side: `robot_bus.Node` (raw / typed protobuf)
+- Custom mappers: see "User-defined" above; built-in reference [`mappers/trigger.py`](../../bindings/python/robot_bus/ros2_bridge/mappers/trigger.py)
+- Mappers lazy-import on demand (depends on corresponding ROS message packages and protobuf)
+
+---
+
+## C++ (`rclcpp`)
+
+```cpp
+#include <robot_bus/ros2_bridge.hpp>
+
+auto bridge = robot_bus::Ros2Bridge::New("ros_bridge")
+    .bus_tcp("localhost")
+    .route("/chatter", "/chatter")
+    .mapper(robot_bus::StdMsgsStringMapper{})
+    .direction(robot_bus::Direction::Ros2ToBus)
+    .add()
+    .service("/reset", "/reset")
+    .mapper(robot_bus::TriggerServiceMapper{})
+    .add()
+    .build();
+
+bridge.spin();
+```
+
+- Link **`robot_bus_ros2_bridge`** (`ROBOT_BUS_HAS_ROS2`); without this macro, `build()` throws
+- Local build: `just cpp-dev-ros2` (requires `just gen-cpp` + source ROS first)
+- Packages: `robot-bus-ros2-humble` / `robot-bus-ros2-jazzy` (**does not** vendor `rcl`)
+- Built-in ZSTs + `.mapper(std::shared_ptr<…Mapper>)` for custom; see "User-defined" above
+
+---
+
+## Runtime
+
+Same process holds both:
+
+1. ROS node (rclrs / rclpy / rclcpp)
+2. robot-bus `Node`
+
+The main loop must drive both sides (`spin` / `spin_once`); implementation details differ per language, semantics are the same: drain ROS↔bus queues and drive the bus.
+
+---
+
+## FAQ
+
+1. **ROS not sourced** — all three language bindings fail.
+2. **YAML bridge config** — not supported; mount mappers in code.
+3. **Type-name strings only** — not supported for mounting routes; pass concrete mapper objects.
+4. **Cross-language universal dynamic srv** — not supported; write a custom mapper in the target language.
+5. **C++ `ros2_available() == false`** — not linked with `robot_bus_ros2_bridge` / installed package without bridge.
+6. **Python `ros2_available() == False`** — `rclpy` not installed or ROS not sourced.
+7. **Rust topic registered but fails at runtime** — missing corresponding ROS typesupport (e.g. `foxglove_msgs`).
+
+---
+
+## Related
+
+- C++ packages and local build: [cpp-api.md](cpp-api.md)
+- Python SDK: [python-api.md](python-api.md)
+- API comparison: [api-compare.md](api-compare.md)

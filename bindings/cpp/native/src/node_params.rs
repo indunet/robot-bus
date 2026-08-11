@@ -3,7 +3,7 @@
 use std::os::raw::{c_char, c_int};
 use std::ptr;
 
-use robot_bus::runtime::ParameterValue;
+use robot_bus::runtime::{Parameter, ParameterValue};
 
 use crate::ffi::{
     bus_err, clear_error, cstr_req, dup_string, err, ok, robot_bus_free_string,
@@ -104,7 +104,7 @@ pub extern "C" fn robot_bus_node_declare_parameter(
         Err(e) => return e,
     };
     match unsafe { &mut *n }.inner.declare_parameter(name, pv) {
-        Ok(()) => ok(),
+        Ok(_) => ok(),
         Err(e) => bus_err(e),
     }
 }
@@ -129,7 +129,10 @@ pub extern "C" fn robot_bus_node_set_parameter(
         Ok(v) => v,
         Err(e) => return e,
     };
-    match unsafe { &mut *n }.inner.set_parameter(name, pv) {
+    match unsafe { &mut *n }
+        .inner
+        .set_parameter(Parameter::new(name, pv))
+    {
         Ok(()) => ok(),
         Err(e) => bus_err(e),
     }
@@ -152,8 +155,8 @@ pub extern "C" fn robot_bus_node_get_parameter(
         Err(e) => return e,
     };
     match unsafe { &*n }.inner.get_parameter(name) {
-        Ok(v) => {
-            unsafe { *out = parameter_value_to_c(v) };
+        Ok(p) => {
+            unsafe { *out = parameter_value_to_c(p.value) };
             ok()
         }
         Err(e) => bus_err(e),
@@ -192,7 +195,7 @@ pub extern "C" fn robot_bus_node_list_parameters(
     if out.is_null() || out_count.is_null() {
         return err("null out");
     }
-    let list = unsafe { &*n }.inner.list_parameters();
+    let list = unsafe { &*n }.inner.list_all_parameters();
     let count = list.len();
     if count == 0 {
         unsafe {

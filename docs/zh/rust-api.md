@@ -32,7 +32,7 @@ cargo run --bin robot_bus_broker
 | action FE / BE | `tcp://0.0.0.0:0` | 同上 | 同上 |
 | API（gRPC + WS + discover + console） | `0.0.0.0:15570` | — | — |
 
-仍可用 `--message-xsub-bind` 等手动固定总线端口。SDK 侧 `Node::new` 默认连本机 **tcp**，并在端点未填时自动对 `http://127.0.0.1:15570` 做 discover；`Node::ipc` / `Node::inproc` / `Node::grpc` 分别走对应传输。
+仍可用 `--message-xsub-bind` 等手动固定总线端口。SDK 侧**推荐** `Context::new` → `Node::with_context`（本地 tcp）；便捷的 `Node::new` 仍可用（私有 Context）。端点未填时自动对 `http://127.0.0.1:15570` 做 discover；`Node::ipc` / `Node::inproc` / `Node::grpc` 分别走对应传输。
 
 ### HTTP 发现（填地址，不选传输）
 
@@ -59,8 +59,8 @@ UDP 组播发现已移除。
 use robot_bus::{Context, Node, RobotBusBroker, RobotBusConfig};
 
 let ctx = Context::new();
-let broker = RobotBusBroker::start_with_context(ctx.clone(), RobotBusConfig::default())?;
-let mut node = Node::inproc_with_context(ctx, "pilot");
+let broker = RobotBusBroker::start_with_context(&ctx, RobotBusConfig::default())?;
+let mut node = Node::inproc_with_context(&ctx, "pilot");
 // …
 broker.stop()?;
 ```
@@ -79,34 +79,40 @@ let broker = RobotBusBroker::start(RobotBusConfig::default())?;
 broker.stop()?;
 ```
 
-典型流程：`Node::new` → `create_*` → `node.spin()`。多节点或需并行时再 `executor.add_node` + `executor.spin`。仅连 gRPC 网关时用 `Node::grpc` / `Node::ws_at`（见下文「WebSocket RPC 模式 Node」）。
+典型流程：`Context` → `Node::with_context` → `create_*` → `node.spin()`（或便捷 `Node::new`）。多节点或需并行时再 `executor.add_node` + `executor.spin`。仅连 gRPC 网关时用 `Node::grpc` / `Node::ws_at`（见下文「WebSocket RPC 模式 Node」）。
 
 ---
 
 ## 本地参数（Node）
 
-ROS 2 风格的本节点参数表（不经总线；无远程参数服务 / CLI `-p`）。标量类型：`bool` / `i64` / `f64` / `String`；须先 `declare` 再 `get` / `set`，`set` 时类型必须与声明一致。
+ROS 2 风格的本节点参数表（不经总线；无远程参数服务 / CLI `-p`）。标量类型：`bool` / `i64` / `f64` / `String`。
 
-可用 YAML 启动加载（未声明则 declare，已声明则 set）：
+对齐 ROS 2 的用法：`declare_parameter` / `get_parameter` 返回 [`Parameter`]（含 `name` + `value`），`set_parameter(Parameter::new(...))`，以及 `get_parameters` / `set_parameters` / `list_parameters(prefixes, depth)` / `undeclare_parameter`。可用 `as_bool` / `as_int` / `as_double` / `as_string` 取值。
+
+YAML 启动加载（未声明则 declare，已声明则 set）：
 
 - 扁平：`max_speed: 1.5`
 - ROS 2 风格：`ros__parameters: { … }`
 - 通配：`"/**": { ros__parameters: { … } }`
 
 ```rust
-use robot_bus::{Node, ParameterValue};
+use robot_bus::{Context, Node, Parameter};
 
 fn main() -> robot_bus::Result<()> {
-    let mut node = Node::new("pilot");
-    node.declare_parameter("max_speed", ParameterValue::Double(1.5))?;
-    node.declare_parameter("frame_id", ParameterValue::String("base_link".into()))?;
+    let ctx = Context::new();
+    let mut node = Node::with_context(&ctx, "pilot");
+    node.declare_parameter("max_speed", 1.5)?;
+    node.declare_parameter("frame_id", "base_link")?;
 
-    if let ParameterValue::Double(v) = node.get_parameter("max_speed")? {
-        println!("max_speed={v}");
-    }
-    node.set_parameter("max_speed", ParameterValue::Double(2.0))?;
+    let max_speed = node.get_parameter("max_speed")?.as_double()?;
+    println!("max_speed={max_speed}");
+    node.set_parameter(Parameter::new("max_speed", 2.0))?;
     assert!(node.has_parameter("frame_id"));
-    for p in node.list_parameters() {
+
+    let listed = node.list_parameters(&[], 0); // depth 0 = recursive
+    println!("names={:?}", listed.names);
+
+    for p in node.list_all_parameters() {
         println!("{} = {:?}", p.name, p.value);
     }
 
@@ -126,7 +132,7 @@ ros__parameters:
 
 ## Message bus（Node + spin）
 
-接近 ROS 2：`Node::new` → typed `create_publisher` / `create_subscription`（创建时绑定消息类型，自动 encode/decode）→ `node.spin()`。底层与 gRPC 仍传 opaque bytes。
+接近 ROS 2：`Context` → `Node::with_context` → typed `create_publisher` / `create_subscription`（创建时绑定消息类型，自动 encode/decode）→ `node.spin()`。底层与 gRPC 仍传 opaque bytes。
 
 Typed `create_publisher::<M>` 会向 broker 控制面（service bus 服务 `/robot_bus/topic_type/register`）**best-effort** 登记 `topic → M::full_name()`（如 `sensor_msgs.msg.v1.Imu`）。登记失败只打日志，不影响 publish。`create_publisher_raw` 不登记。可用 `rbus topic list` / `rbus topic info /path` 查看（HTTP 默认 `http://127.0.0.1:15570`）。
 
@@ -135,11 +141,12 @@ use std::sync::Arc;
 use std::time::Duration;
 use robot_bus::geometry_msgs::msg::v1::Vector3;
 use robot_bus::sensor_msgs::msg::v1::Imu;
-use robot_bus::Node;
+use robot_bus::{Context, Node};
 
 fn main() -> robot_bus::Result<()> {
-    let mut node = Node::new("pilot");
-    // 进程内 / 自定义地址：Node::with_options("pilot", NodeOptions { ... })
+    let ctx = Context::new();
+    let mut node = Node::with_context(&ctx, "pilot");
+    // 进程内 / 自定义地址：Node::with_context_options(&ctx, "pilot", NodeOptions { ... })
 
     let imu_pub = node.create_publisher::<Imu>("/robot1/imu")?;
     node.create_subscription::<Imu, _>(
@@ -228,13 +235,28 @@ node.create_timer(
 ```
 
 
-### 高水位（HWM）
+### 高水位（HWM）与 Topic QoS
+
+Topic 可用 `QosProfile::keep_last(depth)`（→ HWM）。**仅对 topic 生效**；reliability 固定 best-effort。Service / action 暂不接 QoS。
 
 ```rust
-use robot_bus::{Publisher, HighWaterMark};
+use robot_bus::{Node, QosProfile, Publisher, HighWaterMark};
 
-let pub_ = Publisher::with_hwm(None, HighWaterMark::new(10, 10))?;
-pub_.set_high_water_mark(HighWaterMark { snd: 10, rcv: 10 })?;
+let mut node = Node::new("pilot");
+let pub_ = node.create_publisher_with_qos::<robot_bus::sensor_msgs::msg::v1::Imu>(
+    "/robot1/imu",
+    QosProfile::keep_last(10),
+)?;
+node.create_subscription_with_qos::<robot_bus::sensor_msgs::msg::v1::Imu, _>(
+    "/robot1/imu",
+    QosProfile::keep_last(10),
+    |_topic, _imu| {},
+    None,
+)?;
+
+// 底层仍可直接设 HWM：
+let raw = Publisher::with_hwm(None, HighWaterMark::new(10, 10))?;
+raw.set_high_water_mark(HighWaterMark { snd: 10, rcv: 10 })?;
 ```
 
 ---

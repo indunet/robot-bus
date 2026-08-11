@@ -186,7 +186,7 @@ fn run_loop(
     let context = Context::new();
     // Worker pool so long-running nav actions don't block the pose tick.
     let executor = MultiThreadedExecutor::with_context(context.clone(), 4);
-    let mut node = Node::with_context(context, "tank", opts);
+    let mut node = Node::with_context_options(&context, "tank", opts);
     executor.add_node(&mut node)?;
 
     let pose_pub = node.create_publisher::<Pose2D>(POSE_TOPIC)?;

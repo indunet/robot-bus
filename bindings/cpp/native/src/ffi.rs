@@ -91,14 +91,15 @@ pub(crate) fn node_options(
     action_backend: Option<String>,
     action_frontend: Option<String>,
 ) -> Result<RustNodeOptions, c_int> {
-    if transport == "ws" {
+    // Canonical gateway transport is "ws"; "grpc" kept as a compatibility alias.
+    if transport == "ws" || transport == "grpc" {
         return Ok(match ws_url {
             Some(url) => RustNodeOptions::ws_at(url),
             None => RustNodeOptions::ws(),
         });
     }
     if ws_url.is_some() {
-        return Err(err("ws_url is only valid when transport=\"grpc\""));
+        return Err(err("ws_url is only valid when transport=\"ws\""));
     }
     Ok(RustNodeOptions {
         host: host.into(),

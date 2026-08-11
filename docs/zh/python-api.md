@@ -74,7 +74,7 @@ tcp / ipc / gRPC 不要求共享 Context。
 
 ## 本地参数（Node）
 
-本节点参数表（不经总线）。值类型为 Python `bool` / `int` / `float` / `str`；须先 `declare`，`set` 时类型须与声明一致。支持 YAML 启动加载（扁平或 `ros__parameters` / `"/**"` 通配）。
+本节点参数表（不经总线）。值类型为 Python `bool` / `int` / `float` / `str`；须先 `declare`，`set` 时类型须与声明一致。`get_parameter` / `declare_parameter` 返回 `{"name", "value"}`（对齐 ROS 2 Parameter，取值用 `["value"]`）。`list_parameters()` 返回 `{"names", "prefixes"}`；需要带值列表用 `list_all_parameters()`。支持 YAML 启动加载（扁平或 `ros__parameters` / `"/**"` 通配）。
 
 ```python
 import robot_bus
@@ -83,10 +83,11 @@ node = robot_bus.Node("pilot")
 node.declare_parameter("max_speed", 1.5)
 node.declare_parameter("frame_id", "base_link")
 
-print(node.get_parameter("max_speed"))  # 1.5
+print(node.get_parameter("max_speed")["value"])  # 1.5
 node.set_parameter("max_speed", 2.0)
 assert node.has_parameter("frame_id")
-print(node.list_parameters())  # [{"name": "...", "value": ...}, ...]
+print(node.list_parameters())  # {"names": [...], "prefixes": [...]}
+print(node.list_all_parameters())  # [{"name": "...", "value": ...}, ...]
 
 node.load_parameters_from_yaml_str("""
 ros__parameters:
@@ -102,7 +103,7 @@ node.load_parameters_from_yaml_file("config/pilot.yaml")
 
 接近 ROS 2：`Node(...)` → `create_publisher` / `create_subscription` → `node.spin()`。单节点时无需手写 Executor（内部自动挂 `SingleThreadedExecutor`）。
 
-仅走 gRPC 网关时用 `Node.grpc` / `Node.ws_at`（或 `transport="grpc"`）：可订阅、publish、调 service / action，不能当 server；见下文「WebSocket RPC 模式 Node」。
+仅走 gRPC 网关时用 `Node.ws` / `Node.ws_at`（或 `transport="ws"`；`transport="grpc"` 仍可作为别名）：可订阅、publish、调 service / action，不能当 server；见下文「WebSocket RPC 模式 Node」。
 
 Python 主推 **typed**（创建时传入 protobuf 类，自动 `SerializeToString` / `ParseFromString`）；不传类型则仍为 raw bytes。底层与 Rust 一样走 opaque bytes（纯 Python 薄封装，因 PyO3 无法映射 Rust 泛型）。
 
@@ -166,7 +167,7 @@ t = buf.lookup_transform("base_link", "camera")
 
 ### WebSocket RPC 模式 Node（客户端）
 
-`Node.grpc` / `Node.ws_at`（或 `Node(..., transport="grpc", ws_url=...)`）经 broker gRPC 网关接入，不创建 ZMQ socket。
+`Node.ws` / `Node.ws_at`（或 `Node(..., transport="ws", ws_url=...)`；`transport="grpc"` 仍可作为别名）经 broker gRPC 网关接入，不创建 ZMQ socket。
 
 | 支持 | 不支持 |
 |------|--------|
@@ -417,7 +418,7 @@ print(robot_bus.__version__)
 | 符号 | 说明 |
 |------|------|
 | `Node(name, host=..., transport=..., ws_url=..., message_xsub=..., …)` | 建节点；首次 `create_*` / `spin` 时自动挂 `SingleThreadedExecutor` |
-| `Node.tcp` / `Node.ipc` / `Node.inproc` / `Node.inproc_with_context` / `Node.grpc` / `Node.ws_at` / `Node.discover` | 传输预设（gRPC 为客户端模式；同进程 inproc 用 `inproc_with_context`；`discover` 只填地址） |
+| `Node.tcp` / `Node.ipc` / `Node.inproc` / `Node.inproc_with_context` / `Node.with_context` / `Node.ws` / `Node.ws_at` / `Node.discover` | 传输预设（推荐 `Context` + `with_context`；gRPC/WebSocket 网关为客户端模式；同进程 inproc 用 `inproc_with_context`；`discover` 只填地址） |
 | `Node.declare_parameter` / `get_parameter` / `set_parameter` / `has_parameter` / `list_parameters` | 本节点本地参数（`bool` / `int` / `float` / `str`） |
 | `Node.load_parameters_from_yaml_str` / `load_parameters_from_yaml_file` | 从 YAML 加载 / 覆盖参数 |
 | `node.spin()` / `spin_once` / `shutdown` | 驱动回调（ROS 2 式简单路径） |

@@ -268,7 +268,7 @@ impl PyRobotBusBroker {
         }
 
         let broker = match context {
-            Some(c) => RustRobotBusBroker::start_with_context(c.inner.clone(), config),
+            Some(c) => RustRobotBusBroker::start_with_context(&c.inner, config),
             None => RustRobotBusBroker::start(config),
         }
         .map_err(anyhow_err)?;

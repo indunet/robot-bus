@@ -9,7 +9,7 @@ use pyo3::types::PyBytes;
 use crate::action_bus::ActionKind;
 use crate::discovery::{DiscoverOpts as RustDiscoverOpts, wait as discover_wait};
 use crate::errors::BusError;
-use crate::runtime::{NodeOptions as RustNodeOptions, ParameterValue};
+use crate::runtime::{NodeOptions as RustNodeOptions, Parameter, ParameterValue};
 use crate::transports;
 
 pub(crate) fn bus_err(err: BusError) -> PyErr {
@@ -42,6 +42,13 @@ pub(crate) fn parameter_value_to_py(py: Python<'_>, value: ParameterValue) -> Py
         ParameterValue::Double(v) => v.into_py_any(py),
         ParameterValue::String(v) => v.into_py_any(py),
     }
+}
+
+pub(crate) fn parameter_to_py(py: Python<'_>, param: Parameter) -> PyResult<PyObject> {
+    let dict = pyo3::types::PyDict::new(py);
+    dict.set_item("name", param.name)?;
+    dict.set_item("value", parameter_value_to_py(py, param.value)?)?;
+    Ok(dict.into())
 }
 
 /// Run blocking ZMQ/gRPC I/O without holding the GIL.
@@ -99,7 +106,8 @@ pub(crate) fn py_node_options(
     action_backend: Option<String>,
     action_frontend: Option<String>,
 ) -> PyResult<crate::runtime::NodeOptions> {
-    if transport == "ws" {
+    // Canonical gateway transport is "ws"; "grpc" kept as a compatibility alias.
+    if transport == "ws" || transport == "grpc" {
         #[cfg(feature = "ws")]
         {
             return Ok(match ws_url {
@@ -111,13 +119,13 @@ pub(crate) fn py_node_options(
         {
             let _ = ws_url;
             return Err(PyRuntimeError::new_err(
-                "transport=\"grpc\" requires the grpc feature",
+                "transport=\"ws\" requires the ws feature",
             ));
         }
     }
     if ws_url.is_some() {
         return Err(PyRuntimeError::new_err(
-            "ws_url is only valid when transport=\"grpc\"",
+            "ws_url is only valid when transport=\"ws\"",
         ));
     }
     Ok(crate::runtime::NodeOptions {
@@ -144,7 +152,7 @@ pub(crate) fn py_discover_options(
         "tcp" => RustNodeOptions::tcp(),
         "ipc" => RustNodeOptions::ipc(),
         "inproc" => RustNodeOptions::inproc(),
-        "ws" => {
+        "ws" | "grpc" => {
             #[cfg(feature = "ws")]
             {
                 RustNodeOptions::ws()
@@ -152,7 +160,7 @@ pub(crate) fn py_discover_options(
             #[cfg(not(feature = "ws"))]
             {
                 return Err(PyRuntimeError::new_err(
-                    "transport=\"grpc\" requires the grpc feature",
+                    "transport=\"ws\" requires the ws feature",
                 ));
             }
         }

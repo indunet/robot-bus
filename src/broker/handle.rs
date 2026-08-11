@@ -484,11 +484,15 @@ impl RobotBusBroker {
     /// Creates a private ZeroMQ context. For same-process `inproc://`, use
     /// [`start_with_context`](Self::start_with_context) and share that context with Nodes.
     pub fn start(config: RobotBusConfig) -> Result<Self> {
-        Self::start_with_context(BusContext::new(), config)
+        let context = BusContext::new();
+        Self::start_with_context(&context, config)
     }
 
     /// Start buses using a shared [`crate::Context`] (required for inproc with SDK Nodes).
-    pub fn start_with_context(context: BusContext, mut config: RobotBusConfig) -> Result<Self> {
+    ///
+    /// Takes a shared reference; the ZMQ context is refcounted, so the caller keeps using
+    /// the same `context` for Nodes without an explicit `.clone()`.
+    pub fn start_with_context(context: &BusContext, mut config: RobotBusConfig) -> Result<Self> {
         let broker_id = normalize_broker_id(&mut config);
         let bind_opts = BindAllOpts::for_broker(&broker_id);
         config.message.bind_opts = bind_opts.clone();

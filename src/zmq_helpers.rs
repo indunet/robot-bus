@@ -9,8 +9,8 @@ use zmq::Socket;
 
 /// ZeroMQ send / receive high-water marks (max queued messages per direction).
 ///
-/// This is the practical stand-in for ROS 2 QoS depth until a fuller QoS model exists.
-/// When the queue is full, further sends block or drop depending on socket type / flags.
+/// Topic [`crate::QosProfile::keep_last`] depth maps here. When the queue is full,
+/// further sends block or drop depending on socket type / flags.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct HighWaterMark {
     /// `ZMQ_SNDHWM` — outbound queue depth.

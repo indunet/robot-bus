@@ -91,7 +91,7 @@ fn main() {
         println!("service iters={svc_iters} action iters={act_iters}");
     }
     let ctx = Context::new();
-    let broker = RobotBusBroker::start_with_context(ctx.clone(), perf_broker_config())
+    let broker = RobotBusBroker::start_with_context(&ctx, perf_broker_config())
         .expect("start broker");
     thread::sleep(Duration::from_millis(300));
 

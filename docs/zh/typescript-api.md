@@ -84,7 +84,8 @@ const node = new Node("pilot");
 node.declareParameter("max_speed", 1.5);
 node.declareParameter("frame_id", "base_link");
 node.setParameter("max_speed", 2.0);
-console.log(node.getParameter("max_speed"));
+console.log(node.getParameter("max_speed").value); // { name, value }
+console.log(node.listParameters()); // { names, prefixes }
 node.loadParametersFromYamlStr("ros__parameters:\n  max_speed: 3.0\n");
 // node.loadParametersFromYamlFile("config/pilot.yaml");
 ```

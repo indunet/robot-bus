@@ -36,6 +36,8 @@ SDK：**Rust**、**Python**、**TypeScript**、**C++**、**Java**、**Android**�
 
 robot-bus 轻量、环境简单，适合先完成节点原型与联调验证，再将已验证的设计迁移为原生 ROS 2 节点；也可继续运行在 bus 上，仅桥接需要进入 ROS 2 图的接口。
 
+迁移手册（给开发者 / Agent 用）：[`docs/skills/ros2-to-robot-bus`](docs/skills/ros2-to-robot-bus/SKILL.md) 与 [`docs/skills/robot-bus-to-ros2`](docs/skills/robot-bus-to-ros2/SKILL.md)。在 Cursor 里 `@` 这两个文件，或直接说「把某包迁到 robot-bus / ROS 2」。
+
 ## 2. 架构
 
 ```
@@ -218,7 +220,7 @@ bridge = (
 bridge.spin()
 ```
 
-完整说明与示例（Rust / Python / C++）：[`docs/zh/ros2-bridge.md`](docs/zh/ros2-bridge.md)。
+完整说明与示例（Rust / Python / C++）：[`docs/zh/ros2-bridge.md`](docs/zh/ros2-bridge.md)。若要做整包迁移（而不只是桥接），见 [`docs/skills/`](docs/skills/)。
 
 ## 6. Protobuf 消息
 

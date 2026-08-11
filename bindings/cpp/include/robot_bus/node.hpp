@@ -441,6 +441,7 @@ class Node {
         "Node::inproc_with_context")));
   }
 
+  /// ROS 2–style preferred entry: shared context + local TCP.
   static Node with_context(Context &ctx, std::string name,
                            const RobotBusNodeOptions *opts = nullptr) {
     return Node(static_cast<RobotBusNode *>(check_ptr(

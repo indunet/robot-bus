@@ -1,13 +1,11 @@
 //! ROS 2–style [`Node`]: named participant with optional executor.
 //!
-//! Simple single-threaded flow (matches ROS 2 `spin(node)`):
-//! 1. `let mut node = Node::new("pilot");`
-//! 2. `let pub_ = node.create_publisher::<Imu>("/robot1/imu")?;`
-//! 3. `node.spin()?;` — lazily owns a [`SingleThreadedExecutor`]
+//! Recommended (ROS-like) flow:
+//! 1. `let ctx = Context::new();`
+//! 2. `let mut node = Node::with_context(&ctx, "pilot");`
+//! 3. `node.spin()?;`
 //!
-//! For shared / multi-threaded executors: `executor.add_node(&mut node)?` then
-//! `executor.spin()?`.
-//!
+//! Convenience: [`Node::new`] creates a private context (fine for tcp/ipc).
 //! Same-process **inproc** needs a shared [`crate::Context`] with the embedded
 //! broker: `RobotBusBroker::start_with_context` + [`Node::inproc_with_context`].
 //!
@@ -35,7 +33,8 @@ use crate::runtime::executor::{Executor, ShutdownHandle};
 use crate::runtime::executors::{ExecutorHandle, SingleThreadedExecutor};
 #[cfg(feature = "ws")]
 use crate::runtime::ws_runtime::{WsClientContext, WsRuntime};
-use crate::runtime::parameters::{Parameter, ParameterStore, ParameterValue};
+use crate::runtime::parameters::{ListParametersResult, Parameter, ParameterStore, ParameterValue};
+use crate::runtime::qos::QosProfile;
 use crate::runtime::queues::ActionMessageCallback;
 use crate::runtime::registrations::{ActionGoalHandler, MessageCallback, ServiceHandler};
 use crate::runtime::timers::{TimerCallback, TimerHandle};
@@ -1015,11 +1014,26 @@ pub struct Node {
 }
 
 impl Node {
-    /// Create a node that is not yet attached to an executor.
+    /// Convenience: tcp node with a **private** [`Context`].
+    ///
+    /// Prefer [`with_context`](Self::with_context) when aligning with ROS 2
+    /// (`Context` → `Node`) or when multiple nodes should share sockets/inproc.
     ///
     /// Equivalent to [`Node::tcp`] (connects to `localhost` over TCP).
     pub fn new(name: impl Into<String>) -> Self {
         Self::tcp(name)
+    }
+
+    /// ROS 2–style preferred entry: share `context`, connect local broker over TCP.
+    ///
+    /// ```ignore
+    /// let ctx = Context::new();
+    /// let mut node = Node::with_context(&ctx, "pilot");
+    /// ```
+    ///
+    /// For custom transports / endpoints, use [`with_context_options`](Self::with_context_options).
+    pub fn with_context(context: &Context, name: impl Into<String>) -> Self {
+        Self::with_context_options(context, name, NodeOptions::tcp())
     }
 
     /// TCP to the local broker (`localhost` + default ports).
@@ -1045,7 +1059,7 @@ impl Node {
     /// Same-process `inproc://robot_bus/...`.
     ///
     /// For inproc to work, share a [`Context`] with the embedded broker via
-    /// [`Node::inproc_with_context`] / [`Node::with_context`].
+    /// [`Node::inproc_with_context`] / [`Node::with_context_options`].
     pub fn inproc(name: impl Into<String>) -> Self {
         Self::with_options(name, NodeOptions::inproc())
     }
@@ -1056,17 +1070,17 @@ impl Node {
     }
 
     /// Same-process inproc using a shared [`Context`] (with the embedded broker).
-    pub fn inproc_with_context(context: Context, name: impl Into<String>) -> Self {
-        Self::with_context(context, name, NodeOptions::inproc())
+    pub fn inproc_with_context(context: &Context, name: impl Into<String>) -> Self {
+        Self::with_context_options(context, name, NodeOptions::inproc())
     }
 
     /// Same-process inproc under a custom prefix, sharing `context`.
     pub fn inproc_at_with_context(
-        context: Context,
+        context: &Context,
         name: impl Into<String>,
         prefix: impl AsRef<str>,
     ) -> Self {
-        Self::with_context(context, name, NodeOptions::inproc_at(prefix))
+        Self::with_context_options(context, name, NodeOptions::inproc_at(prefix))
     }
 
     /// gRPC client node talking to the local broker gateway (`http://127.0.0.1:15570`).
@@ -1086,11 +1100,16 @@ impl Node {
     /// For `tcp` / `ipc` with unset endpoints, auto-discovers via
     /// `http://{host}:15570/api/v1/discover` (host `localhost` → `127.0.0.1`).
     pub fn with_options(name: impl Into<String>, options: NodeOptions) -> Self {
-        Self::with_context(Context::new(), name, options)
+        let context = Context::new();
+        Self::with_context_options(&context, name, options)
     }
 
     /// Create a node that shares `context` for all ZMQ sockets (required for inproc).
-    pub fn with_context(context: Context, name: impl Into<String>, mut options: NodeOptions) -> Self {
+    pub fn with_context_options(
+        context: &Context,
+        name: impl Into<String>,
+        mut options: NodeOptions,
+    ) -> Self {
         if options.needs_endpoint_discover() {
             let discover_opts = crate::discovery::DiscoverOpts::for_host(&options.host);
             match options.clone().discover(discover_opts) {
@@ -1105,7 +1124,7 @@ impl Node {
         Self {
             name: name.into(),
             options,
-            context,
+            context: context.clone(),
             executor: None,
             owned_executor: None,
             #[cfg(feature = "ws")]
@@ -1196,22 +1215,42 @@ impl Node {
     }
 
     /// Declare a local parameter with a default value (must not already exist).
+    ///
+    /// Returns the declared [`Parameter`] (ROS 2 `declare_parameter`).
     pub fn declare_parameter(
         &mut self,
         name: impl Into<String>,
-        value: ParameterValue,
-    ) -> Result<()> {
-        self.parameters.declare(name, value)
+        value: impl Into<ParameterValue>,
+    ) -> Result<Parameter> {
+        self.parameters.declare(name, value.into())
     }
 
-    /// Read a previously declared parameter.
-    pub fn get_parameter(&self, name: &str) -> Result<ParameterValue> {
+    /// Read a previously declared parameter (ROS 2 `get_parameter` → [`Parameter`]).
+    pub fn get_parameter(&self, name: &str) -> Result<Parameter> {
         self.parameters.get(name)
     }
 
-    /// Update a declared parameter (type must match the declared variant).
-    pub fn set_parameter(&mut self, name: &str, value: ParameterValue) -> Result<()> {
-        self.parameters.set(name, value)
+    /// Read several parameters by name (ROS 2 `get_parameters`).
+    pub fn get_parameters(&self, names: &[&str]) -> Result<Vec<Parameter>> {
+        self.parameters.get_many(names)
+    }
+
+    /// Update a declared parameter (ROS 2 `set_parameter(rclcpp::Parameter(...))`).
+    pub fn set_parameter(&mut self, parameter: Parameter) -> Result<()> {
+        self.parameters.set_parameter(parameter)
+    }
+
+    /// Update several declared parameters (ROS 2 `set_parameters`).
+    pub fn set_parameters(
+        &mut self,
+        parameters: impl IntoIterator<Item = Parameter>,
+    ) -> Result<()> {
+        self.parameters.set_many(parameters)
+    }
+
+    /// Remove a declared parameter (ROS 2 `undeclare_parameter`).
+    pub fn undeclare_parameter(&mut self, name: &str) -> Result<()> {
+        self.parameters.undeclare(name)
     }
 
     /// Whether `name` has been declared.
@@ -1219,9 +1258,20 @@ impl Node {
         self.parameters.has(name)
     }
 
-    /// All declared parameters, sorted by name.
-    pub fn list_parameters(&self) -> Vec<Parameter> {
-        self.parameters.list()
+    /// List parameter names by prefix / depth (ROS 2 `list_parameters`).
+    ///
+    /// Empty `prefixes` lists the whole tree. `depth == 0` means recursive
+    /// ([`crate::PARAMETER_DEPTH_RECURSIVE`]). Hierarchy separator is `.`.
+    pub fn list_parameters(&self, prefixes: &[&str], depth: u64) -> ListParametersResult {
+        self.parameters.list_parameters(prefixes, depth)
+    }
+
+    /// All declared parameters with values (convenience; not a ROS 2 API name).
+    ///
+    /// Prefer [`get_parameter`](Self::get_parameter) / [`get_parameters`](Self::get_parameters)
+    /// when you already know the names.
+    pub fn list_all_parameters(&self) -> Vec<Parameter> {
+        self.parameters.list_all()
     }
 
     /// Load parameters from a YAML string (declare missing, set existing).
@@ -1241,6 +1291,9 @@ impl Node {
     }
 
     /// Create a typed topic publisher (ROS 2 `create_publisher`).
+    ///
+    /// Uses the node's stream HWM default on first PUB connect. Prefer
+    /// [`create_publisher_with_qos`](Self::create_publisher_with_qos) to set KeepLast depth.
     ///
     /// Multiple publishers on the same node share one bus PUB socket.
     /// Best-effort registers `topic → M::full_name()` with the broker console.
@@ -1263,13 +1316,45 @@ impl Node {
         Ok(pub_)
     }
 
-    /// Create a raw-bytes topic publisher.
+    /// Create a typed topic publisher with topic QoS (KeepLast depth → HWM).
+    ///
+    /// Topic reliability is always best-effort. Service / action ignore QoS for now.
+    pub fn create_publisher_with_qos<M: Message + Name + Default>(
+        &mut self,
+        topic: impl Into<String>,
+        qos: QosProfile,
+    ) -> Result<TopicPublisher<M>> {
+        let topic = topic.into();
+        let pub_ = TopicPublisher {
+            inner: self.create_publisher_raw_with_qos(topic.clone(), qos)?,
+            _marker: PhantomData,
+        };
+        topic_type_register::register_topic_type(
+            self.options.service_frontend.as_deref(),
+            &self.options.host,
+            &self.options.transport,
+            &topic,
+            &M::full_name(),
+        );
+        Ok(pub_)
+    }
+
+    /// Create a raw-bytes topic publisher (inherits node stream HWM).
     pub fn create_publisher_raw(&mut self, topic: impl Into<String>) -> Result<TopicPublisherRaw> {
         self.create_publisher_raw_with_hwm(topic, None)
     }
 
+    /// Create a raw-bytes topic publisher with topic QoS.
+    pub fn create_publisher_raw_with_qos(
+        &mut self,
+        topic: impl Into<String>,
+        qos: QosProfile,
+    ) -> Result<TopicPublisherRaw> {
+        self.create_publisher_raw_with_hwm(topic, Some(qos.to_hwm()))
+    }
+
     /// Like [`create_publisher_raw`](Self::create_publisher_raw), optionally setting HWM
-    /// on first socket connect.
+    /// on first socket connect. Prefer [`create_publisher_raw_with_qos`] for topic depth.
     pub fn create_publisher_raw_with_hwm(
         &mut self,
         topic: impl Into<String>,
@@ -1306,6 +1391,7 @@ impl Node {
     }
 
     /// Like [`create_publisher`](Self::create_publisher), setting HWM on first socket connect.
+    /// Prefer [`create_publisher_with_qos`](Self::create_publisher_with_qos) for topic depth.
     pub fn create_publisher_with_hwm<M: Message + Name + Default>(
         &mut self,
         topic: impl Into<String>,
@@ -1417,6 +1503,10 @@ impl Node {
 
     /// Subscribe with a protobuf-typed callback (ROS 2 `create_subscription`).
     ///
+    /// Does not change the node's stream HWM. Prefer
+    /// [`create_subscription_with_qos`](Self::create_subscription_with_qos) to set
+    /// KeepLast depth on the shared SUB socket.
+    ///
     /// Decode failures are skipped (logged). `callback_group: None` uses the
     /// node's default mutually exclusive group.
     /// Best-effort registers `topic → M::full_name()` with the broker console.
@@ -1448,10 +1538,64 @@ impl Node {
         Ok(())
     }
 
-    /// Subscribe with a raw-bytes callback.
+    /// Subscribe with topic QoS (KeepLast depth → shared SUB HWM).
+    ///
+    /// Topic reliability is always best-effort. Multiple subscriptions on one node
+    /// share one SUB socket — the last explicit QoS depth wins for that socket.
+    pub fn create_subscription_with_qos<M, F>(
+        &mut self,
+        topic: &str,
+        qos: QosProfile,
+        callback: F,
+        callback_group: Option<&CallbackGroup>,
+    ) -> Result<()>
+    where
+        M: Message + Name + Default + 'static,
+        F: Fn(&str, M) + Send + Sync + 'static,
+    {
+        let group = callback_group
+            .cloned()
+            .unwrap_or_else(|| self.default_callback_group.clone());
+        let cb: MessageCallback = Arc::new(move |topic, payload| match M::decode(payload) {
+            Ok(msg) => callback(topic, msg),
+            Err(err) => log::warn!("typed subscription decode failed: {err}"),
+        });
+        self.create_subscription_raw_with_qos(topic, qos, cb, Some(&group))?;
+        topic_type_register::register_topic_type(
+            self.options.service_frontend.as_deref(),
+            &self.options.host,
+            &self.options.transport,
+            topic,
+            &M::full_name(),
+        );
+        Ok(())
+    }
+
+    /// Subscribe with a raw-bytes callback (does not change stream HWM).
     pub fn create_subscription_raw(
         &mut self,
         topic: &str,
+        callback: MessageCallback,
+        callback_group: Option<&CallbackGroup>,
+    ) -> Result<()> {
+        self.create_subscription_raw_inner(topic, None, callback, callback_group)
+    }
+
+    /// Subscribe with a raw-bytes callback and topic QoS (applies KeepLast depth → HWM).
+    pub fn create_subscription_raw_with_qos(
+        &mut self,
+        topic: &str,
+        qos: QosProfile,
+        callback: MessageCallback,
+        callback_group: Option<&CallbackGroup>,
+    ) -> Result<()> {
+        self.create_subscription_raw_inner(topic, Some(qos), callback, callback_group)
+    }
+
+    fn create_subscription_raw_inner(
+        &mut self,
+        topic: &str,
+        qos: Option<QosProfile>,
         callback: MessageCallback,
         callback_group: Option<&CallbackGroup>,
     ) -> Result<()> {
@@ -1468,9 +1612,15 @@ impl Node {
         );
         #[cfg(feature = "ws")]
         if self.options.is_ws() {
+            let _ = qos; // gRPC subscribe has no local ZMQ HWM
             self.ensure_ws()?.subscribe(topic, callback, group)?;
             self.topology_subscriptions.push(topology);
             return Ok(());
+        }
+        if let Some(qos) = qos {
+            // Apply before connect so the first SUB socket gets the depth; also
+            // updates an already-connected shared SUB in place.
+            self.set_stream_hwm(qos.to_hwm())?;
         }
         self.ensure_subscriber()?;
         self.lock_executor()?.subscribe(topic, callback, group)?;
@@ -1874,26 +2024,37 @@ mod tests {
     #[test]
     fn node_local_parameters() {
         let mut node = Node::new("pilot");
-        node.declare_parameter("max_speed", ParameterValue::Double(1.5))
+        let declared = node
+            .declare_parameter("max_speed", ParameterValue::Double(1.5))
             .unwrap();
-        node.declare_parameter("enabled", ParameterValue::Bool(true))
-            .unwrap();
+        assert_eq!(declared.as_double().unwrap(), 1.5);
+        node.declare_parameter("enabled", true).unwrap();
         assert_eq!(
-            node.get_parameter("max_speed").unwrap(),
+            node.get_parameter("max_speed").unwrap().value,
             ParameterValue::Double(1.5)
         );
-        node.set_parameter("max_speed", ParameterValue::Double(2.0))
+        assert_eq!(
+            node.get_parameter("max_speed").unwrap().as_double().unwrap(),
+            1.5
+        );
+        node.set_parameter(Parameter::new("max_speed", 2.0))
             .unwrap();
         assert!(node.has_parameter("enabled"));
-        assert_eq!(node.list_parameters().len(), 2);
+        assert_eq!(node.list_all_parameters().len(), 2);
+        assert_eq!(
+            node.list_parameters(&[], 0).names,
+            vec!["enabled".to_string(), "max_speed".to_string()]
+        );
         assert!(matches!(
-            node.declare_parameter("enabled", ParameterValue::Bool(false)),
+            node.declare_parameter("enabled", false),
             Err(BusError::ParameterAlreadyDeclared { .. })
         ));
         assert!(matches!(
-            node.set_parameter("enabled", ParameterValue::Integer(1)),
+            node.set_parameter(Parameter::new("enabled", 1_i64)),
             Err(BusError::ParameterTypeMismatch { .. })
         ));
+        node.undeclare_parameter("enabled").unwrap();
+        assert!(!node.has_parameter("enabled"));
     }
 
     #[test]
@@ -1908,15 +2069,25 @@ ros__parameters:
         )
         .unwrap();
         assert_eq!(
-            node.get_parameter("max_speed").unwrap(),
+            node.get_parameter("max_speed").unwrap().value,
             ParameterValue::Double(1.25)
         );
         node.load_parameters_from_yaml_str("max_speed: 3.0\n")
             .unwrap();
         assert_eq!(
-            node.get_parameter("max_speed").unwrap(),
-            ParameterValue::Double(3.0)
+            node.get_parameter("max_speed").unwrap().as_double().unwrap(),
+            3.0
         );
+        let batch = node
+            .get_parameters(&["max_speed", "frame_id"])
+            .unwrap();
+        assert_eq!(batch.len(), 2);
+        node.set_parameters([
+            Parameter::new("max_speed", 4.0),
+            Parameter::new("frame_id", "odom"),
+        ])
+        .unwrap();
+        assert_eq!(node.get_parameter("frame_id").unwrap().as_string().unwrap(), "odom");
     }
 
     #[test]
@@ -1978,6 +2149,14 @@ ros__parameters:
         assert_eq!(Node::ipc("a").options().transport, "ipc");
         assert_eq!(Node::inproc("a").options().transport, "inproc");
         assert_eq!(Node::new("a").options().transport, "tcp");
+        let ctx = Context::new();
+        assert_eq!(Node::with_context(&ctx, "a").options().transport, "tcp");
+        assert_eq!(
+            Node::with_context_options(&ctx, "a", NodeOptions::ipc())
+                .options()
+                .transport,
+            "ipc"
+        );
         #[cfg(feature = "ws")]
         {
             assert_eq!(Node::ws("a").options().transport, "ws");

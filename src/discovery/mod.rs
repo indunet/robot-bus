@@ -47,7 +47,11 @@ impl BrokerAnnouncement {
             "tcp" => self.apply_tcp(&mut opts)?,
             "ipc" => self.apply_ipc(&mut opts)?,
             "inproc" => self.apply_inproc(&mut opts)?,
-            "grpc" => self.apply_grpc(&mut opts)?,
+            // Canonical name is "ws"; "grpc" is a compatibility alias.
+            "ws" | "grpc" => {
+                self.apply_grpc(&mut opts)?;
+                opts.transport = "ws".into();
+            }
             other => {
                 return Err(BusError::Protocol(format!(
                     "discovery apply: unknown transport {other:?}"

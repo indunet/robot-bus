@@ -116,7 +116,7 @@ Node node = Node.discover("talker", "tcp", new DiscoverOpts(0));
 ```
 
 ### WebSocket RPC 模式 Node（客户端）
-`Node.grpc` / `Node.wsAt` 经 broker gRPC 网关接入，不创建 ZMQ socket。
+`Node.ws` / `Node.wsAt` 经 broker gRPC 网关接入，不创建 ZMQ socket。
 
 | 支持 | 不支持 |
 |------|--------|

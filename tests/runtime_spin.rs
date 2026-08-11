@@ -11,7 +11,7 @@ use robot_bus::geometry_msgs::msg::v1::Vector3;
 use robot_bus::message_bus::Publisher;
 use robot_bus::sensor_msgs::msg::v1::Imu;
 use robot_bus::{
-    CallbackGroup, Executor, HighWaterMark, MessageCallback, Node, NodeOptions,
+    CallbackGroup, Executor, HighWaterMark, MessageCallback, Node, NodeOptions, QosProfile,
     SingleThreadedExecutor,
 };
 use support::MessageProxy;
@@ -194,6 +194,34 @@ fn publisher_subscriber_hwm_roundtrip() {
         .connect_subscriber(Some(&proxy.xpub_endpoint))
         .expect("connect");
     assert_eq!(executor.stream_hwm(), HighWaterMark::new(20, 20));
+}
+
+#[test]
+fn node_topic_qos_keep_last_maps_to_hwm() {
+    let proxy = MessageProxy::spawn();
+    let (executor, mut node) = node_with_proxy("qos-pilot", &proxy);
+    let _ = executor;
+
+    let qos = QosProfile::keep_last(24);
+    let pub_ = node
+        .create_publisher_raw_with_qos("/qos/demo", qos)
+        .expect("publisher with qos");
+    assert_eq!(
+        pub_.high_water_mark().expect("publisher hwm"),
+        HighWaterMark::new(24, 24)
+    );
+
+    node.create_subscription_raw_with_qos(
+        "/qos/demo",
+        QosProfile::keep_last(32),
+        Arc::new(|_topic, _payload| {}),
+        None,
+    )
+    .expect("subscription with qos");
+    assert_eq!(
+        node.stream_hwm().expect("stream hwm"),
+        HighWaterMark::new(32, 32)
+    );
 }
 
 fn node_with_proxy(name: &str, proxy: &MessageProxy) -> (SingleThreadedExecutor, Node) {

@@ -186,7 +186,7 @@ pub extern "C" fn robot_bus_broker_start_with_context(
         RustRobotBusBroker::start(config)
     } else {
         match context_ref(ctx) {
-            Ok(c) => RustRobotBusBroker::start_with_context(c.clone(), config),
+            Ok(c) => RustRobotBusBroker::start_with_context(c, config),
             Err(_) => return ptr::null_mut(),
         }
     };

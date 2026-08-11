@@ -28,7 +28,7 @@ class WsNodeTest {
                         "web3",
                         new NodeOptions(
                                 null,
-                                "grpc",
+                                "ws",
                                 "http://127.0.0.1:15570",
                                 null,
                                 null,

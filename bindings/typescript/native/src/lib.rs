@@ -22,7 +22,8 @@ use robot_bus::runtime::{
     ActionGoalHandler, CallbackGroup, CallbackGroupType, Context as RustContext,
     MultiThreadedExecutor as RustMultiThreadedExecutor, Node as RustNode,
     NodeActionClientRaw as RustNodeActionClient, NodeOptions as RustNodeOptions,
-    NodeServiceClientRaw as RustNodeServiceClient, ParameterValue, RawActionFeedbackCallback,
+    NodeServiceClientRaw as RustNodeServiceClient, Parameter, ParameterValue,
+    RawActionFeedbackCallback,
     RawGoalHandle as RustRawGoalHandle, ServiceHandler, ShutdownHandle as RustShutdownHandle,
     SingleThreadedExecutor as RustSingleThreadedExecutor, TimerCallback,
     TimerHandle as RustTimerHandle, TopicPublisherRaw as RustTopicPublisher,
@@ -70,6 +71,13 @@ fn parameter_value_to_js(env: &Env, value: ParameterValue) -> Result<Unknown> {
     })
 }
 
+fn parameter_to_js(env: &Env, param: Parameter) -> Result<Unknown> {
+    let mut obj = env.create_object()?;
+    obj.set_named_property("name", env.create_string(&param.name)?)?;
+    obj.set_named_property("value", parameter_value_to_js(env, param.value)?)?;
+    Ok(obj.into_unknown())
+}
+
 fn node_options(
     host: &str,
     transport: &str,
@@ -81,7 +89,8 @@ fn node_options(
     action_backend: Option<String>,
     action_frontend: Option<String>,
 ) -> Result<RustNodeOptions> {
-    if transport == "ws" {
+    // Canonical gateway transport is "ws"; "grpc" kept as a compatibility alias.
+    if transport == "ws" || transport == "grpc" {
         return Ok(match ws_url {
             Some(url) => RustNodeOptions::ws_at(url),
             None => RustNodeOptions::ws(),
@@ -89,7 +98,7 @@ fn node_options(
     }
     if ws_url.is_some() {
         return Err(Error::from_reason(
-            "ws_url is only valid when transport=\"grpc\"",
+            "ws_url is only valid when transport=\"ws\"",
         ));
     }
     Ok(RustNodeOptions {
@@ -576,10 +585,10 @@ impl Node {
     ) -> Self {
         match prefix.as_deref() {
             Some(p) => Self {
-                inner: RustNode::inproc_at_with_context(context.inner.clone(), name, p),
+                inner: RustNode::inproc_at_with_context(&context.inner, name, p),
             },
             None => Self {
-                inner: RustNode::inproc_with_context(context.inner.clone(), name),
+                inner: RustNode::inproc_with_context(&context.inner, name),
             },
         }
     }
@@ -601,8 +610,8 @@ impl Node {
         let host = host.unwrap_or_else(|| "localhost".into());
         let transport = transport.unwrap_or_else(|| "tcp".into());
         Ok(Self {
-            inner: RustNode::with_context(
-                context.inner.clone(),
+            inner: RustNode::with_context_options(
+                &context.inner,
                 name,
                 node_options(
                     &host,
@@ -642,7 +651,7 @@ impl Node {
             "tcp" => RustNodeOptions::tcp(),
             "ipc" => RustNodeOptions::ipc(),
             "inproc" => RustNodeOptions::inproc(),
-            "ws" => RustNodeOptions::ws(),
+            "ws" | "grpc" => RustNodeOptions::ws(),
             other => {
                 return Err(Error::from_reason(format!("unknown transport {other:?}")));
             }
@@ -675,22 +684,24 @@ impl Node {
     }
 
     #[napi]
-    pub fn declare_parameter(&mut self, name: String, value: Unknown) -> Result<()> {
-        self.inner
+    pub fn declare_parameter(&mut self, env: Env, name: String, value: Unknown) -> Result<Unknown> {
+        let param = self
+            .inner
             .declare_parameter(name, parameter_value_from_js(value)?)
-            .map_err(bus_err)
+            .map_err(bus_err)?;
+        parameter_to_js(&env, param)
     }
 
     #[napi]
     pub fn get_parameter(&self, env: Env, name: String) -> Result<Unknown> {
-        let value = self.inner.get_parameter(&name).map_err(bus_err)?;
-        parameter_value_to_js(&env, value)
+        let param = self.inner.get_parameter(&name).map_err(bus_err)?;
+        parameter_to_js(&env, param)
     }
 
     #[napi]
     pub fn set_parameter(&mut self, name: String, value: Unknown) -> Result<()> {
         self.inner
-            .set_parameter(&name, parameter_value_from_js(value)?)
+            .set_parameter(Parameter::new(name, parameter_value_from_js(value)?))
             .map_err(bus_err)
     }
 
@@ -700,13 +711,42 @@ impl Node {
     }
 
     #[napi]
-    pub fn list_parameters(&self, env: Env) -> Result<Vec<Unknown>> {
+    pub fn undeclare_parameter(&mut self, name: String) -> Result<()> {
+        self.inner.undeclare_parameter(&name).map_err(bus_err)
+    }
+
+    /// ROS 2–style list: `{ names: string[], prefixes: string[] }`.
+    #[napi]
+    pub fn list_parameters(
+        &self,
+        env: Env,
+        prefixes: Option<Vec<String>>,
+        depth: Option<u32>,
+    ) -> Result<Unknown> {
+        let owned = prefixes.unwrap_or_default();
+        let refs: Vec<&str> = owned.iter().map(|s| s.as_str()).collect();
+        let result = self
+            .inner
+            .list_parameters(&refs, u64::from(depth.unwrap_or(0)));
+        let mut obj = env.create_object()?;
+        let mut names = env.create_array_with_length(result.names.len())?;
+        for (i, name) in result.names.iter().enumerate() {
+            names.set(i as u32, env.create_string(name)?)?;
+        }
+        let mut prefixes_arr = env.create_array_with_length(result.prefixes.len())?;
+        for (i, prefix) in result.prefixes.iter().enumerate() {
+            prefixes_arr.set(i as u32, env.create_string(prefix)?)?;
+        }
+        obj.set_named_property("names", names)?;
+        obj.set_named_property("prefixes", prefixes_arr)?;
+        Ok(obj.into_unknown())
+    }
+
+    #[napi]
+    pub fn list_all_parameters(&self, env: Env) -> Result<Vec<Unknown>> {
         let mut out = Vec::new();
-        for param in self.inner.list_parameters() {
-            let mut obj = env.create_object()?;
-            obj.set_named_property("name", env.create_string(&param.name)?)?;
-            obj.set_named_property("value", parameter_value_to_js(&env, param.value)?)?;
-            out.push(obj.into_unknown());
+        for param in self.inner.list_all_parameters() {
+            out.push(parameter_to_js(&env, param)?);
         }
         Ok(out)
     }
@@ -1278,7 +1318,7 @@ impl RobotBusBroker {
                     config.discovery.advertise_host = Some(v);
                 }
             }
-            if let Some(v) = o.api_listen.or(o.api_listen) {
+            if let Some(v) = o.api_listen {
                 if !v.is_empty() {
                     config.ws.listen = v
                         .parse()
@@ -1289,7 +1329,7 @@ impl RobotBusBroker {
         }
 
         let broker = match context {
-            Some(c) => RustRobotBusBroker::start_with_context(c.inner.clone(), config),
+            Some(c) => RustRobotBusBroker::start_with_context(&c.inner, config),
             None => RustRobotBusBroker::start(config),
         }
         .map_err(anyhow_err)?;

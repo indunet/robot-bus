@@ -82,7 +82,7 @@ pub extern "C" fn robot_bus_node_new_with_context(
 ) -> *mut RobotBusNode {
     clear_error();
     let context = match context_ref(ctx) {
-        Ok(c) => c.clone(),
+        Ok(c) => c,
         Err(_) => return ptr::null_mut(),
     };
     let name = match cstr_req(name) {
@@ -94,7 +94,7 @@ pub extern "C" fn robot_bus_node_new_with_context(
         Err(_) => return ptr::null_mut(),
     };
     Box::into_raw(Box::new(RobotBusNode {
-        inner: RustNode::with_context(context, name, options),
+        inner: RustNode::with_context_options(context, name, options),
     }))
 }
 
@@ -154,7 +154,7 @@ pub extern "C" fn robot_bus_node_inproc_with_context(
 ) -> *mut RobotBusNode {
     clear_error();
     let context = match context_ref(ctx) {
-        Ok(c) => c.clone(),
+        Ok(c) => c,
         Err(_) => return ptr::null_mut(),
     };
     let name = match cstr_req(name) {

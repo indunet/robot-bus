@@ -16,7 +16,7 @@ use super::runtime::{
     PyCallbackGroup, PyCallbackGroupType, PyContext, PyShutdownHandle, PyTimerHandle,
 };
 use super::util::{
-    bus_err, parameter_value_from_py, parameter_value_to_py, py_discover_options, py_node_options,
+    bus_err, parameter_to_py, parameter_value_from_py, py_discover_options, py_node_options,
 };
 
 #[pyclass(name = "Node", unsendable)]
@@ -69,6 +69,32 @@ impl PyNode {
         })
     }
 
+    /// ROS 2–style preferred entry: share `context`, connect local broker over TCP.
+    #[classmethod]
+    fn with_context(_cls: &Bound<'_, PyType>, context: &PyContext, name: String) -> Self {
+        Self {
+            inner: RustNode::with_context(&context.inner, name),
+        }
+    }
+
+    /// Like [`with_context`] with explicit host (TCP).
+    #[classmethod]
+    #[pyo3(signature = (context, name, host="localhost"))]
+    fn with_context_at(
+        _cls: &Bound<'_, PyType>,
+        context: &PyContext,
+        name: String,
+        host: &str,
+    ) -> Self {
+        Self {
+            inner: RustNode::with_context_options(
+                &context.inner,
+                name,
+                RustNodeOptions::tcp_at(host),
+            ),
+        }
+    }
+
     /// TCP to the local broker (`localhost` + default ports).
     #[classmethod]
     #[pyo3(signature = (name, host="localhost"))]
@@ -117,8 +143,8 @@ impl PyNode {
     ) -> Self {
         Self {
             inner: match prefix {
-                Some(p) => RustNode::inproc_at_with_context(context.inner.clone(), name, p),
-                None => RustNode::inproc_with_context(context.inner.clone(), name),
+                Some(p) => RustNode::inproc_at_with_context(&context.inner, name, p),
+                None => RustNode::inproc_with_context(&context.inner, name),
             },
         }
     }
@@ -176,22 +202,29 @@ impl PyNode {
     }
 
     /// Declare a local parameter (`bool` / `int` / `float` / `str`).
-    fn declare_parameter(&mut self, name: &str, value: &Bound<'_, PyAny>) -> PyResult<()> {
-        self.inner
+    /// Returns a dict `{"name", "value"}` (ROS 2 returns a Parameter).
+    fn declare_parameter(&mut self, py: Python<'_>, name: &str, value: &Bound<'_, PyAny>) -> PyResult<PyObject> {
+        let param = self
+            .inner
             .declare_parameter(name, parameter_value_from_py(value)?)
-            .map_err(bus_err)
+            .map_err(bus_err)?;
+        parameter_to_py(py, param)
     }
 
-    /// Read a previously declared parameter (returns `bool` / `int` / `float` / `str`).
+    /// Read a previously declared parameter.
+    /// Returns a dict `{"name", "value"}` (ROS 2 `Parameter`; use `["value"]` like `.value`).
     fn get_parameter(&self, py: Python<'_>, name: &str) -> PyResult<PyObject> {
-        let value = self.inner.get_parameter(name).map_err(bus_err)?;
-        parameter_value_to_py(py, value)
+        let param = self.inner.get_parameter(name).map_err(bus_err)?;
+        parameter_to_py(py, param)
     }
 
     /// Update a declared parameter (type must match).
     fn set_parameter(&mut self, name: &str, value: &Bound<'_, PyAny>) -> PyResult<()> {
         self.inner
-            .set_parameter(name, parameter_value_from_py(value)?)
+            .set_parameter(crate::runtime::Parameter::new(
+                name,
+                parameter_value_from_py(value)?,
+            ))
             .map_err(bus_err)
     }
 
@@ -199,14 +232,35 @@ impl PyNode {
         self.inner.has_parameter(name)
     }
 
+    /// Remove a declared parameter.
+    fn undeclare_parameter(&mut self, name: &str) -> PyResult<()> {
+        self.inner.undeclare_parameter(name).map_err(bus_err)
+    }
+
+    /// List parameter names (ROS 2 `list_parameters`).
+    ///
+    /// Returns `{"names": [...], "prefixes": [...]}`. Omit args to list all recursively.
+    #[pyo3(signature = (prefixes=None, depth=0))]
+    fn list_parameters(
+        &self,
+        py: Python<'_>,
+        prefixes: Option<Vec<String>>,
+        depth: u64,
+    ) -> PyResult<PyObject> {
+        let owned = prefixes.unwrap_or_default();
+        let refs: Vec<&str> = owned.iter().map(|s| s.as_str()).collect();
+        let result = self.inner.list_parameters(&refs, depth);
+        let dict = pyo3::types::PyDict::new(py);
+        dict.set_item("names", result.names)?;
+        dict.set_item("prefixes", result.prefixes)?;
+        Ok(dict.into())
+    }
+
     /// All declared parameters as `list[dict]` with keys `name`, `value`.
-    fn list_parameters(&self, py: Python<'_>) -> PyResult<PyObject> {
+    fn list_all_parameters(&self, py: Python<'_>) -> PyResult<PyObject> {
         let list = pyo3::types::PyList::empty(py);
-        for param in self.inner.list_parameters() {
-            let dict = pyo3::types::PyDict::new(py);
-            dict.set_item("name", &param.name)?;
-            dict.set_item("value", parameter_value_to_py(py, param.value)?)?;
-            list.append(dict)?;
+        for param in self.inner.list_all_parameters() {
+            list.append(parameter_to_py(py, param)?)?;
         }
         Ok(list.into())
     }
