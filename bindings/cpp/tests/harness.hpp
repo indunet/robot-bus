@@ -1,6 +1,6 @@
 #pragma once
 
-#include <robot_bus/Node.hpp>
+#include <robot_bus/node.hpp>
 
 #include <chrono>
 #include <cstdint>

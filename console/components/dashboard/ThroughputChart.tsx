@@ -96,7 +96,7 @@ function RateChart({
   }, [data, windowMin])
 
   return (
-    <section className="border border-bus-border bg-bus-panel rounded-sm h-full flex flex-col min-h-0">
+    <section className="border border-bus-border bg-bus-panel rounded-sm h-full flex flex-col min-h-0 min-w-0 w-full">
       <PanelHeader
         icon={icon}
         title={title}

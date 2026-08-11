@@ -1,325 +1,254 @@
 #pragma once
 
-#include <robot_bus.h>
-
-#include <robot_bus/Node.hpp>
+#include <robot_bus/node.hpp>
 
 #include <cstdint>
-#include <cstring>
 #include <memory>
 #include <string>
 #include <utility>
 #include <vector>
 
+#ifdef ROBOT_BUS_HAS_ROS2
+#include <rclcpp/rclcpp.hpp>
+#include <rclcpp_action/rclcpp_action.hpp>
+#endif
+
 namespace robot_bus {
 
 /// Topic / service / action bridge direction (ROS 2 ↔ robot-bus).
 enum class Direction {
-  Ros2ToBus = ROBOT_BUS_ROUTE_DIR_ROS2_TO_BUS,
-  BusToRos2 = ROBOT_BUS_ROUTE_DIR_BUS_TO_ROS2,
+  Ros2ToBus = 0,
+  BusToRos2 = 1,
 };
 
-/// True if `librobot_bus` was built with `--features ros2`.
-inline bool ros2_available() { return robot_bus_ros2_available() != 0; }
+/// True when this translation unit / consumer was built with `ROBOT_BUS_HAS_ROS2`
+/// (link `robot_bus_ros2_bridge`). Independent of the C ABI stub.
+inline bool ros2_available() {
+#ifdef ROBOT_BUS_HAS_ROS2
+  return true;
+#else
+  return false;
+#endif
+}
 
-/// Borrowed DynamicMessage view during a TopicMapper callback (fields via dotted paths).
-class DynMsg {
- public:
-  explicit DynMsg(RobotBusRos2DynMsg *raw) : raw_(raw) {}
-  explicit DynMsg(const RobotBusRos2DynMsg *raw) : raw_(const_cast<RobotBusRos2DynMsg *>(raw)) {}
+inline constexpr const char *kRos2BridgeUnavailable =
+    "ROS 2 bridge not built: link robot_bus_ros2_bridge "
+    "(CMake -DROBOT_BUS_ROS2=ON) after sourcing Humble/Jazzy";
 
-  RobotBusRos2DynMsg *raw() const { return raw_; }
+/// Default timeout for bridged service calls (seconds).
+inline constexpr double kServiceCallTimeoutSecs = 5.0;
+/// Default timeout for bridged action goals (seconds).
+inline constexpr double kActionCallTimeoutSecs = 30.0;
 
-  bool has_field(const char *path) const {
-    return robot_bus_ros2_dyn_msg_has_field(raw_, path) != 0;
+#ifdef ROBOT_BUS_HAS_ROS2
+/// Context for custom [`TopicMapper::attach`].
+struct TopicWireContext {
+  rclcpp::Node::SharedPtr ros_node;
+  Node &bus_node;
+  const std::string &ros_topic;
+  const std::string &bus_topic;
+  Direction direction;
+  /// Keep ROS / bus entities alive for the bridge lifetime.
+  std::vector<std::shared_ptr<void>> &keep_alive;
+
+  template <typename T>
+  void retain(std::shared_ptr<T> p) {
+    keep_alive.push_back(std::shared_ptr<void>(std::move(p)));
   }
-
-  std::string get_string(const char *path) const {
-    char *out = nullptr;
-    check(robot_bus_ros2_dyn_msg_get_string(raw_, path, &out), "DynMsg::get_string");
-    std::string s = out ? out : "";
-    robot_bus_free_string(out);
-    return s;
-  }
-
-  void set_string(const char *path, const std::string &value) {
-    check(robot_bus_ros2_dyn_msg_set_string(raw_, path, value.c_str()), "DynMsg::set_string");
-  }
-
-  bool get_bool(const char *path) const {
-    int out = 0;
-    check(robot_bus_ros2_dyn_msg_get_bool(raw_, path, &out), "DynMsg::get_bool");
-    return out != 0;
-  }
-
-  void set_bool(const char *path, bool value) {
-    check(robot_bus_ros2_dyn_msg_set_bool(raw_, path, value ? 1 : 0), "DynMsg::set_bool");
-  }
-
-  int64_t get_i64(const char *path) const {
-    int64_t out = 0;
-    check(robot_bus_ros2_dyn_msg_get_i64(raw_, path, &out), "DynMsg::get_i64");
-    return out;
-  }
-
-  void set_i64(const char *path, int64_t value) {
-    check(robot_bus_ros2_dyn_msg_set_i64(raw_, path, value), "DynMsg::set_i64");
-  }
-
-  double get_f64(const char *path) const {
-    double out = 0;
-    check(robot_bus_ros2_dyn_msg_get_f64(raw_, path, &out), "DynMsg::get_f64");
-    return out;
-  }
-
-  void set_f64(const char *path, double value) {
-    check(robot_bus_ros2_dyn_msg_set_f64(raw_, path, value), "DynMsg::set_f64");
-  }
-
-  std::vector<uint8_t> get_bytes(const char *path) const {
-    uint8_t *data = nullptr;
-    size_t len = 0;
-    check(robot_bus_ros2_dyn_msg_get_bytes(raw_, path, &data, &len), "DynMsg::get_bytes");
-    std::vector<uint8_t> out;
-    if (data && len > 0) {
-      out.assign(data, data + len);
-    }
-    robot_bus_free_bytes(data, len);
-    return out;
-  }
-
-  void set_bytes(const char *path, const std::vector<uint8_t> &value) {
-    check(robot_bus_ros2_dyn_msg_set_bytes(raw_, path, value.data(), value.size()),
-          "DynMsg::set_bytes");
-  }
-
- private:
-  RobotBusRos2DynMsg *raw_ = nullptr;
 };
 
-/// Custom topic mapper implemented in C++ (ROS DynamicMessage ↔ bus protobuf bytes).
-///
-/// Keep implementations thread-safe: callbacks may run on the ROS spin thread or bus
-/// subscription thread.
+/// Context for custom [`ServiceMapper::attach`].
+struct ServiceWireContext {
+  rclcpp::Node::SharedPtr ros_node;
+  Node &bus_node;
+  const std::string &ros_service;
+  const std::string &bus_service;
+  Direction direction;
+  double timeout_secs;
+  rclcpp::CallbackGroup::SharedPtr callback_group;
+  std::vector<std::shared_ptr<void>> &keep_alive;
+
+  template <typename T>
+  void retain(std::shared_ptr<T> p) {
+    keep_alive.push_back(std::shared_ptr<void>(std::move(p)));
+  }
+};
+
+/// Context for custom [`ActionMapper::attach`].
+struct ActionWireContext {
+  rclcpp::Node::SharedPtr ros_node;
+  Node &bus_node;
+  const std::string &ros_action;
+  const std::string &bus_action;
+  Direction direction;
+  double timeout_secs;
+  rclcpp::CallbackGroup::SharedPtr callback_group;
+  std::vector<std::shared_ptr<void>> &keep_alive;
+
+  template <typename T>
+  void retain(std::shared_ptr<T> p) {
+    keep_alive.push_back(std::shared_ptr<void>(std::move(p)));
+  }
+};
+#endif  // ROBOT_BUS_HAS_ROS2
+
+/// Topic codec. Builtins are ZSTs; custom mappers override `attach` (ROS2 builds).
 class TopicMapper {
  public:
   virtual ~TopicMapper() = default;
   virtual const char *type_name() const = 0;
-  virtual std::vector<uint8_t> ros_to_bus(const DynMsg &msg) = 0;
-  virtual void bus_to_ros(const uint8_t *payload, size_t len, DynMsg &msg) = 0;
+#ifdef ROBOT_BUS_HAS_ROS2
+  /// Wire this topic. Default throws — builtins use the library path instead.
+  virtual void attach(TopicWireContext &ctx);
+#endif
 };
 
-/// Service codec (same shape as TopicMapper). Until Track B (dynamic RPC), only
-/// `type_name()` is used and must match a library typed backend (`Trigger` /
-/// `SetBool`). Convert methods are reserved and not invoked.
+/// Service codec. Custom: override `attach` with concrete `create_service<T>`.
 class ServiceMapper {
  public:
   virtual ~ServiceMapper() = default;
   virtual const char *type_name() const = 0;
-  virtual std::vector<uint8_t> request_ros_to_bus(const DynMsg &msg) {
-    (void)msg;
-    throw Error(
-        "ServiceMapper::request_ros_to_bus requires Track B dynamic service support");
-  }
-  virtual void request_bus_to_ros(const uint8_t *payload, size_t len, DynMsg &msg) {
-    (void)payload;
-    (void)len;
-    (void)msg;
-    throw Error(
-        "ServiceMapper::request_bus_to_ros requires Track B dynamic service support");
-  }
-  virtual std::vector<uint8_t> response_ros_to_bus(const DynMsg &msg) {
-    (void)msg;
-    throw Error(
-        "ServiceMapper::response_ros_to_bus requires Track B dynamic service support");
-  }
-  virtual void response_bus_to_ros(const uint8_t *payload, size_t len, DynMsg &msg) {
-    (void)payload;
-    (void)len;
-    (void)msg;
-    throw Error(
-        "ServiceMapper::response_bus_to_ros requires Track B dynamic service support");
-  }
+#ifdef ROBOT_BUS_HAS_ROS2
+  virtual void attach(ServiceWireContext &ctx);
+#endif
 };
 
-/// Action codec (Goal / Feedback / Result). Same Track B limitation as ServiceMapper.
+/// Action codec. Custom: override `attach` with concrete action types.
 class ActionMapper {
  public:
   virtual ~ActionMapper() = default;
   virtual const char *type_name() const = 0;
-  virtual std::vector<uint8_t> goal_ros_to_bus(const DynMsg &msg) {
-    (void)msg;
-    throw Error("ActionMapper::goal_ros_to_bus requires Track B dynamic action support");
-  }
-  virtual void goal_bus_to_ros(const uint8_t *payload, size_t len, DynMsg &msg) {
-    (void)payload;
-    (void)len;
-    (void)msg;
-    throw Error("ActionMapper::goal_bus_to_ros requires Track B dynamic action support");
-  }
-  virtual std::vector<uint8_t> feedback_ros_to_bus(const DynMsg &msg) {
-    (void)msg;
-    throw Error(
-        "ActionMapper::feedback_ros_to_bus requires Track B dynamic action support");
-  }
-  virtual void feedback_bus_to_ros(const uint8_t *payload, size_t len, DynMsg &msg) {
-    (void)payload;
-    (void)len;
-    (void)msg;
-    throw Error(
-        "ActionMapper::feedback_bus_to_ros requires Track B dynamic action support");
-  }
-  virtual std::vector<uint8_t> result_ros_to_bus(const DynMsg &msg) {
-    (void)msg;
-    throw Error("ActionMapper::result_ros_to_bus requires Track B dynamic action support");
-  }
-  virtual void result_bus_to_ros(const uint8_t *payload, size_t len, DynMsg &msg) {
-    (void)payload;
-    (void)len;
-    (void)msg;
-    throw Error("ActionMapper::result_bus_to_ros requires Track B dynamic action support");
-  }
+#ifdef ROBOT_BUS_HAS_ROS2
+  virtual void attach(ActionWireContext &ctx);
+#endif
 };
 
-/// Builtin topic/service/action type tag: `.mapper(StdMsgsStringMapper{})`.
-struct StdMsgsStringMapper {
-  static constexpr const char *type_name = "std_msgs/msg/String";
-};
-struct SensorMsgsImageMapper {
-  static constexpr const char *type_name = "sensor_msgs/msg/Image";
-};
-struct SensorMsgsImuMapper {
-  static constexpr const char *type_name = "sensor_msgs/msg/Imu";
-};
-struct TriggerServiceMapper {
-  static constexpr const char *type_name = "std_srvs/srv/Trigger";
-};
-struct SetBoolServiceMapper {
-  static constexpr const char *type_name = "std_srvs/srv/SetBool";
-};
-struct FibonacciActionMapper {
-  static constexpr const char *type_name = "example_interfaces/action/Fibonacci";
+/// Builtin: `std_msgs/msg/String` ↔ bus `std_msgs.msg.v1.String`.
+struct StdMsgsStringMapper : TopicMapper {
+  const char *type_name() const override { return "std_msgs/msg/String"; }
 };
 
-namespace detail {
-template <typename T>
-using BuiltinTypeName = decltype(T::type_name);
-}  // namespace detail
+/// Builtin: `sensor_msgs/msg/Image` ↔ bus `sensor_msgs.msg.v1.Image`.
+struct SensorMsgsImageMapper : TopicMapper {
+  const char *type_name() const override { return "sensor_msgs/msg/Image"; }
+};
+
+/// Builtin: `std_srvs/srv/Trigger`.
+struct TriggerServiceMapper : ServiceMapper {
+  const char *type_name() const override { return "std_srvs/srv/Trigger"; }
+};
+
+/// Builtin: `std_srvs/srv/SetBool`.
+struct SetBoolServiceMapper : ServiceMapper {
+  const char *type_name() const override { return "std_srvs/srv/SetBool"; }
+};
+
+/// Builtin: `example_interfaces/action/Fibonacci`.
+struct FibonacciActionMapper : ActionMapper {
+  const char *type_name() const override { return "example_interfaces/action/Fibonacci"; }
+};
+
+#ifdef ROBOT_BUS_HAS_ROS2
+#include <robot_bus/ros2_bridge_typed.hpp>
+#endif
 
 class Ros2Bridge;
 class Ros2BridgeBuilder;
+class Ros2BridgeRoute;
+class Ros2BridgeServiceRoute;
+class Ros2BridgeActionRoute;
 
 namespace detail {
 
-struct TopicMapperHolder {
-  std::shared_ptr<TopicMapper> mapper;
+enum class TopicBuiltin { StdMsgsString, SensorMsgsImage };
+enum class ServiceBuiltin { Trigger, SetBool };
+enum class ActionBuiltin { Fibonacci };
+
+struct TopicRouteSpec {
+  std::string ros_topic;
+  std::string bus_topic;
+  Direction direction = Direction::Ros2ToBus;
+  TopicBuiltin builtin = TopicBuiltin::StdMsgsString;
+  std::shared_ptr<TopicMapper> custom;
+  bool is_custom() const { return static_cast<bool>(custom); }
 };
 
-inline int topic_mapper_ros_to_bus(const RobotBusRos2DynMsg *ros_msg, uint8_t **out_bus,
-                                   size_t *out_len, void *user) {
-  auto *holder = static_cast<TopicMapperHolder *>(user);
-  try {
-    DynMsg msg(ros_msg);
-    std::vector<uint8_t> bytes = holder->mapper->ros_to_bus(msg);
-    if (bytes.empty()) {
-      *out_bus = nullptr;
-      *out_len = 0;
-      return 0;
-    }
-    uint8_t *buf = robot_bus_alloc_bytes(bytes.size());
-    if (!buf) {
-      robot_bus_set_error("robot_bus_alloc_bytes failed");
-      return -1;
-    }
-    std::memcpy(buf, bytes.data(), bytes.size());
-    *out_bus = buf;
-    *out_len = bytes.size();
-    return 0;
-  } catch (const std::exception &e) {
-    robot_bus_set_error(e.what());
-    return -1;
-  } catch (...) {
-    robot_bus_set_error("TopicMapper::ros_to_bus failed");
-    return -1;
-  }
-}
+struct ServiceRouteSpec {
+  std::string ros_service;
+  std::string bus_service;
+  Direction direction = Direction::Ros2ToBus;
+  double timeout_secs = kServiceCallTimeoutSecs;
+  ServiceBuiltin builtin = ServiceBuiltin::Trigger;
+  std::shared_ptr<ServiceMapper> custom;
+  bool is_custom() const { return static_cast<bool>(custom); }
+};
 
-inline int topic_mapper_bus_to_ros(const uint8_t *bus_payload, size_t bus_len,
-                                  RobotBusRos2DynMsg *ros_msg, void *user) {
-  auto *holder = static_cast<TopicMapperHolder *>(user);
-  try {
-    DynMsg msg(ros_msg);
-    holder->mapper->bus_to_ros(bus_payload, bus_len, msg);
-    return 0;
-  } catch (const std::exception &e) {
-    robot_bus_set_error(e.what());
-    return -1;
-  } catch (...) {
-    robot_bus_set_error("TopicMapper::bus_to_ros failed");
-    return -1;
-  }
-}
+struct ActionRouteSpec {
+  std::string ros_action;
+  std::string bus_action;
+  Direction direction = Direction::Ros2ToBus;
+  double timeout_secs = kActionCallTimeoutSecs;
+  ActionBuiltin builtin = ActionBuiltin::Fibonacci;
+  std::shared_ptr<ActionMapper> custom;
+  bool is_custom() const { return static_cast<bool>(custom); }
+};
 
-inline void topic_mapper_drop(void *user) { delete static_cast<TopicMapperHolder *>(user); }
+enum class BusTransportKind { Tcp, Ipc, IpcAt, Discover };
+
+struct BusTransport {
+  BusTransportKind kind = BusTransportKind::Tcp;
+  std::string host = "localhost";
+  std::string ipc_path;
+  std::string api_url;
+  double discover_timeout_secs = 0.0;
+  std::string broker_id;
+};
+
+struct BuilderState {
+  std::string name;
+  BusTransport bus;
+  std::vector<TopicRouteSpec> routes;
+  std::vector<ServiceRouteSpec> services;
+  std::vector<ActionRouteSpec> actions;
+};
 
 }  // namespace detail
 
-/// Intermediate topic route configuration before `.add()`.
+/// Intermediate topic route: `.mapper(...).direction(...).add()`.
 class Ros2BridgeRoute {
  public:
-  Ros2BridgeRoute(RobotBusRos2BridgeBuilder *b, std::string ros_topic, std::string bus_topic)
-      : b_(b), ros_topic_(std::move(ros_topic)), bus_topic_(std::move(bus_topic)) {}
-
-  ~Ros2BridgeRoute() { robot_bus_ros2_bridge_builder_free(b_); }
+  Ros2BridgeRoute(std::shared_ptr<detail::BuilderState> state, std::string ros_topic,
+                  std::string bus_topic)
+      : state_(std::move(state)),
+        ros_topic_(std::move(ros_topic)),
+        bus_topic_(std::move(bus_topic)) {}
 
   Ros2BridgeRoute(const Ros2BridgeRoute &) = delete;
   Ros2BridgeRoute &operator=(const Ros2BridgeRoute &) = delete;
+  Ros2BridgeRoute(Ros2BridgeRoute &&) noexcept = default;
+  Ros2BridgeRoute &operator=(Ros2BridgeRoute &&) noexcept = default;
 
-  Ros2BridgeRoute(Ros2BridgeRoute &&o) noexcept
-      : b_(o.b_),
-        ros_topic_(std::move(o.ros_topic_)),
-        bus_topic_(std::move(o.bus_topic_)),
-        type_(std::move(o.type_)),
-        custom_(std::move(o.custom_)),
-        direction_(o.direction_) {
-    o.b_ = nullptr;
-  }
-
-  Ros2BridgeRoute &operator=(Ros2BridgeRoute &&o) noexcept {
-    if (this != &o) {
-      robot_bus_ros2_bridge_builder_free(b_);
-      b_ = o.b_;
-      o.b_ = nullptr;
-      ros_topic_ = std::move(o.ros_topic_);
-      bus_topic_ = std::move(o.bus_topic_);
-      type_ = std::move(o.type_);
-      custom_ = std::move(o.custom_);
-      direction_ = o.direction_;
-    }
-    return *this;
-  }
-
-  /// Builtin type string (same as Rust lookup). Prefer `.mapper(StdMsgsStringMapper{})`.
-  Ros2BridgeRoute &&type_name(std::string type) && {
-    type_ = std::move(type);
+  Ros2BridgeRoute &&mapper(StdMsgsStringMapper) && {
+    builtin_ = detail::TopicBuiltin::StdMsgsString;
     custom_.reset();
+    mapper_set_ = true;
     return std::move(*this);
   }
 
-  /// Builtin tag (e.g. `StdMsgsStringMapper{}`) or custom `shared_ptr<TopicMapper>`.
-  template <typename T, typename = detail::BuiltinTypeName<T>>
-  Ros2BridgeRoute &&mapper(T) && {
-    type_ = T::type_name;
+  Ros2BridgeRoute &&mapper(SensorMsgsImageMapper) && {
+    builtin_ = detail::TopicBuiltin::SensorMsgsImage;
     custom_.reset();
+    mapper_set_ = true;
     return std::move(*this);
   }
 
-  Ros2BridgeRoute &&mapper(std::shared_ptr<TopicMapper> m) && {
-    if (!m) {
-      throw Error("ros2 bridge route: null TopicMapper");
+  /// Custom topic mapper (override `attach` under `ROBOT_BUS_HAS_ROS2`).
+  Ros2BridgeRoute &&mapper(std::shared_ptr<TopicMapper> mapper) && {
+    if (!mapper) {
+      throw Error("ros2 bridge route: mapper shared_ptr must not be null");
     }
-    custom_ = std::move(m);
-    type_.clear();
+    custom_ = std::move(mapper);
+    mapper_set_ = true;
     return std::move(*this);
   }
 
@@ -331,437 +260,283 @@ class Ros2BridgeRoute {
   Ros2BridgeBuilder add() &&;
 
  private:
-  friend class Ros2BridgeBuilder;
-  RobotBusRos2BridgeBuilder *b_ = nullptr;
+  std::shared_ptr<detail::BuilderState> state_;
   std::string ros_topic_;
   std::string bus_topic_;
-  std::string type_;
-  std::shared_ptr<TopicMapper> custom_;
   Direction direction_ = Direction::Ros2ToBus;
+  detail::TopicBuiltin builtin_ = detail::TopicBuiltin::StdMsgsString;
+  std::shared_ptr<TopicMapper> custom_;
+  bool mapper_set_ = false;
 };
 
-/// Intermediate service route configuration before `.add()`.
-class Ros2BridgeService {
+/// Intermediate service route: `.mapper(...).timeout(...).direction(...).add()`.
+class Ros2BridgeServiceRoute {
  public:
-  Ros2BridgeService(RobotBusRos2BridgeBuilder *b, std::string ros_service, std::string bus_service)
-      : b_(b),
+  Ros2BridgeServiceRoute(std::shared_ptr<detail::BuilderState> state, std::string ros_service,
+                         std::string bus_service)
+      : state_(std::move(state)),
         ros_service_(std::move(ros_service)),
         bus_service_(std::move(bus_service)) {}
 
-  ~Ros2BridgeService() { robot_bus_ros2_bridge_builder_free(b_); }
+  Ros2BridgeServiceRoute(const Ros2BridgeServiceRoute &) = delete;
+  Ros2BridgeServiceRoute &operator=(const Ros2BridgeServiceRoute &) = delete;
+  Ros2BridgeServiceRoute(Ros2BridgeServiceRoute &&) noexcept = default;
+  Ros2BridgeServiceRoute &operator=(Ros2BridgeServiceRoute &&) noexcept = default;
 
-  Ros2BridgeService(const Ros2BridgeService &) = delete;
-  Ros2BridgeService &operator=(const Ros2BridgeService &) = delete;
-
-  Ros2BridgeService(Ros2BridgeService &&o) noexcept
-      : b_(o.b_),
-        ros_service_(std::move(o.ros_service_)),
-        bus_service_(std::move(o.bus_service_)),
-        type_(std::move(o.type_)),
-        custom_(std::move(o.custom_)),
-        direction_(o.direction_),
-        timeout_secs_(o.timeout_secs_) {
-    o.b_ = nullptr;
-  }
-
-  Ros2BridgeService &operator=(Ros2BridgeService &&o) noexcept {
-    if (this != &o) {
-      robot_bus_ros2_bridge_builder_free(b_);
-      b_ = o.b_;
-      o.b_ = nullptr;
-      ros_service_ = std::move(o.ros_service_);
-      bus_service_ = std::move(o.bus_service_);
-      type_ = std::move(o.type_);
-      custom_ = std::move(o.custom_);
-      direction_ = o.direction_;
-      timeout_secs_ = o.timeout_secs_;
-    }
-    return *this;
-  }
-
-  Ros2BridgeService &&type_name(std::string type) && {
-    type_ = std::move(type);
+  Ros2BridgeServiceRoute &&mapper(TriggerServiceMapper) && {
+    builtin_ = detail::ServiceBuiltin::Trigger;
     custom_.reset();
+    mapper_set_ = true;
     return std::move(*this);
   }
 
-  template <typename T, typename = detail::BuiltinTypeName<T>>
-  Ros2BridgeService &&mapper(T) && {
-    type_ = T::type_name;
+  Ros2BridgeServiceRoute &&mapper(SetBoolServiceMapper) && {
+    builtin_ = detail::ServiceBuiltin::SetBool;
     custom_.reset();
+    mapper_set_ = true;
     return std::move(*this);
   }
 
-  /// Custom codec: same shape as TopicMapper. Until Track B, `type_name()` must be a
-  /// builtin (`std_srvs/srv/Trigger` / `SetBool`); convert methods are ignored.
-  Ros2BridgeService &&mapper(std::shared_ptr<ServiceMapper> m) && {
-    if (!m) {
-      throw Error("ros2 bridge service: null ServiceMapper");
+  /// Custom service mapper (override `attach` with concrete ROS srv type).
+  Ros2BridgeServiceRoute &&mapper(std::shared_ptr<ServiceMapper> mapper) && {
+    if (!mapper) {
+      throw Error("ros2 bridge service: mapper shared_ptr must not be null");
     }
-    const char *tn = m->type_name();
-    if (!tn || !*tn) {
-      throw Error("ros2 bridge service: ServiceMapper::type_name() empty");
-    }
-    type_ = tn;
-    custom_ = std::move(m);
+    custom_ = std::move(mapper);
+    mapper_set_ = true;
     return std::move(*this);
   }
 
-  Ros2BridgeService &&direction(Direction d) && {
+  Ros2BridgeServiceRoute &&direction(Direction d) && {
     direction_ = d;
     return std::move(*this);
   }
 
-  /// Override default service call timeout (seconds). `<= 0` keeps library default.
-  Ros2BridgeService &&timeout(double secs) && {
-    timeout_secs_ = secs;
+  Ros2BridgeServiceRoute &&timeout(double timeout_secs) && {
+    timeout_secs_ = timeout_secs;
     return std::move(*this);
   }
 
   Ros2BridgeBuilder add() &&;
 
  private:
-  friend class Ros2BridgeBuilder;
-  RobotBusRos2BridgeBuilder *b_ = nullptr;
+  std::shared_ptr<detail::BuilderState> state_;
   std::string ros_service_;
   std::string bus_service_;
-  std::string type_;
-  std::shared_ptr<ServiceMapper> custom_;
   Direction direction_ = Direction::Ros2ToBus;
-  double timeout_secs_ = 0.0;
+  double timeout_secs_ = kServiceCallTimeoutSecs;
+  detail::ServiceBuiltin builtin_ = detail::ServiceBuiltin::Trigger;
+  std::shared_ptr<ServiceMapper> custom_;
+  bool mapper_set_ = false;
 };
 
-/// Intermediate action route configuration before `.add()`.
-class Ros2BridgeAction {
+/// Intermediate action route: `.mapper(...).timeout(...).direction(...).add()`.
+class Ros2BridgeActionRoute {
  public:
-  Ros2BridgeAction(RobotBusRos2BridgeBuilder *b, std::string ros_action, std::string bus_action)
-      : b_(b),
+  Ros2BridgeActionRoute(std::shared_ptr<detail::BuilderState> state, std::string ros_action,
+                        std::string bus_action)
+      : state_(std::move(state)),
         ros_action_(std::move(ros_action)),
         bus_action_(std::move(bus_action)) {}
 
-  ~Ros2BridgeAction() { robot_bus_ros2_bridge_builder_free(b_); }
+  Ros2BridgeActionRoute(const Ros2BridgeActionRoute &) = delete;
+  Ros2BridgeActionRoute &operator=(const Ros2BridgeActionRoute &) = delete;
+  Ros2BridgeActionRoute(Ros2BridgeActionRoute &&) noexcept = default;
+  Ros2BridgeActionRoute &operator=(Ros2BridgeActionRoute &&) noexcept = default;
 
-  Ros2BridgeAction(const Ros2BridgeAction &) = delete;
-  Ros2BridgeAction &operator=(const Ros2BridgeAction &) = delete;
-
-  Ros2BridgeAction(Ros2BridgeAction &&o) noexcept
-      : b_(o.b_),
-        ros_action_(std::move(o.ros_action_)),
-        bus_action_(std::move(o.bus_action_)),
-        type_(std::move(o.type_)),
-        custom_(std::move(o.custom_)),
-        direction_(o.direction_),
-        timeout_secs_(o.timeout_secs_) {
-    o.b_ = nullptr;
-  }
-
-  Ros2BridgeAction &operator=(Ros2BridgeAction &&o) noexcept {
-    if (this != &o) {
-      robot_bus_ros2_bridge_builder_free(b_);
-      b_ = o.b_;
-      o.b_ = nullptr;
-      ros_action_ = std::move(o.ros_action_);
-      bus_action_ = std::move(o.bus_action_);
-      type_ = std::move(o.type_);
-      custom_ = std::move(o.custom_);
-      direction_ = o.direction_;
-      timeout_secs_ = o.timeout_secs_;
-    }
-    return *this;
-  }
-
-  Ros2BridgeAction &&type_name(std::string type) && {
-    type_ = std::move(type);
+  Ros2BridgeActionRoute &&mapper(FibonacciActionMapper) && {
+    builtin_ = detail::ActionBuiltin::Fibonacci;
     custom_.reset();
+    mapper_set_ = true;
     return std::move(*this);
   }
 
-  template <typename T, typename = detail::BuiltinTypeName<T>>
-  Ros2BridgeAction &&mapper(T) && {
-    type_ = T::type_name;
-    custom_.reset();
-    return std::move(*this);
-  }
-
-  /// Custom codec: until Track B, `type_name()` must be a builtin (`Fibonacci`).
-  Ros2BridgeAction &&mapper(std::shared_ptr<ActionMapper> m) && {
-    if (!m) {
-      throw Error("ros2 bridge action: null ActionMapper");
+  /// Custom action mapper (override `attach` with concrete ROS action type).
+  Ros2BridgeActionRoute &&mapper(std::shared_ptr<ActionMapper> mapper) && {
+    if (!mapper) {
+      throw Error("ros2 bridge action: mapper shared_ptr must not be null");
     }
-    const char *tn = m->type_name();
-    if (!tn || !*tn) {
-      throw Error("ros2 bridge action: ActionMapper::type_name() empty");
-    }
-    type_ = tn;
-    custom_ = std::move(m);
+    custom_ = std::move(mapper);
+    mapper_set_ = true;
     return std::move(*this);
   }
 
-  Ros2BridgeAction &&direction(Direction d) && {
+  Ros2BridgeActionRoute &&direction(Direction d) && {
     direction_ = d;
     return std::move(*this);
   }
 
-  /// Override default action goal timeout (seconds). `<= 0` keeps library default.
-  Ros2BridgeAction &&timeout(double secs) && {
-    timeout_secs_ = secs;
+  Ros2BridgeActionRoute &&timeout(double timeout_secs) && {
+    timeout_secs_ = timeout_secs;
     return std::move(*this);
   }
 
   Ros2BridgeBuilder add() &&;
 
  private:
-  friend class Ros2BridgeBuilder;
-  RobotBusRos2BridgeBuilder *b_ = nullptr;
+  std::shared_ptr<detail::BuilderState> state_;
   std::string ros_action_;
   std::string bus_action_;
-  std::string type_;
-  std::shared_ptr<ActionMapper> custom_;
   Direction direction_ = Direction::Ros2ToBus;
-  double timeout_secs_ = 0.0;
+  double timeout_secs_ = kActionCallTimeoutSecs;
+  detail::ActionBuiltin builtin_ = detail::ActionBuiltin::Fibonacci;
+  std::shared_ptr<ActionMapper> custom_;
+  bool mapper_set_ = false;
 };
 
-/// Fluent builder matching Rust `Ros2Bridge::new(...).bus_tcp(...).route(...).add()`.
+/// Fluent builder: `Ros2Bridge::New(name).bus_tcp(...).route(...).mapper(...).add().build()`.
 class Ros2BridgeBuilder {
  public:
-  explicit Ros2BridgeBuilder(std::string name) {
-    b_ = static_cast<RobotBusRos2BridgeBuilder *>(check_ptr(
-        robot_bus_ros2_bridge_builder_new(name.c_str()), "Ros2BridgeBuilder"));
+  explicit Ros2BridgeBuilder(std::string name)
+      : state_(std::make_shared<detail::BuilderState>()) {
+    state_->name = std::move(name);
   }
 
-  explicit Ros2BridgeBuilder(RobotBusRos2BridgeBuilder *raw) : b_(raw) {}
-
-  ~Ros2BridgeBuilder() { robot_bus_ros2_bridge_builder_free(b_); }
+  explicit Ros2BridgeBuilder(std::shared_ptr<detail::BuilderState> state)
+      : state_(std::move(state)) {}
 
   Ros2BridgeBuilder(const Ros2BridgeBuilder &) = delete;
   Ros2BridgeBuilder &operator=(const Ros2BridgeBuilder &) = delete;
+  Ros2BridgeBuilder(Ros2BridgeBuilder &&) noexcept = default;
+  Ros2BridgeBuilder &operator=(Ros2BridgeBuilder &&) noexcept = default;
 
-  Ros2BridgeBuilder(Ros2BridgeBuilder &&o) noexcept : b_(o.b_) { o.b_ = nullptr; }
-
-  Ros2BridgeBuilder &operator=(Ros2BridgeBuilder &&o) noexcept {
-    if (this != &o) {
-      robot_bus_ros2_bridge_builder_free(b_);
-      b_ = o.b_;
-      o.b_ = nullptr;
-    }
-    return *this;
-  }
-
-  Ros2BridgeBuilder &&bus_tcp(const std::string &host) && {
-    check(robot_bus_ros2_bridge_builder_bus_tcp(b_, host.c_str()), "bus_tcp");
+  Ros2BridgeBuilder &&bus_tcp(const std::string &host = "localhost") && {
+    state_->bus.kind = detail::BusTransportKind::Tcp;
+    state_->bus.host = host;
     return std::move(*this);
   }
 
   Ros2BridgeBuilder &&bus_ipc() && {
-    check(robot_bus_ros2_bridge_builder_bus_ipc(b_), "bus_ipc");
+    state_->bus.kind = detail::BusTransportKind::Ipc;
+    state_->bus.ipc_path.clear();
     return std::move(*this);
   }
 
   Ros2BridgeBuilder &&bus_ipc_at(const std::string &dir) && {
-    check(robot_bus_ros2_bridge_builder_bus_ipc_at(b_, dir.c_str()), "bus_ipc_at");
+    state_->bus.kind = detail::BusTransportKind::IpcAt;
+    state_->bus.ipc_path = dir;
     return std::move(*this);
   }
 
-  /// HTTP discover then TCP. Empty `api_url` → default; `timeout_secs <= 0` uses the
-  /// default; empty broker_id = any.
-  Ros2BridgeBuilder &&bus_discover(const std::string &api_url = {},
-                                   double timeout_secs = 0.0,
+  /// HTTP discover then TCP. Empty `api_url` → default; `timeout_secs <= 0` uses default;
+  /// empty `broker_id` = any.
+  Ros2BridgeBuilder &&bus_discover(const std::string &api_url = {}, double timeout_secs = 0.0,
                                    const std::string &broker_id = {}) && {
-    check(robot_bus_ros2_bridge_builder_bus_discover(
-              b_, api_url.empty() ? nullptr : api_url.c_str(), timeout_secs,
-              broker_id.empty() ? nullptr : broker_id.c_str()),
-          "bus_discover");
+    state_->bus.kind = detail::BusTransportKind::Discover;
+    state_->bus.api_url = api_url;
+    state_->bus.discover_timeout_secs = timeout_secs;
+    state_->bus.broker_id = broker_id;
     return std::move(*this);
   }
 
   Ros2BridgeRoute route(std::string ros_topic, std::string bus_topic) && {
-    RobotBusRos2BridgeBuilder *b = b_;
-    b_ = nullptr;
-    return Ros2BridgeRoute(b, std::move(ros_topic), std::move(bus_topic));
+    auto state = std::move(state_);
+    return Ros2BridgeRoute(std::move(state), std::move(ros_topic), std::move(bus_topic));
   }
 
-  Ros2BridgeService service(std::string ros_service, std::string bus_service) && {
-    RobotBusRos2BridgeBuilder *b = b_;
-    b_ = nullptr;
-    return Ros2BridgeService(b, std::move(ros_service), std::move(bus_service));
+  Ros2BridgeServiceRoute service(std::string ros_service, std::string bus_service) && {
+    auto state = std::move(state_);
+    return Ros2BridgeServiceRoute(std::move(state), std::move(ros_service),
+                                  std::move(bus_service));
   }
 
-  Ros2BridgeAction action(std::string ros_action, std::string bus_action) && {
-    RobotBusRos2BridgeBuilder *b = b_;
-    b_ = nullptr;
-    return Ros2BridgeAction(b, std::move(ros_action), std::move(bus_action));
-  }
-
-  /// Imperative add (type_name e.g. `std_msgs/msg/String`).
-  Ros2BridgeBuilder &&add_route(const std::string &ros_topic, const std::string &bus_topic,
-                                const std::string &type_name,
-                                Direction direction = Direction::Ros2ToBus) && {
-    check(robot_bus_ros2_bridge_builder_add_route(b_, ros_topic.c_str(), bus_topic.c_str(),
-                                                   type_name.c_str(),
-                                                   static_cast<int>(direction)),
-          "add_route");
-    return std::move(*this);
-  }
-
-  Ros2BridgeBuilder &&add_route(const std::string &ros_topic, const std::string &bus_topic,
-                                std::shared_ptr<TopicMapper> mapper,
-                                Direction direction = Direction::Ros2ToBus) && {
-    if (!mapper) {
-      throw Error("add_route: null TopicMapper");
-    }
-    auto *holder = new detail::TopicMapperHolder{std::move(mapper)};
-    RobotBusRos2TopicMapperVtable vt{};
-    vt.type_name = holder->mapper->type_name();
-    vt.ros_to_bus = detail::topic_mapper_ros_to_bus;
-    vt.bus_to_ros = detail::topic_mapper_bus_to_ros;
-    vt.drop_user = detail::topic_mapper_drop;
-    vt.user = holder;
-    int rc = robot_bus_ros2_bridge_builder_add_route_mapper(
-        b_, ros_topic.c_str(), bus_topic.c_str(), &vt, static_cast<int>(direction));
-    if (rc != 0) {
-      detail::topic_mapper_drop(holder);
-      check(rc, "add_route_mapper");
-    }
-    return std::move(*this);
-  }
-
-  /// Imperative service add (`std_srvs/srv/Trigger` or `SetBool`).
-  Ros2BridgeBuilder &&add_service(const std::string &ros_service, const std::string &bus_service,
-                                  const std::string &type_name,
-                                  Direction direction = Direction::Ros2ToBus) && {
-    check(robot_bus_ros2_bridge_builder_add_service(b_, ros_service.c_str(), bus_service.c_str(),
-                                                     type_name.c_str(),
-                                                     static_cast<int>(direction)),
-          "add_service");
-    return std::move(*this);
-  }
-
-  /// Imperative action add (`example_interfaces/action/Fibonacci`).
-  Ros2BridgeBuilder &&add_action(const std::string &ros_action, const std::string &bus_action,
-                                 const std::string &type_name,
-                                 Direction direction = Direction::Ros2ToBus) && {
-    check(robot_bus_ros2_bridge_builder_add_action(b_, ros_action.c_str(), bus_action.c_str(),
-                                                    type_name.c_str(),
-                                                    static_cast<int>(direction)),
-          "add_action");
-    return std::move(*this);
+  Ros2BridgeActionRoute action(std::string ros_action, std::string bus_action) && {
+    auto state = std::move(state_);
+    return Ros2BridgeActionRoute(std::move(state), std::move(ros_action),
+                                 std::move(bus_action));
   }
 
   Ros2Bridge build() &&;
 
  private:
   friend class Ros2BridgeRoute;
-  friend class Ros2BridgeService;
-  friend class Ros2BridgeAction;
-  friend class Ros2Bridge;
-  RobotBusRos2BridgeBuilder *b_ = nullptr;
+  friend class Ros2BridgeServiceRoute;
+  friend class Ros2BridgeActionRoute;
+  std::shared_ptr<detail::BuilderState> state_;
 };
 
-/// In-process ROS 2 ↔ robot-bus topic/service/action bridge (`feature = "ros2"` / Linux ros2 packages).
+/// In-process rclcpp ↔ robot-bus bridge (`robot_bus_ros2_bridge` / `ROBOT_BUS_HAS_ROS2`).
 class Ros2Bridge {
  public:
   static Ros2BridgeBuilder New(std::string name) {
     return Ros2BridgeBuilder(std::move(name));
   }
 
-  static Ros2Bridge from_yaml(const std::string &path) {
-    return Ros2Bridge(static_cast<RobotBusRos2Bridge *>(check_ptr(
-        robot_bus_ros2_bridge_from_yaml(path.c_str()), "Ros2Bridge::from_yaml")));
-  }
-
-  ~Ros2Bridge() { robot_bus_ros2_bridge_free(b_); }
-
+#ifdef ROBOT_BUS_HAS_ROS2
+  ~Ros2Bridge();
   Ros2Bridge(const Ros2Bridge &) = delete;
   Ros2Bridge &operator=(const Ros2Bridge &) = delete;
+  Ros2Bridge(Ros2Bridge &&) noexcept;
+  Ros2Bridge &operator=(Ros2Bridge &&) noexcept;
 
-  Ros2Bridge(Ros2Bridge &&o) noexcept : b_(o.b_) { o.b_ = nullptr; }
-
-  Ros2Bridge &operator=(Ros2Bridge &&o) noexcept {
-    if (this != &o) {
-      robot_bus_ros2_bridge_free(b_);
-      b_ = o.b_;
-      o.b_ = nullptr;
-    }
-    return *this;
-  }
-
-  void spin() { check(robot_bus_ros2_bridge_spin(b_), "Ros2Bridge::spin"); }
-
-  void spin_once(double timeout_secs = 0.01) {
-    check(robot_bus_ros2_bridge_spin_once(b_, timeout_secs), "Ros2Bridge::spin_once");
-  }
-
-  RobotBusRos2Bridge *raw() { return b_; }
+  void spin();
+  void spin_once(double timeout_secs = 0.01);
 
  private:
   friend class Ros2BridgeBuilder;
-  explicit Ros2Bridge(RobotBusRos2Bridge *raw) : b_(raw) {}
-
-  RobotBusRos2Bridge *b_ = nullptr;
+  struct Impl;
+  explicit Ros2Bridge(std::unique_ptr<Impl> impl);
+  std::unique_ptr<Impl> impl_;
+#else
+  Ros2Bridge() = delete;
+#endif
 };
 
 inline Ros2BridgeBuilder Ros2BridgeRoute::add() && {
-  if (custom_) {
-    auto *holder = new detail::TopicMapperHolder{std::move(custom_)};
-    RobotBusRos2TopicMapperVtable vt{};
-    vt.type_name = holder->mapper->type_name();
-    vt.ros_to_bus = detail::topic_mapper_ros_to_bus;
-    vt.bus_to_ros = detail::topic_mapper_bus_to_ros;
-    vt.drop_user = detail::topic_mapper_drop;
-    vt.user = holder;
-    int rc = robot_bus_ros2_bridge_builder_add_route_mapper(
-        b_, ros_topic_.c_str(), bus_topic_.c_str(), &vt, static_cast<int>(direction_));
-    if (rc != 0) {
-      detail::topic_mapper_drop(holder);
-      check(rc, "add_route_mapper");
-    }
-  } else {
-    if (type_.empty()) {
-      throw Error(
-          "ros2 bridge route: call .mapper(...) or .type_name(\"pkg/msg/Type\") before .add()");
-    }
-    check(robot_bus_ros2_bridge_builder_add_route(b_, ros_topic_.c_str(), bus_topic_.c_str(),
-                                                   type_.c_str(), static_cast<int>(direction_)),
-          "add_route");
+  if (!mapper_set_) {
+    throw Error(
+        "ros2 bridge route: call .mapper(...) before .add() "
+        "(builtin ZST or std::shared_ptr<TopicMapper>)");
   }
-  RobotBusRos2BridgeBuilder *b = b_;
-  b_ = nullptr;
-  return Ros2BridgeBuilder(b);
+  detail::TopicRouteSpec spec;
+  spec.ros_topic = std::move(ros_topic_);
+  spec.bus_topic = std::move(bus_topic_);
+  spec.direction = direction_;
+  spec.builtin = builtin_;
+  spec.custom = std::move(custom_);
+  state_->routes.push_back(std::move(spec));
+  return Ros2BridgeBuilder(std::move(state_));
 }
 
-inline Ros2BridgeBuilder Ros2BridgeService::add() && {
-  if (type_.empty()) {
-    throw Error("ros2 bridge service: call .mapper(...) or .type_name(\"pkg/srv/Type\") before .add()");
+inline Ros2BridgeBuilder Ros2BridgeServiceRoute::add() && {
+  if (!mapper_set_) {
+    throw Error(
+        "ros2 bridge service: call .mapper(...) before .add() "
+        "(builtin ZST or std::shared_ptr<ServiceMapper>)");
   }
-  // custom_ is retained only for API shape / lifetime until Track B; wiring uses type_.
-  (void)custom_;
-  check(robot_bus_ros2_bridge_builder_add_service_ex(
-            b_, ros_service_.c_str(), bus_service_.c_str(), type_.c_str(),
-            static_cast<int>(direction_), timeout_secs_),
-        "add_service");
-  RobotBusRos2BridgeBuilder *b = b_;
-  b_ = nullptr;
-  return Ros2BridgeBuilder(b);
+  detail::ServiceRouteSpec spec;
+  spec.ros_service = std::move(ros_service_);
+  spec.bus_service = std::move(bus_service_);
+  spec.direction = direction_;
+  spec.timeout_secs = timeout_secs_;
+  spec.builtin = builtin_;
+  spec.custom = std::move(custom_);
+  state_->services.push_back(std::move(spec));
+  return Ros2BridgeBuilder(std::move(state_));
 }
 
-inline Ros2BridgeBuilder Ros2BridgeAction::add() && {
-  if (type_.empty()) {
-    throw Error("ros2 bridge action: call .mapper(...) or .type_name(\"pkg/action/Type\") before .add()");
+inline Ros2BridgeBuilder Ros2BridgeActionRoute::add() && {
+  if (!mapper_set_) {
+    throw Error(
+        "ros2 bridge action: call .mapper(...) before .add() "
+        "(FibonacciActionMapper{} or std::shared_ptr<ActionMapper>)");
   }
-  (void)custom_;
-  check(robot_bus_ros2_bridge_builder_add_action_ex(
-            b_, ros_action_.c_str(), bus_action_.c_str(), type_.c_str(),
-            static_cast<int>(direction_), timeout_secs_),
-        "add_action");
-  RobotBusRos2BridgeBuilder *b = b_;
-  b_ = nullptr;
-  return Ros2BridgeBuilder(b);
+  detail::ActionRouteSpec spec;
+  spec.ros_action = std::move(ros_action_);
+  spec.bus_action = std::move(bus_action_);
+  spec.direction = direction_;
+  spec.timeout_secs = timeout_secs_;
+  spec.builtin = builtin_;
+  spec.custom = std::move(custom_);
+  state_->actions.push_back(std::move(spec));
+  return Ros2BridgeBuilder(std::move(state_));
 }
 
+#ifndef ROBOT_BUS_HAS_ROS2
 inline Ros2Bridge Ros2BridgeBuilder::build() && {
-  RobotBusRos2Bridge *bridge = static_cast<RobotBusRos2Bridge *>(
-      check_ptr(robot_bus_ros2_bridge_builder_build(b_), "Ros2BridgeBuilder::build"));
-  return Ros2Bridge(bridge);
+  (void)state_;
+  throw Error(kRos2BridgeUnavailable);
 }
+#endif
 
 }  // namespace robot_bus

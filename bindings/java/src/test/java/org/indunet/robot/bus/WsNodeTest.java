@@ -11,8 +11,8 @@ import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.Test;
 
 /**
- * gRPC-mode Node tests aligned with Python {@code test_grpc_node.py} /
- * TypeScript {@code grpc_node.test.ts}.
+ * WebSocket-mode Node tests aligned with Python {@code test_ws_node.py} /
+ * TypeScript {@code ws_node.test.ts}.
  */
 class WsNodeTest {
     @Test

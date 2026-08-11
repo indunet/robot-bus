@@ -11,8 +11,8 @@ Typed pub/sub (and service/action) are pure-Python wrappers: pass a protobuf
 message class to ``create_publisher`` / ``create_subscription`` (etc.) to get
 automatic SerializeToString / ParseFromString around the raw-bytes native API.
 
-``Ros2Bridge`` is only present when the extension was built with the ``ros2``
-feature (see ``ros2_available()`` / docs/ros2-bridge.md).
+``Ros2Bridge`` lives in ``robot_bus.ros2_bridge`` and uses **rclpy** (not Rust FFI).
+See ``ros2_available()`` / docs/ros2-bridge.md.
 """
 
 from __future__ import annotations
@@ -37,7 +37,6 @@ try:
         __version__,
         message_xpub_endpoint,
         message_xsub_endpoint,
-        ros2_available,
         run_broker,
     )
 except ImportError:  # pragma: no cover - msgs-only / docs import without extension
@@ -60,45 +59,42 @@ except ImportError:  # pragma: no cover - msgs-only / docs import without extens
     message_xpub_endpoint = None  # type: ignore[misc, assignment]
     message_xsub_endpoint = None  # type: ignore[misc, assignment]
     run_broker = None  # type: ignore[misc, assignment]
-
-    def ros2_available() -> bool:
-        return False
 else:
     from robot_bus._typed import install_typed_node_api
 
     install_typed_node_api(Node)
 
-# Optional ROS 2 bridge symbols (missing unless built with `--features …,ros2`).
+
+def ros2_available() -> bool:
+    """True when ``rclpy`` can be imported (native Python Ros2Bridge)."""
+    try:
+        import rclpy  # noqa: F401
+    except ImportError:
+        return False
+    return True
+
+
+# Re-export bridge symbols (mappers lazy-load ROS/protobuf deps).
 try:
-    from robot_bus._native import (
-        Direction,
-        DynMsg,
-        FibonacciActionMapper,
-        Ros2Bridge,
-        Ros2BridgeAction,
-        Ros2BridgeBuilder,
-        Ros2BridgeRoute,
-        Ros2BridgeService,
-        SensorMsgsImageMapper,
-        SensorMsgsImuMapper,
-        SetBoolServiceMapper,
-        StdMsgsStringMapper,
-        TriggerServiceMapper,
-    )
+    from robot_bus.ros2_bridge import Direction, Ros2Bridge, Ros2BridgeBuilder
 except ImportError:  # pragma: no cover
     Direction = None  # type: ignore[misc, assignment]
-    DynMsg = None  # type: ignore[misc, assignment]
-    FibonacciActionMapper = None  # type: ignore[misc, assignment]
     Ros2Bridge = None  # type: ignore[misc, assignment]
-    Ros2BridgeAction = None  # type: ignore[misc, assignment]
     Ros2BridgeBuilder = None  # type: ignore[misc, assignment]
-    Ros2BridgeRoute = None  # type: ignore[misc, assignment]
-    Ros2BridgeService = None  # type: ignore[misc, assignment]
-    SensorMsgsImageMapper = None  # type: ignore[misc, assignment]
-    SensorMsgsImuMapper = None  # type: ignore[misc, assignment]
-    SetBoolServiceMapper = None  # type: ignore[misc, assignment]
-    StdMsgsStringMapper = None  # type: ignore[misc, assignment]
-    TriggerServiceMapper = None  # type: ignore[misc, assignment]
+
+
+def __getattr__(name: str):
+    if name in (
+        "StdMsgsStringMapper",
+        "SensorMsgsImageMapper",
+        "TriggerServiceMapper",
+        "SetBoolServiceMapper",
+        "FibonacciActionMapper",
+    ):
+        import robot_bus.ros2_bridge as _rb
+
+        return getattr(_rb, name)
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 from robot_bus._typed import (
     TypedActionClient,
@@ -114,21 +110,16 @@ __all__ = [
     "CallbackGroupType",
     "Context",
     "Direction",
-    "DynMsg",
     "FibonacciActionMapper",
     "MultiThreadedExecutor",
     "Node",
     "Publisher",
     "RobotBusBroker",
     "Ros2Bridge",
-    "Ros2BridgeAction",
     "Ros2BridgeBuilder",
-    "Ros2BridgeRoute",
-    "Ros2BridgeService",
     "SensorMsgsImageMapper",
-    "SensorMsgsImuMapper",
-    "ServiceClient",
     "SetBoolServiceMapper",
+    "ServiceClient",
     "ShutdownHandle",
     "SingleThreadedExecutor",
     "StdMsgsStringMapper",

@@ -30,7 +30,7 @@ export default function TopicTable({ topics, maxBodyHeight }: Props) {
   ]
 
   return (
-    <section className="border border-bus-border bg-bus-panel rounded-sm flex flex-col min-h-0 h-full">
+    <section className="border border-bus-border bg-bus-panel rounded-sm flex flex-col min-h-0 min-w-0 h-full">
       <PanelHeader
         icon={<Radio size={14} />}
         title={t('topicsTitle')}

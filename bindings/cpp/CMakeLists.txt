@@ -8,8 +8,8 @@ set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
 option(ROBOT_BUS_BUILD_TESTS "Build C++ smoke tests" ON)
 option(ROBOT_BUS_BUILD_MSGS "Build librobot_bus_msgs from generated protobufs" ON)
-# Build native FFI with --features ros2 (requires sourced ROS 2 Humble/Jazzy).
-option(ROBOT_BUS_ROS2 "Enable ROS 2 bridge in librobot_bus (cargo --features ros2)" OFF)
+# Build native rclcpp Ros2Bridge library (does NOT enable cargo --features ros2).
+option(ROBOT_BUS_ROS2 "Enable native C++ ROS 2 bridge (rclcpp)" OFF)
 
 # Prefer protobuf's CMake package config so Abseil INTERFACE deps propagate
 # (ABSL_CONSUME_DLL / PROTOBUF_USE_DLLS on Windows shared builds). CMake's
@@ -62,16 +62,8 @@ else()
   set(ROBOT_BUS_FFI_SONAME "librobot_bus.so")
 endif()
 
-if(ROBOT_BUS_ROS2)
-  set(ROBOT_BUS_FFI_CARGO_FEATURES --features ros2)
-  message(STATUS "robot_bus FFI: ROS 2 bridge enabled (source ROS 2 before build)")
-else()
-  set(ROBOT_BUS_FFI_CARGO_FEATURES)
-endif()
-
 add_custom_target(robot_bus_ffi_build
   COMMAND cargo build --release --manifest-path "${ROBOT_BUS_FFI_DIR}/Cargo.toml"
-          ${ROBOT_BUS_FFI_CARGO_FEATURES}
   WORKING_DIRECTORY "${ROBOT_BUS_FFI_DIR}"
   COMMENT "Building robot-bus C FFI (cargo)"
   BYPRODUCTS "${ROBOT_BUS_FFI_BUILT}")
@@ -87,6 +79,56 @@ if(WIN32)
     IMPORTED_IMPLIB "${ROBOT_BUS_FFI_TARGET_DIR}/robot_bus_c.dll.lib")
 endif()
 
+# --- Native rclcpp Ros2Bridge (optional) ---
+if(ROBOT_BUS_ROS2)
+  find_package(rclcpp REQUIRED)
+  find_package(rclcpp_action REQUIRED)
+  find_package(std_msgs REQUIRED)
+  find_package(sensor_msgs REQUIRED)
+  find_package(std_srvs REQUIRED)
+  find_package(example_interfaces REQUIRED)
+  message(STATUS "robot_bus: native ROS 2 bridge enabled (source ROS 2 before build)")
+
+  add_library(robot_bus_ros2_bridge SHARED src/ros2_bridge.cpp)
+  add_library(robot_bus::ros2_bridge ALIAS robot_bus_ros2_bridge)
+  target_compile_definitions(robot_bus_ros2_bridge PUBLIC ROBOT_BUS_HAS_ROS2)
+  target_include_directories(robot_bus_ros2_bridge
+    PUBLIC
+      $<BUILD_INTERFACE:${ROBOT_BUS_INCLUDE_DIR}>
+      $<BUILD_INTERFACE:${ROBOT_BUS_GENERATED_ROOT}>
+      $<INSTALL_INTERFACE:include>)
+  target_link_libraries(robot_bus_ros2_bridge
+    PUBLIC
+      robot_bus
+      robot_bus_msgs
+      rclcpp::rclcpp
+      rclcpp_action::rclcpp_action
+      ${std_msgs_TARGETS}
+      ${sensor_msgs_TARGETS}
+      ${std_srvs_TARGETS}
+      ${example_interfaces_TARGETS})
+  # ament packages export modern targets via *_TARGETS; fall back to older names.
+  if(TARGET std_msgs::std_msgs)
+    target_link_libraries(robot_bus_ros2_bridge PUBLIC std_msgs::std_msgs)
+  endif()
+  if(TARGET sensor_msgs::sensor_msgs)
+    target_link_libraries(robot_bus_ros2_bridge PUBLIC sensor_msgs::sensor_msgs)
+  endif()
+  if(TARGET std_srvs::std_srvs)
+    target_link_libraries(robot_bus_ros2_bridge PUBLIC std_srvs::std_srvs)
+  endif()
+  if(TARGET example_interfaces::example_interfaces)
+    target_link_libraries(robot_bus_ros2_bridge PUBLIC example_interfaces::example_interfaces)
+  endif()
+  add_dependencies(robot_bus_ros2_bridge robot_bus_ffi_build)
+  set_target_properties(robot_bus_ros2_bridge PROPERTIES
+    OUTPUT_NAME robot_bus_ros2_bridge
+    VERSION ${PROJECT_VERSION}
+    SOVERSION 0
+    BUILD_RPATH_USE_ORIGIN TRUE
+    INSTALL_RPATH "\$ORIGIN")
+endif()
+
 if(ROBOT_BUS_BUILD_TESTS)
   set(ROBOT_BUS_TEST_SOURCES
     pub_sub_imu
@@ -94,7 +136,7 @@ if(ROBOT_BUS_BUILD_TESTS)
     action_fibonacci
     timer_spin
     msgs_roundtrip
-    grpc_node
+    ws_node
     inproc_context
     federation_opts
     node_parameters
@@ -107,6 +149,9 @@ if(ROBOT_BUS_BUILD_TESTS)
     target_include_directories(${t} PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/tests")
     target_link_libraries(${t} PRIVATE robot_bus robot_bus_msgs)
     add_dependencies(${t} robot_bus_ffi_build)
+    if(ROBOT_BUS_ROS2 AND t STREQUAL "ros2_bridge_stub")
+      target_link_libraries(${t} PRIVATE robot_bus_ros2_bridge)
+    endif()
     list(APPEND ROBOT_BUS_TEST_TARGETS ${t})
   endforeach()
   add_custom_target(cpp_tests DEPENDS ${ROBOT_BUS_TEST_TARGETS})
@@ -121,6 +166,14 @@ install(DIRECTORY "${ROBOT_BUS_GENERATED_ROOT}/robot_bus"
 
 if(ROBOT_BUS_BUILD_MSGS)
   install(TARGETS robot_bus_msgs
+    EXPORT robot_busTargets
+    LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+    ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+    RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
+endif()
+
+if(ROBOT_BUS_ROS2)
+  install(TARGETS robot_bus_ros2_bridge
     EXPORT robot_busTargets
     LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
     ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
@@ -162,7 +215,7 @@ install(FILES
   "${CMAKE_CURRENT_BINARY_DIR}/robot_busConfig.cmake"
   "${CMAKE_CURRENT_BINARY_DIR}/robot_busConfigVersion.cmake"
   DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/robot_bus)
-if(ROBOT_BUS_BUILD_MSGS)
+if(ROBOT_BUS_BUILD_MSGS OR ROBOT_BUS_ROS2)
   install(EXPORT robot_busTargets
     NAMESPACE robot_bus::
     DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/robot_bus)

@@ -3,8 +3,7 @@
 ```bash
 pip install robot-bus
 # 本地：just python-dev
-# 等价：cd bindings/python && maturin develop --features extension-module,grpc
-# ROS 2 bridge：source ROS 后 just python-dev-ros2（见 docs/ros2-bridge.md）
+# ROS 2 桥（rclpy）：source ROS 后 just python-dev-ros2；见 docs/ros2-bridge.md
 ```
 
 ## Broker 启动
@@ -356,6 +355,51 @@ imu2.ParseFromString(payload)
 
 ---
 
+## ROS 2 桥（`rclpy`）
+
+进程内 ROS ↔ bus 桥在 **`robot_bus.ros2_bridge`**，使用系统 **`rclpy`**（不经 Rust FFI）。完整契约见 [`ros2-bridge.md`](ros2-bridge.md)。
+
+```bash
+source /opt/ros/humble/setup.bash
+just python-dev-ros2   # 安装 robot_bus；需本机有 rclpy
+```
+
+```python
+import robot_bus
+from robot_bus.ros2_bridge import (
+    Direction,
+    Ros2Bridge,
+    StdMsgsStringMapper,
+    TriggerServiceMapper,
+)
+
+assert robot_bus.ros2_available()
+
+bridge = (
+    Ros2Bridge.new("ros_bridge")
+    .bus_tcp("localhost")
+    .route("/chatter", "/chatter")
+    .mapper(StdMsgsStringMapper())
+    .direction(Direction.Ros2ToBus)
+    .add()
+    .service("/reset", "/reset")
+    .mapper(TriggerServiceMapper())
+    .add()
+    .build()
+)
+bridge.spin()
+```
+
+要点：
+
+- 配置只走代码 `.mapper(具体对象)`；无 YAML、无类型名字符串挂路由
+- 一期内置：`StdMsgsStringMapper`、`SensorMsgsImageMapper`、`TriggerServiceMapper`、`SetBoolServiceMapper`、`FibonacciActionMapper`
+- `ros2_available()`：能否 `import rclpy`
+- **自定义 service/action：可以**——写 duck-typed mapper（`ros_srv_type` + `ros_req_to_bus` / `bus_req_to_ros` …），再 `.mapper(MyFoo())`；示例见 [ros2-bridge.md](ros2-bridge.md#用户自定义-service--action可以)
+- `bus_discover(api_url="", timeout=0.0, broker_id="")` 与 C++/Rust 对齐（空 url / `timeout<=0` 用默认）
+
+---
+
 ## 版本
 
 ```python
@@ -389,8 +433,9 @@ print(robot_bus.__version__)
 | `create_action_client(..., goal_type=, feedback_type=, result_type=)` | typed → `TypedActionClient`；`send_goal` 立即返回 GoalHandle（feedback callback / `result()` / `cancel()`） |
 | `ActionGoalHandle` / `TypedActionGoalHandle` | goal 标识、action 名称、阻塞等待 result 与 best-effort cancel |
 | `Publisher(endpoint=None)` | 低层连 XSUB（不经 Node） |
-| `RobotBusBroker.start(..., context=None, broker_id=..., message_peers=..., service_peers=..., action_peers=...)` | 进程内启动三个 bus + gRPC；同进程 inproc 传 `context`；peers 为 CLI 同款字符串列表 |
-| `run_broker()` | 阻塞 CLI 入口 |
+| `ros2_available()` | 能否 `import rclpy`（Python 原生桥） |
+| `robot_bus.ros2_bridge.Ros2Bridge` / `Direction` / 内置 Mapper | 进程内 ROS 桥（**rclpy**）；见 [ros2-bridge.md](ros2-bridge.md) |
+| `RobotBusBroker.start(...)` / `run_broker(...)` | 进程内启动三个 bus + gRPC；同进程 inproc 传 `context`；peers 为 CLI 同款字符串列表 |
 | `ShutdownHandle` / `TimerHandle` | spin 与定时器控制 |
 
 WebSocket RPC 模式 Node 见上一节；底层网关 RPC 也可直接用 Rust tonic 客户端（[rust-api.md](rust-api.md)）。

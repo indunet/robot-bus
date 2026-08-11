@@ -150,7 +150,7 @@ jobs:
           ./bindings/cpp/build/pub_sub_imu
           ./bindings/cpp/build/service_set_bool
           ./bindings/cpp/build/action_fibonacci
-          ./bindings/cpp/build/grpc_node
+          ./bindings/cpp/build/ws_node
           ./bindings/cpp/build/ros2_bridge_stub
 
   java:

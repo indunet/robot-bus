@@ -3,8 +3,9 @@
 # Usage: scripts/build_cpp_install_tree.sh <dest> [version]
 #
 # Env:
-#   ROBOT_BUS_ROS2=1  — build native FFI with --features ros2
-#                       (requires sourced ROS 2; does NOT copy /opt/ros into DEST)
+#   ROBOT_BUS_ROS2=1  — build native rclcpp Ros2Bridge (`robot_bus_ros2_bridge`)
+#                       (requires sourced ROS 2; does NOT copy /opt/ros into DEST;
+#                        cargo FFI stays without --features ros2)
 set -euo pipefail
 
 DEST="${1:?dest}"
@@ -25,18 +26,8 @@ cargo build --release --manifest-path "$ROOT/Cargo.toml" --bin robot_bus_broker 
   --no-default-features --features ws,console
 cp -f "$ROOT/target/release/robot_bus_broker" "$DEST/usr/bin/"
 
-# FFI (rename robot_bus_c → robot_bus)
-# Bash <4.4 + set -u treats empty "${arr[@]}" as unbound; avoid the expansion.
-FFI_CARGO_ARGS=(--release --manifest-path "$CPP/native/Cargo.toml")
-if [[ "${ROBOT_BUS_ROS2:-}" == "1" || "${ROBOT_BUS_ROS2:-}" == "true" ]]; then
-  if [[ -z "${ROS_DISTRO:-}" ]]; then
-    echo "error: ROBOT_BUS_ROS2=1 requires a sourced ROS 2 env (ROS_DISTRO unset)" >&2
-    exit 1
-  fi
-  echo "building FFI with --features ros2 (ROS_DISTRO=${ROS_DISTRO})"
-  FFI_CARGO_ARGS+=(--features ros2)
-fi
-cargo build "${FFI_CARGO_ARGS[@]}"
+# FFI (rename robot_bus_c → robot_bus). ROS bridge is native C++, not cargo --features ros2.
+cargo build --release --manifest-path "$CPP/native/Cargo.toml"
 if [[ "$(uname -s)" == "Darwin" ]]; then
   cp -f "$CPP/native/target/release/librobot_bus_c.dylib" "$DEST/usr/lib/librobot_bus.dylib"
 elif [[ "$(uname -s)" == MINGW* || "$(uname -s)" == MSYS* || "$(uname -s)" == CYGWIN* ]]; then
@@ -56,10 +47,15 @@ fi
 cp -a "$CPP/include/." "$DEST/usr/include/"
 cp -a "$CPP/generated/robot_bus" "$DEST/usr/include/"
 
-# Msgs library via CMake (no tests)
+# Msgs (+ optional ros2 bridge) via CMake (no tests)
 BUILD_DIR="$CPP/build-package"
 CMAKE_ROS2=OFF
 if [[ "${ROBOT_BUS_ROS2:-}" == "1" || "${ROBOT_BUS_ROS2:-}" == "true" ]]; then
+  if [[ -z "${ROS_DISTRO:-}" ]]; then
+    echo "error: ROBOT_BUS_ROS2=1 requires a sourced ROS 2 env (ROS_DISTRO unset)" >&2
+    exit 1
+  fi
+  echo "building native rclcpp Ros2Bridge (ROS_DISTRO=${ROS_DISTRO})"
   CMAKE_ROS2=ON
 fi
 cmake -S "$CPP" -B "$BUILD_DIR" \
@@ -71,9 +67,14 @@ cmake -S "$CPP" -B "$BUILD_DIR" \
 JOBS="$(nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 2)"
 # GitHub Actions runners OOM when compiling ~130 protobuf .pb.cc units in parallel.
 if [ "${CI:-}" = "true" ] && [ "$JOBS" -gt 2 ]; then JOBS=2; fi
-cmake --build "$BUILD_DIR" --target robot_bus_msgs -j"$JOBS"
-# Copy msgs lib from build dir
-find "$BUILD_DIR" -name 'librobot_bus_msgs*' -o -name 'robot_bus_msgs.*' | while read -r f; do
+CMAKE_TARGETS=(robot_bus_msgs)
+if [[ "$CMAKE_ROS2" == "ON" ]]; then
+  CMAKE_TARGETS+=(robot_bus_ros2_bridge)
+fi
+cmake --build "$BUILD_DIR" --target "${CMAKE_TARGETS[@]}" -j"$JOBS"
+# Copy msgs / bridge libs from build dir
+find "$BUILD_DIR" \( -name 'librobot_bus_msgs*' -o -name 'robot_bus_msgs.*' \
+  -o -name 'librobot_bus_ros2_bridge*' -o -name 'robot_bus_ros2_bridge.*' \) | while read -r f; do
   case "$f" in
     *.so*|*.dylib|*.dll|*.lib|*.a) cp -f "$f" "$DEST/usr/lib/" ;;
   esac

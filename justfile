@@ -41,9 +41,9 @@ gen-all: gen-rust proto gen-typescript gen-cpp gen-java gen-android
 python-dev: proto gen-rust
 	cd bindings/python && maturin develop --features extension-module,grpc --no-default-features
 
-# Same as python-dev, plus in-process Ros2Bridge (source Humble/Jazzy first)
+# Same as python-dev; Ros2Bridge is pure Python (rclpy). Source Humble/Jazzy first.
 python-dev-ros2: proto gen-rust
-	cd bindings/python && maturin develop --features extension-module,grpc,ros2 --no-default-features
+	cd bindings/python && maturin develop --features extension-module,grpc --no-default-features
 
 # Build TypeScript native addon + JS bundle
 ts-dev: gen-typescript gen-rust
@@ -55,9 +55,9 @@ cpp-dev: gen-cpp gen-rust
 	cmake -S bindings/cpp -B bindings/cpp/build -DCMAKE_BUILD_TYPE=Release
 	cmake --build bindings/cpp/build -j
 
-# Same as cpp-dev but enable ROS 2 bridge (requires sourced Humble or Jazzy).
+# Same as cpp-dev but enable native C++ ROS 2 bridge (requires sourced Humble or Jazzy).
 cpp-dev-ros2: gen-cpp gen-rust
-	cargo build --release --manifest-path bindings/cpp/native/Cargo.toml --features ros2
+	cargo build --release --manifest-path bindings/cpp/native/Cargo.toml
 	cmake -S bindings/cpp -B bindings/cpp/build -DCMAKE_BUILD_TYPE=Release -DROBOT_BUS_ROS2=ON
 	cmake --build bindings/cpp/build -j
 
@@ -100,7 +100,7 @@ test-cpp:
 	./bindings/cpp/build/pub_sub_imu
 	./bindings/cpp/build/service_set_bool
 	./bindings/cpp/build/action_fibonacci
-	./bindings/cpp/build/grpc_node
+	./bindings/cpp/build/ws_node
 	./bindings/cpp/build/inproc_context
 	./bindings/cpp/build/federation_opts
 	./bindings/cpp/build/node_parameters
@@ -130,7 +130,7 @@ test-python: proto
 
 # Native Python integration (needs `just python-dev` first; skips if extension missing)
 test-python-native:
-	python3 bindings/python/tests/test_grpc_node.py
+	python3 bindings/python/tests/test_ws_node.py
 	python3 bindings/python/tests/test_inproc_context.py
 	python3 bindings/python/tests/test_tf_lookup.py
 

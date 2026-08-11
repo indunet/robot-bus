@@ -1,4 +1,4 @@
-// gRPC-mode Node: guards + subscribe / service / action via broker gateway.
+// WebSocket-mode Node: guards + subscribe / service / action via broker gateway.
 #include "harness.hpp"
 
 #include <atomic>
@@ -194,6 +194,6 @@ int main() {
     bus.stop();
   }
 
-  std::cout << "ok: grpc_node\n";
+  std::cout << "ok: ws_node\n";
   return 0;
 }

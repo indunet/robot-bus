@@ -63,7 +63,7 @@ console = [
 ]
 # In-process ROS 2 ↔ robot-bus topic/service/action bridge (requires sourced ROS + linking rcl).
 # Not enabled by default — keep core SDK / maturin builds free of ROS.
-ros2 = ["dep:rclrs", "dep:rosidl_runtime_rs", "dep:tokio"]
+ros2 = ["dep:rclrs", "dep:rosidl_runtime_rs"]
 # Typecheck without a real ROS install (rclrs stub).
 ros2-shim = ["ros2", "rclrs/use_ros_shim", "rosidl_runtime_rs/use_ros_shim"]
 
@@ -127,14 +127,14 @@ path = "tests/topic_type_registry.rs"
 required-features = ["console", "ws"]
 
 [[test]]
-name = "tank_session"
-path = "tests/tank_session.rs"
-required-features = ["console", "ws"]
-
-[[test]]
 name = "ros2_bridge_service_smoke"
 path = "tests/ros2_bridge_service_smoke.rs"
 required-features = ["ws", "ros2"]
+
+[[test]]
+name = "tank_session"
+path = "tests/tank_session.rs"
+required-features = ["console", "ws"]
 
 [[bin]]
 name = "robot_bus_broker"

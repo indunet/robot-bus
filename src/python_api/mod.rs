@@ -40,8 +40,7 @@ fn _native(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(message_xpub_endpoint, m)?)?;
     m.add_function(wrap_pyfunction!(run_broker, m)?)?;
     m.add_function(wrap_pyfunction!(ros2_available, m)?)?;
-    #[cfg(feature = "ros2")]
-    crate::python_ros2_bridge::register(m)?;
+    // Ros2Bridge is implemented in pure Python (rclpy); see robot_bus.ros2_bridge.
     m.add("__version__", env!("CARGO_PKG_VERSION"))?;
     Ok(())
 }

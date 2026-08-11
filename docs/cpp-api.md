@@ -54,8 +54,8 @@ just cpp-dev-ros2
 Headers install under the `robot_bus/` prefix (no `generated/` segment):
 
 ```cpp
-#include <robot_bus/Node.hpp>
-#include <robot_bus/Ros2Bridge.hpp>   // needs ros2-enabled librobot_bus
+#include <robot_bus/node.hpp>
+#include <robot_bus/ros2_bridge.hpp>   // link robot_bus_ros2_bridge (ROBOT_BUS_HAS_ROS2)
 #include <robot_bus/sensor_msgs/msg/v1/imu.pb.h>
 ```
 
@@ -81,7 +81,7 @@ robot_bus_broker
 ```
 
 ```cpp
-#include <robot_bus/Node.hpp>
+#include <robot_bus/node.hpp>
 
 robot_bus::Broker broker;  // default binds
 // broker.message_xsub_bind() / api_listen() …
@@ -146,7 +146,7 @@ Scalars: `bool` / `int64_t` / `double` / `string`. YAML supports flat maps or `r
 Protobuf message types are **pre-generated** and shipped in the package — you do **not** need `protoc` on the machine that only consumes the SDK.
 
 ```cpp
-#include <robot_bus/Node.hpp>
+#include <robot_bus/node.hpp>
 #include <robot_bus/sensor_msgs/msg/v1/imu.pb.h>
 
 robot_bus::Broker broker;
@@ -184,14 +184,14 @@ auto node = robot_bus::Node::ws("web-client");
 // 或 robot_bus::Node::ws_at("web-client", "http://127.0.0.1:15570");
 ```
 
-本地覆盖见 `bindings/cpp/tests/grpc_node.cpp`（`just test-cpp`）。
+本地覆盖见 `bindings/cpp/tests/ws_node.cpp`（`just test-cpp`）。
 
 ## TF (coordinate frames)
 
 `TfBuffer` / `TfListener` / `TransformBroadcaster` mirror Rust `robot_bus::tf`. Wire format is `tf2_msgs/TFMessage` on `/tf` and `/tf_static`. Lookup returns `geometry_msgs/TransformStamped` protobuf bytes. v1 time semantics: static edges always apply; dynamic = latest only.
 
 ```cpp
-#include <robot_bus/Tf.hpp>
+#include <robot_bus/tf.hpp>
 #include <robot_bus/tf2_msgs/msg/v1/tf_message.pb.h>
 #include <robot_bus/geometry_msgs/msg/v1/stamped.pb.h>
 
@@ -237,7 +237,7 @@ target_link_libraries(my_app PRIVATE robot_bus::robot_bus robot_bus::msgs)
 just gen-cpp          # write bindings/cpp/generated (gitignored; protoc 35.1)
 
 just cpp-dev          # cargo FFI + cmake msgs/tests (no ros2)
-just cpp-dev-ros2     # same with --features ros2 (source Humble/Jazzy first)
+just cpp-dev-ros2     # native rclcpp bridge lib (source Humble/Jazzy first)
 just test-cpp         # msgs / timer / pub-sub / service / action / ros2 stub
 just check-ros2-shim  # typecheck ros2 without a full ROS install
 ```
@@ -246,49 +246,29 @@ Repo layout: generated sources (gitignored) live under `bindings/cpp/generated/r
 
 ## ROS 2 bridge (`Ros2Bridge`)
 
-Full usage (Rust + C++ + YAML): [`ros2-bridge.md`](ros2-bridge.md).
+Full usage (Rust + Python + C++): [`ros2-bridge.md`](ros2-bridge.md).
+
+C++ uses **native rclcpp** (`robot_bus_ros2_bridge`, compile flag `ROBOT_BUS_HAS_ROS2`) — not Rust FFI. No YAML; mount routes with concrete mapper objects only.
 
 Supported distros for **prebuilt** packages: **Humble** and **Jazzy** (**Linux DEBs only** — Windows MSI / macOS PKG ship core SDK with stub `Ros2Bridge` APIs). Headers ship in all packages; only ros2-* libs implement the bridge.
 
 ```cpp
-#include <robot_bus/Ros2Bridge.hpp>
+#include <robot_bus/ros2_bridge.hpp>
 
-// Chained API
 auto bridge = robot_bus::Ros2Bridge::New("ros_bridge")
     .bus_tcp("localhost")
     .route("/chatter", "/chatter")
     .mapper(robot_bus::StdMsgsStringMapper{})
     .direction(robot_bus::Direction::Ros2ToBus)
     .add()
-    .route("/camera/image_raw", "/camera/image_raw")
-    .mapper(robot_bus::SensorMsgsImageMapper{})
-    .direction(robot_bus::Direction::Ros2ToBus)
-    .add()
     .service("/reset", "/reset")
     .mapper(robot_bus::TriggerServiceMapper{})
-    .timeout(2.0)
-    .direction(robot_bus::Direction::Ros2ToBus)
-    .add()
-    .service("/enable", "/enable")
-    .mapper(robot_bus::SetBoolServiceMapper{})
-    .direction(robot_bus::Direction::BusToRos2)
-    .add()
-    .action("/fibonacci", "/fibonacci")
-    .mapper(robot_bus::FibonacciActionMapper{})
-    .direction(robot_bus::Direction::Ros2ToBus)
     .add()
     .build();
 bridge.spin_once(0.01);
-// bridge.spin();
-
-// Or YAML (same schema as Rust Ros2Bridge::from_yaml)
-auto from_file = robot_bus::Ros2Bridge::from_yaml("bridge.yaml");
 ```
 
-Topic types use a **registry** (configure by type string): built-in `std_msgs/msg/String`, `sensor_msgs/msg/Imu`, `sensor_msgs/msg/Image`, `foxglove_msgs/msg/CompressedVideo`. Custom topics: inherit `TopicMapper` + `.mapper(shared_ptr)`.  
-Service / Action: same `.mapper(...)` shape as topics (builtin tags or `shared_ptr<ServiceMapper>` / `ActionMapper`). Until Track B dynamic RPC, only builtin type names are wired; convert methods are reserved. Use `.timeout(secs)` to override defaults (service 5s, action 30s).  
-Service types: `std_srvs/srv/Trigger`, `std_srvs/srv/SetBool` (`Ros2ToBus` / `BusToRos2` only).  
-Action types: `example_interfaces/action/Fibonacci` (`Ros2ToBus` / `BusToRos2` only).  
-`foxglove_msgs/msg/CompressedVideo` needs the `foxglove_msgs` ROS package installed.  
-Default `robot-bus` returns a clear error from these APIs (`robot_bus_last_error` / thrown `robot_bus::Error`).
+Phase-1 builtins: `StdMsgsStringMapper`, `SensorMsgsImageMapper`, `TriggerServiceMapper`, `SetBoolServiceMapper`, `FibonacciActionMapper`.  
+Custom: inherit `TypedTopicMapper` / `TypedServiceMapper` / `TypedActionMapper` CRTP, implement convert methods only, mount with `.mapper(std::make_shared<…>())` (see [ros2-bridge.md](ros2-bridge.md)). Override bare `attach` only for advanced cases.  
+`ros2_available()` is true when linked with `ROBOT_BUS_HAS_ROS2`. Default `robot-bus` stubs throw a clear `robot_bus::Error`.
 

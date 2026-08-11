@@ -39,9 +39,6 @@ pub mod ros2_bridge;
 #[cfg(feature = "extension-module")]
 mod python_api;
 
-#[cfg(all(feature = "extension-module", feature = "ros2"))]
-mod python_ros2_bridge;
-
 pub use action_bus::{ActionClient, ActionKind, ActionMessage, ActionWorker};
 pub use tank::{
     TankEndpoints, TankHandle, TankManager, TankSession, TankStatus, CMD_VEL_TOPIC,

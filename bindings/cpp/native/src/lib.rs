@@ -10,7 +10,3 @@ mod node_params;
 mod executor;
 mod broker;
 mod ros2_bridge;
-
-// Re-export helpers used by `ros2_bridge` (including the `ros2` feature path).
-#[allow(unused_imports)]
-pub(crate) use ffi::{bus_err, clear_error, cstr_opt, cstr_req, err, ok, set_error};

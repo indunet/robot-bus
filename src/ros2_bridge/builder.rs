@@ -1,7 +1,9 @@
 //! Chained builder for [`Ros2Bridge`].
+//!
+//! Configuration is code-only: attach concrete mapper objects via `.mapper(...)`.
+//! There is no YAML loader and no type-name-string route API.
 
 use std::any::Any;
-use std::path::Path;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{self, Receiver, SyncSender};
 use std::sync::Arc;
@@ -17,12 +19,8 @@ use crate::errors::{BusError, Result};
 use crate::runtime::{MessageCallback, Node, NodeOptions, TopicPublisherRaw};
 
 use super::mapper::{
-    self, ActionMapper, ActionWireContext, Direction, ServiceMapper, ServiceWireContext,
-    TopicMapper,
+    ActionMapper, ActionWireContext, Direction, ServiceMapper, ServiceWireContext, TopicMapper,
 };
-use super::mappers::action_bridges;
-use super::mappers::service_bridges;
-use super::yaml;
 
 /// Default timeout for bridged service calls (ROS↔bus).
 pub const SERVICE_CALL_TIMEOUT: Duration = Duration::from_secs(5);
@@ -123,10 +121,6 @@ impl Ros2Bridge {
             services: Vec::new(),
             actions: Vec::new(),
         }
-    }
-
-    pub fn from_yaml(path: impl AsRef<Path>) -> Result<Self> {
-        yaml::builder_from_yaml(path)?.build()
     }
 
     pub fn spin(&mut self) -> Result<()> {
@@ -289,20 +283,7 @@ impl Ros2BridgeBuilder {
         Ok(self)
     }
 
-    /// Add a topic route by ROS type string (e.g. `sensor_msgs/msg/Image`).
-    pub fn add_route(
-        self,
-        ros_topic: impl Into<String>,
-        bus_topic: impl Into<String>,
-        type_name: impl Into<String>,
-        direction: Direction,
-    ) -> Result<Self> {
-        let type_name = type_name.into();
-        let mapper = mapper::lookup_topic_mapper_arc(&type_name)?;
-        self.push_route(ros_topic.into(), bus_topic.into(), mapper, direction)
-    }
-
-    /// Add a topic route with an explicit [`TopicMapper`] (builtin or custom / FFI).
+    /// Add a topic route with an explicit [`TopicMapper`].
     pub fn add_route_mapper(
         self,
         ros_topic: impl Into<String>,
@@ -318,73 +299,37 @@ impl Ros2BridgeBuilder {
         )
     }
 
-    /// Add a service route by ROS type string (e.g. `std_srvs/srv/Trigger`).
-    pub fn add_service(
+    /// Add a service route with an explicit [`ServiceMapper`].
+    pub fn add_service_mapper(
         self,
         ros_service: impl Into<String>,
         bus_service: impl Into<String>,
-        type_name: impl Into<String>,
-        direction: Direction,
-    ) -> Result<Self> {
-        self.add_service_with_timeout(
-            ros_service,
-            bus_service,
-            type_name,
-            direction,
-            SERVICE_CALL_TIMEOUT,
-        )
-    }
-
-    /// Like [`add_service`](Self::add_service) with an explicit call timeout.
-    pub fn add_service_with_timeout(
-        self,
-        ros_service: impl Into<String>,
-        bus_service: impl Into<String>,
-        type_name: impl Into<String>,
+        mapper: impl IntoServiceMapper,
         direction: Direction,
         timeout: Duration,
     ) -> Result<Self> {
-        let mapper = service_bridges::lookup_service_mapper(&type_name.into())?;
         self.push_service(
             ros_service.into(),
             bus_service.into(),
-            mapper,
+            mapper.into_service_mapper(),
             direction,
             timeout,
         )
     }
 
-    /// Add an action route by ROS type string (e.g. `example_interfaces/action/Fibonacci`).
-    pub fn add_action(
+    /// Add an action route with an explicit [`ActionMapper`].
+    pub fn add_action_mapper(
         self,
         ros_action: impl Into<String>,
         bus_action: impl Into<String>,
-        type_name: impl Into<String>,
-        direction: Direction,
-    ) -> Result<Self> {
-        self.add_action_with_timeout(
-            ros_action,
-            bus_action,
-            type_name,
-            direction,
-            ACTION_CALL_TIMEOUT,
-        )
-    }
-
-    /// Like [`add_action`](Self::add_action) with an explicit goal timeout.
-    pub fn add_action_with_timeout(
-        self,
-        ros_action: impl Into<String>,
-        bus_action: impl Into<String>,
-        type_name: impl Into<String>,
+        mapper: impl IntoActionMapper,
         direction: Direction,
         timeout: Duration,
     ) -> Result<Self> {
-        let mapper = action_bridges::lookup_action_mapper(&type_name.into())?;
         self.push_action(
             ros_action.into(),
             bus_action.into(),
-            mapper,
+            mapper.into_action_mapper(),
             direction,
             timeout,
         )
@@ -462,8 +407,7 @@ impl Ros2BridgeBuilder {
 
 
 
-/// Accept either a concrete [`TopicMapper`] or an [`Arc<dyn TopicMapper>`] (e.g. from
-/// [`mapper::lookup_topic_mapper_arc`]).
+/// Accept either a concrete [`TopicMapper`] or an [`Arc<dyn TopicMapper>`].
 pub trait IntoTopicMapper {
     fn into_topic_mapper(self) -> Arc<dyn TopicMapper>;
 }
@@ -747,7 +691,7 @@ mod route_mapper_tests {
     fn builtin_service_concrete_mapper() {
         Ros2Bridge::new("t")
             .service("/a", "/a")
-            .mapper(service_bridges::TriggerServiceMapper)
+            .mapper(crate::ros2_bridge::TriggerServiceMapper)
             .add()
             .expect("builtin service mapper object");
     }
@@ -756,20 +700,10 @@ mod route_mapper_tests {
     fn builtin_service_timeout_override() {
         Ros2Bridge::new("t")
             .service("/a", "/a")
-            .mapper(service_bridges::TriggerServiceMapper)
+            .mapper(crate::ros2_bridge::TriggerServiceMapper)
             .timeout(Duration::from_millis(250))
             .add()
             .expect("timeout should be accepted at add()");
-    }
-
-    #[test]
-    fn unknown_service_type_errors_with_track_b_hint() {
-        let err = Ros2Bridge::new("t")
-            .add_service("/a", "/a", "my_pkg/srv/Custom", Direction::Ros2ToBus)
-            .err()
-            .expect("should fail")
-            .to_string();
-        assert!(err.contains("unsupported") || err.contains("Track B"), "{err}");
     }
 
     #[test]

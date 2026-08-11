@@ -193,5 +193,7 @@ pub(crate) fn message_xpub_endpoint(host: &str, transport: &str) -> PyResult<Str
 
 #[pyfunction]
 pub(crate) fn ros2_available() -> bool {
-    cfg!(feature = "ros2")
+    // C++/Python bridges are native; this FFI flag stays false.
+    // Python `robot_bus.ros2_available()` checks rclpy instead.
+    false
 }

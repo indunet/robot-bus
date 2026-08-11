@@ -30,7 +30,7 @@
 | `runtime::SingleThreadedExecutor` / `MultiThreadedExecutor` | 显式执行器（多节点 / 并行）；单节点可直接 `Node::spin` |
 | `runtime::Node` / `TopicPublisher` / `CallbackGroup` | 节点、publisher、callback group（互斥 / 可重入） |
 | `grpc::`（默认 feature） | gRPC + 浏览器 WebSocket RPC 网关（随 broker 一起启动） |
-| `ros2_bridge::`（`ros2` feature） | 进程内 ROS 2 话题/服务桥（`Ros2Bridge`） |
+| `ros2_bridge::`（分语言） | 进程内 ROS 2 话题/服务/Action 桥（Rust `rclrs` / Python `rclpy` / C++ `rclcpp`） |
 
 ### 仓库布局
 
@@ -58,9 +58,9 @@ Rust 核心留在仓库根目录（`Cargo.toml` + `src/`）。各语言 SDK 放�
 robot_bus_broker 进程
 ```
 
-### 可选 ROS 2 桥（Rust feature）
+### 可选 ROS 2 桥（分语言原生）
 
-日常开发 **不必安装 ROS 2**。进程内与 ROS 2 图互通时，开启 Cargo feature **`ros2`**，使用 `robot_bus::ros2_bridge::Ros2Bridge`（链式 API 或 YAML）。官方支持：**Humble**、**Jazzy**（需 source 对应发行版并链接 `rclrs`）。C++ 另有 `robot-bus-ros2-humble` / `…-jazzy` 包，依赖系统 ROS，**不**把 `rcl` 打进安装包。见 [ROS 2 桥](#ros-2-桥-feature-ros2)。
+日常开发 **不必安装 ROS 2**。进程内与 ROS 2 图互通时，用各语言原生客户端（`rclrs` / `rclpy` / `rclcpp`）——见 [ROS 2 桥](#ros-2-桥feature--ros2--分语言原生) 与 [`docs/ros2-bridge.md`](docs/ros2-bridge.md)。官方支持：**Humble**、**Jazzy**。
 
 ## 快速开始
 
@@ -224,7 +224,7 @@ C++ 无中央库：从 [GitHub Releases](https://github.com/indunet/robot-bus/re
 三选一安装（互斥）。详见 [`docs/cpp-api.md`](docs/cpp-api.md)。
 
 ```cpp
-#include <robot_bus/Node.hpp>
+#include <robot_bus/node.hpp>
 #include <robot_bus/sensor_msgs/msg/v1/imu.pb.h>
 
 robot_bus::Broker broker;
@@ -395,26 +395,25 @@ cd studio && pnpm install && pnpm dev   # http://127.0.0.1:15772
 
 `robot-bus` 保留 broker、多语言通信 SDK、ROS 2 bridge、protobuf 合约（含 `tf2_msgs`），以及 broker 监控 Console（Overview / Topics / Topology / Logs）。
 
-## ROS 2 桥（`feature = "ros2"`）
+## ROS 2 桥（`feature = "ros2"` / 分语言原生）
 
-进程内话题**与**服务桥：`robot_bus::ros2_bridge::Ros2Bridge`（链式 API 或 YAML）。**默认不启用** — 核心 SDK / crates.io / maturin 仍免 ROS。
+进程内 **Topic / Service / Action** 桥。各语言用本侧 ROS 客户端（**rclrs** / **rclpy** / **rclcpp**）——C++/Python **不经** Rust FFI。配置仅代码链式 API + 具体 `.mapper(...)`；**无 YAML**、无类型名字符串挂路由。详见 [`docs/ros2-bridge.md`](docs/ros2-bridge.md)。
 
-**官方支持的 ROS 2 发行版：** **Humble**、**Jazzy**。其它发行版：source 后本机自建（best-effort）。
+核心 SDK / crates.io / 默认 maturin **不必**装 ROS。Python 需系统 `rclpy`；C++ 需 `robot-bus-ros2-*` + 系统 ROS。
+
+**官方支持发行版：** **Humble**、**Jazzy**。
 
 | 需要 | 说明 |
 |------|------|
-| Cargo（Rust） | `--features ros2`（可选依赖 `rclrs`） |
-| 环境 | Source **Humble** 或 **Jazzy** 以便链接 `rcl`；主 CI **不**开此 feature |
-| C++ 包 | `robot-bus`（无桥）与 `robot-bus-ros2-humble` / `robot-bus-ros2-jazzy`（互斥，**仅 Linux DEB** — Windows MSI / macOS PKG 只有核心 stub）。包内 **不 vendor** `rcl`/RMW/DDS — 需安装系统 ROS 并 `source /opt/ros/<distro>/setup.bash` |
-| Broker | 可达的 `robot_bus_broker`（tcp/ipc 或 `bus_discover`） |
-| 话题类型 | **注册表** — YAML/API 用类型字符串配置（非写死枚举）。覆盖 [`proto/`](proto) 中所有有 ROS 2 对应物的消息（`std_msgs`、`geometry_msgs`、`sensor_msgs`、`nav_msgs`、`nav2_msgs`、`tf2_msgs`、`control_msgs`、`visualization_msgs`、`foxglove_msgs` 等），不含总线内部的 `robot_bus_interface`。清单见 `registered_topic_types()`；新增类型：`src/ros2_bridge/mappers/<pkg>/<msg>.rs` |
-| 服务类型 | `std_srvs/srv/Trigger`、`std_srvs/srv/SetBool`（仅 `ros2_to_bus` / `bus_to_ros2`；默认调用超时 5s） |
-| Action 类型 | `example_interfaces/action/Fibonacci`（仅 `ros2_to_bus` / `bus_to_ros2`；默认 goal 超时 30s） |
+| Cargo（Rust） | `--features ros2`（可选 `rclrs`） |
+| Python | `robot_bus.ros2_bridge` + source ROS / `rclpy` |
+| C++ 包 | `robot-bus-ros2-humble` / `…-jazzy`（**仅 Linux DEB**）；原生 `rclcpp`，不 vendor `rcl` |
+| Broker | 可达的 `robot_bus_broker`（tcp/ipc 或 discover） |
+| 一期内置 | String、Image、Trigger、SetBool、Fibonacci（Rust 另有完整 topic 注册表） |
 
 ```rust
 use robot_bus::ros2_bridge::{
-    Direction, FibonacciActionMapper, Ros2Bridge, SensorMsgsImageMapper, SetBoolServiceMapper,
-    StdMsgsStringMapper, TriggerServiceMapper,
+    Direction, Ros2Bridge, StdMsgsStringMapper, TriggerServiceMapper,
 };
 
 let mut bridge = Ros2Bridge::new("ros_bridge")
@@ -423,29 +422,19 @@ let mut bridge = Ros2Bridge::new("ros_bridge")
         .mapper(StdMsgsStringMapper)
         .direction(Direction::Ros2ToBus)
         .add()?
-    .route("/camera/image_raw", "/camera/image_raw")
-        .mapper(SensorMsgsImageMapper)
-        .direction(Direction::Ros2ToBus)
-        .add()?
     .service("/reset", "/reset")
         .mapper(TriggerServiceMapper)
-        .direction(Direction::Ros2ToBus)
-        .add()?
-    .service("/enable", "/enable")
-        .mapper(SetBoolServiceMapper)
-        .direction(Direction::BusToRos2)
         .add()?
     .build()?;
 bridge.spin()?;
-// 或: Ros2Bridge::from_yaml("bridge.yaml")?.spin()?;
 ```
 
-登记 ≠ 一定能跑：桥通过 `DynamicMessage` 反射解析类型，运行时仍需系统装了对应 ROS 包（例如 `foxglove_msgs/msg/CompressedVideo` 需要 `foxglove_msgs`）。
+Rust topic：登记 ≠ 一定能跑（需对应 typesupport）。自定义 srv/action 在本语言写 mapper。
 
-C++（安装对应的 **Linux** `robot-bus-ros2-*` 并 source ROS 后）：
+C++（安装对应 **Linux** `robot-bus-ros2-*` 并 source ROS 后）：
 
 ```cpp
-#include <robot_bus/Ros2Bridge.hpp>
+#include <robot_bus/ros2_bridge.hpp>
 
 auto bridge = robot_bus::Ros2Bridge::New("ros_bridge")
     .bus_tcp("localhost")
@@ -453,17 +442,11 @@ auto bridge = robot_bus::Ros2Bridge::New("ros_bridge")
     .mapper(robot_bus::StdMsgsStringMapper{})
     .direction(robot_bus::Direction::Ros2ToBus)
     .add()
-    .route("/camera/image_raw", "/camera/image_raw")
-    .mapper(robot_bus::SensorMsgsImageMapper{})
-    .direction(robot_bus::Direction::Ros2ToBus)
-    .add()
     .service("/reset", "/reset")
     .mapper(robot_bus::TriggerServiceMapper{})
-    .direction(robot_bus::Direction::Ros2ToBus)
     .add()
     .build();
 bridge.spin();
-// 或: robot_bus::Ros2Bridge::from_yaml("bridge.yaml").spin();
 ```
 
 完整用法见 [`docs/ros2-bridge.md`](docs/ros2-bridge.md)。C++ 包与本机构建见 [`docs/cpp-api.md`](docs/cpp-api.md)（`just cpp-dev-ros2`）。

@@ -183,7 +183,7 @@ function OverviewLayout({
 
   return (
     <div className="flex flex-col gap-3 min-h-full flex-1">
-      <div className="grid grid-cols-1 lg:grid-cols-[1.15fr_0.85fr] gap-3 items-stretch shrink-0">
+      <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1.15fr)_minmax(0,0.85fr)] gap-3 items-stretch shrink-0">
         <BrokerOverview broker={broker} />
         <OverviewStats
           broker={broker}
@@ -193,12 +193,12 @@ function OverviewLayout({
         />
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-[1.15fr_0.85fr] gap-3 items-stretch shrink-0" style={{ minHeight: '16rem' }}>
+      <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1.15fr)_minmax(0,0.85fr)] gap-3 items-stretch shrink-0" style={{ minHeight: '16rem' }}>
         <TopicTable topics={topics} maxBodyHeight={listMax} />
         <ThroughputChart data={throughput} />
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-[1.15fr_0.85fr] gap-3 items-stretch shrink-0" style={{ minHeight: '16rem' }}>
+      <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1.15fr)_minmax(0,0.85fr)] gap-3 items-stretch shrink-0" style={{ minHeight: '16rem' }}>
         <ServiceActionTable
           services={services}
           actions={actions}
@@ -208,7 +208,7 @@ function OverviewLayout({
         <ServiceRateChart data={svcRate} />
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-[1.15fr_0.85fr] gap-3 items-stretch shrink-0" style={{ minHeight: '16rem' }}>
+      <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1.15fr)_minmax(0,0.85fr)] gap-3 items-stretch shrink-0" style={{ minHeight: '16rem' }}>
         <ServiceActionTable
           services={services}
           actions={actions}

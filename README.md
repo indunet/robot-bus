@@ -30,7 +30,7 @@ More API examples live under [`docs/`](docs/).
 | `runtime::SingleThreadedExecutor` / `MultiThreadedExecutor` | Explicit executors (multi-node / parallel); a single node can `Node::spin` directly |
 | `runtime::Node` / `TopicPublisher` / `CallbackGroup` | Nodes, publishers, callback groups (mutually exclusive / reentrant) |
 | `ws_gateway::` (default feature `ws`) | Multiplexed WebSocket RPC gateway (started with the broker) |
-| `ros2_bridge::` (`ros2` feature) | In-process ROS 2 topic/service bridge (`Ros2Bridge`) |
+| `ros2_bridge::` (per language) | In-process ROS 2 topic/service/action bridge (`rclrs` / `rclpy` / `rclcpp`) |
 
 ### Repository layout
 
@@ -59,9 +59,9 @@ Application code (Rust / Python / TypeScript / C++ / Java / Android)
 robot_bus_broker process
 ```
 
-### Optional ROS 2 bridge (Rust feature)
+### Optional ROS 2 bridge (per language)
 
-Everyday robot-bus development **does not install ROS 2**. To interconnect with a ROS 2 graph in-process, enable Cargo feature **`ros2`** and use `robot_bus::ros2_bridge::Ros2Bridge` (chained API or YAML). Official support: **Humble** and **Jazzy** (source that distro + `rclrs`). C++: install `robot-bus-ros2-humble` or `…-jazzy` (does not vendor `rcl`). See the [ROS 2 bridge](#ros-2-bridge-feature-ros2) section.
+Everyday robot-bus development **does not install ROS 2**. To interconnect with a ROS 2 graph in-process, use the native bridge for your language (`rclrs` / `rclpy` / `rclcpp`) — see the [ROS 2 bridge](#ros-2-bridge-feature-ros2--native-per-language) section and [`docs/ros2-bridge.md`](docs/ros2-bridge.md). Official support: **Humble** and **Jazzy**.
 
 ## Quick start
 
@@ -226,7 +226,7 @@ No central package registry for C++: download from [GitHub Releases](https://git
 Install only one of the three (they conflict). See [`docs/cpp-api.md`](docs/cpp-api.md).
 
 ```cpp
-#include <robot_bus/Node.hpp>
+#include <robot_bus/node.hpp>
 #include <robot_bus/sensor_msgs/msg/v1/imu.pb.h>
 
 robot_bus::Broker broker;
@@ -400,26 +400,25 @@ cd studio && pnpm install && pnpm dev   # http://127.0.0.1:15772
 `robot-bus` keeps the broker, multi-language communication SDKs, ROS 2 bridge, protobuf contracts (`tf2_msgs` included), and the broker monitoring console (Overview / Topics / Topology / Logs).
 
 
-## ROS 2 bridge (`feature = "ros2"`)
+## ROS 2 bridge (`feature = "ros2"` / native per language)
 
-In-process topic, service, **and** action bridge via `robot_bus::ros2_bridge::Ros2Bridge` (chained API or YAML). **Not** enabled by default — core SDK, crates.io, and maturin builds stay ROS-free.
+In-process **topic / service / action** bridge. Each language uses its native ROS client (**rclrs** / **rclpy** / **rclcpp**) — C++/Python do **not** go through Rust FFI. Configuration is **code-only** (concrete `.mapper(...)` objects); **no YAML**, no type-name-string route mounting. Details: [`docs/ros2-bridge.md`](docs/ros2-bridge.md).
 
-**Supported ROS 2 distributions (official):** **Humble** and **Jazzy**. Other distros: build from source after sourcing that distro (best-effort).
+**Not** enabled by default for Rust crates.io / maturin — core SDK stays ROS-free. Python needs `rclpy`; C++ needs `robot-bus-ros2-*` + system ROS.
+
+**Supported ROS 2 distributions (official):** **Humble** and **Jazzy**.
 
 | Need | Notes |
 |------|--------|
-| Cargo (Rust) | `--features ros2` (pulls optional `rclrs`) |
-| Environment | Source **Humble** or **Jazzy** so `rcl` / type support libs link; main CI does **not** enable this feature |
-| C++ packages | `robot-bus` (no bridge) vs `robot-bus-ros2-humble` / `robot-bus-ros2-jazzy` (mutually exclusive, **Linux DEBs only** — Windows MSI / macOS PKG ship the core stub). Packages **do not vendor** `rcl`/RMW/DDS — install system ROS and `source /opt/ros/<distro>/setup.bash` |
-| Broker | Running `robot_bus_broker` reachable over tcp/ipc (or `bus_discover`) |
-| Topic types | **Registry** — configure any registered type by string (not a hardcoded enum). Covers every message in [`proto/`](proto) with a ROS 2 counterpart (`std_msgs`, `geometry_msgs`, `sensor_msgs`, `nav_msgs`, `nav2_msgs`, `tf2_msgs`, `control_msgs`, `visualization_msgs`, `foxglove_msgs`, …), excluding bus-internal `robot_bus_interface`. List them with `registered_topic_types()`; add one as `src/ros2_bridge/mappers/<pkg>/<msg>.rs`. |
-| Service types | `std_srvs/srv/Trigger`, `std_srvs/srv/SetBool` (directions `ros2_to_bus` / `bus_to_ros2` only; default call timeout 5s) |
-| Action types | `example_interfaces/action/Fibonacci` (directions `ros2_to_bus` / `bus_to_ros2` only; default goal timeout 30s) |
+| Cargo (Rust) | `--features ros2` (optional `rclrs`) |
+| Python | `robot_bus.ros2_bridge` + sourced ROS / `rclpy` |
+| C++ packages | `robot-bus-ros2-humble` / `…-jazzy` (**Linux DEBs**); native `rclcpp` lib — does not vendor `rcl` |
+| Broker | Running `robot_bus_broker` (tcp/ipc or discover) |
+| Phase-1 builtins | String, Image, Trigger, SetBool, Fibonacci (+ Rust has full topic mapper registry) |
 
 ```rust
 use robot_bus::ros2_bridge::{
-    Direction, FibonacciActionMapper, Ros2Bridge, SensorMsgsImageMapper, SetBoolServiceMapper,
-    StdMsgsStringMapper, TriggerServiceMapper,
+    Direction, Ros2Bridge, StdMsgsStringMapper, TriggerServiceMapper,
 };
 
 let mut bridge = Ros2Bridge::new("ros_bridge")
@@ -428,33 +427,19 @@ let mut bridge = Ros2Bridge::new("ros_bridge")
         .mapper(StdMsgsStringMapper)
         .direction(Direction::Ros2ToBus)
         .add()?
-    .route("/camera/image_raw", "/camera/image_raw")
-        .mapper(SensorMsgsImageMapper)
-        .direction(Direction::Ros2ToBus)
-        .add()?
     .service("/reset", "/reset")
         .mapper(TriggerServiceMapper)
-        .direction(Direction::Ros2ToBus)
-        .add()?
-    .service("/enable", "/enable")
-        .mapper(SetBoolServiceMapper)
-        .direction(Direction::BusToRos2)
-        .add()?
-    .action("/fibonacci", "/fibonacci")
-        .mapper(FibonacciActionMapper)
-        .direction(Direction::Ros2ToBus)
         .add()?
     .build()?;
 bridge.spin()?;
-// or: Ros2Bridge::from_yaml("bridge.yaml")?.spin()?;
 ```
 
-Registered ≠ usable everywhere: the bridge resolves types through `DynamicMessage`, so the ROS package providing the type support must be installed (e.g. `foxglove_msgs` for `foxglove_msgs/msg/CompressedVideo`).
+Registered ≠ usable everywhere on Rust: topics use `DynamicMessage`, so the ROS package providing type support must be installed (e.g. `foxglove_msgs` for CompressedVideo).
 
 C++ (after installing the matching **Linux** `robot-bus-ros2-*` package and sourcing ROS):
 
 ```cpp
-#include <robot_bus/Ros2Bridge.hpp>
+#include <robot_bus/ros2_bridge.hpp>
 
 auto bridge = robot_bus::Ros2Bridge::New("ros_bridge")
     .bus_tcp("localhost")
@@ -462,21 +447,11 @@ auto bridge = robot_bus::Ros2Bridge::New("ros_bridge")
     .mapper(robot_bus::StdMsgsStringMapper{})
     .direction(robot_bus::Direction::Ros2ToBus)
     .add()
-    .route("/camera/image_raw", "/camera/image_raw")
-    .mapper(robot_bus::SensorMsgsImageMapper{})
-    .direction(robot_bus::Direction::Ros2ToBus)
-    .add()
     .service("/reset", "/reset")
     .mapper(robot_bus::TriggerServiceMapper{})
-    .direction(robot_bus::Direction::Ros2ToBus)
-    .add()
-    .action("/fibonacci", "/fibonacci")
-    .mapper(robot_bus::FibonacciActionMapper{})
-    .direction(robot_bus::Direction::Ros2ToBus)
     .add()
     .build();
 bridge.spin();
-// or: robot_bus::Ros2Bridge::from_yaml("bridge.yaml").spin();
 ```
 
 Full usage guide: [`docs/ros2-bridge.md`](docs/ros2-bridge.md). C++ packages / local build: [`docs/cpp-api.md`](docs/cpp-api.md).
