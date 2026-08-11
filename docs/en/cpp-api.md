@@ -1,3 +1,5 @@
+English | [中文](../zh/cpp-api.md)
+
 # C++ API
 
 C++ SDK is distributed via **GitHub Release attachments** (no central C++ registry).

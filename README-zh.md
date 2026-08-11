@@ -159,19 +159,19 @@ goal = act.send_goal(
 # server.spin()
 ```
 
-更多说明见 [`docs/python-api.md`](docs/python-api.md)。
+更多说明见 [`docs/zh/python-api.md`](docs/zh/python-api.md)。
 
 ### 3.6 其他语言
 
 | 语言 | 包 / 产物 | 文档 |
 |------|-----------|------|
-| Python | [PyPI `robot-bus`](https://pypi.org/project/robot-bus/) | [`docs/python-api.md`](docs/python-api.md) |
-| Rust | [crates.io `robot-bus`](https://crates.io/crates/robot-bus) | [`docs/rust-api.md`](docs/rust-api.md) |
-| TypeScript | [npm `robot-bus`](https://www.npmjs.com/package/robot-bus) | [`docs/typescript-api.md`](docs/typescript-api.md) |
-| C++ | [GitHub Releases](https://github.com/indunet/robot-bus/releases)（DEB / MSI） | [`docs/cpp-api.md`](docs/cpp-api.md) |
-| Java | Maven Central `org.indunet:robot-bus` | [`docs/java-api.md`](docs/java-api.md) |
-| Android | Maven Central `org.indunet:robot-bus-android` | [`docs/android-api.md`](docs/android-api.md) |
-| ROS 2 桥 | 分语言（`rclrs` / `rclpy` / `rclcpp`） | [`docs/ros2-bridge.md`](docs/ros2-bridge.md) |
+| Python | [PyPI `robot-bus`](https://pypi.org/project/robot-bus/) | [`docs/zh/python-api.md`](docs/zh/python-api.md) |
+| Rust | [crates.io `robot-bus`](https://crates.io/crates/robot-bus) | [`docs/zh/rust-api.md`](docs/zh/rust-api.md) |
+| TypeScript | [npm `robot-bus`](https://www.npmjs.com/package/robot-bus) | [`docs/zh/typescript-api.md`](docs/zh/typescript-api.md) |
+| C++ | [GitHub Releases](https://github.com/indunet/robot-bus/releases)（DEB / MSI） | [`docs/zh/cpp-api.md`](docs/zh/cpp-api.md) |
+| Java | Maven Central `org.indunet:robot-bus` | [`docs/zh/java-api.md`](docs/zh/java-api.md) |
+| Android | Maven Central `org.indunet:robot-bus-android` | [`docs/zh/android-api.md`](docs/zh/android-api.md) |
+| ROS 2 桥 | 分语言（`rclrs` / `rclpy` / `rclcpp`） | [`docs/zh/ros2-bridge.md`](docs/zh/ros2-bridge.md) |
 
 ## 4. Web 控制台
 
@@ -218,7 +218,7 @@ bridge = (
 bridge.spin()
 ```
 
-完整说明与示例（Rust / Python / C++）：[`docs/ros2-bridge.md`](docs/ros2-bridge.md)。
+完整说明与示例（Rust / Python / C++）：[`docs/zh/ros2-bridge.md`](docs/zh/ros2-bridge.md)。
 
 ## 6. Protobuf 消息
 
@@ -282,3 +282,11 @@ pub.publish(pb.BatteryStatus(voltage=48.0, percentage=0.85))
 ```
 
 若希望把类型贡献进本仓库的内置集合：把文件放到 [`proto/`](proto/) 对应目录，再执行 `just gen-python`（或其他 `just gen-*`）重新生成。
+
+## 7. 参与贡献
+
+如果你对这个项目感兴趣，愿意抽出一部分时间承担开发、测试或文档类的工作，我们都非常欢迎。可通过邮箱联系：[deng_ran@aliyun.com](mailto:deng_ran@aliyun.com)。
+
+## 8. 开源协议
+
+[Apache License 2.0](LICENSE)

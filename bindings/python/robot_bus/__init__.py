@@ -12,7 +12,7 @@ message class to ``create_publisher`` / ``create_subscription`` (etc.) to get
 automatic SerializeToString / ParseFromString around the raw-bytes native API.
 
 ``Ros2Bridge`` lives in ``robot_bus.ros2_bridge`` and uses **rclpy** (not Rust FFI).
-See ``ros2_available()`` / docs/ros2-bridge.md.
+See ``ros2_available()`` / docs/zh/ros2-bridge.md (or docs/en/ros2-bridge.md).
 """
 
 from __future__ import annotations

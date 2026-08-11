@@ -159,19 +159,19 @@ goal = act.send_goal(
 # server.spin()
 ```
 
-More detail: [`docs/python-api.md`](docs/python-api.md).
+More detail: [`docs/en/python-api.md`](docs/en/python-api.md).
 
 ### 3.6 Other languages
 
 | Language | Package / artifact | Guide |
 |----------|--------------------|-------|
-| Python | [PyPI `robot-bus`](https://pypi.org/project/robot-bus/) | [`docs/python-api.md`](docs/python-api.md) |
-| Rust | [crates.io `robot-bus`](https://crates.io/crates/robot-bus) | [`docs/rust-api.md`](docs/rust-api.md) |
-| TypeScript | [npm `robot-bus`](https://www.npmjs.com/package/robot-bus) | [`docs/typescript-api.md`](docs/typescript-api.md) |
-| C++ | [GitHub Releases](https://github.com/indunet/robot-bus/releases) (DEB / MSI) | [`docs/cpp-api.md`](docs/cpp-api.md) |
-| Java | Maven Central `org.indunet:robot-bus` | [`docs/java-api.md`](docs/java-api.md) |
-| Android | Maven Central `org.indunet:robot-bus-android` | [`docs/android-api.md`](docs/android-api.md) |
-| ROS 2 bridge | per-language (`rclrs` / `rclpy` / `rclcpp`) | [`docs/ros2-bridge.md`](docs/ros2-bridge.md) |
+| Python | [PyPI `robot-bus`](https://pypi.org/project/robot-bus/) | [`docs/en/python-api.md`](docs/en/python-api.md) |
+| Rust | [crates.io `robot-bus`](https://crates.io/crates/robot-bus) | [`docs/en/rust-api.md`](docs/en/rust-api.md) |
+| TypeScript | [npm `robot-bus`](https://www.npmjs.com/package/robot-bus) | [`docs/en/typescript-api.md`](docs/en/typescript-api.md) |
+| C++ | [GitHub Releases](https://github.com/indunet/robot-bus/releases) (DEB / MSI) | [`docs/en/cpp-api.md`](docs/en/cpp-api.md) |
+| Java | Maven Central `org.indunet:robot-bus` | [`docs/en/java-api.md`](docs/en/java-api.md) |
+| Android | Maven Central `org.indunet:robot-bus-android` | [`docs/en/android-api.md`](docs/en/android-api.md) |
+| ROS 2 bridge | per-language (`rclrs` / `rclpy` / `rclcpp`) | [`docs/en/ros2-bridge.md`](docs/en/ros2-bridge.md) |
 
 ## 4. Web console
 
@@ -218,7 +218,7 @@ bridge = (
 bridge.spin()
 ```
 
-Full guide and examples (Rust / Python / C++): [`docs/ros2-bridge.md`](docs/ros2-bridge.md).
+Full guide and examples (Rust / Python / C++): [`docs/en/ros2-bridge.md`](docs/en/ros2-bridge.md).
 
 ## 6. Protobuf messages
 
@@ -282,3 +282,11 @@ pub.publish(pb.BatteryStatus(voltage=48.0, percentage=0.85))
 ```
 
 To contribute a type into this repo’s built-in set: add the file under [`proto/`](proto/) and regenerate with `just gen-python` (or the matching `just gen-*` for other languages).
+
+## 7. Contributing
+
+If you are interested in this project and willing to spend some time on development, testing, or documentation, you are very welcome. Please contact: [deng_ran@aliyun.com](mailto:deng_ran@aliyun.com).
+
+## 8. License
+
+[Apache License 2.0](LICENSE)

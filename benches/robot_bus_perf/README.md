@@ -2,7 +2,7 @@
 
 robot-bus 本机性能压测：进程内 `RobotBusBroker`，覆盖 **tcp / ipc / inproc / grpc** 的 pub/sub、service、action。
 
-方法与 `benches/ros2_perf` 对齐，报告写入 [`docs/perf-report.md`](../../docs/perf-report.md)：
+方法与 `benches/ros2_perf` 对齐，报告写入 [`docs/zh/perf-report.md`](../../docs/zh/perf-report.md) / [`docs/en/perf-report.md`](../../docs/en/perf-report.md)：
 
 - **延迟**：限速抽样（发一条等收到再发）
 - **吞吐（主指标）**：在目标速率下限速发送，**二分搜索**丢包 ≤ 1% 的最大可持续速率（max goodput）
@@ -46,4 +46,4 @@ ROBOT_BUS_PERF_ONLY=message cargo run --release --bin robot_bus_perf --features 
 
 - Message HWM=2048（仅 bench）；与 trial 长度配合，避免深队列把过载藏掉。
 - 指标为单机本机回环，机器相关，不作为 CI 门槛。
-- 与 ROS 2 对比见 [`../ros2_perf/`](../ros2_perf/) / [`docs/ros2-perf-report.md`](../../docs/ros2-perf-report.md)；注意 macOS 本机 vs Linux 容器环境差异。
+- 与 ROS 2 对比见 [`../ros2_perf/`](../ros2_perf/) / [`docs/zh/ros2-perf-report.md`](../../docs/zh/ros2-perf-report.md)；注意 macOS 本机 vs Linux 容器环境差异。

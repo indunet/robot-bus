@@ -1,3 +1,5 @@
+[English](../en/ros2-bridge.md) | 中文
+
 # ROS 2 Bridge（`ros2_bridge`）
 
 进程内把 **ROS 2** 与 **robot-bus** 桥在一起：Topic / Service / Action。
@@ -144,7 +146,7 @@ bridge = (
 )
 ```
 
-Action：`ros_action_type()` + `ros_goal_to_bus` / `bus_goal_to_ros` / feedback / result（见 [`mappers/fibonacci.py`](../bindings/python/robot_bus/ros2_bridge/mappers/fibonacci.py)）。
+Action：`ros_action_type()` + `ros_goal_to_bus` / `bus_goal_to_ros` / feedback / result（见 [`mappers/fibonacci.py`](../../bindings/python/robot_bus/ros2_bridge/mappers/fibonacci.py)）。
 
 ### Rust：自定义 Service（`TypedServiceMapper`）
 
@@ -213,7 +215,7 @@ struct AddTwoIntsServiceMapper
 //     .add()
 ```
 
-Topic / Action：`TypedTopicMapper` / `TypedActionMapper`（见 [`ros2_bridge_typed.hpp`](../bindings/cpp/include/robot_bus/ros2_bridge_typed.hpp)）。
+Topic / Action：`TypedTopicMapper` / `TypedActionMapper`（见 [`ros2_bridge_typed.hpp`](../../bindings/cpp/include/robot_bus/ros2_bridge_typed.hpp)）。
 
 ---
 
@@ -249,7 +251,7 @@ fn main() -> robot_bus::Result<()> {
 
 ## Python（`rclpy`）
 
-实现目录：[`bindings/python/robot_bus/ros2_bridge/`](../bindings/python/robot_bus/ros2_bridge/)（纯 Python）。
+实现目录：[`bindings/python/robot_bus/ros2_bridge/`](../../bindings/python/robot_bus/ros2_bridge/)（纯 Python）。
 
 ```bash
 source /opt/ros/humble/setup.bash
@@ -284,7 +286,7 @@ bridge.spin()
 
 - ROS 侧：`rclpy` 节点 + executor（后台线程 spin）
 - Bus 侧：`robot_bus.Node`（raw / typed protobuf）
-- 自定义 mapper：见上文「用户自定义」；内置参考 [`mappers/trigger.py`](../bindings/python/robot_bus/ros2_bridge/mappers/trigger.py)
+- 自定义 mapper：见上文「用户自定义」；内置参考 [`mappers/trigger.py`](../../bindings/python/robot_bus/ros2_bridge/mappers/trigger.py)
 - Mapper 按需 lazy import（依赖对应 ROS 消息包与 protobuf）
 
 ---

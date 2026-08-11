@@ -1,3 +1,5 @@
+[English](../en/java-api.md) | 中文
+
 # Java API
 
 ```bash
@@ -12,7 +14,7 @@ just java-dev       # gen-java + cargo FFI + mvn test
 |------|------|------|
 | JVM JAR | `org.indunet:robot-bus` | Java 11+，JNA + protobuf stubs |
 
-包名 `org.indunet.robot.bus`。Android AAR 是**独立** Kotlin SDK（不依赖本 JAR），见 [`docs/android-api.md`](android-api.md)。
+包名 `org.indunet.robot.bus`。Android AAR 是**独立** Kotlin SDK（不依赖本 JAR），见 [`android-api.md`](android-api.md)。
 ## Broker 启动
 
 与其他语言相同：先起 broker，再跑业务。
@@ -104,7 +106,7 @@ node.createSubscription("/robot1/imu", (topic, payload) -> {
 
 ### Android
 
-见 [`docs/android-api.md`](android-api.md)（独立 Kotlin SDK；`RobotBusAndroid.init`、Node、参数等）。
+见 [`android-api.md`](android-api.md)（独立 Kotlin SDK；`RobotBusAndroid.init`、Node、参数等）。
 
 ### UDP 发现
 

@@ -767,7 +767,7 @@ void write_report(const std::vector<ScenarioResult> & results, const std::string
 {
   std::ostringstream md;
   md << "# ROS 2 性能测试报告\n\n";
-  md << "由 `benches/ros2_perf/run.sh`（容器内 `ros2_perf_bench`）生成，方法对齐 `docs/perf-report.md`。\n\n";
+  md << "由 `benches/ros2_perf/run.sh`（容器内 `ros2_perf_bench`）生成，方法对齐 `docs/zh/perf-report.md`。\n\n";
   md << "## 环境\n\n";
   md << env_summary() << "\n";
   md << "## 方法\n\n";
@@ -834,7 +834,7 @@ int main(int argc, char ** argv)
   const size_t act_iters = env_size("ROS2_PERF_ACT_ITERS", kDefaultIters);
   const char * report_path_env = std::getenv("ROS2_PERF_REPORT");
   const std::string report_path =
-    report_path_env ? report_path_env : "docs/ros2-perf-report.md";
+    report_path_env ? report_path_env : "docs/zh/ros2-perf-report.md";
 
   std::cout << "=== ROS2 perf mode=" << mode
             << " goodput loss≤" << env_double("ROS2_PERF_MAX_LOSS_PCT", kDefaultMaxLossPct) << "%"

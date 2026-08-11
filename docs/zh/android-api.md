@@ -1,3 +1,5 @@
+[English](../en/android-api.md) | 中文
+
 # Android API
 
 Maven: `org.indunet:robot-bus-android`  
@@ -138,4 +140,4 @@ just android-dev       # 需 NDK 26 + cargo-ndk
 just test-android
 ```
 
-目录：[`bindings/android/`](../bindings/android/)。JVM Java 绑定见 [`docs/java-api.md`](java-api.md)。
+目录：[`bindings/android/`](../../bindings/android/)。JVM Java 绑定见 [`java-api.md`](java-api.md)。

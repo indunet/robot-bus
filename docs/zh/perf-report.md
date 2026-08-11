@@ -1,3 +1,5 @@
+[English](../en/perf-report.md) | 中文
+
 # robot-bus 性能测试报告
 
 由 `just perf`（`cargo run --release --bin robot_bus_perf`）生成。

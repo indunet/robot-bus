@@ -8,9 +8,9 @@ JNA wrappers over the C ABI (`bindings/cpp/native` → `librobot_bus_c`), plus
 **pre-generated protobuf stubs** (same `proto/` as Python / C++ / TypeScript).
 
 Android AAR: [`../android/`](../android/) — **standalone Kotlin SDK** (does not depend on this
-JAR). See [`docs/android-api.md`](../../docs/android-api.md).
+JAR). See [`docs/en/android-api.md`](../../docs/en/android-api.md).
 
-API examples: [`docs/java-api.md`](../../docs/java-api.md).
+API examples: [`docs/en/java-api.md`](../../docs/en/java-api.md).
 
 ## Local build
 

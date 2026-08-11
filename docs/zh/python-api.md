@@ -1,9 +1,11 @@
+[English](../en/python-api.md) | 中文
+
 # Python API 示例
 
 ```bash
 pip install robot-bus
 # 本地：just python-dev
-# ROS 2 桥（rclpy）：source ROS 后 just python-dev-ros2；见 docs/ros2-bridge.md
+# ROS 2 桥（rclpy）：source ROS 后 just python-dev-ros2；见 docs/zh/ros2-bridge.md
 ```
 
 ## Broker 启动

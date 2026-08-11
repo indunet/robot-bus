@@ -1,7 +1,7 @@
 """Integration tests for gRPC-mode Node (requires native extension + broker).
 
 Run after: just python-dev
-  (or: cd bindings/python && maturin develop --features extension-module,grpc)
+  (or: cd bindings/python && maturin develop --features extension-module,ws)
   .venv/bin/python bindings/python/tests/test_ws_node.py
 """
 

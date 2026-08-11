@@ -1,3 +1,5 @@
+[English](../en/api-compare.md) | 中文
+
 # API 对比：ROS 2 Humble（rclrs）↔ robot-bus
 
 几个经典场景下，两侧怎么写。左侧是 **ROS 2 Humble + [rclrs](https://github.com/ros2-rust/ros2_rust)**，右侧是 **robot-bus**。

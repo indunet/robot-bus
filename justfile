@@ -39,11 +39,11 @@ gen-all: gen-rust proto gen-typescript gen-cpp gen-java gen-android
 
 # Build and install the Python binding into the active venv
 python-dev: proto gen-rust
-	cd bindings/python && maturin develop --features extension-module,grpc --no-default-features
+	cd bindings/python && maturin develop --features extension-module,ws --no-default-features
 
 # Same as python-dev; Ros2Bridge is pure Python (rclpy). Source Humble/Jazzy first.
 python-dev-ros2: proto gen-rust
-	cd bindings/python && maturin develop --features extension-module,grpc --no-default-features
+	cd bindings/python && maturin develop --features extension-module,ws --no-default-features
 
 # Build TypeScript native addon + JS bundle
 ts-dev: gen-typescript gen-rust
@@ -162,11 +162,11 @@ ci: gen-all
 	just test-python
 	just test-typescript
 
-# Performance harness (release); writes docs/perf-report.md
+# Performance harness (release); writes docs/zh/perf-report.md and docs/en/perf-report.md
 perf: gen-rust
 	cargo run --release --bin robot_bus_perf --features ws
 
-# ROS 2 comparison benches (Docker container `ros2`); writes docs/ros2-perf-report.md
+# ROS 2 comparison benches (Docker container `ros2`); writes docs/{zh,en}/ros2-perf-report.md
 perf-ros2:
 	./benches/ros2_perf/run.sh
 
@@ -174,6 +174,6 @@ perf-ros2:
 check-ros2-shim:
 	RUSTFLAGS='--cfg ros_distro="humble"' cargo check --features ros2-shim
 	RUSTFLAGS='--cfg ros_distro="humble"' cargo check --manifest-path bindings/cpp/native/Cargo.toml --features ros2-shim
-	RUSTFLAGS='--cfg ros_distro="humble"' cargo check --lib --no-default-features --features extension-module,grpc,ros2-shim
+	RUSTFLAGS='--cfg ros_distro="humble"' cargo check --lib --no-default-features --features extension-module,ws,ros2-shim
 
 # Tool nodes moved to sibling repo robot-bus-tools.

@@ -11,7 +11,7 @@ Android Library (AAR) that:
 3. Packages per-ABI `librobot_bus_c.so` under `src/main/jniLibs/`
 4. Exposes `RobotBusAndroid.init(context)` to `System.loadLibrary("robot_bus_c")`
 
-Docs: [`docs/android-api.md`](../../docs/android-api.md). JVM Java binding (separate artifact): [`../java/`](../java/).
+Docs: [`docs/en/android-api.md`](../../docs/en/android-api.md). JVM Java binding (separate artifact): [`../java/`](../java/).
 
 ## Local build
 

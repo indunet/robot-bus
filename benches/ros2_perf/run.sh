@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Build and run ROS 2 perf (shm + udp) inside the `ros2` Docker container,
-# writing docs/ros2-perf-report.md at the robot-bus repo root.
+# writing docs/zh/ros2-perf-report.md and docs/en/ros2-perf-report.md.
 set -euo pipefail
 
 PERF_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -12,7 +12,10 @@ else
 fi
 CONTAINER="${ROS2_PERF_CONTAINER:-ros2}"
 WS_IN_CONTAINER="${ROS2_PERF_WS:-/tmp/ros2_perf_ws}"
-REPORT_HOST="${ROOT}/docs/ros2-perf-report.md"
+REPORT_HOST_ZH="${ROOT}/docs/zh/ros2-perf-report.md"
+REPORT_HOST_EN="${ROOT}/docs/en/ros2-perf-report.md"
+# Back-compat alias used by single-mode paths / docker layout under WS.
+REPORT_HOST="${REPORT_HOST_ZH}"
 
 # Optional overrides (useful for smoke tests):
 #   ROS2_PERF_GOODPUT_TRIAL_MSGS / ROS2_PERF_GOODPUT_RATE_LO / ROS2_PERF_GOODPUT_RATE_HI
@@ -55,104 +58,9 @@ done
 merge_reports() {
   local shm_partial="$1"
   local udp_partial="$2"
-  local out="$3"
-  python3 - "$shm_partial" "$udp_partial" "$out" <<'PY'
-import re, sys
-from pathlib import Path
-
-shm_path, udp_path, out_path = map(Path, sys.argv[1:4])
-
-def parse(path: Path):
-    text = path.read_text()
-    env = []
-    if m := re.search(r"## 环境\n\n(.*?)\n## ", text, re.S):
-        env = [ln for ln in m.group(1).strip().splitlines() if ln.startswith("- ")]
-    # New table: 场景 | 发送 | 接收 | 耗时 | 发布/s | 订阅/s | 投递% | p50 | p95 | p99 | mean
-    rows = {}
-    for m in re.finditer(
-        r"\| (message pub/sub|service call|action send_goal) \| (\d+) \| (\d+) \| ([^|]+) \| ([^|]+) \| ([^|]+) \| ([^|]+) \| ([^|]+) \| ([^|]+) \| ([^|]+) \| ([^|]+) \|",
-        text,
-    ):
-        rows[m.group(1)] = {
-            "sent": m.group(2),
-            "recv": m.group(3),
-            "elapsed": m.group(4).strip(),
-            "pub": m.group(5).strip(),
-            "sub": m.group(6).strip(),
-            "delivery": m.group(7).strip(),
-        }
-    section = ""
-    # Prefer the section matching the partial filename.
-    want = "shm" if "shm" in path.name else "udp"
-    # Title line only ([^\n]*); a greedy .* would swallow later ## sections.
-    sec_re = r"(## (?:shm|udp)[^\n]*\n\n\| 场景.*?)(?=\n## |\Z)"
-    for m in re.finditer(sec_re, text, re.S):
-        block = m.group(1).strip() + "\n"
-        if want in block.lower()[:40] or (want == "shm" and "Shared Memory" in block) or (want == "udp" and "UDPv4" in block):
-            # Keep only if it has real data rows with digits
-            if re.search(r"\| message pub/sub \| \d+", block):
-                section = block
-                break
-    if not section:
-        for m in re.finditer(sec_re, text, re.S):
-            block = m.group(1).strip() + "\n"
-            if re.search(r"\| message pub/sub \| \d+", block):
-                section = block
-                break
-    return env, rows, section
-
-env_s, rows_s, sec_s = parse(shm_path)
-env_u, rows_u, sec_u = parse(udp_path)
-
-def cell_msg_pub(rows):
-    r = rows.get("message pub/sub")
-    return "—" if not r else f"{r['pub']}/s"
-
-def cell_msg_sub(rows):
-    r = rows.get("message pub/sub")
-    return "—" if not r else f"{r['sub']}/s ({r['delivery']}% delivered)"
-
-def cell_rpc(rows, scenario):
-    r = rows.get(scenario)
-    return "—" if not r else f"{r['sub']}/s"
-
-lines = []
-lines.append("# ROS 2 性能测试报告\n")
-lines.append("由 `benches/ros2_perf/run.sh`（容器内 `ros2_perf_bench`）生成，方法对齐 `docs/perf-report.md`。\n")
-lines.append("## 环境\n")
-for ln in env_s:
-    if ln.startswith("- Mode:"):
-        continue
-    lines.append(ln)
-lines.append("- Modes: **shm** (Fast DDS Shared Memory) + **udp** (Fast DDS UDPv4 only)\n")
-lines.append("## 方法\n")
-lines.append("- RMW: `rmw_fastrtps_cpp`；传输由 Fast DDS XML 固定为 **SHM** 或 **UDPv4**。")
-lines.append("- 单进程多 Node + `MultiThreadedExecutor`（本机回环，非跨机）。")
-lines.append("- Payload：64 字节；QoS `KeepLast(2048)` best_effort。")
-lines.append("- Message **吞吐（主指标）**：按目标速率限速发送约 1s，**二分搜索**丢包率 ≤ 1% 且发送窗口内 pub/sub 均 ≥90% 目标速率的最大可持续速率（max goodput）。")
-lines.append("- Message **延迟**：另做限速抽样（发一条等收到再发）。")
-lines.append("- Service / action 延迟：每次 call / send_goal 本地计时。")
-lines.append("- 指标机器相关，不作为 CI 门槛。\n")
-lines.append("## 横比\n")
-lines.append("message 为 **max goodput**（丢包阈值内的最大可持续订阅速率）；括号为该档实测投递率。\n")
-lines.append("| 场景 | shm | udp |")
-lines.append("|------|-----|-----|")
-lines.append(f"| message 发布 | {cell_msg_pub(rows_s)} | {cell_msg_pub(rows_u)} |")
-lines.append(f"| message max goodput | {cell_msg_sub(rows_s)} | {cell_msg_sub(rows_u)} |")
-lines.append(f"| service call | {cell_rpc(rows_s, 'service call')} | {cell_rpc(rows_u, 'service call')} |")
-lines.append(f"| action send_goal | {cell_rpc(rows_s, 'action send_goal')} | {cell_rpc(rows_u, 'action send_goal')} |")
-lines.append("")
-lines.append(sec_s if sec_s else "## shm（Fast DDS Shared Memory）\n\n_(missing)_\n")
-lines.append("")
-lines.append(sec_u if sec_u else "## udp（Fast DDS UDPv4，无 SHM）\n\n_(missing)_\n")
-lines.append("## 复现\n")
-lines.append("```bash")
-lines.append("./benches/ros2_perf/run.sh")
-lines.append("ROS2_PERF_ONLY=message ./benches/ros2_perf/run.sh")
-lines.append("```")
-Path(out_path).write_text("\n".join(lines) + "\n")
-print(f"wrote {out_path}")
-PY
+  local out_zh="$3"
+  local out_en="$4"
+  python3 "${PERF_DIR}/merge_reports.py" "$shm_partial" "$udp_partial" "$out_zh" "$out_en"
 }
 
 run_bench_local() {
@@ -223,20 +131,20 @@ if [[ "${LOCAL}" -eq 1 ]]; then
   if [[ "${BUILD_ONLY}" -eq 1 ]]; then
     exit 0
   fi
-  mkdir -p "${ROOT}/docs"
+  mkdir -p "${ROOT}/docs/zh" "${ROOT}/docs/en"
   case "${MODE}" in
     shm)
-      run_bench_local "${WS}" shm "${REPORT_HOST}"
+      run_bench_local "${WS}" shm "${REPORT_HOST_ZH}"
       ;;
     udp)
-      run_bench_local "${WS}" udp "${REPORT_HOST}"
+      run_bench_local "${WS}" udp "${REPORT_HOST_ZH}"
       ;;
     both)
       shm_p="${PERF_DIR}/_out.shm.partial.md"
       udp_p="${PERF_DIR}/_out.udp.partial.md"
       run_bench_local "${WS}" shm "${shm_p}"
       run_bench_local "${WS}" udp "${udp_p}"
-      merge_reports "${shm_p}" "${udp_p}" "${REPORT_HOST}"
+      merge_reports "${shm_p}" "${udp_p}" "${REPORT_HOST_ZH}" "${REPORT_HOST_EN}"
       rm -f "${shm_p}" "${udp_p}"
       ;;
     *)
@@ -283,6 +191,9 @@ docker exec \
   "${CONTAINER}" \
   bash ./run.sh "${mode_args[@]}"
 
-echo "==> copying report back"
-docker cp "${CONTAINER}:${WS_IN_CONTAINER}/docs/ros2-perf-report.md" "${REPORT_HOST}"
-echo "done: ${REPORT_HOST}"
+echo "==> copying reports back"
+docker exec "${CONTAINER}" mkdir -p "${WS_IN_CONTAINER}/docs/zh" "${WS_IN_CONTAINER}/docs/en"
+docker cp "${CONTAINER}:${WS_IN_CONTAINER}/docs/zh/ros2-perf-report.md" "${REPORT_HOST_ZH}"
+docker cp "${CONTAINER}:${WS_IN_CONTAINER}/docs/en/ros2-perf-report.md" "${REPORT_HOST_EN}"
+echo "done: ${REPORT_HOST_ZH}"
+echo "done: ${REPORT_HOST_EN}"

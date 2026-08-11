@@ -30,7 +30,7 @@ robot-bus-broker = "robot_bus:run_broker"
 manifest-path = "../../Cargo.toml"
 python-source = "."
 module-name = "robot_bus._native"
-features = ["extension-module", "grpc"]
-# Keep wheels free of default multimedia features (system FFmpeg / audio / camera).
+features = ["extension-module", "ws"]
+# Keep wheels free of default features (console UI assets, etc.).
 # Note: `cargo-extra-args` was removed in maturin 0.13; use this flag instead.
 no-default-features = true

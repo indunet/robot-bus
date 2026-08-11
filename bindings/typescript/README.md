@@ -14,4 +14,4 @@ npm install robot-bus
 # local: just ts-dev
 ```
 
-See [`docs/typescript-api.md`](../../docs/typescript-api.md).
+See [`docs/en/typescript-api.md`](../../docs/en/typescript-api.md).

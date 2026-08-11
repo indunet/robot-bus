@@ -3,7 +3,7 @@
 C ABI (`native/`) + C++ RAII headers (`include/`) + protobuf msgs under
 `generated/robot_bus/` (gitignored; run `just gen-cpp` before build).
 Distributed as GitHub Release **DEB / MSI / PKG** assets (see
-[docs/cpp-api.md](../../docs/cpp-api.md)).
+[docs/en/cpp-api.md](../../docs/en/cpp-api.md)).
 
 **C++ standard: C++17** (same minimum as ROS 2 Humble).
 

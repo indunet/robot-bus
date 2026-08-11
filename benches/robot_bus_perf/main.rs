@@ -1,4 +1,4 @@
-//! robot-bus performance harness — writes `docs/perf-report.md`.
+//! robot-bus performance harness — writes `docs/zh/perf-report.md` and `docs/en/perf-report.md`.
 //!
 //! Sources live under `benches/robot_bus_perf/`.
 //! Run: `just perf` or `cargo run --release --bin robot_bus_perf`
@@ -147,7 +147,7 @@ fn main() {
     }
 
     let path = write_report(&results, &env_summary()).expect("write report");
-    println!("wrote {}", path.display());
+    println!("wrote {} (and docs/en/perf-report.md)", path.display());
 }
 
 fn make_payload(ts_ns: u64) -> Vec<u8> {

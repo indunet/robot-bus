@@ -1,3 +1,5 @@
+[English](../en/rust-api.md) | 中文
+
 # Rust API 示例
 
 `Cargo.toml`：
@@ -51,7 +53,7 @@ let mut node = Node::with_options("talker", opts);
 
 UDP 组播发现已移除。
 
-**同进程 inproc：** ZeroMQ 的 `inproc://` 是 context-local。嵌入式 broker 与 Node 必须共用同一个 [`Context`](../src/runtime/context.rs)：
+**同进程 inproc：** ZeroMQ 的 `inproc://` 是 context-local。嵌入式 broker 与 Node 必须共用同一个 [`Context`](../../src/runtime/context.rs)：
 
 ```rust
 use robot_bus::{Context, Node, RobotBusBroker, RobotBusConfig};
