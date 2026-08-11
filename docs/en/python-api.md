@@ -422,18 +422,19 @@ print(robot_bus.__version__)
 | `Node.declare_parameter` / `get_parameter` / `set_parameter` / `has_parameter` / `list_parameters` | Local node parameters (`bool` / `int` / `float` / `str`) |
 | `Node.load_parameters_from_yaml_str` / `load_parameters_from_yaml_file` | Load / override parameters from YAML |
 | `node.spin()` / `spin_once` / `shutdown` | Drive callbacks (ROS 2–style simple path) |
+| `node.wait_for_message(topic, timeout=None)` | Wait for one message or timeout (`bytes` / `None`) |
 | `Context()` | Shared ZMQ context (required for same-process inproc) |
 | `SingleThreadedExecutor(context=None)` | Explicit single-threaded executor (for shared multi-node use) |
 | `MultiThreadedExecutor(num_threads=4, context=None)` | Parallel service/action handlers |
 | `executor.add_node(node)` | Attach node to executor (must be before auto-attach on that node) |
-| `node.create_publisher(topic, msg_type=None)` | typed → `TypedTopicPublisher.publish(Message)`; omit type → raw `TopicPublisher.publish(bytes)` |
+| `node.create_publisher(topic, msg_type=None, qos_depth=None)` | typed → `TypedTopicPublisher`; omit type → raw; `qos_depth>0` → KeepLast HWM (ignored on WS) |
 | `node.create_timer(period, callback)` → `TimerHandle` | Timer (attached to Node like topic) |
 | `CallbackGroupType` / `create_callback_group` | `MutuallyExclusive` / `Reentrant` |
-| `create_subscription(..., msg_type=, callback_group=)` | typed: `callback(topic, Message)`; omit type: `callback(topic, bytes)` |
+| `create_subscription(..., msg_type=, callback_group=, qos_depth=)` | typed: `callback(topic, Message)`; omit type: `callback(topic, bytes)` |
 | `create_service(..., request_type=, response_type=)` | typed: `handler(Request) -> Response`; otherwise raw bytes |
-| `create_client(..., request_type=, response_type=)` | typed → `TypedServiceClient`; otherwise `ServiceClient` |
+| `create_client(..., request_type=, response_type=)` | typed → `TypedServiceClient`; `service_is_ready` / `wait_for_service` (console workers) |
 | `create_action_server(..., goal_type=, feedback_type=, result_type=)` | typed handler publishes feedback in real time via context and returns result; otherwise raw bytes |
-| `create_action_client(..., goal_type=, feedback_type=, result_type=)` | typed → `TypedActionClient`; `send_goal` returns GoalHandle immediately (feedback callback / `result()` / `cancel()`) |
+| `create_action_client(..., goal_type=, feedback_type=, result_type=)` | typed → `TypedActionClient`; `wait_for_action_server`; `send_goal` → GoalHandle |
 | `ActionGoalHandle` / `TypedActionGoalHandle` | Goal id, action name, blocking wait for result, best-effort cancel |
 | `Publisher(endpoint=None)` | Low-level XSUB connection (without Node) |
 | `ros2_available()` | Whether `import rclpy` succeeds (native Python bridge) |

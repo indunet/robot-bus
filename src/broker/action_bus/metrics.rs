@@ -13,6 +13,7 @@ pub struct ActionCounters {
     pub worker_died: AtomicU64,
     pub cancelled: AtomicU64,
     pub active: AtomicU64,
+    pub workers: AtomicU64,
     pub duration_ewma_ms: AtomicU64,
     pub last_seen_unix_ms: AtomicU64,
 }
@@ -26,6 +27,7 @@ pub struct ActionSnapshot {
     pub worker_died: u64,
     pub cancelled: u64,
     pub active: u64,
+    pub workers: u64,
     pub avg_duration_ms: u64,
     pub last_seen_unix_ms: u64,
 }
@@ -67,6 +69,13 @@ impl ActionMetrics {
             .map(|d| d.as_millis() as u64)
             .unwrap_or(0);
         counters.last_seen_unix_ms.store(now_ms, Ordering::Relaxed);
+    }
+
+    /// Ensure the action appears (e.g. on READY) and refresh worker gauge.
+    pub fn set_workers(&self, name: &str, workers: u64) {
+        let c = self.counters(name);
+        c.workers.store(workers, Ordering::Relaxed);
+        Self::touch(&c);
     }
 
     /// Ensure the action appears (e.g. on READY).
@@ -155,6 +164,7 @@ impl ActionMetrics {
                 worker_died: c.worker_died.load(Ordering::Relaxed),
                 cancelled: c.cancelled.load(Ordering::Relaxed),
                 active: c.active.load(Ordering::Relaxed),
+                workers: c.workers.load(Ordering::Relaxed),
                 avg_duration_ms: c.duration_ewma_ms.load(Ordering::Relaxed),
                 last_seen_unix_ms: c.last_seen_unix_ms.load(Ordering::Relaxed),
             })

@@ -422,18 +422,19 @@ print(robot_bus.__version__)
 | `Node.declare_parameter` / `get_parameter` / `set_parameter` / `has_parameter` / `list_parameters` | 本节点本地参数（`bool` / `int` / `float` / `str`） |
 | `Node.load_parameters_from_yaml_str` / `load_parameters_from_yaml_file` | 从 YAML 加载 / 覆盖参数 |
 | `node.spin()` / `spin_once` / `shutdown` | 驱动回调（ROS 2 式简单路径） |
+| `node.wait_for_message(topic, timeout=None)` | 等到一条消息或超时（返回 `bytes` / `None`） |
 | `Context()` | 共享 ZMQ context（同进程 inproc 必需） |
 | `SingleThreadedExecutor(context=None)` | 显式单线程执行器（多节点共享时用） |
 | `MultiThreadedExecutor(num_threads=4, context=None)` | service/action handler 可并行 |
 | `executor.add_node(node)` | 把节点挂到执行器（须在该节点尚未 auto-attach 之前） |
-| `node.create_publisher(topic, msg_type=None)` | typed → `TypedTopicPublisher.publish(Message)`；省略类型 → raw `TopicPublisher.publish(bytes)` |
+| `node.create_publisher(topic, msg_type=None, qos_depth=None)` | typed → `TypedTopicPublisher.publish(Message)`；省略类型 → raw；`qos_depth>0` → KeepLast HWM（WS 忽略） |
 | `node.create_timer(period, callback)` → `TimerHandle` | 定时器（与 topic 一样挂在 Node） |
 | `CallbackGroupType` / `create_callback_group` | `MutuallyExclusive` / `Reentrant` |
-| `create_subscription(..., msg_type=, callback_group=)` | typed：`callback(topic, Message)`；省略类型：`callback(topic, bytes)` |
+| `create_subscription(..., msg_type=, callback_group=, qos_depth=)` | typed：`callback(topic, Message)`；省略类型：`callback(topic, bytes)` |
 | `create_service(..., request_type=, response_type=)` | typed：`handler(Request) -> Response`；否则 raw bytes |
-| `create_client(..., request_type=, response_type=)` | typed → `TypedServiceClient`；否则 `ServiceClient` |
+| `create_client(..., request_type=, response_type=)` | typed → `TypedServiceClient`；`service_is_ready` / `wait_for_service`（console workers） |
 | `create_action_server(..., goal_type=, feedback_type=, result_type=)` | typed handler 通过 context 实时发布 feedback，并返回 result；否则 raw bytes |
-| `create_action_client(..., goal_type=, feedback_type=, result_type=)` | typed → `TypedActionClient`；`send_goal` 立即返回 GoalHandle（feedback callback / `result()` / `cancel()`） |
+| `create_action_client(..., goal_type=, feedback_type=, result_type=)` | typed → `TypedActionClient`；`wait_for_action_server`；`send_goal` → GoalHandle |
 | `ActionGoalHandle` / `TypedActionGoalHandle` | goal 标识、action 名称、阻塞等待 result 与 best-effort cancel |
 | `Publisher(endpoint=None)` | 低层连 XSUB（不经 Node） |
 | `ros2_available()` | 能否 `import rclpy`（Python 原生桥） |

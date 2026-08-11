@@ -7,7 +7,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use robot_bus::runtime::{
-    ActionGoalHandler, CallbackGroupType, ServiceHandler, TimerCallback,
+    ActionGoalHandler, CallbackGroupType, QosProfile, ServiceHandler, TimerCallback,
 };
 
 use crate::clients::{
@@ -45,6 +45,15 @@ pub extern "C" fn robot_bus_node_create_publisher(
     n: *mut RobotBusNode,
     topic: *const c_char,
 ) -> *mut RobotBusTopicPublisher {
+    robot_bus_node_create_publisher_with_qos(n, topic, 0)
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn robot_bus_node_create_publisher_with_qos(
+    n: *mut RobotBusNode,
+    topic: *const c_char,
+    depth: i32,
+) -> *mut RobotBusTopicPublisher {
     if n.is_null() {
         set_error("null node");
         return ptr::null_mut();
@@ -53,7 +62,14 @@ pub extern "C" fn robot_bus_node_create_publisher(
         Ok(t) => t,
         Err(_) => return ptr::null_mut(),
     };
-    match unsafe { &mut *n }.inner.create_publisher_raw(topic) {
+    let result = if depth > 0 {
+        unsafe { &mut *n }
+            .inner
+            .create_publisher_raw_with_qos(topic, QosProfile::keep_last(depth))
+    } else {
+        unsafe { &mut *n }.inner.create_publisher_raw(topic)
+    };
+    match result {
         Ok(inner) => {
             clear_error();
             Box::into_raw(Box::new(RobotBusTopicPublisher { inner }))
@@ -72,6 +88,18 @@ pub extern "C" fn robot_bus_node_create_subscription(
     callback: RobotBusMsgCallback,
     user: *mut c_void,
     group: *const RobotBusCallbackGroup,
+) -> c_int {
+    robot_bus_node_create_subscription_with_qos(n, topic, callback, user, group, 0)
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn robot_bus_node_create_subscription_with_qos(
+    n: *mut RobotBusNode,
+    topic: *const c_char,
+    callback: RobotBusMsgCallback,
+    user: *mut c_void,
+    group: *const RobotBusCallbackGroup,
+    depth: i32,
 ) -> c_int {
     if n.is_null() {
         return err("null node");
@@ -101,10 +129,19 @@ pub extern "C" fn robot_bus_node_create_subscription(
     } else {
         Some(&unsafe { &*group }.inner)
     };
-    match unsafe { &mut *n }
-        .inner
-        .create_subscription_raw(topic, cb, group)
-    {
+    let result = if depth > 0 {
+        unsafe { &mut *n }.inner.create_subscription_raw_with_qos(
+            topic,
+            QosProfile::keep_last(depth),
+            cb,
+            group,
+        )
+    } else {
+        unsafe { &mut *n }
+            .inner
+            .create_subscription_raw(topic, cb, group)
+    };
+    match result {
         Ok(()) => ok(),
         Err(e) => bus_err(e),
     }

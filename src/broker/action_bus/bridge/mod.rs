@@ -153,7 +153,10 @@ pub fn run_federated(
         if Instant::now() >= next_sweep {
             let now = Instant::now();
             let dead = registry.sweep_dead(now, hb_timeout);
-            for wid in &dead {
+            for (wid, act) in &dead {
+                if let Some(m) = metrics {
+                    m.set_workers(act, registry.worker_count(act) as u64);
+                }
                 let dropped = goals.drain_if(|e| e.worker_identity.as_slice() == wid.as_slice());
                 send_died_results(&frontend, &backend, dropped, metrics)?;
             }

@@ -26,13 +26,12 @@ use prost::{Message, Name};
 
 use crate::action_bus::{ActionClient as BusActionClient, ActionKind, ActionMessage};
 use crate::errors::{BusError, Result, parse_error_body};
-use crate::message_bus::Publisher as BusPublisher;
+use crate::message_bus::{Publisher as BusPublisher, Subscriber as BusSubscriber};
 use crate::runtime::callback_group::{CallbackGroup, CallbackGroupType};
+use crate::runtime::console_ready::{self, ReadyKind};
 use crate::runtime::context::Context;
 use crate::runtime::executor::{Executor, ShutdownHandle};
 use crate::runtime::executors::{ExecutorHandle, SingleThreadedExecutor};
-#[cfg(feature = "ws")]
-use crate::runtime::ws_runtime::{WsClientContext, WsRuntime};
 use crate::runtime::parameters::{ListParametersResult, Parameter, ParameterStore, ParameterValue};
 use crate::runtime::qos::QosProfile;
 use crate::runtime::queues::ActionMessageCallback;
@@ -40,6 +39,8 @@ use crate::runtime::registrations::{ActionGoalHandler, MessageCallback, ServiceH
 use crate::runtime::timers::{TimerCallback, TimerHandle};
 use crate::runtime::topic_type_register;
 use crate::runtime::topology_register::TopologyEndpointGuard;
+#[cfg(feature = "ws")]
+use crate::runtime::ws_runtime::{WsClientContext, WsRuntime};
 use crate::service_bus::ServiceClient as BusServiceClient;
 use crate::transports::{
     ACTION_BACKEND_CHANNEL, ACTION_FRONTEND_CHANNEL, SERVICE_BACKEND_CHANNEL,
@@ -392,6 +393,7 @@ impl NodeService {
 pub struct NodeServiceClientRaw {
     inner: ServiceClientInner,
     service_name: String,
+    console_url: Option<String>,
 }
 
 enum ServiceClientInner {
@@ -403,6 +405,21 @@ enum ServiceClientInner {
 impl NodeServiceClientRaw {
     pub fn service_name(&self) -> &str {
         &self.service_name
+    }
+
+    /// Best-effort: console reports `workers > 0` for this service.
+    pub fn service_is_ready(&self) -> bool {
+        console_ready::is_ready(self.console_url.as_deref(), ReadyKind::Service, &self.service_name)
+    }
+
+    /// Poll until [`service_is_ready`](Self::service_is_ready) or `timeout`.
+    pub fn wait_for_service(&self, timeout: Option<Duration>) -> bool {
+        console_ready::wait_until_ready(
+            self.console_url.as_deref(),
+            ReadyKind::Service,
+            &self.service_name,
+            timeout,
+        )
     }
 
     pub fn call(&self, body: &[u8], timeout: Option<Duration>) -> Result<Vec<u8>> {
@@ -456,6 +473,14 @@ pub struct NodeServiceClient<S: Service> {
 impl<S: Service> NodeServiceClient<S> {
     pub fn service_name(&self) -> &str {
         self.inner.service_name()
+    }
+
+    pub fn service_is_ready(&self) -> bool {
+        self.inner.service_is_ready()
+    }
+
+    pub fn wait_for_service(&self, timeout: Option<Duration>) -> bool {
+        self.inner.wait_for_service(timeout)
     }
 
     pub fn call(&self, request: &S::Request, timeout: Option<Duration>) -> Result<S::Response> {
@@ -786,6 +811,7 @@ impl<A: Action> GoalHandle<A> {
 pub struct NodeActionClientRaw {
     inner: ActionClientInner,
     action_name: String,
+    console_url: Option<String>,
 }
 
 enum ActionClientInner {
@@ -801,6 +827,21 @@ enum ActionClientInner {
 impl NodeActionClientRaw {
     pub fn action_name(&self) -> &str {
         &self.action_name
+    }
+
+    /// Best-effort: console reports `workers > 0` for this action.
+    pub fn action_server_is_ready(&self) -> bool {
+        console_ready::is_ready(self.console_url.as_deref(), ReadyKind::Action, &self.action_name)
+    }
+
+    /// Poll until [`action_server_is_ready`](Self::action_server_is_ready) or `timeout`.
+    pub fn wait_for_action_server(&self, timeout: Option<Duration>) -> bool {
+        console_ready::wait_until_ready(
+            self.console_url.as_deref(),
+            ReadyKind::Action,
+            &self.action_name,
+            timeout,
+        )
     }
 
     pub fn send_goal(
@@ -904,6 +945,14 @@ pub struct NodeActionClient<A: Action> {
 impl<A: Action> NodeActionClient<A> {
     pub fn action_name(&self) -> &str {
         self.inner.action_name()
+    }
+
+    pub fn action_server_is_ready(&self) -> bool {
+        self.inner.action_server_is_ready()
+    }
+
+    pub fn wait_for_action_server(&self, timeout: Option<Duration>) -> bool {
+        self.inner.wait_for_action_server(timeout)
     }
 
     pub fn send_goal(
@@ -1750,6 +1799,7 @@ impl Node {
             return Ok(NodeServiceClientRaw {
                 inner: ServiceClientInner::Ws(ctx),
                 service_name: service_name.into(),
+                console_url: self.console_url_opt(),
             });
         }
         let endpoint = self.options.service_frontend_endpoint()?;
@@ -1760,6 +1810,7 @@ impl Node {
                 hwm,
             )?),
             service_name: service_name.into(),
+            console_url: self.console_url_opt(),
         })
     }
 
@@ -1860,6 +1911,7 @@ impl Node {
             return Ok(NodeActionClientRaw {
                 inner: ActionClientInner::Ws(ctx),
                 action_name: action_name.into(),
+                console_url: self.console_url_opt(),
             });
         }
         let endpoint = self.options.action_frontend_endpoint()?;
@@ -1870,6 +1922,7 @@ impl Node {
                 hwm: Mutex::new(hwm),
             },
             action_name: action_name.into(),
+            console_url: self.console_url_opt(),
         })
     }
 
@@ -1928,6 +1981,95 @@ impl Node {
             return Ok(self.ensure_ws()?.shutdown_handle());
         }
         self.ensure_executor()?.shutdown_handle()
+    }
+
+    fn console_url_opt(&self) -> Option<String> {
+        self.options
+            .console_url
+            .as_ref()
+            .map(|s| s.trim().to_string())
+            .filter(|s| !s.is_empty())
+            .or_else(|| {
+                #[cfg(feature = "ws")]
+                if self.options.is_ws() {
+                    return self.options.ws_url.clone().filter(|s| !s.trim().is_empty());
+                }
+                None
+            })
+    }
+
+    /// Console / API base used for readiness probes (`wait_for_service`, etc.).
+    pub fn console_url(&self) -> String {
+        console_ready::resolve_console_url(self.console_url_opt().as_deref())
+    }
+
+    /// Block until one message arrives on `topic`, or `timeout` elapses.
+    ///
+    /// ZMQ path uses a temporary SUB socket (dropped on return). gRPC/WS path
+    /// registers a one-shot subscription callback and drives `spin_once`.
+    pub fn wait_for_message(
+        &mut self,
+        topic: &str,
+        timeout: Option<Duration>,
+    ) -> Result<Option<Vec<u8>>> {
+        #[cfg(feature = "ws")]
+        if self.options.is_ws() {
+            return self.wait_for_message_ws(topic, timeout);
+        }
+        let endpoint = self.options.message_xpub_endpoint()?;
+        let sub = BusSubscriber::with_context_hwm(
+            self.context.zmq(),
+            Some(&endpoint),
+            HighWaterMark::STREAM,
+        )?;
+        sub.subscribe(topic)?;
+        match sub.receive(timeout) {
+            Ok((_topic, payload)) => Ok(Some(payload)),
+            Err(BusError::Timeout(_)) => Ok(None),
+            Err(err) => Err(err),
+        }
+    }
+
+    #[cfg(feature = "ws")]
+    fn wait_for_message_ws(
+        &mut self,
+        topic: &str,
+        timeout: Option<Duration>,
+    ) -> Result<Option<Vec<u8>>> {
+        let slot: Arc<Mutex<Option<Vec<u8>>>> = Arc::new(Mutex::new(None));
+        let slot_cb = Arc::clone(&slot);
+        let cb: MessageCallback = Arc::new(move |_topic, payload| {
+            if let Ok(mut guard) = slot_cb.lock() {
+                if guard.is_none() {
+                    *guard = Some(payload.to_vec());
+                }
+            }
+        });
+        self.create_subscription_raw(topic, cb, None)?;
+        let deadline = timeout.map(|d| Instant::now() + d);
+        loop {
+            if let Ok(guard) = slot.lock() {
+                if guard.is_some() {
+                    break;
+                }
+            }
+            if let Some(deadline) = deadline {
+                let now = Instant::now();
+                if now >= deadline {
+                    break;
+                }
+                let remaining = deadline.saturating_duration_since(now);
+                let slice = remaining.min(Duration::from_millis(50));
+                let _ = self.spin_once(Some(slice))?;
+            } else {
+                let _ = self.spin_once(Some(Duration::from_millis(50)))?;
+            }
+        }
+        let payload = slot
+            .lock()
+            .map_err(|_| BusError::Protocol("wait_for_message mutex poisoned".into()))?
+            .take();
+        Ok(payload)
     }
 
     pub fn shutdown(&mut self) -> Result<()> {

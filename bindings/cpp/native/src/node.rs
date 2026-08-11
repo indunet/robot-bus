@@ -12,7 +12,7 @@ use robot_bus::runtime::{
 use crate::clients::RobotBusShutdownHandle;
 use crate::context::{context_ref, RobotBusContext};
 use crate::ffi::{
-    bus_err, clear_error, cstr_opt, cstr_req, dup_string, err, node_options, ok,
+    bus_err, clear_error, cstr_opt, cstr_req, dup_bytes, dup_string, err, node_options, ok,
     set_error, robot_bus_free_string,
 };
 
@@ -443,6 +443,50 @@ pub extern "C" fn robot_bus_node_spin_once(n: *mut RobotBusNode, timeout_secs: f
             1
         }
         Ok(false) => {
+            clear_error();
+            0
+        }
+        Err(e) => bus_err(e),
+    }
+}
+
+/// Wait for one message on `topic`. Returns 1 and fills `out_*` on success,
+/// 0 on timeout (out cleared), negative on error.
+#[unsafe(no_mangle)]
+pub extern "C" fn robot_bus_node_wait_for_message(
+    n: *mut RobotBusNode,
+    topic: *const c_char,
+    timeout_secs: f64,
+    out_data: *mut *mut u8,
+    out_len: *mut usize,
+) -> c_int {
+    if n.is_null() || out_data.is_null() || out_len.is_null() {
+        return err("null argument");
+    }
+    let topic = match cstr_req(topic) {
+        Ok(t) => t,
+        Err(e) => return e,
+    };
+    let timeout = if timeout_secs < 0.0 {
+        None
+    } else {
+        Some(Duration::from_secs_f64(timeout_secs))
+    };
+    match unsafe { &mut *n }.inner.wait_for_message(topic, timeout) {
+        Ok(Some(payload)) => {
+            let (ptr, nlen) = dup_bytes(&payload);
+            unsafe {
+                *out_data = ptr;
+                *out_len = nlen;
+            }
+            clear_error();
+            1
+        }
+        Ok(None) => {
+            unsafe {
+                *out_data = ptr::null_mut();
+                *out_len = 0;
+            }
             clear_error();
             0
         }

@@ -9,9 +9,10 @@ How to write the same classic scenarios on each side. Left is **ROS 2 Humble + [
 | Runtime | DDS (requires `ros2` / daemon) | Start `robot_bus_broker` first (or embed in-process) |
 | Entry | `Context` → `Node` → `rclrs::spin` | **Preferred** `Context` → `Node::with_context`; tcp/ipc may still use convenience `Node::new` (private Context) |
 | Messages | `.msg` / `.srv` / `.action` generated types | Protobuf in crate (e.g. `sensor_msgs::msg::v1::Imu`) |
-| QoS | `QOS_PROFILE_DEFAULT`, etc. | Topic: `QosProfile::keep_last(depth)` → HWM; fixed best-effort. Service / action do not take QoS yet |
+| QoS | `QOS_PROFILE_DEFAULT`, etc. | Topic: `QosProfile::keep_last(depth)` → HWM (optional `qos_depth` / `qosDepth` in all bindings); fixed best-effort. WS/gRPC Node accepts the arg but ignores it. Service / action do not take QoS yet |
 | Callback groups | Worker / callback group (newer API) | `CallbackGroupType::MutuallyExclusive` / `Reentrant` |
 | Parameters | `declare_parameter` / `get_parameter` → Parameter; `set_parameter(Parameter)`; `list_parameters(prefixes, depth)` (remote / YAML / CLI) | Same local shape (`Parameter` + `as_*` + batch get/set); YAML load; no remote / CLI |
+| Readiness waits | `wait_for_message` / `wait_for_service` / `wait_for_action_server` | Same helpers: `wait_for_message`; service/action poll console `workers > 0` (best-effort, not DDS discovery) |
 
 ---
 
@@ -259,13 +260,13 @@ node.spin()?;
 | Scenario | rclrs | robot-bus |
 |----------|-------|-----------|
 | Create node | `Node::new(&context, "name")` | `Node::with_context(&context, "name")` (or convenience `Node::new("name")`) |
-| Publish | `create_publisher::<T>(topic, qos)` | `create_publisher_with_qos::<T>(topic, qos)` (or plain `create_publisher`) |
+| Publish | `create_publisher::<T>(topic, qos)` | `create_publisher_with_qos::<T>(topic, qos)` (or plain `create_publisher`; bindings expose optional depth) |
 | Subscribe | `create_subscription(topic, qos, cb)` | `create_subscription_with_qos(topic, qos, cb, group)` (or plain `create_subscription`) |
 | Service server | `create_service::<S, _>(name, cb)` | `create_service::<S, _>(name, cb, group)` |
-| Service client | `create_client::<S>(name)` + `call` | `create_client::<S>(name)` + `call(..., timeout)` |
+| Service client | `create_client::<S>(name)` + `call` | `create_client::<S>(name)` + `call(..., timeout)` + `wait_for_service` |
 | Action server | `create_action_server` | `create_action_server::<A, _>(..., group)` |
-| Action client | `create_action_client` + GoalHandle | `create_action_client` + `send_goal` → GoalHandle (feedback / result / cancel) |
-| Spin | `rclrs::spin(node)` | `node.spin()` |
+| Action client | `create_action_client` + GoalHandle | `create_action_client` + `wait_for_action_server` + `send_goal` → GoalHandle |
+| Spin | `rclrs::spin(node)` | `node.spin()` / `wait_for_message` |
 | Raw bytes | Dynamic messages / limited support | `create_*_raw` |
 
 For more complete robot-bus examples, see [rust-api.md](./rust-api.md).

@@ -19,6 +19,18 @@ public final class TypedServiceClient<Req extends MessageLite, Resp extends Mess
         return inner.serviceName();
     }
 
+    public boolean serviceIsReady() {
+        return inner.serviceIsReady();
+    }
+
+    public boolean waitForService() {
+        return inner.waitForService();
+    }
+
+    public boolean waitForService(double timeoutSecs) {
+        return inner.waitForService(timeoutSecs);
+    }
+
     public Class<Req> requestType() {
         return requestType;
     }

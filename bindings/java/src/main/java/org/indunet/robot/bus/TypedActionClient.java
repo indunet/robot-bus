@@ -27,6 +27,18 @@ public final class TypedActionClient<
         return inner.actionName();
     }
 
+    public boolean actionServerIsReady() {
+        return inner.actionServerIsReady();
+    }
+
+    public boolean waitForActionServer() {
+        return inner.waitForActionServer();
+    }
+
+    public boolean waitForActionServer(double timeoutSecs) {
+        return inner.waitForActionServer(timeoutSecs);
+    }
+
     public Class<Goal> goalType() {
         return goalType;
     }

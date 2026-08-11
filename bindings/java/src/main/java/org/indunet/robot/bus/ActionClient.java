@@ -17,6 +17,19 @@ public final class ActionClient implements AutoCloseable {
         return NativeUtils.takeCString(RobotBusC.Holder.INSTANCE.robot_bus_action_client_action_name(ptr));
     }
 
+    public boolean actionServerIsReady() {
+        return RobotBusC.Holder.INSTANCE.robot_bus_action_client_action_server_is_ready(ptr) != 0;
+    }
+
+    public boolean waitForActionServer() {
+        return waitForActionServer(-1.0);
+    }
+
+    public boolean waitForActionServer(double timeoutSecs) {
+        return RobotBusC.Holder.INSTANCE.robot_bus_action_client_wait_for_action_server(ptr, timeoutSecs)
+                != 0;
+    }
+
     public ActionGoalHandle sendGoal(byte[] body) {
         return sendGoal(body, null, -1.0, null);
     }

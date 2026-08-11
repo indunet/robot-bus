@@ -319,10 +319,20 @@ impl Node {
     }
 
     #[napi]
-    pub fn create_publisher(&mut self, topic: String) -> Result<TopicPublisher> {
-        Ok(TopicPublisher {
-            inner: self.inner.create_publisher_raw(&topic).map_err(bus_err)?,
-        })
+    pub fn create_publisher(
+        &mut self,
+        topic: String,
+        qos_depth: Option<i32>,
+    ) -> Result<TopicPublisher> {
+        use robot_bus::runtime::QosProfile;
+        let inner = match qos_depth.filter(|d| *d > 0) {
+            Some(depth) => self
+                .inner
+                .create_publisher_raw_with_qos(&topic, QosProfile::keep_last(depth)),
+            None => self.inner.create_publisher_raw(&topic),
+        }
+        .map_err(bus_err)?;
+        Ok(TopicPublisher { inner })
     }
 
     /// Register a subscription callback `(topic: string, payload: Buffer) => void`.
@@ -332,7 +342,9 @@ impl Node {
         topic: String,
         callback: JsFunction,
         callback_group: Option<&JsCallbackGroup>,
+        qos_depth: Option<i32>,
     ) -> Result<()> {
+        use robot_bus::runtime::QosProfile;
         let tsfn: MsgTsfn = callback.create_threadsafe_function(0, |ctx| {
             let (topic, payload) = ctx.value;
             Ok(vec![
@@ -348,9 +360,16 @@ impl Node {
             );
         });
         let group = callback_group.map(|g| &g.inner);
-        self.inner
-            .create_subscription_raw(&topic, cb, group)
-            .map_err(bus_err)
+        match qos_depth.filter(|d| *d > 0) {
+            Some(depth) => self.inner.create_subscription_raw_with_qos(
+                &topic,
+                QosProfile::keep_last(depth),
+                cb,
+                group,
+            ),
+            None => self.inner.create_subscription_raw(&topic, cb, group),
+        }
+        .map_err(bus_err)
     }
 
     /// Periodic timer; `callback()` takes no arguments. `period` is seconds.
@@ -490,6 +509,20 @@ impl Node {
     pub fn spin_once(&mut self, timeout: Option<f64>) -> Result<bool> {
         let timeout = timeout.map(Duration::from_secs_f64);
         self.inner.spin_once(timeout).map_err(bus_err)
+    }
+
+    /// Wait for one message on `topic`. Returns payload Buffer or `null` on timeout.
+    #[napi]
+    pub fn wait_for_message(
+        &mut self,
+        topic: String,
+        timeout: Option<f64>,
+    ) -> Result<Option<Buffer>> {
+        let timeout = timeout.map(Duration::from_secs_f64);
+        match self.inner.wait_for_message(&topic, timeout).map_err(bus_err)? {
+            Some(payload) => Ok(Some(Buffer::from(payload))),
+            None => Ok(None),
+        }
     }
 
     #[napi]

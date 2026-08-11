@@ -74,6 +74,14 @@ export class TypedServiceClient<Req extends object, Res extends object> {
     return this.inner.serviceName;
   }
 
+  serviceIsReady(): boolean {
+    return this.inner.serviceIsReady();
+  }
+
+  waitForService(timeout?: number): boolean {
+    return this.inner.waitForService(timeout);
+  }
+
   call(request: Req, timeout?: number): Res {
     const raw = this.inner.call(
       Buffer.from(encode(this.requestType, request)),
@@ -101,6 +109,14 @@ export class TypedActionClient<
 
   get actionName(): string {
     return this.inner.actionName;
+  }
+
+  actionServerIsReady(): boolean {
+    return this.inner.actionServerIsReady();
+  }
+
+  waitForActionServer(timeout?: number): boolean {
+    return this.inner.waitForActionServer(timeout);
   }
 
   sendGoal(
@@ -278,32 +294,36 @@ export class Node {
     return this.inner.createCallbackGroup(kind);
   }
 
-  createPublisher(topic: string): NativeTopicPublisher;
+  createPublisher(topic: string, qosDepth?: number): NativeTopicPublisher;
   createPublisher<T extends object>(
     topic: string,
     msgType: MessageType<T>,
+    qosDepth?: number,
   ): TypedTopicPublisher<T>;
   createPublisher<T extends object>(
     topic: string,
-    msgType?: MessageType<T>,
+    msgTypeOrDepth?: MessageType<T> | number,
+    maybeDepth?: number,
   ): NativeTopicPublisher | TypedTopicPublisher<T> {
-    const pub = this.inner.createPublisher(topic);
-    if (msgType) {
-      return new TypedTopicPublisher(pub, msgType);
+    if (typeof msgTypeOrDepth === "number" || msgTypeOrDepth === undefined) {
+      return this.inner.createPublisher(topic, msgTypeOrDepth);
     }
-    return pub;
+    const pub = this.inner.createPublisher(topic, maybeDepth);
+    return new TypedTopicPublisher(pub, msgTypeOrDepth);
   }
 
   createSubscription(
     topic: string,
     callback: (topic: string, payload: Buffer | object) => void,
     callbackGroup?: import("./native-types.js").JsCallbackGroup,
+    qosDepth?: number,
   ): void;
   createSubscription<T extends object>(
     topic: string,
     callback: (topic: string, msg: T) => void,
     msgType: MessageType<T>,
     callbackGroup?: import("./native-types.js").JsCallbackGroup,
+    qosDepth?: number,
   ): void;
   createSubscription(
     topic: string,
@@ -311,10 +331,15 @@ export class Node {
     msgTypeOrGroup?:
       | MessageType<object>
       | import("./native-types.js").JsCallbackGroup,
-    maybeGroup?: import("./native-types.js").JsCallbackGroup,
+    maybeGroupOrDepth?: import("./native-types.js").JsCallbackGroup | number,
+    maybeDepth?: number,
   ): void {
     if (msgTypeOrGroup && "fromBinary" in msgTypeOrGroup) {
       const msgType = msgTypeOrGroup;
+      const group =
+        typeof maybeGroupOrDepth === "number" ? undefined : maybeGroupOrDepth;
+      const depth =
+        typeof maybeGroupOrDepth === "number" ? maybeGroupOrDepth : maybeDepth;
       this.inner.createSubscription(
         topic,
         (t, payload) => {
@@ -323,15 +348,26 @@ export class Node {
             callback(t, decoded);
           }
         },
-        maybeGroup,
+        group,
+        depth,
       );
       return;
     }
+    const group = msgTypeOrGroup as
+      | import("./native-types.js").JsCallbackGroup
+      | undefined;
+    const depth =
+      typeof maybeGroupOrDepth === "number" ? maybeGroupOrDepth : maybeDepth;
     this.inner.createSubscription(
       topic,
       callback as (topic: string, payload: Buffer) => void,
-      msgTypeOrGroup as import("./native-types.js").JsCallbackGroup | undefined,
+      group,
+      depth,
     );
+  }
+
+  waitForMessage(topic: string, timeout?: number): Buffer | null {
+    return this.inner.waitForMessage(topic, timeout);
   }
 
   createTimer(

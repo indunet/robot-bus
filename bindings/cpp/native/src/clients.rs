@@ -270,6 +270,42 @@ pub extern "C" fn robot_bus_service_client_call(
     }
 }
 
+/// Returns 1 if ready, 0 otherwise.
+#[unsafe(no_mangle)]
+pub extern "C" fn robot_bus_service_client_service_is_ready(
+    c: *const RobotBusServiceClient,
+) -> c_int {
+    if c.is_null() {
+        return 0;
+    }
+    if unsafe { &*c }.inner.service_is_ready() {
+        1
+    } else {
+        0
+    }
+}
+
+/// Returns 1 if ready within timeout, 0 on timeout. `timeout_secs < 0` waits forever.
+#[unsafe(no_mangle)]
+pub extern "C" fn robot_bus_service_client_wait_for_service(
+    c: *const RobotBusServiceClient,
+    timeout_secs: f64,
+) -> c_int {
+    if c.is_null() {
+        return 0;
+    }
+    let timeout = if timeout_secs < 0.0 {
+        None
+    } else {
+        Some(Duration::from_secs_f64(timeout_secs))
+    };
+    if unsafe { &*c }.inner.wait_for_service(timeout) {
+        1
+    } else {
+        0
+    }
+}
+
 #[unsafe(no_mangle)]
 pub extern "C" fn robot_bus_action_client_free(c: *mut RobotBusActionClient) {
     if !c.is_null() {
@@ -289,6 +325,42 @@ pub extern "C" fn robot_bus_action_client_action_name(
     }
     clear_error();
     dup_string(unsafe { &*c }.inner.action_name())
+}
+
+/// Returns 1 if ready, 0 otherwise.
+#[unsafe(no_mangle)]
+pub extern "C" fn robot_bus_action_client_action_server_is_ready(
+    c: *const RobotBusActionClient,
+) -> c_int {
+    if c.is_null() {
+        return 0;
+    }
+    if unsafe { &*c }.inner.action_server_is_ready() {
+        1
+    } else {
+        0
+    }
+}
+
+/// Returns 1 if ready within timeout, 0 on timeout. `timeout_secs < 0` waits forever.
+#[unsafe(no_mangle)]
+pub extern "C" fn robot_bus_action_client_wait_for_action_server(
+    c: *const RobotBusActionClient,
+    timeout_secs: f64,
+) -> c_int {
+    if c.is_null() {
+        return 0;
+    }
+    let timeout = if timeout_secs < 0.0 {
+        None
+    } else {
+        Some(Duration::from_secs_f64(timeout_secs))
+    };
+    if unsafe { &*c }.inner.wait_for_action_server(timeout) {
+        1
+    } else {
+        0
+    }
 }
 
 #[unsafe(no_mangle)]

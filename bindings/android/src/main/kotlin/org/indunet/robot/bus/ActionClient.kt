@@ -10,6 +10,13 @@ class ActionClient internal constructor(private var ptr: Pointer?) : AutoCloseab
             RobotBusC.Holder.INSTANCE.robot_bus_action_client_action_name(ptr),
         )
 
+    fun actionServerIsReady(): Boolean =
+        RobotBusC.Holder.INSTANCE.robot_bus_action_client_action_server_is_ready(ptr) != 0
+
+    @JvmOverloads
+    fun waitForActionServer(timeoutSecs: Double = -1.0): Boolean =
+        RobotBusC.Holder.INSTANCE.robot_bus_action_client_wait_for_action_server(ptr, timeoutSecs) != 0
+
     fun sendGoal(body: ByteArray): ActionGoalHandle = sendGoal(body, null, -1.0, null)
 
     fun sendGoal(

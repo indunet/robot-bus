@@ -5,6 +5,7 @@
 //! Shared / multi-threaded: attach nodes with `add_node` / `create_node`, then `spin` on the executor.
 
 mod callback_group;
+mod console_ready;
 mod context;
 mod dispatch;
 mod executor;
@@ -23,6 +24,7 @@ mod topology_register;
 mod worker_pool;
 
 pub use callback_group::{CallbackGroup, CallbackGroupType};
+pub use console_ready::{DEFAULT_CONSOLE_URL, ReadyKind};
 pub use context::Context;
 pub use executor::{Executor, ShutdownHandle};
 pub use executors::{ExecutorHandle, MultiThreadedExecutor, SingleThreadedExecutor};

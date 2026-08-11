@@ -15,6 +15,12 @@ class TypedActionClient<
 ) : AutoCloseable {
     fun actionName(): String = inner.actionName()
 
+    fun actionServerIsReady(): Boolean = inner.actionServerIsReady()
+
+    @JvmOverloads
+    fun waitForActionServer(timeoutSecs: Double = -1.0): Boolean =
+        inner.waitForActionServer(timeoutSecs)
+
     fun goalType(): Class<Goal> = goalType
 
     fun feedbackType(): Class<Feedback> = feedbackType

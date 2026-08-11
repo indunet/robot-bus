@@ -93,9 +93,17 @@ interface RobotBusC extends Library {
             PointerByReference outData,
             LongByReference outLen);
 
+    int robot_bus_service_client_service_is_ready(Pointer c);
+
+    int robot_bus_service_client_wait_for_service(Pointer c, double timeoutSecs);
+
     void robot_bus_action_client_free(Pointer c);
 
     Pointer robot_bus_action_client_action_name(Pointer c);
+
+    int robot_bus_action_client_action_server_is_ready(Pointer c);
+
+    int robot_bus_action_client_wait_for_action_server(Pointer c, double timeoutSecs);
 
     int robot_bus_action_client_send_goal(
             Pointer c,
@@ -154,8 +162,13 @@ interface RobotBusC extends Library {
 
     Pointer robot_bus_node_create_publisher(Pointer n, String topic);
 
+    Pointer robot_bus_node_create_publisher_with_qos(Pointer n, String topic, int depth);
+
     int robot_bus_node_create_subscription(
             Pointer n, String topic, MsgCb callback, Pointer user, Pointer group);
+
+    int robot_bus_node_create_subscription_with_qos(
+            Pointer n, String topic, MsgCb callback, Pointer user, Pointer group, int depth);
 
     Pointer robot_bus_node_create_timer(
             Pointer n, double periodSecs, TimerCb callback, Pointer user, Pointer group);
@@ -179,6 +192,9 @@ interface RobotBusC extends Library {
     int robot_bus_node_shutdown(Pointer n);
 
     int robot_bus_node_spin_once(Pointer n, double timeoutSecs);
+
+    int robot_bus_node_wait_for_message(
+            Pointer n, String topic, double timeoutSecs, PointerByReference outData, LongByReference outLen);
 
     int robot_bus_node_spin(Pointer n);
 

@@ -6,6 +6,7 @@
 #include <cstring>
 #include <functional>
 #include <memory>
+#include <optional>
 #include <stdexcept>
 #include <string>
 #include <string_view>
@@ -198,6 +199,14 @@ class ServiceClient {
     return result;
   }
 
+  bool service_is_ready() const {
+    return robot_bus_service_client_service_is_ready(c_) != 0;
+  }
+
+  bool wait_for_service(double timeout_secs = -1.0) const {
+    return robot_bus_service_client_wait_for_service(c_, timeout_secs) != 0;
+  }
+
  private:
   RobotBusServiceClient *c_;
 };
@@ -314,6 +323,14 @@ class ActionClient {
   std::string action_name() const {
     OwnedString s(robot_bus_action_client_action_name(c_));
     return s.str();
+  }
+
+  bool action_server_is_ready() const {
+    return robot_bus_action_client_action_server_is_ready(c_) != 0;
+  }
+
+  bool wait_for_action_server(double timeout_secs = -1.0) const {
+    return robot_bus_action_client_wait_for_action_server(c_, timeout_secs) != 0;
   }
 
   ActionGoalHandle send_goal(BytesView body, ActionFeedbackCallback feedback = {},
@@ -488,18 +505,45 @@ class Node {
         check_ptr(robot_bus_node_create_publisher(n_, topic), "create_publisher")));
   }
 
+  TopicPublisher create_publisher(const char *topic, int32_t qos_depth) {
+    return TopicPublisher(static_cast<RobotBusTopicPublisher *>(check_ptr(
+        robot_bus_node_create_publisher_with_qos(n_, topic, qos_depth),
+        "create_publisher_with_qos")));
+  }
+
   void create_subscription(const char *topic, MsgCallback cb,
                            const CallbackGroup *group = nullptr) {
+    create_subscription(topic, std::move(cb), group, 0);
+  }
+
+  void create_subscription(const char *topic, MsgCallback cb, const CallbackGroup *group,
+                           int32_t qos_depth) {
     msg_cbs_.push_back(std::make_unique<MsgCallback>(std::move(cb)));
     MsgCallback *held = msg_cbs_.back().get();
-    check(robot_bus_node_create_subscription(
+    check(robot_bus_node_create_subscription_with_qos(
               n_, topic,
               [](const char *t, const uint8_t *data, size_t len, void *user) {
                 auto *fn = static_cast<MsgCallback *>(user);
                 (*fn)(t ? std::string_view(t) : std::string_view(), BytesView(data, len));
               },
-              held, group ? group->raw() : nullptr),
+              held, group ? group->raw() : nullptr, qos_depth),
           "create_subscription");
+  }
+
+  std::optional<std::vector<uint8_t>> wait_for_message(const char *topic,
+                                                        double timeout_secs = -1.0) {
+    uint8_t *out = nullptr;
+    size_t len = 0;
+    int rc = robot_bus_node_wait_for_message(n_, topic, timeout_secs, &out, &len);
+    if (rc < 0) {
+      check(rc, "wait_for_message");
+    }
+    if (rc == 0) {
+      return std::nullopt;
+    }
+    std::vector<uint8_t> result(out, out + len);
+    robot_bus_free_bytes(out, len);
+    return result;
   }
 
   TimerHandle create_timer(double period_secs, TimerCallback cb,

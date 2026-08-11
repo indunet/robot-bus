@@ -7,7 +7,7 @@ use pyo3::prelude::*;
 use pyo3::types::{PyBytes, PyType};
 
 use crate::runtime::{
-    ActionGoalHandler, Node as RustNode, NodeOptions as RustNodeOptions,
+    ActionGoalHandler, Node as RustNode, NodeOptions as RustNodeOptions, QosProfile,
 };
 
 use super::clients::{PyNodeActionClient, PyNodeServiceClient};
@@ -285,19 +285,30 @@ impl PyNode {
         }
     }
 
-    fn create_publisher(&mut self, topic: &str) -> PyResult<PyTopicPublisher> {
-        Ok(PyTopicPublisher {
-            inner: self.inner.create_publisher_raw(topic).map_err(bus_err)?,
-        })
+    #[pyo3(signature = (topic, qos_depth=None))]
+    fn create_publisher(
+        &mut self,
+        topic: &str,
+        qos_depth: Option<i32>,
+    ) -> PyResult<PyTopicPublisher> {
+        let inner = match qos_depth.filter(|d| *d > 0) {
+            Some(depth) => self
+                .inner
+                .create_publisher_raw_with_qos(topic, QosProfile::keep_last(depth)),
+            None => self.inner.create_publisher_raw(topic),
+        }
+        .map_err(bus_err)?;
+        Ok(PyTopicPublisher { inner })
     }
 
     /// Register a subscription callback `callback(topic: str, payload: bytes)`.
-    #[pyo3(signature = (topic, callback, callback_group=None))]
+    #[pyo3(signature = (topic, callback, callback_group=None, qos_depth=None))]
     fn create_subscription(
         &mut self,
         topic: &str,
         callback: Py<PyAny>,
         callback_group: Option<&PyCallbackGroup>,
+        qos_depth: Option<i32>,
     ) -> PyResult<()> {
         let cb: crate::runtime::MessageCallback = Arc::new(move |topic, payload| {
             Python::with_gil(|py| {
@@ -308,9 +319,16 @@ impl PyNode {
             });
         });
         let group = callback_group.map(|g| &g.inner);
-        self.inner
-            .create_subscription_raw(topic, cb, group)
-            .map_err(bus_err)
+        match qos_depth.filter(|d| *d > 0) {
+            Some(depth) => self.inner.create_subscription_raw_with_qos(
+                topic,
+                QosProfile::keep_last(depth),
+                cb,
+                group,
+            ),
+            None => self.inner.create_subscription_raw(topic, cb, group),
+        }
+        .map_err(bus_err)
     }
 
     /// Periodic timer; `callback()` takes no arguments. `period` is seconds.
@@ -450,6 +468,19 @@ impl PyNode {
     fn spin_once(&mut self, timeout: Option<f64>) -> PyResult<bool> {
         let timeout = timeout.map(Duration::from_secs_f64);
         self.inner.spin_once(timeout).map_err(bus_err)
+    }
+
+    /// Wait for one message on `topic`. Returns payload bytes or `None` on timeout.
+    #[pyo3(signature = (topic, timeout=None))]
+    fn wait_for_message(
+        &mut self,
+        topic: &str,
+        timeout: Option<f64>,
+    ) -> PyResult<Option<Vec<u8>>> {
+        let timeout = timeout.map(Duration::from_secs_f64);
+        self.inner
+            .wait_for_message(topic, timeout)
+            .map_err(bus_err)
     }
 
     fn spin(&mut self) -> PyResult<()> {

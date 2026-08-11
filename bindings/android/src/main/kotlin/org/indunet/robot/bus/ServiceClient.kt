@@ -11,6 +11,13 @@ class ServiceClient internal constructor(private var ptr: Pointer?) : AutoClosea
             RobotBusC.Holder.INSTANCE.robot_bus_service_client_service_name(ptr),
         )
 
+    fun serviceIsReady(): Boolean =
+        RobotBusC.Holder.INSTANCE.robot_bus_service_client_service_is_ready(ptr) != 0
+
+    @JvmOverloads
+    fun waitForService(timeoutSecs: Double = -1.0): Boolean =
+        RobotBusC.Holder.INSTANCE.robot_bus_service_client_wait_for_service(ptr, timeoutSecs) != 0
+
     @JvmOverloads
     fun call(body: ByteArray, timeoutSecs: Double = -1.0): ByteArray {
         val outData = PointerByReference()

@@ -41,20 +41,26 @@ class Node : AutoCloseable {
             ),
         )
 
-    fun createPublisher(topic: String): TopicPublisher =
+    @JvmOverloads
+    fun createPublisher(topic: String, qosDepth: Int = 0): TopicPublisher =
         TopicPublisher(
             Errors.checkPtr(
-                RobotBusC.Holder.INSTANCE.robot_bus_node_create_publisher(ptr, topic),
+                RobotBusC.Holder.INSTANCE.robot_bus_node_create_publisher_with_qos(ptr, topic, qosDepth),
                 "create_publisher",
             ),
         )
 
     /** Typed publisher: `publish(Message)` with automatic protobuf encode. */
-    fun <T : MessageLite> createPublisher(topic: String, msgType: Class<T>): TypedTopicPublisher<T> {
+    @JvmOverloads
+    fun <T : MessageLite> createPublisher(
+        topic: String,
+        msgType: Class<T>,
+        qosDepth: Int = 0,
+    ): TypedTopicPublisher<T> {
         ProtoCodec.requireMessageType(msgType, "msgType")
         @Suppress("UNCHECKED_CAST")
         val typed = msgType as Class<T>
-        return TypedTopicPublisher(createPublisher(topic), typed)
+        return TypedTopicPublisher(createPublisher(topic, qosDepth), typed)
     }
 
     @JvmOverloads
@@ -62,6 +68,7 @@ class Node : AutoCloseable {
         topic: String,
         callback: MsgCallback,
         group: CallbackGroup? = null,
+        qosDepth: Int = 0,
     ) {
         val cb =
             RobotBusC.MsgCb { t, data, len, _ ->
@@ -71,12 +78,13 @@ class Node : AutoCloseable {
             }
         msgCallbacks.add(cb)
         Errors.check(
-            RobotBusC.Holder.INSTANCE.robot_bus_node_create_subscription(
+            RobotBusC.Holder.INSTANCE.robot_bus_node_create_subscription_with_qos(
                 ptr,
                 topic,
                 cb,
                 null,
                 group?.raw(),
+                qosDepth,
             ),
             "create_subscription",
         )
@@ -89,6 +97,7 @@ class Node : AutoCloseable {
         callback: TypedMsgCallback<T>,
         msgType: Class<T>,
         group: CallbackGroup? = null,
+        qosDepth: Int = 0,
     ) {
         ProtoCodec.requireMessageType(msgType, "msgType")
         @Suppress("UNCHECKED_CAST")
@@ -100,6 +109,7 @@ class Node : AutoCloseable {
                 callback.onMessage(t, msg)
             },
             group,
+            qosDepth,
         )
     }
 
@@ -388,6 +398,28 @@ class Node : AutoCloseable {
             Errors.check(rc, "spin_once")
         }
         return rc == 1
+    }
+
+    /** Wait for one message on [topic]; returns null on timeout. */
+    @JvmOverloads
+    fun waitForMessage(topic: String, timeoutSecs: Double = -1.0): ByteArray? {
+        val outData = PointerByReference()
+        val outLen = LongByReference()
+        val rc =
+            RobotBusC.Holder.INSTANCE.robot_bus_node_wait_for_message(
+                ptr,
+                topic,
+                timeoutSecs,
+                outData,
+                outLen,
+            )
+        if (rc < 0) {
+            Errors.check(rc, "wait_for_message")
+        }
+        if (rc == 0) {
+            return null
+        }
+        return NativeUtils.readBytes(outData.value, outLen.value)
     }
 
     fun spin() {

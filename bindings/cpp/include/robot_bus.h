@@ -207,9 +207,19 @@ ROBOT_BUS_API char *robot_bus_service_client_service_name(const RobotBusServiceC
 ROBOT_BUS_API int robot_bus_service_client_call(RobotBusServiceClient *c, const uint8_t *data,
                                                 size_t len, double timeout_secs,
                                                 uint8_t **out_data, size_t *out_len);
+/** Returns 1 if console reports workers>0, else 0. */
+ROBOT_BUS_API int robot_bus_service_client_service_is_ready(const RobotBusServiceClient *c);
+/** Returns 1 if ready within timeout; timeout_secs < 0 waits forever. */
+ROBOT_BUS_API int robot_bus_service_client_wait_for_service(const RobotBusServiceClient *c,
+                                                            double timeout_secs);
 
 ROBOT_BUS_API void robot_bus_action_client_free(RobotBusActionClient *c);
 ROBOT_BUS_API char *robot_bus_action_client_action_name(const RobotBusActionClient *c);
+/** Returns 1 if console reports workers>0, else 0. */
+ROBOT_BUS_API int robot_bus_action_client_action_server_is_ready(const RobotBusActionClient *c);
+/** Returns 1 if ready within timeout; timeout_secs < 0 waits forever. */
+ROBOT_BUS_API int robot_bus_action_client_wait_for_action_server(const RobotBusActionClient *c,
+                                                                 double timeout_secs);
 ROBOT_BUS_API int robot_bus_action_client_send_goal(RobotBusActionClient *c, const uint8_t *data,
                                                     size_t len, const char *goal_id,
                                                     double timeout_secs,
@@ -258,9 +268,16 @@ ROBOT_BUS_API RobotBusCallbackGroup *robot_bus_node_create_callback_group(RobotB
                                                                           int kind);
 ROBOT_BUS_API RobotBusTopicPublisher *robot_bus_node_create_publisher(RobotBusNode *n,
                                                                       const char *topic);
+/** depth <= 0 keeps default HWM; depth > 0 maps to KeepLast depth. */
+ROBOT_BUS_API RobotBusTopicPublisher *robot_bus_node_create_publisher_with_qos(
+    RobotBusNode *n, const char *topic, int32_t depth);
 ROBOT_BUS_API int robot_bus_node_create_subscription(RobotBusNode *n, const char *topic,
                                                      RobotBusMsgCallback callback, void *user,
                                                      const RobotBusCallbackGroup *group);
+/** depth <= 0 keeps default HWM; depth > 0 maps to KeepLast depth. */
+ROBOT_BUS_API int robot_bus_node_create_subscription_with_qos(
+    RobotBusNode *n, const char *topic, RobotBusMsgCallback callback, void *user,
+    const RobotBusCallbackGroup *group, int32_t depth);
 ROBOT_BUS_API RobotBusTimerHandle *robot_bus_node_create_timer(RobotBusNode *n, double period_secs,
                                                                RobotBusTimerCallback callback,
                                                                void *user,
@@ -280,6 +297,14 @@ ROBOT_BUS_API int robot_bus_node_connect_action_client(RobotBusNode *n);
 ROBOT_BUS_API RobotBusShutdownHandle *robot_bus_node_shutdown_handle(RobotBusNode *n);
 ROBOT_BUS_API int robot_bus_node_shutdown(RobotBusNode *n);
 ROBOT_BUS_API int robot_bus_node_spin_once(RobotBusNode *n, double timeout_secs);
+/**
+ * Wait for one message on `topic`. Returns 1 and fills out_* on success,
+ * 0 on timeout, negative on error. Caller frees out_data with robot_bus_free_bytes.
+ * timeout_secs < 0 waits forever.
+ */
+ROBOT_BUS_API int robot_bus_node_wait_for_message(RobotBusNode *n, const char *topic,
+                                                  double timeout_secs, uint8_t **out_data,
+                                                  size_t *out_len);
 ROBOT_BUS_API int robot_bus_node_spin(RobotBusNode *n);
 ROBOT_BUS_API int robot_bus_node_start(RobotBusNode *n);
 ROBOT_BUS_API int robot_bus_node_stop(RobotBusNode *n);

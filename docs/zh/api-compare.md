@@ -9,9 +9,10 @@
 | 运行时 | DDS（需 `ros2` / daemon） | 先起 `robot_bus_broker`（或进程内嵌入） |
 | 入口 | `Context` → `Node` → `rclrs::spin` | **推荐** `Context` → `Node::with_context`；tcp/ipc 仍可用便捷的 `Node::new`（私有 Context） |
 | 消息 | `.msg` / `.srv` / `.action` 生成类型 | crate 内 protobuf（如 `sensor_msgs::msg::v1::Imu`） |
-| QoS | `QOS_PROFILE_DEFAULT` 等 | Topic：`QosProfile::keep_last(depth)` → HWM；固定 best-effort。Service / action 暂不接 QoS |
+| QoS | `QOS_PROFILE_DEFAULT` 等 | Topic：`QosProfile::keep_last(depth)` → HWM（各语言可选 `qos_depth` / `qosDepth`）；固定 best-effort。WS/gRPC Node 接受参数但不生效。Service / action 暂不接 QoS |
 | 回调组 | Worker / callback group（较新 API） | `CallbackGroupType::MutuallyExclusive` / `Reentrant` |
 | 参数 | `declare_parameter` / `get_parameter` → Parameter；`set_parameter(Parameter)`；`list_parameters(prefixes, depth)`（可远程 / YAML / CLI） | 同形本地 API（`Parameter` + `as_*` + 批量 get/set）；YAML 加载；无远程 / CLI |
+| 就绪等待 | `wait_for_message` / `wait_for_service` / `wait_for_action_server` | 同名辅助：`wait_for_message`；service/action 通过 console `workers > 0` 轮询（best-effort，非 DDS discovery） |
 
 ---
 
@@ -259,13 +260,13 @@ node.spin()?;
 | 场景 | rclrs | robot-bus |
 |------|-------|-----------|
 | 建节点 | `Node::new(&context, "name")` | `Node::with_context(&context, "name")`（或便捷 `Node::new("name")`） |
-| 发布 | `create_publisher::<T>(topic, qos)` | `create_publisher_with_qos::<T>(topic, qos)`（或无 QoS 的 `create_publisher`） |
+| 发布 | `create_publisher::<T>(topic, qos)` | `create_publisher_with_qos::<T>(topic, qos)`（或无 QoS 的 `create_publisher`；各语言可选 depth） |
 | 订阅 | `create_subscription(topic, qos, cb)` | `create_subscription_with_qos(topic, qos, cb, group)`（或无 QoS 的 `create_subscription`） |
 | 服务端 | `create_service::<S, _>(name, cb)` | `create_service::<S, _>(name, cb, group)` |
-| 客户端 | `create_client::<S>(name)` + `call` | `create_client::<S>(name)` + `call(..., timeout)` |
+| 客户端 | `create_client::<S>(name)` + `call` | `create_client::<S>(name)` + `call(..., timeout)` + `wait_for_service` |
 | Action 服务端 | `create_action_server` | `create_action_server::<A, _>(..., group)` |
-| Action 客户端 | `create_action_client` + GoalHandle | `create_action_client` + `send_goal` → GoalHandle（feedback / result / cancel） |
-| 转起来 | `rclrs::spin(node)` | `node.spin()` |
+| Action 客户端 | `create_action_client` + GoalHandle | `create_action_client` + `wait_for_action_server` + `send_goal` → GoalHandle |
+| 转起来 | `rclrs::spin(node)` | `node.spin()` / `wait_for_message` |
 | 原始字节 | 动态消息 / 有限支持 | `create_*_raw` |
 
 更完整的 robot-bus 示例见 [rust-api.md](./rust-api.md)。

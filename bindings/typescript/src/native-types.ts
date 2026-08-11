@@ -59,11 +59,15 @@ export declare class TopicPublisher {
 
 export declare class ServiceClient {
   readonly serviceName: string;
+  serviceIsReady(): boolean;
+  waitForService(timeout?: number): boolean;
   call(body: Buffer, timeout?: number): Buffer;
 }
 
 export declare class ActionClient {
   readonly actionName: string;
+  actionServerIsReady(): boolean;
+  waitForActionServer(timeout?: number): boolean;
   sendGoal(body: Buffer, options?: SendGoalOptions): GoalHandle;
 }
 
@@ -113,11 +117,12 @@ export declare class Node {
   static discover(name: string, options?: DiscoverNodeOptions): Node;
   readonly name: string;
   createCallbackGroup(kind: JsCallbackGroupType): JsCallbackGroup;
-  createPublisher(topic: string): TopicPublisher;
+  createPublisher(topic: string, qosDepth?: number): TopicPublisher;
   createSubscription(
     topic: string,
     callback: (topic: string, payload: Buffer) => void,
     callbackGroup?: JsCallbackGroup,
+    qosDepth?: number,
   ): void;
   createTimer(
     period: number,
@@ -141,6 +146,7 @@ export declare class Node {
   shutdownHandle(): ShutdownHandle;
   shutdown(): void;
   spinOnce(timeout?: number): boolean;
+  waitForMessage(topic: string, timeout?: number): Buffer | null;
   spin(): void;
   start(): void;
   stop(): void;

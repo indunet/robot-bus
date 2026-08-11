@@ -16,6 +16,18 @@ public final class ServiceClient implements AutoCloseable {
         return NativeUtils.takeCString(RobotBusC.Holder.INSTANCE.robot_bus_service_client_service_name(ptr));
     }
 
+    public boolean serviceIsReady() {
+        return RobotBusC.Holder.INSTANCE.robot_bus_service_client_service_is_ready(ptr) != 0;
+    }
+
+    public boolean waitForService() {
+        return waitForService(-1.0);
+    }
+
+    public boolean waitForService(double timeoutSecs) {
+        return RobotBusC.Holder.INSTANCE.robot_bus_service_client_wait_for_service(ptr, timeoutSecs) != 0;
+    }
+
     public byte[] call(byte[] body) {
         return call(body, -1.0);
     }

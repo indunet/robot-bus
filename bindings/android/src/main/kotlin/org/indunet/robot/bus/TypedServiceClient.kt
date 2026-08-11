@@ -10,6 +10,11 @@ class TypedServiceClient<Req : MessageLite, Resp : MessageLite> internal constru
 ) : AutoCloseable {
     fun serviceName(): String = inner.serviceName()
 
+    fun serviceIsReady(): Boolean = inner.serviceIsReady()
+
+    @JvmOverloads
+    fun waitForService(timeoutSecs: Double = -1.0): Boolean = inner.waitForService(timeoutSecs)
+
     fun requestType(): Class<Req> = requestType
 
     fun responseType(): Class<Resp> = responseType

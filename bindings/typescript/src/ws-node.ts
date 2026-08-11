@@ -133,6 +133,14 @@ export class WsServiceClient {
     readonly serviceName: string,
   ) {}
 
+  async serviceIsReady(): Promise<boolean> {
+    return this.node.entityHasWorkers("services", this.serviceName);
+  }
+
+  async waitForService(timeoutSeconds?: number): Promise<boolean> {
+    return this.node.waitUntilWorkers("services", this.serviceName, timeoutSeconds);
+  }
+
   async call(
     body: Uint8Array,
     timeoutSeconds?: number,
@@ -153,6 +161,14 @@ export class TypedWsServiceClient<Req extends object, Res extends object> {
     return this.inner.serviceName;
   }
 
+  serviceIsReady(): Promise<boolean> {
+    return this.inner.serviceIsReady();
+  }
+
+  waitForService(timeoutSeconds?: number): Promise<boolean> {
+    return this.inner.waitForService(timeoutSeconds);
+  }
+
   async call(request: Req, timeoutSeconds?: number): Promise<Res> {
     const raw = await this.inner.call(encode(this.requestType, request), timeoutSeconds);
     const reply = decode(this.responseType, raw);
@@ -168,6 +184,14 @@ export class WsActionClient {
     private readonly node: WsNode,
     readonly actionName: string,
   ) {}
+
+  async actionServerIsReady(): Promise<boolean> {
+    return this.node.entityHasWorkers("actions", this.actionName);
+  }
+
+  async waitForActionServer(timeoutSeconds?: number): Promise<boolean> {
+    return this.node.waitUntilWorkers("actions", this.actionName, timeoutSeconds);
+  }
 
   sendGoal(
     body: Uint8Array,
@@ -198,6 +222,14 @@ export class TypedWsActionClient<
 
   get actionName(): string {
     return this.inner.actionName;
+  }
+
+  actionServerIsReady(): Promise<boolean> {
+    return this.inner.actionServerIsReady();
+  }
+
+  waitForActionServer(timeoutSeconds?: number): Promise<boolean> {
+    return this.inner.waitForActionServer(timeoutSeconds);
   }
 
   sendGoal(
@@ -302,15 +334,21 @@ export class WsNode {
     return new WsNode(name, url, options);
   }
 
-  createPublisher(topic: string): WsTopicPublisher;
+  createPublisher(topic: string, _qosDepth?: number): WsTopicPublisher;
   createPublisher<T extends object>(
     topic: string,
     msgType: MessageType<T>,
+    _qosDepth?: number,
   ): TypedWsTopicPublisher<T>;
   createPublisher<T extends object>(
     topic: string,
-    msgType?: MessageType<T>,
+    msgTypeOrDepth?: MessageType<T> | number,
+    _maybeDepth?: number,
   ): WsTopicPublisher | TypedWsTopicPublisher<T> {
+    const msgType =
+      typeof msgTypeOrDepth === "number" || msgTypeOrDepth === undefined
+        ? undefined
+        : msgTypeOrDepth;
     const raw = new WsTopicPublisher(this, topic);
     this.trackEndpoint("publisher", topic);
     if (msgType) {
@@ -553,6 +591,70 @@ export class WsNode {
   /** Alias of `start` for API familiarity with ZMQ Node.spin(). */
   spin(): void {
     this.start();
+  }
+
+  /** Best-effort readiness via console metrics (`workers > 0`). */
+  async entityHasWorkers(
+    kind: "services" | "actions",
+    name: string,
+  ): Promise<boolean> {
+    try {
+      const res = await fetch(`${this.url}/api/v1/${kind}`);
+      if (!res.ok) return false;
+      const body = (await res.json()) as {
+        services?: Array<{ name: string; workers?: number }>;
+        actions?: Array<{ name: string; workers?: number }>;
+      };
+      const list = kind === "services" ? body.services ?? [] : body.actions ?? [];
+      const strip = (s: string) => (s.startsWith("/") ? s.slice(1) : s);
+      const entry = list.find(
+        (e) => e.name === name || strip(e.name) === strip(name),
+      );
+      return (entry?.workers ?? 0) > 0;
+    } catch {
+      return false;
+    }
+  }
+
+  async waitUntilWorkers(
+    kind: "services" | "actions",
+    name: string,
+    timeoutSeconds?: number,
+  ): Promise<boolean> {
+    const deadline =
+      timeoutSeconds === undefined
+        ? undefined
+        : Date.now() + timeoutSeconds * 1000;
+    for (;;) {
+      if (await this.entityHasWorkers(kind, name)) return true;
+      if (deadline !== undefined && Date.now() >= deadline) return false;
+      await new Promise((r) => setTimeout(r, 50));
+    }
+  }
+
+  /** Wait for one message on `topic`; returns null on timeout. */
+  async waitForMessage(
+    topic: string,
+    timeoutSeconds?: number,
+  ): Promise<Uint8Array | null> {
+    return new Promise((resolve) => {
+      let settled = false;
+      const timer =
+        timeoutSeconds === undefined
+          ? undefined
+          : setTimeout(() => {
+              if (settled) return;
+              settled = true;
+              resolve(null);
+            }, timeoutSeconds * 1000);
+      this.createSubscription(topic, (_t, payload) => {
+        if (settled) return;
+        settled = true;
+        if (timer) clearTimeout(timer);
+        resolve(payload);
+      });
+      this.start();
+    });
   }
 
   shutdown(): void {

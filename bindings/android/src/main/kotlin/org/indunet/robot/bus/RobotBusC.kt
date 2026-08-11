@@ -43,8 +43,12 @@ internal interface RobotBusC : Library {
     fun robot_bus_service_client_free(c: Pointer?)
     fun robot_bus_service_client_service_name(c: Pointer?): Pointer?
     fun robot_bus_service_client_call(c: Pointer?, data: ByteArray, len: Long, timeoutSecs: Double, outData: PointerByReference, outLen: LongByReference): Int
+    fun robot_bus_service_client_service_is_ready(c: Pointer?): Int
+    fun robot_bus_service_client_wait_for_service(c: Pointer?, timeoutSecs: Double): Int
     fun robot_bus_action_client_free(c: Pointer?)
     fun robot_bus_action_client_action_name(c: Pointer?): Pointer?
+    fun robot_bus_action_client_action_server_is_ready(c: Pointer?): Int
+    fun robot_bus_action_client_wait_for_action_server(c: Pointer?, timeoutSecs: Double): Int
     fun robot_bus_action_client_send_goal(c: Pointer?, data: ByteArray, len: Long, goalId: String?, timeoutSecs: Double, feedback: ActionFeedbackCb?, user: Pointer?, outHandle: PointerByReference): Int
     fun robot_bus_action_goal_handle_free(handle: Pointer?)
     fun robot_bus_action_goal_handle_goal_id(handle: Pointer?): Pointer?
@@ -69,7 +73,9 @@ internal interface RobotBusC : Library {
     fun robot_bus_node_name(n: Pointer?): Pointer?
     fun robot_bus_node_create_callback_group(n: Pointer?, kind: Int): Pointer?
     fun robot_bus_node_create_publisher(n: Pointer?, topic: String?): Pointer?
+    fun robot_bus_node_create_publisher_with_qos(n: Pointer?, topic: String?, depth: Int): Pointer?
     fun robot_bus_node_create_subscription(n: Pointer?, topic: String?, callback: MsgCb, user: Pointer?, group: Pointer?): Int
+    fun robot_bus_node_create_subscription_with_qos(n: Pointer?, topic: String?, callback: MsgCb, user: Pointer?, group: Pointer?, depth: Int): Int
     fun robot_bus_node_create_timer(n: Pointer?, periodSecs: Double, callback: TimerCb, user: Pointer?, group: Pointer?): Pointer?
     fun robot_bus_node_cancel_timer(n: Pointer?, handle: Pointer?): Int
     fun robot_bus_node_create_service(n: Pointer?, name: String?, handler: ServiceCb, user: Pointer?, group: Pointer?): Int
@@ -80,6 +86,7 @@ internal interface RobotBusC : Library {
     fun robot_bus_node_shutdown_handle(n: Pointer?): Pointer?
     fun robot_bus_node_shutdown(n: Pointer?): Int
     fun robot_bus_node_spin_once(n: Pointer?, timeoutSecs: Double): Int
+    fun robot_bus_node_wait_for_message(n: Pointer?, topic: String?, timeoutSecs: Double, outData: PointerByReference, outLen: LongByReference): Int
     fun robot_bus_node_spin(n: Pointer?): Int
     fun robot_bus_node_start(n: Pointer?): Int
     fun robot_bus_node_stop(n: Pointer?): Int

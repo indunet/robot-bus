@@ -50,6 +50,18 @@ impl ServiceClient {
         self.inner.service_name().to_string()
     }
 
+    #[napi]
+    pub fn service_is_ready(&self) -> bool {
+        self.inner.service_is_ready()
+    }
+
+    /// Poll until the service has workers. Omit timeout to wait forever.
+    #[napi]
+    pub fn wait_for_service(&self, timeout: Option<f64>) -> bool {
+        let timeout = timeout.map(Duration::from_secs_f64);
+        self.inner.wait_for_service(timeout)
+    }
+
     /// Call the bound service. `timeout` is seconds; omit to wait indefinitely.
     #[napi]
     pub fn call(&self, body: Buffer, timeout: Option<f64>) -> Result<Buffer> {
@@ -129,6 +141,18 @@ impl ActionClient {
     #[napi(getter)]
     pub fn action_name(&self) -> String {
         self.inner.action_name().to_string()
+    }
+
+    #[napi]
+    pub fn action_server_is_ready(&self) -> bool {
+        self.inner.action_server_is_ready()
+    }
+
+    /// Poll until the action server has workers. Omit timeout to wait forever.
+    #[napi]
+    pub fn wait_for_action_server(&self, timeout: Option<f64>) -> bool {
+        let timeout = timeout.map(Duration::from_secs_f64);
+        self.inner.wait_for_action_server(timeout)
     }
 
     #[napi]

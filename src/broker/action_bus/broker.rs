@@ -101,8 +101,8 @@ impl WorkerRegistry {
         }
     }
 
-    /// Remove a worker from the registry entirely.
-    pub fn remove(&mut self, identity: &[u8]) {
+    /// Remove a worker from the registry entirely. Returns the action it was bound to.
+    pub fn remove(&mut self, identity: &[u8]) -> Option<String> {
         if let Some(act) = self.by_identity.remove(identity) {
             if let Some(list) = self.workers.get_mut(&act) {
                 list.retain(|w| &w.identity != identity);
@@ -111,23 +111,31 @@ impl WorkerRegistry {
                     self.rr_cursor.remove(&act);
                 }
             }
+            Some(act)
+        } else {
+            None
         }
     }
 
     /// Evict workers whose last heartbeat is older than `timeout`. Returns the
     /// identities of the evicted workers so the caller can reclaim their goals.
-    pub fn sweep_dead(&mut self, now: Instant, timeout: Duration) -> Vec<Vec<u8>> {
-        let dead: Vec<Vec<u8>> = self
+    pub fn sweep_dead(&mut self, now: Instant, timeout: Duration) -> Vec<(Vec<u8>, String)> {
+        let dead: Vec<(Vec<u8>, String)> = self
             .workers
             .values()
             .flat_map(|list| {
                 list.iter()
                     .filter(|w| now.duration_since(w.last_heartbeat) > timeout)
-                    .map(|w| w.identity.clone())
+                    .filter_map(|w| {
+                        self.by_identity
+                            .get(&w.identity)
+                            .cloned()
+                            .map(|act| (w.identity.clone(), act))
+                    })
                     .collect::<Vec<_>>()
             })
             .collect();
-        for identity in &dead {
+        for (identity, _) in &dead {
             self.remove(identity);
         }
         dead
@@ -592,7 +600,10 @@ pub fn run_loop(
         if Instant::now() >= next_sweep {
             let now = Instant::now();
             let dead = registry.sweep_dead(now, Duration::from_millis(config.heartbeat_timeout_ms));
-            for wid in dead {
+            for (wid, act) in dead {
+                if let Some(m) = metrics {
+                    m.set_workers(&act, registry.worker_count(&act) as u64);
+                }
                 reclaim_worker_goals(frontend, &mut goals, &wid, metrics)?;
             }
             retry_pending(
@@ -804,15 +815,18 @@ fn handle_worker_message(
                     let act_str = String::from_utf8_lossy(action).into_owned();
                     registry.register(worker_id.to_vec(), act_str.clone(), Instant::now());
                     if let Some(m) = metrics {
-                        m.ensure(&act_str);
+                        m.set_workers(&act_str, registry.worker_count(&act_str) as u64);
                     }
                 }
                 WorkerControl::Heartbeat => {
                     registry.heartbeat(worker_id, Instant::now());
                 }
                 WorkerControl::Disconnect => {
-                    registry.remove(worker_id);
+                    let act = registry.remove(worker_id);
                     reclaim_worker_goals(frontend, goals, worker_id, metrics)?;
+                    if let (Some(m), Some(act)) = (metrics, act) {
+                        m.set_workers(&act, registry.worker_count(&act) as u64);
+                    }
                 }
             }
             Ok(())
@@ -991,7 +1005,7 @@ mod tests {
         let t = now();
         r.register(b"w1".to_vec(), "act".into(), t);
         let dead = r.sweep_dead(t + Duration::from_secs(10), Duration::from_secs(1));
-        assert_eq!(dead, vec![b"w1".to_vec()]);
+        assert_eq!(dead, vec![(b"w1".to_vec(), "act".into())]);
         assert!(!r.is_alive(b"w1"));
         assert_eq!(r.worker_count("act"), 0);
     }

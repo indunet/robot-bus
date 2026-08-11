@@ -103,6 +103,12 @@ class TypedServiceClient:
     def response_type(self) -> Type[Message]:
         return self._response_type
 
+    def service_is_ready(self) -> bool:
+        return bool(self._inner.service_is_ready())
+
+    def wait_for_service(self, timeout: Optional[float] = None) -> bool:
+        return bool(self._inner.wait_for_service(timeout))
+
     def call(
         self, request: Message, timeout: Optional[float] = None
     ) -> Message:
@@ -183,6 +189,12 @@ class TypedActionClient:
     @property
     def action_name(self) -> str:
         return self._inner.action_name
+
+    def action_server_is_ready(self) -> bool:
+        return bool(self._inner.action_server_is_ready())
+
+    def wait_for_action_server(self, timeout: Optional[float] = None) -> bool:
+        return bool(self._inner.wait_for_action_server(timeout))
 
     @property
     def goal_type(self) -> Type[Message]:
@@ -319,8 +331,8 @@ def install_typed_node_api(Node: Any) -> None:
     _raw_create_action_server = Node.create_action_server
     _raw_create_action_client = Node.create_action_client
 
-    def create_publisher(self, topic: str, msg_type: Any = None):
-        raw = _raw_create_publisher(self, topic)
+    def create_publisher(self, topic: str, msg_type: Any = None, qos_depth: Any = None):
+        raw = _raw_create_publisher(self, topic, qos_depth=qos_depth)
         if msg_type is None:
             return raw
         cls = _require_message_type(msg_type, what="msg_type")
@@ -332,10 +344,11 @@ def install_typed_node_api(Node: Any) -> None:
         callback: Callable[..., Any],
         callback_group: Any = None,
         msg_type: Any = None,
+        qos_depth: Any = None,
     ):
         if msg_type is None:
             return _raw_create_subscription(
-                self, topic, callback, callback_group
+                self, topic, callback, callback_group, qos_depth=qos_depth
             )
         cls = _require_message_type(msg_type, what="msg_type")
 
@@ -346,7 +359,7 @@ def install_typed_node_api(Node: Any) -> None:
             callback(topic_name, msg)
 
         return _raw_create_subscription(
-            self, topic, _wrapped, callback_group
+            self, topic, _wrapped, callback_group, qos_depth=qos_depth
         )
 
     def create_service(

@@ -125,25 +125,41 @@ public final class Node implements AutoCloseable {
     }
 
     public TopicPublisher createPublisher(String topic) {
+        return createPublisher(topic, 0);
+    }
+
+    /** {@code qosDepth <= 0} keeps the default HWM; {@code qosDepth > 0} sets KeepLast depth. */
+    public TopicPublisher createPublisher(String topic, int qosDepth) {
         return new TopicPublisher(
                 Errors.checkPtr(
-                        RobotBusC.Holder.INSTANCE.robot_bus_node_create_publisher(ptr, topic),
+                        RobotBusC.Holder.INSTANCE.robot_bus_node_create_publisher_with_qos(
+                                ptr, topic, qosDepth),
                         "create_publisher"));
     }
 
     /** Typed publisher: {@code publish(Message)} with automatic protobuf encode. */
     public <T extends MessageLite> TypedTopicPublisher<T> createPublisher(String topic, Class<T> msgType) {
+        return createPublisher(topic, msgType, 0);
+    }
+
+    public <T extends MessageLite> TypedTopicPublisher<T> createPublisher(
+            String topic, Class<T> msgType, int qosDepth) {
         ProtoCodec.requireMessageType(msgType, "msgType");
         @SuppressWarnings("unchecked")
         Class<T> typed = (Class<T>) msgType;
-        return new TypedTopicPublisher<>(createPublisher(topic), typed);
+        return new TypedTopicPublisher<>(createPublisher(topic, qosDepth), typed);
     }
 
     public void createSubscription(String topic, MsgCallback callback) {
-        createSubscription(topic, callback, null);
+        createSubscription(topic, callback, null, 0);
     }
 
     public void createSubscription(String topic, MsgCallback callback, CallbackGroup group) {
+        createSubscription(topic, callback, group, 0);
+    }
+
+    public void createSubscription(
+            String topic, MsgCallback callback, CallbackGroup group, int qosDepth) {
         RobotBusC.MsgCb cb =
                 (t, data, len, user) -> {
                     byte[] bytes =
@@ -152,19 +168,28 @@ public final class Node implements AutoCloseable {
                 };
         msgCallbacks.add(cb);
         Errors.check(
-                RobotBusC.Holder.INSTANCE.robot_bus_node_create_subscription(
-                        ptr, topic, cb, null, group != null ? group.raw() : null),
+                RobotBusC.Holder.INSTANCE.robot_bus_node_create_subscription_with_qos(
+                        ptr, topic, cb, null, group != null ? group.raw() : null, qosDepth),
                 "create_subscription");
     }
 
     /** Typed subscription: callback receives a decoded protobuf message. */
     public <T extends MessageLite> void createSubscription(
             String topic, TypedMsgCallback<T> callback, Class<T> msgType) {
-        createSubscription(topic, callback, msgType, null);
+        createSubscription(topic, callback, msgType, null, 0);
     }
 
     public <T extends MessageLite> void createSubscription(
             String topic, TypedMsgCallback<T> callback, Class<T> msgType, CallbackGroup group) {
+        createSubscription(topic, callback, msgType, group, 0);
+    }
+
+    public <T extends MessageLite> void createSubscription(
+            String topic,
+            TypedMsgCallback<T> callback,
+            Class<T> msgType,
+            CallbackGroup group,
+            int qosDepth) {
         ProtoCodec.requireMessageType(msgType, "msgType");
         @SuppressWarnings("unchecked")
         Class<T> typed = (Class<T>) msgType;
@@ -177,7 +202,8 @@ public final class Node implements AutoCloseable {
                     }
                     callback.onMessage(t, msg);
                 },
-                group);
+                group,
+                qosDepth);
     }
 
     public TimerHandle createTimer(double periodSecs, TimerCallback callback) {
@@ -455,6 +481,26 @@ public final class Node implements AutoCloseable {
             Errors.check(rc, "spin_once");
         }
         return rc == 1;
+    }
+
+    /** Wait for one message on {@code topic}; returns {@code null} on timeout. */
+    public byte[] waitForMessage(String topic) {
+        return waitForMessage(topic, -1.0);
+    }
+
+    public byte[] waitForMessage(String topic, double timeoutSecs) {
+        PointerByReference outData = new PointerByReference();
+        LongByReference outLen = new LongByReference();
+        int rc =
+                RobotBusC.Holder.INSTANCE.robot_bus_node_wait_for_message(
+                        ptr, topic, timeoutSecs, outData, outLen);
+        if (rc < 0) {
+            Errors.check(rc, "wait_for_message");
+        }
+        if (rc == 0) {
+            return null;
+        }
+        return NativeUtils.readBytes(outData.getValue(), outLen.getValue());
     }
 
     public void spin() {

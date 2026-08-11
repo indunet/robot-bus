@@ -27,6 +27,17 @@ impl PyNodeServiceClient {
         self.inner.service_name()
     }
 
+    fn service_is_ready(&self) -> bool {
+        self.inner.service_is_ready()
+    }
+
+    /// Poll until the service has workers. `timeout` is seconds; `None` waits forever.
+    #[pyo3(signature = (timeout=None))]
+    fn wait_for_service(&self, timeout: Option<f64>) -> bool {
+        let timeout = timeout.map(Duration::from_secs_f64);
+        self.inner.wait_for_service(timeout)
+    }
+
     /// Call the bound service. `timeout` is seconds; `None` waits indefinitely.
     #[pyo3(signature = (body, timeout=None))]
     fn call(&self, py: Python<'_>, body: &[u8], timeout: Option<f64>) -> PyResult<Vec<u8>> {
@@ -108,6 +119,17 @@ impl PyNodeActionClient {
     #[getter]
     fn action_name(&self) -> &str {
         self.inner.action_name()
+    }
+
+    fn action_server_is_ready(&self) -> bool {
+        self.inner.action_server_is_ready()
+    }
+
+    /// Poll until the action server has workers. `timeout` is seconds; `None` waits forever.
+    #[pyo3(signature = (timeout=None))]
+    fn wait_for_action_server(&self, timeout: Option<f64>) -> bool {
+        let timeout = timeout.map(Duration::from_secs_f64);
+        self.inner.wait_for_action_server(timeout)
     }
 
     /// Send a goal and immediately return a live ActionGoalHandle.
