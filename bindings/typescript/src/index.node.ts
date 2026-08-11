@@ -317,14 +317,14 @@ export class Node {
     callback: (topic: string, payload: Buffer | object) => void,
     callbackGroup?: import("./native-types.js").JsCallbackGroup,
     qosDepth?: number,
-  ): void;
+  ): import("./native-types.js").SubscriptionHandle;
   createSubscription<T extends object>(
     topic: string,
     callback: (topic: string, msg: T) => void,
     msgType: MessageType<T>,
     callbackGroup?: import("./native-types.js").JsCallbackGroup,
     qosDepth?: number,
-  ): void;
+  ): import("./native-types.js").SubscriptionHandle;
   createSubscription(
     topic: string,
     callback: (topic: string, payload: Buffer | object) => void,
@@ -333,14 +333,14 @@ export class Node {
       | import("./native-types.js").JsCallbackGroup,
     maybeGroupOrDepth?: import("./native-types.js").JsCallbackGroup | number,
     maybeDepth?: number,
-  ): void {
+  ): import("./native-types.js").SubscriptionHandle {
     if (msgTypeOrGroup && "fromBinary" in msgTypeOrGroup) {
       const msgType = msgTypeOrGroup;
       const group =
         typeof maybeGroupOrDepth === "number" ? undefined : maybeGroupOrDepth;
       const depth =
         typeof maybeGroupOrDepth === "number" ? maybeGroupOrDepth : maybeDepth;
-      this.inner.createSubscription(
+      return this.inner.createSubscription(
         topic,
         (t, payload) => {
           const decoded = decode(msgType, payload);
@@ -351,19 +351,22 @@ export class Node {
         group,
         depth,
       );
-      return;
     }
     const group = msgTypeOrGroup as
       | import("./native-types.js").JsCallbackGroup
       | undefined;
     const depth =
       typeof maybeGroupOrDepth === "number" ? maybeGroupOrDepth : maybeDepth;
-    this.inner.createSubscription(
+    return this.inner.createSubscription(
       topic,
       callback as (topic: string, payload: Buffer) => void,
       group,
       depth,
     );
+  }
+
+  destroySubscription(handle: import("./native-types.js").SubscriptionHandle): void {
+    this.inner.destroySubscription(handle);
   }
 
   waitForMessage(topic: string, timeout?: number): Buffer | null {
@@ -378,6 +381,14 @@ export class Node {
     return this.inner.createTimer(period, callback, callbackGroup);
   }
 
+  createWallTimer(
+    period: number,
+    callback: () => void,
+    callbackGroup?: import("./native-types.js").JsCallbackGroup,
+  ) {
+    return this.inner.createWallTimer(period, callback, callbackGroup);
+  }
+
   cancelTimer(handle: import("./native-types.js").TimerHandle) {
     return this.inner.cancelTimer(handle);
   }
@@ -386,8 +397,12 @@ export class Node {
     serviceName: string,
     handler: (body: Buffer) => Buffer,
     callbackGroup?: import("./native-types.js").JsCallbackGroup,
-  ): void {
-    this.inner.createService(serviceName, handler, callbackGroup);
+  ) {
+    return this.inner.createService(serviceName, handler, callbackGroup);
+  }
+
+  destroyService(handle: import("./native-types.js").ServiceHandle): void {
+    this.inner.destroyService(handle);
   }
 
   createClient(serviceName: string): NativeServiceClient;
@@ -412,8 +427,12 @@ export class Node {
     actionName: string,
     handler: (payload: Buffer) => Array<{ phase: string; body: Buffer }>,
     callbackGroup?: import("./native-types.js").JsCallbackGroup,
-  ): void {
-    this.inner.createActionServer(actionName, handler, callbackGroup);
+  ) {
+    return this.inner.createActionServer(actionName, handler, callbackGroup);
+  }
+
+  destroyActionServer(handle: import("./native-types.js").ActionServerHandle): void {
+    this.inner.destroyActionServer(handle);
   }
 
   createActionClient(actionName: string): NativeActionClient;

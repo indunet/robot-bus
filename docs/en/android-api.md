@@ -10,7 +10,7 @@ Does not depend on `org.indunet:robot-bus` (JVM Java package). Both artifacts ar
 
 ```bash
 # Maven Central (when published)
-# implementation("org.indunet:robot-bus-android:0.1.8")
+# implementation("org.indunet:robot-bus-android:0.1.9")
 
 # Local:
 just gen-android    # → bindings/android/generated/
@@ -38,7 +38,7 @@ class App : Application() {
 ```kotlin
 // build.gradle.kts
 dependencies {
-  implementation("org.indunet:robot-bus-android:0.1.8")
+  implementation("org.indunet:robot-bus-android:0.1.9")
 }
 ```
 
@@ -53,11 +53,15 @@ import org.indunet.robot.bus.sensor_msgs.msg.v1.Imu
 Broker().use { _ ->
   Node("pilot").use { node ->
     val imuPub = node.createPublisher("/robot1/imu", Imu::class.java)
-    node.createSubscription(
+    val sub = node.createSubscription(
       "/robot1/imu",
       { topic, imu -> println("$topic z=${imu.angularVelocity.z}") },
       Imu::class.java,
     )
+    // sub.destroy()
+    // createWallTimer; qosDepth; waitForMessage / waitForService
+    // listParameters() → ListParametersResult; listAllParameters(); undeclareParameter
+    // getParameter(name) → Parameter; getParameterValue(name)
 
     imuPub.publish(
       Imu.newBuilder()
@@ -89,11 +93,14 @@ val t = buf.lookupTransform("base_link", "camera")
 
 Offline use: `TfBuffer()` + `setTransformMsg`. See `TfLookupTest`.
 
-### UDP discovery
+### HTTP discovery (fill addresses, pick transport yourself)
+
+Request `GET /api/v1/discover` on a known API base URL:
 
 ```kotlin
-val node = Node.discover("talker", "tcp", DiscoverOpts(domainId = 0))
-// BrokerOptions(domainId = 0, advertiseHost = "10.0.0.5", noDiscovery = false)
+val node = Node.discover(
+    "talker", "tcp", DiscoverOpts(apiUrl = "http://127.0.0.1:15570"))
+// Optional: brokerId, timeoutSecs; BrokerOptions.noDiscovery / domainId are not UDP
 ```
 
 Cross-broker (federation):

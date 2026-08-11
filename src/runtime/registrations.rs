@@ -33,6 +33,7 @@ impl SubRegistration {
 }
 
 pub struct ServiceRegistration {
+    pub id: u64,
     pub socket: Socket,
     pub service_name: String,
     pub handler: ServiceHandler,
@@ -44,6 +45,7 @@ pub struct ServiceRegistration {
 
 impl ServiceRegistration {
     pub fn create(
+        id: u64,
         context: &Context,
         service_name: &str,
         handler: ServiceHandler,
@@ -62,6 +64,7 @@ impl ServiceRegistration {
         socket.set_identity(&identity)?;
         socket.connect(endpoint)?;
         let mut reg = Self {
+            id,
             socket,
             service_name: service_name.to_string(),
             handler,
@@ -95,6 +98,7 @@ impl ServiceRegistration {
 }
 
 pub struct ActionRegistration {
+    pub id: u64,
     pub socket: Socket,
     pub action_name: String,
     pub handler: ActionGoalHandler,
@@ -106,6 +110,7 @@ pub struct ActionRegistration {
 
 impl ActionRegistration {
     pub fn create(
+        id: u64,
         context: &Context,
         action_name: &str,
         handler: ActionGoalHandler,
@@ -124,6 +129,7 @@ impl ActionRegistration {
         socket.set_identity(&identity)?;
         socket.connect(endpoint)?;
         let mut reg = Self {
+            id,
             socket,
             action_name: action_name.to_string(),
             handler,

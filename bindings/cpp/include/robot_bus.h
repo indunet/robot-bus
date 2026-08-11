@@ -22,6 +22,9 @@ typedef struct RobotBusPublisher RobotBusPublisher;
 typedef struct RobotBusSubscriber RobotBusSubscriber;
 typedef struct RobotBusShutdownHandle RobotBusShutdownHandle;
 typedef struct RobotBusTimerHandle RobotBusTimerHandle;
+typedef struct RobotBusSubscriptionHandle RobotBusSubscriptionHandle;
+typedef struct RobotBusServiceHandle RobotBusServiceHandle;
+typedef struct RobotBusActionServerHandle RobotBusActionServerHandle;
 typedef struct RobotBusCallbackGroup RobotBusCallbackGroup;
 typedef struct RobotBusTopicPublisher RobotBusTopicPublisher;
 typedef struct RobotBusServiceClient RobotBusServiceClient;
@@ -193,6 +196,9 @@ ROBOT_BUS_API void robot_bus_shutdown_handle_free(RobotBusShutdownHandle *h);
 ROBOT_BUS_API void robot_bus_shutdown_handle_shutdown(RobotBusShutdownHandle *h);
 ROBOT_BUS_API int robot_bus_shutdown_handle_is_running(const RobotBusShutdownHandle *h);
 ROBOT_BUS_API void robot_bus_timer_handle_free(RobotBusTimerHandle *h);
+ROBOT_BUS_API void robot_bus_subscription_handle_free(RobotBusSubscriptionHandle *h);
+ROBOT_BUS_API void robot_bus_service_handle_free(RobotBusServiceHandle *h);
+ROBOT_BUS_API void robot_bus_action_server_handle_free(RobotBusActionServerHandle *h);
 ROBOT_BUS_API void robot_bus_callback_group_free(RobotBusCallbackGroup *g);
 ROBOT_BUS_API uint64_t robot_bus_callback_group_id(const RobotBusCallbackGroup *g);
 ROBOT_BUS_API int robot_bus_callback_group_kind(const RobotBusCallbackGroup *g);
@@ -271,26 +277,37 @@ ROBOT_BUS_API RobotBusTopicPublisher *robot_bus_node_create_publisher(RobotBusNo
 /** depth <= 0 keeps default HWM; depth > 0 maps to KeepLast depth. */
 ROBOT_BUS_API RobotBusTopicPublisher *robot_bus_node_create_publisher_with_qos(
     RobotBusNode *n, const char *topic, int32_t depth);
-ROBOT_BUS_API int robot_bus_node_create_subscription(RobotBusNode *n, const char *topic,
-                                                     RobotBusMsgCallback callback, void *user,
-                                                     const RobotBusCallbackGroup *group);
+/** Returns opaque handle (NULL on error). Caller may free with
+ * robot_bus_subscription_handle_free or destroy via robot_bus_node_destroy_subscription. */
+ROBOT_BUS_API RobotBusSubscriptionHandle *robot_bus_node_create_subscription(
+    RobotBusNode *n, const char *topic, RobotBusMsgCallback callback, void *user,
+    const RobotBusCallbackGroup *group);
 /** depth <= 0 keeps default HWM; depth > 0 maps to KeepLast depth. */
-ROBOT_BUS_API int robot_bus_node_create_subscription_with_qos(
+ROBOT_BUS_API RobotBusSubscriptionHandle *robot_bus_node_create_subscription_with_qos(
     RobotBusNode *n, const char *topic, RobotBusMsgCallback callback, void *user,
     const RobotBusCallbackGroup *group, int32_t depth);
+ROBOT_BUS_API int robot_bus_node_destroy_subscription(RobotBusNode *n,
+                                                      RobotBusSubscriptionHandle *handle);
 ROBOT_BUS_API RobotBusTimerHandle *robot_bus_node_create_timer(RobotBusNode *n, double period_secs,
                                                                RobotBusTimerCallback callback,
                                                                void *user,
                                                                const RobotBusCallbackGroup *group);
 ROBOT_BUS_API int robot_bus_node_cancel_timer(RobotBusNode *n, const RobotBusTimerHandle *handle);
-ROBOT_BUS_API int robot_bus_node_create_service(RobotBusNode *n, const char *service_name,
-                                                RobotBusServiceHandler handler, void *user,
-                                                const RobotBusCallbackGroup *group);
+/** Returns opaque handle (NULL on error). */
+ROBOT_BUS_API RobotBusServiceHandle *robot_bus_node_create_service(
+    RobotBusNode *n, const char *service_name, RobotBusServiceHandler handler, void *user,
+    const RobotBusCallbackGroup *group);
+ROBOT_BUS_API int robot_bus_node_destroy_service(RobotBusNode *n, RobotBusServiceHandle *handle);
+ROBOT_BUS_API char *robot_bus_service_handle_name(const RobotBusServiceHandle *h);
 ROBOT_BUS_API RobotBusServiceClient *robot_bus_node_create_client(RobotBusNode *n,
                                                                   const char *service_name);
-ROBOT_BUS_API int robot_bus_node_create_action_server(RobotBusNode *n, const char *action_name,
-                                                      RobotBusActionHandler handler, void *user,
-                                                      const RobotBusCallbackGroup *group);
+/** Returns opaque handle (NULL on error). */
+ROBOT_BUS_API RobotBusActionServerHandle *robot_bus_node_create_action_server(
+    RobotBusNode *n, const char *action_name, RobotBusActionHandler handler, void *user,
+    const RobotBusCallbackGroup *group);
+ROBOT_BUS_API int robot_bus_node_destroy_action_server(RobotBusNode *n,
+                                                       RobotBusActionServerHandle *handle);
+ROBOT_BUS_API char *robot_bus_action_server_handle_name(const RobotBusActionServerHandle *h);
 ROBOT_BUS_API RobotBusActionClient *robot_bus_node_create_action_client(RobotBusNode *n,
                                                                         const char *action_name);
 ROBOT_BUS_API int robot_bus_node_connect_action_client(RobotBusNode *n);
@@ -317,9 +334,21 @@ ROBOT_BUS_API int robot_bus_node_set_parameter(RobotBusNode *n, const char *name
 ROBOT_BUS_API int robot_bus_node_get_parameter(RobotBusNode *n, const char *name,
                                                RobotBusParameterValue *out);
 ROBOT_BUS_API int robot_bus_node_has_parameter(const RobotBusNode *n, const char *name);
-ROBOT_BUS_API int robot_bus_node_list_parameters(RobotBusNode *n, RobotBusParameter **out,
-                                                size_t *out_count);
+ROBOT_BUS_API int robot_bus_node_undeclare_parameter(RobotBusNode *n, const char *name);
+/**
+ * ROS-shaped list: fills `out_names` / `out_prefixes` (NUL-terminated string arrays).
+ * `prefixes` may be NULL when `prefix_count` is 0. `depth` 0 = recursive.
+ * Caller frees with `robot_bus_string_list_free`.
+ */
+ROBOT_BUS_API int robot_bus_node_list_parameters(RobotBusNode *n, const char *const *prefixes,
+                                                size_t prefix_count, uint64_t depth,
+                                                char ***out_names, size_t *out_names_count,
+                                                char ***out_prefixes, size_t *out_prefixes_count);
+/** Convenience: all parameters with values (name + value). */
+ROBOT_BUS_API int robot_bus_node_list_all_parameters(RobotBusNode *n, RobotBusParameter **out,
+                                                    size_t *out_count);
 ROBOT_BUS_API void robot_bus_parameters_free(RobotBusParameter *params, size_t count);
+ROBOT_BUS_API void robot_bus_string_list_free(char **list, size_t count);
 ROBOT_BUS_API int robot_bus_node_load_parameters_from_yaml(RobotBusNode *n, const char *path);
 ROBOT_BUS_API int robot_bus_node_load_parameters_from_yaml_str(RobotBusNode *n, const char *yaml);
 

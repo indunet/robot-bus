@@ -62,11 +62,13 @@ class _FakeActionClient:
 
 
 class _RawNode:
-    def create_publisher(self, topic: str):
+    def create_publisher(self, topic: str, qos_depth=None):
+        self.last_pub_qos = qos_depth
         return _FakePublisher(topic)
 
-    def create_subscription(self, topic, callback, callback_group=None):
+    def create_subscription(self, topic, callback, callback_group=None, qos_depth=None):
         self._sub_cb = callback
+        self.last_sub_qos = qos_depth
 
     def create_service(self, service_name, handler, callback_group=None):
         self._svc_handler = handler
@@ -127,9 +129,11 @@ def test_install_typed_node_api_publisher_and_subscription() -> None:
 
     raw = node.create_publisher("/raw")
     assert isinstance(raw, _FakePublisher)
+    assert node.last_pub_qos is None
 
-    typed = node.create_publisher("/imu", BoolValue)
+    typed = node.create_publisher("/imu", BoolValue, qos_depth=10)
     assert isinstance(typed, TypedTopicPublisher)
+    assert node.last_pub_qos == 10
     typed.publish(BoolValue(value=False))
     assert typed._inner.last == BoolValue(value=False).SerializeToString()
 
@@ -138,7 +142,9 @@ def test_install_typed_node_api_publisher_and_subscription() -> None:
         "/imu",
         lambda topic, msg: got.append((topic, msg.value)),
         msg_type=BoolValue,
+        qos_depth=5,
     )
+    assert node.last_sub_qos == 5
     node._sub_cb("/imu", BoolValue(value=True).SerializeToString())
     assert got == [("/imu", True)]
 

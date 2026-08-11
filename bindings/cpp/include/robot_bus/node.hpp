@@ -414,6 +414,112 @@ class TimerHandle {
   RobotBusTimerHandle *h_;
 };
 
+class SubscriptionHandle {
+ public:
+  SubscriptionHandle(RobotBusNode *n, RobotBusSubscriptionHandle *h) : n_(n), h_(h) {}
+  ~SubscriptionHandle() {
+    destroy();
+    robot_bus_subscription_handle_free(h_);
+    h_ = nullptr;
+  }
+  SubscriptionHandle(const SubscriptionHandle &) = delete;
+  SubscriptionHandle &operator=(const SubscriptionHandle &) = delete;
+  SubscriptionHandle(SubscriptionHandle &&o) noexcept : n_(o.n_), h_(o.h_), destroyed_(o.destroyed_) {
+    o.h_ = nullptr;
+    o.destroyed_ = true;
+  }
+  void destroy() {
+    if (destroyed_ || !h_ || !n_) {
+      return;
+    }
+    check(robot_bus_node_destroy_subscription(n_, h_), "destroy_subscription");
+    destroyed_ = true;
+  }
+  RobotBusSubscriptionHandle *raw() const { return h_; }
+
+ private:
+  RobotBusNode *n_ = nullptr;
+  RobotBusSubscriptionHandle *h_ = nullptr;
+  bool destroyed_ = false;
+};
+
+class ServiceHandle {
+ public:
+  ServiceHandle(RobotBusNode *n, RobotBusServiceHandle *h) : n_(n), h_(h) {}
+  ~ServiceHandle() {
+    destroy();
+    robot_bus_service_handle_free(h_);
+    h_ = nullptr;
+  }
+  ServiceHandle(const ServiceHandle &) = delete;
+  ServiceHandle &operator=(const ServiceHandle &) = delete;
+  ServiceHandle(ServiceHandle &&o) noexcept : n_(o.n_), h_(o.h_), destroyed_(o.destroyed_) {
+    o.h_ = nullptr;
+    o.destroyed_ = true;
+  }
+  void destroy() {
+    if (destroyed_ || !h_ || !n_) {
+      return;
+    }
+    check(robot_bus_node_destroy_service(n_, h_), "destroy_service");
+    destroyed_ = true;
+  }
+  std::string service_name() const {
+    char *s = robot_bus_service_handle_name(h_);
+    if (!s) {
+      return {};
+    }
+    std::string out(s);
+    robot_bus_free_string(s);
+    return out;
+  }
+  RobotBusServiceHandle *raw() const { return h_; }
+
+ private:
+  RobotBusNode *n_ = nullptr;
+  RobotBusServiceHandle *h_ = nullptr;
+  bool destroyed_ = false;
+};
+
+class ActionServerHandle {
+ public:
+  ActionServerHandle(RobotBusNode *n, RobotBusActionServerHandle *h) : n_(n), h_(h) {}
+  ~ActionServerHandle() {
+    destroy();
+    robot_bus_action_server_handle_free(h_);
+    h_ = nullptr;
+  }
+  ActionServerHandle(const ActionServerHandle &) = delete;
+  ActionServerHandle &operator=(const ActionServerHandle &) = delete;
+  ActionServerHandle(ActionServerHandle &&o) noexcept
+      : n_(o.n_), h_(o.h_), destroyed_(o.destroyed_) {
+    o.h_ = nullptr;
+    o.destroyed_ = true;
+  }
+  void destroy() {
+    if (destroyed_ || !h_ || !n_) {
+      return;
+    }
+    check(robot_bus_node_destroy_action_server(n_, h_), "destroy_action_server");
+    destroyed_ = true;
+  }
+  std::string action_name() const {
+    char *s = robot_bus_action_server_handle_name(h_);
+    if (!s) {
+      return {};
+    }
+    std::string out(s);
+    robot_bus_free_string(s);
+    return out;
+  }
+  RobotBusActionServerHandle *raw() const { return h_; }
+
+ private:
+  RobotBusNode *n_ = nullptr;
+  RobotBusActionServerHandle *h_ = nullptr;
+  bool destroyed_ = false;
+};
+
 class Node {
  public:
   using MsgCallback = std::function<void(std::string_view topic, BytesView payload)>;
@@ -511,23 +617,25 @@ class Node {
         "create_publisher_with_qos")));
   }
 
-  void create_subscription(const char *topic, MsgCallback cb,
-                           const CallbackGroup *group = nullptr) {
-    create_subscription(topic, std::move(cb), group, 0);
+  SubscriptionHandle create_subscription(const char *topic, MsgCallback cb,
+                                         const CallbackGroup *group = nullptr) {
+    return create_subscription(topic, std::move(cb), group, 0);
   }
 
-  void create_subscription(const char *topic, MsgCallback cb, const CallbackGroup *group,
-                           int32_t qos_depth) {
+  SubscriptionHandle create_subscription(const char *topic, MsgCallback cb,
+                                         const CallbackGroup *group, int32_t qos_depth) {
     msg_cbs_.push_back(std::make_unique<MsgCallback>(std::move(cb)));
     MsgCallback *held = msg_cbs_.back().get();
-    check(robot_bus_node_create_subscription_with_qos(
-              n_, topic,
-              [](const char *t, const uint8_t *data, size_t len, void *user) {
-                auto *fn = static_cast<MsgCallback *>(user);
-                (*fn)(t ? std::string_view(t) : std::string_view(), BytesView(data, len));
-              },
-              held, group ? group->raw() : nullptr, qos_depth),
-          "create_subscription");
+    return SubscriptionHandle(
+        n_, static_cast<RobotBusSubscriptionHandle *>(check_ptr(
+                robot_bus_node_create_subscription_with_qos(
+                    n_, topic,
+                    [](const char *t, const uint8_t *data, size_t len, void *user) {
+                      auto *fn = static_cast<MsgCallback *>(user);
+                      (*fn)(t ? std::string_view(t) : std::string_view(), BytesView(data, len));
+                    },
+                    held, group ? group->raw() : nullptr, qos_depth),
+                "create_subscription")));
   }
 
   std::optional<std::vector<uint8_t>> wait_for_message(const char *topic,
@@ -557,32 +665,40 @@ class Node {
         "create_timer")));
   }
 
+  /// Alias for create_timer (ROS 2 `create_wall_timer`).
+  TimerHandle create_wall_timer(double period_secs, TimerCallback cb,
+                                const CallbackGroup *group = nullptr) {
+    return create_timer(period_secs, std::move(cb), group);
+  }
+
   void cancel_timer(const TimerHandle &handle) {
     check(robot_bus_node_cancel_timer(n_, handle.raw()), "cancel_timer");
   }
 
-  void create_service(const char *service_name, ServiceHandler handler,
-                      const CallbackGroup *group = nullptr) {
+  ServiceHandle create_service(const char *service_name, ServiceHandler handler,
+                               const CallbackGroup *group = nullptr) {
     svc_cbs_.push_back(std::make_unique<ServiceHandler>(std::move(handler)));
     ServiceHandler *held = svc_cbs_.back().get();
-    check(robot_bus_node_create_service(
-              n_, service_name,
-              [](const uint8_t *data, size_t len, uint8_t **out_data, size_t *out_len,
-                 void *user) -> int {
-                try {
-                  auto *fn = static_cast<ServiceHandler *>(user);
-                  auto reply = (*fn)(BytesView(data, len));
-                  *out_len = reply.size();
-                  *out_data = alloc_reply_bytes(reply);
-                  return 0;
-                } catch (...) {
-                  *out_data = nullptr;
-                  *out_len = 0;
-                  return -1;
-                }
-              },
-              held, group ? group->raw() : nullptr),
-          "create_service");
+    return ServiceHandle(
+        n_, static_cast<RobotBusServiceHandle *>(check_ptr(
+                robot_bus_node_create_service(
+                    n_, service_name,
+                    [](const uint8_t *data, size_t len, uint8_t **out_data, size_t *out_len,
+                       void *user) -> int {
+                      try {
+                        auto *fn = static_cast<ServiceHandler *>(user);
+                        auto reply = (*fn)(BytesView(data, len));
+                        *out_len = reply.size();
+                        *out_data = alloc_reply_bytes(reply);
+                        return 0;
+                      } catch (...) {
+                        *out_data = nullptr;
+                        *out_len = 0;
+                        return -1;
+                      }
+                    },
+                    held, group ? group->raw() : nullptr),
+                "create_service")));
   }
 
   ServiceClient create_client(const char *service_name) {
@@ -590,43 +706,45 @@ class Node {
         check_ptr(robot_bus_node_create_client(n_, service_name), "create_client")));
   }
 
-  void create_action_server(const char *action_name, ActionHandler handler,
-                            const CallbackGroup *group = nullptr) {
+  ActionServerHandle create_action_server(const char *action_name, ActionHandler handler,
+                                          const CallbackGroup *group = nullptr) {
     action_cbs_.push_back(std::make_unique<ActionHandler>(std::move(handler)));
     ActionHandler *held = action_cbs_.back().get();
-    check(robot_bus_node_create_action_server(
-              n_, action_name,
-              [](const uint8_t *data, size_t len, RobotBusActionPhase **out_phases,
-                 size_t *out_count, void *user) -> int {
-                try {
-                  auto *fn = static_cast<ActionHandler *>(user);
-                  auto phases = (*fn)(BytesView(data, len));
-                  *out_count = phases.size();
-                  if (phases.empty()) {
-                    *out_phases = nullptr;
-                    return 0;
-                  }
-                  RobotBusActionPhase *arr = robot_bus_alloc_action_phases(phases.size());
-                  if (!arr) {
-                    *out_phases = nullptr;
-                    *out_count = 0;
-                    return -1;
-                  }
-                  for (size_t i = 0; i < phases.size(); ++i) {
-                    arr[i].phase = robot_bus_dup_string(phases[i].first.c_str());
-                    arr[i].body_len = phases[i].second.size();
-                    arr[i].body = alloc_reply_bytes(phases[i].second);
-                  }
-                  *out_phases = arr;
-                  return 0;
-                } catch (...) {
-                  *out_phases = nullptr;
-                  *out_count = 0;
-                  return -1;
-                }
-              },
-              held, group ? group->raw() : nullptr),
-          "create_action_server");
+    return ActionServerHandle(
+        n_, static_cast<RobotBusActionServerHandle *>(check_ptr(
+                robot_bus_node_create_action_server(
+                    n_, action_name,
+                    [](const uint8_t *data, size_t len, RobotBusActionPhase **out_phases,
+                       size_t *out_count, void *user) -> int {
+                      try {
+                        auto *fn = static_cast<ActionHandler *>(user);
+                        auto phases = (*fn)(BytesView(data, len));
+                        *out_count = phases.size();
+                        if (phases.empty()) {
+                          *out_phases = nullptr;
+                          return 0;
+                        }
+                        RobotBusActionPhase *arr = robot_bus_alloc_action_phases(phases.size());
+                        if (!arr) {
+                          *out_phases = nullptr;
+                          *out_count = 0;
+                          return -1;
+                        }
+                        for (size_t i = 0; i < phases.size(); ++i) {
+                          arr[i].phase = robot_bus_dup_string(phases[i].first.c_str());
+                          arr[i].body_len = phases[i].second.size();
+                          arr[i].body = alloc_reply_bytes(phases[i].second);
+                        }
+                        *out_phases = arr;
+                        return 0;
+                      } catch (...) {
+                        *out_phases = nullptr;
+                        *out_count = 0;
+                        return -1;
+                      }
+                    },
+                    held, group ? group->raw() : nullptr),
+                "create_action_server")));
   }
 
   ActionClient create_action_client(const char *action_name) {
@@ -738,10 +856,49 @@ class Node {
     return rc == 1;
   }
 
-  std::vector<Parameter> list_parameters() {
+  void undeclare_parameter(const char *name) {
+    check(robot_bus_node_undeclare_parameter(n_, name), "undeclare_parameter");
+  }
+
+  struct ListParametersResult {
+    std::vector<std::string> names;
+    std::vector<std::string> prefixes;
+  };
+
+  /// ROS-shaped list (`depth == 0` = recursive).
+  ListParametersResult list_parameters(const std::vector<std::string> &prefixes = {},
+                                       uint64_t depth = 0) {
+    std::vector<const char *> prefix_ptrs;
+    prefix_ptrs.reserve(prefixes.size());
+    for (const auto &p : prefixes) {
+      prefix_ptrs.push_back(p.c_str());
+    }
+    char **out_names = nullptr;
+    size_t names_count = 0;
+    char **out_prefixes = nullptr;
+    size_t prefixes_count = 0;
+    check(robot_bus_node_list_parameters(n_, prefix_ptrs.empty() ? nullptr : prefix_ptrs.data(),
+                                        prefix_ptrs.size(), depth, &out_names, &names_count,
+                                        &out_prefixes, &prefixes_count),
+          "list_parameters");
+    ListParametersResult result;
+    result.names.reserve(names_count);
+    for (size_t i = 0; i < names_count; ++i) {
+      result.names.emplace_back(out_names[i] ? out_names[i] : "");
+    }
+    result.prefixes.reserve(prefixes_count);
+    for (size_t i = 0; i < prefixes_count; ++i) {
+      result.prefixes.emplace_back(out_prefixes[i] ? out_prefixes[i] : "");
+    }
+    robot_bus_string_list_free(out_names, names_count);
+    robot_bus_string_list_free(out_prefixes, prefixes_count);
+    return result;
+  }
+
+  std::vector<Parameter> list_all_parameters() {
     RobotBusParameter *raw = nullptr;
     size_t count = 0;
-    check(robot_bus_node_list_parameters(n_, &raw, &count), "list_parameters");
+    check(robot_bus_node_list_all_parameters(n_, &raw, &count), "list_all_parameters");
     std::vector<Parameter> out;
     out.reserve(count);
     for (size_t i = 0; i < count; ++i) {

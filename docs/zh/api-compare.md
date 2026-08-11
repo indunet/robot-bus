@@ -11,8 +11,10 @@
 | 消息 | `.msg` / `.srv` / `.action` 生成类型 | crate 内 protobuf（如 `sensor_msgs::msg::v1::Imu`） |
 | QoS | `QOS_PROFILE_DEFAULT` 等 | Topic：`QosProfile::keep_last(depth)` → HWM（各语言可选 `qos_depth` / `qosDepth`）；固定 best-effort。WS/gRPC Node 接受参数但不生效。Service / action 暂不接 QoS |
 | 回调组 | Worker / callback group（较新 API） | `CallbackGroupType::MutuallyExclusive` / `Reentrant` |
-| 参数 | `declare_parameter` / `get_parameter` → Parameter；`set_parameter(Parameter)`；`list_parameters(prefixes, depth)`（可远程 / YAML / CLI） | 同形本地 API（`Parameter` + `as_*` + 批量 get/set）；YAML 加载；无远程 / CLI |
+| 参数 | `declare_parameter` / `get_parameter` → Parameter；`set_parameter(Parameter)`；`list_parameters(prefixes, depth)`（可远程 / YAML / CLI） | 同形本地 API（`Parameter` + `as_*` + 批量 get/set）；`list_parameters` → `{names, prefixes}`，便利 API `list_all_parameters`；`undeclare_parameter`；YAML 加载；无远程 / CLI |
 | 就绪等待 | `wait_for_message` / `wait_for_service` / `wait_for_action_server` | 同名辅助：`wait_for_message`；service/action 通过 console `workers > 0` 轮询（best-effort，非 DDS discovery） |
+| 销毁 | `destroy_subscription` / destroy service·action server | 同形：按 handle id 销毁；`start()` 活跃时与 `cancel_timer` 一样拒绝 |
+| 定时器 | `create_wall_timer` | `create_timer` / 别名 `create_wall_timer` |
 
 ---
 

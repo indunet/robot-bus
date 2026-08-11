@@ -69,7 +69,7 @@ class Node : AutoCloseable {
         callback: MsgCallback,
         group: CallbackGroup? = null,
         qosDepth: Int = 0,
-    ) {
+    ): SubscriptionHandle {
         val cb =
             RobotBusC.MsgCb { t, data, len, _ ->
                 val bytes =
@@ -77,16 +77,19 @@ class Node : AutoCloseable {
                 callback.onMessage(t ?: "", bytes)
             }
         msgCallbacks.add(cb)
-        Errors.check(
-            RobotBusC.Holder.INSTANCE.robot_bus_node_create_subscription_with_qos(
-                ptr,
-                topic,
-                cb,
-                null,
-                group?.raw(),
-                qosDepth,
+        return SubscriptionHandle(
+            ptr,
+            Errors.checkPtr(
+                RobotBusC.Holder.INSTANCE.robot_bus_node_create_subscription_with_qos(
+                    ptr,
+                    topic,
+                    cb,
+                    null,
+                    group?.raw(),
+                    qosDepth,
+                ),
+                "create_subscription",
             ),
-            "create_subscription",
         )
     }
 
@@ -98,11 +101,11 @@ class Node : AutoCloseable {
         msgType: Class<T>,
         group: CallbackGroup? = null,
         qosDepth: Int = 0,
-    ) {
+    ): SubscriptionHandle {
         ProtoCodec.requireMessageType(msgType, "msgType")
         @Suppress("UNCHECKED_CAST")
         val typed = msgType as Class<T>
-        createSubscription(
+        return createSubscription(
             topic,
             { t, payload ->
                 val msg = ProtoCodec.tryParse(typed, payload) ?: return@createSubscription
@@ -143,11 +146,18 @@ class Node : AutoCloseable {
     }
 
     @JvmOverloads
+    fun createWallTimer(
+        periodSecs: Double,
+        callback: TimerCallback,
+        group: CallbackGroup? = null,
+    ): TimerHandle = createTimer(periodSecs, callback, group)
+
+    @JvmOverloads
     fun createService(
         serviceName: String,
         handler: ServiceHandler,
         group: CallbackGroup? = null,
-    ) {
+    ): ServiceHandle {
         val cb =
             RobotBusC.ServiceCb { data, len, outData, outLen, _ ->
                 try {
@@ -168,15 +178,18 @@ class Node : AutoCloseable {
                 }
             }
         serviceHandlers.add(cb)
-        Errors.check(
-            RobotBusC.Holder.INSTANCE.robot_bus_node_create_service(
-                ptr,
-                serviceName,
-                cb,
-                null,
-                group?.raw(),
+        return ServiceHandle(
+            ptr,
+            Errors.checkPtr(
+                RobotBusC.Holder.INSTANCE.robot_bus_node_create_service(
+                    ptr,
+                    serviceName,
+                    cb,
+                    null,
+                    group?.raw(),
+                ),
+                "create_service",
             ),
-            "create_service",
         )
     }
 
@@ -188,14 +201,14 @@ class Node : AutoCloseable {
         requestType: Class<Req>,
         responseType: Class<Resp>,
         group: CallbackGroup? = null,
-    ) {
+    ): ServiceHandle {
         ProtoCodec.requireMessageType(requestType, "requestType")
         ProtoCodec.requireMessageType(responseType, "responseType")
         @Suppress("UNCHECKED_CAST")
         val reqT = requestType as Class<Req>
         @Suppress("UNCHECKED_CAST")
         val respT = responseType as Class<Resp>
-        createService(
+        return createService(
             serviceName,
             { body ->
                 val req = ProtoCodec.tryParse(reqT, body) ?: return@createService ByteArray(0)
@@ -239,7 +252,7 @@ class Node : AutoCloseable {
         actionName: String,
         handler: ActionHandler,
         group: CallbackGroup? = null,
-    ) {
+    ): ActionServerHandle {
         val cb =
             RobotBusC.ActionCb { data, len, outPhases, outCount, _ ->
                 try {
@@ -280,15 +293,18 @@ class Node : AutoCloseable {
                 }
             }
         actionHandlers.add(cb)
-        Errors.check(
-            RobotBusC.Holder.INSTANCE.robot_bus_node_create_action_server(
-                ptr,
-                actionName,
-                cb,
-                null,
-                group?.raw(),
+        return ActionServerHandle(
+            ptr,
+            Errors.checkPtr(
+                RobotBusC.Holder.INSTANCE.robot_bus_node_create_action_server(
+                    ptr,
+                    actionName,
+                    cb,
+                    null,
+                    group?.raw(),
+                ),
+                "create_action_server",
             ),
-            "create_action_server",
         )
     }
 
@@ -304,13 +320,13 @@ class Node : AutoCloseable {
         feedbackType: Class<Feedback>,
         resultType: Class<Result>,
         group: CallbackGroup? = null,
-    ) {
+    ): ActionServerHandle {
         ProtoCodec.requireMessageType(goalType, "goalType")
         ProtoCodec.requireMessageType(feedbackType, "feedbackType")
         ProtoCodec.requireMessageType(resultType, "resultType")
         @Suppress("UNCHECKED_CAST")
         val goalT = goalType as Class<Goal>
-        createActionServer(
+        return createActionServer(
             actionName,
             { payload ->
                 val goal = ProtoCodec.tryParse(goalT, payload)
@@ -470,7 +486,7 @@ class Node : AutoCloseable {
         }
     }
 
-    fun getParameter(name: String): Any {
+    fun getParameterValue(name: String): Any {
         val out = RobotBusC.ParameterValueStruct()
         Errors.check(
             RobotBusC.Holder.INSTANCE.robot_bus_node_get_parameter(ptr, name, out),
@@ -478,6 +494,8 @@ class Node : AutoCloseable {
         )
         return fromNativeParameter(out, takeString = true)
     }
+
+    fun getParameter(name: String): Parameter = Parameter(name, getParameterValue(name))
 
     fun hasParameter(name: String): Boolean {
         val rc = RobotBusC.Holder.INSTANCE.robot_bus_node_has_parameter(ptr, name)
@@ -487,12 +505,54 @@ class Node : AutoCloseable {
         return rc == 1
     }
 
-    fun listParameters(): List<Parameter> {
+    fun undeclareParameter(name: String) {
+        Errors.check(
+            RobotBusC.Holder.INSTANCE.robot_bus_node_undeclare_parameter(ptr, name),
+            "undeclare_parameter",
+        )
+    }
+
+    @JvmOverloads
+    fun listParameters(
+        prefixes: Array<String>? = null,
+        depth: Long = 0,
+    ): ListParametersResult {
+        val outNames = PointerByReference()
+        val namesCount = LongByReference()
+        val outPrefixes = PointerByReference()
+        val prefixesCount = LongByReference()
+        val prefixPtr =
+            if (prefixes != null && prefixes.isNotEmpty()) {
+                com.sun.jna.StringArray(prefixes)
+            } else {
+                null
+            }
+        val prefixCount = prefixes?.size?.toLong() ?: 0L
+        Errors.check(
+            RobotBusC.Holder.INSTANCE.robot_bus_node_list_parameters(
+                ptr,
+                prefixPtr,
+                prefixCount,
+                depth,
+                outNames,
+                namesCount,
+                outPrefixes,
+                prefixesCount,
+            ),
+            "list_parameters",
+        )
+        return ListParametersResult(
+            takeStringList(outNames.value, namesCount.value),
+            takeStringList(outPrefixes.value, prefixesCount.value),
+        )
+    }
+
+    fun listAllParameters(): List<Parameter> {
         val out = PointerByReference()
         val countRef = LongByReference()
         Errors.check(
-            RobotBusC.Holder.INSTANCE.robot_bus_node_list_parameters(ptr, out, countRef),
-            "list_parameters",
+            RobotBusC.Holder.INSTANCE.robot_bus_node_list_all_parameters(ptr, out, countRef),
+            "list_all_parameters",
         )
         val count = countRef.value
         val base = out.value
@@ -507,6 +567,18 @@ class Node : AutoCloseable {
                 result.add(Parameter(pname, value))
             }
             RobotBusC.Holder.INSTANCE.robot_bus_parameters_free(base, count)
+        }
+        return result
+    }
+
+    private fun takeStringList(base: Pointer?, count: Long): List<String> {
+        val result = ArrayList<String>(count.toInt())
+        if (base != null && count > 0) {
+            for (i in 0 until count.toInt()) {
+                val sp = base.getPointer((i * com.sun.jna.Native.POINTER_SIZE).toLong())
+                result.add(sp?.getString(0) ?: "")
+            }
+            RobotBusC.Holder.INSTANCE.robot_bus_string_list_free(base, count)
         }
         return result
     }
@@ -614,7 +686,7 @@ class Node : AutoCloseable {
                 ),
             )
 
-        /** Discover a broker via UDP multicast, then connect with [transport]. */
+        /** Discover a broker via HTTP `GET /api/v1/discover`, then connect with [transport]. */
         @JvmStatic
         @JvmOverloads
         fun discover(name: String, transport: String = "tcp", opts: DiscoverOpts? = null): Node =

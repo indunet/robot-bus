@@ -15,6 +15,7 @@
 //!
 //! Topic / service / action names are used as given (pass full paths yourself).
 
+use std::collections::HashMap;
 use std::marker::PhantomData;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{self, Receiver, Sender};
@@ -36,7 +37,7 @@ use crate::runtime::parameters::{ListParametersResult, Parameter, ParameterStore
 use crate::runtime::qos::QosProfile;
 use crate::runtime::queues::ActionMessageCallback;
 use crate::runtime::registrations::{ActionGoalHandler, MessageCallback, ServiceHandler};
-use crate::runtime::timers::{TimerCallback, TimerHandle};
+use crate::runtime::timers::{TimerCallback, TimerHandle, SubscriptionHandle};
 use crate::runtime::topic_type_register;
 use crate::runtime::topology_register::TopologyEndpointGuard;
 #[cfg(feature = "ws")]
@@ -380,10 +381,15 @@ impl<M: Message + Default> TopicPublisher<M> {
 /// Service server handle returned by [`Node::create_service`] / [`Node::create_service_raw`].
 #[derive(Clone, Debug)]
 pub struct NodeService {
+    id: u64,
     service_name: String,
 }
 
 impl NodeService {
+    pub fn id(&self) -> u64 {
+        self.id
+    }
+
     pub fn service_name(&self) -> &str {
         &self.service_name
     }
@@ -506,10 +512,15 @@ impl<S: Service> NodeServiceClient<S> {
 /// [`Node::create_action_server_raw`].
 #[derive(Clone, Debug)]
 pub struct NodeActionServer {
+    id: u64,
     action_name: String,
 }
 
 impl NodeActionServer {
+    pub fn id(&self) -> u64 {
+        self.id
+    }
+
     pub fn action_name(&self) -> &str {
         &self.action_name
     }
@@ -1058,8 +1069,8 @@ pub struct Node {
     subscriber_connected: bool,
     default_callback_group: CallbackGroup,
     parameters: ParameterStore,
-    /// Subscription topology guards (no per-sub handle; live until node drop).
-    topology_subscriptions: Vec<Arc<TopologyEndpointGuard>>,
+    /// Subscription id → topology guard (dropped on destroy_subscription).
+    topology_subscriptions: HashMap<u64, Arc<TopologyEndpointGuard>>,
 }
 
 impl Node {
@@ -1182,7 +1193,7 @@ impl Node {
             subscriber_connected: false,
             default_callback_group: CallbackGroup::mutually_exclusive(),
             parameters: ParameterStore::new(),
-            topology_subscriptions: Vec::new(),
+            topology_subscriptions: HashMap::new(),
         }
     }
 
@@ -1564,7 +1575,7 @@ impl Node {
         topic: &str,
         callback: F,
         callback_group: Option<&CallbackGroup>,
-    ) -> Result<()>
+    ) -> Result<SubscriptionHandle>
     where
         M: Message + Name + Default + 'static,
         F: Fn(&str, M) + Send + Sync + 'static,
@@ -1576,7 +1587,7 @@ impl Node {
             Ok(msg) => callback(topic, msg),
             Err(err) => log::warn!("typed subscription decode failed: {err}"),
         });
-        self.create_subscription_raw(topic, cb, Some(&group))?;
+        let handle = self.create_subscription_raw(topic, cb, Some(&group))?;
         topic_type_register::register_topic_type(
             self.options.service_frontend.as_deref(),
             &self.options.host,
@@ -1584,7 +1595,7 @@ impl Node {
             topic,
             &M::full_name(),
         );
-        Ok(())
+        Ok(handle)
     }
 
     /// Subscribe with topic QoS (KeepLast depth → shared SUB HWM).
@@ -1597,7 +1608,7 @@ impl Node {
         qos: QosProfile,
         callback: F,
         callback_group: Option<&CallbackGroup>,
-    ) -> Result<()>
+    ) -> Result<SubscriptionHandle>
     where
         M: Message + Name + Default + 'static,
         F: Fn(&str, M) + Send + Sync + 'static,
@@ -1609,7 +1620,7 @@ impl Node {
             Ok(msg) => callback(topic, msg),
             Err(err) => log::warn!("typed subscription decode failed: {err}"),
         });
-        self.create_subscription_raw_with_qos(topic, qos, cb, Some(&group))?;
+        let handle = self.create_subscription_raw_with_qos(topic, qos, cb, Some(&group))?;
         topic_type_register::register_topic_type(
             self.options.service_frontend.as_deref(),
             &self.options.host,
@@ -1617,7 +1628,7 @@ impl Node {
             topic,
             &M::full_name(),
         );
-        Ok(())
+        Ok(handle)
     }
 
     /// Subscribe with a raw-bytes callback (does not change stream HWM).
@@ -1626,7 +1637,7 @@ impl Node {
         topic: &str,
         callback: MessageCallback,
         callback_group: Option<&CallbackGroup>,
-    ) -> Result<()> {
+    ) -> Result<SubscriptionHandle> {
         self.create_subscription_raw_inner(topic, None, callback, callback_group)
     }
 
@@ -1637,7 +1648,7 @@ impl Node {
         qos: QosProfile,
         callback: MessageCallback,
         callback_group: Option<&CallbackGroup>,
-    ) -> Result<()> {
+    ) -> Result<SubscriptionHandle> {
         self.create_subscription_raw_inner(topic, Some(qos), callback, callback_group)
     }
 
@@ -1647,7 +1658,7 @@ impl Node {
         qos: Option<QosProfile>,
         callback: MessageCallback,
         callback_group: Option<&CallbackGroup>,
-    ) -> Result<()> {
+    ) -> Result<SubscriptionHandle> {
         let group = callback_group
             .cloned()
             .unwrap_or_else(|| self.default_callback_group.clone());
@@ -1662,9 +1673,9 @@ impl Node {
         #[cfg(feature = "ws")]
         if self.options.is_ws() {
             let _ = qos; // gRPC subscribe has no local ZMQ HWM
-            self.ensure_ws()?.subscribe(topic, callback, group)?;
-            self.topology_subscriptions.push(topology);
-            return Ok(());
+            let handle = self.ensure_ws()?.subscribe(topic, callback, group)?;
+            self.topology_subscriptions.insert(handle.id(), topology);
+            return Ok(handle);
         }
         if let Some(qos) = qos {
             // Apply before connect so the first SUB socket gets the depth; also
@@ -1672,9 +1683,20 @@ impl Node {
             self.set_stream_hwm(qos.to_hwm())?;
         }
         self.ensure_subscriber()?;
-        self.lock_executor()?.subscribe(topic, callback, group)?;
-        self.topology_subscriptions.push(topology);
-        Ok(())
+        let handle = self.lock_executor()?.subscribe(topic, callback, group)?;
+        self.topology_subscriptions.insert(handle.id(), topology);
+        Ok(handle)
+    }
+
+    /// Destroy a subscription created by [`create_subscription`](Self::create_subscription)
+    /// / raw variants. Same `start()` constraint as [`cancel_timer`](Self::cancel_timer).
+    pub fn destroy_subscription(&mut self, handle: SubscriptionHandle) -> Result<()> {
+        self.topology_subscriptions.remove(&handle.id());
+        #[cfg(feature = "ws")]
+        if self.options.is_ws() {
+            return self.ensure_ws()?.destroy_subscription(handle);
+        }
+        self.lock_executor()?.destroy_subscription(handle)
     }
 
     fn ensure_subscriber(&mut self) -> Result<()> {
@@ -1708,6 +1730,16 @@ impl Node {
             return self.ensure_ws()?.create_timer(period, callback, group);
         }
         self.lock_executor()?.create_timer(period, callback, group)
+    }
+
+    /// Alias for [`create_timer`](Self::create_timer) (ROS 2 `create_wall_timer`).
+    pub fn create_wall_timer(
+        &mut self,
+        period: Duration,
+        callback: TimerCallback,
+        callback_group: Option<&CallbackGroup>,
+    ) -> Result<TimerHandle> {
+        self.create_timer(period, callback, callback_group)
     }
 
     pub fn cancel_timer(&mut self, handle: TimerHandle) -> Result<()> {
@@ -1756,7 +1788,7 @@ impl Node {
         let group = callback_group
             .cloned()
             .unwrap_or_else(|| self.default_callback_group.clone());
-        self.lock_executor()?.register_service(
+        let id = self.lock_executor()?.register_service(
             service_name,
             handler,
             group,
@@ -1764,8 +1796,18 @@ impl Node {
             None,
         )?;
         Ok(NodeService {
+            id,
             service_name: service_name.to_string(),
         })
+    }
+
+    /// Destroy a service server created by [`create_service`](Self::create_service).
+    /// Same `start()` constraint as [`cancel_timer`](Self::cancel_timer).
+    pub fn destroy_service(&mut self, handle: &NodeService) -> Result<()> {
+        if self.options.is_ws() {
+            return Err(grpc_mode_unsupported("destroy_service"));
+        }
+        self.lock_executor()?.destroy_service(handle.id)
     }
 
     /// Create a typed service client (ROS 2 / rclrs `create_client`).
@@ -1868,7 +1910,7 @@ impl Node {
         let group = callback_group
             .cloned()
             .unwrap_or_else(|| self.default_callback_group.clone());
-        self.lock_executor()?.register_action(
+        let id = self.lock_executor()?.register_action(
             action_name,
             handler,
             group,
@@ -1876,8 +1918,18 @@ impl Node {
             None,
         )?;
         Ok(NodeActionServer {
+            id,
             action_name: action_name.to_string(),
         })
+    }
+
+    /// Destroy an action server created by [`create_action_server`](Self::create_action_server).
+    /// Same `start()` constraint as [`cancel_timer`](Self::cancel_timer).
+    pub fn destroy_action_server(&mut self, handle: &NodeActionServer) -> Result<()> {
+        if self.options.is_ws() {
+            return Err(grpc_mode_unsupported("destroy_action_server"));
+        }
+        self.lock_executor()?.destroy_action_server(handle.id)
     }
 
     /// Create a typed action client (ROS 2–style `create_action_client`).
@@ -2045,7 +2097,7 @@ impl Node {
                 }
             }
         });
-        self.create_subscription_raw(topic, cb, None)?;
+        let handle = self.create_subscription_raw(topic, cb, None)?;
         let deadline = timeout.map(|d| Instant::now() + d);
         loop {
             if let Ok(guard) = slot.lock() {
@@ -2065,6 +2117,7 @@ impl Node {
                 let _ = self.spin_once(Some(Duration::from_millis(50)))?;
             }
         }
+        let _ = self.destroy_subscription(handle);
         let payload = slot
             .lock()
             .map_err(|_| BusError::Protocol("wait_for_message mutex poisoned".into()))?

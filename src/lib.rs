@@ -72,7 +72,7 @@ pub use runtime::{
     NodeServiceClientRaw, Parameter, ParameterValue, QOS_PROFILE_DEFAULT, QosProfile,
     ListParametersResult, PARAMETER_DEPTH_RECURSIVE, RawActionFeedbackCallback, RawGoalHandle,
     ServiceHandler, ShutdownHandle, SingleThreadedExecutor, TimerCallback, TimerHandle,
-    TopicPublisher, TopicPublisherRaw,
+    SubscriptionHandle, TopicPublisher, TopicPublisherRaw,
 };
 pub use service_bus::{ServiceClient, ServiceWorker};
 pub use transports::{

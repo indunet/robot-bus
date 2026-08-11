@@ -30,7 +30,7 @@ use crate::runtime::executor::ShutdownHandle;
 use crate::runtime::node::RawActionFeedbackCallback;
 use crate::runtime::registrations::MessageCallback;
 use crate::runtime::timers::{
-    Timer, TimerCallback, TimerHandle, effective_poll_timeout_ms, tick_timers,
+    Timer, TimerCallback, TimerHandle, SubscriptionHandle, effective_poll_timeout_ms, tick_timers,
 };
 use crate::runtime::topic_callbacks::for_each_matching_callback;
 
@@ -250,8 +250,11 @@ impl WsClientContext {
 struct WsState {
     topic_callbacks: HashMap<String, Vec<SubscriptionCallback>>,
     active_topics: HashSet<String>,
+    /// Latest WS stream id for each active topic (for Cancel on destroy).
+    topic_stream_ids: HashMap<String, u32>,
     timers: Vec<Timer>,
     next_timer_id: u64,
+    next_subscription_id: u64,
 }
 
 /// Owns a tokio runtime and dispatches WS subscription / timer callbacks.
@@ -260,7 +263,7 @@ pub struct WsRuntime {
     running: Arc<AtomicBool>,
     inbound_tx: Sender<TopicEvent>,
     inbound_rx: Mutex<Receiver<TopicEvent>>,
-    state: Mutex<WsState>,
+    state: Arc<Mutex<WsState>>,
 }
 
 
@@ -290,12 +293,14 @@ impl WsRuntime {
             running: Arc::new(AtomicBool::new(false)),
             inbound_tx,
             inbound_rx: Mutex::new(inbound_rx),
-            state: Mutex::new(WsState {
+            state: Arc::new(Mutex::new(WsState {
                 topic_callbacks: HashMap::new(),
                 active_topics: HashSet::new(),
+                topic_stream_ids: HashMap::new(),
                 timers: Vec::new(),
                 next_timer_id: 1,
-            }),
+                next_subscription_id: 1,
+            })),
         })
     }
 
@@ -323,16 +328,53 @@ impl WsRuntime {
         topic: &str,
         callback: MessageCallback,
         group: CallbackGroup,
-    ) -> Result<()> {
+    ) -> Result<SubscriptionHandle> {
         let mut state = self.lock_state()?;
+        let id = state.next_subscription_id;
+        state.next_subscription_id += 1;
         state
             .topic_callbacks
             .entry(topic.to_string())
             .or_default()
-            .push(SubscriptionCallback { callback, group });
+            .push(SubscriptionCallback {
+                id,
+                callback,
+                group,
+            });
 
         if state.active_topics.insert(topic.to_string()) {
             self.spawn_subscription(topic.to_string());
+        }
+        Ok(SubscriptionHandle { id })
+    }
+
+    pub fn destroy_subscription(&self, handle: SubscriptionHandle) -> Result<()> {
+        let mut state = self.lock_state()?;
+        let mut found_topic: Option<String> = None;
+        for (topic, callbacks) in state.topic_callbacks.iter_mut() {
+            if let Some(pos) = callbacks.iter().position(|c| c.id == handle.id) {
+                callbacks.remove(pos);
+                found_topic = Some(topic.clone());
+                break;
+            }
+        }
+        let Some(topic) = found_topic else {
+            return Err(BusError::Protocol(format!(
+                "unknown subscription id {}",
+                handle.id
+            )));
+        };
+        let empty = state
+            .topic_callbacks
+            .get(&topic)
+            .map(|c| c.is_empty())
+            .unwrap_or(true);
+        if empty {
+            state.topic_callbacks.remove(&topic);
+            state.active_topics.remove(&topic);
+            if let Some(stream_id) = state.topic_stream_ids.remove(&topic) {
+                let _ = self.conn.cmd_tx.send(ConnCmd::Cancel { stream_id });
+            }
         }
         Ok(())
     }
@@ -446,9 +488,21 @@ impl WsRuntime {
         let tx = self.inbound_tx.clone();
         let running = Arc::clone(&self.running);
         let conn = Arc::clone(&self.conn);
+        let state = Arc::clone(&self.state);
         self.conn.runtime.spawn(async move {
             loop {
+                {
+                    let Ok(guard) = state.lock() else {
+                        break;
+                    };
+                    if !guard.active_topics.contains(&topic) {
+                        break;
+                    }
+                }
                 let stream_id = conn.alloc_stream_id();
+                if let Ok(mut guard) = state.lock() {
+                    guard.topic_stream_ids.insert(topic.clone(), stream_id);
+                }
                 let payload = SubscribeRequest {
                     topic: topic.clone(),
                 }
@@ -479,9 +533,17 @@ impl WsRuntime {
                     Ok(Err(err)) => log::warn!("ws subscribe '{topic}' start failed: {err}"),
                     Err(_) => break,
                 }
-                // Reconnect only while the node may still spin.
+                // Reconnect only while the node may still spin and topic is active.
                 if !running.load(Ordering::Acquire) {
                     break;
+                }
+                {
+                    let Ok(guard) = state.lock() else {
+                        break;
+                    };
+                    if !guard.active_topics.contains(&topic) {
+                        break;
+                    }
                 }
                 tokio::time::sleep(Duration::from_millis(200)).await;
             }

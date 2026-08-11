@@ -38,7 +38,7 @@ use crate::runtime::registrations::{
     ServiceHandler, ServiceRegistration, SubRegistration,
 };
 use crate::runtime::timers::{
-    Timer, TimerCallback, TimerHandle, effective_poll_timeout_ms, tick_timers,
+    Timer, TimerCallback, TimerHandle, SubscriptionHandle, effective_poll_timeout_ms, tick_timers,
 };
 use crate::runtime::worker_pool::WorkerPool;
 use crate::transports::{
@@ -88,6 +88,9 @@ pub struct Executor {
     reply_rx: Option<Receiver<ReplyMessage>>,
     timers: Vec<Timer>,
     next_timer_id: u64,
+    next_subscription_id: u64,
+    next_service_id: u64,
+    next_action_id: u64,
     worker_pool: Option<WorkerPool>,
     running: Arc<AtomicBool>,
     started: bool,
@@ -155,6 +158,9 @@ impl Executor {
             reply_rx: Some(reply_rx),
             timers: Vec::new(),
             next_timer_id: 1,
+            next_subscription_id: 1,
+            next_service_id: 1,
+            next_action_id: 1,
             worker_pool,
             running: Arc::new(AtomicBool::new(false)),
             started: false,
@@ -252,8 +258,13 @@ impl Executor {
         topic: &str,
         callback: MessageCallback,
         group: CallbackGroup,
-    ) -> Result<()> {
+    ) -> Result<SubscriptionHandle> {
         self.ensure_open()?;
+        if self.started {
+            return Err(BusError::Protocol(
+                "subscribe() cannot run while start() is active".into(),
+            ));
+        }
         if !self.has_sub_registration() {
             return Err(BusError::Protocol(
                 "connect_subscriber() before subscribe()".into(),
@@ -265,10 +276,58 @@ impl Executor {
                 sub.socket.set_subscribe(topic_bytes)?;
             }
         }
+        let id = self.next_subscription_id;
+        self.next_subscription_id += 1;
         self.topic_callbacks
             .entry(topic.to_string())
             .or_default()
-            .push(SubscriptionCallback { callback, group });
+            .push(SubscriptionCallback {
+                id,
+                callback,
+                group,
+            });
+        Ok(SubscriptionHandle { id })
+    }
+
+    /// Remove a subscription created by [`subscribe`](Self::subscribe).
+    ///
+    /// When the last callback for a topic is removed, the SUB socket unsubscribes
+    /// from that topic filter.
+    pub fn destroy_subscription(&mut self, handle: SubscriptionHandle) -> Result<()> {
+        self.ensure_open()?;
+        if self.started {
+            return Err(BusError::Protocol(
+                "destroy_subscription() cannot run while start() is active".into(),
+            ));
+        }
+        let mut found_topic: Option<String> = None;
+        for (topic, callbacks) in self.topic_callbacks.iter_mut() {
+            if let Some(pos) = callbacks.iter().position(|c| c.id == handle.id) {
+                callbacks.remove(pos);
+                found_topic = Some(topic.clone());
+                break;
+            }
+        }
+        let Some(topic) = found_topic else {
+            return Err(BusError::Protocol(format!(
+                "unknown subscription id {}",
+                handle.id
+            )));
+        };
+        let empty = self
+            .topic_callbacks
+            .get(&topic)
+            .map(|c| c.is_empty())
+            .unwrap_or(true);
+        if empty {
+            self.topic_callbacks.remove(&topic);
+            let topic_bytes = topic.as_bytes();
+            for reg in self.socket_registrations.iter_mut() {
+                if let Registration::Sub(sub) = reg {
+                    let _ = sub.socket.set_unsubscribe(topic_bytes);
+                }
+            }
+        }
         Ok(())
     }
 
@@ -278,7 +337,7 @@ impl Executor {
         topic: &str,
         callback: F,
         group: CallbackGroup,
-    ) -> Result<()>
+    ) -> Result<SubscriptionHandle>
     where
         M: Message + Default + 'static,
         F: Fn(&str, M) + Send + Sync + 'static,
@@ -400,13 +459,21 @@ impl Executor {
         callback_group: CallbackGroup,
         backend_endpoint: Option<&str>,
         identity: Option<&str>,
-    ) -> Result<()> {
+    ) -> Result<u64> {
         self.ensure_open()?;
+        if self.started {
+            return Err(BusError::Protocol(
+                "register_service() cannot run while start() is active".into(),
+            ));
+        }
         let endpoint = match backend_endpoint {
             Some(ep) => ep.to_string(),
             None => service_backend_endpoint("localhost", "tcp").map_err(BusError::Protocol)?,
         };
+        let id = self.next_service_id;
+        self.next_service_id += 1;
         let reg = ServiceRegistration::create(
+            id,
             self.context.zmq(),
             service_name,
             handler,
@@ -422,7 +489,32 @@ impl Executor {
         );
         self.service_registrations.push(reg);
         self.sync_worker_registrations();
-        Ok(())
+        Ok(id)
+    }
+
+    /// Disconnect and remove a service worker registered by [`register_service`].
+    pub fn destroy_service(&mut self, id: u64) -> Result<()> {
+        self.ensure_open()?;
+        if self.started {
+            return Err(BusError::Protocol(
+                "destroy_service() cannot run while start() is active".into(),
+            ));
+        }
+        if let Some(pos) = self.service_registrations.iter().position(|r| r.id == id) {
+            let reg = self.service_registrations.remove(pos);
+            reg.disconnect();
+            return Ok(());
+        }
+        if let Some(pos) = self.socket_registrations.iter().position(|r| {
+            matches!(r, Registration::Service(s) if s.id == id)
+        }) {
+            let reg = self.socket_registrations.remove(pos);
+            if let Registration::Service(worker) = reg {
+                worker.disconnect();
+            }
+            return Ok(());
+        }
+        Err(BusError::Protocol(format!("unknown service id {id}")))
     }
 
     pub fn register_action(
@@ -432,13 +524,21 @@ impl Executor {
         callback_group: CallbackGroup,
         backend_endpoint: Option<&str>,
         identity: Option<&str>,
-    ) -> Result<()> {
+    ) -> Result<u64> {
         self.ensure_open()?;
+        if self.started {
+            return Err(BusError::Protocol(
+                "register_action() cannot run while start() is active".into(),
+            ));
+        }
         let endpoint = match backend_endpoint {
             Some(ep) => ep.to_string(),
             None => action_backend_endpoint("localhost", "tcp").map_err(BusError::Protocol)?,
         };
+        let id = self.next_action_id;
+        self.next_action_id += 1;
         let reg = ActionRegistration::create(
+            id,
             self.context.zmq(),
             action_name,
             handler,
@@ -454,7 +554,32 @@ impl Executor {
         );
         self.action_registrations.push(reg);
         self.sync_worker_registrations();
-        Ok(())
+        Ok(id)
+    }
+
+    /// Disconnect and remove an action worker registered by [`register_action`].
+    pub fn destroy_action_server(&mut self, id: u64) -> Result<()> {
+        self.ensure_open()?;
+        if self.started {
+            return Err(BusError::Protocol(
+                "destroy_action_server() cannot run while start() is active".into(),
+            ));
+        }
+        if let Some(pos) = self.action_registrations.iter().position(|r| r.id == id) {
+            let reg = self.action_registrations.remove(pos);
+            reg.disconnect();
+            return Ok(());
+        }
+        if let Some(pos) = self.socket_registrations.iter().position(|r| {
+            matches!(r, Registration::Action(a) if a.id == id)
+        }) {
+            let reg = self.socket_registrations.remove(pos);
+            if let Registration::Action(worker) = reg {
+                worker.disconnect();
+            }
+            return Ok(());
+        }
+        Err(BusError::Protocol(format!("unknown action server id {id}")))
     }
 
     /// One executor step (ROS 2 `spin_once`): wait up to `timeout`, then

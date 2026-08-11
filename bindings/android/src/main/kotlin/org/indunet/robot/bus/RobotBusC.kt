@@ -34,6 +34,11 @@ internal interface RobotBusC : Library {
     fun robot_bus_shutdown_handle_shutdown(h: Pointer?)
     fun robot_bus_shutdown_handle_is_running(h: Pointer?): Int
     fun robot_bus_timer_handle_free(h: Pointer?)
+    fun robot_bus_subscription_handle_free(h: Pointer?)
+    fun robot_bus_service_handle_free(h: Pointer?)
+    fun robot_bus_action_server_handle_free(h: Pointer?)
+    fun robot_bus_service_handle_name(h: Pointer?): Pointer?
+    fun robot_bus_action_server_handle_name(h: Pointer?): Pointer?
     fun robot_bus_callback_group_free(g: Pointer?)
     fun robot_bus_callback_group_id(g: Pointer?): Long
     fun robot_bus_callback_group_kind(g: Pointer?): Int
@@ -74,13 +79,16 @@ internal interface RobotBusC : Library {
     fun robot_bus_node_create_callback_group(n: Pointer?, kind: Int): Pointer?
     fun robot_bus_node_create_publisher(n: Pointer?, topic: String?): Pointer?
     fun robot_bus_node_create_publisher_with_qos(n: Pointer?, topic: String?, depth: Int): Pointer?
-    fun robot_bus_node_create_subscription(n: Pointer?, topic: String?, callback: MsgCb, user: Pointer?, group: Pointer?): Int
-    fun robot_bus_node_create_subscription_with_qos(n: Pointer?, topic: String?, callback: MsgCb, user: Pointer?, group: Pointer?, depth: Int): Int
+    fun robot_bus_node_create_subscription(n: Pointer?, topic: String?, callback: MsgCb, user: Pointer?, group: Pointer?): Pointer?
+    fun robot_bus_node_create_subscription_with_qos(n: Pointer?, topic: String?, callback: MsgCb, user: Pointer?, group: Pointer?, depth: Int): Pointer?
+    fun robot_bus_node_destroy_subscription(n: Pointer?, handle: Pointer?): Int
     fun robot_bus_node_create_timer(n: Pointer?, periodSecs: Double, callback: TimerCb, user: Pointer?, group: Pointer?): Pointer?
     fun robot_bus_node_cancel_timer(n: Pointer?, handle: Pointer?): Int
-    fun robot_bus_node_create_service(n: Pointer?, name: String?, handler: ServiceCb, user: Pointer?, group: Pointer?): Int
+    fun robot_bus_node_create_service(n: Pointer?, name: String?, handler: ServiceCb, user: Pointer?, group: Pointer?): Pointer?
+    fun robot_bus_node_destroy_service(n: Pointer?, handle: Pointer?): Int
     fun robot_bus_node_create_client(n: Pointer?, name: String?): Pointer?
-    fun robot_bus_node_create_action_server(n: Pointer?, name: String?, handler: ActionCb, user: Pointer?, group: Pointer?): Int
+    fun robot_bus_node_create_action_server(n: Pointer?, name: String?, handler: ActionCb, user: Pointer?, group: Pointer?): Pointer?
+    fun robot_bus_node_destroy_action_server(n: Pointer?, handle: Pointer?): Int
     fun robot_bus_node_create_action_client(n: Pointer?, name: String?): Pointer?
     fun robot_bus_node_connect_action_client(n: Pointer?): Int
     fun robot_bus_node_shutdown_handle(n: Pointer?): Pointer?
@@ -95,8 +103,20 @@ internal interface RobotBusC : Library {
     fun robot_bus_node_set_parameter(n: Pointer?, name: String?, value: ParameterValueStruct): Int
     fun robot_bus_node_get_parameter(n: Pointer?, name: String?, out: ParameterValueStruct): Int
     fun robot_bus_node_has_parameter(n: Pointer?, name: String?): Int
-    fun robot_bus_node_list_parameters(n: Pointer?, out: PointerByReference, count: LongByReference): Int
+    fun robot_bus_node_undeclare_parameter(n: Pointer?, name: String?): Int
+    fun robot_bus_node_list_parameters(
+        n: Pointer?,
+        prefixes: Pointer?,
+        prefixCount: Long,
+        depth: Long,
+        outNames: PointerByReference,
+        outNamesCount: LongByReference,
+        outPrefixes: PointerByReference,
+        outPrefixesCount: LongByReference,
+    ): Int
+    fun robot_bus_node_list_all_parameters(n: Pointer?, out: PointerByReference, count: LongByReference): Int
     fun robot_bus_parameters_free(params: Pointer?, count: Long)
+    fun robot_bus_string_list_free(list: Pointer?, count: Long)
     fun robot_bus_node_load_parameters_from_yaml(n: Pointer?, path: String?): Int
     fun robot_bus_node_load_parameters_from_yaml_str(n: Pointer?, yaml: String?): Int
     fun robot_bus_single_threaded_executor_new(): Pointer?
@@ -208,12 +228,10 @@ internal interface RobotBusC : Library {
         @JvmField var peerCount = 0L
         @JvmField var noTank = 0
     }
-    @Structure.FieldOrder("domainId","brokerId","multicastAddr","multicastPort","timeoutSecs")
+    @Structure.FieldOrder("apiUrl","brokerId","timeoutSecs")
     class DiscoverOpts : Structure() {
-        @JvmField var domainId = 0
+        @JvmField var apiUrl: String? = null
         @JvmField var brokerId: String? = null
-        @JvmField var multicastAddr: String? = null
-        @JvmField var multicastPort: Short = 0
         @JvmField var timeoutSecs = 0.0
     }
     @Structure.FieldOrder("host","transport","wsUrl","messageXsub","messageXpub","serviceFrontend","serviceBackend","actionBackend","actionFrontend")

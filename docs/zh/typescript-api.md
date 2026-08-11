@@ -40,16 +40,21 @@ const broker = RobotBusBroker.start({
 broker.stop();
 ```
 
-### UDP discovery（仅 Node.js 原生）
+### HTTP discovery（仅 Node.js 原生）
+
+对已知 API 口请求 `GET /api/v1/discover`，再按所选传输连接：
 
 ```ts
-import { Node, RobotBusBroker } from "robot-bus";
+import { Node } from "robot-bus";
 
-const broker = RobotBusBroker.start({ domainId: 0, advertiseHost: "127.0.0.1" });
-const node = Node.discover("talker", { transport: "tcp", domainId: 0 });
+const node = Node.discover("talker", {
+  transport: "tcp",
+  apiUrl: "http://127.0.0.1:15570",
+  // brokerId / timeoutSecs 可选
+});
 ```
 
-浏览器入口无 UDP 发现，请用显式 `wsUrl`（HTTP 原点；SDK 会连 `ws://…/ws`）。
+浏览器入口无 HTTP discover 工厂；请用显式 `wsUrl`（HTTP 原点；SDK 会连 `ws://…/ws`）。
 
 跨 broker（federation）与 CLI 同款字符串约定：
 
@@ -100,13 +105,17 @@ const broker = RobotBusBroker.start({ tcpOnly: true, noConsole: true });
 const node = new Node("pilot");
 
 const pub = node.createPublisher("/robot1/imu", Imu);
-node.createSubscription(
+const sub = node.createSubscription(
   "/robot1/imu",
   (_topic, imu) => {
     console.log(imu);
   },
   Imu,
 );
+// node.destroySubscription(sub)
+// createWallTimer = createTimer；可选 qosDepth
+// waitForMessage / client.waitForService / waitForActionServer
+// listParameters() → { names, prefixes }；listAllParameters()
 
 pub.publish(
   Imu.create({

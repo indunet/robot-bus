@@ -37,4 +37,4 @@ pub use parameters::{ListParametersResult, Parameter, ParameterValue, PARAMETER_
 pub use qos::{QOS_PROFILE_DEFAULT, QosProfile};
 pub use queues::ActionMessageCallback;
 pub use registrations::{ActionGoalHandler, MessageCallback, ServiceHandler};
-pub use timers::{TimerCallback, TimerHandle};
+pub use timers::{TimerCallback, TimerHandle, SubscriptionHandle};

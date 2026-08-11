@@ -92,6 +92,7 @@ impl CallbackGroup {
 /// Topic subscription entry: user callback + callback group.
 #[derive(Clone)]
 pub struct SubscriptionCallback {
+    pub id: u64,
     pub callback: crate::runtime::registrations::MessageCallback,
     pub group: CallbackGroup,
 }

@@ -5,9 +5,9 @@ English | [中文](../zh/rust-api.md)
 `Cargo.toml`:
 
 ```toml
-robot-bus = "0.1.8"
+robot-bus = "0.1.9"
 # Local: robot-bus = { path = "../robot-bus" }
-# gRPC is enabled by default; to disable: robot-bus = { version = "0.1.8", default-features = false }
+# gRPC is enabled by default; to disable: robot-bus = { version = "0.1.9", default-features = false }
 ```
 
 ## Broker startup
@@ -149,7 +149,7 @@ fn main() -> robot_bus::Result<()> {
     // In-process / custom address: Node::with_context_options(&ctx, "pilot", NodeOptions { ... })
 
     let imu_pub = node.create_publisher::<Imu>("/robot1/imu")?;
-    node.create_subscription::<Imu, _>(
+    let _sub = node.create_subscription::<Imu, _>(
         "/robot1/imu",
         |topic, imu| {
             println!("{topic}: angular_z={:?}", imu.angular_velocity);
@@ -172,13 +172,17 @@ fn main() -> robot_bus::Result<()> {
     };
     imu_pub.publish(&imu)?;
 
-    node.create_timer(
+    let _timer = node.create_wall_timer(
         Duration::from_millis(100),
         Arc::new(|| {
-            // Periodic task
+            // Periodic task (alias of create_timer)
         }),
         None,
     )?;
+
+    // destroy_subscription / destroy_service / destroy_action_server
+    // reject while executor start() is active (same as cancel_timer).
+    // wait_for_message / client.wait_for_service / wait_for_action_server available.
 
     let handle = node.shutdown_handle()?;
     std::thread::spawn(move || {

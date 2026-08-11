@@ -14,6 +14,18 @@ pub struct TimerHandle {
     pub(crate) id: u64,
 }
 
+/// Opaque id returned by [`super::Executor::subscribe`] / Node create_subscription.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct SubscriptionHandle {
+    pub(crate) id: u64,
+}
+
+impl SubscriptionHandle {
+    pub fn id(self) -> u64 {
+        self.id
+    }
+}
+
 pub(crate) struct Timer {
     pub id: u64,
     pub period: Duration,

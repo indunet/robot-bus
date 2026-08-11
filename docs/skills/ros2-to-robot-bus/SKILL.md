@@ -112,7 +112,7 @@ fn main() -> robot_bus::Result<()> {
 }
 ```
 
-`Cargo.toml`: `robot-bus = "0.1.8"` (match current crate version). Bridge needs `features = ["ros2"]`.
+`Cargo.toml`: `robot-bus = "0.1.9"` (match current crate version). Bridge needs `features = ["ros2"]`.
 
 ### Python sketch
 

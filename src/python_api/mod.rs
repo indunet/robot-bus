@@ -14,8 +14,9 @@ use clients::{PyActionGoalHandle, PyNodeActionClient, PyNodeServiceClient};
 use node::PyNode;
 use pub_sub::{PyPublisher, PySubscriber, PyTopicPublisher};
 use runtime::{
-    PyCallbackGroup, PyCallbackGroupType, PyContext, PyMultiThreadedExecutor, PyShutdownHandle,
-    PySingleThreadedExecutor, PyTimerHandle,
+    PyActionServerHandle, PyCallbackGroup, PyCallbackGroupType, PyContext,
+    PyMultiThreadedExecutor, PyServiceHandle, PyShutdownHandle, PySingleThreadedExecutor,
+    PySubscriptionHandle, PyTimerHandle,
 };
 use util::{message_xpub_endpoint, message_xsub_endpoint, ros2_available};
 
@@ -35,6 +36,9 @@ fn _native(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyActionGoalHandle>()?;
     m.add_class::<PyShutdownHandle>()?;
     m.add_class::<PyTimerHandle>()?;
+    m.add_class::<PySubscriptionHandle>()?;
+    m.add_class::<PyServiceHandle>()?;
+    m.add_class::<PyActionServerHandle>()?;
     m.add_class::<PyRobotBusBroker>()?;
     m.add_function(wrap_pyfunction!(message_xsub_endpoint, m)?)?;
     m.add_function(wrap_pyfunction!(message_xpub_endpoint, m)?)?;

@@ -11,9 +11,10 @@ use robot_bus::runtime::{
 };
 
 use crate::clients::{
-    RobotBusActionClient, RobotBusActionHandler, RobotBusActionPhase, RobotBusCallbackGroup,
-    RobotBusMsgCallback, RobotBusServiceClient, RobotBusServiceHandler, RobotBusTimerCallback,
-    RobotBusTimerHandle, RobotBusTopicPublisher,
+    RobotBusActionClient, RobotBusActionHandler, RobotBusActionPhase, RobotBusActionServerHandle,
+    RobotBusCallbackGroup, RobotBusMsgCallback, RobotBusServiceClient, RobotBusServiceHandle,
+    RobotBusServiceHandler, RobotBusSubscriptionHandle, RobotBusTimerCallback, RobotBusTimerHandle,
+    RobotBusTopicPublisher,
 };
 use crate::ffi::{
     bus_err, clear_error, cstr_req, err, ok, set_error, robot_bus_free_string,
@@ -88,7 +89,7 @@ pub extern "C" fn robot_bus_node_create_subscription(
     callback: RobotBusMsgCallback,
     user: *mut c_void,
     group: *const RobotBusCallbackGroup,
-) -> c_int {
+) -> *mut RobotBusSubscriptionHandle {
     robot_bus_node_create_subscription_with_qos(n, topic, callback, user, group, 0)
 }
 
@@ -100,16 +101,18 @@ pub extern "C" fn robot_bus_node_create_subscription_with_qos(
     user: *mut c_void,
     group: *const RobotBusCallbackGroup,
     depth: i32,
-) -> c_int {
+) -> *mut RobotBusSubscriptionHandle {
     if n.is_null() {
-        return err("null node");
+        set_error("null node");
+        return ptr::null_mut();
     }
     let Some(cb_fn) = callback else {
-        return err("null callback");
+        set_error("null callback");
+        return ptr::null_mut();
     };
     let topic = match cstr_req(topic) {
         Ok(t) => t,
-        Err(e) => return e,
+        Err(_) => return ptr::null_mut(),
     };
     // user pointer is assumed to outlive the subscription (caller responsibility).
     let user = user as usize;
@@ -142,6 +145,27 @@ pub extern "C" fn robot_bus_node_create_subscription_with_qos(
             .create_subscription_raw(topic, cb, group)
     };
     match result {
+        Ok(inner) => {
+            clear_error();
+            Box::into_raw(Box::new(RobotBusSubscriptionHandle { inner }))
+        }
+        Err(e) => {
+            set_error(e.to_string());
+            ptr::null_mut()
+        }
+    }
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn robot_bus_node_destroy_subscription(
+    n: *mut RobotBusNode,
+    handle: *mut RobotBusSubscriptionHandle,
+) -> c_int {
+    if n.is_null() || handle.is_null() {
+        return err("null argument");
+    }
+    let inner = unsafe { (*handle).inner };
+    match unsafe { &mut *n }.inner.destroy_subscription(inner) {
         Ok(()) => ok(),
         Err(e) => bus_err(e),
     }
@@ -212,16 +236,18 @@ pub extern "C" fn robot_bus_node_create_service(
     handler: RobotBusServiceHandler,
     user: *mut c_void,
     group: *const RobotBusCallbackGroup,
-) -> c_int {
+) -> *mut RobotBusServiceHandle {
     if n.is_null() {
-        return err("null node");
+        set_error("null node");
+        return ptr::null_mut();
     }
     let Some(handler_fn) = handler else {
-        return err("null handler");
+        set_error("null handler");
+        return ptr::null_mut();
     };
     let service_name = match cstr_req(service_name) {
         Ok(s) => s,
-        Err(e) => return e,
+        Err(_) => return ptr::null_mut(),
     };
     let user = user as usize;
     let cb: ServiceHandler = Arc::new(move |body| {
@@ -250,7 +276,30 @@ pub extern "C" fn robot_bus_node_create_service(
         .inner
         .create_service_raw(service_name, cb, group)
     {
-        Ok(_) => ok(),
+        Ok(inner) => {
+            clear_error();
+            Box::into_raw(Box::new(RobotBusServiceHandle { inner }))
+        }
+        Err(e) => {
+            set_error(e.to_string());
+            ptr::null_mut()
+        }
+    }
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn robot_bus_node_destroy_service(
+    n: *mut RobotBusNode,
+    handle: *mut RobotBusServiceHandle,
+) -> c_int {
+    if n.is_null() || handle.is_null() {
+        return err("null argument");
+    }
+    match unsafe { &mut *n }
+        .inner
+        .destroy_service(&unsafe { &*handle }.inner)
+    {
+        Ok(()) => ok(),
         Err(e) => bus_err(e),
     }
 }
@@ -287,16 +336,18 @@ pub extern "C" fn robot_bus_node_create_action_server(
     handler: RobotBusActionHandler,
     user: *mut c_void,
     group: *const RobotBusCallbackGroup,
-) -> c_int {
+) -> *mut RobotBusActionServerHandle {
     if n.is_null() {
-        return err("null node");
+        set_error("null node");
+        return ptr::null_mut();
     }
     let Some(handler_fn) = handler else {
-        return err("null handler");
+        set_error("null handler");
+        return ptr::null_mut();
     };
     let action_name = match cstr_req(action_name) {
         Ok(s) => s,
-        Err(e) => return e,
+        Err(_) => return ptr::null_mut(),
     };
     let user = user as usize;
     let cb: ActionGoalHandler = Arc::new(move |payload| {
@@ -344,7 +395,30 @@ pub extern "C" fn robot_bus_node_create_action_server(
         .inner
         .create_action_server_raw(action_name, cb, group)
     {
-        Ok(_) => ok(),
+        Ok(inner) => {
+            clear_error();
+            Box::into_raw(Box::new(RobotBusActionServerHandle { inner }))
+        }
+        Err(e) => {
+            set_error(e.to_string());
+            ptr::null_mut()
+        }
+    }
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn robot_bus_node_destroy_action_server(
+    n: *mut RobotBusNode,
+    handle: *mut RobotBusActionServerHandle,
+) -> c_int {
+    if n.is_null() || handle.is_null() {
+        return err("null argument");
+    }
+    match unsafe { &mut *n }
+        .inner
+        .destroy_action_server(&unsafe { &*handle }.inner)
+    {
+        Ok(()) => ok(),
         Err(e) => bus_err(e),
     }
 }
@@ -384,4 +458,3 @@ pub extern "C" fn robot_bus_node_connect_action_client(n: *mut RobotBusNode) -> 
         Err(e) => bus_err(e),
     }
 }
-

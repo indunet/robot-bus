@@ -10,7 +10,7 @@ Package: `org.indunet.robot.bus`
 
 ```bash
 # Maven Central (when published)
-# implementation("org.indunet:robot-bus-android:0.1.8")
+# implementation("org.indunet:robot-bus-android:0.1.9")
 
 # 本地：
 just gen-android    # → bindings/android/generated/
@@ -38,7 +38,7 @@ class App : Application() {
 ```kotlin
 // build.gradle.kts
 dependencies {
-  implementation("org.indunet:robot-bus-android:0.1.8")
+  implementation("org.indunet:robot-bus-android:0.1.9")
 }
 ```
 
@@ -53,11 +53,15 @@ import org.indunet.robot.bus.sensor_msgs.msg.v1.Imu
 Broker().use { _ ->
   Node("pilot").use { node ->
     val imuPub = node.createPublisher("/robot1/imu", Imu::class.java)
-    node.createSubscription(
+    val sub = node.createSubscription(
       "/robot1/imu",
       { topic, imu -> println("$topic z=${imu.angularVelocity.z}") },
       Imu::class.java,
     )
+    // sub.destroy()
+    // createWallTimer；qosDepth；waitForMessage / waitForService
+    // listParameters() → ListParametersResult；listAllParameters()；undeclareParameter
+    // getParameter(name) → Parameter；取值 getParameterValue(name)
 
     imuPub.publish(
       Imu.newBuilder()
@@ -89,11 +93,14 @@ val t = buf.lookupTransform("base_link", "camera")
 
 离线可用 `TfBuffer()` + `setTransformMsg`。见 `TfLookupTest`。
 
-### UDP 发现
+### HTTP 发现（填地址，不选传输）
+
+对已知 API 口请求 `GET /api/v1/discover`：
 
 ```kotlin
-val node = Node.discover("talker", "tcp", DiscoverOpts(domainId = 0))
-// BrokerOptions(domainId = 0, advertiseHost = "10.0.0.5", noDiscovery = false)
+val node = Node.discover(
+    "talker", "tcp", DiscoverOpts(apiUrl = "http://127.0.0.1:15570"))
+// 可选：brokerId、timeoutSecs；BrokerOptions.noDiscovery / domainId 非 UDP
 ```
 
 跨 broker（federation）：

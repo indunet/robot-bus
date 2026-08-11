@@ -48,16 +48,17 @@ with robot_bus.RobotBusBroker.start(
     pass
 ```
 
-### UDP discovery (fills in addresses, does not choose transport)
+### HTTP discovery (fills in addresses, does not choose transport)
 
-Transport is still specified manually (`tcp` / `ipc` / `inproc` / `grpc`); discovery only fills in locations:
+Request `GET /api/v1/discover` on a known API base URL. Transport is still specified manually (`tcp` / `ipc` / `inproc` / `grpc`); discovery only fills in locations:
 
 ```python
-node = robot_bus.Node.discover("talker", transport="tcp", domain_id=0)
-# Broker: RobotBusBroker.start(domain_id=0, advertise_host="10.0.0.5")
+node = robot_bus.Node.discover(
+    "talker", transport="tcp", api_url="http://127.0.0.1:15570")
+# Optional: broker_id=..., timeout=...; UDP multicast discovery has been removed
 ```
 
-When multiple brokers share a domain, pass `broker_id=...`.
+When multiple brokers are reachable, pass `broker_id=...` to filter.
 
 Same-process **inproc** requires a shared `Context`:
 

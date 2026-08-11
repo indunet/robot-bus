@@ -28,6 +28,20 @@ export declare class ShutdownHandle {
 
 export declare class TimerHandle {}
 
+export declare class SubscriptionHandle {
+  readonly id: number | null;
+}
+
+export declare class ServiceHandle {
+  readonly id: number | null;
+  readonly serviceName: string | null;
+}
+
+export declare class ActionServerHandle {
+  readonly id: number | null;
+  readonly actionName: string | null;
+}
+
 export declare enum JsCallbackGroupType {
   MutuallyExclusive = 0,
   Reentrant = 1,
@@ -123,8 +137,14 @@ export declare class Node {
     callback: (topic: string, payload: Buffer) => void,
     callbackGroup?: JsCallbackGroup,
     qosDepth?: number,
-  ): void;
+  ): SubscriptionHandle;
+  destroySubscription(handle: SubscriptionHandle): void;
   createTimer(
+    period: number,
+    callback: () => void,
+    callbackGroup?: JsCallbackGroup,
+  ): TimerHandle;
+  createWallTimer(
     period: number,
     callback: () => void,
     callbackGroup?: JsCallbackGroup,
@@ -134,13 +154,15 @@ export declare class Node {
     serviceName: string,
     handler: (body: Buffer) => Buffer,
     callbackGroup?: JsCallbackGroup,
-  ): void;
+  ): ServiceHandle;
+  destroyService(handle: ServiceHandle): void;
   createClient(serviceName: string): ServiceClient;
   createActionServer(
     actionName: string,
     handler: (payload: Buffer) => Array<{ phase: string; body: Buffer }>,
     callbackGroup?: JsCallbackGroup,
-  ): void;
+  ): ActionServerHandle;
+  destroyActionServer(handle: ActionServerHandle): void;
   createActionClient(actionName: string): ActionClient;
   connectActionClient(): void;
   shutdownHandle(): ShutdownHandle;
@@ -200,10 +222,9 @@ export declare class MultiThreadedExecutor {
 
 export interface DiscoverNodeOptions {
   transport?: string;
-  domainId?: number;
+  /** Broker API base URL, e.g. http://127.0.0.1:15570 */
+  apiUrl?: string;
   brokerId?: string;
-  multicastAddr?: string;
-  multicastPort?: number;
   timeoutSecs?: number;
 }
 

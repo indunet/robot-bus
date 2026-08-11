@@ -1,31 +1,23 @@
 package org.indunet.robot.bus
 
-/** UDP multicast discovery options (maps to C `RobotBusDiscoverOpts`). */
+/** HTTP discovery options (maps to C `RobotBusDiscoverOpts`: GET /api/v1/discover). */
 class DiscoverOpts
 @JvmOverloads
 constructor(
-    private val domainId: Int = 0,
+    private val apiUrl: String? = null,
     private val brokerId: String? = null,
-    private val multicastAddr: String? = null,
-    private val multicastPort: Int = 0,
     private val timeoutSecs: Double = 0.0,
 ) {
-    fun getDomainId(): Int = domainId
+    fun getApiUrl(): String? = apiUrl
 
     fun getBrokerId(): String? = brokerId
-
-    fun getMulticastAddr(): String? = multicastAddr
-
-    fun getMulticastPort(): Int = multicastPort
 
     fun getTimeoutSecs(): Double = timeoutSecs
 
     internal fun toNative(): RobotBusC.DiscoverOpts {
         val o = RobotBusC.DiscoverOpts()
-        o.domainId = domainId
+        o.apiUrl = apiUrl
         o.brokerId = brokerId
-        o.multicastAddr = multicastAddr
-        o.multicastPort = (multicastPort and 0xffff).toShort()
         o.timeoutSecs = timeoutSecs
         o.write()
         return o

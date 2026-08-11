@@ -36,14 +36,14 @@ CMake 设置 `CMAKE_CXX_STANDARD 17`。自有应用用更高标准（如 `-DCMAK
 
 ```bash
 # 核心 SDK（无 ROS bridge）
-sudo apt install ./robot-bus_0.1.8_linux_amd64.deb
+sudo apt install ./robot-bus_0.1.9_linux_amd64.deb
 
 # 或 ROS 2 bridge 变体（Humble 示例）— 需已安装 Humble
-sudo apt install ./robot-bus-ros2-humble_0.1.8_linux_amd64.deb
+sudo apt install ./robot-bus-ros2-humble_0.1.9_linux_amd64.deb
 source /opt/ros/humble/setup.bash
 
 # macOS Apple Silicon（仅核心包）
-sudo installer -pkg robot-bus_0.1.8_macos_arm64.pkg -target /
+sudo installer -pkg robot-bus_0.1.9_macos_arm64.pkg -target /
 # 安装于 /usr/local（{bin,lib,include}）
 
 # 或从源码（开发）
@@ -120,13 +120,16 @@ auto node = robot_bus::Node::inproc_with_context(ctx, "pilot");
 
 tcp / ipc / gRPC 不需要共享 context。
 
-### UDP 发现（填充地址，自行选传输）
+### HTTP 发现（填充地址，自行选传输）
+
+对已知 API 口请求 `GET /api/v1/discover`，拿到可连接的 ZMQ 端点。传输仍由你指定：
 
 ```cpp
 RobotBusDiscoverOpts d{};
-d.domain_id = 0;
+d.api_url = "http://127.0.0.1:15570";
+// d.broker_id / d.timeout_secs 可选；nullptr / 0 → 默认
 auto node = robot_bus::Node::discover("talker", "tcp", &d);
-// RobotBusBrokerOptions: domain_id / advertise_host / no_discovery
+// RobotBusBrokerOptions.no_discovery / domain_id 为兼容软标签，非 UDP 组播
 ```
 
 ## 本地参数
@@ -147,28 +150,42 @@ node.load_parameters_from_yaml_str("ros__parameters:\n  max_speed: 3.0\n");
 
 Protobuf 消息类型**预生成**并随包发布 — 仅消费 SDK 的机器**不需要** `protoc`。
 
+推荐用 [`robot_bus/typed.hpp`](../../bindings/cpp/include/robot_bus/typed.hpp) 薄封装（`MessageLite` 编解码；解码失败跳过并打 log）：
+
 ```cpp
 #include <robot_bus/node.hpp>
+#include <robot_bus/typed.hpp>
 #include <robot_bus/sensor_msgs/msg/v1/imu.pb.h>
 
 robot_bus::Broker broker;
 robot_bus::Node node("pilot");
-auto pub = node.create_publisher("/imu");
-
-node.create_subscription("/imu", [](std::string_view topic, robot_bus::BytesView payload) {
-  sensor_msgs::msg::v1::Imu imu;
-  imu.ParseFromArray(payload.data, static_cast<int>(payload.size));
-  // …
-});
+auto pub = robot_bus::create_publisher<sensor_msgs::msg::v1::Imu>(node, "/imu");
+auto sub = robot_bus::create_subscription<sensor_msgs::msg::v1::Imu>(
+    node, "/imu", [](std::string_view, const sensor_msgs::msg::v1::Imu &imu) {
+      // …
+    });
 
 node.start();
-// 等待订阅传播后再：
 sensor_msgs::msg::v1::Imu imu;
 imu.mutable_angular_velocity()->set_z(0.1);
-std::string bytes;
-imu.SerializeToString(&bytes);
-pub.publish(bytes);
+pub.publish(imu);
+// sub.destroy();  // 或依赖 SubscriptionHandle 析构
 ```
+
+可选 QoS：`create_publisher(node, topic, qos_depth)` / `create_subscription(..., group, qos_depth)`（`depth > 0` → KeepLast）。  
+`create_wall_timer` = `create_timer` 别名。`wait_for_message` / service·action client 的 `wait_for_*` 见 Node API。
+
+Raw bytes（手动 Serialize/Parse）仍可用：
+
+```cpp
+auto pub = node.create_publisher("/imu");
+auto sub = node.create_subscription("/imu", [](std::string_view topic, robot_bus::BytesView payload) {
+  sensor_msgs::msg::v1::Imu imu;
+  imu.ParseFromArray(payload.data, static_cast<int>(payload.size));
+});
+```
+
+参数：`list_parameters(prefixes, depth)` 返回 `{names, prefixes}`；带值列表用 `list_all_parameters()`；另有 `undeclare_parameter`。
 
 ### gRPC 模式 Node（客户端）
 

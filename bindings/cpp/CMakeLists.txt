@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.16)
-project(robot_bus_cpp VERSION 0.1.8 LANGUAGES CXX)
+project(robot_bus_cpp VERSION 0.1.9 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -140,6 +140,7 @@ if(ROBOT_BUS_BUILD_TESTS)
     inproc_context
     federation_opts
     node_parameters
+    typed_api
     interop_peer
     ros2_bridge_stub)
 

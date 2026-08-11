@@ -69,6 +69,16 @@ interface RobotBusC extends Library {
 
     void robot_bus_timer_handle_free(Pointer h);
 
+    void robot_bus_subscription_handle_free(Pointer h);
+
+    void robot_bus_service_handle_free(Pointer h);
+
+    void robot_bus_action_server_handle_free(Pointer h);
+
+    Pointer robot_bus_service_handle_name(Pointer h);
+
+    Pointer robot_bus_action_server_handle_name(Pointer h);
+
     void robot_bus_callback_group_free(Pointer g);
 
     long robot_bus_callback_group_id(Pointer g);
@@ -164,24 +174,30 @@ interface RobotBusC extends Library {
 
     Pointer robot_bus_node_create_publisher_with_qos(Pointer n, String topic, int depth);
 
-    int robot_bus_node_create_subscription(
+    Pointer robot_bus_node_create_subscription(
             Pointer n, String topic, MsgCb callback, Pointer user, Pointer group);
 
-    int robot_bus_node_create_subscription_with_qos(
+    Pointer robot_bus_node_create_subscription_with_qos(
             Pointer n, String topic, MsgCb callback, Pointer user, Pointer group, int depth);
+
+    int robot_bus_node_destroy_subscription(Pointer n, Pointer handle);
 
     Pointer robot_bus_node_create_timer(
             Pointer n, double periodSecs, TimerCb callback, Pointer user, Pointer group);
 
     int robot_bus_node_cancel_timer(Pointer n, Pointer handle);
 
-    int robot_bus_node_create_service(
+    Pointer robot_bus_node_create_service(
             Pointer n, String serviceName, ServiceCb handler, Pointer user, Pointer group);
+
+    int robot_bus_node_destroy_service(Pointer n, Pointer handle);
 
     Pointer robot_bus_node_create_client(Pointer n, String serviceName);
 
-    int robot_bus_node_create_action_server(
+    Pointer robot_bus_node_create_action_server(
             Pointer n, String actionName, ActionCb handler, Pointer user, Pointer group);
+
+    int robot_bus_node_destroy_action_server(Pointer n, Pointer handle);
 
     Pointer robot_bus_node_create_action_client(Pointer n, String actionName);
 
@@ -212,9 +228,23 @@ interface RobotBusC extends Library {
 
     int robot_bus_node_has_parameter(Pointer n, String name);
 
-    int robot_bus_node_list_parameters(Pointer n, PointerByReference out, LongByReference outCount);
+    int robot_bus_node_undeclare_parameter(Pointer n, String name);
+
+    int robot_bus_node_list_parameters(
+            Pointer n,
+            Pointer prefixes,
+            long prefixCount,
+            long depth,
+            PointerByReference outNames,
+            LongByReference outNamesCount,
+            PointerByReference outPrefixes,
+            LongByReference outPrefixesCount);
+
+    int robot_bus_node_list_all_parameters(Pointer n, PointerByReference out, LongByReference outCount);
 
     void robot_bus_parameters_free(Pointer params, long count);
+
+    void robot_bus_string_list_free(Pointer list, long count);
 
     int robot_bus_node_load_parameters_from_yaml(Pointer n, String path);
 
@@ -430,18 +460,10 @@ interface RobotBusC extends Library {
         public int noTank;
     }
 
-    @Structure.FieldOrder({
-        "domainId",
-        "brokerId",
-        "multicastAddr",
-        "multicastPort",
-        "timeoutSecs"
-    })
+    @Structure.FieldOrder({"apiUrl", "brokerId", "timeoutSecs"})
     class DiscoverOpts extends Structure {
-        public int domainId;
+        public String apiUrl;
         public String brokerId;
-        public String multicastAddr;
-        public short multicastPort;
         public double timeoutSecs;
     }
 

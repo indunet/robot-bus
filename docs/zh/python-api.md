@@ -48,16 +48,17 @@ with robot_bus.RobotBusBroker.start(
     pass
 ```
 
-### UDP 发现（填地址，不选传输）
+### HTTP 发现（填地址，不选传输）
 
-传输仍手动指定（`tcp` / `ipc` / `inproc` / `grpc`）；发现只填充位置：
+对已知 API 口请求 `GET /api/v1/discover`。传输仍手动指定（`tcp` / `ipc` / `inproc` / `grpc`）；发现只填充位置：
 
 ```python
-node = robot_bus.Node.discover("talker", transport="tcp", domain_id=0)
-# Broker：RobotBusBroker.start(domain_id=0, advertise_host="10.0.0.5")
+node = robot_bus.Node.discover(
+    "talker", transport="tcp", api_url="http://127.0.0.1:15570")
+# 可选：broker_id=...、timeout=...；UDP 组播发现已移除
 ```
 
-同 domain 多 broker 时传 `broker_id=...`。
+多 broker 时可用 `broker_id=...` 过滤。
 
 同进程 **inproc** 时必须共享 `Context`：
 

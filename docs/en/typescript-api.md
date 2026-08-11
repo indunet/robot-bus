@@ -40,16 +40,21 @@ const broker = RobotBusBroker.start({
 broker.stop();
 ```
 
-### UDP discovery (Node.js native only)
+### HTTP discovery (Node.js native only)
+
+Request `GET /api/v1/discover` on a known API base URL, then connect with the chosen transport:
 
 ```ts
-import { Node, RobotBusBroker } from "robot-bus";
+import { Node } from "robot-bus";
 
-const broker = RobotBusBroker.start({ domainId: 0, advertiseHost: "127.0.0.1" });
-const node = Node.discover("talker", { transport: "tcp", domainId: 0 });
+const node = Node.discover("talker", {
+  transport: "tcp",
+  apiUrl: "http://127.0.0.1:15570",
+  // optional: brokerId / timeoutSecs
+});
 ```
 
-The browser entry has no UDP discovery; use an explicit `wsUrl` (HTTP origin; the SDK connects to `ws://…/ws`).
+The browser entry has no HTTP discover factory; use an explicit `wsUrl` (HTTP origin; the SDK connects to `ws://…/ws`).
 
 Cross-broker (federation) uses the same string conventions as the CLI:
 
@@ -100,13 +105,16 @@ const broker = RobotBusBroker.start({ tcpOnly: true, noConsole: true });
 const node = new Node("pilot");
 
 const pub = node.createPublisher("/robot1/imu", Imu);
-node.createSubscription(
+const sub = node.createSubscription(
   "/robot1/imu",
   (_topic, imu) => {
     console.log(imu);
   },
   Imu,
 );
+// node.destroySubscription(sub)
+// createWallTimer; optional qosDepth; waitForMessage / waitForService
+// listParameters() → { names, prefixes }; listAllParameters()
 
 pub.publish(
   Imu.create({

@@ -1,6 +1,7 @@
 package org.indunet.robot.bus;
 
 import com.google.protobuf.MessageLite;
+import com.sun.jna.Native;
 import com.sun.jna.Pointer;
 import com.sun.jna.Structure;
 import com.sun.jna.ptr.LongByReference;
@@ -92,7 +93,7 @@ public final class Node implements AutoCloseable {
                 Errors.checkPtr(RobotBusC.Holder.INSTANCE.robot_bus_node_ws_at(name, url), "Node.wsAt"));
     }
 
-    /** Discover a broker via UDP multicast, then connect with {@code transport}. */
+    /** Discover a broker via HTTP {@code GET /api/v1/discover}, then connect with {@code transport}. */
     public static Node discover(String name, String transport) {
         return discover(name, transport, new DiscoverOpts());
     }
@@ -150,15 +151,15 @@ public final class Node implements AutoCloseable {
         return new TypedTopicPublisher<>(createPublisher(topic, qosDepth), typed);
     }
 
-    public void createSubscription(String topic, MsgCallback callback) {
-        createSubscription(topic, callback, null, 0);
+    public SubscriptionHandle createSubscription(String topic, MsgCallback callback) {
+        return createSubscription(topic, callback, null, 0);
     }
 
-    public void createSubscription(String topic, MsgCallback callback, CallbackGroup group) {
-        createSubscription(topic, callback, group, 0);
+    public SubscriptionHandle createSubscription(String topic, MsgCallback callback, CallbackGroup group) {
+        return createSubscription(topic, callback, group, 0);
     }
 
-    public void createSubscription(
+    public SubscriptionHandle createSubscription(
             String topic, MsgCallback callback, CallbackGroup group, int qosDepth) {
         RobotBusC.MsgCb cb =
                 (t, data, len, user) -> {
@@ -167,24 +168,26 @@ public final class Node implements AutoCloseable {
                     callback.onMessage(t != null ? t : "", bytes);
                 };
         msgCallbacks.add(cb);
-        Errors.check(
-                RobotBusC.Holder.INSTANCE.robot_bus_node_create_subscription_with_qos(
-                        ptr, topic, cb, null, group != null ? group.raw() : null, qosDepth),
-                "create_subscription");
+        return new SubscriptionHandle(
+                ptr,
+                Errors.checkPtr(
+                        RobotBusC.Holder.INSTANCE.robot_bus_node_create_subscription_with_qos(
+                                ptr, topic, cb, null, group != null ? group.raw() : null, qosDepth),
+                        "create_subscription"));
     }
 
     /** Typed subscription: callback receives a decoded protobuf message. */
-    public <T extends MessageLite> void createSubscription(
+    public <T extends MessageLite> SubscriptionHandle createSubscription(
             String topic, TypedMsgCallback<T> callback, Class<T> msgType) {
-        createSubscription(topic, callback, msgType, null, 0);
+        return createSubscription(topic, callback, msgType, null, 0);
     }
 
-    public <T extends MessageLite> void createSubscription(
+    public <T extends MessageLite> SubscriptionHandle createSubscription(
             String topic, TypedMsgCallback<T> callback, Class<T> msgType, CallbackGroup group) {
-        createSubscription(topic, callback, msgType, group, 0);
+        return createSubscription(topic, callback, msgType, group, 0);
     }
 
-    public <T extends MessageLite> void createSubscription(
+    public <T extends MessageLite> SubscriptionHandle createSubscription(
             String topic,
             TypedMsgCallback<T> callback,
             Class<T> msgType,
@@ -193,7 +196,7 @@ public final class Node implements AutoCloseable {
         ProtoCodec.requireMessageType(msgType, "msgType");
         @SuppressWarnings("unchecked")
         Class<T> typed = (Class<T>) msgType;
-        createSubscription(
+        return createSubscription(
                 topic,
                 (t, payload) -> {
                     T msg = ProtoCodec.tryParse(typed, payload);
@@ -220,16 +223,25 @@ public final class Node implements AutoCloseable {
                         "create_timer"));
     }
 
+    public TimerHandle createWallTimer(double periodSecs, TimerCallback callback) {
+        return createTimer(periodSecs, callback, null);
+    }
+
+    public TimerHandle createWallTimer(
+            double periodSecs, TimerCallback callback, CallbackGroup group) {
+        return createTimer(periodSecs, callback, group);
+    }
+
     public void cancelTimer(TimerHandle handle) {
         Errors.check(
                 RobotBusC.Holder.INSTANCE.robot_bus_node_cancel_timer(ptr, handle.ptr), "cancel_timer");
     }
 
-    public void createService(String serviceName, ServiceHandler handler) {
-        createService(serviceName, handler, null);
+    public ServiceHandle createService(String serviceName, ServiceHandler handler) {
+        return createService(serviceName, handler, null);
     }
 
-    public void createService(String serviceName, ServiceHandler handler, CallbackGroup group) {
+    public ServiceHandle createService(String serviceName, ServiceHandler handler, CallbackGroup group) {
         RobotBusC.ServiceCb cb =
                 (data, len, outData, outLen, user) -> {
                     try {
@@ -248,22 +260,24 @@ public final class Node implements AutoCloseable {
                     }
                 };
         serviceHandlers.add(cb);
-        Errors.check(
-                RobotBusC.Holder.INSTANCE.robot_bus_node_create_service(
-                        ptr, serviceName, cb, null, group != null ? group.raw() : null),
-                "create_service");
+        return new ServiceHandle(
+                ptr,
+                Errors.checkPtr(
+                        RobotBusC.Holder.INSTANCE.robot_bus_node_create_service(
+                                ptr, serviceName, cb, null, group != null ? group.raw() : null),
+                        "create_service"));
     }
 
     /** Typed service: handler receives / returns protobuf messages. */
-    public <Req extends MessageLite, Resp extends MessageLite> void createService(
+    public <Req extends MessageLite, Resp extends MessageLite> ServiceHandle createService(
             String serviceName,
             TypedServiceHandler<Req, Resp> handler,
             Class<Req> requestType,
             Class<Resp> responseType) {
-        createService(serviceName, handler, requestType, responseType, null);
+        return createService(serviceName, handler, requestType, responseType, null);
     }
 
-    public <Req extends MessageLite, Resp extends MessageLite> void createService(
+    public <Req extends MessageLite, Resp extends MessageLite> ServiceHandle createService(
             String serviceName,
             TypedServiceHandler<Req, Resp> handler,
             Class<Req> requestType,
@@ -275,7 +289,7 @@ public final class Node implements AutoCloseable {
         Class<Req> reqT = (Class<Req>) requestType;
         @SuppressWarnings("unchecked")
         Class<Resp> respT = (Class<Resp>) responseType;
-        createService(
+        return createService(
                 serviceName,
                 body -> {
                     Req req = ProtoCodec.tryParse(reqT, body);
@@ -314,11 +328,12 @@ public final class Node implements AutoCloseable {
         return new TypedServiceClient<>(createClient(serviceName), reqT, respT);
     }
 
-    public void createActionServer(String actionName, ActionHandler handler) {
-        createActionServer(actionName, handler, null);
+    public ActionServerHandle createActionServer(String actionName, ActionHandler handler) {
+        return createActionServer(actionName, handler, null);
     }
 
-    public void createActionServer(String actionName, ActionHandler handler, CallbackGroup group) {
+    public ActionServerHandle createActionServer(
+            String actionName, ActionHandler handler, CallbackGroup group) {
         RobotBusC.ActionCb cb =
                 (data, len, outPhases, outCount, user) -> {
                     try {
@@ -358,10 +373,12 @@ public final class Node implements AutoCloseable {
                     }
                 };
         actionHandlers.add(cb);
-        Errors.check(
-                RobotBusC.Holder.INSTANCE.robot_bus_node_create_action_server(
-                        ptr, actionName, cb, null, group != null ? group.raw() : null),
-                "create_action_server");
+        return new ActionServerHandle(
+                ptr,
+                Errors.checkPtr(
+                        RobotBusC.Holder.INSTANCE.robot_bus_node_create_action_server(
+                                ptr, actionName, cb, null, group != null ? group.raw() : null),
+                        "create_action_server"));
     }
 
     /**
@@ -369,17 +386,17 @@ public final class Node implements AutoCloseable {
      * list (typically FEEDBACK / RESULT).
      */
     public <Goal extends MessageLite, Feedback extends MessageLite, Result extends MessageLite>
-            void createActionServer(
+            ActionServerHandle createActionServer(
                     String actionName,
                     TypedActionHandler<Goal> handler,
                     Class<Goal> goalType,
                     Class<Feedback> feedbackType,
                     Class<Result> resultType) {
-        createActionServer(actionName, handler, goalType, feedbackType, resultType, null);
+        return createActionServer(actionName, handler, goalType, feedbackType, resultType, null);
     }
 
     public <Goal extends MessageLite, Feedback extends MessageLite, Result extends MessageLite>
-            void createActionServer(
+            ActionServerHandle createActionServer(
                     String actionName,
                     TypedActionHandler<Goal> handler,
                     Class<Goal> goalType,
@@ -391,7 +408,7 @@ public final class Node implements AutoCloseable {
         ProtoCodec.requireMessageType(resultType, "resultType");
         @SuppressWarnings("unchecked")
         Class<Goal> goalT = (Class<Goal>) goalType;
-        createActionServer(
+        return createActionServer(
                 actionName,
                 payload -> {
                     Goal goal = ProtoCodec.tryParse(goalT, payload);
@@ -549,12 +566,22 @@ public final class Node implements AutoCloseable {
         }
     }
 
-    public Object getParameter(String name) {
+    public Object getParameterValue(String name) {
         RobotBusC.ParameterValueStruct out = new RobotBusC.ParameterValueStruct();
         Errors.check(
                 RobotBusC.Holder.INSTANCE.robot_bus_node_get_parameter(ptr, name, out),
                 "get_parameter");
         return fromNativeParameter(out, true);
+    }
+
+    /** @deprecated Prefer {@link #getParameterValue(String)} or {@link #getParameter(String)}. */
+    @Deprecated
+    public Object getParameterObject(String name) {
+        return getParameterValue(name);
+    }
+
+    public Parameter getParameter(String name) {
+        return new Parameter(name, getParameterValue(name));
     }
 
     public boolean hasParameter(String name) {
@@ -565,12 +592,52 @@ public final class Node implements AutoCloseable {
         return rc == 1;
     }
 
-    public List<Parameter> listParameters() {
+    public void undeclareParameter(String name) {
+        Errors.check(
+                RobotBusC.Holder.INSTANCE.robot_bus_node_undeclare_parameter(ptr, name),
+                "undeclare_parameter");
+    }
+
+    public ListParametersResult listParameters() {
+        return listParameters(null, 0);
+    }
+
+    public ListParametersResult listParameters(String[] prefixes, long depth) {
+        PointerByReference outNames = new PointerByReference();
+        LongByReference namesCount = new LongByReference();
+        PointerByReference outPrefixes = new PointerByReference();
+        LongByReference prefixesCount = new LongByReference();
+        Pointer prefixPtr = null;
+        long prefixCount = 0;
+        if (prefixes != null && prefixes.length > 0) {
+            // Pass null prefixes for empty; non-empty requires C string array — use empty for MVP
+            // when JNA StringArray is awkward; call with null when prefixes is null/empty.
+            com.sun.jna.StringArray arr = new com.sun.jna.StringArray(prefixes);
+            prefixPtr = arr;
+            prefixCount = prefixes.length;
+        }
+        Errors.check(
+                RobotBusC.Holder.INSTANCE.robot_bus_node_list_parameters(
+                        ptr,
+                        prefixPtr,
+                        prefixCount,
+                        depth,
+                        outNames,
+                        namesCount,
+                        outPrefixes,
+                        prefixesCount),
+                "list_parameters");
+        List<String> names = takeStringList(outNames.getValue(), namesCount.getValue());
+        List<String> pref = takeStringList(outPrefixes.getValue(), prefixesCount.getValue());
+        return new ListParametersResult(names, pref);
+    }
+
+    public List<Parameter> listAllParameters() {
         PointerByReference out = new PointerByReference();
         LongByReference countRef = new LongByReference();
         Errors.check(
-                RobotBusC.Holder.INSTANCE.robot_bus_node_list_parameters(ptr, out, countRef),
-                "list_parameters");
+                RobotBusC.Holder.INSTANCE.robot_bus_node_list_all_parameters(ptr, out, countRef),
+                "list_all_parameters");
         long count = countRef.getValue();
         Pointer base = out.getValue();
         List<Parameter> result = new ArrayList<>((int) count);
@@ -584,6 +651,18 @@ public final class Node implements AutoCloseable {
                 result.add(new Parameter(pname, value));
             }
             RobotBusC.Holder.INSTANCE.robot_bus_parameters_free(base, count);
+        }
+        return result;
+    }
+
+    private static List<String> takeStringList(Pointer base, long count) {
+        List<String> result = new ArrayList<>((int) count);
+        if (base != null && count > 0) {
+            for (int i = 0; i < count; i++) {
+                Pointer sp = base.getPointer(i * Native.POINTER_SIZE);
+                result.add(sp != null ? sp.getString(0) : "");
+            }
+            RobotBusC.Holder.INSTANCE.robot_bus_string_list_free(base, count);
         }
         return result;
     }

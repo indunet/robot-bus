@@ -33,6 +33,9 @@ try:
         SingleThreadedExecutor,
         Subscriber,
         TimerHandle,
+        SubscriptionHandle,
+        ServiceHandle,
+        ActionServerHandle,
         TopicPublisher,
         __version__,
         message_xpub_endpoint,
@@ -54,6 +57,9 @@ except ImportError:  # pragma: no cover - msgs-only / docs import without extens
     SingleThreadedExecutor = None  # type: ignore[misc, assignment]
     Subscriber = None  # type: ignore[misc, assignment]
     TimerHandle = None  # type: ignore[misc, assignment]
+    SubscriptionHandle = None  # type: ignore[misc, assignment]
+    ServiceHandle = None  # type: ignore[misc, assignment]
+    ActionServerHandle = None  # type: ignore[misc, assignment]
     TopicPublisher = None  # type: ignore[misc, assignment]
     __version__ = None  # type: ignore[misc, assignment]
     message_xpub_endpoint = None  # type: ignore[misc, assignment]
@@ -125,6 +131,9 @@ __all__ = [
     "StdMsgsStringMapper",
     "Subscriber",
     "TimerHandle",
+    "SubscriptionHandle",
+    "ServiceHandle",
+    "ActionServerHandle",
     "TopicPublisher",
     "TriggerServiceMapper",
     "TypedActionClient",

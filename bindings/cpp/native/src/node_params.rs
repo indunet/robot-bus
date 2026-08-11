@@ -184,7 +184,88 @@ pub extern "C" fn robot_bus_node_has_parameter(
 }
 
 #[unsafe(no_mangle)]
+pub extern "C" fn robot_bus_node_undeclare_parameter(
+    n: *mut RobotBusNode,
+    name: *const c_char,
+) -> c_int {
+    if n.is_null() {
+        return err("null node");
+    }
+    let name = match cstr_req(name) {
+        Ok(s) => s,
+        Err(e) => return e,
+    };
+    match unsafe { &mut *n }.inner.undeclare_parameter(name) {
+        Ok(()) => ok(),
+        Err(e) => bus_err(e),
+    }
+}
+
+fn dup_string_list(items: &[String]) -> (*mut *mut c_char, usize) {
+    if items.is_empty() {
+        return (ptr::null_mut(), 0);
+    }
+    let mut buf: Vec<*mut c_char> = Vec::with_capacity(items.len());
+    for s in items {
+        buf.push(dup_string(s));
+    }
+    let ptr = buf.as_mut_ptr();
+    let len = buf.len();
+    std::mem::forget(buf);
+    (ptr, len)
+}
+
+#[unsafe(no_mangle)]
 pub extern "C" fn robot_bus_node_list_parameters(
+    n: *mut RobotBusNode,
+    prefixes: *const *const c_char,
+    prefix_count: usize,
+    depth: u64,
+    out_names: *mut *mut *mut c_char,
+    out_names_count: *mut usize,
+    out_prefixes: *mut *mut *mut c_char,
+    out_prefixes_count: *mut usize,
+) -> c_int {
+    if n.is_null() {
+        return err("null node");
+    }
+    if out_names.is_null()
+        || out_names_count.is_null()
+        || out_prefixes.is_null()
+        || out_prefixes_count.is_null()
+    {
+        return err("null out");
+    }
+    let mut prefix_owned: Vec<String> = Vec::new();
+    if prefix_count > 0 {
+        if prefixes.is_null() {
+            return err("null prefixes");
+        }
+        for i in 0..prefix_count {
+            let p = unsafe { *prefixes.add(i) };
+            match cstr_req(p) {
+                Ok(s) => prefix_owned.push(s.to_string()),
+                Err(e) => return e,
+            }
+        }
+    }
+    let prefix_refs: Vec<&str> = prefix_owned.iter().map(String::as_str).collect();
+    let result = unsafe { &*n }
+        .inner
+        .list_parameters(&prefix_refs, depth);
+    let (names_ptr, names_len) = dup_string_list(&result.names);
+    let (prefixes_ptr, prefixes_len) = dup_string_list(&result.prefixes);
+    unsafe {
+        *out_names = names_ptr;
+        *out_names_count = names_len;
+        *out_prefixes = prefixes_ptr;
+        *out_prefixes_count = prefixes_len;
+    }
+    ok()
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn robot_bus_node_list_all_parameters(
     n: *mut RobotBusNode,
     out: *mut *mut RobotBusParameter,
     out_count: *mut usize,
@@ -218,6 +299,20 @@ pub extern "C" fn robot_bus_node_list_parameters(
         *out_count = count;
     }
     ok()
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn robot_bus_string_list_free(list: *mut *mut c_char, count: usize) {
+    if list.is_null() || count == 0 {
+        return;
+    }
+    let mut vec = unsafe { Vec::from_raw_parts(list, count, count) };
+    for s in &mut vec {
+        if !s.is_null() {
+            robot_bus_free_string(*s);
+            *s = ptr::null_mut();
+        }
+    }
 }
 
 #[unsafe(no_mangle)]

@@ -13,7 +13,8 @@ use crate::runtime::{
 use super::clients::{PyNodeActionClient, PyNodeServiceClient};
 use super::pub_sub::PyTopicPublisher;
 use super::runtime::{
-    PyCallbackGroup, PyCallbackGroupType, PyContext, PyShutdownHandle, PyTimerHandle,
+    PyActionServerHandle, PyCallbackGroup, PyCallbackGroupType, PyContext, PyServiceHandle,
+    PyShutdownHandle, PySubscriptionHandle, PyTimerHandle,
 };
 use super::util::{
     bus_err, parameter_to_py, parameter_value_from_py, py_discover_options, py_node_options,
@@ -304,31 +305,35 @@ impl PyNode {
     /// Register a subscription callback `callback(topic: str, payload: bytes)`.
     #[pyo3(signature = (topic, callback, callback_group=None, qos_depth=None))]
     fn create_subscription(
-        &mut self,
+        slf: &Bound<'_, Self>,
         topic: &str,
         callback: Py<PyAny>,
         callback_group: Option<&PyCallbackGroup>,
         qos_depth: Option<i32>,
-    ) -> PyResult<()> {
-        let cb: crate::runtime::MessageCallback = Arc::new(move |topic, payload| {
-            Python::with_gil(|py| {
-                let payload = PyBytes::new(py, payload);
-                if let Err(err) = callback.call1(py, (topic, payload)) {
-                    err.print(py);
-                }
+    ) -> PyResult<PySubscriptionHandle> {
+        let handle = {
+            let mut this = slf.borrow_mut();
+            let cb: crate::runtime::MessageCallback = Arc::new(move |topic, payload| {
+                Python::with_gil(|py| {
+                    let payload = PyBytes::new(py, payload);
+                    if let Err(err) = callback.call1(py, (topic, payload)) {
+                        err.print(py);
+                    }
+                });
             });
-        });
-        let group = callback_group.map(|g| &g.inner);
-        match qos_depth.filter(|d| *d > 0) {
-            Some(depth) => self.inner.create_subscription_raw_with_qos(
-                topic,
-                QosProfile::keep_last(depth),
-                cb,
-                group,
-            ),
-            None => self.inner.create_subscription_raw(topic, cb, group),
-        }
-        .map_err(bus_err)
+            let group = callback_group.map(|g| &g.inner);
+            match qos_depth.filter(|d| *d > 0) {
+                Some(depth) => this.inner.create_subscription_raw_with_qos(
+                    topic,
+                    QosProfile::keep_last(depth),
+                    cb,
+                    group,
+                ),
+                None => this.inner.create_subscription_raw(topic, cb, group),
+            }
+            .map_err(bus_err)?
+        };
+        Ok(PySubscriptionHandle::new(slf.clone().unbind(), handle))
     }
 
     /// Periodic timer; `callback()` takes no arguments. `period` is seconds.
@@ -354,6 +359,17 @@ impl PyNode {
         Ok(PyTimerHandle { inner: handle })
     }
 
+    /// Alias for [`create_timer`](Self::create_timer) (ROS 2 `create_wall_timer`).
+    #[pyo3(signature = (period, callback, callback_group=None))]
+    fn create_wall_timer(
+        &mut self,
+        period: f64,
+        callback: Py<PyAny>,
+        callback_group: Option<&PyCallbackGroup>,
+    ) -> PyResult<PyTimerHandle> {
+        self.create_timer(period, callback, callback_group)
+    }
+
     fn cancel_timer(&mut self, handle: PyTimerHandle) -> PyResult<()> {
         self.inner.cancel_timer(handle.inner).map_err(bus_err)
     }
@@ -363,34 +379,37 @@ impl PyNode {
     /// `handler(body: bytes) -> bytes`
     #[pyo3(signature = (service_name, handler, callback_group=None))]
     fn create_service(
-        &mut self,
+        slf: &Bound<'_, Self>,
         service_name: &str,
         handler: Py<PyAny>,
         callback_group: Option<&PyCallbackGroup>,
-    ) -> PyResult<()> {
-        let cb: crate::runtime::ServiceHandler = Arc::new(move |body| {
-            Python::with_gil(|py| {
-                let args = (PyBytes::new(py, body),);
-                match handler.call1(py, args) {
-                    Ok(obj) => match obj.extract::<Vec<u8>>(py) {
-                        Ok(bytes) => bytes,
+    ) -> PyResult<PyServiceHandle> {
+        let handle = {
+            let mut this = slf.borrow_mut();
+            let cb: crate::runtime::ServiceHandler = Arc::new(move |body| {
+                Python::with_gil(|py| {
+                    let args = (PyBytes::new(py, body),);
+                    match handler.call1(py, args) {
+                        Ok(obj) => match obj.extract::<Vec<u8>>(py) {
+                            Ok(bytes) => bytes,
+                            Err(err) => {
+                                err.print(py);
+                                Vec::new()
+                            }
+                        },
                         Err(err) => {
                             err.print(py);
                             Vec::new()
                         }
-                    },
-                    Err(err) => {
-                        err.print(py);
-                        Vec::new()
                     }
-                }
-            })
-        });
-        let group = callback_group.map(|g| &g.inner);
-        self.inner
-            .create_service_raw(service_name, cb, group)
-            .map(|_| ())
-            .map_err(bus_err)
+                })
+            });
+            let group = callback_group.map(|g| &g.inner);
+            this.inner
+                .create_service_raw(service_name, cb, group)
+                .map_err(bus_err)?
+        };
+        Ok(PyServiceHandle::new(slf.clone().unbind(), handle))
     }
 
     /// Create a service client bound to `service_name` (ROS 2 `create_client`).
@@ -409,34 +428,37 @@ impl PyNode {
     /// where each tuple is `(phase, body)` and `phase` is typically `"FEEDBACK"` / `"RESULT"`.
     #[pyo3(signature = (action_name, handler, callback_group=None))]
     fn create_action_server(
-        &mut self,
+        slf: &Bound<'_, Self>,
         action_name: &str,
         handler: Py<PyAny>,
         callback_group: Option<&PyCallbackGroup>,
-    ) -> PyResult<()> {
-        let cb: ActionGoalHandler = Arc::new(move |payload| {
-            Python::with_gil(|py| {
-                let args = (PyBytes::new(py, payload),);
-                match handler.call1(py, args) {
-                    Ok(obj) => match obj.extract::<Vec<(String, Vec<u8>)>>(py) {
-                        Ok(replies) => replies,
+    ) -> PyResult<PyActionServerHandle> {
+        let handle = {
+            let mut this = slf.borrow_mut();
+            let cb: ActionGoalHandler = Arc::new(move |payload| {
+                Python::with_gil(|py| {
+                    let args = (PyBytes::new(py, payload),);
+                    match handler.call1(py, args) {
+                        Ok(obj) => match obj.extract::<Vec<(String, Vec<u8>)>>(py) {
+                            Ok(replies) => replies,
+                            Err(err) => {
+                                err.print(py);
+                                Vec::new()
+                            }
+                        },
                         Err(err) => {
                             err.print(py);
                             Vec::new()
                         }
-                    },
-                    Err(err) => {
-                        err.print(py);
-                        Vec::new()
                     }
-                }
-            })
-        });
-        let group = callback_group.map(|g| &g.inner);
-        self.inner
-            .create_action_server_raw(action_name, cb, group)
-            .map(|_| ())
-            .map_err(bus_err)
+                })
+            });
+            let group = callback_group.map(|g| &g.inner);
+            this.inner
+                .create_action_server_raw(action_name, cb, group)
+                .map_err(bus_err)?
+        };
+        Ok(PyActionServerHandle::new(slf.clone().unbind(), handle))
     }
 
     /// Create an action client bound to `action_name` (ROS 2 `create_action_client`).

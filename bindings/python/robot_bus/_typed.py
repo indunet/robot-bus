@@ -332,7 +332,11 @@ def install_typed_node_api(Node: Any) -> None:
     _raw_create_action_client = Node.create_action_client
 
     def create_publisher(self, topic: str, msg_type: Any = None, qos_depth: Any = None):
-        raw = _raw_create_publisher(self, topic, qos_depth=qos_depth)
+        # Only forward qos_depth when set so callers/fakes without the kwarg still work.
+        if qos_depth is None:
+            raw = _raw_create_publisher(self, topic)
+        else:
+            raw = _raw_create_publisher(self, topic, qos_depth=qos_depth)
         if msg_type is None:
             return raw
         cls = _require_message_type(msg_type, what="msg_type")
@@ -346,10 +350,15 @@ def install_typed_node_api(Node: Any) -> None:
         msg_type: Any = None,
         qos_depth: Any = None,
     ):
-        if msg_type is None:
+        def _raw_sub(cb: Callable[..., Any]):
+            if qos_depth is None:
+                return _raw_create_subscription(self, topic, cb, callback_group)
             return _raw_create_subscription(
-                self, topic, callback, callback_group, qos_depth=qos_depth
+                self, topic, cb, callback_group, qos_depth=qos_depth
             )
+
+        if msg_type is None:
+            return _raw_sub(callback)
         cls = _require_message_type(msg_type, what="msg_type")
 
         def _wrapped(topic_name: str, payload: bytes) -> None:
@@ -358,9 +367,7 @@ def install_typed_node_api(Node: Any) -> None:
                 return
             callback(topic_name, msg)
 
-        return _raw_create_subscription(
-            self, topic, _wrapped, callback_group, qos_depth=qos_depth
-        )
+        return _raw_sub(_wrapped)
 
     def create_service(
         self,

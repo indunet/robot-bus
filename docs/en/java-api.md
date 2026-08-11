@@ -4,7 +4,7 @@ English | [中文](../zh/java-api.md)
 
 ```bash
 # Maven Central (when published)
-# implementation("org.indunet:robot-bus:0.1.8")           // JVM
+# implementation("org.indunet:robot-bus:0.1.9")           // JVM
 
 # Local:
 just java-dev       # gen-java + cargo FFI + mvn test
@@ -78,10 +78,14 @@ import org.indunet.robot.bus.sensor_msgs.msg.v1.Imu;
 try (Broker broker = new Broker();
      Node node = new Node("pilot")) {
   TypedTopicPublisher<Imu> imuPub = node.createPublisher("/robot1/imu", Imu.class);
-  node.createSubscription(
+  var sub = node.createSubscription(
       "/robot1/imu",
       (topic, imu) -> System.out.println(topic + " z=" + imu.getAngularVelocity().getZ()),
       Imu.class);
+  // sub.destroy();
+  // createWallTimer; optional qosDepth; waitForMessage / waitForService
+  // listParameters() → {names, prefixes}; listAllParameters(); undeclareParameter
+  // getParameter(name) → Parameter; or getParameterValue(name)
 
   imuPub.publish(
       Imu.newBuilder()
@@ -108,11 +112,15 @@ node.createSubscription("/robot1/imu", (topic, payload) -> {
 
 See [`android-api.md`](android-api.md) (independent Kotlin SDK; `RobotBusAndroid.init`, Node, parameters, etc.).
 
-### UDP discovery
+### HTTP discovery (fill addresses, pick transport yourself)
+
+Request `GET /api/v1/discover` on a known API base URL to obtain connectable ZMQ endpoints. You still choose the transport; discovery only fills in locations:
 
 ```java
-Node node = Node.discover("talker", "tcp", new DiscoverOpts(0));
-// BrokerOptions(..., noDiscovery, domainId, advertiseHost, discoveryAddr, discoveryPort)
+Node node = Node.discover(
+    "talker", "tcp", new DiscoverOpts("http://127.0.0.1:15570"));
+// Optional: brokerId, timeoutSecs; null / 0 → defaults
+// BrokerOptions.noDiscovery / domainId are soft labels for compatibility, not UDP multicast
 ```
 
 ### WebSocket RPC mode Node (client)
@@ -240,7 +248,9 @@ just java-install      # ~/.m2 (JVM only; Android no longer needed)
 | `Node.tcp` / `ipc` / `inproc` / `inproc(Context, …)` / `withContext` / `grpc` / `grpcAt` / `discover` | Transport presets; same-process inproc must share `Context`; `discover` only fills in the address |
 | `declareParameter` / `getParameter` / `setParameter` / `hasParameter` / `listParameters` | Local parameters on this node (Boolean / Long / Double / String) |
 | `loadParametersFromYaml` / `loadParametersFromYamlStr` | Load parameters from a YAML file or string |
-| `Parameter` | name/value returned by `listParameters` |
+| `Parameter` | name/value from `getParameter` / `listAllParameters` |
+| `ListParametersResult` | `{names, prefixes}` from `listParameters` |
+| `SubscriptionHandle` / `ServiceHandle` / `ActionServerHandle` | returned by `create*`; `destroy()` / `close()` |
 | `node.spin()` / `spinOnce` / `shutdown` | Drive callbacks |
 | `createPublisher(topic)` / `createPublisher(topic, Class<T>)` | raw → `TopicPublisher`; typed → `TypedTopicPublisher` |
 | `createSubscription(..., MsgCallback)` / `(..., TypedMsgCallback, Class)` | raw `byte[]` or typed `Message` |

@@ -4,7 +4,7 @@
 
 ```bash
 # Maven Central (when published)
-# implementation("org.indunet:robot-bus:0.1.8")           // JVM
+# implementation("org.indunet:robot-bus:0.1.9")           // JVM
 
 # 本地：
 just java-dev       # gen-java + cargo FFI + mvn test
@@ -78,10 +78,16 @@ import org.indunet.robot.bus.sensor_msgs.msg.v1.Imu;
 try (Broker broker = new Broker();
      Node node = new Node("pilot")) {
   TypedTopicPublisher<Imu> imuPub = node.createPublisher("/robot1/imu", Imu.class);
-  node.createSubscription(
+  var sub = node.createSubscription(
       "/robot1/imu",
       (topic, imu) -> System.out.println(topic + " z=" + imu.getAngularVelocity().getZ()),
       Imu.class);
+  // sub.destroy();  // 或 AutoCloseable
+
+  // createWallTimer = createTimer 别名
+  // qosDepth 可选；waitForMessage / client.waitForService / waitForActionServer
+  // listParameters() → {names, prefixes}；listAllParameters()；undeclareParameter
+  // getParameter(name) → Parameter；取值也可用 getParameterValue(name)
 
   imuPub.publish(
       Imu.newBuilder()
@@ -108,11 +114,15 @@ node.createSubscription("/robot1/imu", (topic, payload) -> {
 
 见 [`android-api.md`](android-api.md)（独立 Kotlin SDK；`RobotBusAndroid.init`、Node、参数等）。
 
-### UDP 发现
+### HTTP 发现（填地址，不选传输）
+
+对已知 API 口请求 `GET /api/v1/discover`，拿到可连接的 ZMQ 端点。传输仍由你指定；发现只填充位置：
 
 ```java
-Node node = Node.discover("talker", "tcp", new DiscoverOpts(0));
-// BrokerOptions(..., noDiscovery, domainId, advertiseHost, discoveryAddr, discoveryPort)
+Node node = Node.discover(
+    "talker", "tcp", new DiscoverOpts("http://127.0.0.1:15570"));
+// 可选：brokerId、timeoutSecs；null / 0 → 默认
+// BrokerOptions.noDiscovery / domainId 为兼容软标签，非 UDP 组播
 ```
 
 ### WebSocket RPC 模式 Node（客户端）
@@ -240,7 +250,9 @@ just java-install      # ~/.m2（仅 JVM；Android 不再需要）
 | `Node.tcp` / `ipc` / `inproc` / `inproc(Context, …)` / `withContext` / `grpc` / `grpcAt` / `discover` | 传输预设；同进程 inproc 须共享 `Context`；`discover` 只填地址 |
 | `declareParameter` / `getParameter` / `setParameter` / `hasParameter` / `listParameters` | 本节点本地参数（Boolean / Long / Double / String） |
 | `loadParametersFromYaml` / `loadParametersFromYamlStr` | 从 YAML 文件或字符串加载参数 |
-| `Parameter` | `listParameters` 返回的 name/value |
+| `Parameter` | `getParameter` / `listAllParameters` 返回的 name/value |
+| `ListParametersResult` | `listParameters` 的 `{names, prefixes}` |
+| `SubscriptionHandle` / `ServiceHandle` / `ActionServerHandle` | `create*` 返回；可 `destroy()` / `close()` |
 | `node.spin()` / `spinOnce` / `shutdown` | 驱动回调 |
 | `createPublisher(topic)` / `createPublisher(topic, Class<T>)` | raw → `TopicPublisher`；typed → `TypedTopicPublisher` |
 | `createSubscription(..., MsgCallback)` / `(..., TypedMsgCallback, Class)` | raw `byte[]` 或 typed `Message` |

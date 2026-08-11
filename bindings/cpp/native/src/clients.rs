@@ -10,9 +10,11 @@ use std::time::Duration;
 use robot_bus::action_bus::ActionKind;
 use robot_bus::runtime::{
     CallbackGroup, CallbackGroupType, NodeActionClientRaw as RustNodeActionClient,
+    NodeActionServer as RustNodeActionServer, NodeService as RustNodeService,
     NodeServiceClientRaw as RustNodeServiceClient, RawActionFeedbackCallback,
     RawGoalHandle as RustActionGoalHandle, ShutdownHandle as RustShutdownHandle,
-    TimerHandle as RustTimerHandle, TopicPublisherRaw as RustTopicPublisher,
+    SubscriptionHandle as RustSubscriptionHandle, TimerHandle as RustTimerHandle,
+    TopicPublisherRaw as RustTopicPublisher,
 };
 
 use crate::ffi::{
@@ -28,6 +30,18 @@ pub(crate) struct RobotBusShutdownHandle {
 
 pub(crate) struct RobotBusTimerHandle {
     pub(crate) inner: RustTimerHandle,
+}
+
+pub(crate) struct RobotBusSubscriptionHandle {
+    pub(crate) inner: RustSubscriptionHandle,
+}
+
+pub(crate) struct RobotBusServiceHandle {
+    pub(crate) inner: RustNodeService,
+}
+
+pub(crate) struct RobotBusActionServerHandle {
+    pub(crate) inner: RustNodeActionServer,
 }
 
 pub(crate) struct RobotBusCallbackGroup {
@@ -69,6 +83,55 @@ pub extern "C" fn robot_bus_timer_handle_free(h: *mut RobotBusTimerHandle) {
             drop(Box::from_raw(h));
         }
     }
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn robot_bus_subscription_handle_free(h: *mut RobotBusSubscriptionHandle) {
+    if !h.is_null() {
+        unsafe {
+            drop(Box::from_raw(h));
+        }
+    }
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn robot_bus_service_handle_free(h: *mut RobotBusServiceHandle) {
+    if !h.is_null() {
+        unsafe {
+            drop(Box::from_raw(h));
+        }
+    }
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn robot_bus_service_handle_name(h: *const RobotBusServiceHandle) -> *mut c_char {
+    if h.is_null() {
+        set_error("null service handle");
+        return ptr::null_mut();
+    }
+    clear_error();
+    dup_string(unsafe { &*h }.inner.service_name())
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn robot_bus_action_server_handle_free(h: *mut RobotBusActionServerHandle) {
+    if !h.is_null() {
+        unsafe {
+            drop(Box::from_raw(h));
+        }
+    }
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn robot_bus_action_server_handle_name(
+    h: *const RobotBusActionServerHandle,
+) -> *mut c_char {
+    if h.is_null() {
+        set_error("null action server handle");
+        return ptr::null_mut();
+    }
+    clear_error();
+    dup_string(unsafe { &*h }.inner.action_name())
 }
 
 #[unsafe(no_mangle)]

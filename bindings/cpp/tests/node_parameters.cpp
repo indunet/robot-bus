@@ -25,8 +25,15 @@ int main() {
   node.set_parameter("max_speed", 2.0);
   ROBOT_BUS_CHECK(std::get<double>(node.get_parameter("max_speed")) == 2.0);
 
-  auto listed = node.list_parameters();
+  auto listed = node.list_all_parameters();
   ROBOT_BUS_CHECK(listed.size() == 4);
+
+  auto ros_list = node.list_parameters();
+  ROBOT_BUS_CHECK(ros_list.names.size() == 4);
+
+  node.undeclare_parameter("enabled");
+  ROBOT_BUS_CHECK(!node.has_parameter("enabled"));
+  ROBOT_BUS_CHECK(node.list_all_parameters().size() == 3);
 
   node.load_parameters_from_yaml_str(
       "ros__parameters:\n  max_speed: 3.25\n  extra: hello\n");

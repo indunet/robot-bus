@@ -36,14 +36,14 @@ CMake sets `CMAKE_CXX_STANDARD 17`. Building with a newer standard (e.g. `-DCMAK
 
 ```bash
 # Core SDK (no ROS bridge)
-sudo apt install ./robot-bus_0.1.8_linux_amd64.deb
+sudo apt install ./robot-bus_0.1.9_linux_amd64.deb
 
 # Or ROS 2 bridge variant (Humble example) — needs Humble already installed
-sudo apt install ./robot-bus-ros2-humble_0.1.8_linux_amd64.deb
+sudo apt install ./robot-bus-ros2-humble_0.1.9_linux_amd64.deb
 source /opt/ros/humble/setup.bash
 
 # macOS Apple Silicon (core package only)
-sudo installer -pkg robot-bus_0.1.8_macos_arm64.pkg -target /
+sudo installer -pkg robot-bus_0.1.9_macos_arm64.pkg -target /
 # Installs under /usr/local ({bin,lib,include})
 
 # Or from source (dev)
@@ -120,13 +120,16 @@ auto node = robot_bus::Node::inproc_with_context(ctx, "pilot");
 
 tcp / ipc / gRPC do not require a shared context.
 
-### UDP discovery (fill addresses, pick transport yourself)
+### HTTP discovery (fill addresses, pick transport yourself)
+
+Request `GET /api/v1/discover` on a known API base URL to obtain connectable ZMQ endpoints. You still choose the transport:
 
 ```cpp
 RobotBusDiscoverOpts d{};
-d.domain_id = 0;
+d.api_url = "http://127.0.0.1:15570";
+// Optional: broker_id / timeout_secs; nullptr / 0 → defaults
 auto node = robot_bus::Node::discover("talker", "tcp", &d);
-// RobotBusBrokerOptions: domain_id / advertise_host / no_discovery
+// RobotBusBrokerOptions.no_discovery / domain_id are soft labels, not UDP multicast
 ```
 
 ## Local parameters
@@ -147,28 +150,31 @@ Scalars: `bool` / `int64_t` / `double` / `string`. YAML supports flat maps or `r
 
 Protobuf message types are **pre-generated** and shipped in the package — you do **not** need `protoc` on the machine that only consumes the SDK.
 
+Prefer [`robot_bus/typed.hpp`](../../bindings/cpp/include/robot_bus/typed.hpp) (`MessageLite` encode/decode; decode failures are skipped and logged):
+
 ```cpp
 #include <robot_bus/node.hpp>
+#include <robot_bus/typed.hpp>
 #include <robot_bus/sensor_msgs/msg/v1/imu.pb.h>
 
 robot_bus::Broker broker;
 robot_bus::Node node("pilot");
-auto pub = node.create_publisher("/imu");
-
-node.create_subscription("/imu", [](std::string_view topic, robot_bus::BytesView payload) {
-  sensor_msgs::msg::v1::Imu imu;
-  imu.ParseFromArray(payload.data, static_cast<int>(payload.size));
-  // …
-});
+auto pub = robot_bus::create_publisher<sensor_msgs::msg::v1::Imu>(node, "/imu");
+auto sub = robot_bus::create_subscription<sensor_msgs::msg::v1::Imu>(
+    node, "/imu", [](std::string_view, const sensor_msgs::msg::v1::Imu &imu) {
+      // …
+    });
 
 node.start();
-// allow subscription to propagate, then:
 sensor_msgs::msg::v1::Imu imu;
 imu.mutable_angular_velocity()->set_z(0.1);
-std::string bytes;
-imu.SerializeToString(&bytes);
-pub.publish(bytes);
+pub.publish(imu);
+// sub.destroy();
 ```
+
+Optional QoS: `qos_depth > 0` → KeepLast. `create_wall_timer` aliases `create_timer`. See also `wait_for_message` / client `wait_for_*`. Parameters: `list_parameters` → `{names, prefixes}`; `list_all_parameters`; `undeclare_parameter`.
+
+Raw bytes still work via `create_publisher` / `create_subscription` with manual Serialize/Parse.
 
 ### gRPC mode Node（客户端）
 

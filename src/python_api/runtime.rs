@@ -7,8 +7,9 @@ use pyo3::prelude::*;
 use crate::runtime::{
     CallbackGroup, CallbackGroupType, Context as RustContext,
     MultiThreadedExecutor as RustMultiThreadedExecutor,
+    NodeActionServer as RustNodeActionServer, NodeService as RustNodeService,
     ShutdownHandle as RustShutdownHandle, SingleThreadedExecutor as RustSingleThreadedExecutor,
-    TimerHandle as RustTimerHandle,
+    SubscriptionHandle as RustSubscriptionHandle, TimerHandle as RustTimerHandle,
 };
 
 use super::node::PyNode;
@@ -35,6 +36,139 @@ impl PyShutdownHandle {
 #[derive(Clone, Copy)]
 pub(crate) struct PyTimerHandle {
     pub(crate) inner: RustTimerHandle,
+}
+
+/// Subscription handle with explicit [`destroy`](Self::destroy); best-effort on `__del__`.
+#[pyclass(name = "SubscriptionHandle", unsendable)]
+pub(crate) struct PySubscriptionHandle {
+    handle: Option<RustSubscriptionHandle>,
+    node: Option<Py<super::node::PyNode>>,
+}
+
+impl PySubscriptionHandle {
+    pub(crate) fn new(node: Py<super::node::PyNode>, handle: RustSubscriptionHandle) -> Self {
+        Self {
+            handle: Some(handle),
+            node: Some(node),
+        }
+    }
+}
+
+#[pymethods]
+impl PySubscriptionHandle {
+    #[getter]
+    fn id(&self) -> Option<u64> {
+        self.handle.map(|h| h.id())
+    }
+
+    fn destroy(&mut self) -> PyResult<()> {
+        let Some(handle) = self.handle.take() else {
+            return Ok(());
+        };
+        let Some(node) = self.node.take() else {
+            return Ok(());
+        };
+        Python::with_gil(|py| {
+            let mut node = node.bind(py).borrow_mut();
+            node.inner.destroy_subscription(handle).map_err(bus_err)
+        })
+    }
+
+    fn __del__(&mut self) {
+        let _ = self.destroy();
+    }
+}
+
+/// Service server handle with explicit [`destroy`](Self::destroy); best-effort on `__del__`.
+#[pyclass(name = "ServiceHandle", unsendable)]
+pub(crate) struct PyServiceHandle {
+    handle: Option<RustNodeService>,
+    node: Option<Py<super::node::PyNode>>,
+}
+
+impl PyServiceHandle {
+    pub(crate) fn new(node: Py<super::node::PyNode>, handle: RustNodeService) -> Self {
+        Self {
+            handle: Some(handle),
+            node: Some(node),
+        }
+    }
+}
+
+#[pymethods]
+impl PyServiceHandle {
+    #[getter]
+    fn id(&self) -> Option<u64> {
+        self.handle.as_ref().map(|h| h.id())
+    }
+
+    #[getter]
+    fn service_name(&self) -> Option<String> {
+        self.handle.as_ref().map(|h| h.service_name().to_string())
+    }
+
+    fn destroy(&mut self) -> PyResult<()> {
+        let Some(handle) = self.handle.take() else {
+            return Ok(());
+        };
+        let Some(node) = self.node.take() else {
+            return Ok(());
+        };
+        Python::with_gil(|py| {
+            let mut node = node.bind(py).borrow_mut();
+            node.inner.destroy_service(&handle).map_err(bus_err)
+        })
+    }
+
+    fn __del__(&mut self) {
+        let _ = self.destroy();
+    }
+}
+
+/// Action server handle with explicit [`destroy`](Self::destroy); best-effort on `__del__`.
+#[pyclass(name = "ActionServerHandle", unsendable)]
+pub(crate) struct PyActionServerHandle {
+    handle: Option<RustNodeActionServer>,
+    node: Option<Py<super::node::PyNode>>,
+}
+
+impl PyActionServerHandle {
+    pub(crate) fn new(node: Py<super::node::PyNode>, handle: RustNodeActionServer) -> Self {
+        Self {
+            handle: Some(handle),
+            node: Some(node),
+        }
+    }
+}
+
+#[pymethods]
+impl PyActionServerHandle {
+    #[getter]
+    fn id(&self) -> Option<u64> {
+        self.handle.as_ref().map(|h| h.id())
+    }
+
+    #[getter]
+    fn action_name(&self) -> Option<String> {
+        self.handle.as_ref().map(|h| h.action_name().to_string())
+    }
+
+    fn destroy(&mut self) -> PyResult<()> {
+        let Some(handle) = self.handle.take() else {
+            return Ok(());
+        };
+        let Some(node) = self.node.take() else {
+            return Ok(());
+        };
+        Python::with_gil(|py| {
+            let mut node = node.bind(py).borrow_mut();
+            node.inner.destroy_action_server(&handle).map_err(bus_err)
+        })
+    }
+
+    fn __del__(&mut self) {
+        let _ = self.destroy();
+    }
 }
 
 #[pyclass(name = "CallbackGroupType", eq, eq_int)]

@@ -2,8 +2,9 @@
 
 use napi_derive::napi;
 use robot_bus::runtime::{
-    CallbackGroup, CallbackGroupType, ShutdownHandle as RustShutdownHandle,
-    TimerHandle as RustTimerHandle,
+    CallbackGroup, CallbackGroupType, NodeActionServer as RustNodeActionServer,
+    NodeService as RustNodeService, ShutdownHandle as RustShutdownHandle,
+    SubscriptionHandle as RustSubscriptionHandle, TimerHandle as RustTimerHandle,
 };
 
 #[napi]
@@ -28,6 +29,58 @@ impl ShutdownHandle {
 #[napi]
 pub struct TimerHandle {
     pub(crate) inner: RustTimerHandle,
+}
+
+/// Opaque subscription id; destroy via [`crate::node::Node::destroy_subscription`].
+#[napi]
+pub struct SubscriptionHandle {
+    pub(crate) inner: Option<RustSubscriptionHandle>,
+}
+
+#[napi]
+impl SubscriptionHandle {
+    #[napi(getter)]
+    pub fn id(&self) -> Option<u32> {
+        self.inner.map(|h| h.id() as u32)
+    }
+}
+
+/// Service server handle; destroy via [`crate::node::Node::destroy_service`].
+#[napi]
+pub struct ServiceHandle {
+    pub(crate) inner: Option<RustNodeService>,
+}
+
+#[napi]
+impl ServiceHandle {
+    #[napi(getter)]
+    pub fn id(&self) -> Option<u32> {
+        self.inner.as_ref().map(|h| h.id() as u32)
+    }
+
+    #[napi(getter)]
+    pub fn service_name(&self) -> Option<String> {
+        self.inner.as_ref().map(|h| h.service_name().to_string())
+    }
+}
+
+/// Action server handle; destroy via [`crate::node::Node::destroy_action_server`].
+#[napi]
+pub struct ActionServerHandle {
+    pub(crate) inner: Option<RustNodeActionServer>,
+}
+
+#[napi]
+impl ActionServerHandle {
+    #[napi(getter)]
+    pub fn id(&self) -> Option<u32> {
+        self.inner.as_ref().map(|h| h.id() as u32)
+    }
+
+    #[napi(getter)]
+    pub fn action_name(&self) -> Option<String> {
+        self.inner.as_ref().map(|h| h.action_name().to_string())
+    }
 }
 
 #[napi]

@@ -5,9 +5,9 @@
 `Cargo.toml`：
 
 ```toml
-robot-bus = "0.1.8"
+robot-bus = "0.1.9"
 # 本地：robot-bus = { path = "../robot-bus" }
-# 默认已启用 gRPC；若需关闭：robot-bus = { version = "0.1.8", default-features = false }
+# 默认已启用 gRPC；若需关闭：robot-bus = { version = "0.1.9", default-features = false }
 ```
 
 ## Broker 启动
@@ -149,7 +149,7 @@ fn main() -> robot_bus::Result<()> {
     // 进程内 / 自定义地址：Node::with_context_options(&ctx, "pilot", NodeOptions { ... })
 
     let imu_pub = node.create_publisher::<Imu>("/robot1/imu")?;
-    node.create_subscription::<Imu, _>(
+    let _sub = node.create_subscription::<Imu, _>(
         "/robot1/imu",
         |topic, imu| {
             println!("{topic}: angular_z={:?}", imu.angular_velocity);
@@ -172,13 +172,18 @@ fn main() -> robot_bus::Result<()> {
     };
     imu_pub.publish(&imu)?;
 
-    node.create_timer(
+    let _timer = node.create_wall_timer(
         Duration::from_millis(100),
         Arc::new(|| {
-            // 周期任务
+            // 周期任务（create_timer 别名）
         }),
         None,
     )?;
+
+    // destroy_subscription / destroy_service / destroy_action_server
+    // 与 cancel_timer 相同：executor start() 活跃时拒绝。
+    // wait_for_message / client.wait_for_service / wait_for_action_server 可用。
+    // create_*_with_qos(..., QosProfile::keep_last(n), ...) 设置 KeepLast depth。
 
     let handle = node.shutdown_handle()?;
     std::thread::spawn(move || {

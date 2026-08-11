@@ -14,7 +14,10 @@ use robot_bus::runtime::{
     NodeOptions as RustNodeOptions, Parameter, ServiceHandler, TimerCallback,
 };
 
-use crate::handles::{JsCallbackGroup, JsCallbackGroupType, ShutdownHandle, TimerHandle};
+use crate::handles::{
+    ActionServerHandle, JsCallbackGroup, JsCallbackGroupType, ServiceHandle, ShutdownHandle,
+    SubscriptionHandle, TimerHandle,
+};
 use crate::message::TopicPublisher;
 use crate::rpc::{ActionClient, ActionPhaseReply, ServiceClient};
 use crate::util::{
@@ -343,7 +346,7 @@ impl Node {
         callback: JsFunction,
         callback_group: Option<&JsCallbackGroup>,
         qos_depth: Option<i32>,
-    ) -> Result<()> {
+    ) -> Result<SubscriptionHandle> {
         use robot_bus::runtime::QosProfile;
         let tsfn: MsgTsfn = callback.create_threadsafe_function(0, |ctx| {
             let (topic, payload) = ctx.value;
@@ -360,7 +363,7 @@ impl Node {
             );
         });
         let group = callback_group.map(|g| &g.inner);
-        match qos_depth.filter(|d| *d > 0) {
+        let handle = match qos_depth.filter(|d| *d > 0) {
             Some(depth) => self.inner.create_subscription_raw_with_qos(
                 &topic,
                 QosProfile::keep_last(depth),
@@ -369,7 +372,18 @@ impl Node {
             ),
             None => self.inner.create_subscription_raw(&topic, cb, group),
         }
-        .map_err(bus_err)
+        .map_err(bus_err)?;
+        Ok(SubscriptionHandle {
+            inner: Some(handle),
+        })
+    }
+
+    #[napi]
+    pub fn destroy_subscription(&mut self, handle: &mut SubscriptionHandle) -> Result<()> {
+        let Some(h) = handle.inner.take() else {
+            return Ok(());
+        };
+        self.inner.destroy_subscription(h).map_err(bus_err)
     }
 
     /// Periodic timer; `callback()` takes no arguments. `period` is seconds.
@@ -394,6 +408,17 @@ impl Node {
         Ok(TimerHandle { inner: handle })
     }
 
+    /// Alias for [`create_timer`](Self::create_timer) (ROS 2 `create_wall_timer`).
+    #[napi]
+    pub fn create_wall_timer(
+        &mut self,
+        period: f64,
+        callback: JsFunction,
+        callback_group: Option<&JsCallbackGroup>,
+    ) -> Result<TimerHandle> {
+        self.create_timer(period, callback, callback_group)
+    }
+
     #[napi]
     pub fn cancel_timer(&mut self, handle: &TimerHandle) -> Result<()> {
         self.inner.cancel_timer(handle.inner).map_err(bus_err)
@@ -406,7 +431,7 @@ impl Node {
         service_name: String,
         handler: JsFunction,
         callback_group: Option<&JsCallbackGroup>,
-    ) -> Result<()> {
+    ) -> Result<ServiceHandle> {
         let tsfn: ServiceTsfn = handler.create_threadsafe_function(0, |ctx| {
             Ok(vec![Buffer::from(ctx.value)])
         })?;
@@ -425,10 +450,21 @@ impl Node {
                 .unwrap_or_default()
         });
         let group = callback_group.map(|g| &g.inner);
-        self.inner
+        let handle = self
+            .inner
             .create_service_raw(&service_name, cb, group)
-            .map(|_| ())
-            .map_err(bus_err)
+            .map_err(bus_err)?;
+        Ok(ServiceHandle {
+            inner: Some(handle),
+        })
+    }
+
+    #[napi]
+    pub fn destroy_service(&mut self, handle: &mut ServiceHandle) -> Result<()> {
+        let Some(h) = handle.inner.take() else {
+            return Ok(());
+        };
+        self.inner.destroy_service(&h).map_err(bus_err)
     }
 
     #[napi]
@@ -449,7 +485,7 @@ impl Node {
         action_name: String,
         handler: JsFunction,
         callback_group: Option<&JsCallbackGroup>,
-    ) -> Result<()> {
+    ) -> Result<ActionServerHandle> {
         let tsfn: ActionTsfn = handler.create_threadsafe_function(0, |ctx| {
             Ok(vec![Buffer::from(ctx.value)])
         })?;
@@ -472,10 +508,21 @@ impl Node {
                 .unwrap_or_default()
         });
         let group = callback_group.map(|g| &g.inner);
-        self.inner
+        let handle = self
+            .inner
             .create_action_server_raw(&action_name, cb, group)
-            .map(|_| ())
-            .map_err(bus_err)
+            .map_err(bus_err)?;
+        Ok(ActionServerHandle {
+            inner: Some(handle),
+        })
+    }
+
+    #[napi]
+    pub fn destroy_action_server(&mut self, handle: &mut ActionServerHandle) -> Result<()> {
+        let Some(h) = handle.inner.take() else {
+            return Ok(());
+        };
+        self.inner.destroy_action_server(&h).map_err(bus_err)
     }
 
     #[napi]
