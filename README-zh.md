@@ -10,138 +10,78 @@
 [![Maven Central](https://img.shields.io/maven-central/v/org.indunet/robot-bus.svg?label=Maven%20Central&color=007396)](https://central.sonatype.com/artifact/org.indunet/robot-bus)
 [![License](https://img.shields.io/badge/License-Apache_2.0-green.svg)](https://opensource.org/licenses/Apache-2.0)
 
-轻量级、免环境配置的 ROS 2 风格通信库：基于 ZeroMQ，提供 topic / service / action，以及 `Executor` + `Node` + `spin` 回调模型。多语言 SDK 覆盖 Rust / Python / TypeScript / C++ / Java / Android。
+Robot Bus 是一套轻量级、多语言的通信框架，提供类 ROS 2 的编程模型（topic / service / action、`Node` + `spin`），底层基于 ZeroMQ。它不是要取代 ROS 2，而是把 ROS 生态扩展到完整 ROS 2 栈不易部署或偏重的环境（例如 Android、Windows、浏览器客户端）。
 
-不依赖 ROS 发行版、不需要 `source setup.bash`、不搭 workspace。一个 broker 进程 + 任一语言的 SDK 即可。
+API 刻意贴近 ROS 2 的命名与用法，便于后续迁成 ROS 2 节点；也可以继续跑在 robot-bus 上，通过 [ROS 2 桥](#5-ros-2-桥) 与现有 ROS 2 图互通。核心运行时不依赖 ROS 发行版，不必 `source setup.bash`，也不搭 workspace：一个 broker 进程加任一语言 SDK 即可。
 
-**设计原则**：API 会尽量贴近 ROS 2 的用法与命名（如 `Node`、`SingleThreadedExecutor` / `MultiThreadedExecutor`、`add_node`、`create_publisher` / `create_subscription`、`spin`），降低从 ROS 2 迁过来的心智负担；底层用 ZeroMQ 实现，不绑定某一 ROS 发行版。
+SDK：**Rust**、**Python**、**TypeScript**、**C++**、**Java**、**Android**。
 
-> **预发布说明**：当前仍处于预发布阶段。接下来 API 可能会有较多变更，运行稳定性也尚不完善，请谨慎用于生产环境。
+![Robot Bus Web 控制台](docs/images/console-overview.png)
 
-更多 API 示例见 [`docs/`](docs/)。
+*Web 控制台* — Overview / Topics / Services / Actions / Topology。启动 `robot-bus-broker` 后打开 [http://127.0.0.1:15570](http://127.0.0.1:15570)。详见 [§4 Web 控制台](#4-web-控制台) 与 [小坦克示例](#32-小坦克示例)。
 
-### Crate API
+> **预发布说明**：API 仍可能有较大变更，请谨慎用于生产环境。
 
-| 模块 | 职责 |
-|------|------|
-| `broker::` | 路由进程（message / service / action） |
-| 顶层 API | Publisher / Subscriber / Client / Worker |
-| `runtime::Executor` | 底层 poll loop（一般用下面两个包装） |
-| `runtime::SingleThreadedExecutor` / `MultiThreadedExecutor` | 显式执行器（多节点 / 并行）；单节点可直接 `Node::spin` |
-| `runtime::Node` / `TopicPublisher` / `CallbackGroup` | 节点、publisher、callback group（互斥 / 可重入） |
-| `grpc::`（默认 feature） | gRPC + 浏览器 WebSocket RPC 网关（随 broker 一起启动） |
-| `ros2_bridge::`（分语言） | 进程内 ROS 2 话题/服务/Action 桥（Rust `rclrs` / Python `rclpy` / C++ `rclcpp`） |
+## 1. 典型应用场景
 
-### 仓库布局
+### 1.1 轻量级的类 ROS 2 通信
 
-Rust 核心留在仓库根目录（`Cargo.toml` + `src/`）。各语言 SDK 放在 `bindings/` 下，不要拆成与 Rust 同级的顶层目录。
+当无需完整 ROS 2 安装时，robot-bus 以更小的体积提供相近的编程模型，适用于原型验证、工具链、Windows 主机以及资源受限的部署。
 
-| 路径 | 职责 |
-|------|------|
-| [`src/`](src/)、`Cargo.toml` | Rust 核心（crates.io / maturin 入口） |
-| [`proto/`](proto/) | 契约源：ROS 风格 Protobuf → Rust / bindings 生成代码 |
-| [`bindings/`](bindings/) | 语言 SDK（Python、TypeScript、C++、Java、Android） |
-| [`console/`](console/) | Broker 监控控制台 + 坦克可视化/操作面板（构建产物 → `assets/console/`，不入库）；进程内仿真见 [`src/tank/`](src/tank/) |
-| [`benches/`](benches/) | 性能压测：[`robot_bus_perf/`](benches/robot_bus_perf/)（`just perf`）、[`ros2_perf/`](benches/ros2_perf/)（`just perf-ros2`） |
-| [`tests/`](tests/) | Rust 集成测试 + 跨语言互通（`just test-interop`） |
-| [`docs/`](docs/) | API 文档与生成的性能报告 |
-| [`scripts/`](scripts/)、[`tools/`](tools/)、`justfile` | 代码生成、打包与任务编排 |
+### 1.2 与 ROS 2 组成异构系统
 
-## 架构
+在 Ubuntu（或其他 Linux 主机）上照常运行 ROS 2，同时将部分计算部署在 Android 等不便安装完整 ROS 2 的设备上。这些节点使用 robot-bus，保持相同的话题 / 服务 / Action 模型，再通过 ROS 2 桥接入 ROS 2 图。
+
+### 1.3 在 bus 上原型开发，再迁移至 ROS 2
+
+robot-bus 轻量、环境简单，适合先完成节点原型与联调验证，再将已验证的设计迁移为原生 ROS 2 节点；也可继续运行在 bus 上，仅桥接需要进入 ROS 2 图的接口。
+
+## 2. 架构
 
 ```
-业务代码 (Rust / Python / TypeScript / C++ / Java / Android)
-  └── robot-bus SDK
-              │
-              │ ZMQ (tcp / ipc / inproc) 或 gRPC / WebSocket RPC
-              ▼
-robot_bus_broker 进程
+  应用 (Python / Rust / C++ / Java / Android / …)
+                    │
+                    │  ZMQ (tcp / ipc / inproc) 或 WebSocket RPC
+                    ▼
+             robot_bus_broker
+                    │
+                    │  可选 ros2_bridge（rclrs / rclpy / rclcpp）
+                    ▼
+               ROS 2 图
 ```
 
-### 可选 ROS 2 桥（分语言原生）
+## 3. 快速开始
 
-日常开发 **不必安装 ROS 2**。进程内与 ROS 2 图互通时，用各语言原生客户端（`rclrs` / `rclpy` / `rclcpp`）——见 [ROS 2 桥](#ros-2-桥feature--ros2--分语言原生) 与 [`docs/ros2-bridge.md`](docs/ros2-bridge.md)。官方支持：**Humble**、**Jazzy**。
-
-## 快速开始
-
-### 1. 启动 broker
-
-Rust：
+### 3.1 安装并启动 broker
 
 ```bash
-cargo run --bin robot_bus_broker
-# 发现 / domain: robot_bus_broker --domain-id 0 --advertise-host 10.0.0.5
-# 关闭广播:        robot_bus_broker --no-discovery
-```
-
-### 自省 CLI（`rbus`）
-
-查询 broker console 的 HTTP API（默认 `http://127.0.0.1:15570`；可用 `--url` 或环境变量 `ROBOT_BUS_BROKER_URL` 覆盖）：
-
-```bash
-cargo run --bin rbus -- topic list
-cargo run --bin rbus -- topic info /robot1/imu
-cargo run --bin rbus -- service list
-cargo run --bin rbus -- action list
-cargo run --bin rbus -- status
-```
-
-`topic list` 打印话题名与已登记的 protobuf 类型（未登记则为 `-`）。typed `create_publisher::<M>` 会向 console 登记类型（无需先有流量）；仅有 raw 流量、未登记类型的话题仍会列出，类型为 `-`。service / action 在 worker READY 后出现。
-
-### Broker 发现（UDP 组播）
-
-Broker 周期在 `239.255.76.67:15550` 上广播（刻意避开 ROS 2 / DDS 的 `7400` 与 `239.255.0.1`）。UDP 载荷为纯 protobuf [`BrokerAnnounce`](proto/robot_bus_interface/msg/v1/announce.proto)（`magic` 必须为 `RBUS`）；解不出来的包直接丢弃。
-
-Client **仍手动选择传输**（`tcp` / `ipc` / `inproc` / `grpc`）；发现只填充 host / 路径 / gRPC URL：
-
-```rust
-use robot_bus::{DiscoverOpts, Node, NodeOptions};
-
-let opts = NodeOptions::tcp().discover(DiscoverOpts {
-    domain_id: 0,
-    ..Default::default()
-})?;
-let mut node = Node::with_options("talker", opts);
-```
-
-各语言绑定同款：`Node.discover(...)`（Python / C++ / Java / Android / TypeScript Node.js）。浏览器 WebSocket 客户端无 UDP 发现。
-
-同 domain 多 broker 时请指定 `broker_id`，否则发现会报错并列出候选 id。
-
-Python（`pip install robot-bus` 后自带可执行入口）：
-
-```bash
+pip install robot-bus
 robot-bus-broker
 ```
 
-或在代码里进程内启动：
+默认 API / Web 控制台 / WebSocket 监听：`http://0.0.0.0:15570`。broker 启动后，用浏览器打开 [Web 控制台](#4-web-控制台) 即可查看。
+
+也可在进程内启动 broker：
 
 ```python
 import robot_bus
 
 with robot_bus.RobotBusBroker.start() as broker:
-    # ... 业务代码 ...
+    # 业务代码 …
     pass
-# 离开 with 自动 stop
-
-# 或阻塞运行（等同于命令行，Ctrl+C 退出）
-# robot_bus.run_broker()
 ```
 
-### Python
+### 3.2 小坦克示例
 
-```bash
-pip install robot-bus
-```
+内置的小坦克仿真，无需先写代码即可看到 topic 端到端跑通：
 
-本地开发（需 [maturin](https://www.maturin.rs/)，可选 [just](https://github.com/casey/just)）：
+1. 启动 broker（`robot-bus-broker`）。
+2. 打开 **http://127.0.0.1:15570**，在侧栏点击 **TANK**（或访问 `/tank/`）。
+3. 点击面板后，用 **方向键 / WASD** 遥控；也可切换到点选导航，在地图上 **鼠标点击** 下发目标点。
 
-```bash
-just python-dev
-# 等价：cd bindings/python && maturin develop --features extension-module,grpc
-```
+打开面板会拉起进程内 tank 节点：订阅 `/robot_bus/tank/cmd_vel`，发布 `/robot_bus/tank/pose`。多浏览器共享同一场景（遥控 last-writer-wins）。不需要时可加 `--no-tank`。
 
-（`grpc` 为默认 feature；显式写出可避免 `default-features = false` 的构建漏掉网关。）
+### 3.3 Topic（发布 / 订阅）
 
 ```python
 import robot_bus
@@ -156,336 +96,189 @@ node = robot_bus.Node("pilot")
 imu_pub = node.create_publisher("/robot1/imu", Imu)
 node.create_subscription("/robot1/imu", on_imu, msg_type=Imu)
 imu_pub.publish(Imu(linear_acceleration=Vector3(x=0.0, y=0.0, z=9.8)))
-# node.spin()  # 阻塞；另线程调用 node.shutdown() / shutdown_handle().shutdown()
+# node.spin()
 ```
 
-（不传消息类型时仍为 raw bytes。多节点共享或需多线程 handler 时再用 `SingleThreadedExecutor` / `MultiThreadedExecutor` + `add_node`。）
+### 3.4 Service
 
-仅走 gRPC 网关时：`Node.ws("name")` / `Node.ws_at("name", "http://…")`（客户端：订阅 / publish / 调 service / action）。详见 [`docs/python-api.md`](docs/python-api.md)。
+```python
+import robot_bus
+from robot_bus.std_srvs.srv.v1 import SetBoolRequest, SetBoolResponse
 
-### TypeScript
+def on_set_bool(req: SetBoolRequest) -> SetBoolResponse:
+    return SetBoolResponse(success=True, message=f"set:{req.data}")
+
+server = robot_bus.Node("worker")
+client = robot_bus.Node("caller")
+
+server.create_service(
+    "/set_bool", on_set_bool,
+    request_type=SetBoolRequest, response_type=SetBoolResponse,
+)
+svc = client.create_client(
+    "/set_bool",
+    request_type=SetBoolRequest, response_type=SetBoolResponse,
+)
+# reply = svc.call(SetBoolRequest(data=True), timeout=5.0)
+# server.spin()
+```
+
+### 3.5 Action
+
+```python
+import robot_bus
+from robot_bus.robot_bus_interface.action.v1 import (
+    FibonacciGoal, FibonacciFeedback, FibonacciResult,
+)
+
+def on_fibonacci(goal: FibonacciGoal, context):
+    seq = list(range(goal.order))
+    context.publish_feedback(FibonacciFeedback(sequence=seq[:1]))
+    return FibonacciResult(sequence=seq)
+
+server = robot_bus.Node("worker")
+client = robot_bus.Node("caller")
+
+server.create_action_server(
+    "/fibonacci", on_fibonacci,
+    goal_type=FibonacciGoal,
+    feedback_type=FibonacciFeedback,
+    result_type=FibonacciResult,
+)
+act = client.create_action_client(
+    "/fibonacci",
+    goal_type=FibonacciGoal,
+    feedback_type=FibonacciFeedback,
+    result_type=FibonacciResult,
+)
+goal = act.send_goal(
+    FibonacciGoal(order=5),
+    feedback_callback=lambda fb: print(fb.sequence),
+)
+# result = goal.result(timeout=10.0)
+# server.spin()
+```
+
+更多说明见 [`docs/python-api.md`](docs/python-api.md)。
+
+### 3.6 其他语言
+
+| 语言 | 包 / 产物 | 文档 |
+|------|-----------|------|
+| Python | [PyPI `robot-bus`](https://pypi.org/project/robot-bus/) | [`docs/python-api.md`](docs/python-api.md) |
+| Rust | [crates.io `robot-bus`](https://crates.io/crates/robot-bus) | [`docs/rust-api.md`](docs/rust-api.md) |
+| TypeScript | [npm `robot-bus`](https://www.npmjs.com/package/robot-bus) | [`docs/typescript-api.md`](docs/typescript-api.md) |
+| C++ | [GitHub Releases](https://github.com/indunet/robot-bus/releases)（DEB / MSI） | [`docs/cpp-api.md`](docs/cpp-api.md) |
+| Java | Maven Central `org.indunet:robot-bus` | [`docs/java-api.md`](docs/java-api.md) |
+| Android | Maven Central `org.indunet:robot-bus-android` | [`docs/android-api.md`](docs/android-api.md) |
+| ROS 2 桥 | 分语言（`rclrs` / `rclpy` / `rclcpp`） | [`docs/ros2-bridge.md`](docs/ros2-bridge.md) |
+
+## 4. Web 控制台
+
+Broker 内嵌监控界面（Overview、Topics、Services、Actions、Topology、日志）——截图见本文开头。执行 `robot-bus-broker`（或 `RobotBusBroker.start()`）后，用浏览器打开：
+
+**http://127.0.0.1:15570**
+
+上手可先试侧栏 **TANK** 的 [小坦克示例](#32-小坦克示例)。与 API / WebSocket 网关同端口。可用 `--no-console` 关闭。前端源码在 [`console/`](console/)；本地改 UI 见 [`console/README.md`](console/README.md)。
+
+## 5. ROS 2 桥
+
+进程内在 robot-bus 与 ROS 2 之间桥接 topic / service / action。各语言使用原生客户端（`rclrs` / `rclpy` / `rclcpp`）。官方支持：**Humble**、**Jazzy**。未启用桥时，核心 SDK 不依赖 ROS。
+
+需要已 source 的 ROS 2 发行版与 `rclpy`，以及正在运行的 broker：
 
 ```bash
-npm install robot-bus
+source /opt/ros/humble/setup.bash   # 或 jazzy
+robot-bus-broker                    # 另一个终端
 ```
 
-本地开发：
-
-```bash
-just ts-dev
-# 等价：cd bindings/typescript && npm install && npm run build:native && npm run build:ts
-```
-
-单一 npm 包：Node.js 走 napi-rs（完整 ZMQ API）；浏览器走 WebSocket RPC（`/ws`：订阅 / publish / service / action）。bundler 通过 `exports` 自动选入口。详见 [`docs/typescript-api.md`](docs/typescript-api.md)。
-
-```ts
-import { Node } from "robot-bus";
-import { Imu } from "robot-bus/sensor_msgs/msg/v1/imu.js";
-
-const node = new Node("pilot");
-const pub = node.createPublisher("/robot1/imu", Imu);
-node.createSubscription("/robot1/imu", (_t, imu) => console.log(imu), Imu);
-```
-
-浏览器 / 纯 gRPC：`Node.ws("client")`（browser 入口的 `Node` 即为 WebSocket RPC facade）。
-
-### Java / Android（Maven Central）
-
-| 产物 | 目录 | 坐标 |
-|------|------|------|
-| JVM JAR（Java 11+，Maven） | [`bindings/java/`](bindings/java/) | `org.indunet:robot-bus` |
-| Android AAR（minSdk 24，Kotlin SDK） | [`bindings/android/`](bindings/android/) | `org.indunet:robot-bus-android` |
-
-包名均为 `org.indunet.robot.bus`。Android 是**独立** Kotlin SDK（不依赖 Java JAR）。在 GitHub 上写 Release 说明并 Publish 后，CI 会发到 Maven Central（也可手动跑 Actions）。
-
-```bash
-just java-dev       # JVM
-just android-dev    # AAR（需 Android SDK + NDK 26 + cargo-ndk）
-```
-
-```kotlin
-// Android（Kotlin）
-RobotBusAndroid.init(this)
-val pub = node.createPublisher("/imu", Imu::class.java)
-```
-
-详见 [`docs/java-api.md`](docs/java-api.md) / [`docs/android-api.md`](docs/android-api.md)、[`bindings/java/README.md`](bindings/java/README.md) / [`bindings/android/README.md`](bindings/android/README.md)。
-
-### C++（DEB / MSI）
-
-C++ 无中央库：从 [GitHub Releases](https://github.com/indunet/robot-bus/releases) 下载（Publish 后 CI 挂附件）：
-
-| 包 | 内容 |
-|----|------|
-| `robot-bus_*_linux_*.deb`（另有 MSI / PKG） | 核心 SDK + broker，**无** ROS 2 桥 |
-| `robot-bus-ros2-humble_*_linux_*.deb` | 同上 + **Humble** 桥（**仅 Linux**；需系统 Humble；不 vendor `rcl`） |
-| `robot-bus-ros2-jazzy_*_linux_*.deb` | 同上 + **Jazzy** 桥（**仅 Linux**） |
-
-三选一安装（互斥）。详见 [`docs/cpp-api.md`](docs/cpp-api.md)。
-
-```cpp
-#include <robot_bus/node.hpp>
-#include <robot_bus/sensor_msgs/msg/v1/imu.pb.h>
-
-robot_bus::Broker broker;
-robot_bus::Node node("pilot");
-auto pub = node.create_publisher("/imu");
-```
-
-### Rust（Node + spin）
-
-在 `Cargo.toml` 中添加依赖：
-
-```toml
-robot-bus = { path = "../robot-bus" }
-# 或 crates.io：robot-bus = "0.1.8"
-```
-
-语义接近 ROS 2：`Node::new` → typed `create_publisher` / `create_subscription` → `node.spin()`（自动挂 `SingleThreadedExecutor`）。
-
-仅走 gRPC 网关（不启 ZMQ）时用 `Node::grpc` / `Node::ws_at`：可订阅、publish、调 service / action，不能当 server；详见 [`docs/rust-api.md`](docs/rust-api.md#grpc-模式-node客户端)。
-
-```rust
-use std::sync::Arc;
-use std::time::Duration;
-use robot_bus::geometry_msgs::msg::v1::Vector3;
-use robot_bus::sensor_msgs::msg::v1::Imu;
-use robot_bus::Node;
-
-let mut node = Node::new("pilot");
-
-let imu_pub = node.create_publisher::<Imu>("/robot1/imu")?;
-node.create_subscription::<Imu, _>(
-    "/robot1/imu",
-    |topic, imu| {
-        println!("{topic}: {:?}", imu.linear_acceleration);
-    },
-    None,
-)?;
-
-let imu = Imu {
-    linear_acceleration: Some(Vector3 { x: 0.0, y: 0.0, z: 9.8 }),
-    ..Default::default()
-};
-imu_pub.publish(&imu)?;
-
-node.create_timer(
-    Duration::from_millis(100),
-    Arc::new(|| {
-        // 控制周期 / 心跳
-    }),
-    None,
-)?;
-
-let handle = node.shutdown_handle()?;
-std::thread::spawn(move || { /* ... */ handle.shutdown(); });
-node.spin()?;
-```
-
-- 单节点默认：直接 `node.spin()`（内部 `SingleThreadedExecutor`）
-- `SingleThreadedExecutor` / `MultiThreadedExecutor` + `add_node`：多节点共享或并行 handler
-- Callback group：`MutuallyExclusive` / `Reentrant`（`create_callback_group`；默认互斥组）
-- Service / action：typed `create_service` / `create_client`、`create_action_server` / `create_action_client`（与 topic 一样挂在 Node；另有 `*_raw`）
-- Timer：`create_timer`（同样挂在 Node，由 `spin` 驱动）
-- Raw bytes：`create_publisher_raw` / `create_subscription_raw`
-- 底层 escape hatch：`Executor`（高级用法）
-
-发送 / 接收水位（ZMQ HWM，不是完整 QoS）可在创建时或运行中设置：
-
-```rust
-use robot_bus::{Publisher, HighWaterMark};
-
-let pub_ = Publisher::with_hwm(None, HighWaterMark::new(10, 10))?;
-pub_.set_high_water_mark(HighWaterMark { snd: 10, rcv: 10 })?;
-```
-
-默认：message `STREAM(8/8)`、service `RPC(4/4)`、action `ACTION(8/8)`。Broker 侧用 `--snd-hwm` / `--rcv-hwm`。
-
-## 二进制
-
-| 二进制 | 说明 |
-|------|------|
-| `robot_bus_broker` | 一次启动三条总线 + gRPC / WebSocket RPC 网关 |
-
-## Web 控制台（`console/`）
-
-可选 broker 监控前端：Overview、Topics、Services、Actions、Topology、事件日志。开启 `console` feature（默认）时，先构建一次静态资源后，broker 在 `0.0.0.0:15570` 提供**嵌入式** UI。
-
-**开发（热更新，推荐）：**
-
-```bash
-# 终端 1
-cargo run --bin robot_bus_broker
-# 终端 2
-cd console && pnpm install && pnpm dev
-# 打开 http://localhost:3000  （/api 会代理到 broker；可用 ROBOT_BUS_BROKER_URL 覆盖）
-```
-
-**嵌入 broker 二进制：**
-
-```bash
-just console          # pnpm build + sync → assets/console/（已 gitignore）
-cargo run --bin robot_bus_broker
-# 打开 http://localhost:15570
-# 关闭：cargo run --bin robot_bus_broker -- --no-console
-# 关闭坦克：cargo run --bin robot_bus_broker -- --no-tank
-```
-
-`assets/console/` 是**构建产物**（不提交）。CI / 发布在带 `console` feature 编译前会先生成该目录。
-
-已对接 **与WebSocket RPC / WebSocket RPC 同一端口**（`0.0.0.0:15570`）：Dashboard 是 TypeScript `WsNode`，经 `/ws` 订阅 `/robot_bus/*` 系统话题。`rbus` / 工具仍可用 REST 只读 shim（`GET /api/v1/...`）。拓扑与类型登记通过现有 service bus 上的可靠控制面服务（`/robot_bus/topology/register`、`/robot_bus/topic_type/register`）。领域可视化、Flow、LIVE / WHEP 在同级仓库 **[robot-bus-tools](https://github.com/indunet/robot-bus-tools)** 的 Studio。前端源码在 `console/`；只有生成的静态文件会编进带 `console` feature 的二进制。
-
-**坦克双节点演示：** 进程内 [`src/tank/`](src/tank/) 负责物理（`SUB /robot_bus/tank/cmd_vel` → `PUB /robot_bus/tank/pose`），控制台打开 TANK 会话时自动拉起；**TANK** 面板（`tank_viz`）渲染位姿并调度能力（当前为键盘遥控）。共享世界，多人可看，遥控后写覆盖。生产环境加 `--no-tank`（或绑定 `no_tank`）：侧栏入口隐藏，`GET /api/v1/tank` 返回 `enabled: false`。
-
-## gRPC + 浏览器 WebSocket 网关
-
-随 `robot_bus_broker` / `RobotBusBroker::start` 一起启动；**WebSocket RPC**（HTTP/2）与 **浏览器 WebSocket RPC**（`/ws`，一 RPC 一连接）**同端口**（默认 `0.0.0.0:15570`）。已移除 gRPC-Web。
-
-也可用 `Node::grpc` / `Node::ws_at` 以 Node API 接入网关（客户端：订阅 / publish / 调 service / 调 action，见 [`docs/rust-api.md`](docs/rust-api.md#grpc-模式-node客户端)）。
-
-| RPC | 语义 |
-|-----|------|
-| `MessageGateway.Subscribe` | 按 topic 前缀订阅，服务端流式返回二进制 payload |
-| `MessageGateway.Publish` | 一元发布：topic + 二进制 payload 写入 message bus |
-| `ServiceGateway.Call` | 一元：`service_name` + request bytes → response bytes |
-| `ActionGateway.SendGoal` | 一元 goal 请求，随后由服务端流式返回 `ActionEvent`（`FEEDBACK`，最终为 `RESULT`） |
-
-各语言 action client 统一采用 ROS 2 风格 `GoalHandle`：`send_goal` / `sendGoal` 立即返回 handle，实时 feedback 交给回调，result 独立等待。`handle.cancel()` 是 best-effort 操作，不表示服务端已确认取消：浏览器 WebSocket 发显式 `CANCEL` 帧（连接保持至 `RESULT`；真断连仍会 cancel）；WebSocket RPC 取消 goal 流；ZMQ 发送显式 `CANCEL` 帧。
-
-```bash
-cargo run --bin robot_bus_broker
-# 配置：cargo run --bin robot_bus_broker -- --help
-# gRPC: http://0.0.0.0:15570
-```
-
-进程内：
-
-```rust
-use robot_bus::{WsGatewayConfig, RobotBusBroker, RobotBusConfig};
-
-let broker = RobotBusBroker::start(RobotBusConfig {
-    grpc: WsGatewayConfig {
-        listen: "0.0.0.0:15570".parse()?,
-        ..Default::default()
-    },
-    ..RobotBusConfig::default()
-})?;
-let grpc = format!("http://{}", broker.api_listen());
-```
-
-Proto（包名 `robot_bus_interface.grpc.v1`，与 ROS `*.msg.v1` / `*.srv.v1` 区分）：
-
-- [`message_gateway.proto`](proto/robot_bus_interface/grpc/v1/message_gateway.proto)
-- [`service_gateway.proto`](proto/robot_bus_interface/grpc/v1/service_gateway.proto)
-- [`action_gateway.proto`](proto/robot_bus_interface/grpc/v1/action_gateway.proto)
-
-UDP 发现（包名 `robot_bus_interface.msg.v1`）：
-
-- [`announce.proto`](proto/robot_bus_interface/msg/v1/announce.proto)
-
-## 工具节点、TF 与 Studio
-
-硬件 / 多媒体节点（`rbus_*`）、TF 坐标变换库，以及领域可视化 / Flow / LIVE 界面，已迁移到同级仓库 **[robot-bus-tools](https://github.com/indunet/robot-bus-tools)**。
-
-```bash
-cd ../robot-bus-tools
-cargo build --bins
-cd studio && pnpm install && pnpm dev   # http://127.0.0.1:15772
-```
-
-`robot-bus` 保留 broker、多语言通信 SDK、ROS 2 bridge、protobuf 合约（含 `tf2_msgs`），以及 broker 监控 Console（Overview / Topics / Topology / Logs）。
-
-## ROS 2 桥（`feature = "ros2"` / 分语言原生）
-
-进程内 **Topic / Service / Action** 桥。各语言用本侧 ROS 客户端（**rclrs** / **rclpy** / **rclcpp**）——C++/Python **不经** Rust FFI。配置仅代码链式 API + 具体 `.mapper(...)`；**无 YAML**、无类型名字符串挂路由。详见 [`docs/ros2-bridge.md`](docs/ros2-bridge.md)。
-
-核心 SDK / crates.io / 默认 maturin **不必**装 ROS。Python 需系统 `rclpy`；C++ 需 `robot-bus-ros2-*` + 系统 ROS。
-
-**官方支持发行版：** **Humble**、**Jazzy**。
-
-| 需要 | 说明 |
-|------|------|
-| Cargo（Rust） | `--features ros2`（可选 `rclrs`） |
-| Python | `robot_bus.ros2_bridge` + source ROS / `rclpy` |
-| C++ 包 | `robot-bus-ros2-humble` / `…-jazzy`（**仅 Linux DEB**）；原生 `rclcpp`，不 vendor `rcl` |
-| Broker | 可达的 `robot_bus_broker`（tcp/ipc 或 discover） |
-| 一期内置 | String、Image、Trigger、SetBool、Fibonacci（Rust 另有完整 topic 注册表） |
-
-```rust
-use robot_bus::ros2_bridge::{
-    Direction, Ros2Bridge, StdMsgsStringMapper, TriggerServiceMapper,
-};
-
-let mut bridge = Ros2Bridge::new("ros_bridge")
+```python
+import robot_bus
+from robot_bus.ros2_bridge import (
+    Direction,
+    Ros2Bridge,
+    StdMsgsStringMapper,
+    TriggerServiceMapper,
+)
+
+assert robot_bus.ros2_available()
+
+bridge = (
+    Ros2Bridge.new("ros_bridge")
     .bus_tcp("localhost")
     .route("/chatter", "/chatter")
-        .mapper(StdMsgsStringMapper)
-        .direction(Direction::Ros2ToBus)
-        .add()?
-    .service("/reset", "/reset")
-        .mapper(TriggerServiceMapper)
-        .add()?
-    .build()?;
-bridge.spin()?;
-```
-
-Rust topic：登记 ≠ 一定能跑（需对应 typesupport）。自定义 srv/action 在本语言写 mapper。
-
-C++（安装对应 **Linux** `robot-bus-ros2-*` 并 source ROS 后）：
-
-```cpp
-#include <robot_bus/ros2_bridge.hpp>
-
-auto bridge = robot_bus::Ros2Bridge::New("ros_bridge")
-    .bus_tcp("localhost")
-    .route("/chatter", "/chatter")
-    .mapper(robot_bus::StdMsgsStringMapper{})
-    .direction(robot_bus::Direction::Ros2ToBus)
+    .mapper(StdMsgsStringMapper())
+    .direction(Direction.Ros2ToBus)
     .add()
     .service("/reset", "/reset")
-    .mapper(robot_bus::TriggerServiceMapper{})
+    .mapper(TriggerServiceMapper())
     .add()
-    .build();
-bridge.spin();
+    .build()
+)
+bridge.spin()
 ```
 
-完整用法见 [`docs/ros2-bridge.md`](docs/ros2-bridge.md)。C++ 包与本机构建见 [`docs/cpp-api.md`](docs/cpp-api.md)（`just cpp-dev-ros2`）。
+完整说明与示例（Rust / Python / C++）：[`docs/ros2-bridge.md`](docs/ros2-bridge.md)。
 
-## 测试
+## 6. Protobuf 消息
+
+robot-bus 的全部载荷——**topic**、**service**、**action**——均以 **Protocol Buffers** 定义与序列化。线上是 protobuf 字节流（不是 ROS CDR）。typed API 在创建时绑定 protobuf 消息类型并自动编解码；省略类型则按原始字节收发。
+
+契约位于 [`proto/`](proto/)，按 ROS 风格目录组织，并对标常见 ROS 2 包名：
+
+```text
+proto/<package>/{msg|srv|action|grpc}/v1/*.proto
+```
+
+| 种类 | 建模方式 |
+|------|----------|
+| Topic | 单个 `*.msg` protobuf 消息 |
+| Service | `*.srv` 下的一对 `*Request` / `*Response` |
+| Action | `*.action` 下的 Goal / Feedback / Result |
+
+内置了大量常用类型，并对标 ROS 2 常见包，示例如下：
+
+| 种类 | ROS 2 | robot-bus |
+|------|-------|-----------|
+| Topic | `sensor_msgs/msg/Imu` | `robot_bus.sensor_msgs.msg.v1.Imu` |
+| Topic | `geometry_msgs/msg/Twist` | `robot_bus.geometry_msgs.msg.v1.Twist` |
+| Topic | `nav_msgs/msg/Odometry` | `robot_bus.nav_msgs.msg.v1.Odometry` |
+| Service | `std_srvs/srv/SetBool` | `robot_bus.std_srvs.srv.v1.SetBoolRequest` / `SetBoolResponse` |
+| Topic | `tf2_msgs/msg/TFMessage` | `robot_bus.tf2_msgs.msg.v1.TFMessage` |
+
+生成代码随发布包分发（PyPI、crates.io、npm、DEB/MSI、Maven），使用方无需安装 `protoc`。消息模块处于 `robot_bus` 命名空间，并不在线上占用顶层 ROS 包名。完整列表见 [`proto/`](proto/)。
+
+### 自定义消息
+
+内置类型不够时，按同样的 protobuf 约定自行定义即可。typed API 接受任意 protobuf 消息类（不必放进 robot-bus 仓库）。
+
+1. 编写 `.proto`（建议沿用 ROS 风格包路径）：
+
+```protobuf
+syntax = "proto3";
+package my_robot.msg.v1;
+
+message BatteryStatus {
+  double voltage = 1;
+  double percentage = 2;
+}
+```
+
+2. 用 `protoc` 生成你自己工程里的代码，例如 Python：
 
 ```bash
-just test-rust
-just test-python
-just test-typescript
-just test-interop   # 跨语言矩阵，见 tests/interop/
-just perf           # robot-bus → docs/perf-report.md（benches/robot_bus_perf/）
-just perf-ros2      # ROS 2 对标，见 benches/ros2_perf/
-# 等价：
-# cargo test
-# PYTHONPATH=bindings/python python3 bindings/python/tests/test_msgs_roundtrip.py
-# PYTHONPATH=bindings/python python3 bindings/python/tests/test_typed_api.py
-# cd bindings/typescript && npm test
+protoc --python_out=. --pyi_out=. my_robot/msg/v1/battery_status.proto
 ```
 
-## Protobuf 消息
+3. 像内置类型一样挂到 Node 上：
 
-[`proto/`](proto/) 按 ROS 包布局：`proto/<pkg>/{msg|srv|grpc}/v1/*.proto`。
+```python
+from my_robot.msg.v1 import battery_status_pb2 as pb
 
-各语言 stub **不进 git**；本地改 proto 或跑测试前执行 `just gen-*`（需 protoc **35.1**）。CI / 发版流水线会生成并打进 wheel、crates.io crate、npm 包、DEB/MSI、Maven JAR/AAR——**消费已发布包的用户不需要 protoc**。
+node = robot_bus.Node("bms")
+pub = node.create_publisher("/battery", pb.BatteryStatus)
+node.create_subscription("/battery", lambda t, msg: print(msg.voltage), msg_type=pb.BatteryStatus)
+pub.publish(pb.BatteryStatus(voltage=48.0, percentage=0.85))
+```
 
-| 语言 | 路径 | 说明 |
-|------|------|------|
-| Rust | `robot_bus::<pkg>::{msg\|srv}::v1` | `just gen-rust` → `src/generated/<pkg>/{msg\|srv}/v1/<stem>.rs` |
-| Python | `robot_bus.<pkg>.{msg\|srv}.v1` | `just gen-python`；随 wheel 打包 |
-| TypeScript | `robot-bus/<pkg>/{msg\|srv}/v1/…` | `just gen-typescript`；随 npm 包打包 |
-| Java / Android | `org.indunet.robot.bus.<pkg>.{msg\|srv\|action}.v1` | `just gen-java`；随 JAR / AAR 打包 |
-| C++ | `#include <robot_bus/…>` | `just gen-cpp`；随 DEB/MSI 打包 |
-
-- 传输层 body 仍是 opaque bytes（含 gRPC 网关）；Rust Node SDK 在 create 时绑定类型并自动 encode/decode（`create_publisher::<M>` 等），也可用 `*_raw`；Python / TypeScript / **Java** 传入 protobuf 类型即可 typed（薄封装），省略类型则为 raw bytes
-- typed `create_publisher::<M>` 还会向 broker console **best-effort 登记** `topic → M::full_name()`（如 `sensor_msgs.msg.v1.Imu`），供 `rbus topic list` / `topic info` 展示；类型不在每条消息线上传输
-- **srv** 是一对 `*Request` / `*Response` message，不是 gRPC
-- **grpc**（`robot_bus`）是网关 RPC 契约，随 broker 启动（默认 feature `ws`）
-- 消息在 `robot_bus` 命名空间下，**不占用** ROS 顶层 `sensor_msgs` 包名；编码是 protobuf，与 ROS CDR 不互通
-- 一键：`just gen-all`
-
-已覆盖：`builtin_interfaces`、`std_msgs`、`std_srvs`、`geometry_msgs`、`sensor_msgs`、`nav_msgs`、`tf2_msgs`、`trajectory_msgs`、`diagnostic_msgs`、`unique_identifier_msgs`、`shape_msgs`、`visualization_msgs`、`control_msgs`、`nav2_msgs`、`apriltag_msgs`、`foxglove_msgs`（自 [Foxglove schemas](https://github.com/foxglove/foxglove-sdk) 迁入，包名为 `foxglove_msgs.msg.v1`）。
+若希望把类型贡献进本仓库的内置集合：把文件放到 [`proto/`](proto/) 对应目录，再执行 `just gen-python`（或其他 `just gen-*`）重新生成。

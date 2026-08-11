@@ -10,140 +10,78 @@ English | [中文](README-zh.md)
 [![Maven Central](https://img.shields.io/maven-central/v/org.indunet/robot-bus.svg?label=Maven%20Central&color=007396)](https://central.sonatype.com/artifact/org.indunet/robot-bus)
 [![License](https://img.shields.io/badge/License-Apache_2.0-green.svg)](https://opensource.org/licenses/Apache-2.0)
 
-Lightweight ROS 2–style messaging over ZeroMQ — topics, services & actions, no ROS install. SDKs for Rust, Python, TypeScript, C++, Java, and Android. Tool nodes, TF, and Studio UI live in [robot-bus-tools](https://github.com/indunet/robot-bus-tools).
+Robot Bus is a lightweight, multi-language messaging framework with a ROS 2–style programming model — topics, services, actions, and `Node` + `spin` — built on ZeroMQ. It does not replace ROS 2; it extends the ROS ecosystem to platforms and languages where a full ROS 2 stack is difficult to deploy or heavier than needed (for example Android, Windows, and browser clients).
 
-No ROS distro, no `source setup.bash`, no workspace. One broker process plus an SDK in any supported language is enough.
+APIs stay close to ROS 2 naming and usage so working code can later move into a ROS 2 node, or stay on robot-bus and interconnect with an existing ROS 2 graph through the [ROS 2 bridge](#5-ros-2-bridge). Core runtime needs no ROS distro, no `source setup.bash`, and no workspace: one broker process plus an SDK is enough.
 
-**Design principles**: APIs stay close to ROS 2 naming and usage (`Node`, `SingleThreadedExecutor` / `MultiThreadedExecutor`, `add_node`, `create_publisher` / `create_subscription`, `spin`) to ease migration; the transport is ZeroMQ and is not tied to any ROS distribution.
+SDKs: **Rust**, **Python**, **TypeScript**, **C++**, **Java**, **Android**.
 
-> **Pre-release notice**: This project is still in pre-release. APIs may change substantially and runtime stability is not production-ready yet — use caution in production.
+![Robot Bus Web console](docs/images/console-overview.png)
 
-More API examples live under [`docs/`](docs/).
+*Web console* — Overview / Topics / Services / Actions / Topology. Start `robot-bus-broker`, then open [http://127.0.0.1:15570](http://127.0.0.1:15570). See [§4 Web console](#4-web-console) and the [Tank demo](#32-tank-demo).
 
-### Crate API
+> **Pre-release notice**: APIs may still change substantially; use caution in production.
 
-| Module | Role |
-|------|------|
-| `broker::` | Routing process (message / service / action) |
-| Top-level API | Publisher / Subscriber / Client / Worker |
-| `runtime::Executor` | Low-level poll loop (usually wrapped by the executors below) |
-| `runtime::SingleThreadedExecutor` / `MultiThreadedExecutor` | Explicit executors (multi-node / parallel); a single node can `Node::spin` directly |
-| `runtime::Node` / `TopicPublisher` / `CallbackGroup` | Nodes, publishers, callback groups (mutually exclusive / reentrant) |
-| `ws_gateway::` (default feature `ws`) | Multiplexed WebSocket RPC gateway (started with the broker) |
-| `ros2_bridge::` (per language) | In-process ROS 2 topic/service/action bridge (`rclrs` / `rclpy` / `rclcpp`) |
+## 1. Application scenarios
 
-### Repository layout
+### 1.1 Lightweight ROS 2–style messaging
 
-Rust core stays at the repo root (`Cargo.toml` + `src/`). Language SDKs live under `bindings/`; do not flatten them to peer top-level folders.
+When a full ROS 2 installation is unnecessary, robot-bus provides the same programming model with a smaller footprint — suitable for prototypes, tooling, Windows hosts, and constrained deployments.
 
-| Path | Role |
-|------|------|
-| [`src/`](src/), `Cargo.toml` | Rust core (crates.io / maturin entry) |
-| [`proto/`](proto/) | Contract source: ROS-style Protobuf → generated code for Rust / bindings |
-| [`bindings/`](bindings/) | Language SDKs (Python, TypeScript, C++, Java, Android) |
-| [`console/`](console/) | Broker console + TANK viz/ops panel (build → `assets/console/`); in-process sim in [`src/tank/`](src/tank/) |
-| sibling [`robot-bus-tools`](https://github.com/indunet/robot-bus-tools) | `rbus_*` nodes, TF library + language extensions, Robot Bus Studio |
-| [`benches/`](benches/) | Perf harnesses: [`robot_bus_perf/`](benches/robot_bus_perf/) (`just perf`), [`ros2_perf/`](benches/ros2_perf/) (`just perf-ros2`) |
-| [`tests/`](tests/) | Rust integration tests + cross-language interop (`just test-interop`) |
-| [`docs/`](docs/) | API guides and generated perf reports |
-| [`scripts/`](scripts/), [`tools/`](tools/), `justfile` | Codegen, packaging, and task orchestration |
+### 1.2 Heterogeneous systems with ROS 2
 
-## Architecture
+Run ROS 2 on Ubuntu (or other Linux hosts) as usual, and place part of the compute on Android devices or other hosts where ROS 2 is impractical. Use robot-bus on those hosts with the same topic / service / action model, then interconnect via the ROS 2 bridge.
+
+### 1.3 Prototype on bus, migrate to ROS 2
+
+Because robot-bus is lightweight and quick to bring up, teams can prototype and validate nodes on bus first, then migrate the validated design to native ROS 2 (or keep the process on bus and bridge only the interfaces that must join the ROS 2 graph).
+
+## 2. Architecture
 
 ```
-Application code (Rust / Python / TypeScript / C++ / Java / Android)
-  └── robot-bus SDK
-              │
-              │ ZMQ (tcp / ipc / inproc) or WebSocket RPC
-              ▼
-robot_bus_broker process
+  Application (Python / Rust / C++ / Java / Android / …)
+                    │
+                    │  ZMQ (tcp / ipc / inproc) or WebSocket RPC
+                    ▼
+             robot_bus_broker
+                    │
+                    │  optional ros2_bridge (rclrs / rclpy / rclcpp)
+                    ▼
+               ROS 2 graph
 ```
 
-### Optional ROS 2 bridge (per language)
+## 3. Quick start
 
-Everyday robot-bus development **does not install ROS 2**. To interconnect with a ROS 2 graph in-process, use the native bridge for your language (`rclrs` / `rclpy` / `rclcpp`) — see the [ROS 2 bridge](#ros-2-bridge-feature-ros2--native-per-language) section and [`docs/ros2-bridge.md`](docs/ros2-bridge.md). Official support: **Humble** and **Jazzy**.
-
-## Quick start
-
-### 1. Start the broker
-
-Rust:
+### 3.1 Install and start the broker
 
 ```bash
-cargo run --bin robot_bus_broker
-# API listen:           robot_bus_broker --api-listen 0.0.0.0:15570
-# advertise host:       robot_bus_broker --advertise-host 10.0.0.5
-# federation peer:      robot_bus_broker --peer 10.0.0.2:15570
-```
-
-### Introspection CLI (`rbus`)
-
-Query the broker console HTTP API (default `http://127.0.0.1:15570`; override with `--url` or `ROBOT_BUS_BROKER_URL`):
-
-```bash
-cargo run --bin rbus -- topic list
-cargo run --bin rbus -- topic info /robot1/imu
-cargo run --bin rbus -- service list
-cargo run --bin rbus -- action list
-cargo run --bin rbus -- status
-```
-
-`topic list` prints `name` and registered protobuf type (or `-`). Types appear after a typed `create_publisher::<M>` registers with the console (before any traffic). Topics with only raw traffic and no registration still list with type `-`. Services / actions appear after a worker READY.
-
-### Broker discovery (HTTP API)
-
-Brokers expose `GET /api/v1/discover` on the API listen port (default `15570`, shared with WS gateway / console). The JSON lists connectable message/service/action endpoints (OS-assigned ports after bind `:0`) plus `brokerId` / `apiUrl`.
-
-Clients still **choose the transport** (`tcp` / `ipc` / `inproc` / `ws`); discovery only fills host / paths / API URL:
-
-```rust
-use robot_bus::{DiscoverOpts, Node, NodeOptions};
-
-let opts = NodeOptions::tcp().discover(DiscoverOpts {
-    api_url: "http://127.0.0.1:15570".into(),
-    ..Default::default()
-})?;
-let mut node = Node::with_options("talker", opts);
-```
-
-Same API shape in bindings: `Node.discover(...)` (Python / C++ / Java / Android / TypeScript Node.js). Browser clients use the API URL / WebSocket directly.
-
-Federation: pass `--peer HOST:PORT` (peer API listen) so the local broker fetches the peer's discover map and wires ZMQ peers.
-
-Python (ships a CLI entry after `pip install robot-bus`):
-
-```bash
+pip install robot-bus
 robot-bus-broker
 ```
 
-Or start in-process:
+Default API / Web console / WebSocket listen: `http://0.0.0.0:15570`. After the broker is up, open the [Web console](#4-web-console) in a browser.
+
+Or start the broker in-process:
 
 ```python
 import robot_bus
 
 with robot_bus.RobotBusBroker.start() as broker:
-    # ... application code ...
+    # application code …
     pass
-# leaves the with-block and stops automatically
-
-# Or block like the CLI (Ctrl+C to exit)
-# robot_bus.run_broker()
 ```
 
-### Python
+### 3.2 Tank demo
 
-```bash
-pip install robot-bus
-```
+A built-in mini tank sim helps you see topics moving end-to-end without writing code first:
 
-Local development (requires [maturin](https://www.maturin.rs/); [just](https://github.com/casey/just) optional):
+1. Start the broker (`robot-bus-broker`).
+2. Open **http://127.0.0.1:15570** and click **TANK** in the sidebar (or go to `/tank/`).
+3. Click the panel, then drive with **Arrow keys / WASD**; or switch to point navigation and **click on the map** to send a goal.
 
-```bash
-just python-dev
-# equivalent: cd bindings/python && maturin develop --features extension-module,grpc
-```
+Opening the panel starts the in-process tank node. It subscribes to `/robot_bus/tank/cmd_vel` and publishes `/robot_bus/tank/pose`. Multiple browsers share one world (teleop is last-writer-wins). Disable with `--no-tank` if needed.
 
-(`grpc` is a default feature; spelling it out avoids missing the gateway when `default-features = false`.)
+### 3.3 Topic (publish / subscribe)
 
 ```python
 import robot_bus
@@ -158,339 +96,189 @@ node = robot_bus.Node("pilot")
 imu_pub = node.create_publisher("/robot1/imu", Imu)
 node.create_subscription("/robot1/imu", on_imu, msg_type=Imu)
 imu_pub.publish(Imu(linear_acceleration=Vector3(x=0.0, y=0.0, z=9.8)))
-# node.spin()  # blocks; call node.shutdown() / shutdown_handle().shutdown() from another thread
+# node.spin()
 ```
 
-(Omit the message type for raw bytes. Use `SingleThreadedExecutor` / `MultiThreadedExecutor` + `add_node` when sharing nodes or needing multi-threaded handlers.)
+### 3.4 Service
 
-WebSocket RPC gateway clients: `Node.ws("name")` / `Node.ws_at("name", "http://…")` (subscribe / publish / call service / action). See [`docs/python-api.md`](docs/python-api.md).
+```python
+import robot_bus
+from robot_bus.std_srvs.srv.v1 import SetBoolRequest, SetBoolResponse
 
-### TypeScript
+def on_set_bool(req: SetBoolRequest) -> SetBoolResponse:
+    return SetBoolResponse(success=True, message=f"set:{req.data}")
+
+server = robot_bus.Node("worker")
+client = robot_bus.Node("caller")
+
+server.create_service(
+    "/set_bool", on_set_bool,
+    request_type=SetBoolRequest, response_type=SetBoolResponse,
+)
+svc = client.create_client(
+    "/set_bool",
+    request_type=SetBoolRequest, response_type=SetBoolResponse,
+)
+# reply = svc.call(SetBoolRequest(data=True), timeout=5.0)
+# server.spin()
+```
+
+### 3.5 Action
+
+```python
+import robot_bus
+from robot_bus.robot_bus_interface.action.v1 import (
+    FibonacciGoal, FibonacciFeedback, FibonacciResult,
+)
+
+def on_fibonacci(goal: FibonacciGoal, context):
+    seq = list(range(goal.order))
+    context.publish_feedback(FibonacciFeedback(sequence=seq[:1]))
+    return FibonacciResult(sequence=seq)
+
+server = robot_bus.Node("worker")
+client = robot_bus.Node("caller")
+
+server.create_action_server(
+    "/fibonacci", on_fibonacci,
+    goal_type=FibonacciGoal,
+    feedback_type=FibonacciFeedback,
+    result_type=FibonacciResult,
+)
+act = client.create_action_client(
+    "/fibonacci",
+    goal_type=FibonacciGoal,
+    feedback_type=FibonacciFeedback,
+    result_type=FibonacciResult,
+)
+goal = act.send_goal(
+    FibonacciGoal(order=5),
+    feedback_callback=lambda fb: print(fb.sequence),
+)
+# result = goal.result(timeout=10.0)
+# server.spin()
+```
+
+More detail: [`docs/python-api.md`](docs/python-api.md).
+
+### 3.6 Other languages
+
+| Language | Package / artifact | Guide |
+|----------|--------------------|-------|
+| Python | [PyPI `robot-bus`](https://pypi.org/project/robot-bus/) | [`docs/python-api.md`](docs/python-api.md) |
+| Rust | [crates.io `robot-bus`](https://crates.io/crates/robot-bus) | [`docs/rust-api.md`](docs/rust-api.md) |
+| TypeScript | [npm `robot-bus`](https://www.npmjs.com/package/robot-bus) | [`docs/typescript-api.md`](docs/typescript-api.md) |
+| C++ | [GitHub Releases](https://github.com/indunet/robot-bus/releases) (DEB / MSI) | [`docs/cpp-api.md`](docs/cpp-api.md) |
+| Java | Maven Central `org.indunet:robot-bus` | [`docs/java-api.md`](docs/java-api.md) |
+| Android | Maven Central `org.indunet:robot-bus-android` | [`docs/android-api.md`](docs/android-api.md) |
+| ROS 2 bridge | per-language (`rclrs` / `rclpy` / `rclcpp`) | [`docs/ros2-bridge.md`](docs/ros2-bridge.md) |
+
+## 4. Web console
+
+The broker ships with an embedded monitoring UI (Overview, Topics, Services, Actions, Topology, logs) — see the screenshot at the top of this README. After `robot-bus-broker` (or `RobotBusBroker.start()`), open:
+
+**http://127.0.0.1:15570**
+
+For a hands-on walkthrough, try the [Tank demo](#32-tank-demo) from the sidebar **TANK** entry. Same port as the API / WebSocket gateway. Disable the UI with `--no-console` if needed. Frontend source: [`console/`](console/); local UI development: [`console/README.md`](console/README.md).
+
+## 5. ROS 2 bridge
+
+In-process topic / service / action bridging between robot-bus and ROS 2. Each language uses its native client (`rclrs` / `rclpy` / `rclcpp`). Official support: **Humble** and **Jazzy**. The core SDK stays ROS-free unless the bridge is enabled.
+
+Requires a sourced ROS 2 distro and `rclpy`, plus a running broker:
 
 ```bash
-npm install robot-bus
+source /opt/ros/humble/setup.bash   # or jazzy
+robot-bus-broker                    # another terminal
 ```
 
-Local development:
-
-```bash
-just ts-dev
-# equivalent: cd bindings/typescript && npm install && npm run build:native && npm run build:ts
-```
-
-One npm package: Node.js uses napi-rs (full ZMQ API); browsers use WebSocket RPC on `/ws` (subscribe / publish / service / action client). Bundlers pick the entry via `exports`. See [`docs/typescript-api.md`](docs/typescript-api.md).
-
-```ts
-import { Node } from "robot-bus";
-import { Imu } from "robot-bus/sensor_msgs/msg/v1/imu.js";
-
-const node = new Node("pilot");
-const pub = node.createPublisher("/robot1/imu", Imu);
-node.createSubscription("/robot1/imu", (_t, imu) => console.log(imu), Imu);
-```
-
-Browser / WS-only: `Node.ws("client")` (the browser entry's `Node` is the WebSocket RPC facade).
-
-### Java / Android (Maven Central)
-
-| Artifact | Directory | Coordinates |
-|------|------|------|
-| JVM JAR (Java 11+, Maven) | [`bindings/java/`](bindings/java/) | `org.indunet:robot-bus` |
-| Android AAR (minSdk 24, Kotlin SDK) | [`bindings/android/`](bindings/android/) | `org.indunet:robot-bus-android` |
-
-Package name is `org.indunet.robot.bus` for both. Android is a **standalone** Kotlin SDK (does not depend on the Java JAR). After you write release notes and Publish on GitHub, CI publishes to Maven Central (or run the Actions workflows manually).
-
-```bash
-just java-dev       # JVM
-just android-dev    # AAR (needs Android SDK + NDK 26 + cargo-ndk)
-```
-
-```kotlin
-// Android (Kotlin)
-RobotBusAndroid.init(this)
-val pub = node.createPublisher("/imu", Imu::class.java)
-```
-
-See [`docs/java-api.md`](docs/java-api.md) / [`docs/android-api.md`](docs/android-api.md), [`bindings/java/README.md`](bindings/java/README.md) / [`bindings/android/README.md`](bindings/android/README.md).
-
-### C++ (DEB / MSI)
-
-No central package registry for C++: download from [GitHub Releases](https://github.com/indunet/robot-bus/releases) (CI attaches assets after you Publish):
-
-| Package | Contents |
-|---------|----------|
-| `robot-bus_*_linux_*.deb` (also MSI / PKG) | Core SDK + broker, **no** ROS 2 bridge |
-| `robot-bus-ros2-humble_*_linux_*.deb` | Same + bridge linked for **Humble** (Linux only; needs system Humble; does not vendor `rcl`) |
-| `robot-bus-ros2-jazzy_*_linux_*.deb` | Same + bridge linked for **Jazzy** (Linux only) |
-
-Install only one of the three (they conflict). See [`docs/cpp-api.md`](docs/cpp-api.md).
-
-```cpp
-#include <robot_bus/node.hpp>
-#include <robot_bus/sensor_msgs/msg/v1/imu.pb.h>
-
-robot_bus::Broker broker;
-robot_bus::Node node("pilot");
-auto pub = node.create_publisher("/imu");
-```
-
-### Rust (Node + spin)
-
-Add to `Cargo.toml`:
-
-```toml
-robot-bus = { path = "../robot-bus" }
-# or from crates.io: robot-bus = "0.1.8"
-```
-
-Semantics mirror ROS 2: `Node::new` → typed `create_publisher` / `create_subscription` → `node.spin()` (auto-attaches a `SingleThreadedExecutor`).
-
-WS-only (no ZMQ): `Node::ws` / `Node::ws_at` — subscribe, publish, and call service / action, but cannot act as a server; see [`docs/rust-api.md`](docs/rust-api.md#grpc-模式-node客户端).
-
-```rust
-use std::sync::Arc;
-use std::time::Duration;
-use robot_bus::geometry_msgs::msg::v1::Vector3;
-use robot_bus::sensor_msgs::msg::v1::Imu;
-use robot_bus::Node;
-
-let mut node = Node::new("pilot");
-
-let imu_pub = node.create_publisher::<Imu>("/robot1/imu")?;
-node.create_subscription::<Imu, _>(
-    "/robot1/imu",
-    |topic, imu| {
-        println!("{topic}: {:?}", imu.linear_acceleration);
-    },
-    None,
-)?;
-
-let imu = Imu {
-    linear_acceleration: Some(Vector3 { x: 0.0, y: 0.0, z: 9.8 }),
-    ..Default::default()
-};
-imu_pub.publish(&imu)?;
-
-node.create_timer(
-    Duration::from_millis(100),
-    Arc::new(|| {
-        // control period / heartbeat
-    }),
-    None,
-)?;
-
-let handle = node.shutdown_handle()?;
-std::thread::spawn(move || { /* ... */ handle.shutdown(); });
-node.spin()?;
-```
-
-- Single-node default: `node.spin()` (internal `SingleThreadedExecutor`)
-- `SingleThreadedExecutor` / `MultiThreadedExecutor` + `add_node`: shared multi-node or parallel handlers
-- Callback groups: `MutuallyExclusive` / `Reentrant` (`create_callback_group`; default is mutually exclusive)
-- Service / action: typed `create_service` / `create_client`, `create_action_server` / `create_action_client` (on the Node like topics; `*_raw` variants also available)
-- Timer: `create_timer` (also on the Node, driven by `spin`)
-- Raw bytes: `create_publisher_raw` / `create_subscription_raw`
-- Low-level escape hatch: `Executor` (advanced)
-
-Send / receive high-water marks (ZMQ HWM, not full QoS) can be set at create time or at runtime:
-
-```rust
-use robot_bus::{Publisher, HighWaterMark};
-
-let pub_ = Publisher::with_hwm(None, HighWaterMark::new(10, 10))?;
-pub_.set_high_water_mark(HighWaterMark { snd: 10, rcv: 10 })?;
-```
-
-Defaults: message `STREAM(8/8)`, service `RPC(4/4)`, action `ACTION(8/8)`. Broker flags: `--snd-hwm` / `--rcv-hwm`.
-
-## Binaries
-
-| Binary | Description |
-|------|------|
-| `robot_bus_broker` | Starts all three buses plus the WebSocket RPC gateway |
-
-## Web console (`console/`)
-
-Optional broker monitoring UI: Overview, Topics, Services, Actions, Topology, and event logs. With the `console` feature (default), the broker serves an **embedded** static UI on `0.0.0.0:15570` after you build assets once.
-
-**Development (hot reload — preferred):**
-
-```bash
-# terminal 1
-cargo run --bin robot_bus_broker
-# terminal 2
-cd console && pnpm install && pnpm dev
-# open http://localhost:3000  (/api is proxied to the broker; override with ROBOT_BUS_BROKER_URL)
-```
-
-**Embedded in the broker binary:**
-
-```bash
-just console          # pnpm build + sync → assets/console/ (gitignored)
-cargo run --bin robot_bus_broker
-# open http://localhost:15570
-# disable: cargo run --bin robot_bus_broker -- --no-console
-# disable tank: cargo run --bin robot_bus_broker -- --no-tank
-```
-
-`assets/console/` is **build output** (not committed). CI and release jobs run `just console` (or equivalent) before compiling with the `console` feature.
-
-Wired to the broker on the **same port** as WebSocket RPC (`0.0.0.0:15570`): the Dashboard is a TypeScript `WsNode` that subscribes to `/robot_bus/*` system topics over `/ws`. A thin REST shim (`GET /api/v1/...`) remains for `rbus` / tooling. Topology and topic-type registration use reliable control-plane services (`/robot_bus/topology/register`, `/robot_bus/topic_type/register`) through the existing service bus. Domain visualizers, Flow, and LIVE / WHEP live in **[robot-bus-tools](https://github.com/indunet/robot-bus-tools)** Studio. The frontend source lives in `console/`; only the generated static files are compiled into binaries with the `console` feature.
-
-**Tank demo (2 nodes):** in-process [`src/tank/`](src/tank/) owns physics (`SUB /robot_bus/tank/cmd_vel` → `PUB /robot_bus/tank/pose`) and starts when the console opens a TANK session; the **TANK** panel (`tank_viz`) renders pose and dispatches capabilities (keyboard teleop first). Shared world — multiple viewers, last-writer-wins teleop. Production: `--no-tank` (or binding `no_tank`) hides the sidebar entry and makes `GET /api/v1/tank` report `enabled: false`.
-
-## Multiplexed WebSocket RPC gateway
-
-Started with `robot_bus_broker` / `RobotBusBroker::start`. **All remote clients** (native SDKs + browsers) use multiplexed WebSocket RPC on `/ws` (V2: one connection, many streams) on the **same port** as the console / discover API (default `0.0.0.0:15570`). Native gRPC/HTTP2 has been removed.
-
-You can also attach via the Node API with `Node::ws` / `Node::ws_at` (client: subscribe / publish / call service / call action; see [`docs/rust-api.md`](docs/rust-api.md#grpc-模式-node客户端)).
-
-| RPC | Semantics |
-|-----|------|
-| `MessageGateway.Subscribe` | Subscribe by topic prefix; server streams binary payloads |
-| `MessageGateway.Publish` | Unary publish: topic + binary payload onto the message bus |
-| `ServiceGateway.Call` | Unary: `service_name` + request bytes → response bytes |
-| `ActionGateway.SendGoal` | Unary goal request followed by a server stream of `ActionEvent` values (`FEEDBACK`, then `RESULT`) |
-
-Action clients use a ROS 2–style `GoalHandle` in every language: `send_goal` / `sendGoal` returns the handle immediately, feedback is delivered to a callback as it arrives, and the result is awaited separately. `handle.cancel()` is best-effort and does not imply server confirmation: WebSocket RPC sends an explicit `CANCEL` frame (connection stays open for `RESULT`; a true disconnect still cancels), WebSocket RPC sends an explicit `CANCEL` frame (same as browsers), and ZMQ sends an explicit `CANCEL` frame.
-
-```bash
-cargo run --bin robot_bus_broker
-# config: cargo run --bin robot_bus_broker -- --help
-# API / WS: http://0.0.0.0:15570
-```
-
-In-process:
-
-```rust
-use robot_bus::{WsGatewayConfig, RobotBusBroker, RobotBusConfig};
-
-let broker = RobotBusBroker::start(RobotBusConfig {
-    grpc: WsGatewayConfig {
-        listen: "0.0.0.0:15570".parse()?,
-        ..Default::default()
-    },
-    ..RobotBusConfig::default()
-})?;
-let grpc = format!("http://{}", broker.api_listen());
-```
-
-Proto (package `robot_bus_interface.grpc.v1`, distinct from ROS `*.msg.v1` / `*.srv.v1`):
-
-- [`message_gateway.proto`](proto/robot_bus_interface/grpc/v1/message_gateway.proto)
-- [`service_gateway.proto`](proto/robot_bus_interface/grpc/v1/service_gateway.proto)
-- [`action_gateway.proto`](proto/robot_bus_interface/grpc/v1/action_gateway.proto)
-
-HTTP discovery (`GET /api/v1/discover` on the API listen port). Legacy protobuf schema:
-
-- [`announce.proto`](proto/robot_bus_interface/msg/v1/announce.proto) (UDP multicast path removed)
-
-## Tool nodes, TF, and Studio
-
-Hardware / multimedia nodes (`rbus_*`), the TF coordinate-frame library, and the domain visualizer / Flow / LIVE UI now live in the sibling repository **[robot-bus-tools](https://github.com/indunet/robot-bus-tools)**.
-
-```bash
-# After cloning both repos as siblings:
-cd ../robot-bus-tools
-cargo build --bins
-# Studio (visualizers + Flow + LIVE):
-cd studio && pnpm install && pnpm dev   # http://127.0.0.1:15772
-```
-
-`robot-bus` keeps the broker, multi-language communication SDKs, ROS 2 bridge, protobuf contracts (`tf2_msgs` included), and the broker monitoring console (Overview / Topics / Topology / Logs).
-
-
-## ROS 2 bridge (`feature = "ros2"` / native per language)
-
-In-process **topic / service / action** bridge. Each language uses its native ROS client (**rclrs** / **rclpy** / **rclcpp**) — C++/Python do **not** go through Rust FFI. Configuration is **code-only** (concrete `.mapper(...)` objects); **no YAML**, no type-name-string route mounting. Details: [`docs/ros2-bridge.md`](docs/ros2-bridge.md).
-
-**Not** enabled by default for Rust crates.io / maturin — core SDK stays ROS-free. Python needs `rclpy`; C++ needs `robot-bus-ros2-*` + system ROS.
-
-**Supported ROS 2 distributions (official):** **Humble** and **Jazzy**.
-
-| Need | Notes |
-|------|--------|
-| Cargo (Rust) | `--features ros2` (optional `rclrs`) |
-| Python | `robot_bus.ros2_bridge` + sourced ROS / `rclpy` |
-| C++ packages | `robot-bus-ros2-humble` / `…-jazzy` (**Linux DEBs**); native `rclcpp` lib — does not vendor `rcl` |
-| Broker | Running `robot_bus_broker` (tcp/ipc or discover) |
-| Phase-1 builtins | String, Image, Trigger, SetBool, Fibonacci (+ Rust has full topic mapper registry) |
-
-```rust
-use robot_bus::ros2_bridge::{
-    Direction, Ros2Bridge, StdMsgsStringMapper, TriggerServiceMapper,
-};
-
-let mut bridge = Ros2Bridge::new("ros_bridge")
+```python
+import robot_bus
+from robot_bus.ros2_bridge import (
+    Direction,
+    Ros2Bridge,
+    StdMsgsStringMapper,
+    TriggerServiceMapper,
+)
+
+assert robot_bus.ros2_available()
+
+bridge = (
+    Ros2Bridge.new("ros_bridge")
     .bus_tcp("localhost")
     .route("/chatter", "/chatter")
-        .mapper(StdMsgsStringMapper)
-        .direction(Direction::Ros2ToBus)
-        .add()?
-    .service("/reset", "/reset")
-        .mapper(TriggerServiceMapper)
-        .add()?
-    .build()?;
-bridge.spin()?;
-```
-
-Registered ≠ usable everywhere on Rust: topics use `DynamicMessage`, so the ROS package providing type support must be installed (e.g. `foxglove_msgs` for CompressedVideo).
-
-C++ (after installing the matching **Linux** `robot-bus-ros2-*` package and sourcing ROS):
-
-```cpp
-#include <robot_bus/ros2_bridge.hpp>
-
-auto bridge = robot_bus::Ros2Bridge::New("ros_bridge")
-    .bus_tcp("localhost")
-    .route("/chatter", "/chatter")
-    .mapper(robot_bus::StdMsgsStringMapper{})
-    .direction(robot_bus::Direction::Ros2ToBus)
+    .mapper(StdMsgsStringMapper())
+    .direction(Direction.Ros2ToBus)
     .add()
     .service("/reset", "/reset")
-    .mapper(robot_bus::TriggerServiceMapper{})
+    .mapper(TriggerServiceMapper())
     .add()
-    .build();
-bridge.spin();
+    .build()
+)
+bridge.spin()
 ```
 
-Full usage guide: [`docs/ros2-bridge.md`](docs/ros2-bridge.md). C++ packages / local build: [`docs/cpp-api.md`](docs/cpp-api.md).
+Full guide and examples (Rust / Python / C++): [`docs/ros2-bridge.md`](docs/ros2-bridge.md).
 
-## Testing
+## 6. Protobuf messages
+
+All robot-bus payloads — **topics**, **services**, and **actions** — are defined and serialized with **Protocol Buffers**. The wire format is protobuf bytes (not ROS CDR). Typed APIs bind a protobuf message class at create time and encode/decode automatically; omit the type to work with raw bytes.
+
+Contracts live under [`proto/`](proto/) in a ROS-style layout, aligned with common ROS 2 package names:
+
+```text
+proto/<package>/{msg|srv|action|grpc}/v1/*.proto
+```
+
+| Kind | How it is modeled |
+|------|-------------------|
+| Topic | A single `*.msg` protobuf message |
+| Service | A pair of `*Request` / `*Response` messages under `*.srv` |
+| Action | Goal / Feedback / Result messages under `*.action` |
+
+Many built-in types are already provided, aligned with common ROS 2 packages. A few examples:
+
+| Kind | ROS 2 | robot-bus |
+|------|-------|-----------|
+| Topic | `sensor_msgs/msg/Imu` | `robot_bus.sensor_msgs.msg.v1.Imu` |
+| Topic | `geometry_msgs/msg/Twist` | `robot_bus.geometry_msgs.msg.v1.Twist` |
+| Topic | `nav_msgs/msg/Odometry` | `robot_bus.nav_msgs.msg.v1.Odometry` |
+| Service | `std_srvs/srv/SetBool` | `robot_bus.std_srvs.srv.v1.SetBoolRequest` / `SetBoolResponse` |
+| Topic | `tf2_msgs/msg/TFMessage` | `robot_bus.tf2_msgs.msg.v1.TFMessage` |
+
+Generated stubs ship inside published packages (PyPI, crates.io, npm, DEB/MSI, Maven) — consumers do not need `protoc`. Message modules live under the `robot_bus` namespace and do not claim top-level ROS package names on the wire. Full list: [`proto/`](proto/).
+
+### Custom messages
+
+When the builtins are not enough, define your own protobuf types the same way. Typed APIs accept any protobuf message class (they do not have to live in this repository).
+
+1. Write a `.proto` (ROS-style package path recommended):
+
+```protobuf
+syntax = "proto3";
+package my_robot.msg.v1;
+
+message BatteryStatus {
+  double voltage = 1;
+  double percentage = 2;
+}
+```
+
+2. Generate code into your own project, for example with Python:
 
 ```bash
-just test-rust
-just test-python
-just test-typescript
-just test-interop   # cross-language matrix under tests/interop/
-just perf           # robot-bus → docs/perf-report.md (benches/robot_bus_perf/)
-just perf-ros2      # ROS 2 comparison under benches/ros2_perf/
-# equivalent:
-# cargo test
-# PYTHONPATH=bindings/python python3 bindings/python/tests/test_msgs_roundtrip.py
-# PYTHONPATH=bindings/python python3 bindings/python/tests/test_typed_api.py
-# cd bindings/typescript && npm test
+protoc --python_out=. --pyi_out=. my_robot/msg/v1/battery_status.proto
 ```
 
-## Protobuf messages
+3. Use it on a Node like a built-in type:
 
-[`proto/`](proto/) follows ROS package layout: `proto/<pkg>/{msg|srv|grpc}/v1/*.proto`.
+```python
+from my_robot.msg.v1 import battery_status_pb2 as pb
 
-Generated stubs are **not checked into git**; run `just gen-*` after changing protos or before local tests (requires protoc **35.1**). CI / release pipelines generate and ship them inside wheels, crates.io crates, npm packages, DEB/MSI, and Maven JAR/AAR — **consumers of published packages do not need protoc**.
+node = robot_bus.Node("bms")
+pub = node.create_publisher("/battery", pb.BatteryStatus)
+node.create_subscription("/battery", lambda t, msg: print(msg.voltage), msg_type=pb.BatteryStatus)
+pub.publish(pb.BatteryStatus(voltage=48.0, percentage=0.85))
+```
 
-| Language | Path | Notes |
-|------|------|------|
-| Rust | `robot_bus::<pkg>::{msg\|srv}::v1` | `just gen-rust` → `src/generated/<pkg>/{msg\|srv}/v1/<stem>.rs` |
-| Python | `robot_bus.<pkg>.{msg\|srv}.v1` | `just gen-python`; packed into the wheel |
-| TypeScript | `robot-bus/<pkg>/{msg\|srv}/v1/…` | `just gen-typescript`; packed into the npm package |
-| Java / Android | `org.indunet.robot.bus.<pkg>.{msg\|srv\|action}.v1` | `just gen-java`; packed into JAR / AAR |
-| C++ | `#include <robot_bus/…>` | `just gen-cpp`; packed into DEB/MSI |
-
-- Transport body remains opaque bytes (including the gRPC gateway); the Rust Node SDK binds types at create time and auto encode/decode (`create_publisher::<M>`, etc.), or use `*_raw`; Python / TypeScript / **Java** pass a protobuf type for typed APIs (thin wrappers), or omit the type for raw bytes
-- Typed `create_publisher::<M>` also **best-effort registers** `topic → M::full_name()` (e.g. `sensor_msgs.msg.v1.Imu`) with the broker console HTTP API so `rbus topic list` / `topic info` can show types without putting type metadata on the wire
-- **srv** is a pair of `*Request` / `*Response` messages, not gRPC
-- **grpc** (`robot_bus`) is the gateway RPC contract, started with the broker (default feature `grpc`)
-- Messages live under the `robot_bus` namespace and do **not** claim top-level ROS package names like `sensor_msgs`; encoding is protobuf and is not interoperable with ROS CDR
-- One-shot: `just gen-all`
-
-Covered packages: `builtin_interfaces`, `std_msgs`, `std_srvs`, `geometry_msgs`, `sensor_msgs`, `nav_msgs`, `tf2_msgs`, `trajectory_msgs`, `diagnostic_msgs`, `unique_identifier_msgs`, `shape_msgs`, `visualization_msgs`, `control_msgs`, `nav2_msgs`, `apriltag_msgs`, `foxglove_msgs` (ported from [Foxglove schemas](https://github.com/foxglove/foxglove-sdk), package `foxglove_msgs.msg.v1`).
+To contribute a type into this repo’s built-in set: add the file under [`proto/`](proto/) and regenerate with `just gen-python` (or the matching `just gen-*` for other languages).
