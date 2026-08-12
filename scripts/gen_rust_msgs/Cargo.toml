@@ -1,7 +1,7 @@
 [workspace]
 
 [package]
-name = "robot-bus-gen-msgs"
+name = "robot-bus-gen-rust-msgs"
 version = "0.0.0"
 edition = "2024"
 publish = false

@@ -2,7 +2,7 @@
 members = ["."]
 # Invoked via --manifest-path; each declares its own [workspace].
 exclude = [
-    "tools/gen-msgs",
+    "scripts/gen_rust_msgs",
     "bindings/cpp/native",
     "bindings/typescript/native",
 ]

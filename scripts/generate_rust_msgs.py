@@ -58,7 +58,7 @@ def main() -> None:
         "run",
         "--quiet",
         "--manifest-path",
-        str(ROOT / "tools" / "gen-msgs" / "Cargo.toml"),
+        str(ROOT / "scripts" / "gen_rust_msgs" / "Cargo.toml"),
         "--release",
     ]
     print("+", " ".join(cmd), flush=True)

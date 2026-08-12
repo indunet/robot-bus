@@ -74,8 +74,8 @@ bindings/java/generated/
 bindings/android/generated/
 
 # Codegen helper crate
-tools/gen-msgs/target/
-tools/gen-msgs/Cargo.lock
+scripts/gen_rust_msgs/target/
+scripts/gen_rust_msgs/Cargo.lock
 
 # ROS 2 perf local colcon workspace + merge partials (`run.sh --local`)
 benches/ros2_perf/_ws/

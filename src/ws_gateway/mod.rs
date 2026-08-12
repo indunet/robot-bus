@@ -14,7 +14,7 @@ pub mod ws;
 pub mod ws_frame;
 
 pub mod pb {
-    // Messages-only (no tonic). Regenerated via `just gen-rust` after gen-msgs
+    // Messages-only (no tonic). Regenerated via `just gen-rust` / scripts/gen_rust_msgs
     // is switched to prost-only for gateway protos.
     include!("../generated/robot_bus_interface/grpc/v1/messages.inc.rs");
 }
