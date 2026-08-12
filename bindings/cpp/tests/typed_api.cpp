@@ -35,10 +35,10 @@ int main() {
   ROBOT_BUS_CHECK(wait_until([&] { return got.load(); }));
   ROBOT_BUS_CHECK(got_z == 0.25);
 
-  sub.destroy();
   node.shutdown();
   node.wait();
   bus.stop();
+  (void)sub;
   std::cout << "ok: typed_api\n";
   return 0;
 }

@@ -418,7 +418,11 @@ class SubscriptionHandle {
  public:
   SubscriptionHandle(RobotBusNode *n, RobotBusSubscriptionHandle *h) : n_(n), h_(h) {}
   ~SubscriptionHandle() {
-    destroy();
+    // Best-effort: destroy is rejected while start() is active; never throw.
+    if (!destroyed_ && h_ && n_) {
+      (void)robot_bus_node_destroy_subscription(n_, h_);
+      destroyed_ = true;
+    }
     robot_bus_subscription_handle_free(h_);
     h_ = nullptr;
   }
@@ -447,7 +451,10 @@ class ServiceHandle {
  public:
   ServiceHandle(RobotBusNode *n, RobotBusServiceHandle *h) : n_(n), h_(h) {}
   ~ServiceHandle() {
-    destroy();
+    if (!destroyed_ && h_ && n_) {
+      (void)robot_bus_node_destroy_service(n_, h_);
+      destroyed_ = true;
+    }
     robot_bus_service_handle_free(h_);
     h_ = nullptr;
   }
@@ -485,7 +492,10 @@ class ActionServerHandle {
  public:
   ActionServerHandle(RobotBusNode *n, RobotBusActionServerHandle *h) : n_(n), h_(h) {}
   ~ActionServerHandle() {
-    destroy();
+    if (!destroyed_ && h_ && n_) {
+      (void)robot_bus_node_destroy_action_server(n_, h_);
+      destroyed_ = true;
+    }
     robot_bus_action_server_handle_free(h_);
     h_ = nullptr;
   }
@@ -606,24 +616,26 @@ class Node {
     return s.str();
   }
 
-  TopicPublisher create_publisher(const char *topic) {
+  [[nodiscard]] TopicPublisher create_publisher(const char *topic) {
     return TopicPublisher(static_cast<RobotBusTopicPublisher *>(
         check_ptr(robot_bus_node_create_publisher(n_, topic), "create_publisher")));
   }
 
-  TopicPublisher create_publisher(const char *topic, int32_t qos_depth) {
+  [[nodiscard]] TopicPublisher create_publisher(const char *topic, int32_t qos_depth) {
     return TopicPublisher(static_cast<RobotBusTopicPublisher *>(check_ptr(
         robot_bus_node_create_publisher_with_qos(n_, topic, qos_depth),
         "create_publisher_with_qos")));
   }
 
-  SubscriptionHandle create_subscription(const char *topic, MsgCallback cb,
-                                         const CallbackGroup *group = nullptr) {
+  /// Keep the returned handle; dropping it unsubscribes (ROS 2 shared_ptr style).
+  [[nodiscard]] SubscriptionHandle create_subscription(const char *topic, MsgCallback cb,
+                                                       const CallbackGroup *group = nullptr) {
     return create_subscription(topic, std::move(cb), group, 0);
   }
 
-  SubscriptionHandle create_subscription(const char *topic, MsgCallback cb,
-                                         const CallbackGroup *group, int32_t qos_depth) {
+  [[nodiscard]] SubscriptionHandle create_subscription(const char *topic, MsgCallback cb,
+                                                       const CallbackGroup *group,
+                                                       int32_t qos_depth) {
     msg_cbs_.push_back(std::make_unique<MsgCallback>(std::move(cb)));
     MsgCallback *held = msg_cbs_.back().get();
     return SubscriptionHandle(
@@ -654,8 +666,8 @@ class Node {
     return result;
   }
 
-  TimerHandle create_timer(double period_secs, TimerCallback cb,
-                           const CallbackGroup *group = nullptr) {
+  [[nodiscard]] TimerHandle create_timer(double period_secs, TimerCallback cb,
+                                         const CallbackGroup *group = nullptr) {
     timer_cbs_.push_back(std::make_unique<TimerCallback>(std::move(cb)));
     TimerCallback *held = timer_cbs_.back().get();
     return TimerHandle(static_cast<RobotBusTimerHandle *>(check_ptr(
@@ -666,8 +678,8 @@ class Node {
   }
 
   /// Alias for create_timer (ROS 2 `create_wall_timer`).
-  TimerHandle create_wall_timer(double period_secs, TimerCallback cb,
-                                const CallbackGroup *group = nullptr) {
+  [[nodiscard]] TimerHandle create_wall_timer(double period_secs, TimerCallback cb,
+                                              const CallbackGroup *group = nullptr) {
     return create_timer(period_secs, std::move(cb), group);
   }
 
@@ -675,8 +687,9 @@ class Node {
     check(robot_bus_node_cancel_timer(n_, handle.raw()), "cancel_timer");
   }
 
-  ServiceHandle create_service(const char *service_name, ServiceHandler handler,
-                               const CallbackGroup *group = nullptr) {
+  /// Keep the returned handle; dropping it destroys the service.
+  [[nodiscard]] ServiceHandle create_service(const char *service_name, ServiceHandler handler,
+                                             const CallbackGroup *group = nullptr) {
     svc_cbs_.push_back(std::make_unique<ServiceHandler>(std::move(handler)));
     ServiceHandler *held = svc_cbs_.back().get();
     return ServiceHandle(
@@ -706,8 +719,10 @@ class Node {
         check_ptr(robot_bus_node_create_client(n_, service_name), "create_client")));
   }
 
-  ActionServerHandle create_action_server(const char *action_name, ActionHandler handler,
-                                          const CallbackGroup *group = nullptr) {
+  /// Keep the returned handle; dropping it destroys the action server.
+  [[nodiscard]] ActionServerHandle create_action_server(const char *action_name,
+                                                        ActionHandler handler,
+                                                        const CallbackGroup *group = nullptr) {
     action_cbs_.push_back(std::make_unique<ActionHandler>(std::move(handler)));
     ActionHandler *held = action_cbs_.back().get();
     return ActionServerHandle(

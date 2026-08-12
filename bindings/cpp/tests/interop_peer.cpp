@@ -65,7 +65,7 @@ void run_svc_server() {
   auto ends = EndpointBag::from_env();
   auto opts = ends.to_opts();
   robot_bus::Node node("interop_cpp_svc", opts);
-  node.create_service(kService, [](robot_bus::BytesView body) {
+  auto svc = node.create_service(kService, [](robot_bus::BytesView body) {
     std_srvs::srv::v1::SetBoolRequest req;
     ROBOT_BUS_CHECK(req.ParseFromArray(body.data, static_cast<int>(body.size)));
     std_srvs::srv::v1::SetBoolResponse resp;
@@ -80,6 +80,7 @@ void run_svc_server() {
   std::this_thread::sleep_for(std::chrono::seconds(15));
   node.shutdown();
   node.wait();
+  (void)svc;
 }
 
 void run_act_client() {

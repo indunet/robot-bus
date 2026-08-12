@@ -67,7 +67,8 @@ class TypedTopicPublisher {
 };
 
 template <typename Msg>
-TypedTopicPublisher<Msg> create_publisher(Node &node, const char *topic, int32_t qos_depth = 0) {
+[[nodiscard]] TypedTopicPublisher<Msg> create_publisher(Node &node, const char *topic,
+                                                        int32_t qos_depth = 0) {
   if (qos_depth > 0) {
     return TypedTopicPublisher<Msg>(node.create_publisher(topic, qos_depth));
   }
@@ -75,7 +76,7 @@ TypedTopicPublisher<Msg> create_publisher(Node &node, const char *topic, int32_t
 }
 
 template <typename Msg>
-SubscriptionHandle create_subscription(
+[[nodiscard]] SubscriptionHandle create_subscription(
     Node &node, const char *topic, std::function<void(std::string_view, const Msg &)> callback,
     const CallbackGroup *group = nullptr, int32_t qos_depth = 0) {
   return node.create_subscription(
@@ -128,7 +129,7 @@ TypedServiceClient<Req, Resp> create_client(Node &node, const char *service_name
 }
 
 template <typename Req, typename Resp>
-ServiceHandle create_service(Node &node, const char *service_name,
+[[nodiscard]] ServiceHandle create_service(Node &node, const char *service_name,
                              std::function<Resp(const Req &)> handler,
                              const CallbackGroup *group = nullptr) {
   return node.create_service(
@@ -203,7 +204,7 @@ TypedActionClient<Goal, Feedback, Result> create_action_client(Node &node,
 
 /// Typed action server. Handler returns `(phase, body)` pairs; use `encode_pb(feedback|result)`.
 template <typename Goal>
-ActionServerHandle create_action_server(
+[[nodiscard]] ActionServerHandle create_action_server(
     Node &node, const char *action_name,
     std::function<std::vector<std::pair<std::string, std::vector<uint8_t>>>(const Goal &)> handler,
     const CallbackGroup *group = nullptr) {

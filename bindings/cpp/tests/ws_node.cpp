@@ -59,12 +59,14 @@ int main() {
   {
     auto node = robot_bus::Node::ws("only-client");
     expect_not_supported("create_service", [&] {
-      node.create_service("/svc", [](robot_bus::BytesView) { return std::vector<uint8_t>{}; });
+      auto svc = node.create_service("/svc", [](robot_bus::BytesView) { return std::vector<uint8_t>{}; });
+      (void)svc;
     });
     expect_not_supported("create_action_server", [&] {
-      node.create_action_server("/act", [](robot_bus::BytesView) {
+      auto act = node.create_action_server("/act", [](robot_bus::BytesView) {
         return std::vector<std::pair<std::string, std::vector<uint8_t>>>{};
       });
+      (void)act;
     });
   }
 
@@ -77,7 +79,7 @@ int main() {
     std::atomic<bool> got{false};
     std::string got_topic;
     std::vector<uint8_t> got_payload;
-    sub_node.create_subscription("cpp.ws.pub", [&](std::string_view topic, robot_bus::BytesView payload) {
+    auto sub = sub_node.create_subscription("cpp.ws.pub", [&](std::string_view topic, robot_bus::BytesView payload) {
       got_topic = std::string(topic);
       got_payload.assign(payload.data, payload.data + payload.size);
       got = true;
@@ -98,6 +100,7 @@ int main() {
     sub_node.stop();
     sub_node.wait();
     bus.stop();
+    (void)sub;
   }
 
   // --- subscribe + service via gRPC ---
@@ -109,7 +112,7 @@ int main() {
     auto pub = pub_node.create_publisher("cpp.ws.topic");
 
     auto server = bus.make_node("svc_server");
-    server.create_service("svc.cpp_grpc_echo", [](robot_bus::BytesView body) {
+    auto svc_h = server.create_service("svc.cpp_grpc_echo", [](robot_bus::BytesView body) {
       std::vector<uint8_t> out;
       const char *prefix = "echo:";
       out.insert(out.end(), prefix, prefix + 5);
@@ -123,7 +126,7 @@ int main() {
     std::atomic<bool> got{false};
     std::string got_topic;
     std::vector<uint8_t> got_payload;
-    client.create_subscription("cpp.ws.topic", [&](std::string_view topic, robot_bus::BytesView payload) {
+    auto sub = client.create_subscription("cpp.ws.topic", [&](std::string_view topic, robot_bus::BytesView payload) {
       got_topic = std::string(topic);
       got_payload.assign(payload.data, payload.data + payload.size);
       got = true;
@@ -147,6 +150,8 @@ int main() {
     server.stop();
     server.wait();
     bus.stop();
+    (void)svc_h;
+    (void)sub;
   }
 
   // --- action client via gRPC ---
@@ -155,7 +160,7 @@ int main() {
     const std::string ws_url = "http://" + bus.api_listen;
 
     auto server = bus.make_node("act_server");
-    server.create_action_server("act.cpp_grpc_demo", [](robot_bus::BytesView body) {
+    auto act = server.create_action_server("act.cpp_grpc_demo", [](robot_bus::BytesView body) {
       std::vector<std::pair<std::string, std::vector<uint8_t>>> phases;
       phases.emplace_back("FEEDBACK", std::vector<uint8_t>{'s', 't', 'e', 'p', '-', '1'});
       phases.emplace_back("FEEDBACK", std::vector<uint8_t>{'s', 't', 'e', 'p', '-', '2'});
@@ -192,6 +197,7 @@ int main() {
     server.stop();
     server.wait();
     bus.stop();
+    (void)act;
   }
 
   std::cout << "ok: ws_node\n";

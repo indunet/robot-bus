@@ -14,7 +14,7 @@ int main() {
   auto server = bus.make_node("svc_server");
   auto client_node = bus.make_node("svc_client");
 
-  server.create_service("/set_bool", [](robot_bus::BytesView body) {
+  auto svc = server.create_service("/set_bool", [](robot_bus::BytesView body) {
     std_srvs::srv::v1::SetBoolRequest req;
     ROBOT_BUS_CHECK(req.ParseFromArray(body.data, static_cast<int>(body.size)));
     std_srvs::srv::v1::SetBoolResponse resp;
@@ -43,6 +43,7 @@ int main() {
   server.shutdown();
   server.wait();
   bus.stop();
+  (void)svc;
   std::cout << "ok: service_set_bool\n";
   return 0;
 }

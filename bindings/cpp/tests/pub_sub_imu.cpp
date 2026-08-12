@@ -15,7 +15,7 @@ int main() {
 
   std::atomic<bool> got{false};
   double got_z = 0.0;
-  node.create_subscription("/imu", [&](std::string_view topic, robot_bus::BytesView payload) {
+  auto sub = node.create_subscription("/imu", [&](std::string_view topic, robot_bus::BytesView payload) {
     ROBOT_BUS_CHECK(topic == "/imu");
     sensor_msgs::msg::v1::Imu imu;
     ROBOT_BUS_CHECK(imu.ParseFromArray(payload.data, static_cast<int>(payload.size)));
@@ -38,6 +38,7 @@ int main() {
   node.shutdown();
   node.wait();
   bus.stop();
+  (void)sub;
   std::cout << "ok: pub_sub_imu\n";
   return 0;
 }

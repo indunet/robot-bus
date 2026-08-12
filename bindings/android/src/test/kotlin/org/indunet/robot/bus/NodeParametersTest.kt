@@ -26,7 +26,13 @@ class NodeParametersTest {
             node.setParameter("max_speed", 2.0)
             assertEquals(2.0, node.getParameter("max_speed") as Double, 1e-9)
 
-            assertEquals(4, node.listParameters().size)
+            val listed = node.listParameters()
+            assertEquals(4, listed.names.size)
+            assertEquals(4, node.listAllParameters().size)
+
+            node.undeclareParameter("enabled")
+            assertFalse(node.hasParameter("enabled"))
+            assertEquals(3, node.listAllParameters().size)
 
             node.loadParametersFromYamlStr("ros__parameters:\n  max_speed: 3.25\n  extra: hello\n")
             assertEquals(3.25, node.getParameter("max_speed") as Double, 1e-9)

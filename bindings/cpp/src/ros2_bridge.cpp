@@ -254,10 +254,11 @@ template <typename RosMsg>
 void wire_topic_bus_to_ros(rclcpp::Node::SharedPtr ros_node, Node &bus_node,
                            const TopicRouteSpec &route,
                            RosMsg (*convert)(const uint8_t *, size_t),
-                           std::vector<rclcpp::PublisherBase::SharedPtr> &pubs) {
+                           std::vector<rclcpp::PublisherBase::SharedPtr> &pubs,
+                           std::vector<std::shared_ptr<void>> &keep_alive) {
   auto ros_pub = ros_node->create_publisher<RosMsg>(route.ros_topic, 10);
   auto weak_pub = std::weak_ptr<typename rclcpp::Publisher<RosMsg>>(ros_pub);
-  bus_node.create_subscription(
+  keep_alive.push_back(std::make_shared<SubscriptionHandle>(bus_node.create_subscription(
       route.bus_topic.c_str(),
       [weak_pub, convert](std::string_view, BytesView payload) {
         auto pub = weak_pub.lock();
@@ -268,7 +269,7 @@ void wire_topic_bus_to_ros(rclcpp::Node::SharedPtr ros_node, Node &bus_node,
           pub->publish(convert(payload.data, payload.size));
         } catch (...) {
         }
-      });
+      })));
   pubs.push_back(std::move(ros_pub));
 }
 
@@ -277,7 +278,8 @@ void wire_topic_builtin(rclcpp::Node::SharedPtr ros_node, Node &bus_node,
                         std::vector<rclcpp::SubscriptionBase::SharedPtr> &ros_subs,
                         std::vector<rclcpp::PublisherBase::SharedPtr> &ros_pubs,
                         std::vector<std::shared_ptr<TopicPublisher>> &bus_pubs,
-                        std::vector<std::shared_ptr<std::mutex>> &bus_pub_mutexes) {
+                        std::vector<std::shared_ptr<std::mutex>> &bus_pub_mutexes,
+                        std::vector<std::shared_ptr<void>> &keep_alive) {
   if (route.direction == Direction::Ros2ToBus) {
     switch (route.builtin) {
       case TopicBuiltin::StdMsgsString:
@@ -293,11 +295,11 @@ void wire_topic_builtin(rclcpp::Node::SharedPtr ros_node, Node &bus_node,
     switch (route.builtin) {
       case TopicBuiltin::StdMsgsString:
         wire_topic_bus_to_ros<std_msgs::msg::String>(ros_node, bus_node, route, string_bus_to_ros,
-                                                     ros_pubs);
+                                                     ros_pubs, keep_alive);
         break;
       case TopicBuiltin::SensorMsgsImage:
         wire_topic_bus_to_ros<sensor_msgs::msg::Image>(ros_node, bus_node, route, image_bus_to_ros,
-                                                       ros_pubs);
+                                                       ros_pubs, keep_alive);
         break;
     }
   }
@@ -316,14 +318,16 @@ void wire_topic(rclcpp::Node::SharedPtr ros_node, Node &bus_node, const TopicRou
     route.custom->attach(ctx);
     return;
   }
-  wire_topic_builtin(ros_node, bus_node, route, ros_subs, ros_pubs, bus_pubs, bus_pub_mutexes);
+  wire_topic_builtin(ros_node, bus_node, route, ros_subs, ros_pubs, bus_pubs, bus_pub_mutexes,
+                     keep_alive);
 }
 
 void wire_trigger(rclcpp::Node::SharedPtr ros_node, Node &bus_node, const ServiceRouteSpec &route,
                   rclcpp::CallbackGroup::SharedPtr group,
                   std::vector<rclcpp::ServiceBase::SharedPtr> &ros_srvs,
                   std::vector<rclcpp::ClientBase::SharedPtr> &ros_clients,
-                  std::vector<std::shared_ptr<ServiceClient>> &bus_clients) {
+                  std::vector<std::shared_ptr<ServiceClient>> &bus_clients,
+                  std::vector<std::shared_ptr<void>> &keep_alive) {
   const double timeout = route.timeout_secs;
   if (route.direction == Direction::Ros2ToBus) {
     auto bus_client =
@@ -356,28 +360,27 @@ void wire_trigger(rclcpp::Node::SharedPtr ros_node, Node &bus_node, const Servic
     auto ros_client = ros_node->create_client<std_srvs::srv::Trigger>(
         route.ros_service, rmw_qos_profile_services_default, group);
     ros_clients.push_back(ros_client);
-    bus_node.create_service(route.bus_service.c_str(),
-                            [ros_client, timeout](BytesView body) -> std::vector<uint8_t> {
-                              (void)body;
-                              if (!ros_client->wait_for_service(
-                                      std::chrono::duration<double>(timeout))) {
-                                std_srvs::srv::Trigger::Response err;
-                                err.success = false;
-                                err.message = "timed out waiting for ROS service";
-                                return trigger_resp_ros_to_bus(err);
-                              }
-                              auto req = std::make_shared<std_srvs::srv::Trigger::Request>();
-                              auto future = ros_client->async_send_request(req);
-                              const auto status =
-                                  future.wait_for(std::chrono::duration<double>(timeout));
-                              if (status != std::future_status::ready) {
-                                std_srvs::srv::Trigger::Response err;
-                                err.success = false;
-                                err.message = "timed out waiting for ROS response";
-                                return trigger_resp_ros_to_bus(err);
-                              }
-                              return trigger_resp_ros_to_bus(*future.get());
-                            });
+    keep_alive.push_back(std::make_shared<ServiceHandle>(bus_node.create_service(
+        route.bus_service.c_str(),
+        [ros_client, timeout](BytesView body) -> std::vector<uint8_t> {
+          (void)body;
+          if (!ros_client->wait_for_service(std::chrono::duration<double>(timeout))) {
+            std_srvs::srv::Trigger::Response err;
+            err.success = false;
+            err.message = "timed out waiting for ROS service";
+            return trigger_resp_ros_to_bus(err);
+          }
+          auto req = std::make_shared<std_srvs::srv::Trigger::Request>();
+          auto future = ros_client->async_send_request(req);
+          const auto status = future.wait_for(std::chrono::duration<double>(timeout));
+          if (status != std::future_status::ready) {
+            std_srvs::srv::Trigger::Response err;
+            err.success = false;
+            err.message = "timed out waiting for ROS response";
+            return trigger_resp_ros_to_bus(err);
+          }
+          return trigger_resp_ros_to_bus(*future.get());
+        })));
   }
 }
 
@@ -385,7 +388,8 @@ void wire_set_bool(rclcpp::Node::SharedPtr ros_node, Node &bus_node, const Servi
                    rclcpp::CallbackGroup::SharedPtr group,
                    std::vector<rclcpp::ServiceBase::SharedPtr> &ros_srvs,
                    std::vector<rclcpp::ClientBase::SharedPtr> &ros_clients,
-                   std::vector<std::shared_ptr<ServiceClient>> &bus_clients) {
+                   std::vector<std::shared_ptr<ServiceClient>> &bus_clients,
+                   std::vector<std::shared_ptr<void>> &keep_alive) {
   const double timeout = route.timeout_secs;
   if (route.direction == Direction::Ros2ToBus) {
     auto bus_client =
@@ -418,28 +422,26 @@ void wire_set_bool(rclcpp::Node::SharedPtr ros_node, Node &bus_node, const Servi
     auto ros_client = ros_node->create_client<std_srvs::srv::SetBool>(
         route.ros_service, rmw_qos_profile_services_default, group);
     ros_clients.push_back(ros_client);
-    bus_node.create_service(route.bus_service.c_str(),
-                            [ros_client, timeout](BytesView body) -> std::vector<uint8_t> {
-                              if (!ros_client->wait_for_service(
-                                      std::chrono::duration<double>(timeout))) {
-                                std_srvs::srv::SetBool::Response err;
-                                err.success = false;
-                                err.message = "timed out waiting for ROS service";
-                                return set_bool_resp_ros_to_bus(err);
-                              }
-                              auto req = std::make_shared<std_srvs::srv::SetBool::Request>(
-                                  set_bool_req_bus_to_ros(body));
-                              auto future = ros_client->async_send_request(req);
-                              const auto status =
-                                  future.wait_for(std::chrono::duration<double>(timeout));
-                              if (status != std::future_status::ready) {
-                                std_srvs::srv::SetBool::Response err;
-                                err.success = false;
-                                err.message = "timed out waiting for ROS response";
-                                return set_bool_resp_ros_to_bus(err);
-                              }
-                              return set_bool_resp_ros_to_bus(*future.get());
-                            });
+    keep_alive.push_back(std::make_shared<ServiceHandle>(bus_node.create_service(
+        route.bus_service.c_str(),
+        [ros_client, timeout](BytesView body) -> std::vector<uint8_t> {
+          if (!ros_client->wait_for_service(std::chrono::duration<double>(timeout))) {
+            std_srvs::srv::SetBool::Response err;
+            err.success = false;
+            err.message = "timed out waiting for ROS service";
+            return set_bool_resp_ros_to_bus(err);
+          }
+          auto req = std::make_shared<std_srvs::srv::SetBool::Request>(set_bool_req_bus_to_ros(body));
+          auto future = ros_client->async_send_request(req);
+          const auto status = future.wait_for(std::chrono::duration<double>(timeout));
+          if (status != std::future_status::ready) {
+            std_srvs::srv::SetBool::Response err;
+            err.success = false;
+            err.message = "timed out waiting for ROS response";
+            return set_bool_resp_ros_to_bus(err);
+          }
+          return set_bool_resp_ros_to_bus(*future.get());
+        })));
   }
 }
 
@@ -447,13 +449,16 @@ void wire_service_builtin(rclcpp::Node::SharedPtr ros_node, Node &bus_node,
                           const ServiceRouteSpec &route, rclcpp::CallbackGroup::SharedPtr group,
                           std::vector<rclcpp::ServiceBase::SharedPtr> &ros_srvs,
                           std::vector<rclcpp::ClientBase::SharedPtr> &ros_clients,
-                          std::vector<std::shared_ptr<ServiceClient>> &bus_clients) {
+                          std::vector<std::shared_ptr<ServiceClient>> &bus_clients,
+                          std::vector<std::shared_ptr<void>> &keep_alive) {
   switch (route.builtin) {
     case ServiceBuiltin::Trigger:
-      wire_trigger(ros_node, bus_node, route, group, ros_srvs, ros_clients, bus_clients);
+      wire_trigger(ros_node, bus_node, route, group, ros_srvs, ros_clients, bus_clients,
+                   keep_alive);
       break;
     case ServiceBuiltin::SetBool:
-      wire_set_bool(ros_node, bus_node, route, group, ros_srvs, ros_clients, bus_clients);
+      wire_set_bool(ros_node, bus_node, route, group, ros_srvs, ros_clients, bus_clients,
+                    keep_alive);
       break;
   }
 }
@@ -471,7 +476,8 @@ void wire_service(rclcpp::Node::SharedPtr ros_node, Node &bus_node, const Servic
     route.custom->attach(ctx);
     return;
   }
-  wire_service_builtin(ros_node, bus_node, route, group, ros_srvs, ros_clients, bus_clients);
+  wire_service_builtin(ros_node, bus_node, route, group, ros_srvs, ros_clients, bus_clients,
+                       keep_alive);
 }
 
 using Fibonacci = example_interfaces::action::Fibonacci;
@@ -541,13 +547,14 @@ void wire_fibonacci_ros_to_bus(
 void wire_fibonacci_bus_to_ros(
     rclcpp::Node::SharedPtr ros_node, Node &bus_node, const ActionRouteSpec &route,
     rclcpp::CallbackGroup::SharedPtr group,
-    std::vector<std::shared_ptr<rclcpp_action::ClientBase>> &ros_action_clients) {
+    std::vector<std::shared_ptr<rclcpp_action::ClientBase>> &ros_action_clients,
+    std::vector<std::shared_ptr<void>> &keep_alive) {
   auto ros_client = rclcpp_action::create_client<Fibonacci>(ros_node, route.ros_action, group);
   auto mtx = std::make_shared<std::mutex>();
   const double timeout = route.timeout_secs;
   ros_action_clients.push_back(ros_client);
 
-  bus_node.create_action_server(
+  keep_alive.push_back(std::make_shared<ActionServerHandle>(bus_node.create_action_server(
       route.bus_action.c_str(),
       [ros_client, mtx, timeout](BytesView body)
           -> std::vector<std::pair<std::string, std::vector<uint8_t>>> {
@@ -617,7 +624,7 @@ void wire_fibonacci_bus_to_ros(
           return fibonacci_empty_result_phases();
         }
         return phases;
-      });
+      })));
 }
 
 void wire_action_builtin(
@@ -625,14 +632,16 @@ void wire_action_builtin(
     rclcpp::CallbackGroup::SharedPtr group,
     std::vector<std::shared_ptr<rclcpp_action::ServerBase>> &ros_actions,
     std::vector<std::shared_ptr<rclcpp_action::ClientBase>> &ros_action_clients,
-    std::vector<std::shared_ptr<ActionClient>> &bus_action_clients) {
+    std::vector<std::shared_ptr<ActionClient>> &bus_action_clients,
+    std::vector<std::shared_ptr<void>> &keep_alive) {
   switch (route.builtin) {
     case ActionBuiltin::Fibonacci:
       if (route.direction == Direction::Ros2ToBus) {
         wire_fibonacci_ros_to_bus(ros_node, bus_node, route, group, ros_actions,
                                   bus_action_clients);
       } else {
-        wire_fibonacci_bus_to_ros(ros_node, bus_node, route, group, ros_action_clients);
+        wire_fibonacci_bus_to_ros(ros_node, bus_node, route, group, ros_action_clients,
+                                  keep_alive);
       }
       break;
   }
@@ -652,7 +661,7 @@ void wire_action(rclcpp::Node::SharedPtr ros_node, Node &bus_node, const ActionR
     return;
   }
   wire_action_builtin(ros_node, bus_node, route, group, ros_actions, ros_action_clients,
-                      bus_action_clients);
+                      bus_action_clients, keep_alive);
 }
 
 }  // namespace

@@ -277,8 +277,9 @@ ROBOT_BUS_API RobotBusTopicPublisher *robot_bus_node_create_publisher(RobotBusNo
 /** depth <= 0 keeps default HWM; depth > 0 maps to KeepLast depth. */
 ROBOT_BUS_API RobotBusTopicPublisher *robot_bus_node_create_publisher_with_qos(
     RobotBusNode *n, const char *topic, int32_t depth);
-/** Returns opaque handle (NULL on error). Caller may free with
- * robot_bus_subscription_handle_free or destroy via robot_bus_node_destroy_subscription. */
+/** Returns opaque handle (NULL on error). `robot_bus_subscription_handle_free`
+ * only releases the handle; use `robot_bus_node_destroy_subscription` to
+ * unsubscribe. The C++ `SubscriptionHandle` destructor destroys on drop. */
 ROBOT_BUS_API RobotBusSubscriptionHandle *robot_bus_node_create_subscription(
     RobotBusNode *n, const char *topic, RobotBusMsgCallback callback, void *user,
     const RobotBusCallbackGroup *group);

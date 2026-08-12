@@ -41,7 +41,7 @@ class TypedTopicMapper : public TopicMapper {
     } else {
       auto ros_pub = ctx.ros_node->template create_publisher<RosMsg>(ctx.ros_topic, 10);
       auto weak_pub = std::weak_ptr<rclcpp::Publisher<RosMsg>>(ros_pub);
-      ctx.bus_node.create_subscription(
+      ctx.retain(std::make_shared<SubscriptionHandle>(ctx.bus_node.create_subscription(
           ctx.bus_topic.c_str(),
           [self, weak_pub](std::string_view, BytesView payload) {
             auto pub = weak_pub.lock();
@@ -52,7 +52,7 @@ class TypedTopicMapper : public TopicMapper {
               pub->publish(self->bus_to_ros(payload));
             } catch (...) {
             }
-          });
+          })));
       ctx.retain(std::move(ros_pub));
     }
   }
@@ -99,7 +99,7 @@ class TypedServiceMapper : public ServiceMapper {
       auto ros_client = ctx.ros_node->template create_client<RosSrv>(
           ctx.ros_service, rmw_qos_profile_services_default, ctx.callback_group);
       ctx.retain(ros_client);
-      ctx.bus_node.create_service(
+      ctx.retain(std::make_shared<ServiceHandle>(ctx.bus_node.create_service(
           ctx.bus_service.c_str(),
           [self, ros_client, timeout](BytesView body) -> std::vector<uint8_t> {
             if (!ros_client->wait_for_service(std::chrono::duration<double>(timeout))) {
@@ -114,7 +114,7 @@ class TypedServiceMapper : public ServiceMapper {
                   self->error_response("timed out waiting for ROS response"));
             }
             return self->ros_resp_to_bus(*future.get());
-          });
+          })));
     }
   }
 
@@ -194,7 +194,7 @@ class TypedActionMapper : public ActionMapper {
       auto mtx = std::make_shared<std::mutex>();
       ctx.retain(ros_client);
       ctx.retain(mtx);
-      ctx.bus_node.create_action_server(
+      ctx.retain(std::make_shared<ActionServerHandle>(ctx.bus_node.create_action_server(
           ctx.bus_action.c_str(),
           [self, ros_client, mtx, timeout](BytesView body)
               -> std::vector<std::pair<std::string, std::vector<uint8_t>>> {
@@ -258,7 +258,7 @@ class TypedActionMapper : public ActionMapper {
               return {{"RESULT", self->ros_result_to_bus(Result{})}};
             }
             return phases;
-          });
+          })));
     }
   }
 };

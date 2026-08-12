@@ -20,7 +20,7 @@ int main() {
   auto server = bus.make_node("act_server");
   auto client_node = bus.make_node("act_client");
 
-  server.create_action_server("fibonacci", [](robot_bus::BytesView body) {
+  auto act = server.create_action_server("fibonacci", [](robot_bus::BytesView body) {
     robot_bus_interface::action::v1::FibonacciGoal goal;
     ROBOT_BUS_CHECK(goal.ParseFromArray(body.data, static_cast<int>(body.size)));
     const int order = goal.order() < 0 ? 0 : goal.order();
@@ -102,6 +102,7 @@ int main() {
   server.shutdown();
   server.wait();
   bus.stop();
+  (void)act;
   std::cout << "ok: action_fibonacci\n";
   return 0;
 }

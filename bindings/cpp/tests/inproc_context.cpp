@@ -18,7 +18,7 @@ int main() {
 
   std::atomic<int> hits{0};
   auto sub = Node::inproc_with_context(ctx, "inproc-sub");
-  sub.create_subscription("/inproc/demo", [&](std::string_view, BytesView payload) {
+  auto sub_h = sub.create_subscription("/inproc/demo", [&](std::string_view, BytesView payload) {
     ROBOT_BUS_CHECK(std::string(reinterpret_cast<const char *>(payload.data), payload.size) ==
                     "hello-inproc");
     hits.fetch_add(1);
@@ -39,5 +39,6 @@ int main() {
 
   sub.stop();
   broker.stop();
+  (void)sub_h;
   return 0;
 }
