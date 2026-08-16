@@ -1,17 +1,37 @@
 import type { Metadata, Viewport } from 'next'
-import { Inter, JetBrains_Mono, Orbitron } from 'next/font/google'
+import localFont from 'next/font/local'
 import Providers from './providers'
 import './globals.css'
 
-const inter = Inter({ subsets: ['latin'], variable: '--font-inter' })
-const jetbrainsMono = JetBrains_Mono({
-  subsets: ['latin'],
-  variable: '--font-mono',
+// Self-hosted (next/font/local) so `next build` does not fetch fonts.gstatic.com —
+// CI / locked-down networks often fail with next/font/google.
+const inter = localFont({
+  src: '../fonts/inter-latin-wght-normal.woff2',
+  variable: '--font-inter',
+  weight: '100 900',
+  display: 'swap',
 })
-const orbitron = Orbitron({
-  subsets: ['latin'],
+const jetbrainsMono = localFont({
+  src: '../fonts/jetbrains-mono-latin-wght-normal.woff2',
+  variable: '--font-mono',
+  weight: '100 900',
+  display: 'swap',
+})
+const orbitron = localFont({
+  src: [
+    {
+      path: '../fonts/orbitron-latin-600-normal.woff2',
+      weight: '600',
+      style: 'normal',
+    },
+    {
+      path: '../fonts/orbitron-latin-700-normal.woff2',
+      weight: '700',
+      style: 'normal',
+    },
+  ],
   variable: '--font-brand',
-  weight: ['600', '700'],
+  display: 'swap',
 })
 
 export const metadata: Metadata = {

@@ -102,11 +102,11 @@
   }
   body {
     @apply bg-background text-foreground;
-    font-family: 'Inter', system-ui, sans-serif;
+    font-family: var(--font-inter), 'Inter', system-ui, sans-serif;
   }
 }
 
-/* 品牌展示字体（左上角 wordmark） */
+/* Brand wordmark (top-left); --font-brand from next/font/local */
 .font-brand {
   font-family: var(--font-brand), 'Orbitron', ui-sans-serif, system-ui, sans-serif;
 }
