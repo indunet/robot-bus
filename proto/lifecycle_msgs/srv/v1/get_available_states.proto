@@ -1,0 +1,12 @@
+syntax = "proto3";
+
+package lifecycle_msgs.srv.v1;
+
+import "lifecycle_msgs/msg/v1/state.proto";
+
+// Equivalent to ROS 2 `lifecycle_msgs/srv/GetAvailableStates`.
+message GetAvailableStatesRequest {}
+
+message GetAvailableStatesResponse {
+  repeated lifecycle_msgs.msg.v1.State available_states = 1;
+}

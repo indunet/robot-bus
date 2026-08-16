@@ -354,7 +354,7 @@ def scenario_java_svc_rust_client(robot_bus, broker) -> None:
 
 
 def scenario_python_act_cpp_client(robot_bus, broker) -> None:
-    from robot_bus.robot_bus_interface.action.v1 import (
+    from robot_bus.example_interfaces.action.v1 import (
         FibonacciFeedback,
         FibonacciGoal,
         FibonacciResult,

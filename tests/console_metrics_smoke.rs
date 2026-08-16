@@ -117,18 +117,22 @@ fn message_metrics_count_published_topics() {
     );
 
     let status = std::process::Command::new("curl")
-        .args(["-s", "http://127.0.0.1:25770/api/v1/status"])
+        .args(["-s", "--max-time", "3", "http://127.0.0.1:25770/api/v1/status"])
         .output()
         .map(|o| String::from_utf8_lossy(&o.stdout).into_owned())
         .unwrap_or_default();
     assert!(status.contains("ONLINE"), "status={status}");
 
     let index = std::process::Command::new("curl")
-        .args(["-s", "http://127.0.0.1:25770/"])
+        .args(["-s", "--max-time", "3", "http://127.0.0.1:25770/"])
         .output()
         .map(|o| String::from_utf8_lossy(&o.stdout).into_owned())
         .unwrap_or_default();
-    assert!(index.contains("<!DOCTYPE html>"), "index={index}");
+    // HTML5 doctype is case-insensitive; built console may emit lowercase.
+    assert!(
+        index.to_ascii_lowercase().contains("<!doctype html>"),
+        "index={index}"
+    );
 
     // Keep sub alive until after snapshot (drop order).
     drop(sub);
@@ -193,7 +197,7 @@ fn service_and_action_metrics_via_console_api() {
     );
 
     let services_json = std::process::Command::new("curl")
-        .args(["-s", "http://127.0.0.1:26770/api/v1/services"])
+        .args(["-s", "--max-time", "3", "http://127.0.0.1:26770/api/v1/services"])
         .output()
         .map(|o| String::from_utf8_lossy(&o.stdout).into_owned())
         .unwrap_or_default();
@@ -203,7 +207,7 @@ fn service_and_action_metrics_via_console_api() {
     );
 
     let actions_json = std::process::Command::new("curl")
-        .args(["-s", "http://127.0.0.1:26770/api/v1/actions"])
+        .args(["-s", "--max-time", "3", "http://127.0.0.1:26770/api/v1/actions"])
         .output()
         .map(|o| String::from_utf8_lossy(&o.stdout).into_owned())
         .unwrap_or_default();

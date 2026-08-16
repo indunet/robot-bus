@@ -1,0 +1,12 @@
+syntax = "proto3";
+
+package vision_msgs.msg.v1;
+
+import "geometry_msgs/msg/v1/covariance.proto";
+import "vision_msgs/msg/v1/object_hypothesis.proto";
+
+// Equivalent to ROS 2 `vision_msgs/msg/ObjectHypothesisWithPose`.
+message ObjectHypothesisWithPose {
+  ObjectHypothesis hypothesis = 1;
+  geometry_msgs.msg.v1.PoseWithCovariance pose = 2;
+}

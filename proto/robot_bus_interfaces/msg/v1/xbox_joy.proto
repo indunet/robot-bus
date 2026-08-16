@@ -1,0 +1,57 @@
+syntax = "proto3";
+
+package robot_bus_interfaces.msg.v1;
+
+import "std_msgs/msg/v1/header.proto";
+
+// robot-bus custom message (not a ROS 2 type).
+//
+// Xbox-layout joy state with named axes and buttons (ROS-style "Joy" naming).
+// Prefer this over anonymous `sensor_msgs/Joy` axes/buttons arrays when the
+// device follows (or is mapped to) a standard Xbox / XInput layout.
+//
+// Stick axes are typically -1.0 .. 1.0 (0 = centered).
+// Triggers are typically 0.0 .. 1.0 (0 = released).
+// Face-button names follow Xbox physical positions (A bottom, B right, X left, Y top).
+//
+message XboxJoy {
+  std_msgs.msg.v1.Header header = 1;
+
+  // Left analog stick: +x right, +y up (or driver convention; document at publish site).
+  float left_stick_x = 2;
+  float left_stick_y = 3;
+
+  // Right analog stick.
+  float right_stick_x = 4;
+  float right_stick_y = 5;
+
+  // Analog triggers (LT / RT).
+  float left_trigger = 6;
+  float right_trigger = 7;
+
+  // Face buttons (Xbox layout).
+  bool a = 8;
+  bool b = 9;
+  bool x = 10;
+  bool y = 11;
+
+  // Shoulder bumpers (LB / RB).
+  bool left_bumper = 12;
+  bool right_bumper = 13;
+
+  // Stick press (LS / RS).
+  bool left_stick_button = 14;
+  bool right_stick_button = 15;
+
+  // D-pad.
+  bool dpad_up = 16;
+  bool dpad_down = 17;
+  bool dpad_left = 18;
+  bool dpad_right = 19;
+
+  // System / menu buttons.
+  // View = Back / Select; Menu = Start; Guide = Xbox logo button.
+  bool view = 20;
+  bool menu = 21;
+  bool guide = 22;
+}

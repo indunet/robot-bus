@@ -12,12 +12,12 @@ export const FRAME_CANCEL = 3;
 export const FRAME_TRAILER = 4;
 
 export const METHOD_SUBSCRIBE =
-  "robot_bus_interface.grpc.v1.MessageGateway/Subscribe";
+  "robot_bus_interfaces.grpc.v1.MessageGateway/Subscribe";
 export const METHOD_PUBLISH =
-  "robot_bus_interface.grpc.v1.MessageGateway/Publish";
-export const METHOD_CALL = "robot_bus_interface.grpc.v1.ServiceGateway/Call";
+  "robot_bus_interfaces.grpc.v1.MessageGateway/Publish";
+export const METHOD_CALL = "robot_bus_interfaces.grpc.v1.ServiceGateway/Call";
 export const METHOD_SEND_GOAL =
-  "robot_bus_interface.grpc.v1.ActionGateway/SendGoal";
+  "robot_bus_interfaces.grpc.v1.ActionGateway/SendGoal";
 
 export type WsFrame =
   | { type: "request"; streamId: number; method: string; payload: Uint8Array }

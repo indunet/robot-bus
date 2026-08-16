@@ -14,10 +14,10 @@ pub const FRAME_DATA: u8 = 2;
 pub const FRAME_CANCEL: u8 = 3;
 pub const FRAME_TRAILER: u8 = 4;
 
-pub const METHOD_SUBSCRIBE: &str = "robot_bus_interface.grpc.v1.MessageGateway/Subscribe";
-pub const METHOD_PUBLISH: &str = "robot_bus_interface.grpc.v1.MessageGateway/Publish";
-pub const METHOD_CALL: &str = "robot_bus_interface.grpc.v1.ServiceGateway/Call";
-pub const METHOD_SEND_GOAL: &str = "robot_bus_interface.grpc.v1.ActionGateway/SendGoal";
+pub const METHOD_SUBSCRIBE: &str = "robot_bus_interfaces.grpc.v1.MessageGateway/Subscribe";
+pub const METHOD_PUBLISH: &str = "robot_bus_interfaces.grpc.v1.MessageGateway/Publish";
+pub const METHOD_CALL: &str = "robot_bus_interfaces.grpc.v1.ServiceGateway/Call";
+pub const METHOD_SEND_GOAL: &str = "robot_bus_interfaces.grpc.v1.ActionGateway/SendGoal";
 
 #[derive(Debug, Clone)]
 pub enum Frame {

@@ -1,0 +1,14 @@
+syntax = "proto3";
+
+package map_msgs.msg.v1;
+
+// Equivalent to ROS 2 `map_msgs/msg/ProjectedMapInfo`.
+message ProjectedMapInfo {
+  string frame_id = 1;
+  double x = 2;
+  double y = 3;
+  double width = 4;
+  double height = 5;
+  double min_z = 6;
+  double max_z = 7;
+}

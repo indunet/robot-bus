@@ -1,0 +1,12 @@
+syntax = "proto3";
+
+package vision_msgs.msg.v1;
+
+import "geometry_msgs/msg/v1/pose.proto";
+import "geometry_msgs/msg/v1/vector3.proto";
+
+// Equivalent to ROS 2 `vision_msgs/msg/BoundingBox3D`.
+message BoundingBox3D {
+  geometry_msgs.msg.v1.Pose center = 1;
+  geometry_msgs.msg.v1.Vector3 size = 2;
+}

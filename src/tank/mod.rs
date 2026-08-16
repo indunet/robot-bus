@@ -25,7 +25,7 @@ use crate::action::v1::{
     PointNavigationResult,
 };
 use crate::geometry_msgs::msg::v1::{Pose2D, Twist};
-use crate::robot_bus_interface::srv::v1::{Reset, ResetRequest, ResetResponse};
+use crate::robot_bus_interfaces::srv::v1::{Reset, ResetRequest, ResetResponse};
 use crate::runtime::{CallbackGroupType, Context, MultiThreadedExecutor, Node, NodeOptions};
 use crate::{ActionOutcome, BusError, Result};
 

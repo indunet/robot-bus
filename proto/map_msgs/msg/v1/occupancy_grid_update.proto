@@ -1,0 +1,16 @@
+syntax = "proto3";
+
+package map_msgs.msg.v1;
+
+import "std_msgs/msg/v1/header.proto";
+
+// Equivalent to ROS 2 `map_msgs/msg/OccupancyGridUpdate`.
+message OccupancyGridUpdate {
+  std_msgs.msg.v1.Header header = 1;
+  int32 x = 2;
+  int32 y = 3;
+  uint32 width = 4;
+  uint32 height = 5;
+  // int8[] in ROS 2; modeled as int32 for protobuf / prost.
+  repeated int32 data = 6;
+}

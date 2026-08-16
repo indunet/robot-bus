@@ -6,7 +6,9 @@ use std::sync::Arc;
 use std::thread;
 use std::time::Duration;
 
-use robot_bus::action::v1::{Fibonacci, FibonacciFeedback, FibonacciGoal, FibonacciResult};
+use robot_bus::example_interfaces::action::v1::{
+    Fibonacci, FibonacciFeedback, FibonacciGoal, FibonacciResult,
+};
 use robot_bus::action_bus::ActionKind;
 use robot_bus::std_srvs::srv::v1::{SetBool, SetBoolRequest, SetBoolResponse};
 use robot_bus::{ActionOutcome, Node, NodeOptions, RobotBusBroker, SingleThreadedExecutor};

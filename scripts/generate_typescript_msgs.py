@@ -34,12 +34,16 @@ PROTOC = os.environ.get("PROTOC", "protoc")
 EXPECTED_PROTOC_VERSION = "35.1"
 
 MSG_PACKAGES = (
+    "ackermann_msgs",
     "apriltag_msgs",
     "builtin_interfaces",
     "control_msgs",
     "diagnostic_msgs",
+    "example_interfaces",
     "foxglove_msgs",
     "geometry_msgs",
+    "lifecycle_msgs",
+    "map_msgs",
     "nav2_msgs",
     "nav_msgs",
     "sensor_msgs",
@@ -49,6 +53,7 @@ MSG_PACKAGES = (
     "tf2_msgs",
     "trajectory_msgs",
     "unique_identifier_msgs",
+    "vision_msgs",
     "visualization_msgs",
 )
 

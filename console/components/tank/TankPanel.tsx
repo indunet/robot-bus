@@ -14,16 +14,16 @@ import {
   MultiWaypointNavigationFeedback,
   MultiWaypointNavigationGoal,
   MultiWaypointNavigationResult,
-} from 'robot-bus/robot_bus_interface/action/v1/multi_waypoint_navigation'
+} from 'robot-bus/robot_bus_interfaces/action/v1/multi_waypoint_navigation'
 import {
   PointNavigationFeedback,
   PointNavigationGoal,
   PointNavigationResult,
-} from 'robot-bus/robot_bus_interface/action/v1/point_navigation'
+} from 'robot-bus/robot_bus_interfaces/action/v1/point_navigation'
 import {
   ResetRequest,
   ResetResponse,
-} from 'robot-bus/robot_bus_interface/srv/v1/reset'
+} from 'robot-bus/robot_bus_interfaces/srv/v1/reset'
 import { useI18n } from '@/lib/i18n'
 import {
   CMD_VEL_TOPIC,

@@ -1,0 +1,11 @@
+syntax = "proto3";
+
+package vision_msgs.msg.v1;
+
+import "vision_msgs/msg/v1/point2d.proto";
+
+// Equivalent to ROS 2 `vision_msgs/msg/Pose2D` (not geometry_msgs.Pose2D).
+message Pose2D {
+  Point2D position = 1;
+  double theta = 2;
+}

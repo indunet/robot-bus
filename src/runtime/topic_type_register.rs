@@ -3,7 +3,7 @@
 use prost::Message;
 
 use crate::console_topics;
-use crate::robot_bus_interface::msg::v1::TopicTypeRegister;
+use crate::robot_bus_interfaces::msg::v1::TopicTypeRegister;
 use crate::service_bus::ServiceClient;
 use crate::transports;
 

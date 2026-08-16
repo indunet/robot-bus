@@ -4,7 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import org.indunet.robot.bus.geometry_msgs.msg.v1.Vector3;
-import org.indunet.robot.bus.robot_bus_interface.action.v1.FibonacciGoal;
+import org.indunet.robot.bus.example_interfaces.action.v1.FibonacciGoal;
 import org.indunet.robot.bus.sensor_msgs.msg.v1.Imu;
 import org.indunet.robot.bus.std_srvs.srv.v1.SetBoolRequest;
 import org.indunet.robot.bus.std_srvs.srv.v1.SetBoolResponse;

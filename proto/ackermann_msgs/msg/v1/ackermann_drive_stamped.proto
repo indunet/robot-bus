@@ -1,0 +1,12 @@
+syntax = "proto3";
+
+package ackermann_msgs.msg.v1;
+
+import "std_msgs/msg/v1/header.proto";
+import "ackermann_msgs/msg/v1/ackermann_drive.proto";
+
+// Equivalent to ROS 2 `ackermann_msgs/msg/AckermannDriveStamped`.
+message AckermannDriveStamped {
+  std_msgs.msg.v1.Header header = 1;
+  AckermannDrive drive = 2;
+}

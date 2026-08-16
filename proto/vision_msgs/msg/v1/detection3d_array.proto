@@ -1,0 +1,12 @@
+syntax = "proto3";
+
+package vision_msgs.msg.v1;
+
+import "std_msgs/msg/v1/header.proto";
+import "vision_msgs/msg/v1/detection3d.proto";
+
+// Equivalent to ROS 2 `vision_msgs/msg/Detection3DArray`.
+message Detection3DArray {
+  std_msgs.msg.v1.Header header = 1;
+  repeated Detection3D detections = 2;
+}

@@ -1,0 +1,12 @@
+syntax = "proto3";
+
+package vision_msgs.msg.v1;
+
+import "vision_msgs/msg/v1/pose2d.proto";
+
+// Equivalent to ROS 2 `vision_msgs/msg/BoundingBox2D`.
+message BoundingBox2D {
+  Pose2D center = 1;
+  double size_x = 2;
+  double size_y = 3;
+}

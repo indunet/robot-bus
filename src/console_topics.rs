@@ -5,24 +5,24 @@ use crate::errors::{BusError, Result};
 /// Namespace for console snapshot topics and control-plane services.
 pub const PREFIX: &str = "/robot_bus";
 
-/// Periodic [`crate::robot_bus_interface::msg::v1::BrokerStatus`] snapshot.
+/// Periodic [`crate::robot_bus_interfaces::msg::v1::BrokerStatus`] snapshot.
 pub const STATUS: &str = "/robot_bus/status";
-/// Periodic [`crate::robot_bus_interface::msg::v1::TopicStatsList`] snapshot.
+/// Periodic [`crate::robot_bus_interfaces::msg::v1::TopicStatsList`] snapshot.
 pub const TOPICS: &str = "/robot_bus/topics";
-/// Periodic [`crate::robot_bus_interface::msg::v1::ServiceStatsList`] snapshot.
+/// Periodic [`crate::robot_bus_interfaces::msg::v1::ServiceStatsList`] snapshot.
 pub const SERVICES: &str = "/robot_bus/services";
-/// Periodic [`crate::robot_bus_interface::msg::v1::ActionStatsList`] snapshot.
+/// Periodic [`crate::robot_bus_interfaces::msg::v1::ActionStatsList`] snapshot.
 pub const ACTIONS: &str = "/robot_bus/actions";
-/// Periodic [`crate::robot_bus_interface::msg::v1::TopologySnapshot`] snapshot.
+/// Periodic [`crate::robot_bus_interfaces::msg::v1::TopologySnapshot`] snapshot.
 pub const TOPOLOGY: &str = "/robot_bus/topology";
-/// Streaming [`crate::robot_bus_interface::msg::v1::ConsoleEvent`] log lines.
+/// Streaming [`crate::robot_bus_interfaces::msg::v1::ConsoleEvent`] log lines.
 pub const EVENTS: &str = "/robot_bus/events";
 
-/// Client → broker: [`crate::robot_bus_interface::msg::v1::TopologyRegister`].
+/// Client → broker: [`crate::robot_bus_interfaces::msg::v1::TopologyRegister`].
 pub const TOPOLOGY_REGISTER: &str = "/robot_bus/topology/register";
-/// Client → broker: [`crate::robot_bus_interface::msg::v1::TopologyUnregister`].
+/// Client → broker: [`crate::robot_bus_interfaces::msg::v1::TopologyUnregister`].
 pub const TOPOLOGY_UNREGISTER: &str = "/robot_bus/topology/unregister";
-/// Client → broker: [`crate::robot_bus_interface::msg::v1::TopicTypeRegister`].
+/// Client → broker: [`crate::robot_bus_interfaces::msg::v1::TopicTypeRegister`].
 pub const TOPIC_TYPE_REGISTER: &str = "/robot_bus/topic_type/register";
 
 /// All control-plane topics the broker control subscriber must join.

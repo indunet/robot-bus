@@ -5,9 +5,9 @@ English | [中文](../zh/rust-api.md)
 `Cargo.toml`:
 
 ```toml
-robot-bus = "1.0.0"
+robot-bus = "1.1.0"
 # Local: robot-bus = { path = "../robot-bus" }
-# WebSocket RPC gateway (`ws` feature) is on by default; to disable: robot-bus = { version = "1.0.0", default-features = false }
+# WebSocket RPC gateway (`ws` feature) is on by default; to disable: robot-bus = { version = "1.1.0", default-features = false }
 ```
 
 ## Broker startup
@@ -195,6 +195,8 @@ fn main() -> robot_bus::Result<()> {
 }
 ```
 
+Full runnable programs: [`examples/topic_imu/`](../../examples/topic_imu/).
+
 Raw bytes: `create_publisher_raw` / `create_subscription_raw`.
 
 Topic / service / action names are used as passed (use full paths yourself).
@@ -313,7 +315,7 @@ Also on `Node`: typed `create_action_server` / `create_action_client` → `serve
 
 ```rust
 use std::time::Duration;
-use robot_bus::action::v1::{Fibonacci, FibonacciGoal};
+use robot_bus::example_interfaces::action::v1::{Fibonacci, FibonacciGoal};
 use robot_bus::Node;
 
 fn main() -> robot_bus::Result<()> {
@@ -331,6 +333,8 @@ fn main() -> robot_bus::Result<()> {
     Ok(())
 }
 ```
+
+Full runnable programs: [`examples/service_set_bool/`](../../examples/service_set_bool/), [`examples/action_fibonacci/`](../../examples/action_fibonacci/).
 
 Raw bytes: `create_action_server_raw` / `create_action_client_raw`. ZMQ `cancel()` sends an explicit `CANCEL` frame; gRPC `cancel()` cancels the corresponding server stream—neither guarantees “server acknowledged cancel”.
 
@@ -538,7 +542,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 ```
 
-Proto package name: `robot_bus_interface.grpc.v1`. See `proto/robot_bus_interface/grpc/v1/{message,service,action}_gateway.proto`.
+Proto package name: `robot_bus_interfaces.grpc.v1`. See `proto/robot_bus_interfaces/grpc/v1/{message,service,action}_gateway.proto`.
 
 HTTP discovery: `GET /api/v1/discover` (JSON); legacy protobuf `BrokerAnnounce` is encoding compatibility only—UDP multicast path removed.
 

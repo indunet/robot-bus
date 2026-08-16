@@ -12,7 +12,7 @@
 //! Service (`.srv`) definitions are Request/Response message pairs (e.g.
 //! `std_srvs::srv::v1::SetBoolRequest`), not gRPC `service`/`rpc` stubs.
 //! Marker types (e.g. [`std_srvs::srv::v1::SetBool`]) implement [`crate::typed::Service`].
-//! Action markers (e.g. [`crate::action::v1::Fibonacci`]) implement
+//! Action markers (e.g. [`crate::example_interfaces::action::v1::Fibonacci`]) implement
 //! [`crate::typed::Action`].
 
 pub mod apriltag_msgs {
@@ -82,6 +82,20 @@ pub mod sensor_msgs {
     pub mod msg {
         pub mod v1 {
             include!("sensor_msgs/msg/v1/_includes.rs");
+        }
+    }
+    pub mod srv {
+        pub mod v1 {
+            include!("sensor_msgs/srv/v1/_includes.rs");
+
+            use crate::typed::Service;
+
+            /// ROS 2 `sensor_msgs/srv/SetCameraInfo` type marker.
+            pub struct SetCameraInfo;
+            impl Service for SetCameraInfo {
+                type Request = SetCameraInfoRequest;
+                type Response = SetCameraInfoResponse;
+            }
         }
     }
 }
@@ -161,19 +175,11 @@ pub mod action_msgs {
 
 pub mod action {
     pub mod v1 {
-        include!("robot_bus_interface/action/v1/_includes.rs");
+        include!("robot_bus_interfaces/action/v1/_includes.rs");
 
         use crate::typed::Action;
 
-        /// Demo action type marker (`robot_bus_interface/action/Fibonacci`).
-        pub struct Fibonacci;
-        impl Action for Fibonacci {
-            type Goal = FibonacciGoal;
-            type Feedback = FibonacciFeedback;
-            type Result = FibonacciResult;
-        }
-
-        /// 单点导航 (`robot_bus_interface/action/PointNavigation`).
+        /// 单点导航 (`robot_bus_interfaces/action/PointNavigation`).
         pub struct PointNavigation;
         impl Action for PointNavigation {
             type Goal = PointNavigationGoal;
@@ -181,7 +187,7 @@ pub mod action {
             type Result = PointNavigationResult;
         }
 
-        /// 多途经点导航 (`robot_bus_interface/action/MultiWaypointNavigation`).
+        /// 多途经点导航 (`robot_bus_interfaces/action/MultiWaypointNavigation`).
         pub struct MultiWaypointNavigation;
         impl Action for MultiWaypointNavigation {
             type Goal = MultiWaypointNavigationGoal;
@@ -191,20 +197,53 @@ pub mod action {
     }
 }
 
-/// robot-bus interface messages (`robot_bus_interface.msg.v1`).
-pub mod robot_bus_interface {
-    pub mod msg {
+/// ROS 2–aligned tutorial interfaces (`example_interfaces`).
+pub mod example_interfaces {
+    pub mod action {
         pub mod v1 {
-            include!("robot_bus_interface/msg/v1/_includes.rs");
+            include!("example_interfaces/action/v1/_includes.rs");
+
+            use crate::typed::Action;
+
+            /// Demo action type marker (`example_interfaces/action/Fibonacci`).
+            pub struct Fibonacci;
+            impl Action for Fibonacci {
+                type Goal = FibonacciGoal;
+                type Feedback = FibonacciFeedback;
+                type Result = FibonacciResult;
+            }
         }
     }
     pub mod srv {
         pub mod v1 {
-            include!("robot_bus_interface/srv/v1/_includes.rs");
+            include!("example_interfaces/srv/v1/_includes.rs");
 
             use crate::typed::Service;
 
-            /// 复位 (`robot_bus_interface/srv/Reset`).
+            /// ROS 2 `example_interfaces/srv/AddTwoInts` type marker.
+            pub struct AddTwoInts;
+            impl Service for AddTwoInts {
+                type Request = AddTwoIntsRequest;
+                type Response = AddTwoIntsResponse;
+            }
+        }
+    }
+}
+
+/// robot-bus interface messages (`robot_bus_interfaces.msg.v1`).
+pub mod robot_bus_interfaces {
+    pub mod msg {
+        pub mod v1 {
+            include!("robot_bus_interfaces/msg/v1/_includes.rs");
+        }
+    }
+    pub mod srv {
+        pub mod v1 {
+            include!("robot_bus_interfaces/srv/v1/_includes.rs");
+
+            use crate::typed::Service;
+
+            /// 复位 (`robot_bus_interfaces/srv/Reset`).
             pub struct Reset;
             impl Service for Reset {
                 type Request = ResetRequest;
@@ -218,6 +257,20 @@ pub mod tf2_msgs {
     pub mod msg {
         pub mod v1 {
             include!("tf2_msgs/msg/v1/_includes.rs");
+        }
+    }
+    pub mod srv {
+        pub mod v1 {
+            include!("tf2_msgs/srv/v1/_includes.rs");
+
+            use crate::typed::Service;
+
+            /// ROS 2 `tf2_msgs/srv/FrameGraph` type marker.
+            pub struct FrameGraph;
+            impl Service for FrameGraph {
+                type Request = FrameGraphRequest;
+                type Response = FrameGraphResponse;
+            }
         }
     }
 }
@@ -234,6 +287,94 @@ pub mod diagnostic_msgs {
     pub mod msg {
         pub mod v1 {
             include!("diagnostic_msgs/msg/v1/_includes.rs");
+        }
+    }
+    pub mod srv {
+        pub mod v1 {
+            include!("diagnostic_msgs/srv/v1/_includes.rs");
+
+            use crate::typed::Service;
+
+            /// ROS 2 `diagnostic_msgs/srv/AddDiagnostics` type marker.
+            pub struct AddDiagnostics;
+            impl Service for AddDiagnostics {
+                type Request = AddDiagnosticsRequest;
+                type Response = AddDiagnosticsResponse;
+            }
+
+            /// ROS 2 `diagnostic_msgs/srv/SelfTest` type marker.
+            pub struct SelfTest;
+            impl Service for SelfTest {
+                type Request = SelfTestRequest;
+                type Response = SelfTestResponse;
+            }
+        }
+    }
+}
+
+pub mod ackermann_msgs {
+    pub mod msg {
+        pub mod v1 {
+            include!("ackermann_msgs/msg/v1/_includes.rs");
+        }
+    }
+}
+
+pub mod lifecycle_msgs {
+    pub mod msg {
+        pub mod v1 {
+            include!("lifecycle_msgs/msg/v1/_includes.rs");
+        }
+    }
+    pub mod srv {
+        pub mod v1 {
+            include!("lifecycle_msgs/srv/v1/_includes.rs");
+
+            use crate::typed::Service;
+
+            /// ROS 2 `lifecycle_msgs/srv/ChangeState` type marker.
+            pub struct ChangeState;
+            impl Service for ChangeState {
+                type Request = ChangeStateRequest;
+                type Response = ChangeStateResponse;
+            }
+
+            /// ROS 2 `lifecycle_msgs/srv/GetState` type marker.
+            pub struct GetState;
+            impl Service for GetState {
+                type Request = GetStateRequest;
+                type Response = GetStateResponse;
+            }
+
+            /// ROS 2 `lifecycle_msgs/srv/GetAvailableStates` type marker.
+            pub struct GetAvailableStates;
+            impl Service for GetAvailableStates {
+                type Request = GetAvailableStatesRequest;
+                type Response = GetAvailableStatesResponse;
+            }
+
+            /// ROS 2 `lifecycle_msgs/srv/GetAvailableTransitions` type marker.
+            pub struct GetAvailableTransitions;
+            impl Service for GetAvailableTransitions {
+                type Request = GetAvailableTransitionsRequest;
+                type Response = GetAvailableTransitionsResponse;
+            }
+        }
+    }
+}
+
+pub mod vision_msgs {
+    pub mod msg {
+        pub mod v1 {
+            include!("vision_msgs/msg/v1/_includes.rs");
+        }
+    }
+}
+
+pub mod map_msgs {
+    pub mod msg {
+        pub mod v1 {
+            include!("map_msgs/msg/v1/_includes.rs");
         }
     }
 }

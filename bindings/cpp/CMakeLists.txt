@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.16)
-project(robot_bus_cpp VERSION 1.0.0 LANGUAGES CXX)
+project(robot_bus_cpp VERSION 1.1.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -156,6 +156,31 @@ if(ROBOT_BUS_BUILD_TESTS)
     list(APPEND ROBOT_BUS_TEST_TARGETS ${t})
   endforeach()
   add_custom_target(cpp_tests DEPENDS ${ROBOT_BUS_TEST_TARGETS})
+endif()
+
+option(ROBOT_BUS_BUILD_EXAMPLES "Build repo examples/ C++ demos" OFF)
+if(ROBOT_BUS_BUILD_EXAMPLES)
+  set(ROBOT_BUS_EXAMPLES_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/../../examples")
+  set(ROBOT_BUS_EXAMPLE_SOURCES
+    topic_imu_listener:topic_imu/cpp/listener.cpp
+    topic_imu_talker:topic_imu/cpp/talker.cpp
+    service_set_bool_server:service_set_bool/cpp/server.cpp
+    service_set_bool_client:service_set_bool/cpp/client.cpp
+    action_fibonacci_server:action_fibonacci/cpp/server.cpp
+    action_fibonacci_client:action_fibonacci/cpp/client.cpp)
+  set(ROBOT_BUS_EXAMPLE_TARGETS)
+  foreach(entry ${ROBOT_BUS_EXAMPLE_SOURCES})
+    string(REPLACE ":" ";" parts "${entry}")
+    list(GET parts 0 target_name)
+    list(GET parts 1 rel_src)
+    add_executable(${target_name} "${ROBOT_BUS_EXAMPLES_ROOT}/${rel_src}")
+    target_link_libraries(${target_name} PRIVATE robot_bus robot_bus_msgs)
+    add_dependencies(${target_name} robot_bus_ffi_build)
+    set_target_properties(${target_name} PROPERTIES
+      RUNTIME_OUTPUT_DIRECTORY "${ROBOT_BUS_EXAMPLES_ROOT}/build")
+    list(APPEND ROBOT_BUS_EXAMPLE_TARGETS ${target_name})
+  endforeach()
+  add_custom_target(cpp_examples DEPENDS ${ROBOT_BUS_EXAMPLE_TARGETS})
 endif()
 
 include(GNUInstallDirs)

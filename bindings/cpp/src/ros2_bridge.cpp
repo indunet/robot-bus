@@ -1,7 +1,7 @@
 #include <robot_bus/ros2_bridge.hpp>
 
 #include <robot_bus/builtin_interfaces/msg/v1/time.pb.h>
-#include <robot_bus/robot_bus_interface/action/v1/fibonacci.pb.h>
+#include <robot_bus/example_interfaces/action/v1/fibonacci.pb.h>
 #include <robot_bus/sensor_msgs/msg/v1/image.pb.h>
 #include <robot_bus/std_msgs/msg/v1/header.pb.h>
 #include <robot_bus/std_msgs/msg/v1/primitives.pb.h>
@@ -157,20 +157,20 @@ std_srvs::srv::SetBool::Response set_bool_resp_bus_to_ros(BytesView body) {
 
 std::vector<uint8_t> fibonacci_goal_ros_to_bus(
     const example_interfaces::action::Fibonacci::Goal &ros) {
-  robot_bus_interface::action::v1::FibonacciGoal bus;
+  example_interfaces::action::v1::FibonacciGoal bus;
   bus.set_order(ros.order);
   return serialize_pb(bus);
 }
 
 example_interfaces::action::Fibonacci::Goal fibonacci_goal_bus_to_ros(BytesView body) {
-  auto bus = parse_pb<robot_bus_interface::action::v1::FibonacciGoal>(body);
+  auto bus = parse_pb<example_interfaces::action::v1::FibonacciGoal>(body);
   example_interfaces::action::Fibonacci::Goal ros;
   ros.order = bus.order();
   return ros;
 }
 
 example_interfaces::action::Fibonacci::Feedback fibonacci_feedback_bus_to_ros(BytesView body) {
-  auto bus = parse_pb<robot_bus_interface::action::v1::FibonacciFeedback>(body);
+  auto bus = parse_pb<example_interfaces::action::v1::FibonacciFeedback>(body);
   example_interfaces::action::Fibonacci::Feedback ros;
   ros.sequence.assign(bus.sequence().begin(), bus.sequence().end());
   return ros;
@@ -178,7 +178,7 @@ example_interfaces::action::Fibonacci::Feedback fibonacci_feedback_bus_to_ros(By
 
 std::vector<uint8_t> fibonacci_feedback_ros_to_bus(
     const example_interfaces::action::Fibonacci::Feedback &ros) {
-  robot_bus_interface::action::v1::FibonacciFeedback bus;
+  example_interfaces::action::v1::FibonacciFeedback bus;
   for (auto v : ros.sequence) {
     bus.add_sequence(v);
   }
@@ -186,7 +186,7 @@ std::vector<uint8_t> fibonacci_feedback_ros_to_bus(
 }
 
 example_interfaces::action::Fibonacci::Result fibonacci_result_bus_to_ros(BytesView body) {
-  auto bus = parse_pb<robot_bus_interface::action::v1::FibonacciResult>(body);
+  auto bus = parse_pb<example_interfaces::action::v1::FibonacciResult>(body);
   example_interfaces::action::Fibonacci::Result ros;
   ros.sequence.assign(bus.sequence().begin(), bus.sequence().end());
   return ros;
@@ -194,7 +194,7 @@ example_interfaces::action::Fibonacci::Result fibonacci_result_bus_to_ros(BytesV
 
 std::vector<uint8_t> fibonacci_result_ros_to_bus(
     const example_interfaces::action::Fibonacci::Result &ros) {
-  robot_bus_interface::action::v1::FibonacciResult bus;
+  example_interfaces::action::v1::FibonacciResult bus;
   for (auto v : ros.sequence) {
     bus.add_sequence(v);
   }
@@ -202,7 +202,7 @@ std::vector<uint8_t> fibonacci_result_ros_to_bus(
 }
 
 std::vector<std::pair<std::string, std::vector<uint8_t>>> fibonacci_empty_result_phases() {
-  return {{"RESULT", serialize_pb(robot_bus_interface::action::v1::FibonacciResult{})}};
+  return {{"RESULT", serialize_pb(example_interfaces::action::v1::FibonacciResult{})}};
 }
 
 Node make_bus_node(const BuilderState &state) {
@@ -618,7 +618,7 @@ void wire_fibonacci_bus_to_ros(
             phases.emplace_back("RESULT", fibonacci_result_ros_to_bus(*wrapped.result));
           } else {
             phases.emplace_back("RESULT",
-                                serialize_pb(robot_bus_interface::action::v1::FibonacciResult{}));
+                                serialize_pb(example_interfaces::action::v1::FibonacciResult{}));
           }
         } catch (...) {
           return fibonacci_empty_result_phases();

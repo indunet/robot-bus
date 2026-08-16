@@ -2,7 +2,7 @@
 
 // --- Fibonacci action conversions (rclrs vendor ↔ bus prost) ---
 
-use crate::action::v1::{
+use crate::example_interfaces::action::v1::{
     FibonacciFeedback as BusFibonacciFeedback, FibonacciGoal as BusFibonacciGoal,
     FibonacciResult as BusFibonacciResult,
 };

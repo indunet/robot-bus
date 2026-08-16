@@ -63,6 +63,8 @@ robot-bus-broker
 
 Default API / Web console / WebSocket listen: `http://0.0.0.0:15570`. After the broker is up, open the [Web console](#4-web-console) in a browser.
 
+Runnable demos (topic, service, action) for Rust / Python / C++: [`examples/`](examples/).
+
 Or start the broker in-process:
 
 ```python
@@ -129,7 +131,7 @@ svc = client.create_client(
 
 ```python
 import robot_bus
-from robot_bus.robot_bus_interface.action.v1 import (
+from robot_bus.example_interfaces.action.v1 import (
     FibonacciGoal, FibonacciFeedback, FibonacciResult,
 )
 
@@ -246,6 +248,7 @@ Many built-in types are already provided, aligned with common ROS 2 packages. A 
 | Topic | `geometry_msgs/msg/Twist` | `robot_bus.geometry_msgs.msg.v1.Twist` |
 | Topic | `nav_msgs/msg/Odometry` | `robot_bus.nav_msgs.msg.v1.Odometry` |
 | Service | `std_srvs/srv/SetBool` | `robot_bus.std_srvs.srv.v1.SetBoolRequest` / `SetBoolResponse` |
+| Action | `example_interfaces/action/Fibonacci` | `robot_bus.example_interfaces.action.v1.FibonacciGoal` / … |
 | Topic | `tf2_msgs/msg/TFMessage` | `robot_bus.tf2_msgs.msg.v1.TFMessage` |
 
 Generated stubs ship inside published packages (PyPI, crates.io, npm, DEB/MSI, Maven) — consumers do not need `protoc`. Message modules live under the `robot_bus` namespace and do not claim top-level ROS package names on the wire. Full list: [`proto/`](proto/).

@@ -5,9 +5,9 @@
 `Cargo.toml`：
 
 ```toml
-robot-bus = "1.0.0"
+robot-bus = "1.1.0"
 # 本地：robot-bus = { path = "../robot-bus" }
-# 默认已启用 WebSocket RPC 网关（`ws` feature）；若需关闭：robot-bus = { version = "1.0.0", default-features = false }
+# 默认已启用 WebSocket RPC 网关（`ws` feature）；若需关闭：robot-bus = { version = "1.1.0", default-features = false }
 ```
 
 ## Broker 启动
@@ -196,6 +196,8 @@ fn main() -> robot_bus::Result<()> {
 }
 ```
 
+完整可运行程序：[`examples/topic_imu/`](../../examples/topic_imu/)。
+
 Raw bytes：`create_publisher_raw` / `create_subscription_raw`。
 
 topic / service / action 名按传入原样使用（请自行写全路径）。
@@ -314,7 +316,7 @@ Raw bytes：`create_service_raw` / `create_client_raw`。endpoint 取自 `NodeOp
 
 ```rust
 use std::time::Duration;
-use robot_bus::action::v1::{Fibonacci, FibonacciGoal};
+use robot_bus::example_interfaces::action::v1::{Fibonacci, FibonacciGoal};
 use robot_bus::Node;
 
 fn main() -> robot_bus::Result<()> {
@@ -332,6 +334,8 @@ fn main() -> robot_bus::Result<()> {
     Ok(())
 }
 ```
+
+完整可运行程序：[`examples/service_set_bool/`](../../examples/service_set_bool/)、[`examples/action_fibonacci/`](../../examples/action_fibonacci/)。
 
 Raw bytes：`create_action_server_raw` / `create_action_client_raw`。ZMQ 的 `cancel()` 发送显式 `CANCEL` 帧；gRPC 的 `cancel()` 取消对应的 server stream，两者都不提供“服务端已确认取消”的保证。
 
@@ -539,7 +543,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 ```
 
-Proto 包名：`robot_bus_interface.grpc.v1`。见 `proto/robot_bus_interface/grpc/v1/{message,service,action}_gateway.proto`。
+Proto 包名：`robot_bus_interfaces.grpc.v1`。见 `proto/robot_bus_interfaces/grpc/v1/{message,service,action}_gateway.proto`。
 
 HTTP 发现：`GET /api/v1/discover`（JSON）；历史 protobuf `BrokerAnnounce` 仅作兼容编码辅助，UDP 组播路径已移除。
 

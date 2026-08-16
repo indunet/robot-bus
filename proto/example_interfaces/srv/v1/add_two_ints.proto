@@ -1,0 +1,13 @@
+syntax = "proto3";
+
+package example_interfaces.srv.v1;
+
+// Equivalent to ROS 2 `example_interfaces/srv/AddTwoInts`.
+message AddTwoIntsRequest {
+  int64 a = 1;
+  int64 b = 2;
+}
+
+message AddTwoIntsResponse {
+  int64 sum = 1;
+}

@@ -1,0 +1,15 @@
+syntax = "proto3";
+
+package vision_msgs.msg.v1;
+
+import "std_msgs/msg/v1/header.proto";
+import "vision_msgs/msg/v1/bounding_box3d.proto";
+import "vision_msgs/msg/v1/object_hypothesis_with_pose.proto";
+
+// Equivalent to ROS 2 `vision_msgs/msg/Detection3D`.
+message Detection3D {
+  std_msgs.msg.v1.Header header = 1;
+  repeated ObjectHypothesisWithPose results = 2;
+  BoundingBox3D bbox = 3;
+  string id = 4;
+}

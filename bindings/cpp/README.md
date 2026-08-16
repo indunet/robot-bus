@@ -17,7 +17,7 @@ Distributed as GitHub Release **DEB / MSI / PKG** assets (see
 | `include/robot_bus.h` | C API (`robot_bus_ros2_available` is deprecated / always 0) |
 | `include/robot_bus/` | C++ wrappers (`node.hpp`, `ros2_bridge.hpp`, …) |
 | `src/ros2_bridge.cpp` | Native **rclcpp** Ros2Bridge (`ROBOT_BUS_ROS2=ON`) |
-| `generated/robot_bus/` | `protoc --cpp_out` stubs (gitignored; `just gen-cpp`); built-in action at `robot_bus_interface/action/` |
+| `generated/robot_bus/` | `protoc --cpp_out` stubs (gitignored; `just gen-cpp`); built-in action at `robot_bus_interfaces/action/` |
 | `tests/` | C++ tests (pub-sub, service, action, timer, msgs, ros2 stub) |
 | `packaging/` | DEB/MSI/PKG packaging (WiX `.wxs`, etc.; used only for C++ Releases) |
 | `CMakeLists.txt` | Build/install msgs + FFI; optional `robot_bus_ros2_bridge` |

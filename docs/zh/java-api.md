@@ -4,7 +4,7 @@
 
 ```bash
 # Maven Central (when published)
-# implementation("org.indunet:robot-bus:1.0.0")           // JVM
+# implementation("org.indunet:robot-bus:1.1.0")           // JVM
 
 # 本地：
 just java-dev       # gen-java + cargo FFI + mvn test
@@ -145,9 +145,9 @@ Node node = Node.ws("web-client");
 
 ```java
 import org.indunet.robot.bus.TypedActionPhase;
-import org.indunet.robot.bus.robot_bus_interface.action.v1.FibonacciFeedback;
-import org.indunet.robot.bus.robot_bus_interface.action.v1.FibonacciGoal;
-import org.indunet.robot.bus.robot_bus_interface.action.v1.FibonacciResult;
+import org.indunet.robot.bus.example_interfaces.action.v1.FibonacciFeedback;
+import org.indunet.robot.bus.example_interfaces.action.v1.FibonacciGoal;
+import org.indunet.robot.bus.example_interfaces.action.v1.FibonacciResult;
 import org.indunet.robot.bus.std_srvs.srv.v1.SetBoolRequest;
 import org.indunet.robot.bus.std_srvs.srv.v1.SetBoolResponse;
 import java.util.List;

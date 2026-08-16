@@ -1,0 +1,15 @@
+syntax = "proto3";
+
+package diagnostic_msgs.srv.v1;
+
+import "diagnostic_msgs/msg/v1/diagnostic.proto";
+
+// Equivalent to ROS 2 `diagnostic_msgs/srv/SelfTest`.
+message SelfTestRequest {}
+
+message SelfTestResponse {
+  string id = 1;
+  // byte in ROS 2; non-zero means passed.
+  uint32 passed = 2;
+  repeated diagnostic_msgs.msg.v1.DiagnosticStatus status = 3;
+}

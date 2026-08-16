@@ -41,6 +41,8 @@ jobs:
         run: ./scripts/build_console.sh
       - run: cargo test
       - run: cargo test --no-default-features
+      - name: Build Rust examples
+        run: cargo build --examples
 
   python:
     runs-on: ubuntu-latest
@@ -86,6 +88,17 @@ jobs:
           python3 bindings/python/tests/test_ws_node.py
           python3 bindings/python/tests/test_inproc_context.py
           python3 bindings/python/tests/test_federation_opts.py
+      - name: Compile Python examples
+        run: |
+          python3 -m py_compile \
+            examples/topic_imu/python/listener.py \
+            examples/topic_imu/python/talker.py \
+            examples/service_set_bool/python/server.py \
+            examples/service_set_bool/python/client.py \
+            examples/action_fibonacci/python/server.py \
+            examples/action_fibonacci/python/client.py
+      - name: Examples topic smoke
+        run: python3 scripts/run_examples_topic_smoke.py
 
   typescript:
     runs-on: ubuntu-latest
@@ -156,10 +169,11 @@ jobs:
           cmake -S bindings/cpp -B bindings/cpp/build -DCMAKE_BUILD_TYPE=Release \
             -DCMAKE_PREFIX_PATH=/usr/local \
             -DCMAKE_FIND_PACKAGE_PREFER_CONFIG=ON \
-            -DROBOT_BUS_BUILD_TESTS=ON
+            -DROBOT_BUS_BUILD_TESTS=ON \
+            -DROBOT_BUS_BUILD_EXAMPLES=ON
           # Cap jobs: bare `-j` is unlimited under GNU make and OOMs GHA when
           # compiling ~130 protobuf .pb.cc units (exit 143 = SIGTERM).
-          cmake --build bindings/cpp/build --target robot_bus_msgs cpp_tests -j2
+          cmake --build bindings/cpp/build --target robot_bus_msgs cpp_tests cpp_examples -j2
       - name: Run C++ binding tests
         run: |
           export LD_LIBRARY_PATH=/usr/local/lib:bindings/cpp/native/target/release:bindings/cpp/build:${LD_LIBRARY_PATH:-}

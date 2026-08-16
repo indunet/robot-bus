@@ -177,7 +177,7 @@ Path: `ws://<host>:<port>/ws` (use `wss://` on HTTPS sites). Each connection car
 | CANCEL | 3 | Client soft cancel (SendGoal: submit cancel, connection stays open until RESULT; Subscribe: stop subscription) |
 | TRAILER | 4 | `u32 status` + UTF-8 message (0 = OK) |
 
-Example methods: `robot_bus_interface.grpc.v1.MessageGateway/Subscribe` (also Publish / ServiceGateway/Call / ActionGateway/SendGoal). Business payload uses gateway protobuf (method names still include the historical `.grpc.v1` package path).
+Example methods: `robot_bus_interfaces.grpc.v1.MessageGateway/Subscribe` (also Publish / ServiceGateway/Call / ActionGateway/SendGoal). Business payload uses gateway protobuf (method names still include the historical `.grpc.v1` package path).
 
 ## Action GoalHandle
 
@@ -228,7 +228,7 @@ import { Imu } from "robot-bus/sensor_msgs/msg/v1/imu.js";
 | Rust | `robot_bus::sensor_msgs::msg::v1::Imu` |
 | TypeScript | `import { Imu } from "robot-bus/sensor_msgs/msg/v1/imu.js"` |
 
-Gateway stubs: `robot-bus/robot_bus_interface/grpc/v1/*.client.js`.
+Gateway stubs: `robot-bus/robot_bus_interfaces/grpc/v1/*.client.js`.
 
 After changing `proto/`:
 

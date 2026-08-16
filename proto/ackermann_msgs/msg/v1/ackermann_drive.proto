@@ -1,0 +1,12 @@
+syntax = "proto3";
+
+package ackermann_msgs.msg.v1;
+
+// Equivalent to ROS 2 `ackermann_msgs/msg/AckermannDrive`.
+message AckermannDrive {
+  float steering_angle = 1;
+  float steering_angle_velocity = 2;
+  float speed = 3;
+  float acceleration = 4;
+  float jerk = 5;
+}

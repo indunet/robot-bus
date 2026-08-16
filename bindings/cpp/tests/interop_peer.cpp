@@ -2,7 +2,7 @@
 // Roles: svc-server | act-client
 #include "harness.hpp"
 
-#include <robot_bus/robot_bus_interface/action/v1/fibonacci.pb.h>
+#include <robot_bus/example_interfaces/action/v1/fibonacci.pb.h>
 #include <robot_bus/std_srvs/srv/v1/set_bool.pb.h>
 
 #include <chrono>
@@ -90,7 +90,7 @@ void run_act_client() {
   robot_bus::Node node("interop_cpp_act_client", opts);
   auto client = node.create_action_client(kAction);
 
-  robot_bus_interface::action::v1::FibonacciGoal goal;
+  example_interfaces::action::v1::FibonacciGoal goal;
   goal.set_order(5);
   std::string goal_bytes;
   ROBOT_BUS_CHECK(goal.SerializeToString(&goal_bytes));
@@ -98,7 +98,7 @@ void run_act_client() {
   auto handle = client.send_goal(goal_bytes, {}, nullptr, 10.0);
   auto event = handle.wait_result(10.0);
   ROBOT_BUS_CHECK(event.kind == "RESULT");
-  robot_bus_interface::action::v1::FibonacciResult result;
+  example_interfaces::action::v1::FibonacciResult result;
   ROBOT_BUS_CHECK(
       result.ParseFromArray(event.body.data(), static_cast<int>(event.body.size())));
   ROBOT_BUS_CHECK(result.sequence_size() == 5);

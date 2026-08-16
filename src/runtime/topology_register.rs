@@ -8,7 +8,7 @@ use std::time::Duration;
 use prost::Message;
 
 use crate::console_topics;
-use crate::robot_bus_interface::msg::v1::{TopologyRegister, TopologyUnregister};
+use crate::robot_bus_interfaces::msg::v1::{TopologyRegister, TopologyUnregister};
 use crate::service_bus::ServiceClient;
 use crate::transports;
 

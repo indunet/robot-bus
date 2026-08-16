@@ -16,3 +16,4 @@ language-facing package (metadata, stubs, tests, packaging).
 
 `console/` is a product UI embedded into the broker, not an SDK binding.
 Cross-language interop lives under `tests/interop/` (`just test-interop`).
+Runnable demos: [`../examples/`](../examples/).

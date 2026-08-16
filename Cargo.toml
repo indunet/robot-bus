@@ -11,7 +11,7 @@ resolver = "2"
 
 [package]
 name = "robot-bus"
-version = "1.0.0"
+version = "1.1.0"
 edition = "2024"
 description = "ZeroMQ message bus: broker routing and participant SDK"
 license = "Apache-2.0"
@@ -152,6 +152,30 @@ path = "src/bin/robot_bus_interop.rs"
 name = "robot_bus_perf"
 path = "benches/robot_bus_perf/main.rs"
 required-features = ["ws"]
+
+[[example]]
+name = "topic_imu_listener"
+path = "examples/topic_imu/rust/listener.rs"
+
+[[example]]
+name = "topic_imu_talker"
+path = "examples/topic_imu/rust/talker.rs"
+
+[[example]]
+name = "service_set_bool_server"
+path = "examples/service_set_bool/rust/server.rs"
+
+[[example]]
+name = "service_set_bool_client"
+path = "examples/service_set_bool/rust/client.rs"
+
+[[example]]
+name = "action_fibonacci_server"
+path = "examples/action_fibonacci/rust/server.rs"
+
+[[example]]
+name = "action_fibonacci_client"
+path = "examples/action_fibonacci/rust/client.rs"
 
 [package.metadata.docs.rs]
 features = ["ws", "console"]

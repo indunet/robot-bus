@@ -7,7 +7,7 @@ use prost::Message;
 
 use crate::console_topics;
 use crate::message_bus::Publisher;
-use crate::robot_bus_interface::msg::v1::{
+use crate::robot_bus_interfaces::msg::v1::{
     ActionStats, ActionStatsList, BrokerStatus, ConsoleEvent, ServiceStats, ServiceStatsList,
     TopicStats, TopicStatsList, TopologyEdge, TopologyNode, TopologySnapshot,
 };

@@ -8,7 +8,7 @@ use super::config::{DEFAULT_API_DISCOVER_PATH, DiscoverOpts};
 use super::net::tcp_port_from_bind;
 use super::packet::BrokerAnnouncement;
 use crate::errors::{BusError, Result};
-use crate::generated::robot_bus_interface::msg::v1::TcpPorts;
+use crate::generated::robot_bus_interfaces::msg::v1::TcpPorts;
 
 /// JSON body of `GET /api/v1/discover`.
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]

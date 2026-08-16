@@ -133,6 +133,8 @@ imu_pub.publish(
 # node.spin()
 ```
 
+完整可运行程序：[`examples/topic_imu/`](../../examples/topic_imu/)。
+
 Raw bytes（与旧用法兼容）：
 
 ```python
@@ -213,7 +215,7 @@ node.create_action_server("navigate", on_goal, callback_group=group)
 
 ```python
 from robot_bus.std_srvs.srv.v1 import SetBoolRequest, SetBoolResponse
-from robot_bus.robot_bus_interface.action.v1 import (
+from robot_bus.example_interfaces.action.v1 import (
     FibonacciGoal,
     FibonacciFeedback,
     FibonacciResult,
@@ -261,6 +263,8 @@ result = goal.result(timeout=10.0)
 # goal.cancel()  # best-effort；不代表服务端已确认
 # server_node.spin()
 ```
+
+完整可运行程序：[`examples/service_set_bool/`](../../examples/service_set_bool/)、[`examples/action_fibonacci/`](../../examples/action_fibonacci/)。
 
 Raw action 的 `feedback_callback(body: bytes)`、`ActionGoalHandle.result(timeout=None) -> bytes`；handle 还提供只读 `goal_id` / `action_name` 与 `cancel()`。`ActionClient.send_goal_and_wait(...)` 保留旧的批量消息列表用法。
 Raw service：`handler(body: bytes) -> bytes` / `call(bytes)`。

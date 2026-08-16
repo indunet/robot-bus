@@ -1,0 +1,14 @@
+syntax = "proto3";
+
+package diagnostic_msgs.srv.v1;
+
+// Equivalent to ROS 2 `diagnostic_msgs/srv/AddDiagnostics`.
+message AddDiagnosticsRequest {
+  // Global namespace where analyzer parameters have been loaded.
+  string load_namespace = 1;
+}
+
+message AddDiagnosticsResponse {
+  bool success = 1;
+  string message = 2;
+}

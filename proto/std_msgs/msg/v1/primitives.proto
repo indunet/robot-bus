@@ -55,3 +55,8 @@ message String {
 message Byte {
   uint32 data = 1;
 }
+
+// Equivalent to ROS 2 `std_msgs/msg/Char` (ASCII / single code unit).
+message Char {
+  uint32 data = 1;
+}

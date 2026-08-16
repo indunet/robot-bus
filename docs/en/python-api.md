@@ -133,6 +133,8 @@ imu_pub.publish(
 # node.spin()
 ```
 
+Full runnable programs: [`examples/topic_imu/`](../../examples/topic_imu/).
+
 Raw bytes (compatible with older usage):
 
 ```python
@@ -213,7 +215,7 @@ Same as topic / timer: attached to the Node. Pass protobuf types for automatic e
 
 ```python
 from robot_bus.std_srvs.srv.v1 import SetBoolRequest, SetBoolResponse
-from robot_bus.robot_bus_interface.action.v1 import (
+from robot_bus.example_interfaces.action.v1 import (
     FibonacciGoal,
     FibonacciFeedback,
     FibonacciResult,
@@ -261,6 +263,8 @@ result = goal.result(timeout=10.0)
 # goal.cancel()  # best-effort; does not mean the server confirmed
 # server_node.spin()
 ```
+
+Full runnable programs: [`examples/service_set_bool/`](../../examples/service_set_bool/), [`examples/action_fibonacci/`](../../examples/action_fibonacci/).
 
 Raw action: `feedback_callback(body: bytes)`, `ActionGoalHandle.result(timeout=None) -> bytes`; the handle also exposes read-only `goal_id` / `action_name` and `cancel()`. `ActionClient.send_goal_and_wait(...)` keeps the older batch message list usage.
 Raw service: `handler(body: bytes) -> bytes` / `call(bytes)`.

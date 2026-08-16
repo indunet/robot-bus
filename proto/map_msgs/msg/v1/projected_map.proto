@@ -1,0 +1,12 @@
+syntax = "proto3";
+
+package map_msgs.msg.v1;
+
+import "nav_msgs/msg/v1/occupancy_grid.proto";
+
+// Equivalent to ROS 2 `map_msgs/msg/ProjectedMap`.
+message ProjectedMap {
+  nav_msgs.msg.v1.OccupancyGrid map = 1;
+  double min_z = 2;
+  double max_z = 3;
+}

@@ -106,6 +106,40 @@ test-cpp:
 	./bindings/cpp/build/node_parameters
 	./bindings/cpp/build/ros2_bridge_stub
 
+# --- examples/ (see examples/README.md) ---
+
+examples-rust: gen-rust
+	cargo build --examples
+
+examples-python:
+	#!/usr/bin/env bash
+	set -euo pipefail
+	if [[ -x .venv/bin/python ]]; then PY=.venv/bin/python; else PY=python3; fi
+	"$PY" -m py_compile \
+		examples/topic_imu/python/listener.py \
+		examples/topic_imu/python/talker.py \
+		examples/service_set_bool/python/server.py \
+		examples/service_set_bool/python/client.py \
+		examples/action_fibonacci/python/server.py \
+		examples/action_fibonacci/python/client.py
+
+examples-cpp: gen-cpp gen-rust
+	cargo build --release --manifest-path bindings/cpp/native/Cargo.toml
+	cmake -S bindings/cpp -B bindings/cpp/build -DCMAKE_BUILD_TYPE=Release \
+		-DCMAKE_PREFIX_PATH="${CMAKE_PREFIX_PATH:-/usr/local}" \
+		-DCMAKE_FIND_PACKAGE_PREFER_CONFIG=ON \
+		-DROBOT_BUS_BUILD_EXAMPLES=ON
+	cmake --build bindings/cpp/build --target cpp_examples -j2
+
+# End-to-end topic smoke (Python talker/listener against an ephemeral broker).
+examples-topic:
+	#!/usr/bin/env bash
+	set -euo pipefail
+	if [[ -x .venv/bin/python ]]; then PY=.venv/bin/python; else PY=python3; fi
+	"$PY" scripts/run_examples_topic_smoke.py
+
+examples: examples-rust examples-python examples-cpp examples-topic
+
 # Build console UI into assets/console/ for rust-embed (gitignored; run before cargo with `console`)
 console:
 	./scripts/build_console.sh

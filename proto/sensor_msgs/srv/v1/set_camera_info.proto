@@ -1,0 +1,15 @@
+syntax = "proto3";
+
+package sensor_msgs.srv.v1;
+
+import "sensor_msgs/msg/v1/camera_info.proto";
+
+// Equivalent to ROS 2 `sensor_msgs/srv/SetCameraInfo`.
+message SetCameraInfoRequest {
+  sensor_msgs.msg.v1.CameraInfo camera_info = 1;
+}
+
+message SetCameraInfoResponse {
+  bool success = 1;
+  string status_message = 2;
+}

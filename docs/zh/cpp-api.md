@@ -36,14 +36,14 @@ CMake 设置 `CMAKE_CXX_STANDARD 17`。自有应用用更高标准（如 `-DCMAK
 
 ```bash
 # 核心 SDK（无 ROS bridge）
-sudo apt install ./robot-bus_1.0.0_linux_amd64.deb
+sudo apt install ./robot-bus_1.1.0_linux_amd64.deb
 
 # 或 ROS 2 bridge 变体（Humble 示例）— 需已安装 Humble
-sudo apt install ./robot-bus-ros2-humble_1.0.0_linux_amd64.deb
+sudo apt install ./robot-bus-ros2-humble_1.1.0_linux_amd64.deb
 source /opt/ros/humble/setup.bash
 
 # macOS Apple Silicon（仅核心包）
-sudo installer -pkg robot-bus_1.0.0_macos_arm64.pkg -target /
+sudo installer -pkg robot-bus_1.1.0_macos_arm64.pkg -target /
 # 安装于 /usr/local（{bin,lib,include}）
 
 # 或从源码（开发）
@@ -172,6 +172,8 @@ pub.publish(imu);
 // sub.destroy();  // 或依赖 SubscriptionHandle 析构
 ```
 
+完整可运行程序：[`examples/topic_imu/`](../../examples/topic_imu/)、[`examples/service_set_bool/`](../../examples/service_set_bool/)、[`examples/action_fibonacci/`](../../examples/action_fibonacci/)。
+
 可选 QoS：`create_publisher(node, topic, qos_depth)` / `create_subscription(..., group, qos_depth)`（`depth > 0` → KeepLast）。  
 `create_wall_timer` = `create_timer` 别名。`wait_for_message` / service·action client 的 `wait_for_*` 见 Node API。
 
@@ -214,7 +216,7 @@ auto node = robot_bus::Node::ws("web-client");
 | TypeScript | `import { Imu } from "robot-bus/sensor_msgs/msg/v1/imu.js"` |
 | Java / Android | `import org.indunet.robot.bus.sensor_msgs.msg.v1.Imu;` |
 | C++（ROS msgs） | `#include <robot_bus/sensor_msgs/msg/v1/imu.pb.h>` |
-| C++（内置 action） | `#include <robot_bus/robot_bus_interface/action/v1/fibonacci.pb.h>` |
+| C++（内置 action） | `#include <robot_bus/example_interfaces/action/v1/fibonacci.pb.h>` |
 
 ## CMake
 

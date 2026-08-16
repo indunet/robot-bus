@@ -1,0 +1,11 @@
+syntax = "proto3";
+
+package lifecycle_msgs.msg.v1;
+
+// Equivalent to ROS 2 `lifecycle_msgs/msg/State`.
+message State {
+  // uint8 in ROS 2 — primary: UNKNOWN=0, UNCONFIGURED=1, INACTIVE=2,
+  // ACTIVE=3, FINALIZED=4; transition states 10–15.
+  uint32 id = 1;
+  string label = 2;
+}

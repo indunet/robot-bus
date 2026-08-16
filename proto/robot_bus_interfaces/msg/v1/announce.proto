@@ -1,0 +1,32 @@
+syntax = "proto3";
+
+// UDP multicast broker discovery (control plane only).
+// Wire payload: a single encoded BrokerAnnounce (no outer framing).
+package robot_bus_interfaces.msg.v1;
+
+message BrokerAnnounce {
+  // Must equal "RBUS"; reject otherwise.
+  string magic = 1;
+  // Schema version; receivers support version 1.
+  uint32 schema_version = 2;
+  string broker_id = 3;
+  uint32 domain_id = 4;
+  // Reachable host for clients (never 0.0.0.0 / *).
+  string advertise_host = 5;
+  TcpPorts tcp = 6;
+  // Omitted when broker is --tcp-only.
+  optional string ipc_dir = 7;
+  optional string inproc_prefix = 8;
+  optional string ws_url = 9;
+  // Embedded console HTTP base URL when enabled (same origin as ws_url / api when co-located).
+  optional string console_url = 10;
+}
+
+message TcpPorts {
+  uint32 message_xsub = 1;
+  uint32 message_xpub = 2;
+  uint32 service_frontend = 3;
+  uint32 service_backend = 4;
+  uint32 action_frontend = 5;
+  uint32 action_backend = 6;
+}

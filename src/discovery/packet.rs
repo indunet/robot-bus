@@ -3,7 +3,7 @@
 use prost::Message;
 
 use crate::errors::{BusError, Result};
-use crate::generated::robot_bus_interface::msg::v1::{BrokerAnnounce, TcpPorts};
+use crate::generated::robot_bus_interfaces::msg::v1::{BrokerAnnounce, TcpPorts};
 
 use super::config::{MAGIC, SCHEMA_VERSION};
 
@@ -116,7 +116,7 @@ fn nonempty(v: Option<String>) -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::generated::robot_bus_interface::msg::v1::TcpPorts;
+    use crate::generated::robot_bus_interfaces::msg::v1::TcpPorts;
 
     fn sample() -> BrokerAnnouncement {
         BrokerAnnouncement {

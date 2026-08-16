@@ -18,7 +18,7 @@ use robot_bus::sensor_msgs::msg::v1::Imu;
 use robot_bus::service_bus::ServiceClient;
 use robot_bus::std_msgs::msg::v1::String as BusString;
 use robot_bus::{Node, NodeOptions};
-use robot_bus::{console_topics, robot_bus_interface::msg::v1::TopicTypeRegister};
+use robot_bus::{console_topics, robot_bus_interfaces::msg::v1::TopicTypeRegister};
 use serde::Deserialize;
 use support::lock_brokers;
 

@@ -1,0 +1,12 @@
+syntax = "proto3";
+
+package lifecycle_msgs.srv.v1;
+
+import "lifecycle_msgs/msg/v1/transition_description.proto";
+
+// Equivalent to ROS 2 `lifecycle_msgs/srv/GetAvailableTransitions`.
+message GetAvailableTransitionsRequest {}
+
+message GetAvailableTransitionsResponse {
+  repeated lifecycle_msgs.msg.v1.TransitionDescription available_transitions = 1;
+}

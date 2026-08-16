@@ -6,7 +6,7 @@ import {
   ActionStatsList,
   TopologySnapshot,
   ConsoleEvent,
-} from 'robot-bus/robot_bus_interface/msg/v1/console_status'
+} from 'robot-bus/robot_bus_interfaces/msg/v1/console_status'
 import {
   EMPTY_BROKER,
   u64,

@@ -9,10 +9,10 @@ embed the stubs. End users who install the SDK do not need protoc.
 extensions (hand-written SDK code uses ``.hpp`` / ``.cpp``). Public includes:
 
   #include <robot_bus/sensor_msgs/msg/v1/imu.pb.h>
-  #include <robot_bus/robot_bus_interface/action/v1/fibonacci.pb.h>
+  #include <robot_bus/example_interfaces/action/v1/fibonacci.pb.h>
 
 The outer ``robot_bus/`` is the SDK include prefix. Built-in protos under
-``proto/robot_bus_interface/…`` keep that path segment.
+``proto/robot_bus_interfaces/…`` keep that path segment.
 
 Usage (from repo root)::
 
@@ -41,12 +41,16 @@ PROTOC = os.environ.get("PROTOC", "protoc")
 EXPECTED_PROTOC_VERSION = "35.1"
 
 MSG_PACKAGES = (
+    "ackermann_msgs",
     "apriltag_msgs",
     "builtin_interfaces",
     "control_msgs",
     "diagnostic_msgs",
+    "example_interfaces",
     "foxglove_msgs",
     "geometry_msgs",
+    "lifecycle_msgs",
+    "map_msgs",
     "nav2_msgs",
     "nav_msgs",
     "sensor_msgs",
@@ -56,6 +60,7 @@ MSG_PACKAGES = (
     "tf2_msgs",
     "trajectory_msgs",
     "unique_identifier_msgs",
+    "vision_msgs",
     "visualization_msgs",
 )
 
@@ -64,7 +69,7 @@ PROTOC_VERSION_RE = re.compile(r"libprotoc\s+(\d+\.\d+(?:\.\d+)?)")
 INCLUDE_RE = re.compile(
     r'(#include\s+)([<"])('
     + "|".join(re.escape(p) for p in MSG_PACKAGES)
-    + r"|robot_bus_interface"
+    + r"|robot_bus_interfaces"
     + r')(/[^">]+)([>"])'
 )
 
@@ -93,7 +98,7 @@ def collect_protos() -> list[Path]:
     protos: list[Path] = []
     for path in PROTO_ROOT.rglob("*.proto"):
         rel = path.relative_to(PROTO_ROOT).as_posix()
-        if rel.startswith("robot_bus_interface/grpc/"):
+        if rel.startswith("robot_bus_interfaces/grpc/"):
             continue
         protos.append(path)
     return sorted(protos)
@@ -113,9 +118,9 @@ def rewrite_includes(text: str) -> str:
     def repl(m: re.Match[str]) -> str:
         directive, _quote_open, pkg, rest, _quote_close = m.groups()
         # ROS pkgs: sensor_msgs/... → robot_bus/sensor_msgs/...
-        # Built-in: robot_bus_interface/action/... → robot_bus/robot_bus_interface/action/...
-        if pkg == "robot_bus_interface":
-            return f"{directive}<robot_bus/robot_bus_interface{rest}>"
+        # Built-in: robot_bus_interfaces/action/... → robot_bus/robot_bus_interfaces/action/...
+        if pkg == "robot_bus_interfaces":
+            return f"{directive}<robot_bus/robot_bus_interfaces{rest}>"
         return f"{directive}<robot_bus/{pkg}{rest}>"
 
     return INCLUDE_RE.sub(repl, text)
@@ -135,13 +140,13 @@ def copy_and_rewrite(tmp: Path) -> None:
         dst = OUT_ROOT / pkg
         shutil.copytree(src, dst)
 
-    # proto/robot_bus_interface/... → generated/robot_bus/robot_bus_interface/...
-    iface_src = tmp / "robot_bus_interface"
+    # proto/robot_bus_interfaces/... → generated/robot_bus/robot_bus_interfaces/...
+    iface_src = tmp / "robot_bus_interfaces"
     if iface_src.exists():
         for child in iface_src.iterdir():
             if child.name == "grpc":
                 continue
-            dst = OUT_ROOT / "robot_bus_interface" / child.name
+            dst = OUT_ROOT / "robot_bus_interfaces" / child.name
             if dst.exists():
                 shutil.rmtree(dst)
             shutil.copytree(child, dst)
@@ -166,8 +171,8 @@ def write_readme() -> None:
         "#include <robot_bus/sensor_msgs/msg/v1/imu.pb.h>\n"
         "// → bindings/cpp/generated/robot_bus/sensor_msgs/msg/v1/imu.pb.h\n"
         "\n"
-        "#include <robot_bus/robot_bus_interface/action/v1/fibonacci.pb.h>\n"
-        "// → proto/robot_bus_interface/action/v1/fibonacci.proto\n"
+        "#include <robot_bus/example_interfaces/action/v1/fibonacci.pb.h>\n"
+        "// → proto/example_interfaces/action/v1/fibonacci.proto\n"
         "```\n",
         encoding="utf-8",
     )

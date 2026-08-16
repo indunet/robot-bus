@@ -36,14 +36,14 @@ CMake sets `CMAKE_CXX_STANDARD 17`. Building with a newer standard (e.g. `-DCMAK
 
 ```bash
 # Core SDK (no ROS bridge)
-sudo apt install ./robot-bus_1.0.0_linux_amd64.deb
+sudo apt install ./robot-bus_1.1.0_linux_amd64.deb
 
 # Or ROS 2 bridge variant (Humble example) — needs Humble already installed
-sudo apt install ./robot-bus-ros2-humble_1.0.0_linux_amd64.deb
+sudo apt install ./robot-bus-ros2-humble_1.1.0_linux_amd64.deb
 source /opt/ros/humble/setup.bash
 
 # macOS Apple Silicon (core package only)
-sudo installer -pkg robot-bus_1.0.0_macos_arm64.pkg -target /
+sudo installer -pkg robot-bus_1.1.0_macos_arm64.pkg -target /
 # Installs under /usr/local ({bin,lib,include})
 
 # Or from source (dev)
@@ -172,6 +172,8 @@ pub.publish(imu);
 // sub.destroy();
 ```
 
+Full runnable programs: [`examples/topic_imu/`](../../examples/topic_imu/), [`examples/service_set_bool/`](../../examples/service_set_bool/), [`examples/action_fibonacci/`](../../examples/action_fibonacci/).
+
 Optional QoS: `qos_depth > 0` → KeepLast. `create_wall_timer` aliases `create_timer`. See also `wait_for_message` / client `wait_for_*`. Parameters: `list_parameters` → `{names, prefixes}`; `list_all_parameters`; `undeclare_parameter`.
 
 Raw bytes still work via `create_publisher` / `create_subscription` with manual Serialize/Parse.
@@ -203,7 +205,7 @@ Compare imports across languages:
 | TypeScript | `import { Imu } from "robot-bus/sensor_msgs/msg/v1/imu.js"` |
 | Java / Android | `import org.indunet.robot.bus.sensor_msgs.msg.v1.Imu;` |
 | C++ (ROS msgs) | `#include <robot_bus/sensor_msgs/msg/v1/imu.pb.h>` |
-| C++ (built-in action) | `#include <robot_bus/robot_bus_interface/action/v1/fibonacci.pb.h>` |
+| C++ (built-in action) | `#include <robot_bus/example_interfaces/action/v1/fibonacci.pb.h>` |
 
 ## CMake
 

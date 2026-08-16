@@ -1,0 +1,9 @@
+syntax = "proto3";
+
+package vision_msgs.msg.v1;
+
+// Equivalent to ROS 2 `vision_msgs/msg/Point2D` (pixel coordinates).
+message Point2D {
+  double x = 1;
+  double y = 2;
+}

@@ -16,7 +16,7 @@ pub mod ws_frame;
 pub mod pb {
     // Messages-only (no tonic). Regenerated via `just gen-rust` / scripts/gen_rust_msgs
     // is switched to prost-only for gateway protos.
-    include!("../generated/robot_bus_interface/grpc/v1/messages.inc.rs");
+    include!("../generated/robot_bus_interfaces/grpc/v1/messages.inc.rs");
 }
 
 pub use action::ActionGatewayService;

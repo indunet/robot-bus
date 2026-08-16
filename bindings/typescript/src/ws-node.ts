@@ -10,15 +10,15 @@ import {
   ActionEvent as PbActionEvent,
   ActionKind,
   GoalCommand,
-} from "../generated/robot_bus_interface/grpc/v1/action_gateway.js";
+} from "../generated/robot_bus_interfaces/grpc/v1/action_gateway.js";
 import {
   SubscribeRequest,
   TopicMessage,
-} from "../generated/robot_bus_interface/grpc/v1/message_gateway.js";
+} from "../generated/robot_bus_interfaces/grpc/v1/message_gateway.js";
 import {
   ServiceCallRequest,
   ServiceCallResponse,
-} from "../generated/robot_bus_interface/grpc/v1/service_gateway.js";
+} from "../generated/robot_bus_interfaces/grpc/v1/service_gateway.js";
 import { decode, encode, type MessageType } from "./typed.js";
 import {
   TOPIC_TYPE_REGISTER,
@@ -29,7 +29,7 @@ import {
   TopologyRegister,
   TopologyUnregister,
   TopicTypeRegister,
-} from "../generated/robot_bus_interface/msg/v1/console_status.js";
+} from "../generated/robot_bus_interfaces/msg/v1/console_status.js";
 import {
   METHOD_CALL,
   METHOD_PUBLISH,

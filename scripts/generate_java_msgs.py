@@ -93,7 +93,7 @@ def collect_protos() -> list[Path]:
     protos: list[Path] = []
     for path in PROTO_ROOT.rglob("*.proto"):
         rel = path.relative_to(PROTO_ROOT).as_posix()
-        if rel.startswith("robot_bus_interface/grpc/"):
+        if rel.startswith("robot_bus_interfaces/grpc/"):
             continue
         protos.append(path)
     return sorted(protos)

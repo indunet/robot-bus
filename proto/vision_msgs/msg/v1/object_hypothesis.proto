@@ -1,0 +1,9 @@
+syntax = "proto3";
+
+package vision_msgs.msg.v1;
+
+// Equivalent to ROS 2 `vision_msgs/msg/ObjectHypothesis`.
+message ObjectHypothesis {
+  string class_id = 1;
+  double score = 2;
+}

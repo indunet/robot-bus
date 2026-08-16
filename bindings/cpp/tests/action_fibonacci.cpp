@@ -1,7 +1,7 @@
 // Built-in Fibonacci action client round-trip.
 #include "harness.hpp"
 
-#include <robot_bus/robot_bus_interface/action/v1/fibonacci.pb.h>
+#include <robot_bus/example_interfaces/action/v1/fibonacci.pb.h>
 
 #include <iostream>
 #include <string>
@@ -21,7 +21,7 @@ int main() {
   auto client_node = bus.make_node("act_client");
 
   auto act = server.create_action_server("fibonacci", [](robot_bus::BytesView body) {
-    robot_bus_interface::action::v1::FibonacciGoal goal;
+    example_interfaces::action::v1::FibonacciGoal goal;
     ROBOT_BUS_CHECK(goal.ParseFromArray(body.data, static_cast<int>(body.size)));
     const int order = goal.order() < 0 ? 0 : goal.order();
     std::vector<int32_t> seq;
@@ -34,7 +34,7 @@ int main() {
       }
     }
 
-    robot_bus_interface::action::v1::FibonacciFeedback feedback;
+    example_interfaces::action::v1::FibonacciFeedback feedback;
     for (size_t i = 0; i + 1 < seq.size(); ++i) {
       feedback.add_sequence(seq[i]);
     }
@@ -44,7 +44,7 @@ int main() {
       }
     }
 
-    robot_bus_interface::action::v1::FibonacciResult result;
+    example_interfaces::action::v1::FibonacciResult result;
     for (int32_t v : seq) {
       result.add_sequence(v);
     }
@@ -64,7 +64,7 @@ int main() {
   sleep_ms(150);
 
   auto client = client_node.create_action_client("fibonacci");
-  robot_bus_interface::action::v1::FibonacciGoal goal;
+  example_interfaces::action::v1::FibonacciGoal goal;
   goal.set_order(5);
   std::string goal_bytes;
   ROBOT_BUS_CHECK(goal.SerializeToString(&goal_bytes));
@@ -86,14 +86,14 @@ int main() {
   ROBOT_BUS_CHECK(result_message.kind == "RESULT");
   ROBOT_BUS_CHECK(result_message.goal_id == "cpp-fibonacci-goal");
 
-  robot_bus_interface::action::v1::FibonacciFeedback feedback;
+  example_interfaces::action::v1::FibonacciFeedback feedback;
   ROBOT_BUS_CHECK(feedback.ParseFromArray(feedback_messages[0].body.data(),
                                           static_cast<int>(feedback_messages[0].body.size())));
   ROBOT_BUS_CHECK(feedback.sequence_size() == 4);
   ROBOT_BUS_CHECK(feedback.sequence(0) == 0);
   ROBOT_BUS_CHECK(feedback.sequence(3) == 2);
 
-  robot_bus_interface::action::v1::FibonacciResult result;
+  example_interfaces::action::v1::FibonacciResult result;
   ROBOT_BUS_CHECK(result.ParseFromArray(result_message.body.data(),
                                         static_cast<int>(result_message.body.size())));
   ROBOT_BUS_CHECK(result.sequence_size() == 5);

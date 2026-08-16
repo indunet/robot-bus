@@ -3,7 +3,7 @@
 #[cfg(feature = "ws")]
 mod support;
 
-use robot_bus::robot_bus_interface::msg::v1::TcpPorts;
+use robot_bus::robot_bus_interfaces::msg::v1::TcpPorts;
 use robot_bus::{NodeOptions, discovery};
 
 #[cfg(feature = "ws")]

@@ -1,0 +1,10 @@
+syntax = "proto3";
+
+package lifecycle_msgs.msg.v1;
+
+// Equivalent to ROS 2 `lifecycle_msgs/msg/Transition`.
+message Transition {
+  // uint8 in ROS 2 — CREATE=0, CONFIGURE=1, CLEANUP=2, ACTIVATE=3, …
+  uint32 id = 1;
+  string label = 2;
+}

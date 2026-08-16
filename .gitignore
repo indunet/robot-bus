@@ -73,6 +73,9 @@ bindings/typescript/generated/
 bindings/java/generated/
 bindings/android/generated/
 
+# Example C++ build outputs
+examples/build/
+
 # Codegen helper crate
 scripts/gen_rust_msgs/target/
 scripts/gen_rust_msgs/Cargo.lock

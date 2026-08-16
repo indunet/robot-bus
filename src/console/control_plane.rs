@@ -9,7 +9,7 @@ use prost::Message;
 
 use crate::console_topics;
 use crate::message_bus::Subscriber;
-use crate::robot_bus_interface::msg::v1::{
+use crate::robot_bus_interfaces::msg::v1::{
     TopicTypeRegister, TopologyRegister, TopologyUnregister,
 };
 use crate::worker_thread::WorkerThread;

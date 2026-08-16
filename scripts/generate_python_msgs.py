@@ -39,12 +39,16 @@ EXPECTED_PROTOC_VERSION = "35.1"
 
 # Top-level packages that own message/service protos (not robot_bus.grpc).
 MSG_PACKAGES = (
+    "ackermann_msgs",
     "apriltag_msgs",
     "builtin_interfaces",
     "control_msgs",
     "diagnostic_msgs",
+    "example_interfaces",
     "foxglove_msgs",
     "geometry_msgs",
+    "lifecycle_msgs",
+    "map_msgs",
     "nav2_msgs",
     "nav_msgs",
     "sensor_msgs",
@@ -54,6 +58,7 @@ MSG_PACKAGES = (
     "tf2_msgs",
     "trajectory_msgs",
     "unique_identifier_msgs",
+    "vision_msgs",
     "visualization_msgs",
 )
 
@@ -98,8 +103,8 @@ def collect_protos() -> list[Path]:
     protos: list[Path] = []
     for path in PROTO_ROOT.rglob("*.proto"):
         rel = path.relative_to(PROTO_ROOT).as_posix()
-        # gRPC stubs are generated separately; keep robot_bus_interface/action for prost/pb2.
-        if rel.startswith("robot_bus_interface/grpc/"):
+        # gRPC stubs are generated separately; keep robot_bus_interfaces/action for prost/pb2.
+        if rel.startswith("robot_bus_interfaces/grpc/"):
             continue
         protos.append(path)
     return sorted(protos)
@@ -123,17 +128,17 @@ def rewrite_imports(text: str) -> str:
 
 
 def rewrite_interface_imports(text: str) -> str:
-    """Nest proto package under the PyPI package: robot_bus_interface → robot_bus.robot_bus_interface."""
+    """Nest proto package under the PyPI package: robot_bus_interfaces → robot_bus.robot_bus_interfaces."""
     # Only rewrite Python import / module path strings, not the FileDescriptor blob.
     text = re.sub(
-        r"^((?:from|import)\s+)robot_bus_interface(\b)",
-        r"\1robot_bus.robot_bus_interface\2",
+        r"^((?:from|import)\s+)robot_bus_interfaces(\b)",
+        r"\1robot_bus.robot_bus_interfaces\2",
         text,
         flags=re.MULTILINE,
     )
     text = re.sub(
-        r"(['\"])robot_bus_interface(\.[^'\"]*_pb2)(['\"])",
-        r"\1robot_bus.robot_bus_interface\2\3",
+        r"(['\"])robot_bus_interfaces(\.[^'\"]*_pb2)(['\"])",
+        r"\1robot_bus.robot_bus_interfaces\2\3",
         text,
     )
     return text
@@ -144,13 +149,15 @@ def clear_generated_packages() -> None:
         target = OUT_ROOT / pkg
         if target.exists():
             shutil.rmtree(target)
-    # Legacy flat action/ (pre robot_bus_interface rename)
+    # Legacy flat action/ (pre robot_bus_interfaces rename)
     action_dst = OUT_ROOT / "action"
     if action_dst.exists():
         shutil.rmtree(action_dst)
-    iface = OUT_ROOT / "robot_bus_interface"
-    if iface.exists():
-        shutil.rmtree(iface)
+    # Drop singular package name if leftover from older checkouts.
+    for iface_name in ("robot_bus_interfaces", "robot_bus_interface"):
+        iface = OUT_ROOT / iface_name
+        if iface.exists():
+            shutil.rmtree(iface)
 
 
 def copy_and_rewrite(tmp: Path) -> None:
@@ -168,23 +175,28 @@ def copy_and_rewrite(tmp: Path) -> None:
             if rewritten != text:
                 py_file.write_text(rewritten, encoding="utf-8")
 
-    # proto/robot_bus_interface/action → bindings/python/robot_bus/robot_bus_interface/action
-    # Public import: from robot_bus.robot_bus_interface.action.v1 import …
-    iface_src = tmp / "robot_bus_interface"
+    # proto/robot_bus_interfaces/action → bindings/python/robot_bus/robot_bus_interfaces/action
+    # Public import: from robot_bus.robot_bus_interfaces.action.v1 import …
+    iface_src = tmp / "robot_bus_interfaces"
     if iface_src.exists():
         for child in iface_src.iterdir():
             if child.name == "grpc":
                 continue
-            dst = OUT_ROOT / "robot_bus_interface" / child.name
+            dst = OUT_ROOT / "robot_bus_interfaces" / child.name
             if dst.exists():
                 shutil.rmtree(dst)
             shutil.copytree(child, dst)
-        iface_root = OUT_ROOT / "robot_bus_interface"
+        iface_root = OUT_ROOT / "robot_bus_interfaces"
         for py_file in iface_root.rglob("*.py*"):
             if py_file.suffix not in {".py", ".pyi"}:
                 continue
             text = py_file.read_text(encoding="utf-8")
-            rewritten = rewrite_interface_imports(text)
+            # Interface protos import geometry_msgs (etc.). rewrite_interface_imports
+            # only nests robot_bus_interfaces; without rewrite_imports, pb2 files
+            # still do `from geometry_msgs...` and fail with
+            # `No module named 'geometry_msgs'` (interop python→cpp action).
+            rewritten = rewrite_imports(text)
+            rewritten = rewrite_interface_imports(rewritten)
             if rewritten != text:
                 py_file.write_text(rewritten, encoding="utf-8")
 
@@ -227,8 +239,8 @@ def write_leaf_reexports(pkg_dir: Path) -> None:
 
 
 def write_action_leaf_reexports() -> None:
-    """Re-export robot_bus.robot_bus_interface.action.v1 classes."""
-    v1 = OUT_ROOT / "robot_bus_interface" / "action" / "v1"
+    """Re-export robot_bus.robot_bus_interfaces.action.v1 classes."""
+    v1 = OUT_ROOT / "robot_bus_interfaces" / "action" / "v1"
     if not v1.is_dir():
         return
     pb2_files = sorted(v1.glob("*_pb2.py"))
@@ -236,7 +248,7 @@ def write_action_leaf_reexports() -> None:
         return
     lines = [
         "# Generated by scripts/generate_python_msgs.py — do not edit by hand.",
-        '"""Re-export protobuf message classes for robot_bus.robot_bus_interface.action.v1."""',
+        '"""Re-export protobuf message classes for robot_bus.robot_bus_interfaces.action.v1."""',
         "",
     ]
     for pb2 in pb2_files:
@@ -285,10 +297,11 @@ def main() -> int:
         write_leaf_reexports(pkg_dir)
         write_pkg_root_init(pkg)
 
-    action_dir = OUT_ROOT / "robot_bus_interface"
+    action_dir = OUT_ROOT / "robot_bus_interfaces"
     if action_dir.exists():
         ensure_package_inits(action_dir)
-        write_action_leaf_reexports()
+        write_leaf_reexports(action_dir)
+        write_pkg_root_init("robot_bus_interfaces")
 
     print(f"wrote Python msgs under {OUT_ROOT}")
     return 0

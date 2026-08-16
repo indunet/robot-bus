@@ -1,0 +1,13 @@
+syntax = "proto3";
+
+package lifecycle_msgs.msg.v1;
+
+import "lifecycle_msgs/msg/v1/state.proto";
+import "lifecycle_msgs/msg/v1/transition.proto";
+
+// Equivalent to ROS 2 `lifecycle_msgs/msg/TransitionDescription`.
+message TransitionDescription {
+  Transition transition = 1;
+  State start_state = 2;
+  State goal_state = 3;
+}

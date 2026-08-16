@@ -1,0 +1,10 @@
+syntax = "proto3";
+
+package tf2_msgs.srv.v1;
+
+// Equivalent to ROS 2 `tf2_msgs/srv/FrameGraph`.
+message FrameGraphRequest {}
+
+message FrameGraphResponse {
+  string frame_yaml = 1;
+}

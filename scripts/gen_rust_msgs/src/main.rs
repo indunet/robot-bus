@@ -2,7 +2,7 @@
 //!
 //! Layout mirrors C++/Python (one file per `.proto`):
 //!   `src/generated/<pkg>/{msg|srv|action}/v1/<stem>.rs`
-//!   `src/generated/robot_bus_interface/grpc/v1/mod.inc.rs`
+//!   `src/generated/robot_bus_interfaces/grpc/v1/mod.inc.rs`
 //!
 //! Prost still compiles by package; we then split the package module into
 //! per-proto files and `include!` them back into one Rust module so
@@ -44,7 +44,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut package_type_stems: HashMap<String, HashMap<String, String>> = HashMap::new();
     let msg_protos: Vec<PathBuf> = all_protos
         .iter()
-        .filter(|p| !path_is_under(p, "proto/robot_bus_interface/grpc"))
+        .filter(|p| !path_is_under(p, "proto/robot_bus_interfaces/grpc"))
         .cloned()
         .collect();
 
@@ -136,13 +136,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     fs::remove_dir_all(&tmp)?;
 
     // Gateway payload messages (prost only; transport is multiplexed WebSocket).
-    // → src/generated/robot_bus_interface/grpc/v1/messages.inc.rs
-    let grpc_dir = out_root.join("robot_bus_interface/grpc/v1");
+    // → src/generated/robot_bus_interfaces/grpc/v1/messages.inc.rs
+    let grpc_dir = out_root.join("robot_bus_interfaces/grpc/v1");
     fs::create_dir_all(&grpc_dir)?;
     let gateways = [
-        PathBuf::from("proto/robot_bus_interface/grpc/v1/message_gateway.proto"),
-        PathBuf::from("proto/robot_bus_interface/grpc/v1/service_gateway.proto"),
-        PathBuf::from("proto/robot_bus_interface/grpc/v1/action_gateway.proto"),
+        PathBuf::from("proto/robot_bus_interfaces/grpc/v1/message_gateway.proto"),
+        PathBuf::from("proto/robot_bus_interfaces/grpc/v1/service_gateway.proto"),
+        PathBuf::from("proto/robot_bus_interfaces/grpc/v1/action_gateway.proto"),
     ];
     let grpc_tmp = grpc_dir.join(".tmp_prost");
     if grpc_tmp.is_dir() {
@@ -152,9 +152,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     prost_build::Config::new()
         .out_dir(&grpc_tmp)
         .compile_protos(&gateways, &[proto_root])?;
-    let grpc_pkg = grpc_tmp.join("robot_bus_interface.grpc.v1.rs");
+    let grpc_pkg = grpc_tmp.join("robot_bus_interfaces.grpc.v1.rs");
     if !grpc_pkg.exists() {
-        return Err("prost did not write robot_bus_interface.grpc.v1.rs".into());
+        return Err("prost did not write robot_bus_interfaces.grpc.v1.rs".into());
     }
     let mut body = String::from(
         "// @generated messages-only for WebSocket gateway (no tonic).\n",

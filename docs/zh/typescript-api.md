@@ -178,7 +178,7 @@ import { WsNode } from "robot-bus"; // Node 入口也导出 WsNode
 | CANCEL | 3 | 客户端软取消（SendGoal：提交 cancel，连接保持至 RESULT；Subscribe：停订） |
 | TRAILER | 4 | `u32 status` + UTF-8 message（0 = OK） |
 
-method 示例：`robot_bus_interface.grpc.v1.MessageGateway/Subscribe`（以及 Publish / ServiceGateway/Call / ActionGateway/SendGoal）。业务 payload 为 gateway protobuf（method 名仍含历史 `.grpc.v1` 包路径）。
+method 示例：`robot_bus_interfaces.grpc.v1.MessageGateway/Subscribe`（以及 Publish / ServiceGateway/Call / ActionGateway/SendGoal）。业务 payload 为 gateway protobuf（method 名仍含历史 `.grpc.v1` 包路径）。
 
 ## Action GoalHandle
 
@@ -229,7 +229,7 @@ import { Imu } from "robot-bus/sensor_msgs/msg/v1/imu.js";
 | Rust | `robot_bus::sensor_msgs::msg::v1::Imu` |
 | TypeScript | `import { Imu } from "robot-bus/sensor_msgs/msg/v1/imu.js"` |
 
-网关 stub：`robot-bus/robot_bus_interface/grpc/v1/*.client.js`。
+网关 stub：`robot-bus/robot_bus_interfaces/grpc/v1/*.client.js`。
 
 改 `proto/` 后：
 

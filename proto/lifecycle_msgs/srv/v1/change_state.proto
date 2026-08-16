@@ -1,0 +1,14 @@
+syntax = "proto3";
+
+package lifecycle_msgs.srv.v1;
+
+import "lifecycle_msgs/msg/v1/transition.proto";
+
+// Equivalent to ROS 2 `lifecycle_msgs/srv/ChangeState`.
+message ChangeStateRequest {
+  lifecycle_msgs.msg.v1.Transition transition = 1;
+}
+
+message ChangeStateResponse {
+  bool success = 1;
+}

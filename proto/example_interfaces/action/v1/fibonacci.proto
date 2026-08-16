@@ -1,0 +1,17 @@
+syntax = "proto3";
+
+package example_interfaces.action.v1;
+
+// Built-in demo action for typed `create_action_server` / `create_action_client`.
+// Equivalent to ROS 2 `example_interfaces/action/Fibonacci`.
+message FibonacciGoal {
+  int32 order = 1;
+}
+
+message FibonacciFeedback {
+  repeated int32 sequence = 1;
+}
+
+message FibonacciResult {
+  repeated int32 sequence = 1;
+}

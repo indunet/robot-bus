@@ -167,7 +167,7 @@ ROS 2–style GoalHandle: `send_goal` returns immediately; feedback via callback
 
 ```rust
 use std::time::Duration;
-use robot_bus::action::v1::{Fibonacci, FibonacciGoal};
+use robot_bus::example_interfaces::action::v1::{Fibonacci, FibonacciGoal};
 use robot_bus::Node;
 
 let mut node = Node::new("act_client");
@@ -180,12 +180,12 @@ let goal = client.send_goal(
 let result = goal.result(Some(Duration::from_secs(10)))?;
 ```
 
-Server: `create_action_server::<A, _>(...)`. Confirm exact action type path in rust-api / crate docs (`action::v1` vs `robot_bus_interface`).
+Server: `create_action_server::<A, _>(...)`. Confirm exact action type path in rust-api / crate docs (`action::v1` vs `robot_bus_interfaces`).
 
 ### Python
 
 ```python
-from robot_bus.robot_bus_interface.action.v1 import (
+from robot_bus.example_interfaces.action.v1 import (
     FibonacciGoal, FibonacciFeedback, FibonacciResult,
 )
 

@@ -3,7 +3,7 @@
 use prost::Message as ProstMessage;
 use rclrs::vendor::example_interfaces::action as ros_act;
 
-use crate::action::v1::{
+use crate::example_interfaces::action::v1::{
     FibonacciFeedback as BusFibonacciFeedback, FibonacciGoal as BusFibonacciGoal,
     FibonacciResult as BusFibonacciResult,
 };
