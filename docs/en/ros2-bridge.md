@@ -384,6 +384,7 @@ bridge.spin()
 
 - ROS side: `rclpy` node + executor (background thread spin)
 - Bus side: `robot_bus.Node` (raw / typed protobuf)
+- **Threading:** `ServiceClient` / `TopicPublisher` / `ActionClient` are process-safe (`Send + Sync` via a per-handle mutex around the ZMQ socket). `Ros2ToBus` callbacks on the rclpy executor thread may call them directly (same idea as C++ `std::mutex` around the client). Concurrent calls on one handle are serialised.
 - Custom mappers: see "User-defined" above; built-in reference [`mappers/trigger.py`](../../bindings/python/robot_bus/ros2_bridge/mappers/trigger.py)
 - Mappers lazy-import on demand (depends on corresponding ROS message packages and protobuf)
 

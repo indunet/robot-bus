@@ -1,15 +1,20 @@
 //! PUB socket that connects to the message bus XSUB side.
+//!
+//! The PUB socket is guarded by a [`Mutex`] so a publisher handle is `Send + Sync`
+//! and safe to publish from multiple threads (sends are serialised per handle).
+
+use std::sync::Mutex;
 
 use zmq::{Context as ZmqContext, Socket, SocketType};
 
-use crate::errors::Result;
+use crate::errors::{BusError, Result};
 use crate::runtime::Context;
 use crate::transports;
 use crate::zmq_helpers::{HighWaterMark, apply_publisher_options_with, wait_for_connection};
 
 pub struct Publisher {
     endpoint: String,
-    socket: Socket,
+    socket: Mutex<Socket>,
 }
 
 impl Publisher {
@@ -53,7 +58,16 @@ impl Publisher {
         socket.connect(&endpoint)?;
         wait_for_connection();
         log::info!("publisher connected to {endpoint}");
-        Ok(Self { endpoint, socket })
+        Ok(Self {
+            endpoint,
+            socket: Mutex::new(socket),
+        })
+    }
+
+    fn lock_socket(&self) -> Result<std::sync::MutexGuard<'_, Socket>> {
+        self.socket
+            .lock()
+            .map_err(|_| BusError::Protocol("publisher socket mutex poisoned".into()))
     }
 
     pub fn endpoint(&self) -> &str {
@@ -62,30 +76,48 @@ impl Publisher {
 
     /// Current send / receive high-water marks.
     pub fn high_water_mark(&self) -> Result<HighWaterMark> {
-        Ok(HighWaterMark::from_socket(&self.socket)?)
+        let sock = self.lock_socket()?;
+        Ok(HighWaterMark::from_socket(&sock)?)
     }
 
     /// Update send / receive high-water marks on the live socket.
     pub fn set_high_water_mark(&self, hwm: HighWaterMark) -> Result<()> {
-        hwm.apply(&self.socket)?;
+        let sock = self.lock_socket()?;
+        hwm.apply(&sock)?;
         Ok(())
     }
 
     /// Milliseconds; `-1` waits forever. Used by console status publisher so
     /// shutdown cannot block on a full capture HWM.
     pub fn set_send_timeout_ms(&self, ms: i32) -> Result<()> {
-        self.socket.set_sndtimeo(ms)?;
+        let sock = self.lock_socket()?;
+        sock.set_sndtimeo(ms)?;
         Ok(())
     }
 
     pub fn publish(&self, topic: &str, payload: &[u8]) -> Result<()> {
-        self.socket.send_multipart([topic.as_bytes(), payload], 0)?;
+        let sock = self.lock_socket()?;
+        sock.send_multipart([topic.as_bytes(), payload], 0)?;
         Ok(())
     }
 }
 
 impl Drop for Publisher {
     fn drop(&mut self) {
-        let _ = self.socket.set_linger(0);
+        if let Ok(sock) = self.socket.get_mut() {
+            let _ = sock.set_linger(0);
+        }
+    }
+}
+
+#[cfg(test)]
+mod sync_assert {
+    use super::Publisher;
+
+    fn assert_send_sync<T: Send + Sync>() {}
+
+    #[test]
+    fn publisher_is_send_sync() {
+        assert_send_sync::<Publisher>();
     }
 }

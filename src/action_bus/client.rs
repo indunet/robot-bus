@@ -1,5 +1,9 @@
 //! DEALER client for the action bus frontend.
+//!
+//! The DEALER socket is guarded by a [`Mutex`] so a client handle is `Send + Sync`
+//! and safe to use from multiple threads (I/O is serialised per handle).
 
+use std::sync::Mutex;
 use std::time::Duration;
 
 use uuid::Uuid;
@@ -41,7 +45,7 @@ pub struct ActionMessage {
 
 pub struct ActionClient {
     endpoint: String,
-    socket: Socket,
+    socket: Mutex<Socket>,
 }
 
 impl ActionClient {
@@ -68,7 +72,16 @@ impl ActionClient {
         apply_action_options_with(&socket, hwm)?;
         socket.connect(&endpoint)?;
         log::info!("action client connected to {endpoint}");
-        Ok(Self { endpoint, socket })
+        Ok(Self {
+            endpoint,
+            socket: Mutex::new(socket),
+        })
+    }
+
+    fn lock_socket(&self) -> Result<std::sync::MutexGuard<'_, Socket>> {
+        self.socket
+            .lock()
+            .map_err(|_| BusError::Protocol("action client socket mutex poisoned".into()))
     }
 
     pub fn endpoint(&self) -> &str {
@@ -76,11 +89,13 @@ impl ActionClient {
     }
 
     pub fn high_water_mark(&self) -> Result<HighWaterMark> {
-        Ok(HighWaterMark::from_socket(&self.socket)?)
+        let sock = self.lock_socket()?;
+        Ok(HighWaterMark::from_socket(&sock)?)
     }
 
     pub fn set_high_water_mark(&self, hwm: HighWaterMark) -> Result<()> {
-        hwm.apply(&self.socket)?;
+        let sock = self.lock_socket()?;
+        hwm.apply(&sock)?;
         Ok(())
     }
 
@@ -128,14 +143,15 @@ impl ActionClient {
         let gid = goal_id
             .map(str::to_string)
             .unwrap_or_else(|| Uuid::new_v4().simple().to_string());
-        self.socket
-            .send_multipart([action_name.as_bytes(), gid.as_bytes(), b"GOAL", body], 0)?;
+        let sock = self.lock_socket()?;
+        sock.send_multipart([action_name.as_bytes(), gid.as_bytes(), b"GOAL", body], 0)?;
         Ok(gid)
     }
 
     /// Send a CANCEL frame without waiting for RESULT.
     pub fn submit_cancel(&self, action_name: &str, goal_id: &str, body: &[u8]) -> Result<()> {
-        self.socket.send_multipart(
+        let sock = self.lock_socket()?;
+        sock.send_multipart(
             [action_name.as_bytes(), goal_id.as_bytes(), b"CANCEL", body],
             0,
         )?;
@@ -167,16 +183,17 @@ impl ActionClient {
 
     /// Receive one action-bus reply frame (optionally with a poll timeout).
     pub fn recv_message(&self, timeout: Option<Duration>) -> Result<ActionMessage> {
+        let sock = self.lock_socket()?;
         if let Some(duration) = timeout {
             let ms = duration.as_millis().min(i64::MAX as u128) as i64;
-            if !poll_readable(&self.socket, ms)? {
+            if !poll_readable(&sock, ms)? {
                 return Err(BusError::Timeout(format!(
                     "action client timed out after {}s",
                     duration.as_secs_f64()
                 )));
             }
         }
-        let frames = self.socket.recv_multipart(0)?;
+        let frames = sock.recv_multipart(0)?;
         if frames.len() != 4 {
             return Err(BusError::Protocol(format!(
                 "expected 4 reply frames, got {}",
@@ -241,6 +258,20 @@ impl Iterator for ActionGoalIter<'_> {
 
 impl Drop for ActionClient {
     fn drop(&mut self) {
-        let _ = self.socket.set_linger(0);
+        if let Ok(sock) = self.socket.get_mut() {
+            let _ = sock.set_linger(0);
+        }
+    }
+}
+
+#[cfg(test)]
+mod sync_assert {
+    use super::ActionClient;
+
+    fn assert_send_sync<T: Send + Sync>() {}
+
+    #[test]
+    fn action_client_is_send_sync() {
+        assert_send_sync::<ActionClient>();
     }
 }

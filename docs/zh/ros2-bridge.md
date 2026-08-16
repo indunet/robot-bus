@@ -381,6 +381,7 @@ bridge.spin()
 
 - ROS 侧：`rclpy` 节点 + executor（后台线程 spin）
 - Bus 侧：`robot_bus.Node`（raw / typed protobuf）
+- **线程：** `ServiceClient` / `TopicPublisher` / `ActionClient` 为进程内线程安全（每个句柄对 ZMQ socket 加 mutex，满足 `Send + Sync`）。`Ros2ToBus` 可在 rclpy executor 线程里直接调用（与 C++ 侧对 client 加 `std::mutex` 同思路）。同一句柄上的并发调用会串行化。
 - 自定义 mapper：见上文「用户自定义」；内置参考 [`mappers/trigger.py`](../../bindings/python/robot_bus/ros2_bridge/mappers/trigger.py)
 - Mapper 按需 lazy import（依赖对应 ROS 消息包与 protobuf）
 

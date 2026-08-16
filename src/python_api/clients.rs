@@ -15,7 +15,7 @@ use crate::runtime::{
 
 use super::util::{action_message_to_py, allow_threads_io, bus_err};
 
-#[pyclass(name = "ServiceClient", unsendable)]
+#[pyclass(name = "ServiceClient")]
 pub(crate) struct PyNodeServiceClient {
     pub(crate) inner: RustNodeServiceClient,
 }
@@ -49,7 +49,7 @@ impl PyNodeServiceClient {
     }
 }
 
-#[pyclass(name = "ActionClient", unsendable)]
+#[pyclass(name = "ActionClient")]
 pub(crate) struct PyNodeActionClient {
     pub(crate) inner: RustNodeActionClient,
 }

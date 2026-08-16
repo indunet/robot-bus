@@ -70,7 +70,7 @@ impl PySubscriber {
     }
 }
 
-#[pyclass(name = "TopicPublisher", unsendable)]
+#[pyclass(name = "TopicPublisher")]
 pub(crate) struct PyTopicPublisher {
     pub(crate) inner: RustTopicPublisher,
 }
