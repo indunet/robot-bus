@@ -20,7 +20,7 @@ SDKs: **Rust**, **Python**, **TypeScript**, **C++**, **Java**, **Android**.
 
 *Web console* — Overview / Topics / Services / Actions / Topology. Start `robot-bus-broker`, then open [http://127.0.0.1:15570](http://127.0.0.1:15570). See [§4 Web console](#4-web-console) and the [Tank demo](#32-tank-demo).
 
-> **Pre-release notice**: APIs may still change substantially; use caution in production.
+> The Node programming model — `Context` / `Node`, topic pub-sub, service, action (`send_goal` → GoalHandle → `result` / `cancel`), and `spin` — is the stable public API. Gateway clients use **WebSocket RPC** (`Node::ws` / `Node.ws`; transport `"ws"`). `"grpc"` and `--grpc-listen` remain aliases.
 
 ## 1. Application scenarios
 

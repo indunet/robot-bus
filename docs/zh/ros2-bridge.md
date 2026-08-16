@@ -85,7 +85,7 @@ Rust 另有完整 topic mapper 注册表（`src/ros2_bridge/mappers/`），挂�
 
 ## 用户自定义 service / action：可以
 
-**可以。** 在本语言拿到具体 ROS 类型后，只写 **字段 ↔ bus protobuf 转换**；库负责 `create_service` / client 接线。
+**可以。** 先写 **bus protobuf**（字段对齐 ROS `.srv` / `.action`），`protoc` 生成本语言 stubs，再只写 **字段 ↔ protobuf 转换**；库负责 `create_service` / client 接线。typed API 接受任意 protobuf 消息类，不必放进 robot-bus 仓库。
 
 | | 行不行 |
 |--|--------|
@@ -96,15 +96,66 @@ Rust 另有完整 topic mapper 注册表（`src/ros2_bridge/mappers/`），挂�
 
 高级：仍可直接 override `ServiceMapper::attach` / `ActionMapper::attach`（特殊 QoS 等）。
 
-下面用「自有 `my_pkg/srv/AddTwoInts` + 对应 protobuf」说明（字段名示意）。
+下面以自有 ROS `my_pkg/srv/AddTwoInts` 为例，从 proto 写到挂桥。
+
+### 1. 定义 bus protobuf
+
+ROS 侧已有：
+
+```text
+# my_pkg/srv/AddTwoInts.srv
+int64 a
+int64 b
+---
+int64 sum
+```
+
+Bus 侧按同样字段写 `.proto`（建议 ROS 风格包路径 + `v1`），例如 `my_pkg/srv/v1/add_two_ints.proto`：
+
+```protobuf
+syntax = "proto3";
+package my_pkg.srv.v1;
+
+// Equivalent to ROS 2 `my_pkg/srv/AddTwoInts`.
+message AddTwoIntsRequest {
+  int64 a = 1;
+  int64 b = 2;
+}
+
+message AddTwoIntsResponse {
+  int64 sum = 1;
+}
+```
+
+生成 stubs（放在自己工程里）：
+
+```bash
+# Python
+protoc --python_out=. --pyi_out=. my_pkg/srv/v1/add_two_ints.proto
+
+# C++
+protoc --cpp_out=. my_pkg/srv/v1/add_two_ints.proto
+```
+
+Rust 在 `build.rs` 里：
+
+```rust
+prost_build::compile_protos(
+    &["proto/my_pkg/srv/v1/add_two_ints.proto"],
+    &["proto"],
+)?;
+```
+
+若要把类型贡献进本仓库内置集合：文件放到 [`proto/`](../../proto/) 对应目录，再 `just gen-*`。
 
 ### Python：自定义 Service mapper
 
 桥调用：`ros_srv_type()`、`ros_req_to_bus` / `bus_req_to_ros`、`ros_resp_to_bus` / `bus_resp_to_ros`。
 
 ```python
-# from my_pkg.srv import AddTwoInts
-# from my_robot.pb.add_two_ints_pb2 import AddTwoIntsRequest, AddTwoIntsResponse
+from my_pkg.srv import AddTwoInts
+from my_pkg.srv.v1 import add_two_ints_pb2 as pb
+from robot_bus.ros2_bridge import Direction, Ros2Bridge
 
 class AddTwoIntsServiceMapper:
     def type_name(self) -> str:
@@ -114,10 +165,10 @@ class AddTwoIntsServiceMapper:
         return AddTwoInts
 
     def ros_req_to_bus(self, req) -> bytes:
-        return AddTwoIntsRequest(a=int(req.a), b=int(req.b)).SerializeToString()
+        return pb.AddTwoIntsRequest(a=int(req.a), b=int(req.b)).SerializeToString()
 
     def bus_req_to_ros(self, payload: bytes):
-        bus = AddTwoIntsRequest()
+        bus = pb.AddTwoIntsRequest()
         bus.ParseFromString(payload)
         out = AddTwoInts.Request()
         out.a = int(bus.a)
@@ -125,10 +176,10 @@ class AddTwoIntsServiceMapper:
         return out
 
     def ros_resp_to_bus(self, resp) -> bytes:
-        return AddTwoIntsResponse(sum=int(resp.sum)).SerializeToString()
+        return pb.AddTwoIntsResponse(sum=int(resp.sum)).SerializeToString()
 
     def bus_resp_to_ros(self, payload: bytes):
-        bus = AddTwoIntsResponse()
+        bus = pb.AddTwoIntsResponse()
         bus.ParseFromString(payload)
         out = AddTwoInts.Response()
         out.sum = int(bus.sum)
@@ -146,15 +197,16 @@ bridge = (
 )
 ```
 
-Action：`ros_action_type()` + `ros_goal_to_bus` / `bus_goal_to_ros` / feedback / result（见 [`mappers/fibonacci.py`](../../bindings/python/robot_bus/ros2_bridge/mappers/fibonacci.py)）。
+Action：同一套流程——proto 里写 Goal / Feedback / Result 三个 message，再实现 `ros_action_type()` + 六向转换（见 [`mappers/fibonacci.py`](../../bindings/python/robot_bus/ros2_bridge/mappers/fibonacci.py)）。
 
 ### Rust：自定义 Service（`TypedServiceMapper`）
+
+`include!` 生成代码后，用 prost 类型编解码：
 
 ```rust
 use prost::Message as ProstMessage;
 use robot_bus::ros2_bridge::TypedServiceMapper;
-// use my_pkg::srv::AddTwoInts;
-// use my_robot::pb::{AddTwoIntsRequest, AddTwoIntsResponse};
+use my_pkg::srv::v1::{AddTwoIntsRequest, AddTwoIntsResponse};
 
 #[derive(Clone)]
 struct AddTwoIntsServiceMapper;
@@ -185,7 +237,9 @@ impl TypedServiceMapper for AddTwoIntsServiceMapper {
     }
 }
 
-// .service("/add", "/add").mapper(AddTwoIntsServiceMapper).add()?
+// .service("/add_two_ints", "/add_two_ints")
+//     .mapper(AddTwoIntsServiceMapper)
+//     .add()?
 ```
 
 Action：`impl TypedActionMapper`（`type Ros = …` + goal/feedback/result 六向转换）。库内 `wire_typed_*` 负责接线。
@@ -196,26 +250,55 @@ Action：`impl TypedActionMapper`（`type Ros = …` + goal/feedback/result 六�
 
 ```cpp
 #include <robot_bus/ros2_bridge.hpp>
-// #include <my_pkg/srv/add_two_ints.hpp>
-// #include "add_two_ints.pb.h"
+#include <my_pkg/srv/add_two_ints.hpp>
+#include "my_pkg/srv/v1/add_two_ints.pb.h"
 
 struct AddTwoIntsServiceMapper
     : robot_bus::TypedServiceMapper<AddTwoIntsServiceMapper, my_pkg::srv::AddTwoInts> {
   const char *type_name() const override { return "my_pkg/srv/AddTwoInts"; }
 
-  std::vector<uint8_t> ros_req_to_bus(const Request &req) const { /* … */ }
-  Request bus_req_to_ros(robot_bus::BytesView body) const { /* … */ }
-  std::vector<uint8_t> ros_resp_to_bus(const Response &resp) const { /* … */ }
-  Response bus_resp_to_ros(robot_bus::BytesView body) const { /* … */ }
+  std::vector<uint8_t> ros_req_to_bus(const Request &req) const {
+    my_pkg::srv::v1::AddTwoIntsRequest bus;
+    bus.set_a(req.a);
+    bus.set_b(req.b);
+    std::string bytes;
+    bus.SerializeToString(&bytes);
+    return {bytes.begin(), bytes.end()};
+  }
+
+  Request bus_req_to_ros(robot_bus::BytesView body) const {
+    my_pkg::srv::v1::AddTwoIntsRequest bus;
+    bus.ParseFromArray(body.data, static_cast<int>(body.size));
+    Request out;
+    out.a = bus.a();
+    out.b = bus.b();
+    return out;
+  }
+
+  std::vector<uint8_t> ros_resp_to_bus(const Response &resp) const {
+    my_pkg::srv::v1::AddTwoIntsResponse bus;
+    bus.set_sum(resp.sum);
+    std::string bytes;
+    bus.SerializeToString(&bytes);
+    return {bytes.begin(), bytes.end()};
+  }
+
+  Response bus_resp_to_ros(robot_bus::BytesView body) const {
+    my_pkg::srv::v1::AddTwoIntsResponse bus;
+    bus.ParseFromArray(body.data, static_cast<int>(body.size));
+    Response out;
+    out.sum = bus.sum();
+    return out;
+  }
 };
 
-// .service("/add", "/add")
+// .service("/add_two_ints", "/add_two_ints")
 //     .mapper(std::make_shared<AddTwoIntsServiceMapper>())
 //     .direction(robot_bus::Direction::Ros2ToBus)
 //     .add()
 ```
 
-Topic / Action：`TypedTopicMapper` / `TypedActionMapper`（见 [`ros2_bridge_typed.hpp`](../../bindings/cpp/include/robot_bus/ros2_bridge_typed.hpp)）。
+Topic / Action：同一套「先 proto 再 mapper」。`TypedTopicMapper` / `TypedActionMapper` 见 [`ros2_bridge_typed.hpp`](../../bindings/cpp/include/robot_bus/ros2_bridge_typed.hpp)。
 
 ---
 

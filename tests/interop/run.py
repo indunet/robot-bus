@@ -9,7 +9,8 @@
   6. Python action   → C++ client      (Fibonacci)
 
 Requires: `just python-dev` plus built peers (see `just test-interop`).
-Skips a scenario cleanly when its peer toolchain/binary is missing.
+Missing peers fail the run. Set ROBOT_BUS_INTEROP_ALLOW_SKIP=1 only for
+local partial runs.
 """
 
 from __future__ import annotations
@@ -62,8 +63,18 @@ def _peer_env(broker) -> dict[str, str]:
         }
     )
     native = REPO / "bindings/cpp/native/target/release"
+    cpp_build = REPO / "bindings/cpp/build"
+    lib_dirs: list[str] = []
     if native.is_dir():
         env.setdefault("ROBOT_BUS_NATIVE_DIR", str(native))
+        lib_dirs.append(str(native))
+    if cpp_build.is_dir():
+        lib_dirs.append(str(cpp_build))
+    lib_dirs.append("/usr/local/lib")
+    extra = os.pathsep.join(lib_dirs)
+    for key in ("LD_LIBRARY_PATH", "DYLD_LIBRARY_PATH"):
+        prev = env.get(key, "")
+        env[key] = extra if not prev else extra + os.pathsep + prev
     return env
 
 
@@ -385,18 +396,40 @@ def scenario_python_act_cpp_client(robot_bus, broker) -> None:
         server.wait()
 
 
+def _allow_skip() -> bool:
+    return os.environ.get("ROBOT_BUS_INTEROP_ALLOW_SKIP", "").lower() in (
+        "1",
+        "true",
+        "yes",
+    )
+
+
+def _missing_peers() -> list[str]:
+    missing: list[str] = []
+    if _rust_bin() is None:
+        missing.append("robot_bus_interop (cargo build --bin robot_bus_interop)")
+    if not _java_ready():
+        missing.append("Java InteropPeer (mvn test-compile in bindings/java)")
+    if not _ts_ready():
+        missing.append("TypeScript native binding (just ts-dev)")
+    if _cpp_bin() is None:
+        missing.append("interop_peer (cmake --build bindings/cpp --target interop_peer)")
+    return missing
+
+
 def main() -> int:
     try:
         import robot_bus
     except ImportError as err:
-        print(f"skip: native robot_bus not installed ({err})", file=sys.stderr)
-        return 0
+        print(f"FAIL: native robot_bus not installed ({err})", file=sys.stderr)
+        print("hint: just python-dev", file=sys.stderr)
+        return 1
 
-    if not hasattr(robot_bus, "RobotBusBroker"):
-        print("skip: RobotBusBroker missing (just python-dev)", file=sys.stderr)
-        return 0
+    if robot_bus.RobotBusBroker is None or not hasattr(robot_bus, "RobotBusBroker"):
+        print("FAIL: RobotBusBroker missing (just python-dev)", file=sys.stderr)
+        return 1
 
-    tests: list[tuple[str, object, callable]] = [
+    tests: list[tuple[str, str, object]] = [
         ("1 rust→python pub-sub", "rust", scenario_rust_pub_python_sub),
         ("2 python→java pub-sub", "java", scenario_python_pub_java_sub),
         ("3 typescript→python pub-sub", "ts", scenario_ts_pub_python_sub),
@@ -404,6 +437,14 @@ def main() -> int:
         ("5 java→rust service", "java+rust", scenario_java_svc_rust_client),
         ("6 python→cpp action", "cpp", scenario_python_act_cpp_client),
     ]
+
+    missing = _missing_peers()
+    if missing and not _allow_skip():
+        print("FAIL: required interop peers missing:", file=sys.stderr)
+        for item in missing:
+            print(f"  - {item}", file=sys.stderr)
+        print("hint: just test-interop  (or set ROBOT_BUS_INTEROP_ALLOW_SKIP=1)", file=sys.stderr)
+        return 1
 
     def available(need: str) -> bool:
         if need == "rust":
@@ -440,6 +481,8 @@ def main() -> int:
         f"interop summary: {passed} passed, {failed} failed, {skipped} skipped "
         f"(of {len(tests)})"
     )
+    if skipped and not _allow_skip():
+        return 1
     return 1 if failed else 0
 
 

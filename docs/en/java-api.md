@@ -4,7 +4,7 @@ English | [中文](../zh/java-api.md)
 
 ```bash
 # Maven Central (when published)
-# implementation("org.indunet:robot-bus:0.1.9")           // JVM
+# implementation("org.indunet:robot-bus:1.0.0")           // JVM
 
 # Local:
 just java-dev       # gen-java + cargo FFI + mvn test
@@ -124,7 +124,7 @@ Node node = Node.discover(
 ```
 
 ### WebSocket RPC mode Node (client)
-`Node.ws` / `Node.wsAt` connect through the broker gRPC gateway and do not create ZMQ sockets.
+`Node.ws` / `Node.wsAt` connect through the broker WebSocket RPC gateway and do not create ZMQ sockets.
 
 | Supported | Not supported |
 |------|--------|
@@ -138,28 +138,6 @@ Node node = Node.discover(
 Node node = Node.ws("web-client");
 // or Node.wsAt("web-client", "http://127.0.0.1:15570");
 ```
-
-### TF (transform tree)
-
-`TfBuffer` / `TfListener` / `TransformBroadcaster` correspond to Rust `robot_bus::tf`. Messages are `tf2_msgs/TFMessage` (`/tf`, `/tf_static`). v1: static edges are always active; dynamic edges use the latest sample.
-
-```java
-import org.indunet.robot.bus.TfListener;
-import org.indunet.robot.bus.TransformBroadcaster;
-import org.indunet.robot.bus.tf2_msgs.msg.v1.TFMessage;
-
-TfListener listener = new TfListener(node); // /tf + /tf_static
-TfBuffer buf = listener.buffer();
-
-TransformBroadcaster br =
-    new TransformBroadcaster(node.createPublisher("/tf_static", TFMessage.class));
-br.send(/* TFMessage or TransformStamped... */);
-
-// after start() delivers messages:
-var t = buf.lookupTransform("base_link", "camera");
-```
-
-Offline use: `new TfBuffer()` + `setTransformMsg`. See `TfLookupTest`.
 
 ### Service / Action (typed)
 
@@ -245,7 +223,7 @@ just java-install      # ~/.m2 (JVM only; Android no longer needed)
 | Symbol | Description |
 |------|------|
 | `Node(name)` / `Node(name, NodeOptions)` | Create a node |
-| `Node.tcp` / `ipc` / `inproc` / `inproc(Context, …)` / `withContext` / `grpc` / `grpcAt` / `discover` | Transport presets; same-process inproc must share `Context`; `discover` only fills in the address |
+| `Node.tcp` / `ipc` / `inproc` / `inproc(Context, …)` / `withContext` / `ws` / `wsAt` / `discover` | Transport presets; same-process inproc must share `Context`; `discover` only fills in the address |
 | `declareParameter` / `getParameter` / `setParameter` / `hasParameter` / `listParameters` | Local parameters on this node (Boolean / Long / Double / String) |
 | `loadParametersFromYaml` / `loadParametersFromYamlStr` | Load parameters from a YAML file or string |
 | `Parameter` | name/value from `getParameter` / `listAllParameters` |

@@ -112,7 +112,7 @@ fn main() -> robot_bus::Result<()> {
 }
 ```
 
-`Cargo.toml`: `robot-bus = "0.1.9"` (match current crate version). Bridge needs `features = ["ros2"]`.
+`Cargo.toml`: `robot-bus = "1.0.0"` (match current crate version). Bridge needs `features = ["ros2"]`.
 
 ### Python sketch
 
@@ -173,7 +173,7 @@ Default: `Direction::Ros2ToBus` when ROS is the publisher/server side feeding bu
 - Launch XML/Python → rewrite as process list / compose / scripts
 - `ros2 topic/service/action` CLI → Web console + `rbus` + language smoke tests
 - Lifecycle nodes / components / pluginlib → redesign on bus or keep on ROS
-- tf2 buffer listeners with full ROS graph assumptions → bus `/tf` types if available, or keep tf on ROS behind bridge
+- tf2 buffer / transform tree → keep on ROS behind the bridge; robot-bus has no TF library
 - Reliable / deadline / liveliness QoS — bus topics are best-effort KeepLast depth only
 - Remote parameters and `ros2 param` — local YAML/API only
 

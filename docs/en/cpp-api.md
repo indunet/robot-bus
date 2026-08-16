@@ -36,14 +36,14 @@ CMake sets `CMAKE_CXX_STANDARD 17`. Building with a newer standard (e.g. `-DCMAK
 
 ```bash
 # Core SDK (no ROS bridge)
-sudo apt install ./robot-bus_0.1.9_linux_amd64.deb
+sudo apt install ./robot-bus_1.0.0_linux_amd64.deb
 
 # Or ROS 2 bridge variant (Humble example) — needs Humble already installed
-sudo apt install ./robot-bus-ros2-humble_0.1.9_linux_amd64.deb
+sudo apt install ./robot-bus-ros2-humble_1.0.0_linux_amd64.deb
 source /opt/ros/humble/setup.bash
 
 # macOS Apple Silicon (core package only)
-sudo installer -pkg robot-bus_0.1.9_macos_arm64.pkg -target /
+sudo installer -pkg robot-bus_1.0.0_macos_arm64.pkg -target /
 # Installs under /usr/local ({bin,lib,include})
 
 # Or from source (dev)
@@ -176,16 +176,17 @@ Optional QoS: `qos_depth > 0` → KeepLast. `create_wall_timer` aliases `create_
 
 Raw bytes still work via `create_publisher` / `create_subscription` with manual Serialize/Parse.
 
-### gRPC mode Node（客户端）
+### WebSocket RPC mode Node (client)
 
-`Node::grpc` / `Node::ws_at` 经 broker gRPC 网关接入，不创建 ZMQ socket。
+`Node::ws` / `Node::ws_at` connect through the broker WebSocket RPC gateway and do not create ZMQ sockets. Transport `"grpc"` is a compatibility alias.
 
-| 支持 | 不支持 |
-|------|--------|
-| `create_subscription` | `create_publisher` |
-| `create_client` | `create_service` |
-| `create_action_client` | `create_action_server` |
-| `create_timer`、`spin` / `spin_once` / `shutdown` | — |
+| Supported | Not supported |
+|-----------|---------------|
+| `create_subscription` | `create_service` |
+| `create_publisher` | `create_action_server` |
+| `create_client` | |
+| `create_action_client` | |
+| `create_timer`, `spin` / `spin_once` / `shutdown` | — |
 
 ```cpp
 auto node = robot_bus::Node::ws("web-client");
@@ -193,34 +194,6 @@ auto node = robot_bus::Node::ws("web-client");
 ```
 
 本地覆盖见 `bindings/cpp/tests/ws_node.cpp`（`just test-cpp`）。
-
-## TF (coordinate frames)
-
-`TfBuffer` / `TfListener` / `TransformBroadcaster` mirror Rust `robot_bus::tf`. Wire format is `tf2_msgs/TFMessage` on `/tf` and `/tf_static`. Lookup returns `geometry_msgs/TransformStamped` protobuf bytes. v1 time semantics: static edges always apply; dynamic = latest only.
-
-```cpp
-#include <robot_bus/tf.hpp>
-#include <robot_bus/tf2_msgs/msg/v1/tf_message.pb.h>
-#include <robot_bus/geometry_msgs/msg/v1/stamped.pb.h>
-
-robot_bus::TfListener listener(node);  // /tf + /tf_static
-auto buf = listener.buffer();
-
-auto pub = node.create_publisher("/tf_static");
-robot_bus::TransformBroadcaster br(std::move(pub));
-tf2_msgs::msg::v1::TFMessage msg;
-// … fill transforms …
-std::string bytes;
-msg.SerializeToString(&bytes);
-br.send(bytes);
-
-// after spin delivers messages:
-auto stamped_bytes = buf.lookup_transform("base_link", "camera");
-geometry_msgs::msg::v1::TransformStamped stamped;
-stamped.ParseFromArray(stamped_bytes.data(), static_cast<int>(stamped_bytes.size()));
-```
-
-Offline use: `robot_bus::TfBuffer` + `set_transform_msg` without a listener. See `bindings/cpp/tests/tf_lookup.cpp`.
 
 Compare imports across languages:
 
@@ -277,6 +250,6 @@ bridge.spin_once(0.01);
 ```
 
 Phase-1 builtins: `StdMsgsStringMapper`, `SensorMsgsImageMapper`, `TriggerServiceMapper`, `SetBoolServiceMapper`, `FibonacciActionMapper`.  
-Custom: inherit `TypedTopicMapper` / `TypedServiceMapper` / `TypedActionMapper` CRTP, implement convert methods only, mount with `.mapper(std::make_shared<…>())` (see [ros2-bridge.md](ros2-bridge.md)). Override bare `attach` only for advanced cases.  
+Custom: write a bus `.proto` aligned with the ROS type and `protoc` it, then inherit `TypedTopicMapper` / `TypedServiceMapper` / `TypedActionMapper` CRTP, implement convert methods only, mount with `.mapper(std::make_shared<…>())` (see [ros2-bridge.md](ros2-bridge.md)). Override bare `attach` only for advanced cases.  
 `ros2_available()` is true when linked with `ROBOT_BUS_HAS_ROS2`. Default `robot-bus` stubs throw a clear `robot_bus::Error`.
 

@@ -36,14 +36,14 @@ CMake 设置 `CMAKE_CXX_STANDARD 17`。自有应用用更高标准（如 `-DCMAK
 
 ```bash
 # 核心 SDK（无 ROS bridge）
-sudo apt install ./robot-bus_0.1.9_linux_amd64.deb
+sudo apt install ./robot-bus_1.0.0_linux_amd64.deb
 
 # 或 ROS 2 bridge 变体（Humble 示例）— 需已安装 Humble
-sudo apt install ./robot-bus-ros2-humble_0.1.9_linux_amd64.deb
+sudo apt install ./robot-bus-ros2-humble_1.0.0_linux_amd64.deb
 source /opt/ros/humble/setup.bash
 
 # macOS Apple Silicon（仅核心包）
-sudo installer -pkg robot-bus_0.1.9_macos_arm64.pkg -target /
+sudo installer -pkg robot-bus_1.0.0_macos_arm64.pkg -target /
 # 安装于 /usr/local（{bin,lib,include}）
 
 # 或从源码（开发）
@@ -187,15 +187,16 @@ auto sub = node.create_subscription("/imu", [](std::string_view topic, robot_bus
 
 参数：`list_parameters(prefixes, depth)` 返回 `{names, prefixes}`；带值列表用 `list_all_parameters()`；另有 `undeclare_parameter`。
 
-### gRPC 模式 Node（客户端）
+### WebSocket RPC 模式 Node（客户端）
 
-`Node::grpc` / `Node::ws_at` 经 broker gRPC 网关接入，不创建 ZMQ socket。
+`Node::ws` / `Node::ws_at` 经 broker WebSocket RPC 网关接入，不创建 ZMQ socket。传输 `"grpc"` 为兼容别名。
 
 | 支持 | 不支持 |
 |------|--------|
-| `create_subscription` | `create_publisher` |
-| `create_client` | `create_service` |
-| `create_action_client` | `create_action_server` |
+| `create_subscription` | `create_service` |
+| `create_publisher` | `create_action_server` |
+| `create_client` | |
+| `create_action_client` | |
 | `create_timer`、`spin` / `spin_once` / `shutdown` | — |
 
 ```cpp
@@ -204,34 +205,6 @@ auto node = robot_bus::Node::ws("web-client");
 ```
 
 本地覆盖见 `bindings/cpp/tests/ws_node.cpp`（`just test-cpp`）。
-
-## TF（坐标系）
-
-`TfBuffer` / `TfListener` / `TransformBroadcaster` 对应 Rust `robot_bus::tf`。线格式为 `/tf` 与 `/tf_static` 上的 `tf2_msgs/TFMessage`。查找返回 `geometry_msgs/TransformStamped` protobuf 字节。v1 时间语义：静态边始终生效；动态 = 仅最新。
-
-```cpp
-#include <robot_bus/tf.hpp>
-#include <robot_bus/tf2_msgs/msg/v1/tf_message.pb.h>
-#include <robot_bus/geometry_msgs/msg/v1/stamped.pb.h>
-
-robot_bus::TfListener listener(node);  // /tf + /tf_static
-auto buf = listener.buffer();
-
-auto pub = node.create_publisher("/tf_static");
-robot_bus::TransformBroadcaster br(std::move(pub));
-tf2_msgs::msg::v1::TFMessage msg;
-// … 填充 transforms …
-std::string bytes;
-msg.SerializeToString(&bytes);
-br.send(bytes);
-
-// spin 投递消息后：
-auto stamped_bytes = buf.lookup_transform("base_link", "camera");
-geometry_msgs::msg::v1::TransformStamped stamped;
-stamped.ParseFromArray(stamped_bytes.data(), static_cast<int>(stamped_bytes.size()));
-```
-
-离线用法：无 listener 时用 `robot_bus::TfBuffer` + `set_transform_msg`。见 `bindings/cpp/tests/tf_lookup.cpp`。
 
 各语言 import 对照：
 
@@ -288,5 +261,5 @@ bridge.spin_once(0.01);
 ```
 
 一期内置：`StdMsgsStringMapper`、`SensorMsgsImageMapper`、`TriggerServiceMapper`、`SetBoolServiceMapper`、`FibonacciActionMapper`。  
-自定义：继承 `TypedTopicMapper` / `TypedServiceMapper` / `TypedActionMapper` CRTP，只实现 convert 方法，用 `.mapper(std::make_shared<…>())` 挂载（见 [ros2-bridge.md](ros2-bridge.md)）。高级场景才 override 裸 `attach`。  
+自定义：先写对齐 ROS 的 bus `.proto` 并 `protoc`，再继承 `TypedTopicMapper` / `TypedServiceMapper` / `TypedActionMapper` CRTP，只实现 convert 方法，用 `.mapper(std::make_shared<…>())` 挂载（见 [ros2-bridge.md](ros2-bridge.md)）。高级场景才 override 裸 `attach`。  
 链接 `ROBOT_BUS_HAS_ROS2` 时 `ros2_available()` 为 true。默认 `robot-bus` stub 会抛出明确的 `robot_bus::Error`。

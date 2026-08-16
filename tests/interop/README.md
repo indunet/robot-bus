@@ -12,16 +12,19 @@ Six scenarios on a shared **TCP** broker, each with a different language pair
 | 5 | Java → Rust | service (`SetBool`) |
 | 6 | Python → C++ | action (`Fibonacci`) |
 
+Missing peers **fail** the run (CI gate). For a local partial run only:
+
+```bash
+ROBOT_BUS_INTEROP_ALLOW_SKIP=1 python3 tests/interop/run.py
+```
+
 ## Prerequisites
 
 ```bash
 just python-dev    # Python native extension
-just ts-dev        # TypeScript native + dist (scenarios 3)
-just java-dev      # Java + librobot_bus_c (scenarios 2, 5)
-just cpp-dev       # C++ tests/build (scenarios 4, 6)
+just console       # embedded UI assets (C ABI / TS native enable `console`)
+# `just test-interop` then builds Rust / C++ / Java / TypeScript peers
 ```
-
-Missing peers are **skipped** (exit 0 for that scenario); real failures exit non-zero.
 
 ## Run
 

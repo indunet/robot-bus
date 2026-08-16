@@ -5,14 +5,14 @@
 `Cargo.toml`：
 
 ```toml
-robot-bus = "0.1.9"
+robot-bus = "1.0.0"
 # 本地：robot-bus = { path = "../robot-bus" }
-# 默认已启用 gRPC；若需关闭：robot-bus = { version = "0.1.9", default-features = false }
+# 默认已启用 WebSocket RPC 网关（`ws` feature）；若需关闭：robot-bus = { version = "1.0.0", default-features = false }
 ```
 
 ## Broker 启动
 
-运行示例前先起 broker（也可进程内嵌入，见下文）。默认一次启动 **message / service / action** 三条总线；每条 TCP 默认 bind `…:0`（由操作系统分配空闲端口），并启动 **API**（gRPC / WebSocket RPC `/ws` / `GET /api/v1/discover` / console http），默认 `0.0.0.0:15570`。
+运行示例前先起 broker（也可进程内嵌入，见下文）。默认一次启动 **message / service / action** 三条总线；每条 TCP 默认 bind `…:0`（由操作系统分配空闲端口），并启动 **API**（WebSocket RPC `/ws` / `GET /api/v1/discover` / console http），默认 `0.0.0.0:15570`。`--grpc-listen` 是 `--api-listen` 的别名。
 
 ```bash
 cargo run --bin robot_bus_broker
@@ -30,9 +30,9 @@ cargo run --bin robot_bus_broker
 | message XSUB / XPUB | `tcp://0.0.0.0:0`（启动后解析为实际端口） | `ipc:///tmp/robot_bus/<broker_id>/…` | `inproc://robot_bus/…` |
 | service FE / BE | `tcp://0.0.0.0:0` | 同上 | 同上 |
 | action FE / BE | `tcp://0.0.0.0:0` | 同上 | 同上 |
-| API（gRPC + WS + discover + console） | `0.0.0.0:15570` | — | — |
+| API（WebSocket RPC + discover + console） | `0.0.0.0:15570` | — | — |
 
-仍可用 `--message-xsub-bind` 等手动固定总线端口。SDK 侧**推荐** `Context::new` → `Node::with_context`（本地 tcp）；便捷的 `Node::new` 仍可用（私有 Context）。端点未填时自动对 `http://127.0.0.1:15570` 做 discover；`Node::ipc` / `Node::inproc` / `Node::grpc` 分别走对应传输。
+仍可用 `--message-xsub-bind` 等手动固定总线端口。SDK 侧**推荐** `Context::new` → `Node::with_context`（本地 tcp）；便捷的 `Node::new` 仍可用（私有 Context）。端点未填时自动对 `http://127.0.0.1:15570` 做 discover；`Node::ipc` / `Node::inproc` / `Node::ws` 分别走对应传输。
 
 ### HTTP 发现（填地址，不选传输）
 
@@ -49,7 +49,7 @@ let opts = NodeOptions::tcp().discover(DiscoverOpts {
 let mut node = Node::with_options("talker", opts);
 ```
 
-或分两步：`discovery::wait(opts)?` → `ann.apply(NodeOptions::grpc())?`。
+或分两步：`discovery::wait(opts)?` → `ann.apply(NodeOptions::ws())?`。
 
 UDP 组播发现已移除。
 
@@ -79,7 +79,7 @@ let broker = RobotBusBroker::start(RobotBusConfig::default())?;
 broker.stop()?;
 ```
 
-典型流程：`Context` → `Node::with_context` → `create_*` → `node.spin()`（或便捷 `Node::new`）。多节点或需并行时再 `executor.add_node` + `executor.spin`。仅连 gRPC 网关时用 `Node::grpc` / `Node::ws_at`（见下文「WebSocket RPC 模式 Node」）。
+典型流程：`Context` → `Node::with_context` → `create_*` → `node.spin()`（或便捷 `Node::new`）。多节点或需并行时再 `executor.add_node` + `executor.spin`。仅连 WebSocket RPC 网关时用 `Node::ws` / `Node::ws_at`（见下文「WebSocket RPC 模式 Node」）。
 
 ---
 
@@ -312,8 +312,6 @@ Raw bytes：`create_service_raw` / `create_client_raw`。endpoint 取自 `NodeOp
 
 同样挂在 Node 上：typed `create_action_server` / `create_action_client` → `server_node.spin()`。客户端采用 ROS 2 风格 `GoalHandle`：`send_goal` 立即返回，feedback 到达时实时调用回调，result 由 handle 独立等待。
 
-> 下例为概念性 API；GoalHandle API 正在实现中，最终签名以 crate 文档为准。
-
 ```rust
 use std::time::Duration;
 use robot_bus::action::v1::{Fibonacci, FibonacciGoal};
@@ -395,7 +393,7 @@ Service / Action 同理（如 `create_client::<SetBool>`、`create_action_client
 
 ## WebSocket RPC 模式 Node（客户端）
 
-`Node::grpc` / `NodeOptions::grpc` 通过 broker 的 gRPC 网关接入总线，**不创建 ZMQ socket**。API 仍是 `create_subscription` / `create_publisher` / `create_client` / `create_action_client` + `spin`，对调用方透明。
+`Node::ws` / `NodeOptions::ws` 通过 broker 的 WebSocket RPC 网关接入总线，**不创建 ZMQ socket**。传输 `"grpc"` 为兼容别名。API 仍是 `create_subscription` / `create_publisher` / `create_client` / `create_action_client` + `spin`，对调用方透明。
 
 | 支持 | 不支持 |
 |------|--------|
@@ -437,11 +435,11 @@ let result = goal.result(Some(Duration::from_secs(10)))?;
 node.spin()?;
 ```
 
-上面的 GoalHandle 写法是概念性 API。底层仍是网关 RPC（`MessageGateway.Subscribe` / `MessageGateway.Publish` / `ServiceGateway.Call` / `ActionGateway.SendGoal`）。需要更底层控制时，可直接用下一节的 tonic 客户端。
+底层仍是网关 RPC（`MessageGateway.Subscribe` / `MessageGateway.Publish` / `ServiceGateway.Call` / `ActionGateway.SendGoal`）。需要更底层控制时，可直接用下一节的客户端。
 
 ---
 
-## gRPC + 浏览器 WebSocket 网关
+## WebSocket RPC 网关
 
 由 `RobotBusBroker` / `robot_bus_broker` 一并启动（feature `ws`，默认开启）。**WebSocket RPC**（HTTP/2）与浏览器 **WebSocket RPC**（`/ws`，一 RPC 一连接）**同端口**（默认 `0.0.0.0:15570`）。已移除 gRPC-Web。
 
@@ -452,7 +450,7 @@ node.spin()?;
 | `ServiceGateway.Call` | 一元：`service_name` + request bytes → response bytes |
 | `ActionGateway.SendGoal` | 一元 `GoalRequest` → server stream `ActionEvent`（实时 `FEEDBACK`，最终 `RESULT`） |
 
-gRPC action：原生 HTTP/2 客户端通过取消该 goal 的响应流发起取消；浏览器 WebSocket 路径发显式 `CANCEL` 帧并继续等到 `RESULT`，连接断开时仍会提交 cancel。ZMQ transport 由 GoalHandle 发显式 `CANCEL` 帧。均不表示服务端已确认。
+Action cancel：WebSocket RPC（原生与浏览器）发显式 `CANCEL` 帧并继续等到 `RESULT`，连接断开时仍会提交 cancel。ZMQ transport 由 GoalHandle 发显式 `CANCEL` 帧。均不表示服务端已确认。
 
 Subscribe 示例：
 
@@ -558,7 +556,7 @@ use robot_bus::transports::{
     action_frontend_endpoint, action_backend_endpoint,
 };
 
-// transport: "tcp" | "ipc" | "inproc"（WebSocket RPC 模式用 Node::grpc，不经这些端点）
+// transport: "tcp" | "ipc" | "inproc"（WebSocket RPC 模式用 Node::ws，不经这些端点）
 let ep = message_xpub_endpoint("localhost", "tcp")?;
 ```
 
@@ -633,29 +631,6 @@ cargo install robot-bus --bin rbus_usb_camera
 rbus_usb_camera --list-devices
 rbus_usb_camera --print-example-config > camera.yaml
 rbus_usb_camera --params camera.yaml
-```
-
-## 工具节点：TF（static + robot_state_publisher）
-
-库模块 **`robot_bus::tf`**（始终可用）：`Buffer`、`TfListener`、`TransformBroadcaster`。消息真相源为 `tf2_msgs/TFMessage`（`/tf`、`/tf_static`）。
-
-- feature **`static-transform-publisher`** → `rbus_static_transform_publisher`
-- feature **`robot-state-publisher`** → `rbus_robot_state_publisher`（URDF 子集含 `<mimic>` + JointState）
-
-```bash
-cargo install robot-bus --bin rbus_static_transform_publisher
-cargo install robot-bus --bin rbus_robot_state_publisher
-rbus_static_transform_publisher --print-example-config > static_tf.yaml
-rbus_robot_state_publisher --print-example-config > rsp.yaml
-```
-
-```rust
-use robot_bus::tf::TfListener;
-
-let listener = TfListener::with_defaults(&mut node)?;
-let buf = listener.buffer();
-// after spin delivers /tf + /tf_static:
-let t = buf.lock().unwrap().lookup_transform("base_link", "camera", None)?;
 ```
 
 不要默认多媒体依赖时：`cargo build --no-default-features --features ws,console`。

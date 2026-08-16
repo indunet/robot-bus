@@ -49,6 +49,10 @@ jobs:
       - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y curl unzip libzmq3-dev pkg-config
       - name: Install protobuf compiler (match codegen)
         run: |
           set -eux
@@ -56,14 +60,26 @@ jobs:
             "https://github.com/protocolbuffers/protobuf/releases/download/v35.1/protoc-35.1-linux-x86_64.zip"
           sudo unzip -o /tmp/protoc.zip -d /usr/local
           protoc --version
-      - name: Install protobuf runtime
-        run: pip install 'protobuf>=7.35,<8'
-      - name: Generate Python protobuf stubs
-        run: python3 scripts/generate_python_msgs.py
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Install protobuf runtime + maturin
+        run: pip install 'protobuf>=7.35,<8' maturin
+      - name: Generate Python + Rust protobuf stubs
+        run: |
+          python3 scripts/generate_python_msgs.py
+          python3 scripts/generate_rust_msgs.py
       - name: Smoke test message round-trip and typed API
         run: |
           PYTHONPATH=bindings/python python3 bindings/python/tests/test_msgs_roundtrip.py
           PYTHONPATH=bindings/python python3 bindings/python/tests/test_typed_api.py
+      - name: Build native extension
+        run: |
+          cd bindings/python
+          maturin develop --features extension-module,ws --no-default-features
+      - name: Native integration tests
+        run: |
+          python3 bindings/python/tests/test_ws_node.py
+          python3 bindings/python/tests/test_inproc_context.py
+          python3 bindings/python/tests/test_federation_opts.py
 
   typescript:
     runs-on: ubuntu-latest
@@ -151,18 +167,20 @@ jobs:
           ./bindings/cpp/build/service_set_bool
           ./bindings/cpp/build/action_fibonacci
           ./bindings/cpp/build/ws_node
+          ./bindings/cpp/build/inproc_context
+          ./bindings/cpp/build/federation_opts
+          ./bindings/cpp/build/node_parameters
+          ./bindings/cpp/build/typed_api
           ./bindings/cpp/build/ros2_bridge_stub
 
   java:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v6
-      - uses: actions/setup-java@v5
-        with:
-          distribution: temurin
-          java-version: "17"
-          cache: maven
-          cache-dependency-path: bindings/java/pom.xml
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake g++ pkg-config libzmq3-dev curl unzip
       - name: Install protobuf compiler (match codegen)
         run: |
           set -eux
@@ -170,11 +188,36 @@ jobs:
             "https://github.com/protocolbuffers/protobuf/releases/download/v35.1/protoc-35.1-linux-x86_64.zip"
           sudo unzip -o /tmp/protoc.zip -d /usr/local
           protoc --version
-      - name: Generate Java protobuf stubs
-        run: python3 scripts/generate_java_msgs.py
-      - name: Compile + msgs round-trip test
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: maven
+          cache-dependency-path: bindings/java/pom.xml
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v6
+        with:
+          version: 11
+      - name: Setup Node (console embed)
+        uses: actions/setup-node@v6
+        with:
+          node-version: "22"
+          cache: pnpm
+          cache-dependency-path: console/pnpm-lock.yaml
+      - name: Build embedded console assets
+        run: ./scripts/build_console.sh
+      - name: Generate Rust + Java protobuf stubs
+        run: |
+          python3 scripts/generate_rust_msgs.py
+          python3 scripts/generate_java_msgs.py
+      - name: Build C ABI
+        run: cargo build --release --manifest-path bindings/cpp/native/Cargo.toml
+      - name: Compile + native tests
         working-directory: bindings/java
-        run: mvn -B -Dtest=MsgsRoundtripTest test
+        env:
+          ROBOT_BUS_NATIVE_DIR: ${{ github.workspace }}/bindings/cpp/native/target/release
+        run: mvn -B test
 
   android:
     runs-on: ubuntu-22.04
@@ -236,3 +279,85 @@ jobs:
         env:
           ROBOT_BUS_NATIVE_DIR: ${{ github.workspace }}/bindings/cpp/native/target/release
         run: ./gradlew assembleRelease test --no-daemon
+
+  interop:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v6
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake g++ pkg-config libzmq3-dev \
+            curl unzip ninja-build
+      - name: Install protobuf compiler + C++ runtime 35.1
+        run: |
+          set -eux
+          curl -fsSL -o /tmp/protoc.zip \
+            "https://github.com/protocolbuffers/protobuf/releases/download/v35.1/protoc-35.1-linux-x86_64.zip"
+          sudo unzip -o /tmp/protoc.zip -d /usr/local
+          sudo ./scripts/install_protobuf_cpp.sh /usr/local
+          sudo ldconfig
+          protoc --version
+          pkg-config --modversion protobuf
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: maven
+          cache-dependency-path: bindings/java/pom.xml
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v6
+        with:
+          version: 11
+      - name: Setup Node (console embed + TypeScript SDK)
+        uses: actions/setup-node@v6
+        with:
+          node-version: "22"
+          cache: pnpm
+          cache-dependency-path: console/pnpm-lock.yaml
+      - name: Build embedded console assets
+        run: ./scripts/build_console.sh
+      - name: Generate protobuf stubs
+        run: |
+          python3 scripts/generate_rust_msgs.py
+          python3 scripts/generate_python_msgs.py
+          python3 scripts/generate_java_msgs.py
+          python3 scripts/generate_cpp_msgs.py
+          python3 scripts/generate_typescript_msgs.py
+      - name: Install Python native extension
+        run: |
+          pip install 'protobuf>=7.35,<8' maturin
+          cd bindings/python
+          maturin develop --features extension-module,ws --no-default-features
+      - name: Build Rust interop peer
+        run: cargo build --bin robot_bus_interop
+      - name: Build C ABI + C++ interop peer
+        run: |
+          export PKG_CONFIG_PATH=/usr/local/lib/pkgconfig:${PKG_CONFIG_PATH:-}
+          export LD_LIBRARY_PATH=/usr/local/lib:${LD_LIBRARY_PATH:-}
+          cargo build --release --manifest-path bindings/cpp/native/Cargo.toml
+          cmake -S bindings/cpp -B bindings/cpp/build -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_PREFIX_PATH=/usr/local \
+            -DCMAKE_FIND_PACKAGE_PREFER_CONFIG=ON \
+            -DROBOT_BUS_BUILD_TESTS=ON
+          cmake --build bindings/cpp/build --target interop_peer -j2
+          ln -sfn "$(pwd)/bindings/cpp/native/target/release/librobot_bus_c.so" \
+            bindings/cpp/build/librobot_bus.so
+      - name: Build Java interop peer
+        working-directory: bindings/java
+        run: mvn -B test-compile dependency:build-classpath -Dmdep.outputFile=target/interop-classpath.txt
+      - name: Build TypeScript native peer
+        working-directory: bindings/typescript
+        run: |
+          npm ci
+          npm run build:native
+          npm run build:ts
+      - name: Run interop matrix
+        env:
+          ROBOT_BUS_NATIVE_DIR: ${{ github.workspace }}/bindings/cpp/native/target/release
+          LD_LIBRARY_PATH: /usr/local/lib:${{ github.workspace }}/bindings/cpp/native/target/release:${{ github.workspace }}/bindings/cpp/build
+        run: python3 tests/interop/run.py

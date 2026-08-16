@@ -9,7 +9,7 @@
 set -euo pipefail
 
 DEST="${1:?dest}"
-VERSION="${2:-0.1.9}"
+VERSION="${2:-1.0.0}"
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 CPP="$ROOT/bindings/cpp"
 

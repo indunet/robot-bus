@@ -150,7 +150,7 @@ impl PyNode {
         }
     }
 
-    /// gRPC client node talking to the local broker gateway (`http://127.0.0.1:15570`).
+    /// WebSocket RPC client node talking to the local broker gateway (`http://127.0.0.1:15570`).
     #[cfg(feature = "ws")]
     #[classmethod]
     #[pyo3(signature = (name,))]
@@ -162,8 +162,8 @@ impl PyNode {
 
     /// Discover a broker via HTTP `GET /api/v1/discover`, then connect with `transport`.
     ///
-    /// Transport is still chosen by the caller (`tcp` / `ipc` / `inproc` / `grpc`);
-    /// discovery only fills host / paths / gRPC URL.
+    /// Transport is still chosen by the caller (`tcp` / `ipc` / `inproc` / `ws`);
+    /// `"grpc"` is an alias of `ws`. Discovery only fills host / paths / gateway URL.
     #[classmethod]
     #[pyo3(signature = (
         name,
@@ -187,7 +187,7 @@ impl PyNode {
         })
     }
 
-    /// gRPC client node talking to `url` (e.g. `http://127.0.0.1:15570`).
+    /// WebSocket RPC client node talking to `url` (e.g. `http://127.0.0.1:15570`).
     #[cfg(feature = "ws")]
     #[classmethod]
     #[pyo3(signature = (name, url))]

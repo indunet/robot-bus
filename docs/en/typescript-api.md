@@ -141,32 +141,6 @@ const node = Node.ws("web-client");
 | `createActionClient` | |
 | `createTimer`, `spin` / `shutdown` | |
 
-## TF (transform tree, Node.js only)
-
-`TfBuffer` / `TfListener` / `TransformBroadcaster` correspond to Rust `robot_bus::tf`. The browser entry does not provide a native Buffer. Messages are `tf2_msgs/TFMessage` (`/tf`, `/tf_static`).
-
-```ts
-import {
-  createTfBuffer,
-  TfListener,
-  TransformBroadcaster,
-} from "robot-bus";
-import { TFMessage } from "robot-bus/tf2_msgs/msg/v1/tf_message.js";
-import { TransformStamped } from "robot-bus/geometry_msgs/msg/v1/stamped.js";
-
-const listener = new TfListener(node); // /tf + /tf_static
-const buf = listener.buffer();
-const br = TransformBroadcaster.fromTyped(
-  node.createPublisher("/tf_static", TFMessage),
-  TFMessage,
-);
-br.send(msg);
-
-const t = buf.lookupTransform("base_link", "camera", TransformStamped);
-```
-
-Offline: `createTfBuffer()` + `setTransformMsg`. See `tests/tf_lookup.test.ts`.
-
 ## Browser (WebSocket RPC)
 
 Browser clients use the broker’s **`/ws`** (gRPC-like over WebSocket, **single connection multiplexed (V2 stream_id)**), not gRPC-Web.

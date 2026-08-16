@@ -16,7 +16,7 @@ pip install robot-bus
 # 安装包后的 CLI
 robot-bus-broker
 robot-bus-broker --help
-robot-bus-broker --grpc-listen 0.0.0.0:15570 --tcp-only
+robot-bus-broker --api-listen 0.0.0.0:15570 --tcp-only
 ```
 
 或进程内（关键字参数覆盖默认 bind / HWM / 心跳 / gRPC）：
@@ -50,7 +50,7 @@ with robot_bus.RobotBusBroker.start(
 
 ### HTTP 发现（填地址，不选传输）
 
-对已知 API 口请求 `GET /api/v1/discover`。传输仍手动指定（`tcp` / `ipc` / `inproc` / `grpc`）；发现只填充位置：
+对已知 API 口请求 `GET /api/v1/discover`。传输仍手动指定（`tcp` / `ipc` / `inproc` / `ws`；`"grpc"` 是 `"ws"` 的别名）；发现只填充位置：
 
 ```python
 node = robot_bus.Node.discover(
@@ -146,29 +146,9 @@ def on_raw(topic, payload: bytes):
 node.create_subscription("/robot1/imu", on_raw)
 ```
 
-### TF（坐标树）
-
-`TfBuffer` / `TfListener` / `TransformBroadcaster` 对应 Rust `robot_bus::tf`。消息为 `tf2_msgs/TFMessage`（`/tf`、`/tf_static`）。v1：静态边始终生效，动态边取最新样本。
-
-```python
-from robot_bus import TfListener, TransformBroadcaster
-from robot_bus.tf2_msgs.msg.v1 import TFMessage
-
-listener = TfListener(node)  # /tf + /tf_static
-buf = listener.buffer()
-
-br = TransformBroadcaster(node.create_publisher("/tf_static", TFMessage))
-br.send(msg)  # TFMessage or TransformStamped...
-
-# after start/spin delivers messages:
-t = buf.lookup_transform("base_link", "camera")
-```
-
-离线可用 `TfBuffer()` + `set_transform_msg`。见 `tests/test_tf_lookup.py`。
-
 ### WebSocket RPC 模式 Node（客户端）
 
-`Node.ws` / `Node.ws_at`（或 `Node(..., transport="ws", ws_url=...)`；`transport="grpc"` 仍可作为别名）经 broker gRPC 网关接入，不创建 ZMQ socket。
+`Node.ws` / `Node.ws_at`（或 `Node(..., transport="ws", ws_url=...)`；`transport="grpc"` 仍可作为别名）经 broker WebSocket RPC 网关接入，不创建 ZMQ socket。
 
 | 支持 | 不支持 |
 |------|--------|
@@ -399,7 +379,7 @@ bridge.spin()
 - 配置只走代码 `.mapper(具体对象)`；无 YAML、无类型名字符串挂路由
 - 一期内置：`StdMsgsStringMapper`、`SensorMsgsImageMapper`、`TriggerServiceMapper`、`SetBoolServiceMapper`、`FibonacciActionMapper`
 - `ros2_available()`：能否 `import rclpy`
-- **自定义 service/action：可以**——写 duck-typed mapper（`ros_srv_type` + `ros_req_to_bus` / `bus_req_to_ros` …），再 `.mapper(MyFoo())`；示例见 [ros2-bridge.md](ros2-bridge.md#用户自定义-service--action可以)
+- **自定义 service/action：可以**——先写对齐 ROS 的 bus `.proto` 并 `protoc`，再写 duck-typed mapper（`ros_srv_type` + `ros_req_to_bus` / `bus_req_to_ros` …），`.mapper(MyFoo())`；示例见 [ros2-bridge.md](ros2-bridge.md#用户自定义-service--action可以)
 - `bus_discover(api_url="", timeout=0.0, broker_id="")` 与 C++/Rust 对齐（空 url / `timeout<=0` 用默认）
 
 ---

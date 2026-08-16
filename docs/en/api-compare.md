@@ -9,7 +9,7 @@ How to write the same classic scenarios on each side. Left is **ROS 2 Humble + [
 | Runtime | DDS (requires `ros2` / daemon) | Start `robot_bus_broker` first (or embed in-process) |
 | Entry | `Context` → `Node` → `rclrs::spin` | **Preferred** `Context` → `Node::with_context`; tcp/ipc may still use convenience `Node::new` (private Context) |
 | Messages | `.msg` / `.srv` / `.action` generated types | Protobuf in crate (e.g. `sensor_msgs::msg::v1::Imu`) |
-| QoS | `QOS_PROFILE_DEFAULT`, etc. | Topic: `QosProfile::keep_last(depth)` → HWM (optional `qos_depth` / `qosDepth` in all bindings); fixed best-effort. WS/gRPC Node accepts the arg but ignores it. Service / action do not take QoS yet |
+| QoS | `QOS_PROFILE_DEFAULT`, etc. | Topic: `QosProfile::keep_last(depth)` → HWM (optional `qos_depth` / `qosDepth` in all bindings); fixed best-effort. WebSocket RPC Node (`Node::ws`) accepts the arg but ignores it. Service / action do not take QoS yet |
 | Callback groups | Worker / callback group (newer API) | `CallbackGroupType::MutuallyExclusive` / `Reentrant` |
 | Parameters | `declare_parameter` / `get_parameter` → Parameter; `set_parameter(Parameter)`; `list_parameters(prefixes, depth)` (remote / YAML / CLI) | Same local shape (`Parameter` + `as_*` + batch get/set); `list_parameters` → `{names, prefixes}`, convenience `list_all_parameters`; `undeclare_parameter`; YAML load; no remote / CLI |
 | Ready waits | `wait_for_message` / `wait_for_service` / `wait_for_action_server` | Same helpers: `wait_for_message`; service/action poll console `workers > 0` (best-effort, not DDS discovery) |
@@ -219,7 +219,7 @@ fn main() -> robot_bus::Result<()> {
 }
 ```
 
-The above is conceptual API; exact signatures are still being implemented. `ActionGateway.SendGoal` is a unary request + server stream (`FEEDBACK` / `RESULT`). Browser WebSocket cancel sends an explicit `CANCEL` frame and waits until RESULT (true disconnect still cancels); native gRPC cancels the response stream; ZMQ sends an explicit `CANCEL` frame. None guarantee server acknowledgment.
+Cancel is best-effort on every transport: browser WebSocket sends an explicit `CANCEL` frame and waits until RESULT (true disconnect still cancels); native WebSocket RPC does the same; ZMQ sends an explicit `CANCEL` frame. None guarantee server acknowledgment.
 
 ---
 

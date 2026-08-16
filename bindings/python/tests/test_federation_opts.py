@@ -62,6 +62,13 @@ def test_start_with_federation_peers() -> None:
 
 
 def main() -> int:
+    try:
+        import robot_bus
+    except ImportError as err:
+        raise SystemExit(f"native robot_bus is required (run: just python-dev): {err}") from err
+    if robot_bus.RobotBusBroker is None:
+        raise SystemExit("native robot_bus is required (run: just python-dev)")
+
     test_start_rejects_invalid_message_peer()
     test_start_with_federation_peers()
     print("ok")

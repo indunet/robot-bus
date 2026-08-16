@@ -20,7 +20,7 @@ SDK：**Rust**、**Python**、**TypeScript**、**C++**、**Java**、**Android**�
 
 *Web 控制台* — Overview / Topics / Services / Actions / Topology。启动 `robot-bus-broker` 后打开 [http://127.0.0.1:15570](http://127.0.0.1:15570)。详见 [§4 Web 控制台](#4-web-控制台) 与 [小坦克示例](#32-小坦克示例)。
 
-> **预发布说明**：API 仍可能有较大变更，请谨慎用于生产环境。
+> Node 编程模型——`Context` / `Node`、topic pub-sub、service、action（`send_goal` → GoalHandle → `result` / `cancel`）以及 `spin`——为稳定的公开 API。网关客户端使用 **WebSocket RPC**（`Node::ws` / `Node.ws`；传输 `"ws"`）。`"grpc"` 与 `--grpc-listen` 仍是别名。
 
 ## 1. 典型应用场景
 

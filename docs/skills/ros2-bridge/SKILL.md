@@ -59,7 +59,7 @@ Progress:
 - [ ] 1. Source ROS; broker reachable (tcp / ipc / discover)
 - [ ] 2. Pick language that owns the ROS types
 - [ ] 3. List routes: topic/service/action names + direction each
-- [ ] 4. Prefer built-in mappers; else write Typed* mapper (field ↔ bus protobuf)
+- [ ] 4. Prefer built-in mappers; else define bus `.proto` (fields = ROS .srv/.action), `protoc`, then Typed* mapper
 - [ ] 5. Ros2Bridge.new → bus_* → route/service/action → mapper → direction → add → build
 - [ ] 6. bridge.spin(); verify ros2 topic echo + bus console
 ```
@@ -162,7 +162,20 @@ bridge.spin();
 
 ## Custom service / action mappers
 
-Library wires `create_service` / clients; you only convert **fields ↔ bus protobuf**.
+Start from a **bus `.proto`** whose fields match the ROS `.srv` / `.action`. Generate stubs with
+`protoc` (or `prost-build`), then convert **fields ↔ protobuf**. The library wires
+`create_service` / clients. Full listing: [ros2-bridge.md](../zh/ros2-bridge.md).
+
+```protobuf
+syntax = "proto3";
+package my_pkg.srv.v1;
+message AddTwoIntsRequest { int64 a = 1; int64 b = 2; }
+message AddTwoIntsResponse { int64 sum = 1; }
+```
+
+```bash
+protoc --python_out=. --pyi_out=. my_pkg/srv/v1/add_two_ints.proto
+```
 
 | Language | Pattern |
 |----------|---------|
@@ -173,8 +186,9 @@ Library wires `create_service` / clients; you only convert **fields ↔ bus prot
 ### Python service shape
 
 Implement: `type_name`, `ros_srv_type`, `ros_req_to_bus` / `bus_req_to_ros`, `ros_resp_to_bus` / `bus_resp_to_ros`.
+Import generated stubs (`from my_pkg.srv.v1 import add_two_ints_pb2 as pb`) plus the ROS type.
 
-Action: `ros_action_type` + goal / feedback / result six-way converts — see
+Action: proto Goal / Feedback / Result, then `ros_action_type` + six-way converts — see
 `bindings/python/robot_bus/ros2_bridge/mappers/fibonacci.py`.
 
 ### Rust service shape

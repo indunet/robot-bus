@@ -1,4 +1,4 @@
-"""Integration tests for gRPC-mode Node (requires native extension + broker).
+"""Integration tests for WebSocket RPC Node (requires native extension + broker).
 
 Run after: just python-dev
   (or: cd bindings/python && maturin develop --features extension-module,ws)
@@ -8,7 +8,6 @@ Run after: just python-dev
 from __future__ import annotations
 
 import socket
-import sys
 import time
 
 
@@ -32,7 +31,19 @@ def _ephemeral_binds() -> dict[str, object]:
     }
 
 
-def test_grpc_constructors() -> None:
+def _require_native():
+    try:
+        import robot_bus
+    except ImportError as err:
+        raise SystemExit(f"native robot_bus is required (run: just python-dev): {err}") from err
+    if robot_bus.Node is None or not hasattr(robot_bus, "RobotBusBroker"):
+        raise SystemExit("native robot_bus is required (run: just python-dev)")
+    if not hasattr(robot_bus.Node, "ws"):
+        raise SystemExit("Node.ws is required (rebuild with --features ws)")
+    return robot_bus
+
+
+def test_ws_constructors() -> None:
     import robot_bus
 
     node = robot_bus.Node.ws("web")
@@ -66,13 +77,13 @@ def test_ws_node_publish() -> None:
         sub.subscribe("py.ws.pub")
         time.sleep(0.2)
 
-        node = robot_bus.Node.ws_at("grpc_pub", ws_url)
+        node = robot_bus.Node.ws_at("ws_pub", ws_url)
         pub = node.create_publisher("py.ws.pub")
-        pub.publish(b"from-py-grpc")
+        pub.publish(b"from-py-ws")
 
         topic, payload = sub.receive(timeout=3.0)
         assert topic == "py.ws.pub"
-        assert bytes(payload) == b"from-py-grpc"
+        assert bytes(payload) == b"from-py-ws"
 
 def test_ws_node_subscribe_and_service() -> None:
     import robot_bus
@@ -88,13 +99,13 @@ def test_ws_node_subscribe_and_service() -> None:
             service_frontend=broker.service_frontend_bind,
             service_backend=broker.service_backend_bind,
         )
-        server.create_service("svc.py_grpc_echo", lambda body: b"echo:" + bytes(body))
+        server.create_service("svc.py_ws_echo", lambda body: b"echo:" + bytes(body))
         # Background Rust thread (PyNode is unsendable — do not spin from a Python thread).
         server.start()
         time.sleep(0.2)
 
         got: list[tuple[str, bytes]] = []
-        client = robot_bus.Node.ws_at("grpc_client", ws_url)
+        client = robot_bus.Node.ws_at("ws_client", ws_url)
 
         def on_msg(topic: str, payload: bytes) -> None:
             got.append((topic, bytes(payload)))
@@ -102,16 +113,16 @@ def test_ws_node_subscribe_and_service() -> None:
         client.create_subscription("py.ws.topic", on_msg)
         time.sleep(0.3)
 
-        pub.publish("py.ws.topic", b"hello-py-grpc")
+        pub.publish("py.ws.topic", b"hello-py-ws")
         deadline = time.time() + 5.0
         while not got and time.time() < deadline:
             client.spin_once(0.05)
 
         assert got, "subscription callback did not fire"
         assert got[0][0] == "py.ws.topic"
-        assert got[0][1] == b"hello-py-grpc"
+        assert got[0][1] == b"hello-py-ws"
 
-        svc = client.create_client("svc.py_grpc_echo")
+        svc = client.create_client("svc.py_ws_echo")
         reply = svc.call(b"ping", timeout=3.0)
         assert bytes(reply) == b"echo:ping"
 
@@ -139,21 +150,21 @@ def test_ws_node_action_client() -> None:
                 ("RESULT", b"done:" + bytes(body)),
             ]
 
-        server.create_action_server("act.py_grpc_demo", handler)
+        server.create_action_server("act.py_ws_demo", handler)
         server.start()
         time.sleep(0.2)
 
-        client = robot_bus.Node.ws_at("grpc_action", ws_url)
-        action = client.create_action_client("act.py_grpc_demo")
+        client = robot_bus.Node.ws_at("ws_action", ws_url)
+        action = client.create_action_client("act.py_ws_demo")
         feedback: list[bytes] = []
         goal = action.send_goal(
             b"fly",
-            goal_id="py-grpc-goal",
+            goal_id="py-ws-goal",
             timeout=5.0,
             feedback_callback=lambda body: feedback.append(bytes(body)),
         )
-        assert goal.goal_id == "py-grpc-goal"
-        assert goal.action_name == "act.py_grpc_demo"
+        assert goal.goal_id == "py-ws-goal"
+        assert goal.action_name == "act.py_ws_demo"
         assert bytes(goal.result(timeout=5.0)) == b"done:fly"
         assert feedback == [b"step-1", b"step-2"]
 
@@ -163,17 +174,8 @@ def test_ws_node_action_client() -> None:
 
 
 def main() -> int:
-    try:
-        import robot_bus  # noqa: F401
-    except ImportError as err:
-        print(f"skip: native robot_bus not installed ({err})", file=sys.stderr)
-        return 0
-
-    if not hasattr(robot_bus.Node, "grpc"):
-        print("skip: Node.ws not available (rebuild with --features ws)", file=sys.stderr)
-        return 0
-
-    test_grpc_constructors()
+    _require_native()
+    test_ws_constructors()
     test_ws_node_rejects_servers()
     test_ws_node_publish()
     test_ws_node_subscribe_and_service()

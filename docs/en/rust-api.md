@@ -5,14 +5,14 @@ English | [中文](../zh/rust-api.md)
 `Cargo.toml`:
 
 ```toml
-robot-bus = "0.1.9"
+robot-bus = "1.0.0"
 # Local: robot-bus = { path = "../robot-bus" }
-# gRPC is enabled by default; to disable: robot-bus = { version = "0.1.9", default-features = false }
+# WebSocket RPC gateway (`ws` feature) is on by default; to disable: robot-bus = { version = "1.0.0", default-features = false }
 ```
 
 ## Broker startup
 
-Start the broker before running examples (or embed it in-process; see below). By default one startup brings up **message / service / action** buses; each TCP bind defaults to `…:0` (OS assigns a free port), plus **API** (gRPC / WebSocket RPC `/ws` / `GET /api/v1/discover` / console http), default `0.0.0.0:15570`.
+Start the broker before running examples (or embed it in-process; see below). By default one startup brings up **message / service / action** buses; each TCP bind defaults to `…:0` (OS assigns a free port), plus **API** (WebSocket RPC `/ws` / `GET /api/v1/discover` / console http), default `0.0.0.0:15570`. `--grpc-listen` is an alias of `--api-listen`.
 
 ```bash
 cargo run --bin robot_bus_broker
@@ -30,9 +30,9 @@ cargo run --bin robot_bus_broker
 | message XSUB / XPUB | `tcp://0.0.0.0:0` (resolved to actual port after startup) | `ipc:///tmp/robot_bus/<broker_id>/…` | `inproc://robot_bus/…` |
 | service FE / BE | `tcp://0.0.0.0:0` | same as above | same as above |
 | action FE / BE | `tcp://0.0.0.0:0` | same as above | same as above |
-| API (gRPC + WS + discover + console) | `0.0.0.0:15570` | — | — |
+| API (WebSocket RPC + discover + console) | `0.0.0.0:15570` | — | — |
 
-You can still manually pin bus ports with `--message-xsub-bind` and similar flags. On the SDK side, **prefer** `Context::new` → `Node::with_context` (local tcp); convenience `Node::new` still works (private Context). When endpoints are unset it auto-discovers against `http://127.0.0.1:15570`; `Node::ipc` / `Node::inproc` / `Node::grpc` use the corresponding transport.
+You can still manually pin bus ports with `--message-xsub-bind` and similar flags. On the SDK side, **prefer** `Context::new` → `Node::with_context` (local tcp); convenience `Node::new` still works (private Context). When endpoints are unset it auto-discovers against `http://127.0.0.1:15570`; `Node::ipc` / `Node::inproc` / `Node::ws` use the corresponding transport.
 
 ### HTTP discovery (fill addresses, not transport)
 
@@ -49,7 +49,7 @@ let opts = NodeOptions::tcp().discover(DiscoverOpts {
 let mut node = Node::with_options("talker", opts);
 ```
 
-Or in two steps: `discovery::wait(opts)?` → `ann.apply(NodeOptions::grpc())?`.
+Or in two steps: `discovery::wait(opts)?` → `ann.apply(NodeOptions::ws())?`.
 
 UDP multicast discovery has been removed.
 
@@ -79,7 +79,7 @@ let broker = RobotBusBroker::start(RobotBusConfig::default())?;
 broker.stop()?;
 ```
 
-Typical flow: `Context` → `Node::with_context` → `create_*` → `node.spin()` (or convenience `Node::new`). For multiple nodes or parallelism, use `executor.add_node` + `executor.spin`. For gRPC gateway only, use `Node::grpc` / `Node::ws_at` (see “WebSocket RPC mode Node” below).
+Typical flow: `Context` → `Node::with_context` → `create_*` → `node.spin()` (or convenience `Node::new`). For multiple nodes or parallelism, use `executor.add_node` + `executor.spin`. For the WebSocket RPC gateway only, use `Node::ws` / `Node::ws_at` (see “WebSocket RPC mode Node” below).
 
 ---
 
@@ -311,8 +311,6 @@ Raw bytes: `create_service_raw` / `create_client_raw`. Endpoints come from `Node
 
 Also on `Node`: typed `create_action_server` / `create_action_client` → `server_node.spin()`. The client uses a ROS 2–style `GoalHandle`: `send_goal` returns immediately, feedback callbacks run as feedback arrives, and the handle waits for the result independently.
 
-> The example below is conceptual API; GoalHandle API is being implemented—final signatures are in the crate docs.
-
 ```rust
 use std::time::Duration;
 use robot_bus::action::v1::{Fibonacci, FibonacciGoal};
@@ -394,7 +392,7 @@ Service / Action likewise (e.g. `create_client::<SetBool>`, `create_action_clien
 
 ## WebSocket RPC mode Node (client)
 
-`Node::grpc` / `NodeOptions::grpc` reach the bus through the broker gRPC gateway and **do not create ZMQ sockets**. The API is still `create_subscription` / `create_publisher` / `create_client` / `create_action_client` + `spin`, transparent to callers.
+`Node::ws` / `NodeOptions::ws` reach the bus through the broker WebSocket RPC gateway and **do not create ZMQ sockets**. Transport `"grpc"` / older `Node::grpc` names are aliases. The API is still `create_subscription` / `create_publisher` / `create_client` / `create_action_client` + `spin`, transparent to callers.
 
 | Supported | Not supported |
 |-----------|---------------|
@@ -436,11 +434,11 @@ let result = goal.result(Some(Duration::from_secs(10)))?;
 node.spin()?;
 ```
 
-The GoalHandle usage above is conceptual API. Under the hood it is still gateway RPC (`MessageGateway.Subscribe` / `MessageGateway.Publish` / `ServiceGateway.Call` / `ActionGateway.SendGoal`). For lower-level control, use the tonic client in the next section directly.
+Under the hood this is gateway RPC (`MessageGateway.Subscribe` / `MessageGateway.Publish` / `ServiceGateway.Call` / `ActionGateway.SendGoal`). For lower-level control, use the client in the next section directly.
 
 ---
 
-## gRPC + browser WebSocket gateway
+## WebSocket RPC gateway
 
 Started together by `RobotBusBroker` / `robot_bus_broker` (feature `ws`, on by default). **WebSocket RPC** (HTTP/2) and browser **WebSocket RPC** (`/ws`, one RPC per connection) share **the same port** (default `0.0.0.0:15570`). gRPC-Web has been removed.
 
@@ -451,7 +449,7 @@ Started together by `RobotBusBroker` / `robot_bus_broker` (feature `ws`, on by d
 | `ServiceGateway.Call` | Unary: `service_name` + request bytes → response bytes |
 | `ActionGateway.SendGoal` | Unary `GoalRequest` → server stream `ActionEvent` (live `FEEDBACK`, final `RESULT`) |
 
-gRPC action: native HTTP/2 clients cancel by canceling that goal’s response stream; the browser WebSocket path sends an explicit `CANCEL` frame and still waits for `RESULT`; disconnect still submits cancel. ZMQ transport sends an explicit `CANCEL` frame via GoalHandle. None imply server acknowledgment.
+Action cancel: WebSocket RPC (native and browser) sends an explicit `CANCEL` frame and still waits for `RESULT`; disconnect still submits cancel. ZMQ transport sends an explicit `CANCEL` frame via GoalHandle. None imply server acknowledgment.
 
 Subscribe example:
 
@@ -557,7 +555,7 @@ use robot_bus::transports::{
     action_frontend_endpoint, action_backend_endpoint,
 };
 
-// transport: "tcp" | "ipc" | "inproc" (WebSocket RPC mode uses Node::grpc, not these endpoints)
+// transport: "tcp" | "ipc" | "inproc" (WebSocket RPC mode uses Node::ws, not these endpoints)
 let ep = message_xpub_endpoint("localhost", "tcp")?;
 ```
 
@@ -632,29 +630,6 @@ cargo install robot-bus --bin rbus_usb_camera
 rbus_usb_camera --list-devices
 rbus_usb_camera --print-example-config > camera.yaml
 rbus_usb_camera --params camera.yaml
-```
-
-## Utility node: TF (static + robot_state_publisher)
-
-Library module **`robot_bus::tf`** (always available): `Buffer`, `TfListener`, `TransformBroadcaster`. Message source of truth is `tf2_msgs/TFMessage` (`/tf`, `/tf_static`).
-
-- feature **`static-transform-publisher`** → `rbus_static_transform_publisher`
-- feature **`robot-state-publisher`** → `rbus_robot_state_publisher` (URDF subset with `<mimic>` + JointState)
-
-```bash
-cargo install robot-bus --bin rbus_static_transform_publisher
-cargo install robot-bus --bin rbus_robot_state_publisher
-rbus_static_transform_publisher --print-example-config > static_tf.yaml
-rbus_robot_state_publisher --print-example-config > rsp.yaml
-```
-
-```rust
-use robot_bus::tf::TfListener;
-
-let listener = TfListener::with_defaults(&mut node)?;
-let buf = listener.buffer();
-// after spin delivers /tf + /tf_static:
-let t = buf.lock().unwrap().lookup_transform("base_link", "camera", None)?;
 ```
 
 To avoid default multimedia dependencies: `cargo build --no-default-features --features ws,console`.

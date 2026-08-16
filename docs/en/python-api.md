@@ -16,7 +16,7 @@ Same as Rust: start the broker first, then run application code.
 # CLI after installing the package
 robot-bus-broker
 robot-bus-broker --help
-robot-bus-broker --grpc-listen 0.0.0.0:15570 --tcp-only
+robot-bus-broker --api-listen 0.0.0.0:15570 --tcp-only
 ```
 
 Or in-process (keyword arguments override default bind / HWM / heartbeat / gRPC):
@@ -50,7 +50,7 @@ with robot_bus.RobotBusBroker.start(
 
 ### HTTP discovery (fills in addresses, does not choose transport)
 
-Request `GET /api/v1/discover` on a known API base URL. Transport is still specified manually (`tcp` / `ipc` / `inproc` / `grpc`); discovery only fills in locations:
+Request `GET /api/v1/discover` on a known API base URL. Transport is still specified manually (`tcp` / `ipc` / `inproc` / `ws`; `"grpc"` is an alias of `"ws"`); discovery only fills in locations:
 
 ```python
 node = robot_bus.Node.discover(
@@ -104,7 +104,7 @@ node.load_parameters_from_yaml_file("config/pilot.yaml")
 
 Close to ROS 2: `Node(...)` → `create_publisher` / `create_subscription` → `node.spin()`. With a single node you do not need to hand-write an Executor (it auto-attaches `SingleThreadedExecutor` internally).
 
-For gRPC gateway only, use `Node.ws` / `Node.ws_at` (or `transport="ws"`; `transport="grpc"` is still accepted as an alias): you can subscribe, publish, and call service / action, but cannot act as a server; see “WebSocket RPC mode Node” below.
+For the WebSocket RPC gateway only, use `Node.ws` / `Node.ws_at` (or `transport="ws"`; `transport="grpc"` is still accepted as an alias): you can subscribe, publish, and call service / action, but cannot act as a server; see “WebSocket RPC mode Node” below.
 
 Python recommends **typed** usage (pass a protobuf class at creation for automatic `SerializeToString` / `ParseFromString`); omit the type for raw bytes. Under the hood it is the same as Rust with opaque bytes (thin Python wrapper; PyO3 cannot map Rust generics).
 
@@ -146,29 +146,9 @@ def on_raw(topic, payload: bytes):
 node.create_subscription("/robot1/imu", on_raw)
 ```
 
-### TF (transform tree)
-
-`TfBuffer` / `TfListener` / `TransformBroadcaster` correspond to Rust `robot_bus::tf`. Messages are `tf2_msgs/TFMessage` (`/tf`, `/tf_static`). v1: static edges always apply; dynamic edges use the latest sample.
-
-```python
-from robot_bus import TfListener, TransformBroadcaster
-from robot_bus.tf2_msgs.msg.v1 import TFMessage
-
-listener = TfListener(node)  # /tf + /tf_static
-buf = listener.buffer()
-
-br = TransformBroadcaster(node.create_publisher("/tf_static", TFMessage))
-br.send(msg)  # TFMessage or TransformStamped...
-
-# after start/spin delivers messages:
-t = buf.lookup_transform("base_link", "camera")
-```
-
-Offline use `TfBuffer()` + `set_transform_msg`. See `tests/test_tf_lookup.py`.
-
 ### WebSocket RPC mode Node (client)
 
-`Node.ws` / `Node.ws_at` (or `Node(..., transport="ws", ws_url=...)`; `transport="grpc"` is still accepted as an alias) connect via the broker gRPC gateway and do not create ZMQ sockets.
+`Node.ws` / `Node.ws_at` (or `Node(..., transport="ws", ws_url=...)`; `transport="grpc"` is still accepted as an alias) connect via the broker WebSocket RPC gateway and do not create ZMQ sockets.
 
 | Supported | Not supported |
 |------|--------|
@@ -399,7 +379,7 @@ Key points:
 - Configuration is code-only via `.mapper(concrete object)`; no YAML, no type name strings on routes
 - Built-in (phase 1): `StdMsgsStringMapper`, `SensorMsgsImageMapper`, `TriggerServiceMapper`, `SetBoolServiceMapper`, `FibonacciActionMapper`
 - `ros2_available()`: whether `import rclpy` succeeds
-- **Custom service/action: yes** — write a duck-typed mapper (`ros_srv_type` + `ros_req_to_bus` / `bus_req_to_ros` …), then `.mapper(MyFoo())`; example in [ros2-bridge.md](ros2-bridge.md#user-defined-service--action-yes)
+- **Custom service/action: yes** — write a bus `.proto` aligned with the ROS type and `protoc` it, then a duck-typed mapper (`ros_srv_type` + `ros_req_to_bus` / `bus_req_to_ros` …) and `.mapper(MyFoo())`; example in [ros2-bridge.md](ros2-bridge.md#user-defined-service--action-yes)
 - `bus_discover(api_url="", timeout=0.0, broker_id="")` aligns with C++/Rust (empty url / `timeout<=0` uses defaults)
 
 ---

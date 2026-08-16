@@ -85,7 +85,7 @@ Rust also has a full topic mapper registry (`src/ros2_bridge/mappers/`); mountin
 
 ## User-defined service / action: yes
 
-**Yes.** Once you have the concrete ROS type in your language, you only write **field ↔ bus protobuf conversion**; the library handles `create_service` / client wiring.
+**Yes.** First write a **bus protobuf** (fields aligned with the ROS `.srv` / `.action`), generate language stubs with `protoc`, then only write **field ↔ protobuf conversion**; the library handles `create_service` / client wiring. Typed APIs accept any protobuf message class — they do not have to live in this repository.
 
 | | Works? |
 |--|--------|
@@ -96,15 +96,66 @@ Rust also has a full topic mapper registry (`src/ros2_bridge/mappers/`); mountin
 
 Advanced: you can still override `ServiceMapper::attach` / `ActionMapper::attach` directly (special QoS, etc.).
 
-Below uses a custom `my_pkg/srv/AddTwoInts` + matching protobuf (field names illustrative).
+Below uses a custom ROS `my_pkg/srv/AddTwoInts`, starting from the proto through mounting the bridge.
+
+### 1. Define the bus protobuf
+
+ROS side already exists:
+
+```text
+# my_pkg/srv/AddTwoInts.srv
+int64 a
+int64 b
+---
+int64 sum
+```
+
+On the bus, write a `.proto` with the same fields (ROS-style package path + `v1` recommended), e.g. `my_pkg/srv/v1/add_two_ints.proto`:
+
+```protobuf
+syntax = "proto3";
+package my_pkg.srv.v1;
+
+// Equivalent to ROS 2 `my_pkg/srv/AddTwoInts`.
+message AddTwoIntsRequest {
+  int64 a = 1;
+  int64 b = 2;
+}
+
+message AddTwoIntsResponse {
+  int64 sum = 1;
+}
+```
+
+Generate stubs in your own project:
+
+```bash
+# Python
+protoc --python_out=. --pyi_out=. my_pkg/srv/v1/add_two_ints.proto
+
+# C++
+protoc --cpp_out=. my_pkg/srv/v1/add_two_ints.proto
+```
+
+Rust, in `build.rs`:
+
+```rust
+prost_build::compile_protos(
+    &["proto/my_pkg/srv/v1/add_two_ints.proto"],
+    &["proto"],
+)?;
+```
+
+To contribute a type into this repo’s built-in set: add the file under [`proto/`](../../proto/) and regenerate with `just gen-*`.
 
 ### Python: custom Service mapper
 
 The bridge calls: `ros_srv_type()`, `ros_req_to_bus` / `bus_req_to_ros`, `ros_resp_to_bus` / `bus_resp_to_ros`.
 
 ```python
-# from my_pkg.srv import AddTwoInts
-# from my_robot.pb.add_two_ints_pb2 import AddTwoIntsRequest, AddTwoIntsResponse
+from my_pkg.srv import AddTwoInts
+from my_pkg.srv.v1 import add_two_ints_pb2 as pb
+from robot_bus.ros2_bridge import Direction, Ros2Bridge
 
 class AddTwoIntsServiceMapper:
     def type_name(self) -> str:
@@ -114,10 +165,10 @@ class AddTwoIntsServiceMapper:
         return AddTwoInts
 
     def ros_req_to_bus(self, req) -> bytes:
-        return AddTwoIntsRequest(a=int(req.a), b=int(req.b)).SerializeToString()
+        return pb.AddTwoIntsRequest(a=int(req.a), b=int(req.b)).SerializeToString()
 
     def bus_req_to_ros(self, payload: bytes):
-        bus = AddTwoIntsRequest()
+        bus = pb.AddTwoIntsRequest()
         bus.ParseFromString(payload)
         out = AddTwoInts.Request()
         out.a = int(bus.a)
@@ -125,10 +176,10 @@ class AddTwoIntsServiceMapper:
         return out
 
     def ros_resp_to_bus(self, resp) -> bytes:
-        return AddTwoIntsResponse(sum=int(resp.sum)).SerializeToString()
+        return pb.AddTwoIntsResponse(sum=int(resp.sum)).SerializeToString()
 
     def bus_resp_to_ros(self, payload: bytes):
-        bus = AddTwoIntsResponse()
+        bus = pb.AddTwoIntsResponse()
         bus.ParseFromString(payload)
         out = AddTwoInts.Response()
         out.sum = int(bus.sum)
@@ -146,15 +197,16 @@ bridge = (
 )
 ```
 
-Action: `ros_action_type()` + `ros_goal_to_bus` / `bus_goal_to_ros` / feedback / result (see [`mappers/fibonacci.py`](../../bindings/python/robot_bus/ros2_bridge/mappers/fibonacci.py)).
+Action: same flow — three proto messages (Goal / Feedback / Result), then `ros_action_type()` + six-way conversion (see [`mappers/fibonacci.py`](../../bindings/python/robot_bus/ros2_bridge/mappers/fibonacci.py)).
 
 ### Rust: custom Service (`TypedServiceMapper`)
+
+After `include!` of the generated code, encode/decode with prost types:
 
 ```rust
 use prost::Message as ProstMessage;
 use robot_bus::ros2_bridge::TypedServiceMapper;
-// use my_pkg::srv::AddTwoInts;
-// use my_robot::pb::{AddTwoIntsRequest, AddTwoIntsResponse};
+use my_pkg::srv::v1::{AddTwoIntsRequest, AddTwoIntsResponse};
 
 #[derive(Clone)]
 struct AddTwoIntsServiceMapper;
@@ -185,7 +237,9 @@ impl TypedServiceMapper for AddTwoIntsServiceMapper {
     }
 }
 
-// .service("/add", "/add").mapper(AddTwoIntsServiceMapper).add()?
+// .service("/add_two_ints", "/add_two_ints")
+//     .mapper(AddTwoIntsServiceMapper)
+//     .add()?
 ```
 
 Action: `impl TypedActionMapper` (`type Ros = …` + six-way goal/feedback/result conversion). The library's `wire_typed_*` handles wiring.
@@ -196,26 +250,55 @@ Built-ins use ZSTs: `.mapper(TriggerServiceMapper{})`. Custom mappers inherit CR
 
 ```cpp
 #include <robot_bus/ros2_bridge.hpp>
-// #include <my_pkg/srv/add_two_ints.hpp>
-// #include "add_two_ints.pb.h"
+#include <my_pkg/srv/add_two_ints.hpp>
+#include "my_pkg/srv/v1/add_two_ints.pb.h"
 
 struct AddTwoIntsServiceMapper
     : robot_bus::TypedServiceMapper<AddTwoIntsServiceMapper, my_pkg::srv::AddTwoInts> {
   const char *type_name() const override { return "my_pkg/srv/AddTwoInts"; }
 
-  std::vector<uint8_t> ros_req_to_bus(const Request &req) const { /* … */ }
-  Request bus_req_to_ros(robot_bus::BytesView body) const { /* … */ }
-  std::vector<uint8_t> ros_resp_to_bus(const Response &resp) const { /* … */ }
-  Response bus_resp_to_ros(robot_bus::BytesView body) const { /* … */ }
+  std::vector<uint8_t> ros_req_to_bus(const Request &req) const {
+    my_pkg::srv::v1::AddTwoIntsRequest bus;
+    bus.set_a(req.a);
+    bus.set_b(req.b);
+    std::string bytes;
+    bus.SerializeToString(&bytes);
+    return {bytes.begin(), bytes.end()};
+  }
+
+  Request bus_req_to_ros(robot_bus::BytesView body) const {
+    my_pkg::srv::v1::AddTwoIntsRequest bus;
+    bus.ParseFromArray(body.data, static_cast<int>(body.size));
+    Request out;
+    out.a = bus.a();
+    out.b = bus.b();
+    return out;
+  }
+
+  std::vector<uint8_t> ros_resp_to_bus(const Response &resp) const {
+    my_pkg::srv::v1::AddTwoIntsResponse bus;
+    bus.set_sum(resp.sum);
+    std::string bytes;
+    bus.SerializeToString(&bytes);
+    return {bytes.begin(), bytes.end()};
+  }
+
+  Response bus_resp_to_ros(robot_bus::BytesView body) const {
+    my_pkg::srv::v1::AddTwoIntsResponse bus;
+    bus.ParseFromArray(body.data, static_cast<int>(body.size));
+    Response out;
+    out.sum = bus.sum();
+    return out;
+  }
 };
 
-// .service("/add", "/add")
+// .service("/add_two_ints", "/add_two_ints")
 //     .mapper(std::make_shared<AddTwoIntsServiceMapper>())
 //     .direction(robot_bus::Direction::Ros2ToBus)
 //     .add()
 ```
 
-Topic / Action: `TypedTopicMapper` / `TypedActionMapper` (see [`ros2_bridge_typed.hpp`](../../bindings/cpp/include/robot_bus/ros2_bridge_typed.hpp)).
+Topic / Action: same “proto first, then mapper” flow. `TypedTopicMapper` / `TypedActionMapper` (see [`ros2_bridge_typed.hpp`](../../bindings/cpp/include/robot_bus/ros2_bridge_typed.hpp)).
 
 ---
 

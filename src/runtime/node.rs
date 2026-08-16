@@ -9,9 +9,10 @@
 //! Same-process **inproc** needs a shared [`crate::Context`] with the embedded
 //! broker: `RobotBusBroker::start_with_context` + [`Node::inproc_with_context`].
 //!
-//! gRPC client mode (feature `grpc`): [`Node::ws`] connects to the broker
-//! gateway only (subscribe / call service / call action). No ZMQ sockets;
-//! publisher and server APIs return an error.
+//! WebSocket RPC client mode (feature `ws`): [`Node::ws`] connects to the
+//! broker gateway (subscribe / publish / call service / call action). No ZMQ
+//! sockets; service and action **server** APIs return an error. Transport
+//! `"grpc"` is a compatibility alias for `"ws"`.
 //!
 //! Topic / service / action names are used as given (pass full paths yourself).
 
@@ -161,13 +162,13 @@ impl NodeOptions {
         }
     }
 
-    /// gRPC gateway (native + browser WebSocket `/ws`) on the local broker (`http://127.0.0.1:15570`).
+    /// WebSocket RPC gateway (native + browser `/ws`) on the local broker (`http://127.0.0.1:15570`).
     #[cfg(feature = "ws")]
     pub fn ws() -> Self {
         Self::ws_at(WsRuntime::default_url())
     }
 
-    /// gRPC gateway at `url` (e.g. `http://127.0.0.1:15570`); browsers use `ws(s)://…/ws`.
+    /// WebSocket RPC gateway at `url` (e.g. `http://127.0.0.1:15570`); browsers use `ws(s)://…/ws`.
     #[cfg(feature = "ws")]
     pub fn ws_at(url: impl Into<String>) -> Self {
         let url = url.into();
@@ -192,7 +193,7 @@ impl NodeOptions {
     fn require_zmq(&self) -> Result<()> {
         if self.is_ws() {
             Err(BusError::Protocol(
-                "ZMQ endpoints are not available in gRPC node mode".into(),
+                "ZMQ endpoints are not available in WebSocket RPC node mode".into(),
             ))
         } else {
             Ok(())
@@ -295,13 +296,13 @@ impl NodeOptions {
 
 fn grpc_mode_unsupported(op: &str) -> BusError {
     BusError::Protocol(format!(
-        "{op} is not supported in gRPC node mode (client: subscribe / publish / call service / call action; no servers)"
+        "{op} is not supported in WebSocket RPC node mode (client: subscribe / publish / call service / call action; no servers)"
     ))
 }
 
 /// Raw (opaque bytes) publisher from [`Node::create_publisher_raw`].
 ///
-/// ZMQ mode shares one underlying bus PUB socket per node; gRPC mode issues
+/// ZMQ mode shares one underlying bus PUB socket per node; WebSocket RPC mode issues
 /// unary `MessageGateway.Publish` RPCs. Each handle remembers its topic.
 ///
 /// Topology registration is shared across clones and unregistered when the last
@@ -347,7 +348,7 @@ impl TopicPublisherRaw {
             TopicPublisherBackend::Zmq(inner) => inner.set_high_water_mark(hwm),
             #[cfg(feature = "ws")]
             TopicPublisherBackend::Ws(_) => Err(BusError::Protocol(
-                "set_high_water_mark is not available for gRPC publishers".into(),
+                "set_high_water_mark is not available for WebSocket RPC publishers".into(),
             )),
         }
     }
@@ -454,7 +455,7 @@ impl NodeServiceClientRaw {
             ServiceClientInner::Zmq(client) => client.high_water_mark(),
             #[cfg(feature = "ws")]
             ServiceClientInner::Ws(_) => Err(BusError::Protocol(
-                "high_water_mark is not available in gRPC node mode".into(),
+                "high_water_mark is not available in WebSocket RPC node mode".into(),
             )),
         }
     }
@@ -464,7 +465,7 @@ impl NodeServiceClientRaw {
             ServiceClientInner::Zmq(client) => client.set_high_water_mark(hwm),
             #[cfg(feature = "ws")]
             ServiceClientInner::Ws(_) => Err(BusError::Protocol(
-                "set_high_water_mark is not available in gRPC node mode".into(),
+                "set_high_water_mark is not available in WebSocket RPC node mode".into(),
             )),
         }
     }
@@ -926,7 +927,7 @@ impl NodeActionClientRaw {
                 .map_err(|_| BusError::Protocol("action HWM mutex poisoned".into())),
             #[cfg(feature = "ws")]
             ActionClientInner::Ws(_) => Err(BusError::Protocol(
-                "high_water_mark is not available in gRPC node mode".into(),
+                "high_water_mark is not available in WebSocket RPC node mode".into(),
             )),
         }
     }
@@ -941,7 +942,7 @@ impl NodeActionClientRaw {
             }
             #[cfg(feature = "ws")]
             ActionClientInner::Ws(_) => Err(BusError::Protocol(
-                "set_high_water_mark is not available in gRPC node mode".into(),
+                "set_high_water_mark is not available in WebSocket RPC node mode".into(),
             )),
         }
     }
@@ -1054,7 +1055,7 @@ impl<A: Action> NodeActionClient<A> {
 /// [`SingleThreadedExecutor::add_node`](crate::runtime::SingleThreadedExecutor::add_node)
 /// (or the multi-threaded variant) before `create_*` / `spin`.
 ///
-/// gRPC mode ([`Node::ws`]): client-only over the broker gateway; does not
+/// WebSocket RPC mode ([`Node::ws`]): client-only over the broker gateway; does not
 /// attach to a ZMQ executor.
 pub struct Node {
     name: String,
@@ -1143,7 +1144,7 @@ impl Node {
         Self::with_context_options(context, name, NodeOptions::inproc_at(prefix))
     }
 
-    /// gRPC client node talking to the local broker gateway (`http://127.0.0.1:15570`).
+    /// WebSocket RPC client node talking to the local broker gateway (`http://127.0.0.1:15570`).
     #[cfg(feature = "ws")]
     pub fn ws(name: impl Into<String>) -> Self {
         Self::with_options(name, NodeOptions::ws())
@@ -1205,7 +1206,7 @@ impl Node {
     pub(crate) fn attach_executor(&mut self, handle: ExecutorHandle) -> Result<()> {
         if self.options.is_ws() {
             return Err(BusError::Protocol(
-                "gRPC node cannot attach to a ZMQ executor".into(),
+                "WebSocket RPC node cannot attach to a ZMQ executor".into(),
             ));
         }
         if self.executor.is_some() {
@@ -1222,7 +1223,7 @@ impl Node {
     fn ensure_executor(&mut self) -> Result<&ExecutorHandle> {
         if self.options.is_ws() {
             return Err(BusError::Protocol(
-                "gRPC node does not use a ZMQ executor; use spin() on the node directly".into(),
+                "WebSocket RPC node does not use a ZMQ executor; use spin() on the node directly".into(),
             ));
         }
         if self.executor.is_none() {
@@ -1523,7 +1524,7 @@ impl Node {
     pub fn set_stream_hwm(&mut self, hwm: HighWaterMark) -> Result<()> {
         if self.options.is_ws() {
             return Err(BusError::Protocol(
-                "set_stream_hwm is not available in gRPC node mode".into(),
+                "set_stream_hwm is not available in WebSocket RPC node mode".into(),
             ));
         }
         self.lock_executor()?.set_stream_hwm(hwm)
@@ -1539,7 +1540,7 @@ impl Node {
     pub fn set_rpc_hwm(&mut self, hwm: HighWaterMark) -> Result<()> {
         if self.options.is_ws() {
             return Err(BusError::Protocol(
-                "set_rpc_hwm is not available in gRPC node mode".into(),
+                "set_rpc_hwm is not available in WebSocket RPC node mode".into(),
             ));
         }
         self.lock_executor()?.set_rpc_hwm(hwm)
@@ -1555,7 +1556,7 @@ impl Node {
     pub fn set_action_hwm(&mut self, hwm: HighWaterMark) -> Result<()> {
         if self.options.is_ws() {
             return Err(BusError::Protocol(
-                "set_action_hwm is not available in gRPC node mode".into(),
+                "set_action_hwm is not available in WebSocket RPC node mode".into(),
             ));
         }
         self.lock_executor()?.set_action_hwm(hwm)
@@ -2139,7 +2140,7 @@ impl Node {
     /// Lazily creates a [`SingleThreadedExecutor`] when none was attached via
     /// `add_node`. Same as `executor.spin()` on the attached / owned executor.
     ///
-    /// In gRPC mode, drives subscription callbacks and timers over the gateway.
+    /// In WebSocket RPC mode, drives subscription callbacks and timers over the gateway.
     pub fn spin_once(&mut self, timeout: Option<Duration>) -> Result<bool> {
         #[cfg(feature = "ws")]
         if self.options.is_ws() {
@@ -2367,7 +2368,7 @@ ros__parameters:
                     .message_xpub_endpoint()
                     .unwrap_err()
                     .to_string()
-                    .contains("gRPC")
+                    .contains("WebSocket")
             );
         }
     }

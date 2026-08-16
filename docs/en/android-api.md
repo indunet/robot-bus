@@ -10,7 +10,7 @@ Does not depend on `org.indunet:robot-bus` (JVM Java package). Both artifacts ar
 
 ```bash
 # Maven Central (when published)
-# implementation("org.indunet:robot-bus-android:0.1.9")
+# implementation("org.indunet:robot-bus-android:1.0.0")
 
 # Local:
 just gen-android    # → bindings/android/generated/
@@ -38,7 +38,7 @@ class App : Application() {
 ```kotlin
 // build.gradle.kts
 dependencies {
-  implementation("org.indunet:robot-bus-android:0.1.9")
+  implementation("org.indunet:robot-bus-android:1.0.0")
 }
 ```
 
@@ -73,25 +73,6 @@ Broker().use { _ ->
   }
 }
 ```
-
-### TF (transform tree)
-
-`TfBuffer` / `TfListener` / `TransformBroadcaster` correspond to Rust `robot_bus::tf`. Messages are `tf2_msgs/TFMessage` (`/tf`, `/tf_static`). v1: static edges are always active; dynamic edges use the latest sample.
-
-```kotlin
-import org.indunet.robot.bus.TfListener
-import org.indunet.robot.bus.TransformBroadcaster
-import org.indunet.robot.bus.tf2_msgs.msg.v1.TFMessage
-
-val listener = TfListener(node) // /tf + /tf_static
-val buf = listener.buffer()
-val br = TransformBroadcaster(node.createPublisher("/tf_static", TFMessage::class.java))
-br.send(/* TFMessage or TransformStamped... */)
-// after start() delivers messages:
-val t = buf.lookupTransform("base_link", "camera")
-```
-
-Offline use: `TfBuffer()` + `setTransformMsg`. See `TfLookupTest`.
 
 ### HTTP discovery (fill addresses, pick transport yourself)
 

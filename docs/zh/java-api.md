@@ -4,7 +4,7 @@
 
 ```bash
 # Maven Central (when published)
-# implementation("org.indunet:robot-bus:0.1.9")           // JVM
+# implementation("org.indunet:robot-bus:1.0.0")           // JVM
 
 # 本地：
 just java-dev       # gen-java + cargo FFI + mvn test
@@ -126,7 +126,7 @@ Node node = Node.discover(
 ```
 
 ### WebSocket RPC 模式 Node（客户端）
-`Node.ws` / `Node.wsAt` 经 broker gRPC 网关接入，不创建 ZMQ socket。
+`Node.ws` / `Node.wsAt` 经 broker WebSocket RPC 网关接入，不创建 ZMQ socket。
 
 | 支持 | 不支持 |
 |------|--------|
@@ -140,28 +140,6 @@ Node node = Node.discover(
 Node node = Node.ws("web-client");
 // 或 Node.wsAt("web-client", "http://127.0.0.1:15570");
 ```
-
-### TF（坐标树）
-
-`TfBuffer` / `TfListener` / `TransformBroadcaster` 对应 Rust `robot_bus::tf`。消息为 `tf2_msgs/TFMessage`（`/tf`、`/tf_static`）。v1：静态边始终生效，动态边取最新样本。
-
-```java
-import org.indunet.robot.bus.TfListener;
-import org.indunet.robot.bus.TransformBroadcaster;
-import org.indunet.robot.bus.tf2_msgs.msg.v1.TFMessage;
-
-TfListener listener = new TfListener(node); // /tf + /tf_static
-TfBuffer buf = listener.buffer();
-
-TransformBroadcaster br =
-    new TransformBroadcaster(node.createPublisher("/tf_static", TFMessage.class));
-br.send(/* TFMessage or TransformStamped... */);
-
-// after start() delivers messages:
-var t = buf.lookupTransform("base_link", "camera");
-```
-
-离线可用 `new TfBuffer()` + `setTransformMsg`。见 `TfLookupTest`。
 
 ### Service / Action（typed）
 
@@ -247,7 +225,7 @@ just java-install      # ~/.m2（仅 JVM；Android 不再需要）
 | 符号 | 说明 |
 |------|------|
 | `Node(name)` / `Node(name, NodeOptions)` | 建节点 |
-| `Node.tcp` / `ipc` / `inproc` / `inproc(Context, …)` / `withContext` / `grpc` / `grpcAt` / `discover` | 传输预设；同进程 inproc 须共享 `Context`；`discover` 只填地址 |
+| `Node.tcp` / `ipc` / `inproc` / `inproc(Context, …)` / `withContext` / `ws` / `wsAt` / `discover` | 传输预设；同进程 inproc 须共享 `Context`；`discover` 只填地址 |
 | `declareParameter` / `getParameter` / `setParameter` / `hasParameter` / `listParameters` | 本节点本地参数（Boolean / Long / Double / String） |
 | `loadParametersFromYaml` / `loadParametersFromYamlStr` | 从 YAML 文件或字符串加载参数 |
 | `Parameter` | `getParameter` / `listAllParameters` 返回的 name/value |

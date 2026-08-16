@@ -7,7 +7,6 @@ Run after: just python-dev
 from __future__ import annotations
 
 import socket
-import sys
 import time
 
 
@@ -106,12 +105,9 @@ def main() -> int:
     try:
         import robot_bus
     except ImportError as err:
-        print(f"skip: native robot_bus not installed ({err})", file=sys.stderr)
-        return 0
-
-    if not hasattr(robot_bus, "Context"):
-        print("skip: Context not available (rebuild extension)", file=sys.stderr)
-        return 0
+        raise SystemExit(f"native robot_bus is required (run: just python-dev): {err}") from err
+    if robot_bus.Node is None or not hasattr(robot_bus, "Context"):
+        raise SystemExit("native robot_bus is required (run: just python-dev)")
 
     test_inproc_pubsub_with_shared_context()
     test_inproc_action_goal_handle()

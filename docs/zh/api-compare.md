@@ -9,7 +9,7 @@
 | 运行时 | DDS（需 `ros2` / daemon） | 先起 `robot_bus_broker`（或进程内嵌入） |
 | 入口 | `Context` → `Node` → `rclrs::spin` | **推荐** `Context` → `Node::with_context`；tcp/ipc 仍可用便捷的 `Node::new`（私有 Context） |
 | 消息 | `.msg` / `.srv` / `.action` 生成类型 | crate 内 protobuf（如 `sensor_msgs::msg::v1::Imu`） |
-| QoS | `QOS_PROFILE_DEFAULT` 等 | Topic：`QosProfile::keep_last(depth)` → HWM（各语言可选 `qos_depth` / `qosDepth`）；固定 best-effort。WS/gRPC Node 接受参数但不生效。Service / action 暂不接 QoS |
+| QoS | `QOS_PROFILE_DEFAULT` 等 | Topic：`QosProfile::keep_last(depth)` → HWM（各语言可选 `qos_depth` / `qosDepth`）；固定 best-effort。WebSocket RPC Node（`Node::ws`）接受参数但不生效。Service / action 暂不接 QoS |
 | 回调组 | Worker / callback group（较新 API） | `CallbackGroupType::MutuallyExclusive` / `Reentrant` |
 | 参数 | `declare_parameter` / `get_parameter` → Parameter；`set_parameter(Parameter)`；`list_parameters(prefixes, depth)`（可远程 / YAML / CLI） | 同形本地 API（`Parameter` + `as_*` + 批量 get/set）；`list_parameters` → `{names, prefixes}`，便利 API `list_all_parameters`；`undeclare_parameter`；YAML 加载；无远程 / CLI |
 | 就绪等待 | `wait_for_message` / `wait_for_service` / `wait_for_action_server` | 同名辅助：`wait_for_message`；service/action 通过 console `workers > 0` 轮询（best-effort，非 DDS discovery） |
@@ -219,7 +219,7 @@ fn main() -> robot_bus::Result<()> {
 }
 ```
 
-以上为概念性 API，具体签名正在实现。`ActionGateway.SendGoal` 为一元请求 + server stream（`FEEDBACK` / `RESULT`）。浏览器 WebSocket 取消发显式 `CANCEL` 帧并继续等到 RESULT（真断连仍 cancel）；原生 gRPC 取消响应流；ZMQ 发显式 `CANCEL` 帧。均不承诺服务端确认。
+各传输上 `cancel` 均为 best-effort：浏览器 WebSocket 发显式 `CANCEL` 帧并继续等到 RESULT（真断连仍 cancel）；原生 WebSocket RPC 同样发 CANCEL；ZMQ 发显式 `CANCEL` 帧。均不承诺服务端确认。
 
 ---
 

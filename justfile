@@ -128,26 +128,33 @@ test-python: proto
 	PYTHONPATH=bindings/python python3 bindings/python/tests/test_msgs_roundtrip.py
 	PYTHONPATH=bindings/python python3 bindings/python/tests/test_typed_api.py
 
-# Native Python integration (needs `just python-dev` first; skips if extension missing)
+# Native Python integration (requires `just python-dev`; fails if extension missing)
 test-python-native:
 	python3 bindings/python/tests/test_ws_node.py
 	python3 bindings/python/tests/test_inproc_context.py
-	python3 bindings/python/tests/test_tf_lookup.py
+	python3 bindings/python/tests/test_federation_opts.py
 
-# Cross-language interop matrix (6 language-pair scenarios; skips missing peers)
-# Needs `just python-dev`; optionally java-dev / ts-dev / cpp-dev for full coverage.
-test-interop: gen-rust
+# Cross-language interop matrix (6 language-pair scenarios). Missing peers fail.
+# Needs `just python-dev`, console assets, protobuf C++ runtime, Java, Node/napi.
+test-interop: gen-rust console
 	#!/usr/bin/env bash
 	set -euo pipefail
 	cargo build --quiet --bin robot_bus_interop
-	# Best-effort peer builds (failures here only cause scenario skips).
-	if [[ -d bindings/cpp/build ]]; then
-		cmake -S bindings/cpp -B bindings/cpp/build >/dev/null
-		cmake --build bindings/cpp/build --target interop_peer >/dev/null || true
+	cargo build --release --manifest-path bindings/cpp/native/Cargo.toml
+	python3 scripts/generate_cpp_msgs.py
+	cmake -S bindings/cpp -B bindings/cpp/build -DCMAKE_BUILD_TYPE=Release \
+		-DCMAKE_PREFIX_PATH="${CMAKE_PREFIX_PATH:-/usr/local}" \
+		-DCMAKE_FIND_PACKAGE_PREFER_CONFIG=ON \
+		-DROBOT_BUS_BUILD_TESTS=ON
+	cmake --build bindings/cpp/build --target interop_peer -j2
+	if [[ -f bindings/cpp/native/target/release/librobot_bus_c.so ]]; then
+		ln -sfn "$(pwd)/bindings/cpp/native/target/release/librobot_bus_c.so" \
+			bindings/cpp/build/librobot_bus.so
 	fi
-	if [[ -f bindings/java/pom.xml ]]; then
-		(cd bindings/java && mvn -q test-compile dependency:build-classpath -Dmdep.outputFile=target/interop-classpath.txt) || true
-	fi
+	python3 scripts/generate_java_msgs.py
+	(cd bindings/java && mvn -q test-compile dependency:build-classpath -Dmdep.outputFile=target/interop-classpath.txt)
+	python3 scripts/generate_typescript_msgs.py
+	(cd bindings/typescript && npm ci && npm run build:native && npm run build:ts)
 	if [[ -x .venv/bin/python ]]; then PY=.venv/bin/python; else PY=python3; fi
 	"$PY" tests/interop/run.py
 
@@ -155,7 +162,9 @@ test-interop: gen-rust
 test-typescript: gen-typescript
 	cd bindings/typescript && npm test
 
-# Local checks aligned with CI (codegen then rust + python/ts smoke)
+# Local checks aligned with CI smoke (codegen then rust + python/ts).
+# Native Python / Java / interop gates: just python-dev && just test-python-native;
+# just test-java; just test-interop
 ci: gen-all
 	just test-rust
 	just test-rust-minimal

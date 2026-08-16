@@ -6,7 +6,7 @@
 
   <groupId>org.indunet</groupId>
   <artifactId>robot-bus</artifactId>
-  <version>0.1.9</version>
+  <version>1.0.0</version>
   <packaging>jar</packaging>
 
   <name>robot-bus</name>
@@ -100,6 +100,9 @@
           <environmentVariables>
             <ROBOT_BUS_NATIVE_DIR>${project.basedir}/../cpp/native/target/release</ROBOT_BUS_NATIVE_DIR>
           </environmentVariables>
+          <excludes>
+            <exclude>**/interop/InteropPeer.java</exclude>
+          </excludes>
         </configuration>
       </plugin>
       <plugin>
