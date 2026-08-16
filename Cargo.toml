@@ -177,5 +177,15 @@ path = "examples/action_fibonacci/rust/server.rs"
 name = "action_fibonacci_client"
 path = "examples/action_fibonacci/rust/client.rs"
 
+[[example]]
+name = "ros2_bridge_builtin"
+path = "examples/ros2_bridge/rust/builtin.rs"
+required-features = ["ros2"]
+
+[[example]]
+name = "ros2_bridge_custom_add_two_ints"
+path = "examples/ros2_bridge/rust/custom_add_two_ints.rs"
+required-features = ["ros2"]
+
 [package.metadata.docs.rs]
 features = ["ws", "console"]

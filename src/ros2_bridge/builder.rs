@@ -139,8 +139,11 @@ impl Ros2Bridge {
                 }
             }
         }
-        self.bus_node.spin_once(Some(timeout))?;
-        Ok(())
+        match self.bus_node.spin_once(Some(timeout)) {
+            // Ros2ToBus-only may leave the bus node with no sub/service/action server.
+            Err(BusError::Protocol(msg)) if msg.contains("nothing registered") => Ok(()),
+            other => other.map(|_| ()),
+        }
     }
 }
 

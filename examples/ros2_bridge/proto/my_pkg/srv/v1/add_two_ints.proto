@@ -1,0 +1,20 @@
+syntax = "proto3";
+
+package my_pkg.srv.v1;
+
+// Bus protobuf for the custom bridge example (NOT a robot-bus SDK built-in).
+//
+// Pair with the ROS 2 interface:
+//   examples/ros2_bridge/ros2/my_pkg/srv/AddTwoInts.srv
+//
+// Fields must stay aligned with that .srv. Runtime smoke may use system
+// example_interfaces/AddTwoInts (identical layout); your app would use my_pkg.
+
+message AddTwoIntsRequest {
+  int64 a = 1;
+  int64 b = 2;
+}
+
+message AddTwoIntsResponse {
+  int64 sum = 1;
+}

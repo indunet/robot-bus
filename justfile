@@ -121,7 +121,9 @@ examples-python:
 		examples/service_set_bool/python/server.py \
 		examples/service_set_bool/python/client.py \
 		examples/action_fibonacci/python/server.py \
-		examples/action_fibonacci/python/client.py
+		examples/action_fibonacci/python/client.py \
+		examples/ros2_bridge/python/builtin.py \
+		examples/ros2_bridge/python/custom_add_two_ints.py
 
 examples-cpp: gen-cpp gen-rust
 	cargo build --release --manifest-path bindings/cpp/native/Cargo.toml
@@ -129,6 +131,16 @@ examples-cpp: gen-cpp gen-rust
 		-DCMAKE_PREFIX_PATH="${CMAKE_PREFIX_PATH:-/usr/local}" \
 		-DCMAKE_FIND_PACKAGE_PREFER_CONFIG=ON \
 		-DROBOT_BUS_BUILD_EXAMPLES=ON
+	cmake --build bindings/cpp/build --target cpp_examples -j2
+
+# C++ examples including Ros2Bridge (source Humble/Jazzy first).
+examples-cpp-ros2: gen-cpp gen-rust
+	cargo build --release --manifest-path bindings/cpp/native/Cargo.toml
+	cmake -S bindings/cpp -B bindings/cpp/build -DCMAKE_BUILD_TYPE=Release \
+		-DCMAKE_PREFIX_PATH="${CMAKE_PREFIX_PATH:-/usr/local}" \
+		-DCMAKE_FIND_PACKAGE_PREFER_CONFIG=ON \
+		-DROBOT_BUS_BUILD_EXAMPLES=ON \
+		-DROBOT_BUS_ROS2=ON
 	cmake --build bindings/cpp/build --target cpp_examples -j2
 
 # End-to-end topic smoke (Python talker/listener against an ephemeral broker).

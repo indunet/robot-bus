@@ -96,27 +96,31 @@ Rust 另有完整 topic mapper 注册表（`src/ros2_bridge/mappers/`），挂�
 
 高级：仍可直接 override `ServiceMapper::attach` / `ActionMapper::attach`（特殊 QoS 等）。
 
-下面以自有 ROS `my_pkg/srv/AddTwoInts` 为例，从 proto 写到挂桥。
+下面以 ROS `example_interfaces/srv/AddTwoInts` 为例（与工程内自有 `my_pkg/srv/AddTwoInts` 写法相同），从 proto 写到挂桥。
+
+**可运行示例**（Python / Rust / C++）：[`examples/ros2_bridge/`](../../examples/ros2_bridge/)
+— `builtin` 为 phase-1 内置 mapper，`custom_add_two_ints` 为本自定义流程。
 
 ### 1. 定义 bus protobuf
 
-ROS 侧已有：
+ROS 侧已有（Humble/Jazzy 自带 `example_interfaces`）：
 
 ```text
-# my_pkg/srv/AddTwoInts.srv
+# example_interfaces/srv/AddTwoInts.srv
 int64 a
 int64 b
 ---
 int64 sum
 ```
 
-Bus 侧按同样字段写 `.proto`（建议 ROS 风格包路径 + `v1`），例如 `my_pkg/srv/v1/add_two_ints.proto`：
+Bus 侧按同样字段写 `.proto`（建议 ROS 风格包路径 + `v1`）。本仓库已提供
+[`proto/example_interfaces/srv/v1/add_two_ints.proto`](../../proto/example_interfaces/srv/v1/add_two_ints.proto)：
 
 ```protobuf
 syntax = "proto3";
-package my_pkg.srv.v1;
+package example_interfaces.srv.v1;
 
-// Equivalent to ROS 2 `my_pkg/srv/AddTwoInts`.
+// Equivalent to ROS 2 `example_interfaces/srv/AddTwoInts`.
 message AddTwoIntsRequest {
   int64 a = 1;
   int64 b = 2;
@@ -127,7 +131,7 @@ message AddTwoIntsResponse {
 }
 ```
 
-生成 stubs（放在自己工程里）：
+若是**工程内自有类型**（如 `my_pkg`），自行生成 stubs：
 
 ```bash
 # Python
@@ -152,14 +156,16 @@ prost_build::compile_protos(
 
 桥调用：`ros_srv_type()`、`ros_req_to_bus` / `bus_req_to_ros`、`ros_resp_to_bus` / `bus_resp_to_ros`。
 
+完整可运行文件：[`examples/ros2_bridge/python/custom_add_two_ints.py`](../../examples/ros2_bridge/python/custom_add_two_ints.py)。
+
 ```python
-from my_pkg.srv import AddTwoInts
-from my_pkg.srv.v1 import add_two_ints_pb2 as pb
+from example_interfaces.srv import AddTwoInts
+from robot_bus.example_interfaces.srv.v1 import add_two_ints_pb2 as pb
 from robot_bus.ros2_bridge import Direction, Ros2Bridge
 
 class AddTwoIntsServiceMapper:
     def type_name(self) -> str:
-        return "my_pkg/srv/AddTwoInts"
+        return "example_interfaces/srv/AddTwoInts"
 
     def ros_srv_type(self):
         return AddTwoInts
@@ -188,7 +194,7 @@ class AddTwoIntsServiceMapper:
 bridge = (
     Ros2Bridge.new("bridge")
     .bus_tcp("localhost")
-    .service("/add_two_ints", "/add_two_ints")
+    .service("/examples/add_two_ints", "/examples/add_two_ints")
     .mapper(AddTwoIntsServiceMapper())
     .direction(Direction.Ros2ToBus)
     .timeout(5.0)
@@ -201,43 +207,45 @@ Action：同一套流程——proto 里写 Goal / Feedback / Result 三个 messa
 
 ### Rust：自定义 Service（`TypedServiceMapper`）
 
-`include!` 生成代码后，用 prost 类型编解码：
+`include!` 生成代码后，用 prost 类型编解码。
+可运行：[`examples/ros2_bridge/rust/custom_add_two_ints.rs`](../../examples/ros2_bridge/rust/custom_add_two_ints.rs)。
 
 ```rust
 use prost::Message as ProstMessage;
+use rclrs::vendor::example_interfaces::srv as ros_srv;
+use robot_bus::example_interfaces::srv::v1::{AddTwoIntsRequest, AddTwoIntsResponse};
 use robot_bus::ros2_bridge::TypedServiceMapper;
-use my_pkg::srv::v1::{AddTwoIntsRequest, AddTwoIntsResponse};
 
-#[derive(Clone)]
+#[derive(Clone, Copy)]
 struct AddTwoIntsServiceMapper;
 
 impl TypedServiceMapper for AddTwoIntsServiceMapper {
-    type Ros = my_pkg::srv::AddTwoInts;
+    type Ros = ros_srv::AddTwoInts;
 
     fn type_name(&self) -> &str {
-        "my_pkg/srv/AddTwoInts"
+        "example_interfaces/srv/AddTwoInts"
     }
 
-    fn ros_req_to_bus(&self, req: &Self::Ros::Request) -> robot_bus::Result<Vec<u8>> {
+    fn ros_req_to_bus(&self, req: &ros_srv::AddTwoInts_Request) -> robot_bus::Result<Vec<u8>> {
         Ok(AddTwoIntsRequest { a: req.a, b: req.b }.encode_to_vec())
     }
 
-    fn bus_req_to_ros(&self, payload: &[u8]) -> robot_bus::Result<Self::Ros::Request> {
+    fn bus_req_to_ros(&self, payload: &[u8]) -> robot_bus::Result<ros_srv::AddTwoInts_Request> {
         let bus = AddTwoIntsRequest::decode(payload)?;
-        Ok(Self::Ros::Request { a: bus.a, b: bus.b })
+        Ok(ros_srv::AddTwoInts_Request { a: bus.a, b: bus.b })
     }
 
-    fn ros_resp_to_bus(&self, resp: &Self::Ros::Response) -> robot_bus::Result<Vec<u8>> {
+    fn ros_resp_to_bus(&self, resp: &ros_srv::AddTwoInts_Response) -> robot_bus::Result<Vec<u8>> {
         Ok(AddTwoIntsResponse { sum: resp.sum }.encode_to_vec())
     }
 
-    fn bus_resp_to_ros(&self, payload: &[u8]) -> robot_bus::Result<Self::Ros::Response> {
+    fn bus_resp_to_ros(&self, payload: &[u8]) -> robot_bus::Result<ros_srv::AddTwoInts_Response> {
         let bus = AddTwoIntsResponse::decode(payload)?;
-        Ok(Self::Ros::Response { sum: bus.sum })
+        Ok(ros_srv::AddTwoInts_Response { sum: bus.sum })
     }
 }
 
-// .service("/add_two_ints", "/add_two_ints")
+// .service("/examples/add_two_ints", "/examples/add_two_ints")
 //     .mapper(AddTwoIntsServiceMapper)
 //     .add()?
 ```
@@ -247,18 +255,22 @@ Action：`impl TypedActionMapper`（`type Ros = …` + goal/feedback/result 六�
 ### C++：自定义 Service（`TypedServiceMapper` CRTP）
 
 内置仍用 ZST：`.mapper(TriggerServiceMapper{})`。自定义继承 CRTP，只写转换；库自动 `attach` / `retain`。
+可运行：[`examples/ros2_bridge/cpp/custom_add_two_ints.cpp`](../../examples/ros2_bridge/cpp/custom_add_two_ints.cpp)。
 
 ```cpp
 #include <robot_bus/ros2_bridge.hpp>
-#include <my_pkg/srv/add_two_ints.hpp>
-#include "my_pkg/srv/v1/add_two_ints.pb.h"
+#include <example_interfaces/srv/add_two_ints.hpp>
+#include <robot_bus/example_interfaces/srv/v1/add_two_ints.pb.h>
 
 struct AddTwoIntsServiceMapper
-    : robot_bus::TypedServiceMapper<AddTwoIntsServiceMapper, my_pkg::srv::AddTwoInts> {
-  const char *type_name() const override { return "my_pkg/srv/AddTwoInts"; }
+    : robot_bus::TypedServiceMapper<AddTwoIntsServiceMapper,
+                                    example_interfaces::srv::AddTwoInts> {
+  const char *type_name() const override {
+    return "example_interfaces/srv/AddTwoInts";
+  }
 
   std::vector<uint8_t> ros_req_to_bus(const Request &req) const {
-    my_pkg::srv::v1::AddTwoIntsRequest bus;
+    example_interfaces::srv::v1::AddTwoIntsRequest bus;
     bus.set_a(req.a);
     bus.set_b(req.b);
     std::string bytes;
@@ -267,7 +279,7 @@ struct AddTwoIntsServiceMapper
   }
 
   Request bus_req_to_ros(robot_bus::BytesView body) const {
-    my_pkg::srv::v1::AddTwoIntsRequest bus;
+    example_interfaces::srv::v1::AddTwoIntsRequest bus;
     bus.ParseFromArray(body.data, static_cast<int>(body.size));
     Request out;
     out.a = bus.a();
@@ -276,7 +288,7 @@ struct AddTwoIntsServiceMapper
   }
 
   std::vector<uint8_t> ros_resp_to_bus(const Response &resp) const {
-    my_pkg::srv::v1::AddTwoIntsResponse bus;
+    example_interfaces::srv::v1::AddTwoIntsResponse bus;
     bus.set_sum(resp.sum);
     std::string bytes;
     bus.SerializeToString(&bytes);
@@ -284,7 +296,7 @@ struct AddTwoIntsServiceMapper
   }
 
   Response bus_resp_to_ros(robot_bus::BytesView body) const {
-    my_pkg::srv::v1::AddTwoIntsResponse bus;
+    example_interfaces::srv::v1::AddTwoIntsResponse bus;
     bus.ParseFromArray(body.data, static_cast<int>(body.size));
     Response out;
     out.sum = bus.sum();
@@ -292,7 +304,7 @@ struct AddTwoIntsServiceMapper
   }
 };
 
-// .service("/add_two_ints", "/add_two_ints")
+// .service("/examples/add_two_ints", "/examples/add_two_ints")
 //     .mapper(std::make_shared<AddTwoIntsServiceMapper>())
 //     .direction(robot_bus::Direction::Ros2ToBus)
 //     .add()

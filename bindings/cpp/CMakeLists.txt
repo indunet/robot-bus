@@ -180,6 +180,29 @@ if(ROBOT_BUS_BUILD_EXAMPLES)
       RUNTIME_OUTPUT_DIRECTORY "${ROBOT_BUS_EXAMPLES_ROOT}/build")
     list(APPEND ROBOT_BUS_EXAMPLE_TARGETS ${target_name})
   endforeach()
+  if(ROBOT_BUS_ROS2)
+    add_executable(ros2_bridge_builtin
+      "${ROBOT_BUS_EXAMPLES_ROOT}/ros2_bridge/cpp/builtin.cpp")
+    target_link_libraries(ros2_bridge_builtin PRIVATE
+      robot_bus robot_bus_msgs robot_bus_ros2_bridge)
+    add_dependencies(ros2_bridge_builtin robot_bus_ffi_build)
+    set_target_properties(ros2_bridge_builtin PROPERTIES
+      RUNTIME_OUTPUT_DIRECTORY "${ROBOT_BUS_EXAMPLES_ROOT}/build")
+    list(APPEND ROBOT_BUS_EXAMPLE_TARGETS ros2_bridge_builtin)
+
+    # Custom mapper: compile example-local my_pkg protobuf (not SDK msgs).
+    add_executable(ros2_bridge_custom_add_two_ints
+      "${ROBOT_BUS_EXAMPLES_ROOT}/ros2_bridge/cpp/custom_add_two_ints.cpp"
+      "${ROBOT_BUS_EXAMPLES_ROOT}/ros2_bridge/generated/my_pkg/srv/v1/add_two_ints.pb.cc")
+    target_include_directories(ros2_bridge_custom_add_two_ints PRIVATE
+      "${ROBOT_BUS_EXAMPLES_ROOT}/ros2_bridge/generated")
+    target_link_libraries(ros2_bridge_custom_add_two_ints PRIVATE
+      robot_bus robot_bus_msgs robot_bus_ros2_bridge protobuf::libprotobuf)
+    add_dependencies(ros2_bridge_custom_add_two_ints robot_bus_ffi_build)
+    set_target_properties(ros2_bridge_custom_add_two_ints PROPERTIES
+      RUNTIME_OUTPUT_DIRECTORY "${ROBOT_BUS_EXAMPLES_ROOT}/build")
+    list(APPEND ROBOT_BUS_EXAMPLE_TARGETS ros2_bridge_custom_add_two_ints)
+  endif()
   add_custom_target(cpp_examples DEPENDS ${ROBOT_BUS_EXAMPLE_TARGETS})
 endif()
 

@@ -732,7 +732,16 @@ void Ros2Bridge::spin_once(double timeout_secs) {
   if (!impl_) {
     throw Error("Ros2Bridge is empty");
   }
-  impl_->bus_node.spin_once(timeout_secs);
+  try {
+    impl_->bus_node.spin_once(timeout_secs);
+  } catch (const Error &e) {
+    // Ros2ToBus-only may leave the bus node with no sub/service/action server.
+    const std::string msg = e.what();
+    if (msg.find("nothing registered") != std::string::npos) {
+      return;
+    }
+    throw;
+  }
 }
 
 Ros2Bridge Ros2BridgeBuilder::build() && {

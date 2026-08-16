@@ -1,0 +1,11 @@
+# Optional action-shaped ROS interface (Goal / Result / Feedback).
+#
+# Pair with bus protobuf messages e.g. my_pkg.action.v1.{ComputeGoal,
+# ComputeFeedback, ComputeResult}. Same mapper idea as Fibonacci, but your
+# own types. Not mounted by the runnable AddTwoInts demo.
+
+int64 n
+---
+int64 result
+---
+int64 current

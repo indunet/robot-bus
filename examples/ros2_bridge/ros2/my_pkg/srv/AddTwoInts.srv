@@ -1,0 +1,15 @@
+# my_pkg/srv/AddTwoInts.srv
+#
+# ROS 2 interface definition for the custom bridge example.
+# Pair with the bus protobuf:
+#   examples/ros2_bridge/proto/my_pkg/srv/v1/add_two_ints.proto
+#
+# In a real ament package this file lives under my_pkg/srv/ and is built with
+# rosidl. This example keeps the .srv here so both sides of the bridge are
+# visible in-tree. Runtime smoke reuses system example_interfaces/AddTwoInts
+# (identical fields) so you do not need to colcon-build my_pkg first.
+
+int64 a
+int64 b
+---
+int64 sum
