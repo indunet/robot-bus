@@ -73,13 +73,6 @@ export default function StatusBar({ broker }: StatusBarProps) {
         <Metric label={t('metricPid')} value={String(broker.pid)} />
       </div>
 
-      <div className="w-px h-5 bg-bus-border shrink-0" />
-
-      <div className="flex items-center gap-4 shrink-0">
-        <AddrChip label="gRPC" addr={broker.grpcAddr} />
-        <AddrChip label="Web" addr={broker.webAddr} />
-      </div>
-
       {broker.totalErrors > 0 && (
         <>
           <div className="w-px h-5 bg-bus-border shrink-0" />
@@ -155,15 +148,6 @@ function Metric({
       <span className={`font-mono text-sm font-semibold tabular-nums ${accent ? 'text-bus-cyan' : 'text-bus-text'}`}>
         {value}
       </span>
-    </div>
-  )
-}
-
-function AddrChip({ label, addr }: { label: string; addr: string }) {
-  return (
-    <div className="flex items-center gap-1">
-      <span className="font-mono text-xs text-bus-muted">{label}:</span>
-      <span className="font-mono text-xs text-bus-text bg-bus-panel border border-bus-border px-1.5 py-0.5 rounded">{addr}</span>
     </div>
   )
 }
