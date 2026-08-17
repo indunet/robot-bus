@@ -26,7 +26,7 @@ const LEVEL_BG: Record<LogLevel, string> = {
 const ROW_HEIGHT_PX = 28
 
 export default function EventStream({ logs }: Props) {
-  const { t, dateLocale } = useI18n()
+  const { t, dateLocale, labelCase } = useI18n()
   const [filter, setFilter] = useState<LogLevel | 'ALL'>('ALL')
   const [paused, setPaused] = useState(false)
   const [entries, setEntries] = useState<LogEntry[]>(logs)
@@ -63,10 +63,10 @@ export default function EventStream({ logs }: Props) {
 
   const filterLabels = {
     ALL: t('filterAll'),
-    DEBUG: 'DEBUG',
-    INFO: 'INFO',
-    WARN: 'WARN',
-    ERROR: 'ERROR',
+    DEBUG: t('filterDebug'),
+    INFO: t('filterInfo'),
+    WARN: t('filterWarn'),
+    ERROR: t('filterError'),
   } as const
 
   return (
@@ -74,7 +74,7 @@ export default function EventStream({ logs }: Props) {
       <div className="flex items-center justify-between px-3 h-9 border-b border-bus-border shrink-0">
         <div className="flex items-center gap-2">
           <Terminal size={14} className="text-bus-cyan" />
-          <span className="font-mono text-xs font-bold text-bus-text tracking-widest uppercase">{t('eventsTitle')}</span>
+          <span className={`font-mono text-xs font-bold text-bus-text tracking-widest ${labelCase}`}>{t('eventsTitle')}</span>
           <span className="font-mono text-xs text-bus-muted">{t('eventsSub')}</span>
         </div>
         <div className="flex items-center gap-2">
@@ -115,16 +115,16 @@ export default function EventStream({ logs }: Props) {
       </div>
 
       <div className="flex items-center gap-2.5 px-3 h-8 border-b border-bus-border bg-bus-bg shrink-0">
-        <span className="font-mono text-xs text-bus-muted uppercase tracking-wider shrink-0 w-[96px]">
+        <span className={`font-mono text-xs text-bus-muted tracking-wider shrink-0 w-[96px] ${labelCase}`}>
           {t('colTime')}
         </span>
-        <span className="font-mono text-xs text-bus-muted uppercase tracking-wider shrink-0 w-11">
+        <span className={`font-mono text-xs text-bus-muted tracking-wider shrink-0 w-11 ${labelCase}`}>
           {t('colLevel')}
         </span>
-        <span className="font-mono text-xs text-bus-muted uppercase tracking-wider shrink-0 w-[110px]">
+        <span className={`font-mono text-xs text-bus-muted tracking-wider shrink-0 w-[110px] ${labelCase}`}>
           {t('colSource')}
         </span>
-        <span className="font-mono text-xs text-bus-muted uppercase tracking-wider min-w-0">
+        <span className={`font-mono text-xs text-bus-muted tracking-wider min-w-0 ${labelCase}`}>
           {t('colMessage')}
         </span>
       </div>

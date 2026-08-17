@@ -3,6 +3,7 @@
   "version": "1.2.1",
   "private": true,
   "scripts": {
+    "prebuild": "node ./scripts/bundle-docs.mjs",
     "build": "next build --webpack",
     "dev": "next dev --webpack -p 3020",
     "start": "next start",
@@ -18,7 +19,9 @@
     "next": "16.2.6",
     "react": "^19",
     "react-dom": "^19",
+    "react-markdown": "^10.1.0",
     "recharts": "^3.9.2",
+    "remark-gfm": "^4.0.1",
     "robot-bus": "file:../bindings/typescript",
     "shadcn": "^4.8.0",
     "tailwind-merge": "^3.3.1",

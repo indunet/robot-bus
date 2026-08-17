@@ -13,10 +13,10 @@ interface Props {
   maxBodyHeight?: string
 }
 
-const COLS = 'grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)_80px_96px_80px_56px_56px_96px]'
+const COLS = 'grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)_88px_96px_80px_64px_64px_96px]'
 
 export default function TopicTable({ topics, maxBodyHeight }: Props) {
-  const { t } = useI18n()
+  const { t, labelCase } = useI18n()
   const sorted = [...topics].sort((a, b) => b.msgPerSec - a.msgPerSec)
   const headers = [
     t('colTopic'),
@@ -44,7 +44,7 @@ export default function TopicTable({ topics, maxBodyHeight }: Props) {
             {headers.map((h, i) => (
               <span
                 key={`${h}-${i}`}
-                className={`font-mono text-xs text-bus-muted uppercase tracking-wider ${i > 1 ? 'text-right' : ''}`}
+                className={`font-mono text-xs text-bus-muted tracking-wider ${labelCase} ${i > 1 ? 'text-right' : ''}`}
               >
                 {h}
               </span>

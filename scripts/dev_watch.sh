@@ -31,7 +31,9 @@ console_sources_newer_than() {
     console/app console/components console/lib console/public \
     console/package.json console/next.config.mjs console/tsconfig.json \
     bindings/typescript/src \
-    -type f -newer "$stamp" -print -quit 2>/dev/null | grep -q .
+    -type f \
+    ! -name 'bundled-docs.generated.ts' \
+    -newer "$stamp" -print -quit 2>/dev/null | grep -q .
 }
 
 run_once() {
@@ -98,6 +100,7 @@ exec cargo watch \
   -i '**/tsconfig.tsbuildinfo' \
   -i '**/next-env.d.ts' \
   -i 'assets/console/**' \
+  -i 'console/lib/bundled-docs.generated.ts' \
   -i 'bindings/typescript/dist/**' \
   -i 'bindings/typescript/generated/**' \
   -s "bash \"$root/scripts/dev_watch.sh\" --once"

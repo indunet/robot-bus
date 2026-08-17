@@ -25,12 +25,12 @@ fn run(config: RobotBusConfig) -> Result<()> {
     let shutdown = Arc::new(AtomicBool::new(false));
     shutdown::install(shutdown.clone());
 
-    println!("robot_bus_broker starting message + service + action buses + gRPC + console…");
+    println!("robot_bus_broker starting message + service + action buses + WebSocket + console…");
     let broker = RobotBusBroker::start(config)?;
 
     #[cfg(feature = "ws")]
     println!(
-        "gRPC + WebSocket listening on http://{}",
+        "WebSocket RPC listening on http://{}",
         broker.api_listen()
     );
 

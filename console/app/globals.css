@@ -149,6 +149,22 @@
 }
 .value-pop { animation: value-pop 0.4s ease-out; }
 
+/* 网络拓扑画布：暗底 + 颗粒纹理，格线叠在上面 */
+.robot-bus-flow {
+  background-color: #0e1215 !important;
+  background-image:
+    radial-gradient(ellipse 85% 70% at 50% 38%, rgb(0 212 255 / 1.5%), transparent 62%),
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='4' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0.05 0 0 0 0 0.08 0 0 0 0 0.1 0 0 0 0.14 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  background-size: auto, 160px 160px;
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 1.5%),
+    inset 0 0 90px rgb(0 0 0 / 18%);
+}
+
+.robot-bus-flow .react-flow__background {
+  background-color: transparent !important;
+}
+
 /* 网络拓扑画布控件 */
 .robot-bus-flow-controls {
   overflow: hidden;
@@ -223,4 +239,136 @@
 }
 .bus-scroll::-webkit-scrollbar-corner {
   background: #141618;
+}
+
+/* Help page: bundled Markdown from docs/zh + docs/en */
+.doc-md {
+  font-family: var(--font-mono), ui-monospace, monospace;
+  font-size: 12px;
+  line-height: 1.65;
+  color: rgb(200 206 214 / 88%);
+}
+
+.doc-md h1,
+.doc-md h2,
+.doc-md h3,
+.doc-md h4 {
+  color: #00d4ff;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  scroll-margin-top: 0.5rem;
+}
+
+.doc-md h1 {
+  font-size: 15px;
+  margin: 0 0 0.75rem;
+}
+
+.doc-md h2 {
+  font-size: 13px;
+  margin: 1.25rem 0 0.5rem;
+}
+
+.doc-md h3,
+.doc-md h4 {
+  font-size: 12px;
+  margin: 1rem 0 0.4rem;
+}
+
+.doc-md p {
+  margin: 0 0 0.65rem;
+}
+
+.doc-md ul,
+.doc-md ol {
+  margin: 0 0 0.75rem;
+  padding-left: 1.25rem;
+}
+
+.doc-md li {
+  margin: 0.2rem 0;
+}
+
+.doc-md hr {
+  border: 0;
+  border-top: 1px solid #2a2f35;
+  margin: 1rem 0;
+}
+
+.doc-md a {
+  color: #00d4ff;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.doc-md a:hover {
+  color: #7ae7ff;
+}
+
+.doc-md strong {
+  color: #c8ced6;
+  font-weight: 650;
+}
+
+.doc-md code {
+  font-family: inherit;
+  font-size: 11px;
+  color: rgb(0 212 255 / 90%);
+  background: #121416;
+  border: 1px solid #2a2f35;
+  border-radius: 2px;
+  padding: 0.05rem 0.3rem;
+}
+
+.doc-md pre {
+  margin: 0.5rem 0 0.85rem;
+  overflow-x: auto;
+  border: 1px solid #2a2f35;
+  border-radius: 2px;
+  background: #121416;
+  padding: 0.65rem 0.75rem;
+}
+
+.doc-md pre code {
+  border: 0;
+  background: transparent;
+  padding: 0;
+  color: rgb(0 212 255 / 90%);
+  font-size: 11px;
+  line-height: 1.55;
+  white-space: pre;
+}
+
+.doc-md-table-wrap {
+  margin: 0.65rem 0 0.9rem;
+  overflow-x: auto;
+}
+
+.doc-md table {
+  width: max-content;
+  min-width: 100%;
+  border-collapse: collapse;
+  font-size: 11px;
+}
+
+.doc-md th,
+.doc-md td {
+  border: 1px solid #2a2f35;
+  padding: 0.35rem 0.55rem;
+  text-align: left;
+  vertical-align: top;
+}
+
+.doc-md th {
+  background: #141618;
+  color: #5a6370;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+}
+
+.doc-md blockquote {
+  margin: 0.5rem 0 0.85rem;
+  padding: 0.15rem 0 0.15rem 0.75rem;
+  border-left: 2px solid rgb(0 212 255 / 45%);
+  color: #5a6370;
 }

@@ -35,7 +35,10 @@ export default function StatusBar({ broker }: StatusBarProps) {
     'pulse-red bg-bus-red'
 
   const statusLabel =
-    broker.status === 'CONNECTING' ? t('connecting') : broker.status
+    broker.status === 'CONNECTING' ? t('connecting')
+    : broker.status === 'ONLINE' ? t('statusOnline')
+    : broker.status === 'DEGRADED' ? t('statusDegraded')
+    : t('statusOffline')
 
   return (
     <header className="h-11 bg-[#0e1012] border-b border-bus-border flex items-center px-4 gap-6 shrink-0 overflow-x-auto">
@@ -141,10 +144,11 @@ function Metric({
   value: string
   accent?: boolean
 }) {
+  const { labelCase } = useI18n()
   return (
     <div className="flex items-center gap-1.5">
       {icon}
-      <span className="font-mono text-xs text-bus-muted uppercase">{label}</span>
+      <span className={`font-mono text-xs text-bus-muted ${labelCase}`}>{label}</span>
       <span className={`font-mono text-sm font-semibold tabular-nums ${accent ? 'text-bus-cyan' : 'text-bus-text'}`}>
         {value}
       </span>

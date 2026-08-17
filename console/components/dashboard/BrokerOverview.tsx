@@ -16,12 +16,12 @@ export default function BrokerOverview({ broker }: Props) {
   const offline = broker.status === 'OFFLINE'
 
   const buses: BusEndpoint[] = [
-    { label: 'MSG XSUB', addr: broker.msgBusXSub },
-    { label: 'MSG XPUB', addr: broker.msgBusXPub },
-    { label: 'SVC  FE', addr: broker.svcFE },
-    { label: 'SVC  BE', addr: broker.svcBE },
-    { label: 'ACT  FE', addr: broker.actFE },
-    { label: 'ACT  BE', addr: broker.actBE },
+    { label: t('brokerMsgXSub'), addr: broker.msgBusXSub },
+    { label: t('brokerMsgXPub'), addr: broker.msgBusXPub },
+    { label: t('brokerSvcFE'), addr: broker.svcFE },
+    { label: t('brokerSvcBE'), addr: broker.svcBE },
+    { label: t('brokerActFE'), addr: broker.actFE },
+    { label: t('brokerActBE'), addr: broker.actBE },
   ]
 
   return (
@@ -41,7 +41,7 @@ export default function BrokerOverview({ broker }: Props) {
                       : 'bg-bus-red pulse-red'
                 }`}
               />
-              <span className="font-mono text-xs text-bus-muted w-[4.5rem] shrink-0">{b.label}</span>
+              <span className="font-mono text-xs text-bus-muted w-20 shrink-0">{b.label}</span>
               {connecting ? (
                 <span className="flex-1 h-3 rounded-sm status-shimmer" aria-hidden />
               ) : (
@@ -77,6 +77,7 @@ export function PanelHeader({
   /** Optional controls on the right (e.g. window picker). */
   trailing?: React.ReactNode
 }) {
+  const { labelCase } = useI18n()
   return (
     <div className="flex items-center justify-between gap-2 px-3 h-9 border-b border-bus-border">
       <div className="flex items-center gap-2 min-w-0">
@@ -85,7 +86,7 @@ export function PanelHeader({
         ) : (
           <div className="w-0.5 h-4 bg-bus-cyan shrink-0" />
         )}
-        <span className="font-mono text-xs font-bold text-bus-text tracking-widest uppercase truncate">
+        <span className={`font-mono text-xs font-bold text-bus-text tracking-widest truncate ${labelCase}`}>
           {title}
         </span>
       </div>

@@ -10,7 +10,7 @@ import {
 } from '@/lib/mock-data'
 import { PanelHeader } from './BrokerOverview'
 import { Activity, Radio, Cpu, GitBranch, HardDrive, Layers, Hash, Clock } from 'lucide-react'
-import { useI18n } from '@/lib/i18n'
+import { useI18n, type I18nValue } from '@/lib/i18n'
 import type { ReactNode } from 'react'
 
 interface Props {
@@ -82,7 +82,7 @@ export default function OverviewStats({ broker, topics, services, actions }: Pro
         <StatTile
           icon={<Clock size={12} />}
           label={t('statUptime')}
-          value={formatShortUptime(broker.uptime)}
+          value={formatShortUptime(broker.uptime, t)}
           accent="muted"
         />
       </div>
@@ -103,6 +103,7 @@ function StatTile({
   value: string
   accent: Accent
 }) {
+  const { labelCase } = useI18n()
   const valueColor =
     accent === 'cyan'
       ? 'text-bus-cyan'
@@ -116,12 +117,12 @@ function StatTile({
     <div className="border border-bus-border bg-bus-bg px-2.5 py-2 min-h-0 h-full flex flex-col justify-between gap-1">
       <div className="flex items-center gap-1.5 min-w-0">
         <span className="text-bus-muted shrink-0">{icon}</span>
-        <span className="font-mono text-[11px] leading-none text-bus-muted tracking-wider uppercase truncate">
+        <span className={`font-mono text-[11px] leading-none text-bus-muted tracking-wider truncate ${labelCase}`}>
           {label}
         </span>
       </div>
       <span
-        className={`font-mono text-[15px] font-semibold tabular-nums leading-none text-right ${valueColor}`}
+        className={`mt-auto w-full min-w-0 truncate text-right font-mono text-[15px] font-medium tabular-nums leading-5 ${valueColor}`}
       >
         {value}
       </span>
@@ -129,11 +130,11 @@ function StatTile({
   )
 }
 
-function formatShortUptime(s: number): string {
+function formatShortUptime(s: number, t: I18nValue['t']): string {
   const d = Math.floor(s / 86400)
   const h = Math.floor((s % 86400) / 3600)
   const m = Math.floor((s % 3600) / 60)
-  if (d > 0) return `${d}d ${h}h`
-  if (h > 0) return `${h}h ${m}m`
-  return `${m}m ${s % 60}s`
+  if (d > 0) return t('uptimeShortDh', { d, h })
+  if (h > 0) return t('uptimeShortHm', { h, m })
+  return t('uptimeShortMs', { m, s: s % 60 })
 }

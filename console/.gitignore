@@ -3,6 +3,7 @@ node_modules/
 .next/
 out/
 *.tsbuildinfo
+lib/bundled-docs.generated.ts
 
 # Env / local
 .env

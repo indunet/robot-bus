@@ -4,6 +4,7 @@ import { memo, useEffect, useMemo } from 'react'
 import {
   ReactFlow,
   Background,
+  BackgroundVariant,
   Controls,
   MiniMap,
   Handle,
@@ -219,7 +220,7 @@ function buildWireEdges(
 }
 
 const ProcessNode = memo(function ProcessNode({ data }: NodeProps) {
-  const { t } = useI18n()
+  const { t, labelCase } = useI18n()
   const d = data as ProcessNodeData
   const portCount = d.inputs.length + d.outputs.length
 
@@ -231,13 +232,12 @@ const ProcessNode = memo(function ProcessNode({ data }: NodeProps) {
           'polygon(0 0, calc(100% - 12px) 0, 100% 12px, 100% 100%, 8px 100%, 0 calc(100% - 8px))',
       }}
     >
-      <span className="pointer-events-none absolute left-0 top-0 z-10 h-[2px] w-16 bg-bus-cyan" />
       <span className="pointer-events-none absolute bottom-0 right-4 z-10 h-px w-10 bg-bus-cyan/70" />
 
       <div className="flex items-center gap-2.5 border-b border-bus-border bg-gradient-to-r from-bus-cyan/15 to-transparent px-3 py-2.5">
         <Hexagon size={26} className="shrink-0 text-bus-cyan" strokeWidth={1.75} />
         <div className="min-w-0 flex-1">
-          <div className="text-[9px] uppercase tracking-[0.2em] text-bus-cyan/65">
+          <div className={`text-[9px] tracking-[0.2em] text-bus-cyan/65 ${labelCase}`}>
             {t('topologyNode')}
           </div>
           <div className="truncate text-[13px] font-semibold tracking-wide" title={d.label}>
@@ -251,7 +251,7 @@ const ProcessNode = memo(function ProcessNode({ data }: NodeProps) {
 
       {d.inputs.length > 0 && (
         <div className="border-b border-bus-border/60 py-2">
-          <div className="px-3 pb-1.5 text-[9px] uppercase tracking-[0.18em] text-bus-green/70">
+          <div className={`px-3 pb-1.5 text-[9px] tracking-[0.18em] text-bus-green/70 ${labelCase}`}>
             {t('topologyInput')}
           </div>
           {d.inputs.map((p) => (
@@ -282,7 +282,7 @@ const ProcessNode = memo(function ProcessNode({ data }: NodeProps) {
 
       {d.outputs.length > 0 && (
         <div className="py-2">
-          <div className="px-3 pb-1.5 text-right text-[9px] uppercase tracking-[0.18em] text-bus-cyan/70">
+          <div className={`px-3 pb-1.5 text-right text-[9px] tracking-[0.18em] text-bus-cyan/70 ${labelCase}`}>
             {t('topologyOutput')}
           </div>
           {d.outputs.map((p) => (
@@ -358,30 +358,47 @@ export default function TopologyView({ topology }: Props) {
           e: graph.wires.length,
         })}
       />
-      <div className="flex-1 min-h-0" style={{ height: 'calc(100vh - 160px)' }}>
-        {empty ? (
-          <div className="flex items-center justify-center h-full text-bus-muted font-mono text-xs">
-            {t('topologyEmpty')}
-          </div>
-        ) : (
-          <ReactFlow
-            className="robot-bus-flow"
-            nodes={nodes}
-            edges={edges}
-            nodeTypes={nodeTypes}
-            onNodesChange={onNodesChange}
-            onEdgesChange={onEdgesChange}
-            fitView
-            fitViewOptions={{ padding: 0.18, maxZoom: 1.05 }}
-            minZoom={0.25}
-            maxZoom={1.8}
-            proOptions={{ hideAttribution: true }}
-            nodesDraggable
-            nodesConnectable={false}
-            elementsSelectable
-          >
-            <Background color="#2a2f35" gap={20} />
-            <Controls className="robot-bus-flow-controls" />
+      <div className="relative flex-1 min-h-0" style={{ height: 'calc(100vh - 160px)' }}>
+        <ReactFlow
+          className="robot-bus-flow"
+          nodes={nodes}
+          edges={edges}
+          nodeTypes={nodeTypes}
+          onNodesChange={onNodesChange}
+          onEdgesChange={onEdgesChange}
+          fitView
+          fitViewOptions={{ padding: 0.18, maxZoom: 1.05 }}
+          minZoom={0.25}
+          maxZoom={1.8}
+          proOptions={{ hideAttribution: true }}
+          nodesDraggable
+          nodesConnectable={false}
+          elementsSelectable
+        >
+          <Background
+            id="topo-dots"
+            variant={BackgroundVariant.Dots}
+            gap={18}
+            size={1}
+            color="rgba(92, 138, 154, 0.12)"
+            bgColor="transparent"
+          />
+          <Background
+            id="topo-minor"
+            variant={BackgroundVariant.Lines}
+            gap={36}
+            size={1}
+            color="rgba(0, 212, 255, 0.022)"
+          />
+          <Background
+            id="topo-major"
+            variant={BackgroundVariant.Lines}
+            gap={144}
+            size={1}
+            color="rgba(0, 212, 255, 0.045)"
+          />
+          <Controls className="robot-bus-flow-controls" />
+          {!empty && (
             <MiniMap
               className="robot-bus-flow-minimap"
               nodeColor="#007fa0"
@@ -391,7 +408,12 @@ export default function TopologyView({ topology }: Props) {
               pannable
               zoomable
             />
-          </ReactFlow>
+          )}
+        </ReactFlow>
+        {empty && (
+          <div className="pointer-events-none absolute inset-0 flex items-center justify-center font-mono text-xs text-bus-muted">
+            {t('topologyEmpty')}
+          </div>
         )}
       </div>
     </section>

@@ -50,15 +50,20 @@ export default function TankMap({
         />
         <div className="pointer-events-none absolute inset-0 font-mono text-[9px] leading-4">
           <div className="absolute top-2 left-2 max-w-[90%] space-y-0.5 break-all text-bus-text drop-shadow-[0_1px_2px_rgb(0_0_0_/80%)]">
-            <div>
-              {t('tankSubscribe')} {POSE_TOPIC}
-            </div>
-            <div>
-              {t('tankPublish')} {CMD_VEL_TOPIC}
-            </div>
-            <div>SRV {RESET_SERVICE}</div>
-            <div>ACT {POINT_NAV_ACTION}</div>
-            <div>ACT {MULTI_WAYPOINT_NAV_ACTION}</div>
+            {(
+              [
+                [t('tankSubscribe'), POSE_TOPIC],
+                [t('tankPublish'), CMD_VEL_TOPIC],
+                [t('tankSrv'), RESET_SERVICE],
+                [t('tankAct'), POINT_NAV_ACTION],
+                [t('tankAct'), MULTI_WAYPOINT_NAV_ACTION],
+              ] as const
+            ).map(([kind, path]) => (
+              <div key={path} className="flex gap-1.5">
+                <span className="w-8 shrink-0 text-bus-cyan">{kind}</span>
+                <span className="min-w-0 break-all">{path}</span>
+              </div>
+            ))}
           </div>
           <div className="absolute bottom-2 right-2 whitespace-nowrap text-right text-bus-cyan drop-shadow-[0_1px_2px_rgb(0_0_0_/80%)]">
             {t('tankPoseTitle')}  x {pose.x.toFixed(3)}  y {pose.y.toFixed(3)}  θ {pose.theta.toFixed(3)}

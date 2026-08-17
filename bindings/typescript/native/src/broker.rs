@@ -291,13 +291,13 @@ pub fn run_broker() -> Result<()> {
     let flag = Arc::new(AtomicBool::new(false));
     shutdown::install(flag.clone());
 
-    println!("robot-bus-broker starting message + service + action buses + gRPC + console…");
+    println!("robot-bus-broker starting message + service + action buses + WebSocket + console…");
     let broker = RustRobotBusBroker::start(config).map_err(anyhow_err)?;
     let mut broker = RobotBusBroker {
         inner: Some(broker),
     };
     println!(
-        "gRPC + WebSocket listening on http://{}",
+        "WebSocket RPC listening on http://{}",
         broker.api_listen()?
     );
     if let Some(addr) = broker.console_listen()? {

@@ -46,7 +46,7 @@ function ServicesPanel({
 }) {
   const { t } = useI18n()
   const sorted = [...services].sort((a, b) => b.callsPerSec - a.callsPerSec || b.calls - a.calls)
-  const grid = 'grid-cols-[1fr_56px_64px_64px_44px_64px_72px]'
+  const grid = 'grid-cols-[1fr_72px_64px_64px_48px_64px_72px]'
 
   return (
     <section className="border border-bus-border bg-bus-panel rounded-sm h-full flex flex-col min-h-0">
@@ -101,7 +101,7 @@ function ActionsPanel({
 }) {
   const { t } = useI18n()
   const sorted = [...actions].sort((a, b) => b.runsPerSec - a.runsPerSec || b.runs - a.runs)
-  const grid = 'grid-cols-[1fr_56px_56px_64px_44px_64px_72px]'
+  const grid = 'grid-cols-[1fr_72px_56px_64px_48px_64px_72px]'
 
   return (
     <section className="border border-bus-border bg-bus-panel rounded-sm h-full flex flex-col min-h-0">
@@ -163,10 +163,11 @@ function EmptyRow({ text }: { text: string }) {
 }
 
 function ColHeader({ cols, widths }: { cols: string[]; widths: string }) {
+  const { labelCase } = useI18n()
   return (
     <div className={`grid ${widths} items-center px-3 h-8 border-b border-bus-border bg-bus-bg`}>
       {cols.map((c, i) => (
-        <span key={c} className={`font-mono text-xs text-bus-muted uppercase tracking-wider ${i > 0 ? 'text-right' : ''}`}>
+        <span key={`${c}-${i}`} className={`font-mono text-xs text-bus-muted tracking-wider ${labelCase} ${i > 0 ? 'text-right' : ''}`}>
           {c}
         </span>
       ))}

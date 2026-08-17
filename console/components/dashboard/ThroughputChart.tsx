@@ -41,10 +41,11 @@ function WindowPicker({
   onChange: (next: RateWindowMinutes) => void
   accent: string
 }) {
+  const { t } = useI18n()
   return (
     <div
       role="radiogroup"
-      aria-label="chart window"
+      aria-label={t('chartWindowAria')}
       className="flex items-center gap-0.5 rounded-md border border-[#3a8fa3]/40 bg-[#0c1014]/90 p-0.5 shadow-[inset_0_1px_0_rgb(255_255_255_/06%)]"
     >
       {RATE_WINDOWS.map((mins) => {
@@ -70,7 +71,7 @@ function WindowPicker({
                 : undefined
             }
           >
-            {mins}m
+            {t('chartWindow', { n: mins })}
           </button>
         )
       })}
@@ -179,7 +180,7 @@ export default function ThroughputChart({
       title={t('throughputTitle')}
       subForWindow={(m) => t('throughputSub', { n: m })}
       seriesLabel={t('throughputSeries')}
-      unit="msg/s"
+      unit={t('unitMsgS')}
       stroke="#00d4ff"
       gradientId="gradCyan"
       icon={<BarChart2 size={14} />}
@@ -203,7 +204,7 @@ export function ServiceRateChart({
       title={t('svcRateTitle')}
       subForWindow={(m) => t('svcRateSub', { n: m })}
       seriesLabel={t('svcRateSeries')}
-      unit="calls/s"
+      unit={t('unitCallsS')}
       stroke="#f5a623"
       gradientId="gradAmber"
       icon={<Cpu size={14} />}
@@ -227,7 +228,7 @@ export function ActionRateChart({
       title={t('actRateTitle')}
       subForWindow={(m) => t('actRateSub', { n: m })}
       seriesLabel={t('actRateSeries')}
-      unit="runs/s"
+      unit={t('unitRunsS')}
       stroke="#3dd68c"
       gradientId="gradGreen"
       icon={<GitBranch size={14} />}
