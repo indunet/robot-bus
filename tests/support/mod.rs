@@ -96,34 +96,32 @@ pub fn free_ports(n: usize) -> Vec<u16> {
 }
 
 pub fn ephemeral_robot_bus_config() -> RobotBusConfig {
-    // Hold all listeners together so this config never picks the same port twice
-    // (sequential free_port() can return duplicates and flake on the second bind).
-    let mut ports = free_ports(8).into_iter();
-    let mut next = || ports.next().expect("ephemeral port");
+    // Bind `:0` and read the real endpoints from `RobotBusBroker` after start.
+    // `free_ports()` is TOCTOU: parallel tests (MessageProxy, other cargo-test
+    // binaries) can steal the probed port between drop and ZMQ/HTTP bind, which
+    // surfaces as "message bus failed to report bound endpoints".
     RobotBusConfig {
         message: BusConfig {
-            xsub_bind: format!("tcp://127.0.0.1:{}", next()),
-            xpub_bind: format!("tcp://127.0.0.1:{}", next()),
+            xsub_bind: "tcp://127.0.0.1:0".into(),
+            xpub_bind: "tcp://127.0.0.1:0".into(),
             bind_all_transports: false,
             ..BusConfig::default()
         },
         service: ServiceBusConfig {
-            frontend_bind: format!("tcp://127.0.0.1:{}", next()),
-            backend_bind: format!("tcp://127.0.0.1:{}", next()),
+            frontend_bind: "tcp://127.0.0.1:0".into(),
+            backend_bind: "tcp://127.0.0.1:0".into(),
             bind_all_transports: false,
             ..ServiceBusConfig::default()
         },
         action: ActionBusConfig {
-            frontend_bind: format!("tcp://127.0.0.1:{}", next()),
-            backend_bind: format!("tcp://127.0.0.1:{}", next()),
+            frontend_bind: "tcp://127.0.0.1:0".into(),
+            backend_bind: "tcp://127.0.0.1:0".into(),
             bind_all_transports: false,
             ..ActionBusConfig::default()
         },
         #[cfg(feature = "ws")]
         ws: WsGatewayConfig {
-            listen: format!("127.0.0.1:{}", next())
-                .parse()
-                .expect("grpc listen"),
+            listen: "127.0.0.1:0".parse().expect("grpc listen"),
             cors_origins: Vec::new(),
         },
         discovery: DiscoveryConfig {
@@ -134,9 +132,7 @@ pub fn ephemeral_robot_bus_config() -> RobotBusConfig {
         console: ConsoleBrokerConfig {
             enabled: false,
             tank_enabled: false,
-            listen: format!("127.0.0.1:{}", next())
-                .parse()
-                .expect("console listen"),
+            listen: "127.0.0.1:0".parse().expect("console listen"),
             cors_origins: vec![],
         },
     }

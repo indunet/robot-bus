@@ -7,6 +7,7 @@
 use anyhow::{Context, Result, anyhow};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::mpsc::{Receiver, RecvTimeoutError};
 use std::thread::{self, JoinHandle};
 use std::time::Duration;
 use zmq::Context as ZmqContext;
@@ -50,6 +51,33 @@ fn join_broker_thread(name: &str, handle: JoinHandle<Result<()>>) -> Result<()> 
         .with_context(|| format!("{name} exited with error"))
 }
 
+/// Wait for a bus thread to publish its resolved TCP binds (`:0` → real ports).
+///
+/// On disconnect, join the thread so a bind `EADDRINUSE` (or panic) is not
+/// flattened into a generic timeout error.
+fn recv_bound_endpoints(
+    name: &str,
+    bound_rx: Receiver<(String, String)>,
+    handle: JoinHandle<Result<()>>,
+) -> Result<((String, String), JoinHandle<Result<()>>)> {
+    match bound_rx.recv_timeout(Duration::from_secs(5)) {
+        Ok(pair) => Ok((pair, handle)),
+        Err(RecvTimeoutError::Timeout) => Err(anyhow!(
+            "{name} failed to report bound endpoints: timed out after 5s"
+        )),
+        Err(RecvTimeoutError::Disconnected) => {
+            let detail = match handle.join() {
+                Ok(Ok(())) => "thread exited without reporting binds".to_string(),
+                Ok(Err(err)) => format!("{err:#}"),
+                Err(panic) => format!("thread panicked: {panic:?}"),
+            };
+            Err(anyhow!(
+                "{name} failed to report bound endpoints: {detail}"
+            ))
+        }
+    }
+}
+
 /// Background handle for the message bus (XSUB/XPUB proxy).
 pub struct MessageBusBroker {
     pub xsub_bind: String,
@@ -85,9 +113,8 @@ impl MessageBusBroker {
                 Some(bound_tx),
             )
         });
-        let (xsub_bind, xpub_bind) = bound_rx
-            .recv_timeout(Duration::from_secs(5))
-            .map_err(|_| anyhow!("message bus failed to report bound endpoints"))?;
+        let ((xsub_bind, xpub_bind), handle) =
+            recv_bound_endpoints("message bus", bound_rx, handle)?;
         thread::sleep(STARTUP_SETTLE);
         Ok(Self {
             xsub_bind,
@@ -146,9 +173,8 @@ impl ServiceBusBroker {
                 Some(bound_tx),
             )
         });
-        let (frontend_bind, backend_bind) = bound_rx
-            .recv_timeout(Duration::from_secs(5))
-            .map_err(|_| anyhow!("service bus failed to report bound endpoints"))?;
+        let ((frontend_bind, backend_bind), handle) =
+            recv_bound_endpoints("service bus", bound_rx, handle)?;
         thread::sleep(STARTUP_SETTLE);
         Ok(Self {
             frontend_bind,
@@ -207,9 +233,8 @@ impl ActionBusBroker {
                 Some(bound_tx),
             )
         });
-        let (frontend_bind, backend_bind) = bound_rx
-            .recv_timeout(Duration::from_secs(5))
-            .map_err(|_| anyhow!("action bus failed to report bound endpoints"))?;
+        let ((frontend_bind, backend_bind), handle) =
+            recv_bound_endpoints("action bus", bound_rx, handle)?;
         thread::sleep(STARTUP_SETTLE);
         Ok(Self {
             frontend_bind,
@@ -313,14 +338,27 @@ struct WsGatewayHandle {
 
 #[cfg(feature = "ws")]
 impl WsGatewayHandle {
-    fn start(config: GatewayConfig) -> Result<Self> {
-        let listen = config.listen;
+    fn start(mut config: GatewayConfig) -> Result<Self> {
+        let requested = config.listen;
         // Bind on the calling thread so EADDRINUSE fails at start(), not only at stop().
-        let std_listener = std::net::TcpListener::bind(listen)
-            .with_context(|| format!("bind gRPC listen {listen}"))?;
+        let std_listener = std::net::TcpListener::bind(requested)
+            .with_context(|| format!("bind gRPC listen {requested}"))?;
         std_listener
             .set_nonblocking(true)
             .context("set gRPC listener nonblocking")?;
+        let listen = std_listener
+            .local_addr()
+            .context("gRPC listener local_addr")?;
+        config.listen = listen;
+        if let Some(disc) = config.discover.as_mut() {
+            let mut d = (**disc).clone();
+            d.api_url = connect_url_for_listen(listen);
+            #[cfg(feature = "console")]
+            if d.console_url.is_some() {
+                d.console_url = Some(d.api_url.clone());
+            }
+            *disc = Arc::new(d);
+        }
 
         let (shutdown_tx, shutdown_rx) = tokio::sync::watch::channel(false);
         let handle = thread::spawn(move || {
@@ -549,7 +587,8 @@ impl RobotBusBroker {
         let svc_be = rewrite_bind_host(&service.backend_bind, &advertise_host);
         let act_fe = rewrite_bind_host(&action.frontend_bind, &advertise_host);
         let act_be = rewrite_bind_host(&action.backend_bind, &advertise_host);
-        let discover = DiscoverResponse {
+        #[allow(unused_mut)] // mutated after WS bind when `ws` is enabled (`:0` → real port)
+        let mut discover = DiscoverResponse {
             broker_id: broker_id.clone(),
             domain_id: config.discovery.domain_id,
             advertise_host: advertise_host.clone(),
@@ -663,6 +702,14 @@ impl RobotBusBroker {
             };
             WsGatewayHandle::start(gateway)?
         };
+        #[cfg(feature = "ws")]
+        {
+            discover.api_url = connect_url_for_listen(ws.listen);
+            #[cfg(feature = "console")]
+            if discover.console_url.is_some() {
+                discover.console_url = Some(discover.api_url.clone());
+            }
+        }
 
         // Console-only HTTP server — only needed when `grpc` is disabled; otherwise
         // the console shares the gRPC gateway's listener started above.
