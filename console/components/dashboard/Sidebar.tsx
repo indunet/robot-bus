@@ -39,8 +39,14 @@ export default function Sidebar({ active, onSelect, onOpenTank, tankEnabled = tr
     { id: 'services', label: t('navServices'), short: t('navServicesShort'), icon: <Cpu size={16} /> },
     { id: 'actions', label: t('navActions'), short: t('navActionsShort'), icon: <Zap size={16} /> },
     { id: 'logs', label: t('navEvents'), short: t('navEventsShort'), icon: <ScrollText size={16} /> },
-    { id: 'docs', label: t('navDocs'), short: t('navDocsShort'), icon: <BookOpen size={16} /> },
   ]
+
+  const navButtonClass = (isActive: boolean) =>
+    `w-12 h-12 flex flex-col items-center justify-center gap-0.5 rounded transition-colors group ${
+      isActive
+        ? 'bg-bus-cyan/15 text-bus-cyan'
+        : 'text-bus-muted hover:text-bus-text hover:bg-bus-panel'
+    }`
 
   return (
     <aside className="w-16 bg-[#0e1012] border-r border-bus-border flex flex-col items-center py-3 gap-1.5 shrink-0">
@@ -49,11 +55,7 @@ export default function Sidebar({ active, onSelect, onOpenTank, tankEnabled = tr
           key={item.id}
           onClick={() => onSelect(item.id)}
           title={item.label}
-          className={`w-12 h-12 flex flex-col items-center justify-center gap-0.5 rounded transition-colors group ${
-            active === item.id
-              ? 'bg-bus-cyan/15 text-bus-cyan'
-              : 'text-bus-muted hover:text-bus-text hover:bg-bus-panel'
-          }`}
+          className={navButtonClass(active === item.id)}
         >
           {item.icon}
           <span className="font-mono text-[9px] tracking-widest">{item.short}</span>
@@ -73,6 +75,18 @@ export default function Sidebar({ active, onSelect, onOpenTank, tankEnabled = tr
           </button>
         </>
       )}
+      <div className="mt-auto flex flex-col items-center gap-1.5 pt-1.5">
+        <div className="w-8 border-t border-bus-border" />
+        <button
+          type="button"
+          onClick={() => onSelect('docs')}
+          title={t('navDocs')}
+          className={navButtonClass(active === 'docs')}
+        >
+          <BookOpen size={16} />
+          <span className="font-mono text-[9px] tracking-widest">{t('navDocsShort')}</span>
+        </button>
+      </div>
     </aside>
   )
 }

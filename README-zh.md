@@ -7,12 +7,10 @@
 [![crates.io](https://img.shields.io/crates/v/robot-bus.svg?color=f74c00)](https://crates.io/crates/robot-bus)
 [![PyPI](https://img.shields.io/pypi/v/robot-bus.svg?color=3775a9)](https://pypi.org/project/robot-bus/)
 [![npm](https://img.shields.io/npm/v/robot-bus.svg?color=cb3837)](https://www.npmjs.com/package/robot-bus)
-[![Maven Central](https://img.shields.io/maven-central/v/org.indunet/robot-bus.svg?label=Maven%20Central&color=007396)](https://central.sonatype.com/artifact/org.indunet/robot-bus)
-[![License](https://img.shields.io/badge/License-Apache_2.0-green.svg)](https://opensource.org/licenses/Apache-2.0)
+[![Maven Central](https://img.shields.io/maven-central/v/org.indunet/robot-bus.svg?label=Maven%20Central)](https://central.sonatype.com/artifact/org.indunet/robot-bus)
+[![License](https://img.shields.io/badge/license-Apache%202.0-4EB1BA.svg)](https://www.apache.org/licenses/LICENSE-2.0.html)
 
-Robot Bus 是一套轻量级、多语言的通信框架，提供类 ROS 2 的编程模型（topic / service / action、`Node` + `spin`），底层基于 ZeroMQ。它不是要取代 ROS 2，而是把 ROS 生态扩展到完整 ROS 2 栈不易部署或偏重的环境（例如 Android、Windows、浏览器客户端）。
-
-API 刻意贴近 ROS 2 的命名与用法，便于后续迁成 ROS 2 节点；也可以继续跑在 robot-bus 上，通过 [ROS 2 桥](#5-ros-2-桥) 与现有 ROS 2 图互通。核心运行时不依赖 ROS 发行版，不必 `source setup.bash`，也不搭 workspace：一个 broker 进程加任一语言 SDK 即可。
+Robot Bus 是一套轻量级、多语言的通信 **框架**，提供类 ROS 2 的编程模型（topic / service / action、`Node` + `spin`），底层基于 ZeroMQ。它不是要取代 ROS 2，而是把 ROS 生态扩展到完整 ROS 2 栈不易部署或偏重的环境（例如 Android、Windows、浏览器客户端）。
 
 SDK：**Rust**、**Python**、**TypeScript**、**C++**、**Java**、**Android**。
 
@@ -20,25 +18,80 @@ SDK：**Rust**、**Python**、**TypeScript**、**C++**、**Java**、**Android**�
 
 *Web 控制台* — Overview / Topics / Services / Actions / Topology。启动 `robot-bus-broker` 后打开 [http://127.0.0.1:15570](http://127.0.0.1:15570)。详见 [§4 Web 控制台](#4-web-控制台) 与 [小坦克示例](#32-小坦克示例)。
 
-> Node 编程模型——`Context` / `Node`、topic pub-sub、service、action（`send_goal` → GoalHandle → `result` / `cancel`）以及 `spin`——为稳定的公开 API。网关客户端使用 **WebSocket RPC**（`Node::ws` / `Node.ws`；传输 `"ws"`）。`"grpc"` 与 `--grpc-listen` 仍是别名。
+## *设计理念*
 
-## 1. 典型应用场景
+- **类 ROS 2 模型，更轻的运行时：** 提供 topic、service、action 以及 `Node` + `spin`，不依赖 ROS 发行版，不必 `source setup.bash`，也不搭 workspace —— 一个 broker 进程加任一语言 SDK 即可。
+- **API 可迁移：** 命名与用法贴近 ROS 2，便于后续迁成 ROS 2 节点；也可以继续跑在 robot-bus 上，通过 [ROS 2 桥](#5-ros-2-桥) 与现有 ROS 2 图互通。
+- **面向真实部署：** 在 Android、Windows、浏览器以及其他不便安装完整 ROS 2 的主机上，使用同一套编程模型。
 
-### 1.1 轻量级的类 ROS 2 通信
+## *核心功能*
+
+- **类 ROS 2 原语：** Topic 发布/订阅、service、action（`send_goal` → GoalHandle → `result` / `cancel`）、定时器与参数。
+- **一个 broker，多种语言：** Rust、Python、TypeScript、C++、Java、Android SDK 接入同一条总线。
+- **内嵌 Web 控制台：** Overview、Topics、Services、Actions、Topology，以及内置小坦克示例 —— 无需额外前端进程。
+- **可选 ROS 2 桥：** 进程内用 `rclrs` / `rclpy` / `rclcpp` 桥接 topic / service / action（Humble / Jazzy）。未启用桥时，核心 SDK 不依赖 ROS。
+- **Protobuf 契约：** 全部载荷使用 Protocol Buffers（不是 ROS CDR），目录与常见 ROS 2 包名对齐，见 [`proto/`](proto/)。
+- **浏览器与远程客户端：** WebSocket RPC（`Node::ws` / `Node.ws`；传输 `"ws"`）。`"grpc"` 与 `--grpc-listen` 仍是别名。
+
+Node 编程模型——`Context` / `Node`、topic pub-sub、service、action 以及 `spin`——为稳定的公开 API。
+
+### *文档*
+
+- 各语言指南：[`docs/zh/`](docs/zh/)（Python / Rust / TypeScript / C++ / Java / Android）
+- ROS 2 桥：[`docs/zh/ros2-bridge.md`](docs/zh/ros2-bridge.md)
+- 迁移手册：[`docs/skills/`](docs/skills/)
+- 性能报告：[`docs/zh/perf-report.md`](docs/zh/perf-report.md)
+
+### *安装*
+
+* Python（含 `robot-bus-broker` 命令行）
+
+```bash
+pip install robot-bus
+```
+
+* Rust
+
+```toml
+robot-bus = "1.2.1"
+```
+
+* npm
+
+```bash
+npm install robot-bus
+```
+
+* Maven
+
+```xml
+<dependency>
+    <groupId>org.indunet</groupId>
+    <artifactId>robot-bus</artifactId>
+    <version>1.2.1</version>
+</dependency>
+```
+
+C++ 安装包（DEB / MSI）与 Android（`org.indunet:robot-bus-android`）见 [§3.6](#36-其他语言)。
+
+
+## *1. 典型应用场景*
+
+### *1.1 轻量级的类 ROS 2 通信*
 
 当无需完整 ROS 2 安装时，robot-bus 以更小的体积提供相近的编程模型，适用于原型验证、工具链、Windows 主机以及资源受限的部署。
 
-### 1.2 与 ROS 2 组成异构系统
+### *1.2 与 ROS 2 组成异构系统*
 
 在 Ubuntu（或其他 Linux 主机）上照常运行 ROS 2，同时将部分计算部署在 Android 等不便安装完整 ROS 2 的设备上。这些节点使用 robot-bus，保持相同的话题 / 服务 / Action 模型，再通过 ROS 2 桥接入 ROS 2 图。
 
-### 1.3 在 bus 上原型开发，再迁移至 ROS 2
+### *1.3 在 bus 上原型开发，再迁移至 ROS 2*
 
 robot-bus 轻量、环境简单，适合先完成节点原型与联调验证，再将已验证的设计迁移为原生 ROS 2 节点；也可继续运行在 bus 上，仅桥接需要进入 ROS 2 图的接口。
 
 迁移手册（给开发者 / Agent 用）：[`docs/skills/ros2-to-robot-bus`](docs/skills/ros2-to-robot-bus/SKILL.md) 与 [`docs/skills/robot-bus-to-ros2`](docs/skills/robot-bus-to-ros2/SKILL.md)。在 Cursor 里 `@` 这两个文件，或直接说「把某包迁到 robot-bus / ROS 2」。
 
-## 2. 架构
+## *2. 架构*
 
 ```
   应用 (Python / Rust / C++ / Java / Android / …)
@@ -52,9 +105,9 @@ robot-bus 轻量、环境简单，适合先完成节点原型与联调验证，�
                ROS 2 图
 ```
 
-## 3. 快速开始
+## *3. 快速开始*
 
-### 3.1 安装并启动 broker
+### *3.1 安装并启动 broker*
 
 ```bash
 pip install robot-bus
@@ -75,17 +128,19 @@ with robot_bus.RobotBusBroker.start() as broker:
     pass
 ```
 
-### 3.2 小坦克示例
+### *3.2 小坦克示例*
+
+![Web 控制台中的小坦克仿真](docs/images/tank-sim.png)
 
 内置的小坦克仿真，无需先写代码即可看到 topic 端到端跑通：
 
 1. 启动 broker（`robot-bus-broker`）。
 2. 打开 **http://127.0.0.1:15570**，在侧栏点击 **TANK**（或访问 `/tank/`）。
-3. 点击面板后，用 **方向键 / WASD** 遥控；也可切换到点选导航，在地图上 **鼠标点击** 下发目标点。
+3. 点击面板后，用 **方向键** 遥控；也可切换到点选导航，在地图上 **鼠标点击** 下发目标点。
 
 打开面板会拉起进程内 tank 节点：订阅 `/robot_bus/tank/cmd_vel`，发布 `/robot_bus/tank/pose`。多浏览器共享同一场景（遥控 last-writer-wins）。不需要时可加 `--no-tank`。
 
-### 3.3 Topic（发布 / 订阅）
+### *3.3 Topic（发布 / 订阅）*
 
 ```python
 import robot_bus
@@ -103,7 +158,7 @@ imu_pub.publish(Imu(linear_acceleration=Vector3(x=0.0, y=0.0, z=9.8)))
 # node.spin()
 ```
 
-### 3.4 Service
+### *3.4 Service*
 
 ```python
 import robot_bus
@@ -127,7 +182,7 @@ svc = client.create_client(
 # server.spin()
 ```
 
-### 3.5 Action
+### *3.5 Action*
 
 ```python
 import robot_bus
@@ -165,7 +220,7 @@ goal = act.send_goal(
 
 更多说明见 [`docs/zh/python-api.md`](docs/zh/python-api.md)。
 
-### 3.6 其他语言
+### *3.6 其他语言*
 
 | 语言 | 包 / 产物 | 文档 |
 |------|-----------|------|
@@ -177,7 +232,7 @@ goal = act.send_goal(
 | Android | Maven Central `org.indunet:robot-bus-android` | [`docs/zh/android-api.md`](docs/zh/android-api.md) |
 | ROS 2 桥 | 分语言（`rclrs` / `rclpy` / `rclcpp`） | [`docs/zh/ros2-bridge.md`](docs/zh/ros2-bridge.md) |
 
-## 4. Web 控制台
+## *4. Web 控制台*
 
 Broker 内嵌监控界面（Overview、Topics、Services、Actions、Topology、日志）——截图见本文开头。执行 `robot-bus-broker`（或 `RobotBusBroker.start()`）后，用浏览器打开：
 
@@ -185,7 +240,7 @@ Broker 内嵌监控界面（Overview、Topics、Services、Actions、Topology、
 
 上手可先试侧栏 **TANK** 的 [小坦克示例](#32-小坦克示例)。与 API / WebSocket 网关同端口。可用 `--no-console` 关闭。前端源码在 [`console/`](console/)；本地改 UI 见 [`console/README.md`](console/README.md)。
 
-## 5. ROS 2 桥
+## *5. ROS 2 桥*
 
 进程内在 robot-bus 与 ROS 2 之间桥接 topic / service / action。各语言使用原生客户端（`rclrs` / `rclpy` / `rclcpp`）。官方支持：**Humble**、**Jazzy**。未启用桥时，核心 SDK 不依赖 ROS。
 
@@ -224,7 +279,7 @@ bridge.spin()
 
 完整说明与示例（Rust / Python / C++）：[`docs/zh/ros2-bridge.md`](docs/zh/ros2-bridge.md)。若要做整包迁移（而不只是桥接），见 [`docs/skills/`](docs/skills/)。
 
-## 6. Protobuf 消息
+## *6. Protobuf 消息*
 
 robot-bus 的全部载荷——**topic**、**service**、**action**——均以 **Protocol Buffers** 定义与序列化。线上是 protobuf 字节流（不是 ROS CDR）。typed API 在创建时绑定 protobuf 消息类型并自动编解码；省略类型则按原始字节收发。
 
@@ -253,7 +308,7 @@ proto/<package>/{msg|srv|action|grpc}/v1/*.proto
 
 生成代码随发布包分发（PyPI、crates.io、npm、DEB/MSI、Maven），使用方无需安装 `protoc`。消息模块处于 `robot_bus` 命名空间，并不在线上占用顶层 ROS 包名。完整列表见 [`proto/`](proto/)。
 
-### 自定义消息
+### *6.1 自定义消息*
 
 内置类型不够时，按同样的 protobuf 约定自行定义即可。typed API 接受任意 protobuf 消息类（不必放进 robot-bus 仓库）。
 
@@ -288,10 +343,29 @@ pub.publish(pb.BatteryStatus(voltage=48.0, percentage=0.85))
 
 若希望把类型贡献进本仓库的内置集合：把文件放到 [`proto/`](proto/) 对应目录，再执行 `just gen-python`（或其他 `just gen-*`）重新生成。
 
-## 7. 参与贡献
+## *7. 贡献*
 
-如果你对这个项目感兴趣，愿意抽出一部分时间承担开发、测试或文档类的工作，我们都非常欢迎。可通过邮箱联系：[deng_ran@aliyun.com](mailto:deng_ran@aliyun.com)。
+如果你对本项目感兴趣并希望参与（开发/测试/文档），欢迎通过邮箱联系：<deng_ran@aliyun.com>
 
-## 8. 开源协议
+开发 *Robot Bus* 并非出于盈利，而是在纷繁日常里，写代码能让我回到内心的宁静。若它也对你有所助益，便是我持续打磨的动力。
 
-[Apache License 2.0](LICENSE)
+
+## *8. 许可*
+
+Robot Bus 以 [Apache 2.0 许可](LICENSE) 发布。
+
+```
+Copyright 2026 indunet.org
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at the following link.
+
+     http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+```

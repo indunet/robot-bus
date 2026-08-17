@@ -16,7 +16,7 @@ import {
   type NodeProps,
 } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
-import { Cpu, Network } from 'lucide-react'
+import { Hexagon, Network } from 'lucide-react'
 import { PanelHeader } from './BrokerOverview'
 import { useI18n } from '@/lib/i18n'
 import type { TopologyInfo } from '@/lib/mock-data'
@@ -147,28 +147,49 @@ function deriveProcessGraph(topo: TopologyInfo): {
   return { processes, wires }
 }
 
+function estimateCardHeight(p: { inputs: Port[]; outputs: Port[] }): number {
+  const header = 54
+  const sectionChrome = 42
+  const row = 34
+  let h = header
+  if (p.inputs.length > 0) h += sectionChrome + p.inputs.length * row
+  if (p.outputs.length > 0) h += sectionChrome + p.outputs.length * row
+  if (p.inputs.length === 0 && p.outputs.length === 0) h += 48
+  return h
+}
+
 function layoutProcessNodes(
   processes: { id: string; label: string; inputs: Port[]; outputs: Port[] }[],
   prev: Node[],
 ): Node[] {
   const prevPos = new Map(prev.map((n) => [n.id, n.position]))
+  const cardW = 360
+  const gapX = 72
+  const gapY = 56
   const cols = Math.max(1, Math.ceil(Math.sqrt(processes.length)))
-  return processes.map((p, i) => {
-    const col = i % cols
-    const row = Math.floor(i / cols)
-    return {
-      id: p.id,
-      type: 'process',
-      position: prevPos.get(p.id) ?? { x: 48 + col * 420, y: 42 + row * 240 },
-      data: {
-        label: p.label,
-        inputs: p.inputs,
-        outputs: p.outputs,
-      } satisfies ProcessNodeData,
-      sourcePosition: Position.Right,
-      targetPosition: Position.Left,
+  const positions: { x: number; y: number }[] = new Array(processes.length)
+  let y = 42
+  for (let start = 0; start < processes.length; start += cols) {
+    const end = Math.min(start + cols, processes.length)
+    let rowH = 0
+    for (let i = start; i < end; i += 1) {
+      rowH = Math.max(rowH, estimateCardHeight(processes[i]))
+      positions[i] = { x: 48 + (i - start) * (cardW + gapX), y }
     }
-  })
+    y += rowH + gapY
+  }
+  return processes.map((p, i) => ({
+    id: p.id,
+    type: 'process',
+    position: prevPos.get(p.id) ?? positions[i],
+    data: {
+      label: p.label,
+      inputs: p.inputs,
+      outputs: p.outputs,
+    } satisfies ProcessNodeData,
+    sourcePosition: Position.Right,
+    targetPosition: Position.Left,
+  }))
 }
 
 function buildWireEdges(
@@ -214,9 +235,7 @@ const ProcessNode = memo(function ProcessNode({ data }: NodeProps) {
       <span className="pointer-events-none absolute bottom-0 right-4 z-10 h-px w-10 bg-bus-cyan/70" />
 
       <div className="flex items-center gap-2.5 border-b border-bus-border bg-gradient-to-r from-bus-cyan/15 to-transparent px-3 py-2.5">
-        <div className="flex h-8 w-8 shrink-0 items-center justify-center border border-bus-cyan/35 bg-bus-cyan/10 text-bus-cyan">
-          <Cpu size={15} />
-        </div>
+        <Hexagon size={26} className="shrink-0 text-bus-cyan" strokeWidth={1.75} />
         <div className="min-w-0 flex-1">
           <div className="text-[9px] uppercase tracking-[0.2em] text-bus-cyan/65">
             {t('topologyNode')}

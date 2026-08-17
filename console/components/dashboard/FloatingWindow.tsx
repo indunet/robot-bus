@@ -10,11 +10,14 @@ export interface WindowPosition {
 
 interface Props {
   title: string
+  titleIcon?: ReactNode
   children: ReactNode
   position: WindowPosition
   width: number
   height: number
   zIndex: number
+  /** When false, no dim overlay — dashboard stays clickable and outside clicks do not close. */
+  modal?: boolean
   onPositionChange: (position: WindowPosition) => void
   onBringToFront: () => void
   onClose: () => void
@@ -28,11 +31,13 @@ function setDocumentDragLock(locked: boolean) {
 
 export default function FloatingWindow({
   title,
+  titleIcon,
   children,
   position,
   width,
   height,
   zIndex,
+  modal = true,
   onPositionChange,
   onBringToFront,
   onClose,
@@ -93,19 +98,21 @@ export default function FloatingWindow({
 
   return (
     <>
-      <div
-        aria-hidden="true"
-        className="fixed inset-0 bg-black/40 backdrop-blur-[2px]"
-        style={{ zIndex: Math.max(1, zIndex - 1) }}
-        onPointerDown={(event) => {
-          event.preventDefault()
-          onClose()
-        }}
-      />
+      {modal ? (
+        <div
+          aria-hidden="true"
+          className="fixed inset-0 bg-black/40"
+          style={{ zIndex: Math.max(1, zIndex - 1) }}
+          onPointerDown={(event) => {
+            event.preventDefault()
+            onClose()
+          }}
+        />
+      ) : null}
       <section
         role="dialog"
         aria-label={title}
-        aria-modal="true"
+        aria-modal={modal}
         onPointerDown={onBringToFront}
         className="fixed flex flex-col overflow-hidden rounded-lg border border-[#3a8fa3]/50 bg-bus-panel/90 shadow-[0_1px_0_rgb(255_255_255_/06%)_inset,0_0_0_1px_rgb(0_183_216_/18%),0_0_32px_rgb(0_183_216_/10%),0_28px_56px_rgb(0_0_0_/55%),0_10px_20px_rgb(0_0_0_/35%)] backdrop-blur-md"
         style={{
@@ -130,9 +137,16 @@ export default function FloatingWindow({
           onPointerCancel={() => endDrag()}
           className="relative z-10 h-8 shrink-0 flex items-center justify-between px-2.5 border-b border-[#3a8fa3]/28 bg-bus-bg/70 cursor-move select-none touch-none shadow-[0_1px_0_rgb(255_255_255_/05%)_inset]"
         >
-          <span className="font-mono text-[10px] tracking-wider text-bus-cyan drop-shadow-[0_1px_2px_rgb(0_0_0_/55%)]">
-            {title}
-          </span>
+          <div className="flex min-w-0 items-center gap-1.5">
+            {titleIcon ? (
+              <span className="flex h-4 w-4 shrink-0 items-center justify-center" aria-hidden="true">
+                {titleIcon}
+              </span>
+            ) : null}
+            <span className="truncate font-mono text-[10px] tracking-wider text-bus-cyan drop-shadow-[0_1px_2px_rgb(0_0_0_/55%)]">
+              {title}
+            </span>
+          </div>
           <button
             type="button"
             aria-label={`Close ${title}`}
@@ -143,7 +157,7 @@ export default function FloatingWindow({
             <X size={13} />
           </button>
         </div>
-        <div className="relative z-10 flex-1 min-h-0 overflow-auto">{children}</div>
+        <div className="relative z-10 flex-1 min-h-0 overflow-hidden">{children}</div>
       </section>
     </>
   )

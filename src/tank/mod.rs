@@ -56,6 +56,7 @@ pub const DEFAULT_STOP_GRACE: Duration = Duration::from_secs(2);
 pub struct TankEndpoints {
     pub message_xsub: String,
     pub message_xpub: String,
+    pub service_frontend: String,
     pub service_backend: String,
     pub action_backend: String,
 }
@@ -180,6 +181,7 @@ fn run_loop(
     let mut opts = NodeOptions::tcp();
     opts.message_xsub = Some(endpoints.message_xsub);
     opts.message_xpub = Some(endpoints.message_xpub);
+    opts.service_frontend = Some(endpoints.service_frontend);
     opts.service_backend = Some(endpoints.service_backend);
     opts.action_backend = Some(endpoints.action_backend);
 
@@ -678,6 +680,7 @@ mod tests {
             TankEndpoints {
                 message_xsub: "tcp://127.0.0.1:1".into(),
                 message_xpub: "tcp://127.0.0.1:1".into(),
+                service_frontend: "tcp://127.0.0.1:1".into(),
                 service_backend: "tcp://127.0.0.1:1".into(),
                 action_backend: "tcp://127.0.0.1:1".into(),
             },

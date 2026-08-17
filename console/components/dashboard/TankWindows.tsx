@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { Bot } from 'lucide-react'
 import TankPanel from '@/components/tank/TankPanel'
 import { useI18n } from '@/lib/i18n'
 import FloatingWindow, { type WindowPosition } from './FloatingWindow'
@@ -38,10 +39,12 @@ export default function TankWindows({ open, onClose }: Props) {
   return (
     <FloatingWindow
       title={t('tankWindowTitle')}
+      titleIcon={<Bot size={14} className="text-bus-cyan" strokeWidth={2} />}
       position={position}
       width={WINDOW_WIDTH}
       height={WINDOW_HEIGHT}
       zIndex={50}
+      modal={false}
       onPositionChange={setPosition}
       onBringToFront={() => {}}
       onClose={onClose}

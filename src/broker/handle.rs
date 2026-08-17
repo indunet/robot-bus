@@ -618,6 +618,7 @@ impl RobotBusBroker {
             let tank = TankManager::new(TankEndpoints {
                 message_xsub: bind_to_connect(&message.xsub_bind),
                 message_xpub: bind_to_connect(&message.xpub_bind),
+                service_frontend: bind_to_connect(&service.frontend_bind),
                 service_backend: bind_to_connect(&service.backend_bind),
                 action_backend: bind_to_connect(&action.backend_bind),
             });
