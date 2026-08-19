@@ -353,10 +353,7 @@ jobs:
         shell: bash
         run: |
           set -eux
-          # Match scripts/build_cpp_install_tree.sh: broker only needs grpc+console.
-          # Default features pull FFmpeg (and other tool deps) that Windows CI does not install.
-          cargo build --release --bin robot_bus_broker \
-            --no-default-features --features ws,console
+          cargo build --release --bin robot_bus_broker
           cargo build --release --manifest-path bindings/cpp/native/Cargo.toml
 
       - name: Build msgs (CMake)

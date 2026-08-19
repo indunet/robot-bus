@@ -299,7 +299,7 @@ pub struct ConsoleBrokerConfig {
     pub tank_enabled: bool,
     /// Listen address used only when the `grpc` feature is disabled.
     pub listen: SocketAddr,
-    /// Explicit CORS allowlist for cross-origin Studio / browser clients.
+    /// Explicit CORS allowlist for cross-origin browser clients.
     /// Empty (default) disables CORS headers. Never uses `*`.
     pub cors_origins: Vec<String>,
 }

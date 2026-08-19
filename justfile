@@ -4,7 +4,6 @@
 # Layout: Rust core at repo root; language SDKs under bindings/;
 # benches/; tests/ for interop; console/ is broker monitoring UI;
 # Console TANK panel pairs with in-process src/tank (session-acquired).
-# Tool nodes / TF / Studio live in sibling repo robot-bus-tools.
 
 set shell := ["bash", "-eu", "-o", "pipefail", "-c"]
 
@@ -230,5 +229,3 @@ check-ros2-shim:
 	RUSTFLAGS='--cfg ros_distro="humble"' cargo check --features ros2-shim
 	RUSTFLAGS='--cfg ros_distro="humble"' cargo check --manifest-path bindings/cpp/native/Cargo.toml --features ros2-shim
 	RUSTFLAGS='--cfg ros_distro="humble"' cargo check --lib --no-default-features --features extension-module,ws,ros2-shim
-
-# Tool nodes moved to sibling repo robot-bus-tools.

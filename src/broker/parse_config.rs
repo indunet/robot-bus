@@ -353,7 +353,7 @@ Console options (feature `console`, default on):\n  \
 --console-listen HOST:PORT     Alias of --api-listen (single-port UI + API)\n  \
 --no-console                   Do not start the Web console UI\n  \
 --no-tank                      Hide tank demo in console; reject /api/v1/tank/session\n  \
---console-cors-origin ORIGIN   Allow Studio/browser origin (repeatable)\n\n\
+--console-cors-origin ORIGIN   Allow browser origin (repeatable)\n\n\
 --help, -h                     Show this help\n\n\
 Embed in code: robot_bus::RobotBusBroker::start(RobotBusConfig { ... }).\n\
 Clients: GET http://HOST:15570/api/v1/discover then connect to returned ZMQ endpoints.\n"

@@ -34,8 +34,6 @@ UI copy supports EN / 中文 (default EN; preference in `localStorage` key `robo
 
 Sidebar **TOPOLOGY**: pub/sub graph from best-effort control-plane service registration on `Node::create_publisher` / `create_subscription` (`/robot_bus/topology/register` and `/robot_bus/topic_type/register`). Endpoints expire after ~30s without refresh; crashed processes rely on TTL cleanup.
 
-Domain visualizers, Flow plumbing, and LIVE / WHEP live in the sibling **[robot-bus-tools](https://github.com/indunet/robot-bus-tools)** Studio — not in this console.
-
 ## Development (recommended)
 
 Start the broker, then hot-reload the frontend. `pnpm dev` proxies `/api/*` to the broker;
