@@ -44,8 +44,9 @@ impl MessageGatewayService {
     pub fn open_subscribe(
         &self,
         topic: String,
+        qos_depth: i32,
     ) -> Result<mpsc::Receiver<Result<TopicMessage, RpcStatus>>, RpcStatus> {
-        self.demux.open_subscribe(topic)
+        self.demux.open_subscribe(topic, qos_depth)
     }
 
     pub async fn publish_message(&self, msg: TopicMessage) -> Result<(), RpcStatus> {
@@ -94,7 +95,7 @@ impl MessageGatewayService {
         let req = SubscribeRequest::decode(payload).map_err(|err| {
             RpcStatus::invalid_argument(format!("decode SubscribeRequest: {err}"))
         })?;
-        let rx = self.open_subscribe(req.topic.clone())?;
+        let rx = self.open_subscribe(req.topic.clone(), req.qos_depth)?;
         Ok((req.topic, rx))
     }
 }

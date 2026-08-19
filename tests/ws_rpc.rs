@@ -93,6 +93,7 @@ async fn ws_subscribe_receives_published_payload() {
 
     let payload = SubscribeRequest {
         topic: "ws.sub".into(),
+        qos_depth: 8,
     }
     .encode_to_vec();
     let req = encode_frame(&Frame::Request {
@@ -313,6 +314,7 @@ async fn ws_multiplex_two_streams_on_one_connection() {
 
     let sub_req = SubscribeRequest {
         topic: "mux.a".into(),
+        qos_depth: 0,
     }
     .encode_to_vec();
     ws.send(Message::Binary(

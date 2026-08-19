@@ -7,7 +7,7 @@ use std::thread;
 use std::time::Duration;
 
 use robot_bus::worker_thread::WorkerThread;
-use robot_bus::{Node, Publisher, RobotBusBroker};
+use robot_bus::{Node, Publisher, QosProfile, RobotBusBroker};
 use support::{ephemeral_robot_bus_config, lock_brokers};
 
 fn start_bus() -> (support::BrokerLockGuard, RobotBusBroker) {
@@ -53,6 +53,39 @@ fn ws_node_subscribe_receives_published_payload() {
     let (topic, payload) = got.lock().unwrap().clone().expect("callback fired");
     assert_eq!(topic, "ws.node.topic");
     assert_eq!(payload, b"hello-ws-node");
+    broker.stop().expect("stop");
+}
+
+#[test]
+fn ws_node_subscribe_with_qos_receives_published_payload() {
+    let (_guard, broker) = start_bus();
+    let url = ws_url(&broker);
+
+    let got = Arc::new(Mutex::new(None::<Vec<u8>>));
+    let got_cb = Arc::clone(&got);
+    let mut node = Node::ws_at("ws-sub-qos", &url);
+    node.create_subscription_raw_with_qos(
+        "ws.node.qos",
+        QosProfile::keep_last(4),
+        Arc::new(move |_topic, payload| {
+            *got_cb.lock().unwrap() = Some(payload.to_vec());
+        }),
+        None,
+    )
+    .expect("subscribe");
+
+    thread::sleep(Duration::from_millis(300));
+
+    let pub_ = Publisher::new(Some(&broker.message.xsub_bind)).expect("publisher");
+    pub_.publish("ws.node.qos", b"qos-hi").expect("publish");
+
+    let deadline = std::time::Instant::now() + Duration::from_secs(5);
+    while got.lock().unwrap().is_none() && std::time::Instant::now() < deadline {
+        node.spin_once(Some(Duration::from_millis(50)))
+            .expect("spin_once");
+    }
+
+    assert_eq!(got.lock().unwrap().clone().expect("callback fired"), b"qos-hi");
     broker.stop().expect("stop");
 }
 

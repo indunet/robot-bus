@@ -244,7 +244,9 @@ node.create_timer(
 
 ### 高水位（HWM）与 Topic QoS
 
-Topic 可用 `QosProfile::keep_last(depth)`（→ HWM）。**仅对 topic 生效**；reliability 固定 best-effort。Service / action 暂不接 QoS。
+Topic 可用 `QosProfile::keep_last(depth)`（ZMQ 节点上 → HWM）。**仅对 topic 生效**；reliability 固定 best-effort。Service / action 暂不接 QoS。
+
+**WebSocket** Node 上 KeepLast **只兑现订阅侧**：作为网关到客户端的队列深度（满则丢；不传则用网关默认 64）。发布侧 QoS 忽略（所有 WS 发布者共用网关的一个 PUB）。
 
 ```rust
 use robot_bus::{Node, QosProfile, Publisher, HighWaterMark};

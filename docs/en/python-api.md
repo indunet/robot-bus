@@ -412,10 +412,10 @@ print(robot_bus.__version__)
 | `SingleThreadedExecutor(context=None)` | Explicit single-threaded executor (for shared multi-node use) |
 | `MultiThreadedExecutor(num_threads=4, context=None)` | Parallel service/action handlers |
 | `executor.add_node(node)` | Attach node to executor (must be before auto-attach on that node) |
-| `node.create_publisher(topic, msg_type=None, qos_depth=None)` | typed → `TypedTopicPublisher`; omit type → raw; `qos_depth>0` → KeepLast HWM (ignored on WS) |
+| `node.create_publisher(topic, msg_type=None, qos_depth=None)` | typed → `TypedTopicPublisher`; omit type → raw; `qos_depth>0` → KeepLast HWM (ignored on WS publish) |
 | `node.create_timer(period, callback)` → `TimerHandle` | Timer (attached to Node like topic) |
 | `CallbackGroupType` / `create_callback_group` | `MutuallyExclusive` / `Reentrant` |
-| `create_subscription(..., msg_type=, callback_group=, qos_depth=)` | typed: `callback(topic, Message)`; omit type: `callback(topic, bytes)` |
+| `create_subscription(..., msg_type=, callback_group=, qos_depth=)` | typed: `callback(topic, Message)`; omit type: `callback(topic, bytes)`; WS: `qos_depth` sizes the gateway subscribe queue |
 | `create_service(..., request_type=, response_type=)` | typed: `handler(Request) -> Response`; otherwise raw bytes |
 | `create_client(..., request_type=, response_type=)` | typed → `TypedServiceClient`; `service_is_ready` / `wait_for_service` (console workers) |
 | `create_action_server(..., goal_type=, feedback_type=, result_type=)` | typed handler publishes feedback in real time via context and returns result; otherwise raw bytes |

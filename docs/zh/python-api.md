@@ -412,10 +412,10 @@ print(robot_bus.__version__)
 | `SingleThreadedExecutor(context=None)` | 显式单线程执行器（多节点共享时用） |
 | `MultiThreadedExecutor(num_threads=4, context=None)` | service/action handler 可并行 |
 | `executor.add_node(node)` | 把节点挂到执行器（须在该节点尚未 auto-attach 之前） |
-| `node.create_publisher(topic, msg_type=None, qos_depth=None)` | typed → `TypedTopicPublisher.publish(Message)`；省略类型 → raw；`qos_depth>0` → KeepLast HWM（WS 忽略） |
+| `node.create_publisher(topic, msg_type=None, qos_depth=None)` | typed → `TypedTopicPublisher.publish(Message)`；省略类型 → raw；`qos_depth>0` → KeepLast HWM（WS 发布忽略） |
 | `node.create_timer(period, callback)` → `TimerHandle` | 定时器（与 topic 一样挂在 Node） |
 | `CallbackGroupType` / `create_callback_group` | `MutuallyExclusive` / `Reentrant` |
-| `create_subscription(..., msg_type=, callback_group=, qos_depth=)` | typed：`callback(topic, Message)`；省略类型：`callback(topic, bytes)` |
+| `create_subscription(..., msg_type=, callback_group=, qos_depth=)` | typed：`callback(topic, Message)`；省略类型：`callback(topic, bytes)`；WS：`qos_depth` 为网关订阅队列深度 |
 | `create_service(..., request_type=, response_type=)` | typed：`handler(Request) -> Response`；否则 raw bytes |
 | `create_client(..., request_type=, response_type=)` | typed → `TypedServiceClient`；`service_is_ready` / `wait_for_service`（console workers） |
 | `create_action_server(..., goal_type=, feedback_type=, result_type=)` | typed handler 通过 context 实时发布 feedback，并返回 result；否则 raw bytes |

@@ -9,7 +9,7 @@
 | 运行时 | DDS（需 `ros2` / daemon） | 先起 `robot_bus_broker`（或进程内嵌入） |
 | 入口 | `Context` → `Node` → `rclrs::spin` | **推荐** `Context` → `Node::with_context`；tcp/ipc 仍可用便捷的 `Node::new`（私有 Context） |
 | 消息 | `.msg` / `.srv` / `.action` 生成类型 | crate 内 protobuf（如 `sensor_msgs::msg::v1::Imu`） |
-| QoS | `QOS_PROFILE_DEFAULT` 等 | Topic：`QosProfile::keep_last(depth)` → HWM（各语言可选 `qos_depth` / `qosDepth`）；固定 best-effort。WebSocket RPC Node（`Node::ws`）接受参数但不生效。Service / action 暂不接 QoS |
+| QoS | `QOS_PROFILE_DEFAULT` 等 | Topic：`QosProfile::keep_last(depth)` → ZMQ 上为 HWM（各语言可选 `qos_depth` / `qosDepth`）；固定 best-effort。WebSocket 订阅用同一 depth 作为网关到客户端的队列；WS 发布忽略 QoS（共用网关 PUB）。Service / action 暂不接 QoS |
 | 回调组 | Worker / callback group（较新 API） | `CallbackGroupType::MutuallyExclusive` / `Reentrant` |
 | 参数 | `declare_parameter` / `get_parameter` → Parameter；`set_parameter(Parameter)`；`list_parameters(prefixes, depth)`（可远程 / YAML / CLI） | 同形本地 API（`Parameter` + `as_*` + 批量 get/set）；`list_parameters` → `{names, prefixes}`，便利 API `list_all_parameters`；`undeclare_parameter`；YAML 加载；无远程 / CLI |
 | 就绪等待 | `wait_for_message` / `wait_for_service` / `wait_for_action_server` | 同名辅助：`wait_for_message`；service/action 通过 console `workers > 0` 轮询（best-effort，非 DDS discovery） |
@@ -124,7 +124,7 @@ fn main() -> robot_bus::Result<()> {
 }
 ```
 
-要点：rclrs 创建时要带完整 QoS；robot-bus 的 `QosProfile` **仅对 topic 生效**，且只兑现 KeepLast depth（→ 发送/接收 HWM），reliability 固定 best-effort。不传 QoS 的 `create_publisher` / `create_subscription` 仍可用（不改动已有 HWM）。第三个参数是 callback group。topic 名按传入原样使用（建议写全路径）。
+要点：rclrs 创建时要带完整 QoS；robot-bus 的 `QosProfile` **仅对 topic 生效**，且只兑现 KeepLast depth（ZMQ 上 → 发送/接收 HWM；WebSocket 上 → 网关订阅队列）。reliability 固定 best-effort。WS **发布** QoS 忽略（共用网关 PUB）。不传 QoS 的 `create_publisher` / `create_subscription` 仍可用（不改动已有 HWM）。第三个参数是 callback group。topic 名按传入原样使用（建议写全路径）。
 
 ---
 

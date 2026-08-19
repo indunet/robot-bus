@@ -250,6 +250,8 @@ impl WsClientContext {
 struct WsState {
     topic_callbacks: HashMap<String, Vec<SubscriptionCallback>>,
     active_topics: HashSet<String>,
+    /// KeepLast depth sent on SubscribeRequest (`0` = gateway default).
+    topic_qos: HashMap<String, i32>,
     /// Latest WS stream id for each active topic (for Cancel on destroy).
     topic_stream_ids: HashMap<String, u32>,
     timers: Vec<Timer>,
@@ -296,6 +298,7 @@ impl WsRuntime {
             state: Arc::new(Mutex::new(WsState {
                 topic_callbacks: HashMap::new(),
                 active_topics: HashSet::new(),
+                topic_qos: HashMap::new(),
                 topic_stream_ids: HashMap::new(),
                 timers: Vec::new(),
                 next_timer_id: 1,
@@ -328,6 +331,7 @@ impl WsRuntime {
         topic: &str,
         callback: MessageCallback,
         group: CallbackGroup,
+        qos: Option<crate::QosProfile>,
     ) -> Result<SubscriptionHandle> {
         let mut state = self.lock_state()?;
         let id = state.next_subscription_id;
@@ -343,6 +347,8 @@ impl WsRuntime {
             });
 
         if state.active_topics.insert(topic.to_string()) {
+            let depth = qos.map(|q| q.depth()).filter(|d| *d > 0).unwrap_or(0);
+            state.topic_qos.insert(topic.to_string(), depth);
             self.spawn_subscription(topic.to_string());
         }
         Ok(SubscriptionHandle { id })
@@ -372,6 +378,7 @@ impl WsRuntime {
         if empty {
             state.topic_callbacks.remove(&topic);
             state.active_topics.remove(&topic);
+            state.topic_qos.remove(&topic);
             if let Some(stream_id) = state.topic_stream_ids.remove(&topic) {
                 let _ = self.conn.cmd_tx.send(ConnCmd::Cancel { stream_id });
             }
@@ -503,8 +510,15 @@ impl WsRuntime {
                 if let Ok(mut guard) = state.lock() {
                     guard.topic_stream_ids.insert(topic.clone(), stream_id);
                 }
+                let qos_depth = {
+                    let Ok(guard) = state.lock() else {
+                        break;
+                    };
+                    guard.topic_qos.get(&topic).copied().unwrap_or(0)
+                };
                 let payload = SubscribeRequest {
                     topic: topic.clone(),
+                    qos_depth,
                 }
                 .encode_to_vec();
                 let (reply_tx, reply_rx) = tokio::sync::oneshot::channel();

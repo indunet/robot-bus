@@ -155,7 +155,7 @@ const pub = node.createPublisher("/robot1/cmd");
 await pub.publish(new TextEncoder().encode("go"));
 node.createSubscription("/robot1/imu", (topic, payload) => {
   console.log(topic, payload);
-});
+}, 10); // 可选 KeepLast depth → 网关订阅队列
 node.start(); // 或 node.spin()
 ```
 

@@ -5,6 +5,7 @@ import {
   WsTopicPublisher,
   TypedWsTopicPublisher,
   coalesceSubscribeFilters,
+  qosDepthForFilter,
 } from "../src/ws-node.js";
 import { encode, type MessageType } from "../src/typed.js";
 
@@ -34,6 +35,19 @@ describe("coalesceSubscribeFilters", () => {
     assert.deepEqual(coalesceSubscribeFilters(["/robot_bus/tank/pose"]), [
       "/robot_bus/tank/pose",
     ]);
+  });
+});
+
+describe("qosDepthForFilter", () => {
+  it("takes the max KeepLast of topics covered by a coalesced prefix", () => {
+    const qos = new Map([
+      ["/robot_bus/status", 4],
+      ["/robot_bus/topics", 16],
+      ["/robot1/imu", 8],
+    ]);
+    assert.equal(qosDepthForFilter("/robot_bus/", qos), 16);
+    assert.equal(qosDepthForFilter("/robot1/imu", qos), 8);
+    assert.equal(qosDepthForFilter("/other", qos), 0);
   });
 });
 

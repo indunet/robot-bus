@@ -87,7 +87,7 @@ Canonical side-by-side examples: [api-compare.md](../zh/api-compare.md).
 | Service | `create_service` / `create_client` | same names; client `call` takes timeout |
 | Action | `ActionServer` / `ActionClient` | `create_action_server` / `create_action_client` + GoalHandle |
 | Timer | `create_wall_timer` | `create_timer(period, cb, group?)` |
-| QoS | full DDS QoS | Topic only: `QosProfile::keep_last(depth)` → HWM; **reliability fixed best-effort**. Service/action: no QoS yet |
+| QoS | full DDS QoS | Topic only: `QosProfile::keep_last(depth)` → ZMQ HWM / WS subscribe queue; **reliability fixed best-effort**. WS publish ignores QoS. Service/action: no QoS yet |
 | Params | declare/get/set + remote/CLI | Same local shape + YAML load; **no** remote param server / CLI `-p` |
 | Callback groups | MutuallyExclusive / Reentrant | `CallbackGroupType::MutuallyExclusive` / `Reentrant` |
 

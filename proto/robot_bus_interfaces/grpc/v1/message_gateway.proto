@@ -15,6 +15,9 @@ service MessageGateway {
 message SubscribeRequest {
   // ZMQ subscribe prefix. Empty string subscribes to all topics.
   string topic = 1;
+  // KeepLast depth for this subscribe stream (gateway → client queue).
+  // <= 0 (proto3 default / omitted) keeps the gateway default (64).
+  int32 qos_depth = 2;
 }
 
 message TopicMessage {

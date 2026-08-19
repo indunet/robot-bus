@@ -1433,7 +1433,7 @@ impl Node {
         ));
         #[cfg(feature = "ws")]
         if self.options.is_ws() {
-            let _ = hwm; // gRPC publish has no local ZMQ HWM
+            let _ = hwm; // shared gateway PUB; KeepLast is not per-client on WS publish
             let grpc = self.ensure_ws()?;
             return Ok(TopicPublisherRaw {
                 backend: TopicPublisherBackend::Ws(grpc.client_context()),
@@ -1599,10 +1599,11 @@ impl Node {
         Ok(handle)
     }
 
-    /// Subscribe with topic QoS (KeepLast depth → shared SUB HWM).
+    /// Subscribe with topic QoS (KeepLast depth).
     ///
-    /// Topic reliability is always best-effort. Multiple subscriptions on one node
-    /// share one SUB socket — the last explicit QoS depth wins for that socket.
+    /// Topic reliability is always best-effort. On ZMQ, multiple subscriptions on
+    /// one node share one SUB socket — the last explicit QoS depth wins for that
+    /// socket. On WebSocket, depth sizes that topic's gateway→client queue.
     pub fn create_subscription_with_qos<M, F>(
         &mut self,
         topic: &str,
@@ -1642,7 +1643,10 @@ impl Node {
         self.create_subscription_raw_inner(topic, None, callback, callback_group)
     }
 
-    /// Subscribe with a raw-bytes callback and topic QoS (applies KeepLast depth → HWM).
+    /// Subscribe with a raw-bytes callback and topic QoS (KeepLast depth).
+    ///
+    /// ZMQ: applies to the shared SUB socket HWM. WebSocket: sizes this topic's
+    /// gateway→client queue.
     pub fn create_subscription_raw_with_qos(
         &mut self,
         topic: &str,
@@ -1673,8 +1677,7 @@ impl Node {
         );
         #[cfg(feature = "ws")]
         if self.options.is_ws() {
-            let _ = qos; // gRPC subscribe has no local ZMQ HWM
-            let handle = self.ensure_ws()?.subscribe(topic, callback, group)?;
+            let handle = self.ensure_ws()?.subscribe(topic, callback, group, qos)?;
             self.topology_subscriptions.insert(handle.id(), topology);
             return Ok(handle);
         }

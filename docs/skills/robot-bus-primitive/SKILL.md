@@ -65,7 +65,7 @@ Progress:
 | Action server | `create_action_server` |
 | Action client | `create_action_client` → `send_goal` → GoalHandle (`result` / `cancel`) |
 | Timer | `create_timer(period, cb, group?)` |
-| QoS | Topic only: `QosProfile::keep_last(depth)` → HWM; reliability **best-effort** |
+| QoS | Topic only: `QosProfile::keep_last(depth)` → ZMQ HWM; WS subscribe → gateway queue; WS publish ignored; reliability **best-effort** |
 | Groups | `MutuallyExclusive` (default) / `Reentrant` (+ MultiThreadedExecutor) |
 
 Topic / service / action **names are used as given** — prefer absolute paths like `/robot1/imu`.

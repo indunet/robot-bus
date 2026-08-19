@@ -154,7 +154,7 @@ const pub = node.createPublisher("/robot1/cmd");
 await pub.publish(new TextEncoder().encode("go"));
 node.createSubscription("/robot1/imu", (topic, payload) => {
   console.log(topic, payload);
-});
+}, 10); // optional KeepLast depth → gateway subscribe queue
 node.start(); // or node.spin()
 ```
 

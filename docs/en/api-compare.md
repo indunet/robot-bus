@@ -9,7 +9,7 @@ How to write the same classic scenarios on each side. Left is **ROS 2 Humble + [
 | Runtime | DDS (requires `ros2` / daemon) | Start `robot_bus_broker` first (or embed in-process) |
 | Entry | `Context` → `Node` → `rclrs::spin` | **Preferred** `Context` → `Node::with_context`; tcp/ipc may still use convenience `Node::new` (private Context) |
 | Messages | `.msg` / `.srv` / `.action` generated types | Protobuf in crate (e.g. `sensor_msgs::msg::v1::Imu`) |
-| QoS | `QOS_PROFILE_DEFAULT`, etc. | Topic: `QosProfile::keep_last(depth)` → HWM (optional `qos_depth` / `qosDepth` in all bindings); fixed best-effort. WebSocket RPC Node (`Node::ws`) accepts the arg but ignores it. Service / action do not take QoS yet |
+| QoS | `QOS_PROFILE_DEFAULT`, etc. | Topic: `QosProfile::keep_last(depth)` → HWM on ZMQ (optional `qos_depth` / `qosDepth` in all bindings); fixed best-effort. WebSocket subscribe uses the same depth as the gateway→client queue; WS publish ignores QoS (shared gateway PUB). Service / action do not take QoS yet |
 | Callback groups | Worker / callback group (newer API) | `CallbackGroupType::MutuallyExclusive` / `Reentrant` |
 | Parameters | `declare_parameter` / `get_parameter` → Parameter; `set_parameter(Parameter)`; `list_parameters(prefixes, depth)` (remote / YAML / CLI) | Same local shape (`Parameter` + `as_*` + batch get/set); `list_parameters` → `{names, prefixes}`, convenience `list_all_parameters`; `undeclare_parameter`; YAML load; no remote / CLI |
 | Ready waits | `wait_for_message` / `wait_for_service` / `wait_for_action_server` | Same helpers: `wait_for_message`; service/action poll console `workers > 0` (best-effort, not DDS discovery) |
@@ -124,7 +124,7 @@ fn main() -> robot_bus::Result<()> {
 }
 ```
 
-Key points: rclrs requires full QoS at creation; robot-bus `QosProfile` applies to **topics only**, and only KeepLast depth is honored (→ send/receive HWM). Reliability is fixed best-effort. Plain `create_publisher` / `create_subscription` still work (leave existing HWM alone). The last argument is the callback group. robot-bus uses topic names as given (prefer fully qualified paths).
+Key points: rclrs requires full QoS at creation; robot-bus `QosProfile` applies to **topics only**, and only KeepLast depth is honored (→ send/receive HWM on ZMQ; → gateway subscribe queue on WebSocket). Reliability is fixed best-effort. WS **publish** QoS is ignored (shared gateway PUB). Plain `create_publisher` / `create_subscription` still work (leave existing HWM alone). The last argument is the callback group. robot-bus uses topic names as given (prefer fully qualified paths).
 
 ---
 

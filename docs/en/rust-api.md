@@ -243,7 +243,9 @@ node.create_timer(
 
 ### High water mark (HWM) and topic QoS
 
-Topics can use `QosProfile::keep_last(depth)` (→ HWM). **Topics only**; reliability is fixed best-effort. Service / action do not take QoS yet.
+Topics can use `QosProfile::keep_last(depth)` (→ HWM on ZMQ nodes). **Topics only**; reliability is fixed best-effort. Service / action do not take QoS yet.
+
+On a **WebSocket** Node, KeepLast applies to **subscribe** only: it sizes the gateway→client queue (drop-on-full; omitted depth keeps the gateway default of 64). Publish QoS is ignored (all WS publishers share one gateway PUB).
 
 ```rust
 use robot_bus::{Node, QosProfile, Publisher, HighWaterMark};

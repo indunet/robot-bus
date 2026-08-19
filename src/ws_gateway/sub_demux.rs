@@ -10,10 +10,10 @@ use tokio::sync::mpsc;
 use super::rpc_status::RpcStatus;
 
 use crate::message_bus::Subscriber;
+use crate::runtime::ws_subscribe_queue_capacity;
 
 use super::pb::TopicMessage;
 
-const WATCHER_CAPACITY: usize = 64;
 const POLL_TIMEOUT: Duration = Duration::from_millis(200);
 
 type WatcherTx = mpsc::Sender<Result<TopicMessage, RpcStatus>>;
@@ -88,9 +88,10 @@ impl SubDemux {
     pub fn open_subscribe(
         &self,
         topic: String,
+        qos_depth: i32,
     ) -> Result<mpsc::Receiver<Result<TopicMessage, RpcStatus>>, RpcStatus> {
         self.ensure_started()?;
-        let (tx, rx) = mpsc::channel(WATCHER_CAPACITY);
+        let (tx, rx) = mpsc::channel(ws_subscribe_queue_capacity(qos_depth));
         let id = self.inner.next_id.fetch_add(1, Ordering::Relaxed);
         let control = {
             let guard = self

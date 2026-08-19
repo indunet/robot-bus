@@ -297,6 +297,8 @@ export class WsNode {
   readonly name: string;
   readonly url: string;
   private readonly subscriptions = new Map<string, SubCallback[]>();
+  /** KeepLast depth per topic (`0` = gateway default). First subscribe wins for that topic. */
+  private readonly subscriptionQos = new Map<string, number>();
   private readonly topologyEnabled: boolean;
   private readonly topologyRefreshMs: number;
   private readonly topologyEndpoints = new Map<string, TopologyEndpoint>();
@@ -378,17 +380,25 @@ export class WsNode {
   /**
    * Subscribe to a topic prefix. Callbacks fire after `spin()` / `start()` begins.
    */
-  createSubscription(topic: string, callback: SubCallback): void;
+  createSubscription(topic: string, callback: SubCallback, qosDepth?: number): void;
   createSubscription<T extends object>(
     topic: string,
     callback: (topic: string, msg: T) => void,
     msgType: MessageType<T>,
+    qosDepth?: number,
   ): void;
   createSubscription<T extends object>(
     topic: string,
     callback: SubCallback | ((topic: string, msg: T) => void),
-    msgType?: MessageType<T>,
+    msgTypeOrDepth?: MessageType<T> | number,
+    maybeDepth?: number,
   ): void {
+    const msgType =
+      typeof msgTypeOrDepth === "number" || msgTypeOrDepth === undefined
+        ? undefined
+        : msgTypeOrDepth;
+    const qosDepth =
+      typeof msgTypeOrDepth === "number" ? msgTypeOrDepth : maybeDepth;
     const wrapped: SubCallback = msgType
       ? (t, payload) => {
           const decoded = decode(msgType, payload);
@@ -400,6 +410,12 @@ export class WsNode {
     const list = this.subscriptions.get(topic) ?? [];
     list.push(wrapped);
     this.subscriptions.set(topic, list);
+    if (!this.subscriptionQos.has(topic)) {
+      this.subscriptionQos.set(
+        topic,
+        typeof qosDepth === "number" && qosDepth > 0 ? qosDepth : 0,
+      );
+    }
     this.trackEndpoint("subscriber", topic);
     if (msgType) {
       this.topicTypes.set(topic, msgType.typeName);
@@ -584,7 +600,7 @@ export class WsNode {
     for (const filter of coalesceSubscribeFilters([
       ...this.subscriptions.keys(),
     ])) {
-      void this.pumpTopic(filter, this.abort.signal);
+      void this.pumpTopic(filter, this.abort.signal, qosDepthForFilter(filter, this.subscriptionQos));
     }
   }
 
@@ -738,10 +754,10 @@ export class WsNode {
     });
   }
 
-  private async pumpTopic(filter: string, signal: AbortSignal): Promise<void> {
+  private async pumpTopic(filter: string, signal: AbortSignal, qosDepth = 0): Promise<void> {
     try {
       const req = SubscribeRequest.toBinary(
-        SubscribeRequest.create({ topic: filter }),
+        SubscribeRequest.create({ topic: filter, qosDepth }),
       );
       const { control, done } = await this.session.serverStream(
         METHOD_SUBSCRIBE,
@@ -783,6 +799,24 @@ export class WsNode {
       console.error(`robot-bus subscribe '${filter}' failed`, err);
     }
   }
+}
+
+/**
+ * KeepLast depth for a (possibly coalesced) subscribe filter: max of matching topics.
+ * `0` means the gateway default.
+ */
+export function qosDepthForFilter(
+  filter: string,
+  subscriptionQos: Map<string, number>,
+): number {
+  let max = 0;
+  for (const [topic, depth] of subscriptionQos) {
+    if (depth <= 0) continue;
+    if (topic === filter || topic.startsWith(filter)) {
+      if (depth > max) max = depth;
+    }
+  }
+  return max;
 }
 
 /**
