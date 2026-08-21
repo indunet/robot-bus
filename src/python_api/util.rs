@@ -106,8 +106,7 @@ pub(crate) fn py_node_options(
     action_backend: Option<String>,
     action_frontend: Option<String>,
 ) -> PyResult<crate::runtime::NodeOptions> {
-    // Canonical gateway transport is "ws"; "grpc" kept as a compatibility alias.
-    if transport == "ws" || transport == "grpc" {
+    if transport == "ws" {
         #[cfg(feature = "ws")]
         {
             return Ok(match ws_url {
@@ -152,7 +151,7 @@ pub(crate) fn py_discover_options(
         "tcp" => RustNodeOptions::tcp(),
         "ipc" => RustNodeOptions::ipc(),
         "inproc" => RustNodeOptions::inproc(),
-        "ws" | "grpc" => {
+        "ws" => {
             #[cfg(feature = "ws")]
             {
                 RustNodeOptions::ws()

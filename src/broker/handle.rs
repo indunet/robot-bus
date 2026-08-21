@@ -1,4 +1,4 @@
-//! In-process broker handle: start all buses (and gRPC) on background threads.
+//! In-process broker handle: start all buses (and the WebSocket RPC API) on background threads.
 //!
 //! Prefer [`RobotBusBroker::start`] over the CLI binary when embedding in application code.
 //! `start` uses per-bus [`run_with_shutdown`](super::service_bus::run_with_shutdown) and does
@@ -19,7 +19,11 @@ use crate::discovery::{
     DiscoverResponse, DiscoveryConfig, resolve_advertise_host, rewrite_bind_host,
 };
 use crate::runtime::Context as BusContext;
-use crate::transports::BindAllOpts;
+use crate::transports::{
+    ACTION_BACKEND_CHANNEL, ACTION_FRONTEND_CHANNEL, BindAllOpts, SERVICE_BACKEND_CHANNEL,
+    SERVICE_FRONTEND_CHANNEL, XPUB_CHANNEL, XSUB_CHANNEL, ipc_endpoint_in,
+    inproc_endpoint_with_prefix,
+};
 
 #[cfg(feature = "console")]
 use crate::tank::{TankEndpoints, TankManager};
@@ -264,7 +268,7 @@ impl Drop for ActionBusBroker {
     }
 }
 
-/// gRPC + browser WebSocket RPC listen options (feature `grpc`, enabled by default).
+/// WebSocket RPC listen options (feature `ws`, enabled by default).
 #[cfg(feature = "ws")]
 #[derive(Clone, Debug)]
 pub struct WsGatewayConfig {
@@ -277,7 +281,7 @@ pub struct WsGatewayConfig {
 impl Default for WsGatewayConfig {
     fn default() -> Self {
         Self {
-            listen: "0.0.0.0:15570".parse().expect("default grpc listen"),
+            listen: "0.0.0.0:15570".parse().expect("default API listen"),
             cors_origins: Vec::new(),
         }
     }
@@ -285,9 +289,9 @@ impl Default for WsGatewayConfig {
 
 /// Embedded Web console HTTP options (feature `console`, enabled by default).
 ///
-/// When the `grpc` feature is also enabled, the console UI + REST API are served
-/// on [`WsGatewayConfig::listen`] instead — gRPC, WebSocket RPC (`/ws`), and the console all
-/// share one port. `listen` here only takes effect when `grpc` is disabled (or
+/// When the `ws` feature is also enabled, the console UI + REST API are served
+/// on [`WsGatewayConfig::listen`] instead — WebSocket RPC (`/ws`) and the console
+/// share one port. `listen` here only takes effect when `ws` is disabled (or
 /// this crate is built console-only).
 #[cfg(feature = "console")]
 #[derive(Clone, Debug)]
@@ -342,13 +346,13 @@ impl WsGatewayHandle {
         let requested = config.listen;
         // Bind on the calling thread so EADDRINUSE fails at start(), not only at stop().
         let std_listener = std::net::TcpListener::bind(requested)
-            .with_context(|| format!("bind gRPC listen {requested}"))?;
+            .with_context(|| format!("bind API listen {requested}"))?;
         std_listener
             .set_nonblocking(true)
-            .context("set gRPC listener nonblocking")?;
+            .context("set API listener nonblocking")?;
         let listen = std_listener
             .local_addr()
-            .context("gRPC listener local_addr")?;
+            .context("API listener local_addr")?;
         config.listen = listen;
         if let Some(disc) = config.discover.as_mut() {
             let mut d = (**disc).clone();
@@ -365,10 +369,10 @@ impl WsGatewayHandle {
             let rt = tokio::runtime::Builder::new_multi_thread()
                 .enable_all()
                 .build()
-                .context("create tokio runtime for gRPC gateway")?;
+                .context("create tokio runtime for WebSocket RPC gateway")?;
             rt.block_on(async move {
                 let listener = tokio::net::TcpListener::from_std(std_listener)
-                    .context("tokio gRPC listener")?;
+                    .context("tokio API listener")?;
                 // `wait_for` resolves immediately if the watch already holds `true` (e.g.
                 // the caller stopped right after start()); the old `while !*borrow() { changed().await }`
                 // loop could instead park forever waiting for a *change* that already happened.
@@ -761,6 +765,8 @@ impl RobotBusBroker {
         #[cfg(feature = "console")]
         let tank = console_state.as_ref().map(|s| Arc::clone(&s.tank));
 
+        println!("{}", format_startup_banner(&discover));
+
         Ok(Self {
             message,
             service,
@@ -781,13 +787,13 @@ impl RobotBusBroker {
         })
     }
 
-    /// gRPC + WebSocket RPC listen address (feature `grpc`).
+    /// WebSocket RPC listen address (feature `ws`).
     #[cfg(feature = "ws")]
     pub fn api_listen(&self) -> SocketAddr {
         self.ws.listen
     }
 
-    /// Base URL for gRPC clients (`http://127.0.0.1:port` when the broker binds `0.0.0.0`).
+    /// Base URL for WebSocket RPC clients (`http://127.0.0.1:port` when the broker binds `0.0.0.0`).
     #[cfg(feature = "ws")]
     pub fn api_url(&self) -> String {
         connect_url_for_listen(self.ws.listen)
@@ -795,7 +801,7 @@ impl RobotBusBroker {
 
     /// Console HTTP listen address when the console is running (feature `console`).
     ///
-    /// This is the gRPC listen address when `grpc` is also enabled (single port),
+    /// This is the API listen address when `ws` is also enabled (single port),
     /// or the console's own listen address otherwise.
     #[cfg(feature = "console")]
     pub fn console_listen(&self) -> Option<SocketAddr> {
@@ -877,4 +883,121 @@ fn normalize_broker_id(config: &mut RobotBusConfig) -> String {
     config.service.broker_id = id.clone();
     config.action.broker_id = id.clone();
     id
+}
+
+fn transport_aliases(tcp: &str, channel: &str, discover: &DiscoverResponse) -> String {
+    let mut parts = vec![tcp.to_string()];
+    if let Some(dir) = discover.ipc_dir.as_deref().filter(|s| !s.is_empty()) {
+        parts.push(ipc_endpoint_in(dir, channel));
+    }
+    if let Some(prefix) = discover
+        .inproc_prefix
+        .as_deref()
+        .filter(|s| !s.is_empty())
+    {
+        parts.push(inproc_endpoint_with_prefix(prefix, channel));
+    }
+    parts.join("  ")
+}
+
+/// Human-readable listen map printed after all buses (and the API port) are bound.
+fn format_startup_banner(discover: &DiscoverResponse) -> String {
+    let mut lines = vec![format!(
+        "robot-bus {} ready  id={}",
+        env!("CARGO_PKG_VERSION"),
+        discover.broker_id
+    )];
+    let row = |label: &str, value: String| format!("  {label:<16}{value}");
+    lines.push(String::new());
+    #[cfg(feature = "ws")]
+    {
+        let ws_url = discover.api_url.trim_end_matches('/').to_string() + "/ws";
+        lines.push(row("ws", ws_url));
+    }
+    if let Some(console) = discover.console_url.as_deref().filter(|s| !s.is_empty()) {
+        lines.push(row("web console", console.to_string()));
+    }
+    lines.push(row(
+        "message pub",
+        transport_aliases(&discover.message_xsub, XSUB_CHANNEL, discover),
+    ));
+    lines.push(row(
+        "message sub",
+        transport_aliases(&discover.message_xpub, XPUB_CHANNEL, discover),
+    ));
+    lines.push(row(
+        "service client",
+        transport_aliases(
+            &discover.service_frontend,
+            SERVICE_FRONTEND_CHANNEL,
+            discover,
+        ),
+    ));
+    lines.push(row(
+        "service worker",
+        transport_aliases(
+            &discover.service_backend,
+            SERVICE_BACKEND_CHANNEL,
+            discover,
+        ),
+    ));
+    lines.push(row(
+        "action client",
+        transport_aliases(&discover.action_frontend, ACTION_FRONTEND_CHANNEL, discover),
+    ));
+    lines.push(row(
+        "action worker",
+        transport_aliases(&discover.action_backend, ACTION_BACKEND_CHANNEL, discover),
+    ));
+    lines.join("\n")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn sample_discover(ipc: bool) -> DiscoverResponse {
+        DiscoverResponse {
+            broker_id: "abc".into(),
+            domain_id: 0,
+            advertise_host: "127.0.0.1".into(),
+            api_url: "http://127.0.0.1:15570".into(),
+            message_xsub: "tcp://127.0.0.1:1".into(),
+            message_xpub: "tcp://127.0.0.1:2".into(),
+            service_frontend: "tcp://127.0.0.1:3".into(),
+            service_backend: "tcp://127.0.0.1:4".into(),
+            action_frontend: "tcp://127.0.0.1:5".into(),
+            action_backend: "tcp://127.0.0.1:6".into(),
+            ipc_dir: ipc.then(|| "/tmp/robot_bus/abc".into()),
+            inproc_prefix: ipc.then(|| "robot_bus".into()),
+            console_url: Some("http://127.0.0.1:15570".into()),
+        }
+    }
+
+    #[test]
+    fn startup_banner_lists_tcp_ipc_inproc() {
+        let text = format_startup_banner(&sample_discover(true));
+        assert!(text.contains("robot-bus"));
+        assert!(text.contains("id=abc"));
+        assert!(text.contains("tcp://127.0.0.1:1"));
+        assert!(text.contains("ipc:///tmp/robot_bus/abc/message_bus_xsub.ipc"));
+        assert!(text.contains("inproc://robot_bus/message_bus/xsub"));
+        assert!(text.contains("tcp://127.0.0.1:5"));
+        assert!(text.contains("inproc://robot_bus/action_bus/frontend"));
+        let ws_at = text.find("  ws ").expect("ws row");
+        let console_at = text.find("web console").expect("web console row");
+        let message_at = text.find("message pub").expect("message row");
+        assert!(ws_at < console_at);
+        assert!(console_at < message_at);
+        assert!(text.contains("http://127.0.0.1:15570/ws"));
+        assert!(text.contains("web console     http://127.0.0.1:15570"));
+    }
+
+    #[test]
+    fn startup_banner_tcp_only_omits_ipc_inproc() {
+        let text = format_startup_banner(&sample_discover(false));
+        assert!(text.contains("tcp://127.0.0.1:1"));
+        assert!(!text.contains("ipc://"));
+        assert!(!text.contains("inproc://"));
+    }
 }

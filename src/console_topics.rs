@@ -1,7 +1,5 @@
 //! Fixed system topic names for broker console introspection.
 
-use crate::errors::{BusError, Result};
-
 /// Namespace for console snapshot topics and control-plane services.
 pub const PREFIX: &str = "/robot_bus";
 
@@ -32,34 +30,22 @@ pub const CONTROL_SUBSCRIBE: &[&str] =
 /// Snapshot topics the broker status publisher emits.
 pub const SNAPSHOT_PUBLISH: &[&str] = &[STATUS, TOPICS, SERVICES, ACTIONS, TOPOLOGY, EVENTS];
 
-/// Built-in TANK endpoints (`/robot_bus/tank/*`). Clients may pub/sub and call
-/// these; they remain under the reserved prefix so they show as system-owned.
+/// Built-in TANK endpoints (`/robot_bus/tank/*`).
 pub const TANK_PREFIX: &str = "/robot_bus/tank";
 
-/// True for names under the reserved console namespace (`/robot_bus` and `/robot_bus/*`).
+/// True for names under the console namespace (`/robot_bus` and `/robot_bus/*`).
+///
+/// Used to keep per-broker snapshots local: message federation does not forward
+/// this prefix. Nodes may still pub/sub these names.
 pub fn is_reserved_name(name: &str) -> bool {
     let name = name.trim();
     name == PREFIX || name.starts_with("/robot_bus/")
 }
 
-/// True for built-in tank demo names that clients are allowed to use.
+/// True for built-in tank demo names.
 pub fn is_builtin_tank_name(name: &str) -> bool {
     let name = name.trim();
     name == TANK_PREFIX || name.starts_with("/robot_bus/tank/")
-}
-
-/// Reject user registration of reserved console topic / service / action names.
-///
-/// Snapshot / control-plane channels stay exclusive to the broker; `/robot_bus/tank/*`
-/// is exempt so teleop and nav clients can talk to the in-process tank.
-pub fn check_not_reserved(name: &str) -> Result<()> {
-    let name = name.trim();
-    if is_reserved_name(name) && !is_builtin_tank_name(name) {
-        return Err(BusError::ReservedName {
-            name: name.to_string(),
-        });
-    }
-    Ok(())
 }
 
 #[cfg(test)]
@@ -74,10 +60,6 @@ mod tests {
         assert!(is_reserved_name("/robot_bus/tank/pose"));
         assert!(!is_reserved_name("/robot_bus_extra"));
         assert!(!is_reserved_name("/robot1/imu"));
-        assert!(check_not_reserved("/robot_bus/topics").is_err());
-        assert!(check_not_reserved("/robot_bus/tank/cmd_vel").is_ok());
-        assert!(check_not_reserved("/robot_bus/tank/reset").is_ok());
-        assert!(check_not_reserved("/ok").is_ok());
         assert!(is_builtin_tank_name("/robot_bus/tank/pose"));
         assert!(!is_builtin_tank_name("/robot_bus/status"));
         assert!(!is_builtin_tank_name("/robot_bus/bot_extra"));

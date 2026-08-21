@@ -12,7 +12,7 @@ constructor(
     private val serviceBackendBind: String? = null,
     private val actionFrontendBind: String? = null,
     private val actionBackendBind: String? = null,
-    private val grpcListen: String? = null,
+    private val apiListen: String? = null,
     private val consoleListen: String? = null,
     private val tcpOnly: Boolean = false,
     private val noConsole: Boolean = false,
@@ -44,7 +44,7 @@ constructor(
 
     fun getActionBackendBind(): String? = actionBackendBind
 
-    fun getGrpcListen(): String? = grpcListen
+    fun getApiListen(): String? = apiListen
 
     fun getConsoleListen(): String? = consoleListen
 
@@ -78,7 +78,7 @@ constructor(
         o.serviceBackendBind = serviceBackendBind
         o.actionFrontendBind = actionFrontendBind
         o.actionBackendBind = actionBackendBind
-        o.apiListen = grpcListen
+        o.apiListen = apiListen
         o.consoleListen = consoleListen
         o.tcpOnly = if (tcpOnly) 1 else 0
         o.noConsole = if (noConsole) 1 else 0

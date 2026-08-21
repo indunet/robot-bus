@@ -38,6 +38,22 @@ fn parse_u64(flag: &str, value: &str) -> Result<u64> {
         .with_context(|| format!("invalid {flag}: {value}"))
 }
 
+/// Drop leading non-flag tokens (Node script path, `tsx`, etc.).
+pub fn strip_runtime_argv(mut args: Vec<String>) -> Vec<String> {
+    while args.first().is_some_and(|a| !a.starts_with('-')) {
+        args.remove(0);
+    }
+    args
+}
+
+/// CLI args for language-binding `run_broker` entrypoints.
+///
+/// Drops argv0 and any leading non-flag tokens so [`parse_robot_bus_config`]
+/// only sees `--flags`.
+pub fn binding_broker_cli_args() -> Vec<String> {
+    strip_runtime_argv(std::env::args().skip(1).collect())
+}
+
 /// Parse broker startup flags into a [`RobotBusConfig`].
 ///
 /// Returns `Ok(None)` when `--help` / `-h` was requested (caller should print help and exit).
@@ -229,9 +245,9 @@ pub fn parse_robot_bus_config(args: &[String]) -> Result<Option<RobotBusConfig>>
                 );
             }
 
-            // --- API listen (gRPC + WS + console + discover) ---
+            // --- API listen (WS + console + discover) ---
             #[cfg(feature = "ws")]
-            "--api-listen" | "--grpc-listen" | "--listen" => {
+            "--api-listen" | "--listen" => {
                 i += 1;
                 let value = require_arg(args, i, arg)?;
                 config.ws.listen = value
@@ -251,8 +267,8 @@ pub fn parse_robot_bus_config(args: &[String]) -> Result<Option<RobotBusConfig>>
                     .push(require_arg(args, i, arg)?.to_string());
             }
             #[cfg(not(feature = "ws"))]
-            "--api-listen" | "--grpc-listen" | "--listen" | "--cors-origin" => {
-                bail!("{arg} requires the `grpc` feature");
+            "--api-listen" | "--listen" | "--cors-origin" => {
+                bail!("{arg} requires the `ws` feature");
             }
 
             // --- console ---
@@ -265,7 +281,7 @@ pub fn parse_robot_bus_config(args: &[String]) -> Result<Option<RobotBusConfig>>
                     .with_context(|| format!("invalid {arg} {value}"))?;
                 config.console.listen = addr;
                 config.console.enabled = true;
-                // Single-port: console is co-located with gRPC when both features are on.
+                // Single-port: console is co-located with the API listen when both features are on.
                 #[cfg(feature = "ws")]
                 {
                     config.ws.listen = addr;
@@ -310,7 +326,7 @@ pub fn robot_bus_broker_help() -> &'static str {
 Usage:\n  robot_bus_broker [options]\n\n\
 Defaults:\n  \
 message / service / action TCP binds: 0.0.0.0:0 (OS assigns free ports)\n  \
-API listen 0.0.0.0:15570 (gRPC + WS /ws + discover REST + embedded Web UI)\n  \
+API listen 0.0.0.0:15570 (WS /ws + discover REST + embedded Web UI)\n  \
 console  same port as API (use --no-console to disable UI; discover still on API)\n\n\
 Message options:\n  \
 --message-xsub-bind ADDR       Publisher bind (default tcp://0.0.0.0:0; alias: --xsub-bind)\n  \
@@ -346,8 +362,8 @@ Discovery / advertise:\n  \
 --domain-id N                  Soft label returned in /api/v1/discover (default: 0)\n  \
 --advertise-host HOST          Host clients should connect to (default: inferred)\n  \
 --no-discovery                 Compatibility no-op (UDP announce removed)\n\n\
-API options (feature `grpc`, default on):\n  \
---api-listen HOST:PORT         API listen (aliases: --grpc-listen, --listen, --console-listen)\n  \
+API options (feature `ws`, default on):\n  \
+--api-listen HOST:PORT         API listen (aliases: --listen, --console-listen)\n  \
 --cors-origin ORIGIN           Allowed browser origin (repeatable)\n\n\
 Console options (feature `console`, default on):\n  \
 --console-listen HOST:PORT     Alias of --api-listen (single-port UI + API)\n  \
@@ -419,8 +435,24 @@ mod tests {
     }
 
     #[test]
+    fn strip_runtime_argv_drops_node_script_path() {
+        assert_eq!(
+            strip_runtime_argv(args(&["/tmp/start.mjs", "--tcp-only", "--no-console"])),
+            args(&["--tcp-only", "--no-console"])
+        );
+        assert_eq!(
+            strip_runtime_argv(args(&["tsx", "broker.ts", "--api-listen", "127.0.0.1:15570"])),
+            args(&["--api-listen", "127.0.0.1:15570"])
+        );
+        assert_eq!(
+            strip_runtime_argv(args(&["--tcp-only"])),
+            args(&["--tcp-only"])
+        );
+    }
+
+    #[test]
     fn parses_prefixed_binds_and_shared_hwm() {
-        #[allow(unused_mut)] // mutated only when feature `grpc` is enabled
+        #[allow(unused_mut)] // mutated only when feature `ws` is enabled
         let mut argv = args(&[
             "--message-xsub-bind",
             "127.0.0.1:20001",
@@ -435,7 +467,7 @@ mod tests {
         #[cfg(feature = "ws")]
         {
             argv.extend(args(&[
-                "--grpc-listen",
+                "--api-listen",
                 "127.0.0.1:20070",
                 "--cors-origin",
                 "http://localhost:3000",
@@ -534,8 +566,8 @@ mod tests {
         }
         #[cfg(not(feature = "ws"))]
         {
-            let err = result.expect_err("--api-listen requires grpc");
-            assert!(err.to_string().contains("requires the `grpc` feature"));
+            let err = result.expect_err("--api-listen requires ws");
+            assert!(err.to_string().contains("requires the `ws` feature"));
         }
     }
 

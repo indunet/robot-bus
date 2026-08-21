@@ -12,9 +12,9 @@ internal class TestBus private constructor(
     val serviceBackend: String,
     val actionFrontend: String,
     val actionBackend: String,
-    val grpcListen: String,
+    val apiListen: String,
 ) : AutoCloseable {
-    fun wsUrl(): String = "http://$grpcListen"
+    fun wsUrl(): String = "http://$apiListen"
 
     fun makeNode(name: String): Node =
         Node(
@@ -55,7 +55,7 @@ internal class TestBus private constructor(
                 val serviceBackend = "tcp://127.0.0.1:${ports[3]}"
                 val actionFrontend = "tcp://127.0.0.1:${ports[4]}"
                 val actionBackend = "tcp://127.0.0.1:${ports[5]}"
-                val grpcListen = "127.0.0.1:${ports[6]}"
+                val apiListen = "127.0.0.1:${ports[6]}"
                 val opts =
                     BrokerOptions(
                         messageXsubBind = messageXsub,
@@ -64,7 +64,7 @@ internal class TestBus private constructor(
                         serviceBackendBind = serviceBackend,
                         actionFrontendBind = actionFrontend,
                         actionBackendBind = actionBackend,
-                        grpcListen = grpcListen,
+                        apiListen = apiListen,
                         consoleListen = null,
                         tcpOnly = true,
                         noConsole = true,
@@ -78,7 +78,7 @@ internal class TestBus private constructor(
                         serviceBackend,
                         actionFrontend,
                         actionBackend,
-                        grpcListen,
+                        apiListen,
                     )
                 } catch (failure: RobotBusException) {
                     if (attempt == MAX_START_ATTEMPTS - 1) throw failure

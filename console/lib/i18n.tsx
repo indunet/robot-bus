@@ -214,6 +214,10 @@ const en = {
   topologyInput: 'SUBSCRIBE',
   topologyOutput: 'PUBLISH',
   topologyNoPorts: 'No ports registered',
+  topologyService: 'SERVICE',
+  topologyAction: 'ACTION',
+  topologySrv: 'SRV',
+  topologyCli: 'CLI',
 } as const
 
 const zh: Record<MessageKey, string> = {
@@ -413,6 +417,10 @@ const zh: Record<MessageKey, string> = {
   topologyInput: '订阅',
   topologyOutput: '发布',
   topologyNoPorts: '暂无已注册端口',
+  topologyService: '服务',
+  topologyAction: '动作',
+  topologySrv: '服务端',
+  topologyCli: '客户端',
 }
 
 const catalogs: Record<Locale, Record<MessageKey, string>> = { en, zh }

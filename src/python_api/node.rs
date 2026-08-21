@@ -162,8 +162,8 @@ impl PyNode {
 
     /// Discover a broker via HTTP `GET /api/v1/discover`, then connect with `transport`.
     ///
-    /// Transport is still chosen by the caller (`tcp` / `ipc` / `inproc` / `ws`);
-    /// `"grpc"` is an alias of `ws`. Discovery only fills host / paths / gateway URL.
+    /// Transport is still chosen by the caller (`tcp` / `ipc` / `inproc` / `ws`).
+    /// Discovery only fills host / paths / gateway URL.
     #[classmethod]
     #[pyo3(signature = (
         name,

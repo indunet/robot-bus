@@ -21,7 +21,7 @@ export const CONTROL_SUBSCRIBE = [
   TOPIC_TYPE_REGISTER,
 ] as const;
 
-/** True for names under the reserved console namespace (`/robot_bus` and `/robot_bus/*`). */
+/** True for names under the console namespace (`/robot_bus` and `/robot_bus/*`). */
 export function isReservedName(name: string): boolean {
   const trimmed = name.trim();
   return trimmed === PREFIX || trimmed.startsWith("/robot_bus/");

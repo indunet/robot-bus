@@ -1,7 +1,7 @@
 """Integration tests for WebSocket RPC Node (requires native extension + broker).
 
 Run after: just python-dev
-  (or: cd bindings/python && maturin develop --features extension-module,ws)
+  (or: cd bindings/python && maturin develop --features extension-module,ws,console)
   .venv/bin/python bindings/python/tests/test_ws_node.py
 """
 

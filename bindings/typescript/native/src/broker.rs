@@ -8,7 +8,7 @@ use std::time::Duration;
 use napi::bindgen_prelude::*;
 use napi_derive::napi;
 use robot_bus::broker::{
-    apply_federation_opts, parse_robot_bus_config, robot_bus_broker_help,
+    apply_federation_opts, binding_broker_cli_args, parse_robot_bus_config, robot_bus_broker_help,
     RobotBusBroker as RustRobotBusBroker, RobotBusConfig,
 };
 use robot_bus::{shutdown, transports};
@@ -279,7 +279,7 @@ impl RobotBusBroker {
 /// Blocking CLI entry: start broker and wait for Ctrl+C.
 #[napi]
 pub fn run_broker() -> Result<()> {
-    let args: Vec<String> = std::env::args().skip(1).collect();
+    let args = binding_broker_cli_args();
     let config = match parse_robot_bus_config(&args).map_err(anyhow_err)? {
         None => {
             print!("{}", robot_bus_broker_help());
@@ -296,13 +296,6 @@ pub fn run_broker() -> Result<()> {
     let mut broker = RobotBusBroker {
         inner: Some(broker),
     };
-    println!(
-        "WebSocket RPC listening on http://{}",
-        broker.api_listen()?
-    );
-    if let Some(addr) = broker.console_listen()? {
-        println!("Web console listening on http://{addr}");
-    }
 
     while !flag.load(Ordering::Acquire) {
         thread::sleep(Duration::from_millis(50));

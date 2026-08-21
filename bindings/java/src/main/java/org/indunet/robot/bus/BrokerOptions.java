@@ -12,7 +12,7 @@ public final class BrokerOptions {
     private final String serviceBackendBind;
     private final String actionFrontendBind;
     private final String actionBackendBind;
-    private final String grpcListen;
+    private final String apiListen;
     private final String consoleListen;
     private final boolean tcpOnly;
     private final boolean noConsole;
@@ -45,7 +45,7 @@ public final class BrokerOptions {
             String serviceBackendBind,
             String actionFrontendBind,
             String actionBackendBind,
-            String grpcListen,
+            String apiListen,
             String consoleListen,
             boolean tcpOnly,
             boolean noConsole) {
@@ -56,7 +56,7 @@ public final class BrokerOptions {
                 serviceBackendBind,
                 actionFrontendBind,
                 actionBackendBind,
-                grpcListen,
+                apiListen,
                 consoleListen,
                 tcpOnly,
                 noConsole,
@@ -78,7 +78,7 @@ public final class BrokerOptions {
             String serviceBackendBind,
             String actionFrontendBind,
             String actionBackendBind,
-            String grpcListen,
+            String apiListen,
             String consoleListen,
             boolean tcpOnly,
             boolean noConsole,
@@ -93,7 +93,7 @@ public final class BrokerOptions {
                 serviceBackendBind,
                 actionFrontendBind,
                 actionBackendBind,
-                grpcListen,
+                apiListen,
                 consoleListen,
                 tcpOnly,
                 noConsole,
@@ -117,7 +117,7 @@ public final class BrokerOptions {
             String serviceBackendBind,
             String actionFrontendBind,
             String actionBackendBind,
-            String grpcListen,
+            String apiListen,
             String consoleListen,
             boolean tcpOnly,
             boolean noConsole,
@@ -137,7 +137,7 @@ public final class BrokerOptions {
                 serviceBackendBind,
                 actionFrontendBind,
                 actionBackendBind,
-                grpcListen != null ? grpcListen : discoveryAddr,
+                apiListen != null ? apiListen : discoveryAddr,
                 consoleListen,
                 tcpOnly,
                 noConsole,
@@ -159,7 +159,7 @@ public final class BrokerOptions {
             String serviceBackendBind,
             String actionFrontendBind,
             String actionBackendBind,
-            String grpcListen,
+            String apiListen,
             String consoleListen,
             boolean tcpOnly,
             boolean noConsole,
@@ -178,7 +178,7 @@ public final class BrokerOptions {
         this.serviceBackendBind = serviceBackendBind;
         this.actionFrontendBind = actionFrontendBind;
         this.actionBackendBind = actionBackendBind;
-        this.grpcListen = grpcListen;
+        this.apiListen = apiListen;
         this.consoleListen = consoleListen;
         this.tcpOnly = tcpOnly;
         this.noConsole = noConsole;
@@ -217,8 +217,8 @@ public final class BrokerOptions {
         return actionBackendBind;
     }
 
-    public String getGrpcListen() {
-        return grpcListen;
+    public String getApiListen() {
+        return apiListen;
     }
 
     public String getConsoleListen() {
@@ -277,7 +277,7 @@ public final class BrokerOptions {
         o.serviceBackendBind = serviceBackendBind;
         o.actionFrontendBind = actionFrontendBind;
         o.actionBackendBind = actionBackendBind;
-        o.apiListen = grpcListen;
+        o.apiListen = apiListen;
         o.consoleListen = consoleListen;
         o.tcpOnly = tcpOnly ? 1 : 0;
         o.noConsole = noConsole ? 1 : 0;

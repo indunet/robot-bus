@@ -1,12 +1,12 @@
 # robot_bus_perf
 
-robot-bus 本机性能压测：进程内 `RobotBusBroker`，覆盖 **tcp / ipc / inproc / grpc** 的 pub/sub、service、action。
+robot-bus 本机性能压测：进程内 `RobotBusBroker`，覆盖 **tcp / ipc / inproc / ws** 的 pub/sub、service、action。
 
 方法与 `benches/ros2_perf` 对齐，报告写入 [`docs/zh/perf-report.md`](../../docs/zh/perf-report.md) / [`docs/en/perf-report.md`](../../docs/en/perf-report.md)：
 
 - **延迟**：限速抽样（发一条等收到再发）
 - **吞吐（主指标）**：在目标速率下限速发送，**二分搜索**丢包 ≤ 1% 的最大可持续速率（max goodput）
-- **Action**：gRPC 场景名为 `action SendGoal`，对应一元 goal 请求 + server-stream `FEEDBACK` / `RESULT`
+- **Action**：ws 场景名为 `action SendGoal`，对应一元 goal 请求 + server-stream `FEEDBACK` / `RESULT`
 
 ## 结构
 

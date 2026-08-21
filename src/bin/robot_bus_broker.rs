@@ -28,17 +28,6 @@ fn run(config: RobotBusConfig) -> Result<()> {
     println!("robot_bus_broker starting message + service + action buses + WebSocket + console…");
     let broker = RobotBusBroker::start(config)?;
 
-    #[cfg(feature = "ws")]
-    println!(
-        "WebSocket RPC listening on http://{}",
-        broker.api_listen()
-    );
-
-    #[cfg(feature = "console")]
-    if let Some(addr) = broker.console_listen() {
-        println!("Web console listening on http://{addr}");
-    }
-
     while !shutdown.load(Ordering::Acquire) {
         thread::sleep(Duration::from_millis(50));
     }

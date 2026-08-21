@@ -11,8 +11,7 @@
 //!
 //! WebSocket RPC client mode (feature `ws`): [`Node::ws`] connects to the
 //! broker gateway (subscribe / publish / call service / call action). No ZMQ
-//! sockets; service and action **server** APIs return an error. Transport
-//! `"grpc"` is a compatibility alias for `"ws"`.
+//! sockets; service and action **server** APIs return an error.
 //!
 //! Topic / service / action names are used as given (pass full paths yourself).
 
@@ -66,9 +65,9 @@ use crate::zmq_helpers::HighWaterMark;
 pub struct NodeOptions {
     pub host: String,
     pub transport: String,
-    /// gRPC gateway base URL when `transport == "ws"` (e.g. `http://127.0.0.1:15570`).
+    /// WebSocket RPC gateway base URL when `transport == "ws"` (e.g. `http://127.0.0.1:15570`).
     pub ws_url: Option<String>,
-    /// Embedded console HTTP base URL (same origin as gRPC when co-located).
+    /// Embedded console HTTP base URL (same origin as the API listen when co-located).
     /// Filled by discovery when the broker announces it. Used by `rbus` / introspection
     /// clients; topology registration goes over the message bus.
     pub console_url: Option<String>,
@@ -294,7 +293,7 @@ impl NodeOptions {
     }
 }
 
-fn grpc_mode_unsupported(op: &str) -> BusError {
+fn ws_mode_unsupported(op: &str) -> BusError {
     BusError::Protocol(format!(
         "{op} is not supported in WebSocket RPC node mode (client: subscribe / publish / call service / call action; no servers)"
     ))
@@ -401,6 +400,7 @@ pub struct NodeServiceClientRaw {
     inner: ServiceClientInner,
     service_name: String,
     console_url: Option<String>,
+    _topology: Option<Arc<TopologyEndpointGuard>>,
 }
 
 enum ServiceClientInner {
@@ -824,6 +824,7 @@ pub struct NodeActionClientRaw {
     inner: ActionClientInner,
     action_name: String,
     console_url: Option<String>,
+    _topology: Option<Arc<TopologyEndpointGuard>>,
 }
 
 enum ActionClientInner {
@@ -1072,6 +1073,10 @@ pub struct Node {
     parameters: ParameterStore,
     /// Subscription id → topology guard (dropped on destroy_subscription).
     topology_subscriptions: HashMap<u64, Arc<TopologyEndpointGuard>>,
+    /// Service server id → topology guard (dropped on destroy_service).
+    topology_services: HashMap<u64, Arc<TopologyEndpointGuard>>,
+    /// Action server id → topology guard (dropped on destroy_action_server).
+    topology_actions: HashMap<u64, Arc<TopologyEndpointGuard>>,
 }
 
 impl Node {
@@ -1195,6 +1200,8 @@ impl Node {
             default_callback_group: CallbackGroup::mutually_exclusive(),
             parameters: ParameterStore::new(),
             topology_subscriptions: HashMap::new(),
+            topology_services: HashMap::new(),
+            topology_actions: HashMap::new(),
         }
     }
 
@@ -1422,15 +1429,7 @@ impl Node {
         hwm: Option<HighWaterMark>,
     ) -> Result<TopicPublisherRaw> {
         let topic = topic.into();
-        crate::console_topics::check_not_reserved(&topic)?;
-        let topology = Some(TopologyEndpointGuard::start(
-            self.options.service_frontend.as_deref(),
-            &self.options.host,
-            &self.options.transport,
-            &self.name,
-            "publisher",
-            &topic,
-        ));
+        let topology = Some(self.start_topology_guard("publisher", &topic));
         #[cfg(feature = "ws")]
         if self.options.is_ws() {
             let _ = hwm; // shared gateway PUB; KeepLast is not per-client on WS publish
@@ -1667,14 +1666,7 @@ impl Node {
         let group = callback_group
             .cloned()
             .unwrap_or_else(|| self.default_callback_group.clone());
-        let topology = TopologyEndpointGuard::start(
-            self.options.service_frontend.as_deref(),
-            &self.options.host,
-            &self.options.transport,
-            &self.name,
-            "subscriber",
-            topic,
-        );
+        let topology = self.start_topology_guard("subscriber", topic);
         #[cfg(feature = "ws")]
         if self.options.is_ws() {
             let handle = self.ensure_ws()?.subscribe(topic, callback, group, qos)?;
@@ -1784,9 +1776,8 @@ impl Node {
         handler: ServiceHandler,
         callback_group: Option<&CallbackGroup>,
     ) -> Result<NodeService> {
-        crate::console_topics::check_not_reserved(service_name)?;
         if self.options.is_ws() {
-            return Err(grpc_mode_unsupported("create_service"));
+            return Err(ws_mode_unsupported("create_service"));
         }
         let endpoint = self.options.service_backend_endpoint()?;
         let group = callback_group
@@ -1799,6 +1790,8 @@ impl Node {
             Some(&endpoint),
             None,
         )?;
+        let topology = self.start_topology_guard("service_server", service_name);
+        self.topology_services.insert(id, topology);
         Ok(NodeService {
             id,
             service_name: service_name.to_string(),
@@ -1809,8 +1802,9 @@ impl Node {
     /// Same `start()` constraint as [`cancel_timer`](Self::cancel_timer).
     pub fn destroy_service(&mut self, handle: &NodeService) -> Result<()> {
         if self.options.is_ws() {
-            return Err(grpc_mode_unsupported("destroy_service"));
+            return Err(ws_mode_unsupported("destroy_service"));
         }
+        self.topology_services.remove(&handle.id);
         self.lock_executor()?.destroy_service(handle.id)
     }
 
@@ -1839,13 +1833,16 @@ impl Node {
         service_name: impl Into<String>,
         hwm: HighWaterMark,
     ) -> Result<NodeServiceClientRaw> {
+        let service_name = service_name.into();
+        let topology = Some(self.start_topology_guard("service_client", &service_name));
         #[cfg(feature = "ws")]
         if self.options.is_ws() {
             let ctx = self.ensure_ws()?.client_context();
             return Ok(NodeServiceClientRaw {
                 inner: ServiceClientInner::Ws(ctx),
-                service_name: service_name.into(),
+                service_name,
                 console_url: self.console_url_opt(),
+                _topology: topology,
             });
         }
         let endpoint = self.options.service_frontend_endpoint()?;
@@ -1855,8 +1852,9 @@ impl Node {
                 Some(&endpoint),
                 hwm,
             )?),
-            service_name: service_name.into(),
+            service_name,
             console_url: self.console_url_opt(),
+            _topology: topology,
         })
     }
 
@@ -1906,9 +1904,8 @@ impl Node {
         handler: ActionGoalHandler,
         callback_group: Option<&CallbackGroup>,
     ) -> Result<NodeActionServer> {
-        crate::console_topics::check_not_reserved(action_name)?;
         if self.options.is_ws() {
-            return Err(grpc_mode_unsupported("create_action_server"));
+            return Err(ws_mode_unsupported("create_action_server"));
         }
         let endpoint = self.options.action_backend_endpoint()?;
         let group = callback_group
@@ -1921,6 +1918,8 @@ impl Node {
             Some(&endpoint),
             None,
         )?;
+        let topology = self.start_topology_guard("action_server", action_name);
+        self.topology_actions.insert(id, topology);
         Ok(NodeActionServer {
             id,
             action_name: action_name.to_string(),
@@ -1931,8 +1930,9 @@ impl Node {
     /// Same `start()` constraint as [`cancel_timer`](Self::cancel_timer).
     pub fn destroy_action_server(&mut self, handle: &NodeActionServer) -> Result<()> {
         if self.options.is_ws() {
-            return Err(grpc_mode_unsupported("destroy_action_server"));
+            return Err(ws_mode_unsupported("destroy_action_server"));
         }
+        self.topology_actions.remove(&handle.id);
         self.lock_executor()?.destroy_action_server(handle.id)
     }
 
@@ -1961,13 +1961,16 @@ impl Node {
         action_name: impl Into<String>,
         hwm: HighWaterMark,
     ) -> Result<NodeActionClientRaw> {
+        let action_name = action_name.into();
+        let topology = Some(self.start_topology_guard("action_client", &action_name));
         #[cfg(feature = "ws")]
         if self.options.is_ws() {
             let ctx = self.ensure_ws()?.client_context();
             return Ok(NodeActionClientRaw {
                 inner: ActionClientInner::Ws(ctx),
-                action_name: action_name.into(),
+                action_name,
                 console_url: self.console_url_opt(),
+                _topology: topology,
             });
         }
         let endpoint = self.options.action_frontend_endpoint()?;
@@ -1977,8 +1980,9 @@ impl Node {
                 endpoint,
                 hwm: Mutex::new(hwm),
             },
-            action_name: action_name.into(),
+            action_name,
             console_url: self.console_url_opt(),
+            _topology: topology,
         })
     }
 
@@ -1992,10 +1996,21 @@ impl Node {
         }
     }
 
+    fn start_topology_guard(&self, kind: &str, name: &str) -> Arc<TopologyEndpointGuard> {
+        TopologyEndpointGuard::start(
+            self.options.service_frontend.as_deref(),
+            &self.options.host,
+            &self.options.transport,
+            &self.name,
+            kind,
+            name,
+        )
+    }
+
     /// Connect the executor-owned action client used by callback-style [`send_goal`](Self::send_goal).
     pub fn connect_action_client(&mut self) -> Result<()> {
         if self.options.is_ws() {
-            return Err(grpc_mode_unsupported(
+            return Err(ws_mode_unsupported(
                 "connect_action_client (use create_action_client)",
             ));
         }
@@ -2013,7 +2028,7 @@ impl Node {
         goal_id: Option<&str>,
     ) -> Result<String> {
         if self.options.is_ws() {
-            return Err(grpc_mode_unsupported(
+            return Err(ws_mode_unsupported(
                 "send_goal (use create_action_client)",
             ));
         }
@@ -2023,7 +2038,7 @@ impl Node {
 
     pub fn cancel_goal(&mut self, action_name: &str, goal_id: &str, body: &[u8]) -> Result<()> {
         if self.options.is_ws() {
-            return Err(grpc_mode_unsupported(
+            return Err(ws_mode_unsupported(
                 "cancel_goal (use create_action_client)",
             ));
         }
@@ -2170,7 +2185,7 @@ impl Node {
 
     pub fn start(&mut self) -> Result<()> {
         if self.options.is_ws() {
-            return Err(grpc_mode_unsupported("start (use spin / spin_once)"));
+            return Err(ws_mode_unsupported("start (use spin / spin_once)"));
         }
         self.ensure_executor()?.start()
     }
@@ -2198,27 +2213,6 @@ mod tests {
 
     use super::*;
     use crate::runtime::SingleThreadedExecutor;
-
-    #[test]
-    fn rejects_reserved_console_names() {
-        let mut node = Node::new("pilot");
-        assert!(matches!(
-            node.create_publisher_raw("/robot_bus/status"),
-            Err(BusError::ReservedName { .. })
-        ));
-        assert!(matches!(
-            node.create_service_raw(
-                "/robot_bus/topology/register",
-                Arc::new(|_| Vec::new()),
-                None
-            ),
-            Err(BusError::ReservedName { .. })
-        ));
-        assert!(matches!(
-            node.create_action_server_raw("/robot_bus/actions", Arc::new(|_| Vec::new()), None),
-            Err(BusError::ReservedName { .. })
-        ));
-    }
 
     #[test]
     fn node_local_parameters() {

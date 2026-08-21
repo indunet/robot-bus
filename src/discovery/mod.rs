@@ -3,7 +3,7 @@
 //! Brokers expose [`GET /api/v1/discover`](crate::discovery::DiscoverResponse) on the
 //! API listen port (default `15570`). Clients fetch that JSON, then
 //! [`BrokerAnnouncement::apply`] fills location fields on a user-chosen
-//! [`crate::NodeOptions`] transport (`tcp` / `ipc` / `inproc` / `grpc`).
+//! [`crate::NodeOptions`] transport (`tcp` / `ipc` / `inproc` / `ws`).
 //!
 //! UDP multicast announce is deprecated and no longer started by the broker.
 
@@ -47,9 +47,8 @@ impl BrokerAnnouncement {
             "tcp" => self.apply_tcp(&mut opts)?,
             "ipc" => self.apply_ipc(&mut opts)?,
             "inproc" => self.apply_inproc(&mut opts)?,
-            // Canonical name is "ws"; "grpc" is a compatibility alias.
-            "ws" | "grpc" => {
-                self.apply_grpc(&mut opts)?;
+            "ws" => {
+                self.apply_ws(&mut opts)?;
                 opts.transport = "ws".into();
             }
             other => {
@@ -170,7 +169,7 @@ impl BrokerAnnouncement {
         Ok(())
     }
 
-    fn apply_grpc(&self, opts: &mut NodeOptions) -> Result<()> {
+    fn apply_ws(&self, opts: &mut NodeOptions) -> Result<()> {
         let url = self
             .ws_url
             .as_deref()

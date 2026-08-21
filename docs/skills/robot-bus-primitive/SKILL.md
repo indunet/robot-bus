@@ -34,7 +34,7 @@ Default console / discover API: `http://127.0.0.1:15570`.
 | tcp (default `Node::new` / `Node("name")`) | Cross-process; discover fills addresses |
 | ipc | Same machine |
 | inproc | **Must** share one `Context` with embedded broker |
-| ws gateway | Client: pub/sub + call service/action; **cannot** be service/action server (`"grpc"` alias) |
+| ws gateway | Client: pub/sub + call service/action; **cannot** be service/action server |
 
 Prefer **typed** APIs (protobuf bound at create). Use `*_raw` only for opaque payloads.
 
@@ -245,7 +245,7 @@ handle = node.create_timer(0.1, lambda: print("tick"))  # seconds
 - Stop from another thread: `shutdown_handle().shutdown()`.
 - Non-blocking: `spin_once(timeout)`.
 - Default callback group = mutually exclusive. `Reentrant` only parallelizes with `MultiThreadedExecutor`.
-- WS Node (`Node::ws`; `"grpc"` is an alias): can publish/subscribe/call; cannot host service/action servers.
+- WS Node (`Node::ws`): can publish/subscribe/call; cannot host service/action servers.
 
 ## 6. Message types
 

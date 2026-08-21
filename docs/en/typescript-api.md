@@ -23,7 +23,7 @@ Same as Rust / Python: start the broker first, then run application code.
 
 ```bash
 # Rust / Python CLI
-robot-bus-broker --grpc-listen 0.0.0.0:15570 --tcp-only
+robot-bus-broker --api-listen 0.0.0.0:15570 --tcp-only
 ```
 
 In-process in Node:
@@ -32,9 +32,8 @@ In-process in Node:
 import { RobotBusBroker } from "robot-bus";
 
 const broker = RobotBusBroker.start({
-  grpcListen: "0.0.0.0:15570",
+  apiListen: "0.0.0.0:15570",
   tcpOnly: true,
-  noConsole: true,
 });
 // …application…
 broker.stop();

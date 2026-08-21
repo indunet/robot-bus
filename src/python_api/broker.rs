@@ -10,14 +10,14 @@ use pyo3::prelude::*;
 
 use crate::broker::{
     RobotBusBroker as RustRobotBusBroker, RobotBusConfig, apply_federation_opts,
-    parse_robot_bus_config, robot_bus_broker_help,
+    binding_broker_cli_args, parse_robot_bus_config, robot_bus_broker_help,
 };
 use crate::shutdown;
 
 use super::runtime::PyContext;
 use super::util::anyhow_err;
 
-/// In-process broker: message + service + action buses + gRPC on background threads.
+/// In-process broker: message + service + action buses + WebSocket RPC API on background threads.
 #[pyclass(name = "RobotBusBroker", unsendable)]
 pub(crate) struct PyRobotBusBroker {
     pub(crate) inner: Option<RustRobotBusBroker>,
@@ -25,7 +25,7 @@ pub(crate) struct PyRobotBusBroker {
 
 #[pymethods]
 impl PyRobotBusBroker {
-    /// Start all buses (and gRPC). Keyword args override [`RobotBusConfig`] defaults.
+    /// Start all buses (and the WebSocket RPC API). Keyword args override [`RobotBusConfig`] defaults.
     #[staticmethod]
     #[pyo3(signature = (
         *,
@@ -368,7 +368,7 @@ pub(crate) fn print_broker_help() {
 /// Used by the `robot-bus-broker` console script after `pip install robot-bus`.
 #[pyfunction]
 pub(crate) fn run_broker(py: Python<'_>) -> PyResult<()> {
-    let args: Vec<String> = std::env::args().skip(1).collect();
+    let args = binding_broker_cli_args();
     let config = match parse_robot_bus_config(&args).map_err(anyhow_err)? {
         None => {
             print_broker_help();
@@ -385,15 +385,6 @@ pub(crate) fn run_broker(py: Python<'_>) -> PyResult<()> {
     let mut broker = PyRobotBusBroker {
         inner: Some(broker),
     };
-    #[cfg(feature = "ws")]
-    println!(
-        "WebSocket RPC listening on http://{}",
-        broker.api_listen()?
-    );
-    #[cfg(feature = "console")]
-    if let Some(addr) = broker.console_listen()? {
-        println!("Web console listening on http://{addr}");
-    }
 
     loop {
         if flag.load(Ordering::Acquire) {

@@ -36,16 +36,19 @@ gen-rust:
 # All language stubs (protoc 35.1)
 gen-all: gen-rust proto gen-typescript gen-cpp gen-java gen-android
 
-# Build and install the Python binding into the active venv
+# Build and install the Python binding into the active venv (includes Web console)
 python-dev: proto gen-rust
-	cd bindings/python && maturin develop --features extension-module,ws --no-default-features
+	if [[ ! -f assets/console/index.html ]]; then just console; fi
+	cd bindings/python && maturin develop --features extension-module,ws,console --no-default-features
 
 # Same as python-dev; Ros2Bridge is pure Python (rclpy). Source Humble/Jazzy first.
 python-dev-ros2: proto gen-rust
-	cd bindings/python && maturin develop --features extension-module,ws --no-default-features
+	if [[ ! -f assets/console/index.html ]]; then just console; fi
+	cd bindings/python && maturin develop --features extension-module,ws,console --no-default-features
 
-# Build TypeScript native addon + JS bundle
+# Build TypeScript native addon + JS bundle (includes Web console)
 ts-dev: gen-typescript gen-rust
+	if [[ ! -f assets/console/index.html ]]; then just console; fi
 	cd bindings/typescript && npm install && npm run build:native && npm run build:ts
 
 # Build C++ FFI + msgs library + tests
@@ -178,6 +181,7 @@ test-python-native:
 	python3 bindings/python/tests/test_ws_node.py
 	python3 bindings/python/tests/test_inproc_context.py
 	python3 bindings/python/tests/test_federation_opts.py
+	python3 bindings/python/tests/test_console.py
 
 # Cross-language interop matrix (6 language-pair scenarios). Missing peers fail.
 # Needs `just python-dev`, console assets, protobuf C++ runtime, Java, Node/napi.

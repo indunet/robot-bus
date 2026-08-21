@@ -200,7 +200,7 @@ impl Node {
             "tcp" => RustNodeOptions::tcp(),
             "ipc" => RustNodeOptions::ipc(),
             "inproc" => RustNodeOptions::inproc(),
-            "ws" | "grpc" => RustNodeOptions::ws(),
+            "ws" => RustNodeOptions::ws(),
             other => {
                 return Err(Error::from_reason(format!("unknown transport {other:?}")));
             }

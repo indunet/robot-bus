@@ -136,13 +136,6 @@ fn handle_message(state: &ConsoleState, topic: &str, payload: &[u8]) {
             if endpoint_id.is_empty() || node_name.is_empty() || topic_name.is_empty() {
                 return;
             }
-            if kind == EndpointKind::Publisher
-                && console_topics::is_reserved_name(topic_name)
-                && !console_topics::is_builtin_tank_name(topic_name)
-            {
-                log::warn!("reject topology publisher on reserved topic {topic_name}");
-                return;
-            }
             state
                 .topology
                 .register(endpoint_id, node_name, kind, topic_name);
@@ -167,8 +160,6 @@ fn handle_message(state: &ConsoleState, topic: &str, payload: &[u8]) {
             if topic_name.is_empty() || type_name.is_empty() {
                 return;
             }
-            // Reserved `/robot_bus/*` topics are allowed: console UI and the
-            // status publisher need TYPE metadata for system snapshot channels.
             let previous = state.topic_types.register(topic_name, type_name);
             if previous.as_deref() != Some(type_name) {
                 state.events.emit(

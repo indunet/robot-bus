@@ -31,7 +31,7 @@ SDK：**Rust**、**Python**、**TypeScript**、**C++**、**Java**、**Android**�
 - **内嵌 Web 控制台：** Overview、Topics、Services、Actions、Topology，以及内置小坦克示例 —— 无需额外前端进程。
 - **可选 ROS 2 桥：** 进程内用 `rclrs` / `rclpy` / `rclcpp` 桥接 topic / service / action（Humble / Jazzy）。未启用桥时，核心 SDK 不依赖 ROS。
 - **Protobuf 契约：** 全部载荷使用 Protocol Buffers（不是 ROS CDR），目录与常见 ROS 2 包名对齐，见 [`proto/`](proto/)。
-- **浏览器与远程客户端：** WebSocket RPC（`Node::ws` / `Node.ws`；传输 `"ws"`）。`"grpc"` 与 `--grpc-listen` 仍是别名。
+- **浏览器与远程客户端：** WebSocket RPC（`Node::ws` / `Node.ws`；传输 `"ws"`）。
 
 Node 编程模型——`Context` / `Node`、topic pub-sub、service、action 以及 `spin`——为稳定的公开 API。
 
@@ -53,7 +53,7 @@ pip install robot-bus
 * Rust
 
 ```toml
-robot-bus = "1.2.2"
+robot-bus = "1.3.0"
 ```
 
 * npm
@@ -68,7 +68,7 @@ npm install robot-bus
 <dependency>
     <groupId>org.indunet</groupId>
     <artifactId>robot-bus</artifactId>
-    <version>1.2.2</version>
+    <version>1.3.0</version>
 </dependency>
 ```
 

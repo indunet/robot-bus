@@ -31,7 +31,7 @@ SDKs: **Rust**, **Python**, **TypeScript**, **C++**, **Java**, **Android**.
 - **Embedded Web console:** Overview, Topics, Services, Actions, Topology, plus a built-in tank demo — no extra frontend process.
 - **Optional ROS 2 bridge:** In-process topic / service / action bridging with `rclrs` / `rclpy` / `rclcpp` (Humble / Jazzy). The core SDK stays ROS-free unless the bridge is enabled.
 - **Protobuf contracts:** All payloads are Protocol Buffers (not ROS CDR), aligned with common ROS 2 package names under [`proto/`](proto/).
-- **Browser and remote clients:** WebSocket RPC (`Node::ws` / `Node.ws`; transport `"ws"`). `"grpc"` and `--grpc-listen` remain aliases.
+- **Browser and remote clients:** WebSocket RPC (`Node::ws` / `Node.ws`; transport `"ws"`).
 
 The Node programming model — `Context` / `Node`, topic pub-sub, service, action, and `spin` — is the stable public API.
 
@@ -53,7 +53,7 @@ pip install robot-bus
 * Rust
 
 ```toml
-robot-bus = "1.2.2"
+robot-bus = "1.3.0"
 ```
 
 * npm
@@ -68,7 +68,7 @@ npm install robot-bus
 <dependency>
     <groupId>org.indunet</groupId>
     <artifactId>robot-bus</artifactId>
-    <version>1.2.2</version>
+    <version>1.3.0</version>
 </dependency>
 ```
 

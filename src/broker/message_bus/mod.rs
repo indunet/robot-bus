@@ -121,7 +121,7 @@ pub fn run_with_shutdown_ctx_bound(
     }
 
     let federated = !config.peers.is_empty();
-    println!(
+    log::info!(
         "message_bus_broker proxy started\n  \
          publishers (PUB) connect ->\n    {}\n  \
          subscribers (SUB) connect ->\n    {}\n  \

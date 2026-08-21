@@ -36,14 +36,14 @@ CMake 设置 `CMAKE_CXX_STANDARD 17`。自有应用用更高标准（如 `-DCMAK
 
 ```bash
 # 核心 SDK（无 ROS bridge）
-sudo apt install ./robot-bus_1.2.2_linux_amd64.deb
+sudo apt install ./robot-bus_1.3.0_linux_amd64.deb
 
 # 或 ROS 2 bridge 变体（Humble 示例）— 需已安装 Humble
-sudo apt install ./robot-bus-ros2-humble_1.2.2_linux_amd64.deb
+sudo apt install ./robot-bus-ros2-humble_1.3.0_linux_amd64.deb
 source /opt/ros/humble/setup.bash
 
 # macOS Apple Silicon（仅核心包）
-sudo installer -pkg robot-bus_1.2.2_macos_arm64.pkg -target /
+sudo installer -pkg robot-bus_1.3.0_macos_arm64.pkg -target /
 # 安装于 /usr/local（{bin,lib,include}）
 
 # 或从源码（开发）
@@ -118,7 +118,7 @@ robot_bus::Broker broker(ctx);
 auto node = robot_bus::Node::inproc_with_context(ctx, "pilot");
 ```
 
-tcp / ipc / gRPC 不需要共享 context。
+tcp / ipc / ws 不需要共享 context。
 
 ### HTTP 发现（填充地址，自行选传输）
 
@@ -191,7 +191,7 @@ auto sub = node.create_subscription("/imu", [](std::string_view topic, robot_bus
 
 ### WebSocket RPC 模式 Node（客户端）
 
-`Node::ws` / `Node::ws_at` 经 broker WebSocket RPC 网关接入，不创建 ZMQ socket。传输 `"grpc"` 为兼容别名。
+`Node::ws` / `Node::ws_at` 经 broker WebSocket RPC 网关接入，不创建 ZMQ socket。
 
 | 支持 | 不支持 |
 |------|--------|

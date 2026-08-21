@@ -19,7 +19,7 @@ robot-bus-broker --help
 robot-bus-broker --api-listen 0.0.0.0:15570 --tcp-only
 ```
 
-Or in-process (keyword arguments override default bind / HWM / heartbeat / gRPC):
+Or in-process (keyword arguments override default bind / HWM / heartbeat / API):
 
 ```python
 import robot_bus
@@ -30,7 +30,8 @@ with robot_bus.RobotBusBroker.start(
     api_listen="0.0.0.0:15570",
     tcp_only=True,
 ) as broker:
-    # broker.message_xsub_bind / message_xpub_bind / api_listen etc.
+    # broker.message_xsub_bind / message_xpub_bind / api_listen / console_listen
+    # Web console: http://127.0.0.1:15570  (pass no_console=True to disable)
     pass
 ```
 
@@ -50,7 +51,7 @@ with robot_bus.RobotBusBroker.start(
 
 ### HTTP discovery (fills in addresses, does not choose transport)
 
-Request `GET /api/v1/discover` on a known API base URL. Transport is still specified manually (`tcp` / `ipc` / `inproc` / `ws`; `"grpc"` is an alias of `"ws"`); discovery only fills in locations:
+Request `GET /api/v1/discover` on a known API base URL. Transport is still specified manually (`tcp` / `ipc` / `inproc` / `ws`); discovery only fills in locations:
 
 ```python
 node = robot_bus.Node.discover(
@@ -68,7 +69,7 @@ with robot_bus.RobotBusBroker.start(context=ctx) as broker:
     node = robot_bus.Node.inproc_with_context(ctx, "pilot")
 ```
 
-tcp / ipc / gRPC do not require a shared Context.
+tcp / ipc / ws do not require a shared Context.
 Default ports and full CLI options: see [rust-api.md](rust-api.md) “Broker startup”.
 
 ---
@@ -104,7 +105,7 @@ node.load_parameters_from_yaml_file("config/pilot.yaml")
 
 Close to ROS 2: `Node(...)` → `create_publisher` / `create_subscription` → `node.spin()`. With a single node you do not need to hand-write an Executor (it auto-attaches `SingleThreadedExecutor` internally).
 
-For the WebSocket RPC gateway only, use `Node.ws` / `Node.ws_at` (or `transport="ws"`; `transport="grpc"` is still accepted as an alias): you can subscribe, publish, and call service / action, but cannot act as a server; see “WebSocket RPC mode Node” below.
+For the WebSocket RPC gateway only, use `Node.ws` / `Node.ws_at` (or `transport="ws"`): you can subscribe, publish, and call service / action, but cannot act as a server; see “WebSocket RPC mode Node” below.
 
 Python recommends **typed** usage (pass a protobuf class at creation for automatic `SerializeToString` / `ParseFromString`); omit the type for raw bytes. Under the hood it is the same as Rust with opaque bytes (thin Python wrapper; PyO3 cannot map Rust generics).
 
@@ -150,7 +151,7 @@ node.create_subscription("/robot1/imu", on_raw)
 
 ### WebSocket RPC mode Node (client)
 
-`Node.ws` / `Node.ws_at` (or `Node(..., transport="ws", ws_url=...)`; `transport="grpc"` is still accepted as an alias) connect via the broker WebSocket RPC gateway and do not create ZMQ sockets.
+`Node.ws` / `Node.ws_at` (or `Node(..., transport="ws", ws_url=...)`) connect via the broker WebSocket RPC gateway and do not create ZMQ sockets.
 
 | Supported | Not supported |
 |------|--------|
@@ -403,7 +404,7 @@ print(robot_bus.__version__)
 | Symbol | Description |
 |------|------|
 | `Node(name, host=..., transport=..., ws_url=..., message_xsub=..., …)` | Create a node; auto-attaches `SingleThreadedExecutor` on first `create_*` / `spin` |
-| `Node.tcp` / `Node.ipc` / `Node.inproc` / `Node.inproc_with_context` / `Node.with_context` / `Node.ws` / `Node.ws_at` / `Node.discover` | Transport presets (prefer `Context` + `with_context`; gRPC/WebSocket gateway is client mode; same-process inproc uses `inproc_with_context`; `discover` only fills addresses) |
+| `Node.tcp` / `Node.ipc` / `Node.inproc` / `Node.inproc_with_context` / `Node.with_context` / `Node.ws` / `Node.ws_at` / `Node.discover` | Transport presets (prefer `Context` + `with_context`; WebSocket RPC gateway is client mode; same-process inproc uses `inproc_with_context`; `discover` only fills addresses) |
 | `Node.declare_parameter` / `get_parameter` / `set_parameter` / `has_parameter` / `list_parameters` | Local node parameters (`bool` / `int` / `float` / `str`) |
 | `Node.load_parameters_from_yaml_str` / `load_parameters_from_yaml_file` | Load / override parameters from YAML |
 | `node.spin()` / `spin_once` / `shutdown` | Drive callbacks (ROS 2–style simple path) |
@@ -424,7 +425,7 @@ print(robot_bus.__version__)
 | `Publisher(endpoint=None)` | Low-level XSUB connection (without Node) |
 | `ros2_available()` | Whether `import rclpy` succeeds (native Python bridge) |
 | `robot_bus.ros2_bridge.Ros2Bridge` / `Direction` / built-in Mapper | In-process ROS bridge (**rclpy**); see [ros2-bridge.md](ros2-bridge.md) |
-| `RobotBusBroker.start(...)` / `run_broker(...)` | Start three buses + gRPC in-process; pass `context` for same-process inproc; peers use CLI-style string lists |
+| `RobotBusBroker.start(...)` / `run_broker(...)` | Start three buses + WebSocket RPC API in-process; pass `context` for same-process inproc; peers use CLI-style string lists |
 | `ShutdownHandle` / `TimerHandle` | Spin and timer control |
 
 WebSocket RPC mode Node: see previous section; low-level gateway RPC can also use the Rust tonic client directly ([rust-api.md](rust-api.md)).

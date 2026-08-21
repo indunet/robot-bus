@@ -102,8 +102,10 @@ message ConsoleEvent {
 message TopologyRegister {
   string endpoint_id = 1;
   string node_name = 2;
-  // "publisher" | "subscriber"
+  // "publisher" | "subscriber" | "service_client" | "service_server"
+  // | "action_client" | "action_server"
   string kind = 3;
+  // Topic, service, or action name.
   string topic = 4;
 }
 

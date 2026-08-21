@@ -128,7 +128,7 @@ pub fn run_with_shutdown_ctx_bound(
         let _ = tx.send((resolved_fe, resolved_be));
     }
 
-    println!(
+    log::info!(
         "service_bus_broker broker started\n  \
          clients (REQ) connect ->\n    {}\n  \
          workers (DEALER) connect ->\n    {}\n  \

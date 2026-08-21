@@ -5,20 +5,20 @@ English | [中文](../zh/rust-api.md)
 `Cargo.toml`:
 
 ```toml
-robot-bus = "1.2.2"
+robot-bus = "1.3.0"
 # Local: robot-bus = { path = "../robot-bus" }
-# WebSocket RPC gateway (`ws` feature) is on by default; to disable: robot-bus = { version = "1.2.2", default-features = false }
+# WebSocket RPC gateway (`ws` feature) is on by default; to disable: robot-bus = { version = "1.3.0", default-features = false }
 ```
 
 ## Broker startup
 
-Start the broker before running examples (or embed it in-process; see below). By default one startup brings up **message / service / action** buses; each TCP bind defaults to `…:0` (OS assigns a free port), plus **API** (WebSocket RPC `/ws` / `GET /api/v1/discover` / console http), default `0.0.0.0:15570`. `--grpc-listen` is an alias of `--api-listen`.
+Start the broker before running examples (or embed it in-process; see below). By default one startup brings up **message / service / action** buses; each TCP bind defaults to `…:0` (OS assigns a free port), plus **API** (WebSocket RPC `/ws` / `GET /api/v1/discover` / console http), default `0.0.0.0:15570`.
 
 ```bash
 cargo run --bin robot_bus_broker
 # See options: cargo run --bin robot_bus_broker -- --help
 # TCP only: add --tcp-only
-# API port: --api-listen 0.0.0.0:15570 (aliases --grpc-listen / --console-listen)
+# API port: --api-listen 0.0.0.0:15570 (alias --console-listen)
 # Externally reachable host: --advertise-host HOST
 # Federation: --peer 10.0.0.2:15570 (peer API port; repeatable)
 ```
@@ -398,7 +398,7 @@ Service / Action likewise (e.g. `create_client::<SetBool>`, `create_action_clien
 
 ## WebSocket RPC mode Node (client)
 
-`Node::ws` / `NodeOptions::ws` reach the bus through the broker WebSocket RPC gateway and **do not create ZMQ sockets**. Transport `"grpc"` / older `Node::grpc` names are aliases. The API is still `create_subscription` / `create_publisher` / `create_client` / `create_action_client` + `spin`, transparent to callers.
+`Node::ws` / `NodeOptions::ws` reach the bus through the broker WebSocket RPC gateway and **do not create ZMQ sockets**. The API is still `create_subscription` / `create_publisher` / `create_client` / `create_action_client` + `spin`, transparent to callers.
 
 | Supported | Not supported |
 |-----------|---------------|

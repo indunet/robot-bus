@@ -267,7 +267,7 @@ fn render_perf_report(
         ReportLang::Zh => {
             md.push_str("## 方法\n\n");
             md.push_str(
-                "- 进程内 `RobotBusBroker`，`bind_all_transports = true`（tcp + ipc + inproc + grpc）。\n",
+                "- 进程内 `RobotBusBroker`，`bind_all_transports = true`（tcp + ipc + inproc + ws）。\n",
             );
             md.push_str("- Console HTTP 关闭；message HWM=2048（仅 bench）；service/action HWM=64。\n");
             md.push_str("- Payload：64 字节 raw（前 8 字节为发送端 Unix 纳秒时间戳，用于延迟）。\n");
@@ -281,20 +281,20 @@ fn render_perf_report(
                 "- Service / action：各 {svc_iters} / {act_iters} 次（`ROBOT_BUS_PERF_SVC_ITERS` / `ROBOT_BUS_PERF_ACT_ITERS`）；延迟为每次 call / send_goal 本地计时。\n"
             ));
             md.push_str(
-                "- ZMQ：共享 `Context` + `Node::tcp` / `ipc` / `inproc`；gRPC：`Node::ws_at`。\n",
+                "- ZMQ：共享 `Context` + `Node::tcp` / `ipc` / `inproc`；WebSocket RPC：`Node::ws_at`。\n",
             );
             md.push_str(
                 "- inproc 与嵌入式 broker 必须共用同一 `Context`（ZeroMQ inproc 是 context-local）。\n",
             );
             md.push_str("- 指标为单机本机回环，机器相关，不作为 CI 门槛。\n\n");
             md.push_str("## 横比\n\n");
-            md.push_str("message 为 **max goodput**（丢包阈值内的最大可持续订阅速率）；括号为该档实测投递率。service/action 为完成速率。gRPC Node **不支持 publish**，发布格为 —。\n\n");
-            md.push_str("| 场景 | tcp | ipc | inproc | grpc |\n");
+            md.push_str("message 为 **max goodput**（丢包阈值内的最大可持续订阅速率）；括号为该档实测投递率。service/action 为完成速率。WS Node 本报告未测 publish，发布格为 —。\n\n");
+            md.push_str("| 场景 | tcp | ipc | inproc | ws |\n");
         }
         ReportLang::En => {
             md.push_str("## Method\n\n");
             md.push_str(
-                "- In-process `RobotBusBroker` with `bind_all_transports = true` (tcp + ipc + inproc + grpc).\n",
+                "- In-process `RobotBusBroker` with `bind_all_transports = true` (tcp + ipc + inproc + ws).\n",
             );
             md.push_str(
                 "- Console HTTP off; message HWM=2048 (bench only); service/action HWM=64.\n",
@@ -312,7 +312,7 @@ fn render_perf_report(
                 "- Service / action: {svc_iters} / {act_iters} iters (`ROBOT_BUS_PERF_SVC_ITERS` / `ROBOT_BUS_PERF_ACT_ITERS`); latency timed per call / send_goal.\n"
             ));
             md.push_str(
-                "- ZMQ: shared `Context` + `Node::tcp` / `ipc` / `inproc`; gRPC: `Node::ws_at`.\n",
+                "- ZMQ: shared `Context` + `Node::tcp` / `ipc` / `inproc`; WebSocket RPC: `Node::ws_at`.\n",
             );
             md.push_str(
                 "- inproc and the embedded broker must share one `Context` (ZeroMQ inproc is context-local).\n",
@@ -321,8 +321,8 @@ fn render_perf_report(
                 "- Numbers are single-host loopback and machine-dependent; not CI gates.\n\n",
             );
             md.push_str("## Cross-compare\n\n");
-            md.push_str("message is **max goodput** (max sustainable subscribe rate within the loss budget); parentheses show measured delivery at that rate. service/action are completion rates. gRPC Node **does not support publish** (publish cell is —).\n\n");
-            md.push_str("| Scenario | tcp | ipc | inproc | grpc |\n");
+            md.push_str("message is **max goodput** (max sustainable subscribe rate within the loss budget); parentheses show measured delivery at that rate. service/action are completion rates. WS Node publish is not included in this report (cell is —).\n\n");
+            md.push_str("| Scenario | tcp | ipc | inproc | ws |\n");
         }
     }
     md.push_str("|------|-----|-----|--------|------|\n");
@@ -341,21 +341,21 @@ fn render_perf_report(
         cell_sub(results, "tcp", "message pub/sub"),
         cell_sub(results, "ipc", "message pub/sub"),
         cell_sub(results, "inproc", "message pub/sub"),
-        cell_sub(results, "grpc", "message Subscribe"),
+        cell_sub(results, "ws", "message Subscribe"),
     ));
     md.push_str(&format!(
         "| service call | {} | {} | {} | {} |\n",
         cell_rpc(results, "tcp", "service call"),
         cell_rpc(results, "ipc", "service call"),
         cell_rpc(results, "inproc", "service call"),
-        cell_rpc(results, "grpc", "service Call"),
+        cell_rpc(results, "ws", "service Call"),
     ));
     md.push_str(&format!(
         "| action send_goal | {} | {} | {} | {} |\n\n",
         cell_rpc(results, "tcp", "action send_goal"),
         cell_rpc(results, "ipc", "action send_goal"),
         cell_rpc(results, "inproc", "action send_goal"),
-        cell_rpc(results, "grpc", "action SendGoal"),
+        cell_rpc(results, "ws", "action SendGoal"),
     ));
 
     let detail_header = match lang {
@@ -366,7 +366,7 @@ fn render_perf_report(
             "| Scenario | Sent | Recv | Time | Pub/s | Sub/s | Delivery% | p50 (µs) | p95 (µs) | p99 (µs) | mean (µs) |\n"
         }
     };
-    for group in ["tcp", "ipc", "inproc", "grpc"] {
+    for group in ["tcp", "ipc", "inproc", "ws"] {
         md.push_str(&format!("## {group}\n\n"));
         md.push_str(detail_header);
         md.push_str(

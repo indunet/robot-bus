@@ -1,5 +1,6 @@
 'use client'
 
+import type { ButtonHTMLAttributes } from 'react'
 import { useI18n } from '@/lib/i18n'
 import {
   KEY_BUTTONS,
@@ -186,14 +187,14 @@ export default function TankControls({
               yLabel="goal.y"
             />
           )}
-          <button
-            type="button"
+          <ActionButton
+            tone="go"
             disabled={!pointGoal || navPhase === 'running'}
             onClick={onRunPointNav}
-            className="w-full h-8 mb-2 border border-bus-border rounded-sm text-[11px] bg-[#1f2428] hover:border-bus-cyan hover:text-bus-cyan disabled:opacity-40"
+            className="w-full mb-2"
           >
             {t('tankNavGo')}
-          </button>
+          </ActionButton>
           <NavProgress
             phase={navPhase}
             progress={navProgress}
@@ -201,7 +202,9 @@ export default function TankControls({
             progressLabel={t('tankNavProgress')}
           />
           {navPhase === 'running' && (
-            <CancelButton onClick={onCancelNav} label={t('tankNavCancel')} />
+            <ActionButton tone="cancel" onClick={onCancelNav} className="mt-2 w-full">
+              {t('tankNavCancel')}
+            </ActionButton>
           )}
         </div>
       )}
@@ -221,30 +224,27 @@ export default function TankControls({
             />
           )}
           <div className="grid grid-cols-3 gap-1.5 mb-2">
-            <button
-              type="button"
+            <ActionButton
+              tone="go"
               disabled={waypoints.length === 0 || navPhase === 'running'}
               onClick={onRunMultiNav}
-              className="h-8 border border-bus-border rounded-sm text-[11px] bg-[#1f2428] hover:border-bus-cyan hover:text-bus-cyan disabled:opacity-40"
             >
               {t('tankNavGo')}
-            </button>
-            <button
-              type="button"
+            </ActionButton>
+            <ActionButton
+              tone="undo"
               disabled={waypoints.length === 0 || navPhase === 'running'}
               onClick={onUndoWaypoint}
-              className="h-8 border border-bus-border rounded-sm text-[11px] bg-[#1f2428] hover:border-bus-cyan-dim disabled:opacity-40"
             >
               {t('tankNavUndo')}
-            </button>
-            <button
-              type="button"
+            </ActionButton>
+            <ActionButton
+              tone="clear"
               disabled={waypoints.length === 0 || navPhase === 'running'}
               onClick={onClearWaypoints}
-              className="h-8 border border-bus-border rounded-sm text-[11px] bg-[#1f2428] hover:border-bus-amber disabled:opacity-40"
             >
               {t('tankNavClear')}
-            </button>
+            </ActionButton>
           </div>
           <NavProgress
             phase={navPhase}
@@ -253,7 +253,9 @@ export default function TankControls({
             progressLabel={t('tankNavProgress')}
           />
           {navPhase === 'running' && (
-            <CancelButton onClick={onCancelNav} label={t('tankNavCancel')} />
+            <ActionButton tone="cancel" onClick={onCancelNav} className="mt-2 w-full">
+              {t('tankNavCancel')}
+            </ActionButton>
           )}
         </div>
       )}
@@ -261,15 +263,15 @@ export default function TankControls({
       {capability === 'reset' && (
         <div className="border-t border-bus-border pt-3 text-[10px] leading-5">
           <p className="text-bus-muted mb-2">{t('tankResetHint')}</p>
-          <button
-            type="button"
+          <ActionButton
+            tone="reset"
             disabled={resetting || !sessionReady}
             title={t('tankResetHint')}
             onClick={onReset}
-            className="w-full h-8 border border-bus-border rounded-sm text-[11px] bg-[#1f2428] hover:border-bus-amber hover:text-bus-amber disabled:opacity-40"
+            className="w-full"
           >
             {resetting ? t('tankResetting') : t('tankReset')}
-          </button>
+          </ActionButton>
         </div>
       )}
     </aside>
@@ -328,15 +330,27 @@ function GoalStats({
   )
 }
 
-function CancelButton({ onClick, label }: { onClick: () => void; label: string }) {
+type ActionTone = 'go' | 'undo' | 'clear' | 'cancel' | 'reset'
+
+const ACTION_TONES: Record<ActionTone, string> = {
+  go: 'border-bus-cyan bg-bus-cyan/20 text-bus-cyan hover:bg-bus-cyan/30',
+  undo: 'border-bus-border2 bg-[#1f2428] text-bus-text hover:border-bus-cyan-dim hover:text-bus-cyan',
+  clear: 'border-bus-amber/55 bg-bus-amber/10 text-bus-amber hover:bg-bus-amber/20',
+  cancel: 'border-bus-red/70 bg-bus-red/10 text-bus-red hover:bg-bus-red/20',
+  reset: 'border-bus-amber bg-bus-amber/15 text-bus-amber hover:bg-bus-amber/25',
+}
+
+function ActionButton({
+  tone,
+  className = '',
+  ...props
+}: ButtonHTMLAttributes<HTMLButtonElement> & { tone: ActionTone }) {
   return (
     <button
       type="button"
-      onClick={onClick}
-      className="mt-2 w-full h-8 border border-bus-border rounded-sm text-[11px] bg-[#1f2428] hover:border-bus-amber hover:text-bus-amber"
-    >
-      {label}
-    </button>
+      className={`h-8 border rounded-sm text-[11px] transition-colors disabled:opacity-40 disabled:pointer-events-none ${ACTION_TONES[tone]} ${className}`}
+      {...props}
+    />
   )
 }
 

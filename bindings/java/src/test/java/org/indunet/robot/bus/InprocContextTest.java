@@ -1,11 +1,14 @@
 package org.indunet.robot.bus;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.IOException;
 import java.net.ServerSocket;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.Test;
 
@@ -40,6 +43,54 @@ class InprocContextTest {
             assertTrue(hits.get() >= 1, "expected at least one inproc message");
             sub.shutdown();
             sub.waitForShutdown();
+        }
+    }
+
+    @Test
+    void inprocActionGoalHandle() throws Exception {
+        try (Context ctx = new Context();
+                Broker broker = new Broker(ctx, inprocBrokerOptions());
+                Node server = Node.inproc(ctx, "inproc-action-server");
+                Node clientNode = Node.inproc(ctx, "inproc-action-client")) {
+            Thread.sleep(150);
+
+            server.createActionServer(
+                    "/inproc/action",
+                    body ->
+                            List.of(
+                                    new ActionPhase(
+                                            "FEEDBACK",
+                                            ("step:" + new String(body, StandardCharsets.UTF_8))
+                                                    .getBytes(StandardCharsets.UTF_8)),
+                                    new ActionPhase(
+                                            "RESULT",
+                                            ("done:" + new String(body, StandardCharsets.UTF_8))
+                                                    .getBytes(StandardCharsets.UTF_8))));
+            server.start();
+            Thread.sleep(100);
+
+            List<String> feedback = new ArrayList<>();
+            try (ActionClient action = clientNode.createActionClient("/inproc/action");
+                    ActionGoalHandle goal =
+                            action.sendGoal(
+                                    "move".getBytes(StandardCharsets.UTF_8),
+                                    null,
+                                    3.0,
+                                    message ->
+                                            feedback.add(
+                                                    new String(
+                                                            message.getBody(),
+                                                            StandardCharsets.UTF_8)))) {
+                assertEquals("/inproc/action", goal.actionName());
+                assertFalse(goal.goalId().isEmpty());
+                assertEquals(
+                        "done:move",
+                        new String(goal.result(3.0).getBody(), StandardCharsets.UTF_8));
+                assertEquals(List.of("step:move"), feedback);
+            }
+
+            server.shutdown();
+            server.waitForShutdown();
         }
     }
 

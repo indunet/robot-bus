@@ -38,7 +38,7 @@ export interface TopicInfo {
 
 export interface TopologyNodeInfo {
   id: string
-  kind: 'process' | 'topic' | string
+  kind: 'process' | 'topic' | 'service' | 'action' | string
   label: string
   typeName?: string
   msgPerSec?: number
@@ -48,7 +48,7 @@ export interface TopologyEdgeInfo {
   id: string
   source: string
   target: string
-  kind: 'publisher' | 'subscriber' | string
+  kind: 'publisher' | 'subscriber' | 'service_client' | 'service_server' | 'action_client' | 'action_server' | string
   topic: string
 }
 

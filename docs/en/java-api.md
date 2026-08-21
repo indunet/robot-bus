@@ -4,7 +4,7 @@ English | [中文](../zh/java-api.md)
 
 ```bash
 # Maven Central (when published)
-# implementation("org.indunet:robot-bus:1.2.2")           // JVM
+# implementation("org.indunet:robot-bus:1.3.0")           // JVM
 
 # Local:
 just java-dev       # gen-java + cargo FFI + mvn test
@@ -21,7 +21,7 @@ Same as other languages: start the broker first, then run your application logic
 
 ```bash
 robot-bus-broker
-# or robot-bus-broker --grpc-listen 0.0.0.0:15570 --tcp-only
+# or robot-bus-broker --api-listen 0.0.0.0:15570 --tcp-only
 ```
 
 In-process:

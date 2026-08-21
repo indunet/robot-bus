@@ -46,7 +46,7 @@ Progress:
 From the robot-bus project collect:
 
 - Language SDK: Rust / Python / C++ / Java / TypeScript / Android
-- How nodes connect: `Node::new` (tcp+discover), `ipc`, `inproc`, `grpc` / `ws_at`
+- How nodes connect: `Node::new` (tcp+discover), `ipc`, `inproc`, `ws` / `ws_at`
 - Typed vs raw publishers (`create_publisher::<T>` vs `create_*_raw`)
 - Topic / service / action **names** and protobuf type full names (`sensor_msgs.msg.v1.Imu`)
 - Custom `.proto` under the app or only built-in bus types

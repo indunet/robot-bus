@@ -5,20 +5,20 @@
 `Cargo.toml`：
 
 ```toml
-robot-bus = "1.2.2"
+robot-bus = "1.3.0"
 # 本地：robot-bus = { path = "../robot-bus" }
-# 默认已启用 WebSocket RPC 网关（`ws` feature）；若需关闭：robot-bus = { version = "1.2.2", default-features = false }
+# 默认已启用 WebSocket RPC 网关（`ws` feature）；若需关闭：robot-bus = { version = "1.3.0", default-features = false }
 ```
 
 ## Broker 启动
 
-运行示例前先起 broker（也可进程内嵌入，见下文）。默认一次启动 **message / service / action** 三条总线；每条 TCP 默认 bind `…:0`（由操作系统分配空闲端口），并启动 **API**（WebSocket RPC `/ws` / `GET /api/v1/discover` / console http），默认 `0.0.0.0:15570`。`--grpc-listen` 是 `--api-listen` 的别名。
+运行示例前先起 broker（也可进程内嵌入，见下文）。默认一次启动 **message / service / action** 三条总线；每条 TCP 默认 bind `…:0`（由操作系统分配空闲端口），并启动 **API**（WebSocket RPC `/ws` / `GET /api/v1/discover` / console http），默认 `0.0.0.0:15570`。
 
 ```bash
 cargo run --bin robot_bus_broker
 # 查看参数：cargo run --bin robot_bus_broker -- --help
 # 只要 TCP：加 --tcp-only
-# API 口：--api-listen 0.0.0.0:15570（别名 --grpc-listen / --console-listen）
+# API 口：--api-listen 0.0.0.0:15570（别名 --console-listen）
 # 对外可达主机：--advertise-host HOST
 # 邦联：--peer 10.0.0.2:15570（对端 API 口；可重复）
 ```
@@ -399,7 +399,7 @@ Service / Action 同理（如 `create_client::<SetBool>`、`create_action_client
 
 ## WebSocket RPC 模式 Node（客户端）
 
-`Node::ws` / `NodeOptions::ws` 通过 broker 的 WebSocket RPC 网关接入总线，**不创建 ZMQ socket**。传输 `"grpc"` 为兼容别名。API 仍是 `create_subscription` / `create_publisher` / `create_client` / `create_action_client` + `spin`，对调用方透明。
+`Node::ws` / `NodeOptions::ws` 通过 broker 的 WebSocket RPC 网关接入总线，**不创建 ZMQ socket**。API 仍是 `create_subscription` / `create_publisher` / `create_client` / `create_action_client` + `spin`，对调用方透明。
 
 | 支持 | 不支持 |
 |------|--------|

@@ -82,7 +82,7 @@ fn main() {
             .as_str(),
         "message" | "msg" | "pubsub" | "pub/sub"
     );
-    println!("starting RobotBusBroker (bind_all + grpc)…");
+    println!("starting RobotBusBroker (bind_all + ws)…");
     let svc_iters = svc_iters();
     let act_iters = act_iters();
     if only_message {
@@ -107,11 +107,11 @@ fn main() {
     }
 
     let ws_url = broker.api_url();
-    println!("=== grpc ({ws_url}) ===");
-    results.push(bench_grpc_subscribe(&broker, &ws_url));
+    println!("=== ws ({ws_url}) ===");
+    results.push(bench_ws_subscribe(&broker, &ws_url));
     if !only_message {
-        results.push(bench_grpc_service(&broker, &ws_url, svc_iters));
-        results.push(bench_grpc_action(&broker, &ws_url, act_iters));
+        results.push(bench_ws_service(&broker, &ws_url, svc_iters));
+        results.push(bench_ws_action(&broker, &ws_url, act_iters));
     }
 
     broker.stop().expect("stop broker");
@@ -679,16 +679,16 @@ fn bench_action(ctx: &Context, transport: &str, n: usize) -> ScenarioResult {
     worker.join().expect("action client thread")
 }
 
-fn bench_grpc_subscribe(broker: &RobotBusBroker, url: &str) -> ScenarioResult {
-    let transport = "grpc";
+fn bench_ws_subscribe(broker: &RobotBusBroker, url: &str) -> ScenarioResult {
+    let transport = "ws";
     let scenario = "message Subscribe";
-    let topic = "perf/grpc/msg";
+    let topic = "perf/ws/msg";
 
     let latencies = Arc::new(Mutex::new(Vec::<u64>::with_capacity(msg_latency_samples())));
     let count = Arc::new(AtomicUsize::new(0));
     let record_latency = Arc::new(AtomicBool::new(true));
 
-    let mut node = Node::ws_at("perf-grpc-sub", url);
+    let mut node = Node::ws_at("perf-ws-sub", url);
     if let Err(err) = node.create_subscription_raw(
         topic,
         Arc::new({
@@ -803,7 +803,7 @@ fn bench_grpc_subscribe(broker: &RobotBusBroker, url: &str) -> ScenarioResult {
     };
 
     println!(
-        "  … grpc max goodput ≈ {} Hz target (loss≤{:.1}%)",
+        "  … ws max goodput ≈ {} Hz target (loss≤{:.1}%)",
         goodput.target_hz,
         max_loss_pct()
     );
@@ -819,8 +819,8 @@ fn bench_grpc_subscribe(broker: &RobotBusBroker, url: &str) -> ScenarioResult {
     )
 }
 
-fn bench_grpc_service(broker: &RobotBusBroker, url: &str, n: usize) -> ScenarioResult {
-    let transport = "grpc";
+fn bench_ws_service(broker: &RobotBusBroker, url: &str, n: usize) -> ScenarioResult {
+    let transport = "ws";
     let scenario = "service Call";
     let name = "perf.ws.echo";
 
@@ -831,7 +831,7 @@ fn bench_grpc_service(broker: &RobotBusBroker, url: &str, n: usize) -> ScenarioR
     };
     thread::sleep(Duration::from_millis(150));
 
-    let mut node = Node::ws_at("perf-grpc-cli", url);
+    let mut node = Node::ws_at("perf-ws-cli", url);
     let client = match node.create_client_raw(name) {
         Ok(c) => c,
         Err(err) => {
@@ -881,8 +881,8 @@ fn bench_grpc_service(broker: &RobotBusBroker, url: &str, n: usize) -> ScenarioR
     )
 }
 
-fn bench_grpc_action(broker: &RobotBusBroker, url: &str, n: usize) -> ScenarioResult {
-    let transport = "grpc";
+fn bench_ws_action(broker: &RobotBusBroker, url: &str, n: usize) -> ScenarioResult {
+    let transport = "ws";
     let scenario = "action SendGoal";
     let name = "perf.ws.act";
 
@@ -898,7 +898,7 @@ fn bench_grpc_action(broker: &RobotBusBroker, url: &str, n: usize) -> ScenarioRe
     };
     thread::sleep(Duration::from_millis(150));
 
-    let mut node = Node::ws_at("perf-grpc-act", url);
+    let mut node = Node::ws_at("perf-ws-act", url);
     let client = match node.create_action_client_raw(name) {
         Ok(c) => c,
         Err(err) => {

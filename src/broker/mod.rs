@@ -12,7 +12,9 @@ pub use action_bus::ActionPeer;
 pub use federation::{FederationPeerEndpoints, apply_api_peers, resolve_peer_from_api};
 pub use handle::{RobotBusBroker, RobotBusConfig};
 pub use message_bus::MessagePeer;
-pub use parse_config::{apply_federation_opts, parse_robot_bus_config, robot_bus_broker_help};
+pub use parse_config::{
+    apply_federation_opts, binding_broker_cli_args, parse_robot_bus_config, robot_bus_broker_help,
+};
 pub use service_bus::ServicePeer;
 
 #[cfg(feature = "ws")]

@@ -76,15 +76,28 @@ jobs:
         run: |
           PYTHONPATH=bindings/python python3 bindings/python/tests/test_msgs_roundtrip.py
           PYTHONPATH=bindings/python python3 bindings/python/tests/test_typed_api.py
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v6
+        with:
+          version: 11
+      - name: Setup Node (console embed)
+        uses: actions/setup-node@v6
+        with:
+          node-version: "22"
+          cache: pnpm
+          cache-dependency-path: console/pnpm-lock.yaml
+      - name: Build embedded console assets
+        run: ./scripts/build_console.sh
       - name: Build native extension
         run: |
           cd bindings/python
-          maturin develop --features extension-module,ws --no-default-features
+          maturin develop --features extension-module,ws,console --no-default-features
       - name: Native integration tests
         run: |
           python3 bindings/python/tests/test_ws_node.py
           python3 bindings/python/tests/test_inproc_context.py
           python3 bindings/python/tests/test_federation_opts.py
+          python3 bindings/python/tests/test_console.py
       - name: Compile Python examples
         run: |
           python3 -m py_compile \
@@ -355,7 +368,7 @@ jobs:
         run: |
           pip install 'protobuf>=7.35,<8' maturin
           cd bindings/python
-          maturin develop --features extension-module,ws --no-default-features
+          maturin develop --features extension-module,ws,console --no-default-features
       - name: Build Rust interop peer
         run: cargo build --bin robot_bus_interop
       - name: Build C ABI + C++ interop peer

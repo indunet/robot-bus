@@ -251,19 +251,20 @@ export interface BrokerStartOptions {
   heartbeatIntervalMs?: number;
   heartbeatTimeoutMs?: number;
   tcpOnly?: boolean;
-  grpcListen?: string;
+  /** API / WebSocket / console listen address (default 0.0.0.0:15570). */
+  apiListen?: string;
   corsOrigins?: string[];
   consoleListen?: string;
   noConsole?: boolean;
+  noTank?: boolean;
   brokerId?: string;
   messagePeers?: string[];
   servicePeers?: string[];
   actionPeers?: string[];
+  peers?: string[];
   domainId?: number;
   noDiscovery?: boolean;
   advertiseHost?: string;
-  discoveryAddr?: string;
-  discoveryPort?: number;
 }
 
 export declare class RobotBusBroker {
@@ -275,7 +276,7 @@ export declare class RobotBusBroker {
   readonly serviceBackendBind: string;
   readonly actionFrontendBind: string;
   readonly actionBackendBind: string;
-  readonly grpcListen: string;
+  readonly apiListen: string;
   readonly consoleListen: string | null;
 }
 

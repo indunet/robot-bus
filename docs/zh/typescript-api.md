@@ -23,7 +23,7 @@ npm install robot-bus
 
 ```bash
 # Rust / Python CLI
-robot-bus-broker --grpc-listen 0.0.0.0:15570 --tcp-only
+robot-bus-broker --api-listen 0.0.0.0:15570 --tcp-only
 ```
 
 Node 进程内：
@@ -32,9 +32,8 @@ Node 进程内：
 import { RobotBusBroker } from "robot-bus";
 
 const broker = RobotBusBroker.start({
-  grpcListen: "0.0.0.0:15570",
+  apiListen: "0.0.0.0:15570",
   tcpOnly: true,
-  noConsole: true,
 });
 // …业务…
 broker.stop();

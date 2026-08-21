@@ -68,7 +68,7 @@ class Broker : AutoCloseable {
             RobotBusC.Holder.INSTANCE.robot_bus_broker_action_backend_bind(ptr),
         )
 
-    fun grpcListen(): String =
+    fun apiListen(): String =
         NativeUtils.takeCString(RobotBusC.Holder.INSTANCE.robot_bus_broker_api_listen(ptr))
 
     fun consoleListen(): String =

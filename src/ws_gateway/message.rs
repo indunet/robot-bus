@@ -53,9 +53,6 @@ impl MessageGatewayService {
         if msg.topic.is_empty() {
             return Err(RpcStatus::invalid_argument("topic is required"));
         }
-        if let Err(err) = crate::console_topics::check_not_reserved(&msg.topic) {
-            return Err(bus_status(err));
-        }
 
         let publisher = Arc::clone(&self.publisher);
         let xsub = self.message_xsub.clone();
@@ -103,7 +100,6 @@ impl MessageGatewayService {
 fn bus_status(err: BusError) -> RpcStatus {
     match err {
         BusError::Timeout(msg) => RpcStatus::deadline_exceeded(msg),
-        BusError::ReservedName { .. } => RpcStatus::invalid_argument(err.to_string()),
         other => RpcStatus::internal(other.to_string()),
     }
 }

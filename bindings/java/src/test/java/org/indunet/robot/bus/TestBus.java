@@ -12,7 +12,7 @@ final class TestBus implements AutoCloseable {
     final String serviceBackend;
     final String actionFrontend;
     final String actionBackend;
-    final String grpcListen;
+    final String apiListen;
 
     private TestBus(
             Broker broker,
@@ -22,7 +22,7 @@ final class TestBus implements AutoCloseable {
             String serviceBackend,
             String actionFrontend,
             String actionBackend,
-            String grpcListen) {
+            String apiListen) {
         this.broker = broker;
         this.messageXsub = messageXsub;
         this.messageXpub = messageXpub;
@@ -30,7 +30,7 @@ final class TestBus implements AutoCloseable {
         this.serviceBackend = serviceBackend;
         this.actionFrontend = actionFrontend;
         this.actionBackend = actionBackend;
-        this.grpcListen = grpcListen;
+        this.apiListen = apiListen;
     }
 
     static TestBus start() throws IOException {
@@ -40,7 +40,7 @@ final class TestBus implements AutoCloseable {
         String serviceBackend = "tcp://127.0.0.1:" + freePort();
         String actionFrontend = "tcp://127.0.0.1:" + freePort();
         String actionBackend = "tcp://127.0.0.1:" + freePort();
-        String grpcListen = "127.0.0.1:" + freePort();
+        String apiListen = "127.0.0.1:" + freePort();
         BrokerOptions opts =
                 new BrokerOptions(
                         messageXsub,
@@ -49,7 +49,7 @@ final class TestBus implements AutoCloseable {
                         serviceBackend,
                         actionFrontend,
                         actionBackend,
-                        grpcListen,
+                        apiListen,
                         null,
                         true,
                         true);
@@ -61,11 +61,11 @@ final class TestBus implements AutoCloseable {
                 serviceBackend,
                 actionFrontend,
                 actionBackend,
-                grpcListen);
+                apiListen);
     }
 
     String wsUrl() {
-        return "http://" + grpcListen;
+        return "http://" + apiListen;
     }
 
     Node makeNode(String name) {

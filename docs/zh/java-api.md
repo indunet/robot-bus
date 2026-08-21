@@ -4,7 +4,7 @@
 
 ```bash
 # Maven Central (when published)
-# implementation("org.indunet:robot-bus:1.2.2")           // JVM
+# implementation("org.indunet:robot-bus:1.3.0")           // JVM
 
 # 本地：
 just java-dev       # gen-java + cargo FFI + mvn test
@@ -21,7 +21,7 @@ just java-dev       # gen-java + cargo FFI + mvn test
 
 ```bash
 robot-bus-broker
-# 或 robot-bus-broker --grpc-listen 0.0.0.0:15570 --tcp-only
+# 或 robot-bus-broker --api-listen 0.0.0.0:15570 --tcp-only
 ```
 
 进程内：

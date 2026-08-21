@@ -1,6 +1,6 @@
 //! Build protobuf snapshots from [`ConsoleState`] for `/robot_bus/*` topics.
 
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use prost::Message;
@@ -13,7 +13,7 @@ use crate::robot_bus_interfaces::msg::v1::{
 };
 
 use super::state::{ConsoleState, LogEntryDto, TopicRate};
-use super::topology_registry::EndpointKind;
+use super::topology_registry::{self, TopologyGraph};
 
 pub fn encode_status(state: &ConsoleState) -> Vec<u8> {
     let rates = state.rates();
@@ -151,68 +151,61 @@ fn merge_topic_stats(state: &ConsoleState) -> Vec<TopicStats> {
         .collect()
 }
 
-fn build_topology_proto(state: &ConsoleState) -> TopologySnapshot {
-    let endpoints = state.topology.snapshot();
+pub(super) fn topology_graph(state: &ConsoleState) -> TopologyGraph {
     let type_map: HashMap<String, String> = state.topic_types.snapshot().into_iter().collect();
     let rates = state.rates();
-    let rate_by_topic: HashMap<String, &TopicRate> =
-        rates.topics.iter().map(|t| (t.name.clone(), t)).collect();
+    let topic_ops: HashMap<String, u64> = rates
+        .topics
+        .iter()
+        .map(|t| (t.name.clone(), t.msg_per_sec.round() as u64))
+        .collect();
+    let service_ops: HashMap<String, u64> = state
+        .service_rates()
+        .services
+        .iter()
+        .map(|s| (s.name.clone(), s.calls_per_sec.round() as u64))
+        .collect();
+    let action_ops: HashMap<String, u64> = state
+        .action_rates()
+        .actions
+        .iter()
+        .map(|a| (a.name.clone(), a.runs_per_sec.round() as u64))
+        .collect();
+    topology_registry::build_topology_graph(
+        &state.topology.snapshot(),
+        &type_map,
+        &topic_ops,
+        &service_ops,
+        &action_ops,
+    )
+}
 
-    let mut process_names: HashSet<String> = HashSet::new();
-    let mut topic_names: HashSet<String> = HashSet::new();
-    let mut edges = Vec::with_capacity(endpoints.len());
-
-    for ep in &endpoints {
-        process_names.insert(ep.node_name.clone());
-        topic_names.insert(ep.topic.clone());
-        let process_id = format!("node:{}", ep.node_name);
-        let topic_id = format!("topic:{}", ep.topic);
-        let (source, target) = match ep.kind {
-            EndpointKind::Publisher => (process_id, topic_id),
-            EndpointKind::Subscriber => (topic_id, process_id),
-        };
-        edges.push(TopologyEdge {
-            id: ep.endpoint_id.clone(),
-            source,
-            target,
-            kind: ep.kind.as_str().to_string(),
-            topic: ep.topic.clone(),
-        });
+fn build_topology_proto(state: &ConsoleState) -> TopologySnapshot {
+    let graph = topology_graph(state);
+    TopologySnapshot {
+        nodes: graph
+            .nodes
+            .into_iter()
+            .map(|n| TopologyNode {
+                id: n.id,
+                kind: n.kind.into(),
+                label: n.label,
+                type_name: n.type_name,
+                msg_per_sec: n.msg_per_sec,
+            })
+            .collect(),
+        edges: graph
+            .edges
+            .into_iter()
+            .map(|e| TopologyEdge {
+                id: e.id,
+                source: e.source,
+                target: e.target,
+                kind: e.kind.into(),
+                topic: e.topic,
+            })
+            .collect(),
     }
-
-    for name in rate_by_topic.keys().chain(type_map.keys()) {
-        topic_names.insert(name.clone());
-    }
-
-    let mut nodes = Vec::new();
-    let mut process_sorted: Vec<_> = process_names.into_iter().collect();
-    process_sorted.sort();
-    for name in process_sorted {
-        nodes.push(TopologyNode {
-            id: format!("node:{name}"),
-            kind: "process".into(),
-            label: name,
-            type_name: None,
-            msg_per_sec: None,
-        });
-    }
-
-    let mut topic_sorted: Vec<_> = topic_names.into_iter().collect();
-    topic_sorted.sort();
-    for name in topic_sorted {
-        let msg_per_sec = rate_by_topic
-            .get(&name)
-            .map(|t| t.msg_per_sec.round() as u64);
-        nodes.push(TopologyNode {
-            id: format!("topic:{name}"),
-            kind: "topic".into(),
-            label: name.clone(),
-            type_name: type_map.get(&name).cloned(),
-            msg_per_sec,
-        });
-    }
-
-    TopologySnapshot { nodes, edges }
 }
 
 /// Background publisher: 1 Hz snapshots + live event fan-out on the message bus.

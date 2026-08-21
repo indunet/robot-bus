@@ -2,15 +2,16 @@
 
 mod support;
 
-use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::{Duration, Instant};
 
 #[cfg(feature = "console")]
 use robot_bus::ConsoleBrokerConfig;
 use robot_bus::{
-    Context, HighWaterMark, Node, NodeOptions, Publisher, RobotBusBroker, RobotBusConfig,
+    ActionKind, ActionMessage, Context, HighWaterMark, Node, NodeOptions, Publisher,
+    RobotBusBroker, RobotBusConfig,
 };
 use support::lock_brokers;
 
@@ -91,5 +92,64 @@ fn inproc_pubsub_with_shared_context() {
         "expected at least one inproc message"
     );
 
+    broker.stop().expect("stop broker");
+}
+
+#[test]
+fn inproc_action_goal_handle() {
+    let _guard = lock_brokers();
+    let ctx = Context::new();
+    let broker =
+        RobotBusBroker::start_with_context(&ctx, inproc_broker_config()).expect("broker");
+    thread::sleep(Duration::from_millis(150));
+
+    let mut server = Node::inproc_with_context(&ctx, "inproc-action-server");
+    server
+        .create_action_server_raw(
+            "/inproc/action",
+            Arc::new(|body| {
+                vec![
+                    ("FEEDBACK".into(), [b"step:", body].concat()),
+                    ("RESULT".into(), [b"done:", body].concat()),
+                ]
+            }),
+            None,
+        )
+        .expect("create_action_server_raw");
+    server.start().expect("start");
+    thread::sleep(Duration::from_millis(100));
+
+    let mut client_node = Node::inproc_with_context(&ctx, "inproc-action-client");
+    let client = client_node
+        .create_action_client_raw("/inproc/action")
+        .expect("create_action_client_raw");
+    let feedbacks = Arc::new(Mutex::new(Vec::new()));
+    let callback_feedbacks = Arc::clone(&feedbacks);
+    let goal = client
+        .send_goal(
+            b"move",
+            None,
+            Some(Duration::from_secs(3)),
+            Some(Arc::new(move |message: &ActionMessage| {
+                callback_feedbacks
+                    .lock()
+                    .expect("feedback mutex")
+                    .push(message.body.clone());
+            })),
+        )
+        .expect("send_goal");
+    assert_eq!(goal.action_name(), "/inproc/action");
+    assert!(!goal.goal_id().is_empty());
+    let result = goal.wait_result().expect("wait_result");
+    assert_eq!(result.kind, ActionKind::Result);
+    assert_eq!(result.body, b"done:move");
+    assert_eq!(
+        *feedbacks.lock().expect("feedback mutex"),
+        vec![b"step:move".to_vec()]
+    );
+
+    server.shutdown().expect("shutdown");
+    server.stop().expect("stop");
+    server.wait().expect("wait");
     broker.stop().expect("stop broker");
 }

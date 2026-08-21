@@ -36,14 +36,14 @@ CMake sets `CMAKE_CXX_STANDARD 17`. Building with a newer standard (e.g. `-DCMAK
 
 ```bash
 # Core SDK (no ROS bridge)
-sudo apt install ./robot-bus_1.2.2_linux_amd64.deb
+sudo apt install ./robot-bus_1.3.0_linux_amd64.deb
 
 # Or ROS 2 bridge variant (Humble example) — needs Humble already installed
-sudo apt install ./robot-bus-ros2-humble_1.2.2_linux_amd64.deb
+sudo apt install ./robot-bus-ros2-humble_1.3.0_linux_amd64.deb
 source /opt/ros/humble/setup.bash
 
 # macOS Apple Silicon (core package only)
-sudo installer -pkg robot-bus_1.2.2_macos_arm64.pkg -target /
+sudo installer -pkg robot-bus_1.3.0_macos_arm64.pkg -target /
 # Installs under /usr/local ({bin,lib,include})
 
 # Or from source (dev)
@@ -118,7 +118,7 @@ robot_bus::Broker broker(ctx);
 auto node = robot_bus::Node::inproc_with_context(ctx, "pilot");
 ```
 
-tcp / ipc / gRPC do not require a shared context.
+tcp / ipc / ws do not require a shared context.
 
 ### HTTP discovery (fill addresses, pick transport yourself)
 
@@ -180,7 +180,7 @@ Raw bytes still work via `create_publisher` / `create_subscription` with manual 
 
 ### WebSocket RPC mode Node (client)
 
-`Node::ws` / `Node::ws_at` connect through the broker WebSocket RPC gateway and do not create ZMQ sockets. Transport `"grpc"` is a compatibility alias.
+`Node::ws` / `Node::ws_at` connect through the broker WebSocket RPC gateway and do not create ZMQ sockets.
 
 | Supported | Not supported |
 |-----------|---------------|

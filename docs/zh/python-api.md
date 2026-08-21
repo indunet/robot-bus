@@ -19,7 +19,7 @@ robot-bus-broker --help
 robot-bus-broker --api-listen 0.0.0.0:15570 --tcp-only
 ```
 
-或进程内（关键字参数覆盖默认 bind / HWM / 心跳 / gRPC）：
+或进程内（关键字参数覆盖默认 bind / HWM / 心跳 / API）：
 
 ```python
 import robot_bus
@@ -30,7 +30,8 @@ with robot_bus.RobotBusBroker.start(
     api_listen="0.0.0.0:15570",
     tcp_only=True,
 ) as broker:
-    # broker.message_xsub_bind / message_xpub_bind / api_listen 等
+    # broker.message_xsub_bind / message_xpub_bind / api_listen / console_listen
+    # Web console: http://127.0.0.1:15570（no_console=True 可关）
     pass
 ```
 
@@ -50,7 +51,7 @@ with robot_bus.RobotBusBroker.start(
 
 ### HTTP 发现（填地址，不选传输）
 
-对已知 API 口请求 `GET /api/v1/discover`。传输仍手动指定（`tcp` / `ipc` / `inproc` / `ws`；`"grpc"` 是 `"ws"` 的别名）；发现只填充位置：
+对已知 API 口请求 `GET /api/v1/discover`。传输仍手动指定（`tcp` / `ipc` / `inproc` / `ws`）；发现只填充位置：
 
 ```python
 node = robot_bus.Node.discover(
@@ -68,7 +69,7 @@ with robot_bus.RobotBusBroker.start(context=ctx) as broker:
     node = robot_bus.Node.inproc_with_context(ctx, "pilot")
 ```
 
-tcp / ipc / gRPC 不要求共享 Context。
+tcp / ipc / ws 不要求共享 Context。
 默认端口与完整 CLI 选项见 [rust-api.md](rust-api.md)「Broker 启动」。
 
 ---
@@ -104,7 +105,7 @@ node.load_parameters_from_yaml_file("config/pilot.yaml")
 
 接近 ROS 2：`Node(...)` → `create_publisher` / `create_subscription` → `node.spin()`。单节点时无需手写 Executor（内部自动挂 `SingleThreadedExecutor`）。
 
-仅走 gRPC 网关时用 `Node.ws` / `Node.ws_at`（或 `transport="ws"`；`transport="grpc"` 仍可作为别名）：可订阅、publish、调 service / action，不能当 server；见下文「WebSocket RPC 模式 Node」。
+仅走 WebSocket RPC 网关时用 `Node.ws` / `Node.ws_at`（或 `transport="ws"`）：可订阅、publish、调 service / action，不能当 server；见下文「WebSocket RPC 模式 Node」。
 
 Python 主推 **typed**（创建时传入 protobuf 类，自动 `SerializeToString` / `ParseFromString`）；不传类型则仍为 raw bytes。底层与 Rust 一样走 opaque bytes（纯 Python 薄封装，因 PyO3 无法映射 Rust 泛型）。
 
@@ -150,7 +151,7 @@ node.create_subscription("/robot1/imu", on_raw)
 
 ### WebSocket RPC 模式 Node（客户端）
 
-`Node.ws` / `Node.ws_at`（或 `Node(..., transport="ws", ws_url=...)`；`transport="grpc"` 仍可作为别名）经 broker WebSocket RPC 网关接入，不创建 ZMQ socket。
+`Node.ws` / `Node.ws_at`（或 `Node(..., transport="ws", ws_url=...)`）经 broker WebSocket RPC 网关接入，不创建 ZMQ socket。
 
 | 支持 | 不支持 |
 |------|--------|
@@ -403,7 +404,7 @@ print(robot_bus.__version__)
 | 符号 | 说明 |
 |------|------|
 | `Node(name, host=..., transport=..., ws_url=..., message_xsub=..., …)` | 建节点；首次 `create_*` / `spin` 时自动挂 `SingleThreadedExecutor` |
-| `Node.tcp` / `Node.ipc` / `Node.inproc` / `Node.inproc_with_context` / `Node.with_context` / `Node.ws` / `Node.ws_at` / `Node.discover` | 传输预设（推荐 `Context` + `with_context`；gRPC/WebSocket 网关为客户端模式；同进程 inproc 用 `inproc_with_context`；`discover` 只填地址） |
+| `Node.tcp` / `Node.ipc` / `Node.inproc` / `Node.inproc_with_context` / `Node.with_context` / `Node.ws` / `Node.ws_at` / `Node.discover` | 传输预设（推荐 `Context` + `with_context`；WebSocket RPC 网关为客户端模式；同进程 inproc 用 `inproc_with_context`；`discover` 只填地址） |
 | `Node.declare_parameter` / `get_parameter` / `set_parameter` / `has_parameter` / `list_parameters` | 本节点本地参数（`bool` / `int` / `float` / `str`） |
 | `Node.load_parameters_from_yaml_str` / `load_parameters_from_yaml_file` | 从 YAML 加载 / 覆盖参数 |
 | `node.spin()` / `spin_once` / `shutdown` | 驱动回调（ROS 2 式简单路径） |
@@ -424,7 +425,7 @@ print(robot_bus.__version__)
 | `Publisher(endpoint=None)` | 低层连 XSUB（不经 Node） |
 | `ros2_available()` | 能否 `import rclpy`（Python 原生桥） |
 | `robot_bus.ros2_bridge.Ros2Bridge` / `Direction` / 内置 Mapper | 进程内 ROS 桥（**rclpy**）；见 [ros2-bridge.md](ros2-bridge.md) |
-| `RobotBusBroker.start(...)` / `run_broker(...)` | 进程内启动三个 bus + gRPC；同进程 inproc 传 `context`；peers 为 CLI 同款字符串列表 |
+| `RobotBusBroker.start(...)` / `run_broker(...)` | 进程内启动三个 bus + WebSocket RPC API；同进程 inproc 传 `context`；peers 为 CLI 同款字符串列表 |
 | `ShutdownHandle` / `TimerHandle` | spin 与定时器控制 |
 
 WebSocket RPC 模式 Node 见上一节；底层网关 RPC 也可直接用 Rust tonic 客户端（[rust-api.md](rust-api.md)）。

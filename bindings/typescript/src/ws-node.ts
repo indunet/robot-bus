@@ -1,7 +1,7 @@
 /**
  * Browser WebSocket RPC client Node facade.
  *
- * Mirrors Rust/Python `Node.grpc` / `Node.ws_at`: publish, subscribe, service
+ * Mirrors Rust/Python `Node.ws` / `Node.ws_at`: publish, subscribe, service
  * call, action run. Does not support service/action servers or local broker.
  * Transport is multiplexed WebSocket RPC (`/ws`, one connection many streams).
  */
@@ -60,7 +60,13 @@ export interface WsNodeOptions {
   topologyRefreshMs?: number;
 }
 
-type TopologyKind = "publisher" | "subscriber";
+type TopologyKind =
+  | "publisher"
+  | "subscriber"
+  | "service_client"
+  | "service_server"
+  | "action_client"
+  | "action_server"
 
 interface TopologyEndpoint {
   endpointId: string;
@@ -434,6 +440,7 @@ export class WsNode {
     requestType?: MessageType<object>,
     responseType?: MessageType<object>,
   ): WsServiceClient | TypedWsServiceClient<object, object> {
+    this.trackEndpoint("service_client", serviceName)
     const raw = new WsServiceClient(this, serviceName);
     if (requestType && responseType) {
       return new TypedWsServiceClient(raw, requestType, responseType);
@@ -454,6 +461,7 @@ export class WsNode {
     feedbackType?: MessageType<object>,
     resultType?: MessageType<object>,
   ): WsActionClient | TypedWsActionClient<object, object, object> {
+    this.trackEndpoint("action_client", actionName)
     const raw = new WsActionClient(this, actionName);
     if (goalType && feedbackType && resultType) {
       return new TypedWsActionClient(raw, goalType, feedbackType, resultType);

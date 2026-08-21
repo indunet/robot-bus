@@ -26,9 +26,6 @@ pub enum BusError {
     #[error("Executor is closed")]
     Closed,
 
-    #[error("name '{name}' is reserved for robot-bus console (/robot_bus/*)")]
-    ReservedName { name: String },
-
     #[error("parameter '{name}' is already declared")]
     ParameterAlreadyDeclared { name: String },
 

@@ -32,14 +32,39 @@ type Port = {
   msgPerSec?: number
 }
 
+type RpcPort = {
+  name: string
+  role: 'server' | 'client'
+  msgPerSec?: number
+}
+
+type Channel = 'topic' | 'service' | 'action'
+
 type ProcessNodeData = {
   label: string
   inputs: Port[]
   outputs: Port[]
+  services: RpcPort[]
+  actions: RpcPort[]
+}
+
+type Wire = {
+  id: string
+  source: string
+  target: string
+  name: string
+  channel: Channel
+  typeName?: string
+  msgPerSec?: number
 }
 
 function portHandleId(dir: 'in' | 'out', topic: string): string {
   return `${dir}:${topic}`
+}
+
+function rpcHandleId(channel: 'service' | 'action', dir: 'in' | 'out', name: string): string {
+  const prefix = channel === 'service' ? 'svc' : 'act'
+  return `${prefix}-${dir}:${name}`
 }
 
 function shortTopic(topic: string): string {
@@ -49,45 +74,98 @@ function shortTopic(topic: string): string {
   return `…/${parts[parts.length - 1]}`
 }
 
+function pushUnique(list: string[], id: string): void {
+  if (!list.includes(id)) list.push(id)
+}
+
+function addRpcPort(map: Map<string, RpcPort[]>, nodeId: string, port: RpcPort): void {
+  const ports = map.get(nodeId) ?? []
+  if (!ports.some((p) => p.name === port.name && p.role === port.role)) {
+    ports.push(port)
+  }
+  map.set(nodeId, ports)
+}
+
 function deriveProcessGraph(topo: TopologyInfo): {
-  processes: { id: string; label: string; inputs: Port[]; outputs: Port[] }[]
-  wires: { id: string; source: string; target: string; topic: string; typeName?: string; msgPerSec?: number }[]
+  processes: {
+    id: string
+    label: string
+    inputs: Port[]
+    outputs: Port[]
+    services: RpcPort[]
+    actions: RpcPort[]
+  }[]
+  wires: Wire[]
 } {
   const topicMeta = new Map<string, { typeName?: string; msgPerSec?: number }>()
+  const serviceMeta = new Map<string, { msgPerSec?: number }>()
+  const actionMeta = new Map<string, { msgPerSec?: number }>()
   for (const n of topo.nodes) {
     if (n.kind === 'topic') {
       topicMeta.set(n.label, { typeName: n.typeName, msgPerSec: n.msgPerSec })
+    } else if (n.kind === 'service') {
+      serviceMeta.set(n.label, { msgPerSec: n.msgPerSec })
+    } else if (n.kind === 'action') {
+      actionMeta.set(n.label, { msgPerSec: n.msgPerSec })
     }
   }
 
   const pubsByTopic = new Map<string, string[]>()
   const subsByTopic = new Map<string, string[]>()
+  const svcClients = new Map<string, string[]>()
+  const svcServers = new Map<string, string[]>()
+  const actClients = new Map<string, string[]>()
+  const actServers = new Map<string, string[]>()
   const processLabels = new Map<string, string>()
 
   for (const n of topo.nodes) {
     if (n.kind === 'process') processLabels.set(n.id, n.label)
   }
 
+  const rememberProcess = (id: string) => {
+    if (!processLabels.has(id)) {
+      processLabels.set(id, id.replace(/^node:/, ''))
+    }
+  }
+
   for (const e of topo.edges) {
     if (e.kind === 'publisher' && e.source.startsWith('node:')) {
       const list = pubsByTopic.get(e.topic) ?? []
-      if (!list.includes(e.source)) list.push(e.source)
+      pushUnique(list, e.source)
       pubsByTopic.set(e.topic, list)
-      if (!processLabels.has(e.source)) {
-        processLabels.set(e.source, e.source.replace(/^node:/, ''))
-      }
+      rememberProcess(e.source)
     } else if (e.kind === 'subscriber' && e.target.startsWith('node:')) {
       const list = subsByTopic.get(e.topic) ?? []
-      if (!list.includes(e.target)) list.push(e.target)
+      pushUnique(list, e.target)
       subsByTopic.set(e.topic, list)
-      if (!processLabels.has(e.target)) {
-        processLabels.set(e.target, e.target.replace(/^node:/, ''))
-      }
+      rememberProcess(e.target)
+    } else if (e.kind === 'service_client' && e.source.startsWith('node:')) {
+      const list = svcClients.get(e.topic) ?? []
+      pushUnique(list, e.source)
+      svcClients.set(e.topic, list)
+      rememberProcess(e.source)
+    } else if (e.kind === 'service_server' && e.target.startsWith('node:')) {
+      const list = svcServers.get(e.topic) ?? []
+      pushUnique(list, e.target)
+      svcServers.set(e.topic, list)
+      rememberProcess(e.target)
+    } else if (e.kind === 'action_client' && e.source.startsWith('node:')) {
+      const list = actClients.get(e.topic) ?? []
+      pushUnique(list, e.source)
+      actClients.set(e.topic, list)
+      rememberProcess(e.source)
+    } else if (e.kind === 'action_server' && e.target.startsWith('node:')) {
+      const list = actServers.get(e.topic) ?? []
+      pushUnique(list, e.target)
+      actServers.set(e.topic, list)
+      rememberProcess(e.target)
     }
   }
 
   const inputsByNode = new Map<string, Port[]>()
   const outputsByNode = new Map<string, Port[]>()
+  const servicesByNode = new Map<string, RpcPort[]>()
+  const actionsByNode = new Map<string, RpcPort[]>()
 
   for (const [topic, nodes] of pubsByTopic) {
     const meta = topicMeta.get(topic) ?? {}
@@ -109,6 +187,25 @@ function deriveProcessGraph(topo: TopologyInfo): {
       inputsByNode.set(id, ports)
     }
   }
+  for (const [name, nodes] of svcServers) {
+    const meta = serviceMeta.get(name) ?? {}
+    for (const id of nodes) addRpcPort(servicesByNode, id, { name, role: 'server', ...meta })
+  }
+  for (const [name, nodes] of svcClients) {
+    const meta = serviceMeta.get(name) ?? {}
+    for (const id of nodes) addRpcPort(servicesByNode, id, { name, role: 'client', ...meta })
+  }
+  for (const [name, nodes] of actServers) {
+    const meta = actionMeta.get(name) ?? {}
+    for (const id of nodes) addRpcPort(actionsByNode, id, { name, role: 'server', ...meta })
+  }
+  for (const [name, nodes] of actClients) {
+    const meta = actionMeta.get(name) ?? {}
+    for (const id of nodes) addRpcPort(actionsByNode, id, { name, role: 'client', ...meta })
+  }
+
+  const sortRpc = (a: RpcPort, b: RpcPort) =>
+    a.role.localeCompare(b.role) || a.name.localeCompare(b.name)
 
   const processes = [...processLabels.entries()]
     .sort((a, b) => a[1].localeCompare(b[1]))
@@ -117,16 +214,11 @@ function deriveProcessGraph(topo: TopologyInfo): {
       label,
       inputs: (inputsByNode.get(id) ?? []).sort((a, b) => a.topic.localeCompare(b.topic)),
       outputs: (outputsByNode.get(id) ?? []).sort((a, b) => a.topic.localeCompare(b.topic)),
+      services: (servicesByNode.get(id) ?? []).sort(sortRpc),
+      actions: (actionsByNode.get(id) ?? []).sort(sortRpc),
     }))
 
-  const wires: {
-    id: string
-    source: string
-    target: string
-    topic: string
-    typeName?: string
-    msgPerSec?: number
-  }[] = []
+  const wires: Wire[] = []
 
   for (const [topic, pubs] of pubsByTopic) {
     const subs = subsByTopic.get(topic) ?? []
@@ -138,29 +230,73 @@ function deriveProcessGraph(topo: TopologyInfo): {
           id: `${source}->${target}:${topic}`,
           source,
           target,
-          topic,
+          name: topic,
+          channel: 'topic',
           ...meta,
         })
       }
     }
   }
 
+  const pairRpc = (
+    clients: Map<string, string[]>,
+    servers: Map<string, string[]>,
+    meta: Map<string, { msgPerSec?: number }>,
+    channel: 'service' | 'action',
+  ) => {
+    for (const [name, cli] of clients) {
+      const srv = servers.get(name) ?? []
+      const rate = meta.get(name) ?? {}
+      for (const source of cli) {
+        for (const target of srv) {
+          if (source === target) continue
+          wires.push({
+            id: `${source}->${target}:${channel}:${name}`,
+            source,
+            target,
+            name,
+            channel,
+            ...rate,
+          })
+        }
+      }
+    }
+  }
+  pairRpc(svcClients, svcServers, serviceMeta, 'service')
+  pairRpc(actClients, actServers, actionMeta, 'action')
+
   return { processes, wires }
 }
 
-function estimateCardHeight(p: { inputs: Port[]; outputs: Port[] }): number {
+function estimateCardHeight(p: {
+  inputs: Port[]
+  outputs: Port[]
+  services: RpcPort[]
+  actions: RpcPort[]
+}): number {
   const header = 54
   const sectionChrome = 42
   const row = 34
   let h = header
   if (p.inputs.length > 0) h += sectionChrome + p.inputs.length * row
   if (p.outputs.length > 0) h += sectionChrome + p.outputs.length * row
-  if (p.inputs.length === 0 && p.outputs.length === 0) h += 48
+  if (p.services.length > 0) h += sectionChrome + p.services.length * row
+  if (p.actions.length > 0) h += sectionChrome + p.actions.length * row
+  if (p.inputs.length === 0 && p.outputs.length === 0 && p.services.length === 0 && p.actions.length === 0) {
+    h += 48
+  }
   return h
 }
 
 function layoutProcessNodes(
-  processes: { id: string; label: string; inputs: Port[]; outputs: Port[] }[],
+  processes: {
+    id: string
+    label: string
+    inputs: Port[]
+    outputs: Port[]
+    services: RpcPort[]
+    actions: RpcPort[]
+  }[],
   prev: Node[],
 ): Node[] {
   const prevPos = new Map(prev.map((n) => [n.id, n.position]))
@@ -187,27 +323,37 @@ function layoutProcessNodes(
       label: p.label,
       inputs: p.inputs,
       outputs: p.outputs,
+      services: p.services,
+      actions: p.actions,
     } satisfies ProcessNodeData,
     sourcePosition: Position.Right,
     targetPosition: Position.Left,
   }))
 }
 
-function buildWireEdges(
-  wires: { id: string; source: string; target: string; topic: string; msgPerSec?: number }[],
-): Edge[] {
+function buildWireEdges(wires: Wire[]): Edge[] {
   return wires.map((w) => {
     const hot = (w.msgPerSec ?? 0) > 80
-    const color = hot ? '#f59e0b' : '#00d4ff'
+    const topicColor = hot ? '#f59e0b' : '#00d4ff'
+    const color = w.channel === 'service' ? '#f59e0b' : w.channel === 'action' ? '#a78bfa' : topicColor
+    const rpc = w.channel !== 'topic'
     return {
       id: w.id,
       source: w.source,
       target: w.target,
-      sourceHandle: portHandleId('out', w.topic),
-      targetHandle: portHandleId('in', w.topic),
-      label: shortTopic(w.topic),
+      sourceHandle: rpc
+        ? rpcHandleId(w.channel, 'out', w.name)
+        : portHandleId('out', w.name),
+      targetHandle: rpc
+        ? rpcHandleId(w.channel, 'in', w.name)
+        : portHandleId('in', w.name),
+      label: shortTopic(w.name),
       animated: (w.msgPerSec ?? 0) > 0,
-      style: { stroke: color, strokeWidth: 1.5 },
+      style: {
+        stroke: color,
+        strokeWidth: 1.5,
+        ...(rpc ? { strokeDasharray: '6 3' } : {}),
+      },
       labelStyle: {
         fill: '#9ca3af',
         fontSize: 10,
@@ -222,7 +368,7 @@ function buildWireEdges(
 const ProcessNode = memo(function ProcessNode({ data }: NodeProps) {
   const { t, labelCase } = useI18n()
   const d = data as ProcessNodeData
-  const portCount = d.inputs.length + d.outputs.length
+  const portCount = d.inputs.length + d.outputs.length + d.services.length + d.actions.length
 
   return (
     <div
@@ -281,7 +427,7 @@ const ProcessNode = memo(function ProcessNode({ data }: NodeProps) {
       )}
 
       {d.outputs.length > 0 && (
-        <div className="py-2">
+        <div className="border-b border-bus-border/60 py-2">
           <div className={`px-3 pb-1.5 text-right text-[9px] tracking-[0.18em] text-bus-cyan/70 ${labelCase}`}>
             {t('topologyOutput')}
           </div>
@@ -311,12 +457,99 @@ const ProcessNode = memo(function ProcessNode({ data }: NodeProps) {
         </div>
       )}
 
-      {d.inputs.length === 0 && d.outputs.length === 0 && (
+      <RpcSection
+        title={t('topologyService')}
+        titleClass={`text-bus-amber/75 ${labelCase}`}
+        ports={d.services}
+        channel="service"
+        accent="amber"
+        srvLabel={t('topologySrv')}
+        cliLabel={t('topologyCli')}
+      />
+
+      <RpcSection
+        title={t('topologyAction')}
+        titleClass={`text-violet-300/80 ${labelCase}`}
+        ports={d.actions}
+        channel="action"
+        accent="violet"
+        srvLabel={t('topologySrv')}
+        cliLabel={t('topologyCli')}
+      />
+
+      {portCount === 0 && (
         <div className="px-3 py-4 text-[11px] text-bus-muted">{t('topologyNoPorts')}</div>
       )}
     </div>
   )
 })
+
+function RpcSection({
+  title,
+  titleClass,
+  ports,
+  channel,
+  accent,
+  srvLabel,
+  cliLabel,
+}: {
+  title: string
+  titleClass: string
+  ports: RpcPort[]
+  channel: 'service' | 'action'
+  accent: 'amber' | 'violet'
+  srvLabel: string
+  cliLabel: string
+}) {
+  if (ports.length === 0) return null
+  const bar = accent === 'amber' ? 'border-bus-amber/40' : 'border-violet-400/40'
+  const handle = accent === 'amber' ? '!bg-bus-amber' : '!bg-violet-400'
+  const serverBg = accent === 'amber' ? 'bg-bus-amber/[0.04]' : 'bg-violet-400/[0.04]'
+  const clientBg = accent === 'amber' ? 'bg-bus-amber/[0.07]' : 'bg-violet-400/[0.07]'
+
+  return (
+    <div className="border-b border-bus-border/60 py-2 last:border-b-0">
+      <div className={`px-3 pb-1.5 text-[9px] tracking-[0.18em] ${titleClass}`}>{title}</div>
+      {ports.map((p) => {
+        const server = p.role === 'server'
+        return (
+          <div
+            key={`${channel}-${p.role}-${p.name}`}
+            className={`relative mx-2 grid min-h-[30px] grid-cols-[40px_minmax(0,1fr)_40px] items-center gap-2 py-1.5 ${
+              server ? `border-l-2 pl-2.5 pr-2 ${bar} ${serverBg}` : `border-r-2 pl-2 pr-2.5 ${bar} ${clientBg}`
+            }`}
+          >
+            {server && (
+              <Handle
+                type="target"
+                position={Position.Left}
+                id={rpcHandleId(channel, 'in', p.name)}
+                className={`!-left-[11px] !h-2.5 !w-2.5 !border !border-[#0e1012] ${handle}`}
+                title={p.name}
+              />
+            )}
+            <span className="text-[8px] tracking-wide text-bus-muted">{server ? srvLabel : cliLabel}</span>
+            <div className="truncate text-[11px] font-medium text-bus-text" title={p.name}>
+              {shortTopic(p.name)}
+            </div>
+            <span className="text-right text-[9px] tabular-nums text-bus-muted">
+              {Math.round(p.msgPerSec ?? 0)}/s
+            </span>
+            {!server && (
+              <Handle
+                type="source"
+                position={Position.Right}
+                id={rpcHandleId(channel, 'out', p.name)}
+                className={`!-right-[11px] !h-2.5 !w-2.5 !border !border-[#0e1012] ${handle}`}
+                title={p.name}
+              />
+            )}
+          </div>
+        )
+      })}
+    </div>
+  )
+}
 
 const nodeTypes = { process: ProcessNode }
 
@@ -335,8 +568,10 @@ export default function TopologyView({ topology }: Props) {
           p.label,
           p.inputs.map((x) => [x.topic, x.typeName, x.msgPerSec]),
           p.outputs.map((x) => [x.topic, x.typeName, x.msgPerSec]),
+          p.services.map((x) => [x.name, x.role, x.msgPerSec]),
+          p.actions.map((x) => [x.name, x.role, x.msgPerSec]),
         ]),
-        wires: graph.wires.map((w) => [w.id, w.msgPerSec]),
+        wires: graph.wires.map((w) => [w.id, w.msgPerSec, w.channel]),
       }),
     [graph],
   )

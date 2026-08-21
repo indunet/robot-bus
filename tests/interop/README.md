@@ -21,7 +21,7 @@ ROBOT_BUS_INTEROP_ALLOW_SKIP=1 python3 tests/interop/run.py
 ## Prerequisites
 
 ```bash
-just python-dev    # Python native extension
+just python-dev    # Python native extension (embeds Web console)
 just console       # embedded UI assets (C ABI / TS native enable `console`)
 # `just test-interop` then builds Rust / C++ / Java / TypeScript peers
 ```
