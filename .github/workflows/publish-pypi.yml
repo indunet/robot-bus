@@ -185,14 +185,15 @@ jobs:
           set -eux
           curl -fsSL -o /tmp/protoc.zip \
             "https://github.com/protocolbuffers/protobuf/releases/download/v35.1/protoc-35.1-win64.zip"
-          rm -rf /c/protoc
-          mkdir -p /c/protoc
-          unzip -o /tmp/protoc.zip -d /c/protoc
-          echo "/c/protoc/bin" >> "$GITHUB_PATH"
-          /c/protoc/bin/protoc.exe --version
+          rm -rf "${GITHUB_WORKSPACE}/.protoc"
+          mkdir -p "${GITHUB_WORKSPACE}/.protoc"
+          unzip -o /tmp/protoc.zip -d "${GITHUB_WORKSPACE}/.protoc"
+          "${GITHUB_WORKSPACE}/.protoc/bin/protoc.exe" --version
 
       - name: Generate protobuf stubs (Python + Rust for maturin)
         shell: bash
+        env:
+          PROTOC: ${{ format('{0}/.protoc/bin/protoc.exe', github.workspace) }}
         run: |
           set -eux
           python3 scripts/generate_python_msgs.py

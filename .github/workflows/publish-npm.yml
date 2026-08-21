@@ -99,18 +99,21 @@ jobs:
           set -eux
           curl -fsSL -o /tmp/protoc.zip \
             "https://github.com/protocolbuffers/protobuf/releases/download/v35.1/${{ matrix.protoc_zip }}"
-          rm -rf /c/protoc
-          mkdir -p /c/protoc
-          unzip -o /tmp/protoc.zip -d /c/protoc
-          echo "/c/protoc/bin" >> "$GITHUB_PATH"
-          /c/protoc/bin/protoc.exe --version
+          rm -rf "${GITHUB_WORKSPACE}/.protoc"
+          mkdir -p "${GITHUB_WORKSPACE}/.protoc"
+          unzip -o /tmp/protoc.zip -d "${GITHUB_WORKSPACE}/.protoc"
+          "${GITHUB_WORKSPACE}/.protoc/bin/protoc.exe" --version
 
       - name: Install npm deps
         working-directory: bindings/typescript
         run: npm ci
 
       - name: Generate TypeScript + Rust protobuf stubs
+        shell: bash
+        env:
+          PROTOC: ${{ runner.os == 'Windows' && format('{0}/.protoc/bin/protoc.exe', github.workspace) || 'protoc' }}
         run: |
+          set -eux
           python3 scripts/generate_typescript_msgs.py
           python3 scripts/generate_rust_msgs.py
 
