@@ -37,6 +37,7 @@ use crate::runtime::parameters::{ListParametersResult, Parameter, ParameterStore
 use crate::runtime::qos::QosProfile;
 use crate::runtime::queues::ActionMessageCallback;
 use crate::runtime::registrations::{ActionGoalHandler, MessageCallback, ServiceHandler};
+use crate::runtime::session::{BrokerSession, ConnectionState, SESSION_CREATE_WAIT};
 use crate::runtime::timers::{TimerCallback, TimerHandle, SubscriptionHandle};
 use crate::runtime::topic_type_register;
 use crate::runtime::topology_register::TopologyEndpointGuard;
@@ -217,7 +218,7 @@ impl NodeOptions {
         match &self.message_xsub {
             Some(ep) => Ok(ep.clone()),
             None => Err(BusError::Protocol(
-                "message_xsub unset; call NodeOptions::discover(DiscoverOpts::default()) \
+                "message_xsub unset; call wait_for_broker() / NodeOptions::discover() \
                  (GET http://127.0.0.1:15570/api/v1/discover) or set endpoints explicitly"
                     .into(),
             )),
@@ -229,7 +230,7 @@ impl NodeOptions {
         match &self.message_xpub {
             Some(ep) => Ok(ep.clone()),
             None => Err(BusError::Protocol(
-                "message_xpub unset; call NodeOptions::discover(DiscoverOpts::default()) \
+                "message_xpub unset; call wait_for_broker() / NodeOptions::discover() \
                  or set endpoints explicitly"
                     .into(),
             )),
@@ -241,7 +242,8 @@ impl NodeOptions {
         match &self.service_frontend {
             Some(ep) => Ok(ep.clone()),
             None => Err(BusError::Protocol(
-                "service_frontend unset; call NodeOptions::discover(…) or set endpoints explicitly"
+                "service_frontend unset; call wait_for_broker() / NodeOptions::discover() \
+                 or set endpoints explicitly"
                     .into(),
             )),
         }
@@ -252,7 +254,8 @@ impl NodeOptions {
         match &self.service_backend {
             Some(ep) => Ok(ep.clone()),
             None => Err(BusError::Protocol(
-                "service_backend unset; call NodeOptions::discover(…) or set endpoints explicitly"
+                "service_backend unset; call wait_for_broker() / NodeOptions::discover() \
+                 or set endpoints explicitly"
                     .into(),
             )),
         }
@@ -263,7 +266,8 @@ impl NodeOptions {
         match &self.action_backend {
             Some(ep) => Ok(ep.clone()),
             None => Err(BusError::Protocol(
-                "action_backend unset; call NodeOptions::discover(…) or set endpoints explicitly"
+                "action_backend unset; call wait_for_broker() / NodeOptions::discover() \
+                 or set endpoints explicitly"
                     .into(),
             )),
         }
@@ -274,7 +278,8 @@ impl NodeOptions {
         match &self.action_frontend {
             Some(ep) => Ok(ep.clone()),
             None => Err(BusError::Protocol(
-                "action_frontend unset; call NodeOptions::discover(…) or set endpoints explicitly"
+                "action_frontend unset; call wait_for_broker() / NodeOptions::discover() \
+                 or set endpoints explicitly"
                     .into(),
             )),
         }
@@ -1077,6 +1082,7 @@ pub struct Node {
     topology_services: HashMap<u64, Arc<TopologyEndpointGuard>>,
     /// Action server id → topology guard (dropped on destroy_action_server).
     topology_actions: HashMap<u64, Arc<TopologyEndpointGuard>>,
+    session: BrokerSession,
 }
 
 impl Node {
@@ -1171,22 +1177,16 @@ impl Node {
     }
 
     /// Create a node that shares `context` for all ZMQ sockets (required for inproc).
+    ///
+    /// Construction does not block on the broker. TCP/WS nodes discover in the
+    /// background; use [`wait_for_broker`](Self::wait_for_broker) when startup
+    /// must fail if the broker is down.
     pub fn with_context_options(
         context: &Context,
         name: impl Into<String>,
-        mut options: NodeOptions,
+        options: NodeOptions,
     ) -> Self {
-        if options.needs_endpoint_discover() {
-            let discover_opts = crate::discovery::DiscoverOpts::for_host(&options.host);
-            match options.clone().discover(discover_opts) {
-                Ok(filled) => options = filled,
-                Err(err) => {
-                    log::warn!(
-                        "auto-discover failed for node (start broker / check --api-listen): {err}"
-                    );
-                }
-            }
-        }
+        let session = BrokerSession::start(options.clone());
         Self {
             name: name.into(),
             options,
@@ -1202,6 +1202,7 @@ impl Node {
             topology_subscriptions: HashMap::new(),
             topology_services: HashMap::new(),
             topology_actions: HashMap::new(),
+            session,
         }
     }
 
@@ -1222,6 +1223,7 @@ impl Node {
             ));
         }
         self.executor = Some(handle);
+        self.install_reconnect_hook();
         Ok(())
     }
 
@@ -1252,6 +1254,7 @@ impl Node {
                 "internal: ensure_ws called on non-gRPC node".into(),
             ));
         }
+        self.ensure_connected()?;
         if self.ws_runtime.is_none() {
             let url = self.options.resolved_ws_url()?;
             self.ws_runtime = Some(WsRuntime::new(url)?);
@@ -1259,12 +1262,78 @@ impl Node {
         Ok(self.ws_runtime.as_ref().expect("ws runtime just created"))
     }
 
+    fn pull_options(&mut self) {
+        self.options = self.session.options();
+    }
+
+    fn install_reconnect_hook(&self) {
+        let Some(handle) = self.executor.clone() else {
+            return;
+        };
+        self.session.set_reconnect_hook(Arc::new(move || {
+            if let Ok(mut exec) = handle.lock() {
+                exec.resend_worker_ready();
+            }
+        }));
+    }
+
+    /// Wait until this node has a live broker control-plane (HTTP discover).
+    ///
+    /// Construction never throws on a missing broker. Scripts that must fail
+    /// fast should call this after `Node::new`. `None` waits until Connected
+    /// or [`shutdown`](Self::shutdown).
+    pub fn wait_for_broker(&self, timeout: Option<Duration>) -> bool {
+        self.session.wait_for_broker(timeout)
+    }
+
+    /// Current broker link state (see [`ConnectionState`]).
+    pub fn connection_state(&self) -> ConnectionState {
+        self.session.state()
+    }
+
+    /// Callback `(old, new, reason)` on every state change. Invoked from the
+    /// session thread; keep it short and do not call back into the node.
+    pub fn add_on_connection_event<F>(&self, callback: F)
+    where
+        F: Fn(ConnectionState, ConnectionState, &str) + Send + Sync + 'static,
+    {
+        self.session.add_on_connection_event(Arc::new(callback));
+    }
+
+    fn not_connected_err(&self) -> BusError {
+        BusError::Protocol(format!(
+            "node not connected to broker (state={}); call wait_for_broker() or start robot-bus-broker",
+            self.session.state()
+        ))
+    }
+
+    /// Pull discovered endpoints; for TCP/WS wait briefly so `create_*` still
+    /// works when the broker is already up.
+    fn ensure_connected(&mut self) -> Result<()> {
+        self.pull_options();
+        if self.session.state() == ConnectionState::Connected {
+            return Ok(());
+        }
+        if !self.options.needs_endpoint_discover() && !self.options.is_ws() {
+            return Ok(());
+        }
+        let _ = self.session.wait_for_broker(Some(SESSION_CREATE_WAIT));
+        self.pull_options();
+        if self.session.state() == ConnectionState::Connected {
+            return Ok(());
+        }
+        if !self.options.needs_endpoint_discover() && !self.options.is_ws() {
+            return Ok(());
+        }
+        Err(self.not_connected_err())
+    }
+
     pub fn name(&self) -> &str {
         &self.name
     }
 
-    pub fn options(&self) -> &NodeOptions {
-        &self.options
+    pub fn options(&self) -> NodeOptions {
+        self.session.options()
     }
 
     /// Default mutually exclusive group (ROS 2 node default callback group).
@@ -1429,6 +1498,7 @@ impl Node {
         hwm: Option<HighWaterMark>,
     ) -> Result<TopicPublisherRaw> {
         let topic = topic.into();
+        self.ensure_connected()?;
         let topology = Some(self.start_topology_guard("publisher", &topic));
         #[cfg(feature = "ws")]
         if self.options.is_ws() {
@@ -1479,6 +1549,7 @@ impl Node {
             }
             return Ok(());
         }
+        self.ensure_connected()?;
         let hwm = match hwm {
             Some(h) => h,
             None => match &self.executor {
@@ -1666,6 +1737,7 @@ impl Node {
         let group = callback_group
             .cloned()
             .unwrap_or_else(|| self.default_callback_group.clone());
+        self.ensure_connected()?;
         let topology = self.start_topology_guard("subscriber", topic);
         #[cfg(feature = "ws")]
         if self.options.is_ws() {
@@ -1701,6 +1773,7 @@ impl Node {
                 "internal: ensure_subscriber on gRPC node".into(),
             ));
         }
+        self.ensure_connected()?;
         if !self.subscriber_connected {
             let endpoint = self.options.message_xpub_endpoint()?;
             self.lock_executor()?.connect_subscriber(Some(&endpoint))?;
@@ -1779,6 +1852,7 @@ impl Node {
         if self.options.is_ws() {
             return Err(ws_mode_unsupported("create_service"));
         }
+        self.ensure_connected()?;
         let endpoint = self.options.service_backend_endpoint()?;
         let group = callback_group
             .cloned()
@@ -1834,6 +1908,7 @@ impl Node {
         hwm: HighWaterMark,
     ) -> Result<NodeServiceClientRaw> {
         let service_name = service_name.into();
+        self.ensure_connected()?;
         let topology = Some(self.start_topology_guard("service_client", &service_name));
         #[cfg(feature = "ws")]
         if self.options.is_ws() {
@@ -1907,6 +1982,7 @@ impl Node {
         if self.options.is_ws() {
             return Err(ws_mode_unsupported("create_action_server"));
         }
+        self.ensure_connected()?;
         let endpoint = self.options.action_backend_endpoint()?;
         let group = callback_group
             .cloned()
@@ -1962,6 +2038,7 @@ impl Node {
         hwm: HighWaterMark,
     ) -> Result<NodeActionClientRaw> {
         let action_name = action_name.into();
+        self.ensure_connected()?;
         let topology = Some(self.start_topology_guard("action_client", &action_name));
         #[cfg(feature = "ws")]
         if self.options.is_ws() {
@@ -2087,6 +2164,7 @@ impl Node {
         if self.options.is_ws() {
             return self.wait_for_message_ws(topic, timeout);
         }
+        self.ensure_connected()?;
         let endpoint = self.options.message_xpub_endpoint()?;
         let sub = BusSubscriber::with_context_hwm(
             self.context.zmq(),
@@ -2145,12 +2223,18 @@ impl Node {
     }
 
     pub fn shutdown(&mut self) -> Result<()> {
+        self.session.shutdown();
         #[cfg(feature = "ws")]
         if self.options.is_ws() {
-            self.ensure_ws()?.shutdown();
+            if let Some(ws) = self.ws_runtime.as_ref() {
+                ws.shutdown();
+            }
             return Ok(());
         }
-        self.ensure_executor()?.shutdown()
+        if self.executor.is_some() {
+            return self.ensure_executor()?.shutdown();
+        }
+        Ok(())
     }
 
     /// Spin until [`shutdown`](Self::shutdown) (ROS 2–style `spin(node)`).
@@ -2193,7 +2277,9 @@ impl Node {
     pub fn stop(&mut self) -> Result<()> {
         #[cfg(feature = "ws")]
         if self.options.is_ws() {
-            self.ensure_ws()?.shutdown();
+            if let Some(ws) = self.ws_runtime.as_ref() {
+                ws.shutdown();
+            }
             return Ok(());
         }
         self.ensure_executor()?.stop()
@@ -2204,6 +2290,12 @@ impl Node {
             return Ok(());
         }
         self.ensure_executor()?.wait()
+    }
+}
+
+impl Drop for Node {
+    fn drop(&mut self) {
+        self.session.shutdown();
     }
 }
 

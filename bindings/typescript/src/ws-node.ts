@@ -324,6 +324,10 @@ export class WsNode {
     }
   >();
   private running = false;
+  private connection: string = "created";
+  private readonly connectionListeners: Array<
+    (oldState: string, next: string, reason: string) => void
+  > = [];
   private readonly session: WsSession;
 
   private constructor(name: string, url: string, options: WsNodeOptions = {}) {
@@ -340,6 +344,59 @@ export class WsNode {
 
   static wsAt(name: string, url: string, options?: WsNodeOptions): WsNode {
     return new WsNode(name, url, options);
+  }
+
+  connectionState(): string {
+    return this.connection;
+  }
+
+  addOnConnectionEvent(
+    callback: (oldState: string, next: string, reason: string) => void,
+  ): void {
+    this.connectionListeners.push(callback);
+  }
+
+  /** Wait until `GET {url}/api/v1/discover` succeeds. */
+  async waitForBroker(timeoutSeconds?: number): Promise<boolean> {
+    const deadline =
+      timeoutSeconds === undefined ? undefined : Date.now() + timeoutSeconds * 1000;
+    let backoffMs = 200;
+    if (this.connection === "created") {
+      this.setConnection("discovering", "wait_for_broker");
+    }
+    for (;;) {
+      if (this.connection === "shutdown") return false;
+      try {
+        const res = await fetch(`${this.url}/api/v1/discover`);
+        if (res.ok) {
+          this.setConnection("connected", "discover ok");
+          return true;
+        }
+      } catch {
+        // broker not reachable yet
+      }
+      if (deadline !== undefined && Date.now() >= deadline) return false;
+      if (this.connection === "connected") {
+        this.setConnection("reconnecting", "discover failed");
+      } else if (this.connection !== "shutdown") {
+        this.setConnection("discovering", "discover failed");
+      }
+      await new Promise((r) => setTimeout(r, backoffMs));
+      backoffMs = Math.min(backoffMs * 2, 5000);
+    }
+  }
+
+  private setConnection(next: string, reason: string): void {
+    if (next === this.connection) return;
+    const old = this.connection;
+    this.connection = next;
+    for (const cb of this.connectionListeners) {
+      try {
+        cb(old, next, reason);
+      } catch (err) {
+        console.error("robot-bus connection event error", err);
+      }
+    }
   }
 
   createPublisher(topic: string, _qosDepth?: number): WsTopicPublisher;
@@ -683,6 +740,7 @@ export class WsNode {
 
   shutdown(): void {
     this.running = false;
+    this.setConnection("shutdown", "shutdown");
     this.abort?.abort();
     this.abort = null;
     for (const session of this.actionSessions.values()) {
@@ -763,48 +821,55 @@ export class WsNode {
   }
 
   private async pumpTopic(filter: string, signal: AbortSignal, qosDepth = 0): Promise<void> {
-    try {
-      const req = SubscribeRequest.toBinary(
-        SubscribeRequest.create({ topic: filter, qosDepth }),
-      );
-      const { control, done } = await this.session.serverStream(
-        METHOD_SUBSCRIBE,
-        req,
-        {
-          onData: (payload) => {
-            const msg = TopicMessage.fromBinary(payload);
-            const cbs: SubCallback[] = [];
-            const exact = this.subscriptions.get(msg.topic);
-            if (exact) cbs.push(...exact);
-            for (const [key, list] of this.subscriptions) {
-              if (
-                key !== msg.topic &&
-                key.endsWith("/") &&
-                msg.topic.startsWith(key)
-              ) {
-                cbs.push(...list);
-              }
-            }
-            for (const cb of cbs) {
-              try {
-                cb(msg.topic, msg.payload);
-              } catch (err) {
-                console.error("robot-bus subscription callback error", err);
-              }
-            }
-          },
-        },
-      );
-      const onAbort = () => control.close();
-      signal.addEventListener("abort", onAbort, { once: true });
+    let backoffMs = 200;
+    while (!signal.aborted) {
       try {
-        await done;
-      } finally {
-        signal.removeEventListener("abort", onAbort);
+        const req = SubscribeRequest.toBinary(
+          SubscribeRequest.create({ topic: filter, qosDepth }),
+        );
+        const { control, done } = await this.session.serverStream(
+          METHOD_SUBSCRIBE,
+          req,
+          {
+            onData: (payload) => {
+              const msg = TopicMessage.fromBinary(payload);
+              const cbs: SubCallback[] = [];
+              const exact = this.subscriptions.get(msg.topic);
+              if (exact) cbs.push(...exact);
+              for (const [key, list] of this.subscriptions) {
+                if (
+                  key !== msg.topic &&
+                  key.endsWith("/") &&
+                  msg.topic.startsWith(key)
+                ) {
+                  cbs.push(...list);
+                }
+              }
+              for (const cb of cbs) {
+                try {
+                  cb(msg.topic, msg.payload);
+                } catch (err) {
+                  console.error("robot-bus subscription callback error", err);
+                }
+              }
+            },
+          },
+        );
+        const onAbort = () => control.close();
+        signal.addEventListener("abort", onAbort, { once: true });
+        try {
+          await done;
+          backoffMs = 200;
+        } finally {
+          signal.removeEventListener("abort", onAbort);
+        }
+      } catch (err) {
+        if (signal.aborted) return;
+        console.error(`robot-bus subscribe '${filter}' failed`, err);
       }
-    } catch (err) {
       if (signal.aborted) return;
-      console.error(`robot-bus subscribe '${filter}' failed`, err);
+      await new Promise((r) => setTimeout(r, backoffMs));
+      backoffMs = Math.min(backoffMs * 2, 5000);
     }
   }
 }

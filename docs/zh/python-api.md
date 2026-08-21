@@ -61,6 +61,17 @@ node = robot_bus.Node.discover(
 
 多 broker 时可用 `broker_id=...` 过滤。
 
+`Node(...)` **不会**等 broker。构造在 broker 未启动时也不抛错；TCP/WS 节点在后台重试 `GET /api/v1/discover`。可查 `node.connection_state`（`created` / `discovering` / `connecting` / `connected` / `reconnecting` / `shutdown`），或显式等待：
+
+```python
+node = robot_bus.Node("pilot")
+if not node.wait_for_broker(timeout=5.0):
+    raise SystemExit("broker not reachable")
+node.add_on_connection_event(lambda old, new, reason: print(old, "->", new, reason))
+```
+
+`spin()` / `start()` 期间 broker 重启会自动重连。`create_*` 会短等 discover，仍未连上则报错。
+
 同进程 **inproc** 时必须共享 `Context`：
 
 ```python
@@ -408,6 +419,7 @@ print(robot_bus.__version__)
 | `Node.declare_parameter` / `get_parameter` / `set_parameter` / `has_parameter` / `list_parameters` | 本节点本地参数（`bool` / `int` / `float` / `str`） |
 | `Node.load_parameters_from_yaml_str` / `load_parameters_from_yaml_file` | 从 YAML 加载 / 覆盖参数 |
 | `node.spin()` / `spin_once` / `shutdown` | 驱动回调（ROS 2 式简单路径） |
+| `node.connection_state` / `wait_for_broker(timeout=None)` / `add_on_connection_event` | 与 broker 的会话：构造不阻塞；等待或观察 `connected` / `reconnecting` |
 | `node.wait_for_message(topic, timeout=None)` | 等到一条消息或超时（返回 `bytes` / `None`） |
 | `Context()` | 共享 ZMQ context（同进程 inproc 必需） |
 | `SingleThreadedExecutor(context=None)` | 显式单线程执行器（多节点共享时用） |

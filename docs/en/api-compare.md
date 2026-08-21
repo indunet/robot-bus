@@ -12,7 +12,7 @@ How to write the same classic scenarios on each side. Left is **ROS 2 Humble + [
 | QoS | `QOS_PROFILE_DEFAULT`, etc. | Topic: `QosProfile::keep_last(depth)` → HWM on ZMQ (optional `qos_depth` / `qosDepth` in all bindings); fixed best-effort. WebSocket subscribe uses the same depth as the gateway→client queue; WS publish ignores QoS (shared gateway PUB). Service / action do not take QoS yet |
 | Callback groups | Worker / callback group (newer API) | `CallbackGroupType::MutuallyExclusive` / `Reentrant` |
 | Parameters | `declare_parameter` / `get_parameter` → Parameter; `set_parameter(Parameter)`; `list_parameters(prefixes, depth)` (remote / YAML / CLI) | Same local shape (`Parameter` + `as_*` + batch get/set); `list_parameters` → `{names, prefixes}`, convenience `list_all_parameters`; `undeclare_parameter`; YAML load; no remote / CLI |
-| Ready waits | `wait_for_message` / `wait_for_service` / `wait_for_action_server` | Same helpers: `wait_for_message`; service/action poll console `workers > 0` (best-effort, not DDS discovery) |
+| Ready waits | `wait_for_message` / `wait_for_service` / `wait_for_action_server` | Same helpers: `wait_for_message`; service/action poll console `workers > 0` (best-effort, not DDS discovery). Plus broker link: `connection_state` / `wait_for_broker` (construct does not block; TCP/WS auto-reconnect) |
 | Destroy | `destroy_subscription` / destroy service·action server | Same: destroy by handle id; rejected while `start()` is active (like `cancel_timer`) |
 | Timers | `create_wall_timer` | `create_timer` / alias `create_wall_timer` |
 

@@ -114,6 +114,20 @@ public final class Node implements AutoCloseable {
         return NativeUtils.takeCString(RobotBusC.Holder.INSTANCE.robot_bus_node_name(ptr));
     }
 
+    public String connectionState() {
+        return NativeUtils.takeCString(
+                RobotBusC.Holder.INSTANCE.robot_bus_node_connection_state(ptr));
+    }
+
+    /** {@code timeoutSecs < 0} waits until connected or shutdown. */
+    public boolean waitForBroker() {
+        return waitForBroker(-1.0);
+    }
+
+    public boolean waitForBroker(double timeoutSecs) {
+        return RobotBusC.Holder.INSTANCE.robot_bus_node_wait_for_broker(ptr, timeoutSecs) != 0;
+    }
+
     public CallbackGroup createCallbackGroup() {
         return createCallbackGroup(CallbackGroupType.MutuallyExclusive);
     }

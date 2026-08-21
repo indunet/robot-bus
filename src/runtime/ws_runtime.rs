@@ -33,6 +33,7 @@ use crate::runtime::timers::{
     Timer, TimerCallback, TimerHandle, SubscriptionHandle, effective_poll_timeout_ms, tick_timers,
 };
 use crate::runtime::topic_callbacks::for_each_matching_callback;
+use crate::runtime::session::{SESSION_BACKOFF_INITIAL, SESSION_BACKOFF_MAX};
 
 const DEFAULT_WS_URL: &str = "http://127.0.0.1:15570";
 const DEFAULT_SPIN_TIMEOUT_MS: i64 = 250;
@@ -263,6 +264,7 @@ struct WsState {
 pub struct WsRuntime {
     conn: Arc<WsConnection>,
     running: Arc<AtomicBool>,
+    alive: Arc<AtomicBool>,
     inbound_tx: Sender<TopicEvent>,
     inbound_rx: Mutex<Receiver<TopicEvent>>,
     state: Arc<Mutex<WsState>>,
@@ -293,6 +295,7 @@ impl WsRuntime {
         Ok(Self {
             conn,
             running: Arc::new(AtomicBool::new(false)),
+            alive: Arc::new(AtomicBool::new(true)),
             inbound_tx,
             inbound_rx: Mutex::new(inbound_rx),
             state: Arc::new(Mutex::new(WsState {
@@ -322,6 +325,7 @@ impl WsRuntime {
     }
 
     pub fn shutdown(&self) {
+        self.alive.store(false, Ordering::Release);
         self.running.store(false, Ordering::Release);
         let _ = self.conn.cmd_tx.send(ConnCmd::Shutdown);
     }
@@ -493,10 +497,11 @@ impl WsRuntime {
 
     fn spawn_subscription(&self, topic: String) {
         let tx = self.inbound_tx.clone();
-        let running = Arc::clone(&self.running);
+        let alive = Arc::clone(&self.alive);
         let conn = Arc::clone(&self.conn);
         let state = Arc::clone(&self.state);
         self.conn.runtime.spawn(async move {
+            let mut backoff = SESSION_BACKOFF_INITIAL;
             loop {
                 {
                     let Ok(guard) = state.lock() else {
@@ -505,6 +510,9 @@ impl WsRuntime {
                     if !guard.active_topics.contains(&topic) {
                         break;
                     }
+                }
+                if !alive.load(Ordering::Acquire) {
+                    break;
                 }
                 let stream_id = conn.alloc_stream_id();
                 if let Ok(mut guard) = state.lock() {
@@ -542,13 +550,13 @@ impl WsRuntime {
                 }
                 match reply_rx.await {
                     Ok(Ok(())) => {
+                        backoff = SESSION_BACKOFF_INITIAL;
                         let _ = done_rx.await;
                     }
                     Ok(Err(err)) => log::warn!("ws subscribe '{topic}' start failed: {err}"),
                     Err(_) => break,
                 }
-                // Reconnect only while the node may still spin and topic is active.
-                if !running.load(Ordering::Acquire) {
+                if !alive.load(Ordering::Acquire) {
                     break;
                 }
                 {
@@ -559,7 +567,8 @@ impl WsRuntime {
                         break;
                     }
                 }
-                tokio::time::sleep(Duration::from_millis(200)).await;
+                tokio::time::sleep(backoff).await;
+                backoff = std::cmp::min(backoff.saturating_mul(2), SESSION_BACKOFF_MAX);
             }
         });
     }
@@ -581,24 +590,94 @@ async fn connection_loop(
     ws_url: String,
     mut cmd_rx: tokio::sync::mpsc::UnboundedReceiver<ConnCmd>,
 ) {
-    let (ws, _) = match connect_async(&ws_url).await {
-        Ok(pair) => pair,
-        Err(err) => {
-            log::error!("ws connect {ws_url} failed: {err}");
-            while let Some(cmd) = cmd_rx.recv().await {
-                if let ConnCmd::Start { reply, .. } = cmd {
-                    let _ = reply.send(Err(BusError::Protocol(format!(
-                        "ws connect failed: {err}"
-                    ))));
+    let mut backoff = SESSION_BACKOFF_INITIAL;
+    loop {
+        match connect_async(&ws_url).await {
+            Ok((ws, _)) => {
+                backoff = SESSION_BACKOFF_INITIAL;
+                match run_ws_connection(ws, &mut cmd_rx).await {
+                    WsLoopExit::Shutdown => return,
+                    WsLoopExit::Disconnected => {
+                        log::warn!("ws {ws_url} disconnected; reconnecting");
+                    }
                 }
             }
-            return;
+            Err(err) => {
+                log::debug!("ws connect {ws_url} failed: {err}");
+                if fail_pending_starts(
+                    &mut cmd_rx,
+                    BusError::Protocol(format!("ws connect failed: {err}")),
+                )
+                .await
+                {
+                    return;
+                }
+            }
         }
-    };
+        match backoff_or_shutdown(&mut cmd_rx, backoff).await {
+            WsLoopExit::Shutdown => return,
+            WsLoopExit::Disconnected => {
+                backoff = std::cmp::min(backoff.saturating_mul(2), SESSION_BACKOFF_MAX);
+            }
+        }
+    }
+}
+
+enum WsLoopExit {
+    Shutdown,
+    Disconnected,
+}
+
+async fn fail_pending_starts(
+    cmd_rx: &mut tokio::sync::mpsc::UnboundedReceiver<ConnCmd>,
+    err: BusError,
+) -> bool {
+    while let Ok(cmd) = cmd_rx.try_recv() {
+        match cmd {
+            ConnCmd::Start { reply, .. } => {
+                let _ = reply.send(Err(BusError::Protocol(err.to_string())));
+            }
+            ConnCmd::Shutdown => return true,
+            ConnCmd::Cancel { .. } => {}
+        }
+    }
+    false
+}
+
+async fn backoff_or_shutdown(
+    cmd_rx: &mut tokio::sync::mpsc::UnboundedReceiver<ConnCmd>,
+    backoff: Duration,
+) -> WsLoopExit {
+    let sleep = tokio::time::sleep(backoff);
+    tokio::pin!(sleep);
+    loop {
+        tokio::select! {
+            _ = &mut sleep => return WsLoopExit::Disconnected,
+            cmd = cmd_rx.recv() => {
+                match cmd {
+                    Some(ConnCmd::Shutdown) | None => return WsLoopExit::Shutdown,
+                    Some(ConnCmd::Start { reply, .. }) => {
+                        let _ = reply.send(Err(BusError::Protocol(
+                            "websocket reconnecting".into(),
+                        )));
+                    }
+                    Some(ConnCmd::Cancel { .. }) => {}
+                }
+            }
+        }
+    }
+}
+
+async fn run_ws_connection(
+    ws: tokio_tungstenite::WebSocketStream<
+        tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>,
+    >,
+    cmd_rx: &mut tokio::sync::mpsc::UnboundedReceiver<ConnCmd>,
+) -> WsLoopExit {
     let (mut sink, mut stream) = ws.split();
     let mut streams: HashMap<u32, StreamState> = HashMap::new();
 
-    loop {
+    let exit = loop {
         tokio::select! {
             cmd = cmd_rx.recv() => {
                 match cmd {
@@ -610,7 +689,7 @@ async fn connection_loop(
                                     let _ = reply.send(Err(BusError::Protocol(format!(
                                         "ws send failed: {err}"
                                     ))));
-                                    break;
+                                    break WsLoopExit::Disconnected;
                                 }
                                 streams.insert(stream_id, StreamState { kind });
                                 let _ = reply.send(Ok(()));
@@ -626,7 +705,7 @@ async fn connection_loop(
                             let _ = sink.send(WsMessage::Binary(bytes.into())).await;
                         }
                     }
-                    Some(ConnCmd::Shutdown) | None => break,
+                    Some(ConnCmd::Shutdown) | None => break WsLoopExit::Shutdown,
                 }
             }
             msg = stream.next() => {
@@ -641,21 +720,21 @@ async fn connection_loop(
                         };
                         handle_inbound_frame(&mut streams, frame);
                     }
-                    Some(Ok(WsMessage::Close(_))) | None => break,
+                    Some(Ok(WsMessage::Close(_))) | None => break WsLoopExit::Disconnected,
                     Some(Ok(_)) => {}
                     Some(Err(err)) => {
                         log::warn!("ws recv error: {err}");
-                        break;
+                        break WsLoopExit::Disconnected;
                     }
                 }
             }
         }
-    }
+    };
 
-    // Fail outstanding streams.
     for (_, st) in streams.drain() {
         fail_stream(st.kind, BusError::Protocol("websocket closed".into()));
     }
+    exit
 }
 
 fn handle_inbound_frame(streams: &mut HashMap<u32, StreamState>, frame: Frame) {

@@ -168,6 +168,10 @@ interface RobotBusC extends Library {
 
     Pointer robot_bus_node_name(Pointer n);
 
+    Pointer robot_bus_node_connection_state(Pointer n);
+
+    int robot_bus_node_wait_for_broker(Pointer n, double timeoutSecs);
+
     Pointer robot_bus_node_create_callback_group(Pointer n, int kind);
 
     Pointer robot_bus_node_create_publisher(Pointer n, String topic);

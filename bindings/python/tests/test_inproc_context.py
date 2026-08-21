@@ -33,6 +33,8 @@ def test_inproc_pubsub_with_shared_context() -> None:
 
         hits: list[bytes] = []
         sub = robot_bus.Node.inproc_with_context(ctx, "inproc-sub")
+        assert sub.wait_for_broker(1.0)
+        assert sub.connection_state == "connected"
 
         def on_msg(_topic: str, payload: bytes) -> None:
             hits.append(bytes(payload))

@@ -53,6 +53,23 @@ Or in two steps: `discovery::wait(opts)?` → `ann.apply(NodeOptions::ws())?`.
 
 UDP multicast discovery has been removed.
 
+`Node::new` / `Node::tcp` do **not** block on the broker. Construction never fails if the broker is down; the session retries HTTP discover in the background. Use [`ConnectionState`](../../src/runtime/session.rs) and `wait_for_broker`:
+
+```rust
+use std::time::Duration;
+use robot_bus::Node;
+
+let mut node = Node::new("pilot");
+if !node.wait_for_broker(Some(Duration::from_secs(5))) {
+    anyhow::bail!("broker not reachable (state={})", node.connection_state());
+}
+node.add_on_connection_event(|old, new, reason| {
+    eprintln!("{old} -> {new} ({reason})");
+});
+```
+
+`spin` / `start` keep retrying after a broker restart. `create_*` waits a few seconds for discover, then returns an error that names the current state.
+
 **Same-process inproc:** ZeroMQ `inproc://` is context-local. An embedded broker and Node must share the same [`Context`](../../src/runtime/context.rs):
 
 ```rust
@@ -182,6 +199,7 @@ fn main() -> robot_bus::Result<()> {
 
     // destroy_subscription / destroy_service / destroy_action_server
     // reject while executor start() is active (same as cancel_timer).
+    // wait_for_broker / connection_state / add_on_connection_event
     // wait_for_message / client.wait_for_service / wait_for_action_server available.
 
     let handle = node.shutdown_handle()?;

@@ -67,8 +67,8 @@ pub use broker::ConsoleBrokerConfig;
 pub use errors::{BusError, Result, parse_error_body};
 pub use message_bus::{Publisher, Subscriber};
 pub use runtime::{
-    ActionGoalHandler, CallbackGroup, CallbackGroupType, Context, Executor, ExecutorHandle,
-    GoalHandle, MessageCallback, MultiThreadedExecutor, Node, NodeActionClient,
+    ActionGoalHandler, CallbackGroup, CallbackGroupType, ConnectionState, Context, Executor,
+    ExecutorHandle, GoalHandle, MessageCallback, MultiThreadedExecutor, Node, NodeActionClient,
     NodeActionClientRaw, NodeActionServer, NodeOptions, NodeService, NodeServiceClient,
     NodeServiceClientRaw, Parameter, ParameterValue, QOS_PROFILE_DEFAULT, QosProfile,
     ListParametersResult, PARAMETER_DEPTH_RECURSIVE, RawActionFeedbackCallback, RawGoalHandle,

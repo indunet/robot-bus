@@ -290,6 +290,20 @@ export class Node {
     return this.inner.name;
   }
 
+  get connectionState(): string {
+    return this.inner.connectionState;
+  }
+
+  waitForBroker(timeoutSeconds?: number): boolean {
+    return this.inner.waitForBroker(timeoutSeconds);
+  }
+
+  addOnConnectionEvent(
+    callback: (oldState: string, next: string, reason: string) => void,
+  ): void {
+    this.inner.addOnConnectionEvent(callback);
+  }
+
   createCallbackGroup(kind: import("./native-types.js").JsCallbackGroupType) {
     return this.inner.createCallbackGroup(kind);
   }

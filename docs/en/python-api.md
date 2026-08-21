@@ -61,6 +61,17 @@ node = robot_bus.Node.discover(
 
 When multiple brokers are reachable, pass `broker_id=...` to filter.
 
+`Node(...)` does **not** wait for the broker. Construction never raises on a missing broker; TCP/WS nodes retry `GET /api/v1/discover` in the background. Check `node.connection_state` (`created` / `discovering` / `connecting` / `connected` / `reconnecting` / `shutdown`) or wait:
+
+```python
+node = robot_bus.Node("pilot")
+if not node.wait_for_broker(timeout=5.0):
+    raise SystemExit("broker not reachable")
+node.add_on_connection_event(lambda old, new, reason: print(old, "->", new, reason))
+```
+
+`spin()` / `start()` keep retrying if the broker restarts. `create_*` waits a few seconds for discover, then raises if still disconnected.
+
 Same-process **inproc** requires a shared `Context`:
 
 ```python
@@ -408,6 +419,7 @@ print(robot_bus.__version__)
 | `Node.declare_parameter` / `get_parameter` / `set_parameter` / `has_parameter` / `list_parameters` | Local node parameters (`bool` / `int` / `float` / `str`) |
 | `Node.load_parameters_from_yaml_str` / `load_parameters_from_yaml_file` | Load / override parameters from YAML |
 | `node.spin()` / `spin_once` / `shutdown` | Drive callbacks (ROS 2–style simple path) |
+| `node.connection_state` / `wait_for_broker(timeout=None)` / `add_on_connection_event` | Broker link: construct does not block; wait or observe `connected` / `reconnecting` |
 | `node.wait_for_message(topic, timeout=None)` | Wait for one message or timeout (`bytes` / `None`) |
 | `Context()` | Shared ZMQ context (required for same-process inproc) |
 | `SingleThreadedExecutor(context=None)` | Explicit single-threaded executor (for shared multi-node use) |

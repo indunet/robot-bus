@@ -76,6 +76,8 @@ internal interface RobotBusC : Library {
     fun robot_bus_applied_node_options_free(o: AppliedNodeOptions?)
     fun robot_bus_node_free(n: Pointer?)
     fun robot_bus_node_name(n: Pointer?): Pointer?
+    fun robot_bus_node_connection_state(n: Pointer?): Pointer?
+    fun robot_bus_node_wait_for_broker(n: Pointer?, timeoutSecs: Double): Int
     fun robot_bus_node_create_callback_group(n: Pointer?, kind: Int): Pointer?
     fun robot_bus_node_create_publisher(n: Pointer?, topic: String?): Pointer?
     fun robot_bus_node_create_publisher_with_qos(n: Pointer?, topic: String?, depth: Int): Pointer?

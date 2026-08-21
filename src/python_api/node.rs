@@ -202,6 +202,30 @@ impl PyNode {
         self.inner.name()
     }
 
+    /// Broker link state: `created` / `discovering` / `connecting` / `connected` /
+    /// `reconnecting` / `shutdown`.
+    #[getter]
+    fn connection_state(&self) -> &'static str {
+        self.inner.connection_state().as_str()
+    }
+
+    /// Block until the node is connected to the broker. `timeout` is seconds;
+    /// `None` waits until connected or shutdown. Returns `False` on timeout.
+    #[pyo3(signature = (timeout=None))]
+    fn wait_for_broker(&self, timeout: Option<f64>) -> bool {
+        let timeout = timeout.map(Duration::from_secs_f64);
+        self.inner.wait_for_broker(timeout)
+    }
+
+    /// `callback(old: str, new: str, reason: str)` on the session thread.
+    fn add_on_connection_event(&self, callback: Py<PyAny>) {
+        self.inner.add_on_connection_event(move |old, new, reason| {
+            Python::with_gil(|py| {
+                let _ = callback.call1(py, (old.as_str(), new.as_str(), reason));
+            });
+        });
+    }
+
     /// Declare a local parameter (`bool` / `int` / `float` / `str`).
     /// Returns a dict `{"name", "value"}` (ROS 2 returns a Parameter).
     fn declare_parameter(&mut self, py: Python<'_>, name: &str, value: &Bound<'_, PyAny>) -> PyResult<PyObject> {

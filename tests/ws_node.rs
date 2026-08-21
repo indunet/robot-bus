@@ -207,3 +207,58 @@ fn ws_node_rejects_service_and_action_server() {
         .is_err()
     );
 }
+
+#[test]
+fn ws_node_resubscribes_after_broker_restart() {
+    let _guard = lock_brokers();
+    let api_port = support::free_port();
+    let mut config = ephemeral_robot_bus_config();
+    config.ws.listen = format!("127.0.0.1:{api_port}").parse().unwrap();
+    let broker = RobotBusBroker::start(config.clone()).expect("start RobotBusBroker");
+    let url = ws_url(&broker);
+
+    let got = Arc::new(Mutex::new(None::<Vec<u8>>));
+    let got_cb = Arc::clone(&got);
+    let mut node = Node::ws_at("ws-re", &url);
+    node.create_subscription_raw(
+        "ws.reconnect.topic",
+        Arc::new(move |_topic, payload| {
+            *got_cb.lock().unwrap() = Some(payload.to_vec());
+        }),
+        None,
+    )
+    .expect("subscribe");
+    thread::sleep(Duration::from_millis(300));
+
+    let pub_ = Publisher::new(Some(&broker.message.xsub_bind)).expect("publisher");
+    pub_.publish("ws.reconnect.topic", b"before-restart")
+        .expect("publish");
+    let deadline = std::time::Instant::now() + Duration::from_secs(5);
+    while got.lock().unwrap().is_none() && std::time::Instant::now() < deadline {
+        node.spin_once(Some(Duration::from_millis(50)))
+            .expect("spin_once");
+    }
+    assert_eq!(
+        got.lock().unwrap().clone().as_deref(),
+        Some(&b"before-restart"[..])
+    );
+    broker.stop().expect("stop");
+
+    *got.lock().unwrap() = None;
+    thread::sleep(Duration::from_millis(600));
+    let broker = RobotBusBroker::start(config).expect("restart broker");
+    let pub_ = Publisher::new(Some(&broker.message.xsub_bind)).expect("publisher");
+    let deadline = std::time::Instant::now() + Duration::from_secs(8);
+    while got.lock().unwrap().is_none() && std::time::Instant::now() < deadline {
+        let _ = pub_.publish("ws.reconnect.topic", b"after-restart");
+        node.spin_once(Some(Duration::from_millis(50)))
+            .expect("spin_once");
+        thread::sleep(Duration::from_millis(50));
+    }
+    assert_eq!(
+        got.lock().unwrap().clone().as_deref(),
+        Some(&b"after-restart"[..]),
+        "subscription should resume after broker restart"
+    );
+    broker.stop().expect("stop");
+}

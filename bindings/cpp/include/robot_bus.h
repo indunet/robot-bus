@@ -270,6 +270,9 @@ ROBOT_BUS_API int robot_bus_discover_node_options(const char *transport,
 ROBOT_BUS_API void robot_bus_applied_node_options_free(RobotBusAppliedNodeOptions *o);
 ROBOT_BUS_API void robot_bus_node_free(RobotBusNode *n);
 ROBOT_BUS_API char *robot_bus_node_name(const RobotBusNode *n);
+ROBOT_BUS_API char *robot_bus_node_connection_state(const RobotBusNode *n);
+/** timeout_secs < 0 waits forever. Returns 1 if connected, 0 otherwise. */
+ROBOT_BUS_API int robot_bus_node_wait_for_broker(const RobotBusNode *n, double timeout_secs);
 ROBOT_BUS_API RobotBusCallbackGroup *robot_bus_node_create_callback_group(RobotBusNode *n,
                                                                           int kind);
 ROBOT_BUS_API RobotBusTopicPublisher *robot_bus_node_create_publisher(RobotBusNode *n,

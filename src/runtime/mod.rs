@@ -13,6 +13,7 @@ mod executors;
 #[cfg(feature = "ws")]
 mod ws_runtime;
 mod node;
+mod session;
 mod parameters;
 mod qos;
 mod queues;
@@ -33,6 +34,7 @@ pub use node::{
     NodeService, NodeServiceClient, NodeServiceClientRaw, RawActionFeedbackCallback, RawGoalHandle,
     TopicPublisher, TopicPublisherRaw,
 };
+pub use session::ConnectionState;
 pub use parameters::{ListParametersResult, Parameter, ParameterValue, PARAMETER_DEPTH_RECURSIVE};
 pub use qos::{QOS_PROFILE_DEFAULT, QosProfile};
 pub(crate) use qos::ws_subscribe_queue_capacity;

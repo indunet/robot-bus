@@ -616,6 +616,16 @@ class Node {
     return s.str();
   }
 
+  std::string connection_state() const {
+    OwnedString s(robot_bus_node_connection_state(n_));
+    return s.str();
+  }
+
+  /// `timeout_secs < 0` waits until connected or shutdown.
+  bool wait_for_broker(double timeout_secs = -1.0) const {
+    return robot_bus_node_wait_for_broker(n_, timeout_secs) != 0;
+  }
+
   [[nodiscard]] TopicPublisher create_publisher(const char *topic) {
     return TopicPublisher(static_cast<RobotBusTopicPublisher *>(
         check_ptr(robot_bus_node_create_publisher(n_, topic), "create_publisher")));

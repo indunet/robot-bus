@@ -397,6 +397,37 @@ pub extern "C" fn robot_bus_node_name(n: *const RobotBusNode) -> *mut c_char {
 }
 
 #[unsafe(no_mangle)]
+pub extern "C" fn robot_bus_node_connection_state(n: *const RobotBusNode) -> *mut c_char {
+    if n.is_null() {
+        set_error("null node");
+        return ptr::null_mut();
+    }
+    clear_error();
+    dup_string(unsafe { &*n }.inner.connection_state().as_str())
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn robot_bus_node_wait_for_broker(
+    n: *const RobotBusNode,
+    timeout_secs: f64,
+) -> c_int {
+    if n.is_null() {
+        return err("null node");
+    }
+    let timeout = if timeout_secs < 0.0 {
+        None
+    } else {
+        Some(Duration::from_secs_f64(timeout_secs))
+    };
+    clear_error();
+    if unsafe { &*n }.inner.wait_for_broker(timeout) {
+        1
+    } else {
+        0
+    }
+}
+
+#[unsafe(no_mangle)]
 pub extern "C" fn robot_bus_node_shutdown_handle(
     n: *mut RobotBusNode,
 ) -> *mut RobotBusShutdownHandle {

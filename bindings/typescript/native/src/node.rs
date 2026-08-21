@@ -34,6 +34,7 @@ pub struct DiscoverNodeOptions {
 }
 
 
+type ConnTsfn = ThreadsafeFunction<(String, String, String), ErrorStrategy::Fatal>;
 type MsgTsfn = ThreadsafeFunction<(String, Vec<u8>), ErrorStrategy::Fatal>;
 type VoidTsfn = ThreadsafeFunction<(), ErrorStrategy::Fatal>;
 type ServiceTsfn = ThreadsafeFunction<Vec<u8>, ErrorStrategy::CalleeHandled>;
@@ -230,6 +231,46 @@ impl Node {
     #[napi(getter)]
     pub fn name(&self) -> String {
         self.inner.name().to_string()
+    }
+
+    #[napi(getter)]
+    pub fn connection_state(&self) -> String {
+        self.inner.connection_state().as_str().to_string()
+    }
+
+    /// Seconds; omit / negative waits until connected or shutdown.
+    #[napi]
+    pub fn wait_for_broker(&self, timeout_secs: Option<f64>) -> bool {
+        let timeout = match timeout_secs {
+            None => None,
+            Some(s) if s < 0.0 => None,
+            Some(s) => Some(Duration::from_secs_f64(s)),
+        };
+        self.inner.wait_for_broker(timeout)
+    }
+
+    #[napi]
+    pub fn add_on_connection_event(&self, callback: JsFunction) -> Result<()> {
+        let tsfn: ConnTsfn = callback.create_threadsafe_function(0, |ctx| {
+            let (old, next, reason) = ctx.value;
+            Ok(vec![
+                ctx.env.create_string_from_std(old)?.into_unknown(),
+                ctx.env.create_string_from_std(next)?.into_unknown(),
+                ctx.env.create_string_from_std(reason)?.into_unknown(),
+            ])
+        })?;
+        let tsfn = Arc::new(tsfn);
+        self.inner.add_on_connection_event(move |old, next, reason| {
+            let _ = tsfn.call(
+                (
+                    old.as_str().to_string(),
+                    next.as_str().to_string(),
+                    reason.to_string(),
+                ),
+                ThreadsafeFunctionCallMode::NonBlocking,
+            );
+        });
+        Ok(())
     }
 
     #[napi]

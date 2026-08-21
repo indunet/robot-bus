@@ -824,6 +824,36 @@ impl Executor {
         self.sync_action_client_registration();
     }
 
+    /// Re-advertise service/action workers after the broker restarts.
+    pub(crate) fn resend_worker_ready(&mut self) {
+        self.sync_worker_registrations();
+        for reg in &self.socket_registrations {
+            match reg {
+                Registration::Service(worker) => {
+                    if let Err(err) = worker.send_control(b"READY") {
+                        log::debug!("resend service READY failed: {err}");
+                    }
+                }
+                Registration::Action(worker) => {
+                    if let Err(err) = worker.send_control(b"READY") {
+                        log::debug!("resend action READY failed: {err}");
+                    }
+                }
+                _ => {}
+            }
+        }
+        for worker in &self.service_registrations {
+            if let Err(err) = worker.send_control(b"READY") {
+                log::debug!("resend service READY failed: {err}");
+            }
+        }
+        for worker in &self.action_registrations {
+            if let Err(err) = worker.send_control(b"READY") {
+                log::debug!("resend action READY failed: {err}");
+            }
+        }
+    }
+
     fn disconnect_workers(&mut self) {
         for reg in &self.socket_registrations {
             match reg {

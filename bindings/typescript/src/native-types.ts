@@ -130,6 +130,11 @@ export declare class Node {
   static wsAt(name: string, url: string): Node;
   static discover(name: string, options?: DiscoverNodeOptions): Node;
   readonly name: string;
+  readonly connectionState: string;
+  waitForBroker(timeoutSeconds?: number): boolean;
+  addOnConnectionEvent(
+    callback: (oldState: string, next: string, reason: string) => void,
+  ): void;
   createCallbackGroup(kind: JsCallbackGroupType): JsCallbackGroup;
   createPublisher(topic: string, qosDepth?: number): TopicPublisher;
   createSubscription(

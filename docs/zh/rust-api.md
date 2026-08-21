@@ -53,6 +53,23 @@ let mut node = Node::with_options("talker", opts);
 
 UDP 组播发现已移除。
 
+`Node::new` / `Node::tcp` **不会**阻塞等 broker。broker 未启动时构造也不失败；会话在后台重试 HTTP discover。用 [`ConnectionState`](../../src/runtime/session.rs) 和 `wait_for_broker`：
+
+```rust
+use std::time::Duration;
+use robot_bus::Node;
+
+let mut node = Node::new("pilot");
+if !node.wait_for_broker(Some(Duration::from_secs(5))) {
+    anyhow::bail!("broker not reachable (state={})", node.connection_state());
+}
+node.add_on_connection_event(|old, new, reason| {
+    eprintln!("{old} -> {new} ({reason})");
+});
+```
+
+`spin` / `start` 在 broker 重启后会继续重试。`create_*` 会短等 discover，仍未连上则返回带当前 state 的错误。
+
 **同进程 inproc：** ZeroMQ 的 `inproc://` 是 context-local。嵌入式 broker 与 Node 必须共用同一个 [`Context`](../../src/runtime/context.rs)：
 
 ```rust
@@ -182,6 +199,7 @@ fn main() -> robot_bus::Result<()> {
 
     // destroy_subscription / destroy_service / destroy_action_server
     // 与 cancel_timer 相同：executor start() 活跃时拒绝。
+    // wait_for_broker / connection_state / add_on_connection_event
     // wait_for_message / client.wait_for_service / wait_for_action_server 可用。
     // create_*_with_qos(..., QosProfile::keep_last(n), ...) 设置 KeepLast depth。
 

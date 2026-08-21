@@ -30,6 +30,14 @@ class Node : AutoCloseable {
     fun name(): String =
         NativeUtils.takeCString(RobotBusC.Holder.INSTANCE.robot_bus_node_name(ptr))
 
+    fun connectionState(): String =
+        NativeUtils.takeCString(RobotBusC.Holder.INSTANCE.robot_bus_node_connection_state(ptr))
+
+    /** `timeoutSecs < 0` waits until connected or shutdown. */
+    @JvmOverloads
+    fun waitForBroker(timeoutSecs: Double = -1.0): Boolean =
+        RobotBusC.Holder.INSTANCE.robot_bus_node_wait_for_broker(ptr, timeoutSecs) != 0
+
     @JvmOverloads
     fun createCallbackGroup(
         kind: CallbackGroupType = CallbackGroupType.MutuallyExclusive,
