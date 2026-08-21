@@ -10,6 +10,15 @@ set -euo pipefail
 root="$(cd "$(dirname "$0")/.." && pwd)"
 ts="$root/bindings/typescript"
 
+# Honor PROTOC= (full path). On Windows GHA, Git Bash PATH may not see a
+# MSYS-style install unless we prepend the compiler's directory.
+if [[ -n "${PROTOC:-}" ]]; then
+  proto_dir="$(dirname "$PROTOC")"
+  if command -v cygpath >/dev/null 2>&1; then
+    proto_dir="$(cygpath -u "$proto_dir" 2>/dev/null || echo "$proto_dir")"
+  fi
+  export PATH="$proto_dir:$PATH"
+fi
 if ! command -v protoc >/dev/null 2>&1; then
   echo "error: protoc is required to generate bindings/typescript/generated" >&2
   exit 1

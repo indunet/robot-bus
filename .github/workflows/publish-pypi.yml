@@ -179,21 +179,25 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
 
       # Chocolatey protoc tracks latest (now 36.x) and trips EXPECTED_PROTOC_VERSION=35.1.
+      # Write a Windows path to GITHUB_PATH so later Python + Git Bash (`command -v protoc`)
+      # both see the compiler (build_console.sh included).
       - name: Install pinned protoc 35.1
-        shell: bash
+        shell: pwsh
         run: |
-          set -eux
-          curl -fsSL -o /tmp/protoc.zip \
-            "https://github.com/protocolbuffers/protobuf/releases/download/v35.1/protoc-35.1-win64.zip"
-          rm -rf "${GITHUB_WORKSPACE}/.protoc"
-          mkdir -p "${GITHUB_WORKSPACE}/.protoc"
-          unzip -o /tmp/protoc.zip -d "${GITHUB_WORKSPACE}/.protoc"
-          "${GITHUB_WORKSPACE}/.protoc/bin/protoc.exe" --version
+          $ErrorActionPreference = "Stop"
+          $zip = Join-Path $env:RUNNER_TEMP "protoc.zip"
+          $dest = Join-Path $env:GITHUB_WORKSPACE ".protoc"
+          curl.exe -fsSL -o $zip "https://github.com/protocolbuffers/protobuf/releases/download/v35.1/protoc-35.1-win64.zip"
+          if (Test-Path $dest) { Remove-Item -Recurse -Force $dest }
+          Expand-Archive -Path $zip -DestinationPath $dest -Force
+          $bin = Join-Path $dest "bin"
+          $exe = Join-Path $bin "protoc.exe"
+          Add-Content -Path $env:GITHUB_PATH -Value $bin
+          Add-Content -Path $env:GITHUB_ENV -Value "PROTOC=$exe"
+          & $exe --version
 
       - name: Generate protobuf stubs (Python + Rust for maturin)
         shell: bash
-        env:
-          PROTOC: ${{ format('{0}/.protoc/bin/protoc.exe', github.workspace) }}
         run: |
           set -eux
           python3 scripts/generate_python_msgs.py

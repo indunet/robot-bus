@@ -94,15 +94,19 @@ jobs:
 
       - name: Install pinned protoc 35.1 (Windows)
         if: runner.os == 'Windows'
-        shell: bash
+        shell: pwsh
         run: |
-          set -eux
-          curl -fsSL -o /tmp/protoc.zip \
-            "https://github.com/protocolbuffers/protobuf/releases/download/v35.1/${{ matrix.protoc_zip }}"
-          rm -rf "${GITHUB_WORKSPACE}/.protoc"
-          mkdir -p "${GITHUB_WORKSPACE}/.protoc"
-          unzip -o /tmp/protoc.zip -d "${GITHUB_WORKSPACE}/.protoc"
-          "${GITHUB_WORKSPACE}/.protoc/bin/protoc.exe" --version
+          $ErrorActionPreference = "Stop"
+          $zip = Join-Path $env:RUNNER_TEMP "protoc.zip"
+          $dest = Join-Path $env:GITHUB_WORKSPACE ".protoc"
+          curl.exe -fsSL -o $zip "https://github.com/protocolbuffers/protobuf/releases/download/v35.1/${{ matrix.protoc_zip }}"
+          if (Test-Path $dest) { Remove-Item -Recurse -Force $dest }
+          Expand-Archive -Path $zip -DestinationPath $dest -Force
+          $bin = Join-Path $dest "bin"
+          $exe = Join-Path $bin "protoc.exe"
+          Add-Content -Path $env:GITHUB_PATH -Value $bin
+          Add-Content -Path $env:GITHUB_ENV -Value "PROTOC=$exe"
+          & $exe --version
 
       - name: Install npm deps
         working-directory: bindings/typescript
@@ -110,8 +114,6 @@ jobs:
 
       - name: Generate TypeScript + Rust protobuf stubs
         shell: bash
-        env:
-          PROTOC: ${{ runner.os == 'Windows' && format('{0}/.protoc/bin/protoc.exe', github.workspace) || 'protoc' }}
         run: |
           set -eux
           python3 scripts/generate_typescript_msgs.py
