@@ -49,10 +49,10 @@ jobs:
             protoc_zip: protoc-35.1-linux-aarch_64.zip
           - host: macos-14
             target: aarch64-apple-darwin
-            protoc_zip: null
+            protoc_zip: protoc-35.1-osx-aarch_64.zip
           - host: windows-latest
             target: x86_64-pc-windows-msvc
-            protoc_zip: null
+            protoc_zip: protoc-35.1-win64.zip
     runs-on: ${{ matrix.host }}
     steps:
       - uses: actions/checkout@v6
@@ -78,13 +78,32 @@ jobs:
           sudo unzip -o /tmp/protoc.zip -d /usr/local
           protoc --version
 
-      - name: Install protoc / build deps (macOS)
+      - name: Install build deps (macOS)
         if: runner.os == 'macOS'
-        run: brew install cmake protobuf zeromq
+        run: brew install cmake zeromq
 
-      - name: Install protoc (Windows)
+      - name: Install pinned protoc 35.1 (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          set -eux
+          curl -fsSL -o /tmp/protoc.zip \
+            "https://github.com/protocolbuffers/protobuf/releases/download/v35.1/${{ matrix.protoc_zip }}"
+          sudo unzip -o /tmp/protoc.zip -d /usr/local
+          echo "/usr/local/bin" >> "$GITHUB_PATH"
+          /usr/local/bin/protoc --version
+
+      - name: Install pinned protoc 35.1 (Windows)
         if: runner.os == 'Windows'
-        run: choco install protoc -y
+        shell: bash
+        run: |
+          set -eux
+          curl -fsSL -o /tmp/protoc.zip \
+            "https://github.com/protocolbuffers/protobuf/releases/download/v35.1/${{ matrix.protoc_zip }}"
+          rm -rf /c/protoc
+          mkdir -p /c/protoc
+          unzip -o /tmp/protoc.zip -d /c/protoc
+          echo "/c/protoc/bin" >> "$GITHUB_PATH"
+          /c/protoc/bin/protoc.exe --version
 
       - name: Install npm deps
         working-directory: bindings/typescript

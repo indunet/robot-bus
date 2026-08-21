@@ -121,7 +121,17 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
 
       - name: Install build dependencies
-        run: brew install cmake protobuf
+        run: brew install cmake
+
+      # Homebrew protobuf tracks latest (now 36.x) and trips EXPECTED_PROTOC_VERSION=35.1.
+      - name: Install pinned protoc 35.1
+        run: |
+          set -eux
+          curl -fsSL -o /tmp/protoc.zip \
+            "https://github.com/protocolbuffers/protobuf/releases/download/v35.1/protoc-35.1-osx-aarch_64.zip"
+          sudo unzip -o /tmp/protoc.zip -d /usr/local
+          echo "/usr/local/bin" >> "$GITHUB_PATH"
+          /usr/local/bin/protoc --version
 
       - name: Generate protobuf stubs (Python + Rust for maturin)
         run: |
@@ -168,8 +178,18 @@ jobs:
 
       - uses: dtolnay/rust-toolchain@stable
 
-      - name: Install protobuf
-        run: choco install protoc -y
+      # Chocolatey protoc tracks latest (now 36.x) and trips EXPECTED_PROTOC_VERSION=35.1.
+      - name: Install pinned protoc 35.1
+        shell: bash
+        run: |
+          set -eux
+          curl -fsSL -o /tmp/protoc.zip \
+            "https://github.com/protocolbuffers/protobuf/releases/download/v35.1/protoc-35.1-win64.zip"
+          rm -rf /c/protoc
+          mkdir -p /c/protoc
+          unzip -o /tmp/protoc.zip -d /c/protoc
+          echo "/c/protoc/bin" >> "$GITHUB_PATH"
+          /c/protoc/bin/protoc.exe --version
 
       - name: Generate protobuf stubs (Python + Rust for maturin)
         shell: bash
