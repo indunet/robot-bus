@@ -984,13 +984,21 @@ mod tests {
         assert!(text.contains("inproc://robot_bus/message_bus/xsub"));
         assert!(text.contains("tcp://127.0.0.1:5"));
         assert!(text.contains("inproc://robot_bus/action_bus/frontend"));
-        let ws_at = text.find("  ws ").expect("ws row");
         let console_at = text.find("web console").expect("web console row");
         let message_at = text.find("message pub").expect("message row");
-        assert!(ws_at < console_at);
         assert!(console_at < message_at);
-        assert!(text.contains("http://127.0.0.1:15570/ws"));
         assert!(text.contains("web console     http://127.0.0.1:15570"));
+        #[cfg(feature = "ws")]
+        {
+            let ws_at = text.find("  ws ").expect("ws row");
+            assert!(ws_at < console_at);
+            assert!(text.contains("http://127.0.0.1:15570/ws"));
+        }
+        #[cfg(not(feature = "ws"))]
+        {
+            assert!(!text.contains("  ws "));
+            assert!(!text.contains("/ws"));
+        }
     }
 
     #[test]

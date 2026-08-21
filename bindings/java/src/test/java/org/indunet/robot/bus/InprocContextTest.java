@@ -4,8 +4,6 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import java.io.IOException;
-import java.net.ServerSocket;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
@@ -94,25 +92,18 @@ class InprocContextTest {
         }
     }
 
-    /** Ephemeral TCP binds, but keep inproc (tcpOnly=false). */
-    private static BrokerOptions inprocBrokerOptions() throws IOException {
+    /** Ephemeral TCP binds (`:0`), but keep inproc (tcpOnly=false). */
+    private static BrokerOptions inprocBrokerOptions() {
         return new BrokerOptions(
-                "tcp://127.0.0.1:" + freePort(),
-                "tcp://127.0.0.1:" + freePort(),
-                "tcp://127.0.0.1:" + freePort(),
-                "tcp://127.0.0.1:" + freePort(),
-                "tcp://127.0.0.1:" + freePort(),
-                "tcp://127.0.0.1:" + freePort(),
-                "127.0.0.1:" + freePort(),
+                "tcp://127.0.0.1:0",
+                "tcp://127.0.0.1:0",
+                "tcp://127.0.0.1:0",
+                "tcp://127.0.0.1:0",
+                "tcp://127.0.0.1:0",
+                "tcp://127.0.0.1:0",
+                "127.0.0.1:0",
                 null,
                 false,
                 true);
-    }
-
-    private static int freePort() throws IOException {
-        try (ServerSocket socket = new ServerSocket(0)) {
-            socket.setReuseAddress(true);
-            return socket.getLocalPort();
-        }
     }
 }

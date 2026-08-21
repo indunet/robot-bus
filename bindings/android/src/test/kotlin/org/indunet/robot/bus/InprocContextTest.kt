@@ -1,7 +1,5 @@
 package org.indunet.robot.bus
 
-import java.io.IOException
-import java.net.ServerSocket
 import java.nio.charset.StandardCharsets
 import java.util.concurrent.atomic.AtomicInteger
 import org.junit.Assert.assertEquals
@@ -103,26 +101,18 @@ class InprocContextTest {
         }
     }
 
-    /** Ephemeral TCP binds, but keep inproc (tcpOnly=false). */
-    @Throws(IOException::class)
+    /** Ephemeral TCP binds (`:0`), but keep inproc (tcpOnly=false). */
     private fun inprocBrokerOptions(): BrokerOptions =
         BrokerOptions(
-            messageXsubBind = "tcp://127.0.0.1:${freePort()}",
-            messageXpubBind = "tcp://127.0.0.1:${freePort()}",
-            serviceFrontendBind = "tcp://127.0.0.1:${freePort()}",
-            serviceBackendBind = "tcp://127.0.0.1:${freePort()}",
-            actionFrontendBind = "tcp://127.0.0.1:${freePort()}",
-            actionBackendBind = "tcp://127.0.0.1:${freePort()}",
-            apiListen = "127.0.0.1:${freePort()}",
+            messageXsubBind = "tcp://127.0.0.1:0",
+            messageXpubBind = "tcp://127.0.0.1:0",
+            serviceFrontendBind = "tcp://127.0.0.1:0",
+            serviceBackendBind = "tcp://127.0.0.1:0",
+            actionFrontendBind = "tcp://127.0.0.1:0",
+            actionBackendBind = "tcp://127.0.0.1:0",
+            apiListen = "127.0.0.1:0",
             consoleListen = null,
             tcpOnly = false,
             noConsole = true,
         )
-
-    @Throws(IOException::class)
-    private fun freePort(): Int =
-        ServerSocket(0).use { socket ->
-            socket.reuseAddress = true
-            socket.localPort
-        }
 }

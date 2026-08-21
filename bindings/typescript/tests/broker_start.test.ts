@@ -4,25 +4,18 @@
  */
 
 import assert from "node:assert/strict";
-import { createServer } from "node:net";
 import { describe, it } from "node:test";
 import type { NativeBinding } from "../src/native.js";
 
-async function freePort(): Promise<number> {
-  return await new Promise((resolve, reject) => {
-    const server = createServer();
-    server.listen(0, "127.0.0.1", () => {
-      const addr = server.address();
-      if (!addr || typeof addr === "string") {
-        server.close();
-        reject(new Error("no port"));
-        return;
-      }
-      const port = addr.port;
-      server.close((err) => (err ? reject(err) : resolve(port)));
-    });
-  });
-}
+const ephemeralTcp = {
+  messageXsubBind: "tcp://127.0.0.1:0",
+  messageXpubBind: "tcp://127.0.0.1:0",
+  serviceFrontendBind: "tcp://127.0.0.1:0",
+  serviceBackendBind: "tcp://127.0.0.1:0",
+  actionFrontendBind: "tcp://127.0.0.1:0",
+  actionBackendBind: "tcp://127.0.0.1:0",
+  apiListen: "127.0.0.1:0",
+};
 
 async function tryLoadNative(): Promise<NativeBinding | null> {
   try {
@@ -40,22 +33,15 @@ describe("RobotBusBroker.start", () => {
       return;
     }
 
-    const port = await freePort();
     const broker = native.RobotBusBroker.start({
-      messageXsubBind: `tcp://127.0.0.1:${await freePort()}`,
-      messageXpubBind: `tcp://127.0.0.1:${await freePort()}`,
-      serviceFrontendBind: `tcp://127.0.0.1:${await freePort()}`,
-      serviceBackendBind: `tcp://127.0.0.1:${await freePort()}`,
-      actionFrontendBind: `tcp://127.0.0.1:${await freePort()}`,
-      actionBackendBind: `tcp://127.0.0.1:${await freePort()}`,
-      apiListen: `127.0.0.1:${port}`,
+      ...ephemeralTcp,
       tcpOnly: true,
     });
 
     try {
-      assert.equal(broker.apiListen, `127.0.0.1:${port}`);
-      assert.equal(broker.consoleListen, `127.0.0.1:${port}`);
-      const res = await fetch(`http://127.0.0.1:${port}/`);
+      assert.match(broker.apiListen, /^127\.0\.0\.1:[1-9]\d*$/);
+      assert.equal(broker.consoleListen, broker.apiListen);
+      const res = await fetch(`http://${broker.apiListen}/`);
       assert.equal(res.status, 200);
       const html = await res.text();
       assert.match(html, /<html|<!doctype/i);

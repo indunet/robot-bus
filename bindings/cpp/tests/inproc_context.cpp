@@ -24,25 +24,7 @@ int main() {
   using namespace robot_bus::test;
 
   Context ctx;
-  const std::string message_xsub = "tcp://127.0.0.1:" + std::to_string(free_port());
-  const std::string message_xpub = "tcp://127.0.0.1:" + std::to_string(free_port());
-  const std::string service_frontend = "tcp://127.0.0.1:" + std::to_string(free_port());
-  const std::string service_backend = "tcp://127.0.0.1:" + std::to_string(free_port());
-  const std::string action_frontend = "tcp://127.0.0.1:" + std::to_string(free_port());
-  const std::string action_backend = "tcp://127.0.0.1:" + std::to_string(free_port());
-  const std::string api_listen = "127.0.0.1:" + std::to_string(free_port());
-
-  RobotBusBrokerOptions opts{};
-  opts.message_xsub_bind = message_xsub.c_str();
-  opts.message_xpub_bind = message_xpub.c_str();
-  opts.service_frontend_bind = service_frontend.c_str();
-  opts.service_backend_bind = service_backend.c_str();
-  opts.action_frontend_bind = action_frontend.c_str();
-  opts.action_backend_bind = action_backend.c_str();
-  opts.api_listen = api_listen.c_str();
-  opts.console_listen = nullptr;
-  opts.tcp_only = 0;  // keep inproc (+ ipc)
-  opts.no_console = 1;
+  RobotBusBrokerOptions opts = ephemeral_tcp_opts(0, 1);  // keep inproc (+ ipc)
   Broker broker(ctx, opts);
   std::this_thread::sleep_for(std::chrono::milliseconds(150));
 

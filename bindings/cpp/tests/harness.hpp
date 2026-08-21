@@ -3,24 +3,12 @@
 #include <robot_bus/node.hpp>
 
 #include <chrono>
-#include <cstdint>
 #include <cstdlib>
-#include <cstring>
 #include <iostream>
 #include <memory>
 #include <string>
 #include <thread>
 #include <utility>
-
-#if defined(_WIN32)
-#include <winsock2.h>
-#include <ws2tcpip.h>
-#else
-#include <arpa/inet.h>
-#include <netinet/in.h>
-#include <sys/socket.h>
-#include <unistd.h>
-#endif
 
 namespace robot_bus::test {
 
@@ -36,27 +24,27 @@ inline void fail(const char *file, int line, const char *expr) {
     }                                                           \
   } while (0)
 
-inline uint16_t free_port() {
-#if defined(_WIN32)
-  WSADATA wsa;
-  WSAStartup(MAKEWORD(2, 2), &wsa);
-#endif
-  int fd = static_cast<int>(::socket(AF_INET, SOCK_STREAM, 0));
-  ROBOT_BUS_CHECK(fd >= 0);
-  sockaddr_in addr{};
-  addr.sin_family = AF_INET;
-  addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
-  addr.sin_port = 0;
-  ROBOT_BUS_CHECK(::bind(fd, reinterpret_cast<sockaddr *>(&addr), sizeof(addr)) == 0);
-  socklen_t len = sizeof(addr);
-  ROBOT_BUS_CHECK(::getsockname(fd, reinterpret_cast<sockaddr *>(&addr), &len) == 0);
-  uint16_t port = ntohs(addr.sin_port);
-#if defined(_WIN32)
-  closesocket(fd);
-#else
-  ::close(fd);
-#endif
-  return port;
+/// Bind `:0` and let the OS assign ports at `Broker` start.
+/// Probing with bind+close (`free_port`) is TOCTOU: the next ZMQ bind can get EADDRINUSE.
+inline void set_ephemeral_tcp_binds(RobotBusBrokerOptions &opts) {
+  static constexpr const char *kTcp = "tcp://127.0.0.1:0";
+  static constexpr const char *kListen = "127.0.0.1:0";
+  opts.message_xsub_bind = kTcp;
+  opts.message_xpub_bind = kTcp;
+  opts.service_frontend_bind = kTcp;
+  opts.service_backend_bind = kTcp;
+  opts.action_frontend_bind = kTcp;
+  opts.action_backend_bind = kTcp;
+  opts.api_listen = kListen;
+}
+
+inline RobotBusBrokerOptions ephemeral_tcp_opts(int tcp_only, int no_console) {
+  RobotBusBrokerOptions opts{};
+  set_ephemeral_tcp_binds(opts);
+  opts.console_listen = nullptr;
+  opts.tcp_only = tcp_only;
+  opts.no_console = no_console;
+  return opts;
 }
 
 /// Owns bind strings + in-process broker on ephemeral TCP ports (tcp_only, no console).
@@ -68,31 +56,19 @@ struct TestBus {
   std::string action_frontend;
   std::string action_backend;
   std::string api_listen;
-  RobotBusBrokerOptions broker_opts{};
   std::unique_ptr<Broker> broker;
 
   static TestBus start() {
     TestBus bus;
-    bus.message_xsub = "tcp://127.0.0.1:" + std::to_string(free_port());
-    bus.message_xpub = "tcp://127.0.0.1:" + std::to_string(free_port());
-    bus.service_frontend = "tcp://127.0.0.1:" + std::to_string(free_port());
-    bus.service_backend = "tcp://127.0.0.1:" + std::to_string(free_port());
-    bus.action_frontend = "tcp://127.0.0.1:" + std::to_string(free_port());
-    bus.action_backend = "tcp://127.0.0.1:" + std::to_string(free_port());
-    bus.api_listen = "127.0.0.1:" + std::to_string(free_port());
-
-    bus.broker_opts.message_xsub_bind = bus.message_xsub.c_str();
-    bus.broker_opts.message_xpub_bind = bus.message_xpub.c_str();
-    bus.broker_opts.service_frontend_bind = bus.service_frontend.c_str();
-    bus.broker_opts.service_backend_bind = bus.service_backend.c_str();
-    bus.broker_opts.action_frontend_bind = bus.action_frontend.c_str();
-    bus.broker_opts.action_backend_bind = bus.action_backend.c_str();
-    bus.broker_opts.api_listen = bus.api_listen.c_str();
-    bus.broker_opts.console_listen = nullptr;
-    bus.broker_opts.tcp_only = 1;
-    bus.broker_opts.no_console = 1;
-
-    bus.broker = std::make_unique<Broker>(bus.broker_opts);
+    RobotBusBrokerOptions opts = ephemeral_tcp_opts(1, 1);
+    bus.broker = std::make_unique<Broker>(opts);
+    bus.message_xsub = bus.broker->message_xsub_bind();
+    bus.message_xpub = bus.broker->message_xpub_bind();
+    bus.service_frontend = bus.broker->service_frontend_bind();
+    bus.service_backend = bus.broker->service_backend_bind();
+    bus.action_frontend = bus.broker->action_frontend_bind();
+    bus.action_backend = bus.broker->action_backend_bind();
+    bus.api_listen = bus.broker->api_listen();
     return bus;
   }
 

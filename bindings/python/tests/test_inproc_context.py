@@ -6,26 +6,19 @@ Run after: just python-dev
 
 from __future__ import annotations
 
-import socket
 import time
 
 
-def _free_port() -> int:
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-        s.bind(("127.0.0.1", 0))
-        return int(s.getsockname()[1])
-
-
 def _inproc_binds() -> dict[str, object]:
-    """Ephemeral TCP binds, but keep inproc (tcp_only=False)."""
+    """Ephemeral TCP binds (`:0`), but keep inproc (tcp_only=False)."""
     return {
-        "message_xsub_bind": f"tcp://127.0.0.1:{_free_port()}",
-        "message_xpub_bind": f"tcp://127.0.0.1:{_free_port()}",
-        "service_frontend_bind": f"tcp://127.0.0.1:{_free_port()}",
-        "service_backend_bind": f"tcp://127.0.0.1:{_free_port()}",
-        "action_frontend_bind": f"tcp://127.0.0.1:{_free_port()}",
-        "action_backend_bind": f"tcp://127.0.0.1:{_free_port()}",
-        "api_listen": f"127.0.0.1:{_free_port()}",
+        "message_xsub_bind": "tcp://127.0.0.1:0",
+        "message_xpub_bind": "tcp://127.0.0.1:0",
+        "service_frontend_bind": "tcp://127.0.0.1:0",
+        "service_backend_bind": "tcp://127.0.0.1:0",
+        "action_frontend_bind": "tcp://127.0.0.1:0",
+        "action_backend_bind": "tcp://127.0.0.1:0",
+        "api_listen": "127.0.0.1:0",
         "tcp_only": False,
         "no_console": True,
     }

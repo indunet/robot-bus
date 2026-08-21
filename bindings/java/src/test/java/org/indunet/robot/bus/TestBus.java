@@ -1,8 +1,5 @@
 package org.indunet.robot.bus;
 
-import java.io.IOException;
-import java.net.ServerSocket;
-
 /** Ephemeral TCP broker + matching node options (mirrors C++ {@code TestBus}). */
 final class TestBus implements AutoCloseable {
     final Broker broker;
@@ -33,35 +30,30 @@ final class TestBus implements AutoCloseable {
         this.apiListen = apiListen;
     }
 
-    static TestBus start() throws IOException {
-        String messageXsub = "tcp://127.0.0.1:" + freePort();
-        String messageXpub = "tcp://127.0.0.1:" + freePort();
-        String serviceFrontend = "tcp://127.0.0.1:" + freePort();
-        String serviceBackend = "tcp://127.0.0.1:" + freePort();
-        String actionFrontend = "tcp://127.0.0.1:" + freePort();
-        String actionBackend = "tcp://127.0.0.1:" + freePort();
-        String apiListen = "127.0.0.1:" + freePort();
+    static TestBus start() {
+        // Bind :0 so the OS assigns ports at broker start (avoids freePort TOCTOU).
         BrokerOptions opts =
                 new BrokerOptions(
-                        messageXsub,
-                        messageXpub,
-                        serviceFrontend,
-                        serviceBackend,
-                        actionFrontend,
-                        actionBackend,
-                        apiListen,
+                        "tcp://127.0.0.1:0",
+                        "tcp://127.0.0.1:0",
+                        "tcp://127.0.0.1:0",
+                        "tcp://127.0.0.1:0",
+                        "tcp://127.0.0.1:0",
+                        "tcp://127.0.0.1:0",
+                        "127.0.0.1:0",
                         null,
                         true,
                         true);
+        Broker broker = new Broker(opts);
         return new TestBus(
-                new Broker(opts),
-                messageXsub,
-                messageXpub,
-                serviceFrontend,
-                serviceBackend,
-                actionFrontend,
-                actionBackend,
-                apiListen);
+                broker,
+                broker.messageXsubBind(),
+                broker.messageXpubBind(),
+                broker.serviceFrontendBind(),
+                broker.serviceBackendBind(),
+                broker.actionFrontendBind(),
+                broker.actionBackendBind(),
+                broker.apiListen());
     }
 
     String wsUrl() {
@@ -87,12 +79,5 @@ final class TestBus implements AutoCloseable {
     public void close() {
         broker.stop();
         broker.close();
-    }
-
-    private static int freePort() throws IOException {
-        try (ServerSocket socket = new ServerSocket(0)) {
-            socket.setReuseAddress(true);
-            return socket.getLocalPort();
-        }
     }
 }
