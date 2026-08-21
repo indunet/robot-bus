@@ -90,16 +90,17 @@ jobs:
           working-directory: bindings/python
           target: ${{ matrix.platform.target }}
           args: --release --out ../../dist
-          manylinux: auto
+          manylinux: manylinux_2_28
           before-script-linux: |
             set -eux
-            if command -v yum >/dev/null 2>&1; then
-              yum install -y cmake gcc-c++ make curl unzip perl-core
-            elif command -v dnf >/dev/null 2>&1; then
-              dnf install -y cmake gcc-c++ make curl unzip perl
+            # manylinux2014 (CentOS 7) yum hits vault.centos.org; 2_28 is AlmaLinux 8 / dnf.
+            if command -v dnf >/dev/null 2>&1; then
+              dnf install -y cmake gcc-c++ make
+            elif command -v yum >/dev/null 2>&1; then
+              yum install -y cmake gcc-c++ make
             elif command -v apt-get >/dev/null 2>&1; then
               apt-get update
-              apt-get install -y cmake g++ make curl unzip
+              apt-get install -y cmake g++ make
             fi
             # protoc not required at compile time (stubs pre-generated on host)
 
