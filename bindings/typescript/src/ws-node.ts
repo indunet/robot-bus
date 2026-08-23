@@ -336,6 +336,18 @@ export class WsNode {
     this.session = (sessionFactory ?? ((u) => new WsSession(u)))(this.url);
     this.topologyEnabled = options.consoleUrl !== null;
     this.topologyRefreshMs = Math.max(100, options.topologyRefreshMs ?? DEFAULT_TOPOLOGY_REFRESH_MS);
+    this.session.onConnection((event, reason) => {
+      if (this.connection === "shutdown") return;
+      if (event === "connecting") {
+        if (this.connection === "created" || this.connection === "discovering") {
+          this.setConnection("connecting", reason);
+        }
+      } else if (event === "open") {
+        this.setConnection("connected", reason);
+      } else if (event === "reconnecting") {
+        this.setConnection("reconnecting", reason);
+      }
+    });
   }
 
   static ws(name: string, options?: WsNodeOptions): WsNode {
@@ -356,34 +368,15 @@ export class WsNode {
     this.connectionListeners.push(callback);
   }
 
-  /** Wait until `GET {url}/api/v1/discover` succeeds. */
+  /** Wait until the WebSocket session is connected. */
   async waitForBroker(timeoutSeconds?: number): Promise<boolean> {
-    const deadline =
-      timeoutSeconds === undefined ? undefined : Date.now() + timeoutSeconds * 1000;
-    let backoffMs = 200;
+    if (this.connection === "shutdown") return false;
     if (this.connection === "created") {
       this.setConnection("discovering", "wait_for_broker");
     }
-    for (;;) {
-      if (this.connection === "shutdown") return false;
-      try {
-        const res = await fetch(`${this.url}/api/v1/discover`);
-        if (res.ok) {
-          this.setConnection("connected", "discover ok");
-          return true;
-        }
-      } catch {
-        // broker not reachable yet
-      }
-      if (deadline !== undefined && Date.now() >= deadline) return false;
-      if (this.connection === "connected") {
-        this.setConnection("reconnecting", "discover failed");
-      } else if (this.connection !== "shutdown") {
-        this.setConnection("discovering", "discover failed");
-      }
-      await new Promise((r) => setTimeout(r, backoffMs));
-      backoffMs = Math.min(backoffMs * 2, 5000);
-    }
+    const timeoutMs =
+      timeoutSeconds === undefined ? undefined : Math.max(0, timeoutSeconds * 1000);
+    return this.session.waitUntilOpen(timeoutMs);
   }
 
   private setConnection(next: string, reason: string): void {
@@ -659,6 +652,7 @@ export class WsNode {
   start(): void {
     if (this.running) return;
     this.running = true;
+    this.session.start();
     this.startTopologyRegistration();
     this.abort = new AbortController();
     // Optional prefix coalesce reduces ZMQ SUB sockets; each filter is one WS.

@@ -262,3 +262,34 @@ fn ws_node_resubscribes_after_broker_restart() {
     );
     broker.stop().expect("stop");
 }
+
+#[test]
+fn ws_node_connection_state_follows_socket() {
+    let _guard = lock_brokers();
+    let api_port = support::free_port();
+    let mut config = ephemeral_robot_bus_config();
+    config.ws.listen = format!("127.0.0.1:{api_port}").parse().unwrap();
+    let broker = RobotBusBroker::start(config).expect("start RobotBusBroker");
+    let url = ws_url(&broker);
+
+    let node = Node::ws_at("ws-state", &url);
+    assert!(
+        node.wait_for_broker(Some(Duration::from_secs(5))),
+        "expected connected, state={}",
+        node.connection_state()
+    );
+    assert_eq!(node.connection_state(), robot_bus::ConnectionState::Connected);
+
+    broker.stop().expect("stop");
+    let deadline = std::time::Instant::now() + Duration::from_secs(8);
+    while node.connection_state() != robot_bus::ConnectionState::Reconnecting
+        && std::time::Instant::now() < deadline
+    {
+        thread::sleep(Duration::from_millis(50));
+    }
+    assert_eq!(
+        node.connection_state(),
+        robot_bus::ConnectionState::Reconnecting,
+        "socket drop should mark reconnecting"
+    );
+}

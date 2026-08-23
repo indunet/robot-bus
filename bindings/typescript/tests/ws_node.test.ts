@@ -1,5 +1,3 @@
-import assert from "node:assert/strict";
-import { describe, it } from "node:test";
 import {
   WsNode,
   WsTopicPublisher,
@@ -8,6 +6,9 @@ import {
   qosDepthForFilter,
 } from "../src/ws-node.js";
 import { encode, type MessageType } from "../src/typed.js";
+import { __setWebSocketForTests } from "../src/ws-rpc.js";
+import assert from "node:assert/strict";
+import { afterEach, describe, it } from "node:test";
 
 describe("coalesceSubscribeFilters", () => {
   it("multiplexes console /robot_bus/* topics onto one prefix stream", () => {
@@ -79,5 +80,49 @@ describe("WsNode capability guards", () => {
   it("default and custom urls", () => {
     assert.equal(WsNode.ws("a").url, "http://127.0.0.1:15570");
     assert.equal(WsNode.wsAt("a", "http://example:15570/").url, "http://example:15570");
+  });
+});
+
+class FakeWebSocket {
+  static instances: FakeWebSocket[] = [];
+  readyState = 0;
+  binaryType = "arraybuffer";
+  onopen: (() => void) | null = null;
+  onclose: (() => void) | null = null;
+  onerror: (() => void) | null = null;
+  onmessage: (() => void) | null = null;
+  constructor(readonly url: string) {
+    FakeWebSocket.instances.push(this);
+    queueMicrotask(() => {
+      this.readyState = 1;
+      this.onopen?.();
+    });
+  }
+  close(): void {
+    this.readyState = 3;
+    this.onclose?.();
+  }
+  send(_data: Uint8Array): void {}
+}
+
+describe("WsNode connectionState", () => {
+  afterEach(() => {
+    __setWebSocketForTests(undefined);
+    FakeWebSocket.instances = [];
+  });
+
+  it("tracks reconnecting when the socket closes", async () => {
+    __setWebSocketForTests(FakeWebSocket as unknown as typeof WebSocket);
+    const node = WsNode.wsAt("n", "http://127.0.0.1:15570");
+    const states: string[] = [];
+    node.addOnConnectionEvent((_o, next) => states.push(next));
+    assert.equal(await node.waitForBroker(1), true);
+    assert.equal(node.connectionState(), "connected");
+    FakeWebSocket.instances[0]?.close();
+    await new Promise((r) => setTimeout(r, 30));
+    assert.equal(node.connectionState(), "reconnecting");
+    assert.ok(states.includes("connected"));
+    assert.ok(states.includes("reconnecting"));
+    node.shutdown();
   });
 });

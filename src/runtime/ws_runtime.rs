@@ -33,7 +33,10 @@ use crate::runtime::timers::{
     Timer, TimerCallback, TimerHandle, SubscriptionHandle, effective_poll_timeout_ms, tick_timers,
 };
 use crate::runtime::topic_callbacks::for_each_matching_callback;
-use crate::runtime::session::{SESSION_BACKOFF_INITIAL, SESSION_BACKOFF_MAX};
+use crate::runtime::session::{
+    SESSION_BACKOFF_INITIAL, SESSION_BACKOFF_MAX, SESSION_WS_PING_INTERVAL,
+    SESSION_WS_PING_MISS_LIMIT, SessionHandle,
+};
 
 const DEFAULT_WS_URL: &str = "http://127.0.0.1:15570";
 const DEFAULT_SPIN_TIMEOUT_MS: i64 = 250;
@@ -272,7 +275,7 @@ pub struct WsRuntime {
 
 
 impl WsRuntime {
-    pub fn new(url: impl Into<String>) -> Result<Self> {
+    pub fn new(url: impl Into<String>, transport: Option<SessionHandle>) -> Result<Self> {
         let http_url = url.into();
         let ws_url = http_url_to_ws_rpc(&http_url);
         let runtime = tokio::runtime::Builder::new_multi_thread()
@@ -289,7 +292,7 @@ impl WsRuntime {
             runtime: Arc::clone(&runtime),
         });
 
-        runtime.spawn(connection_loop(ws_url, cmd_rx));
+        runtime.spawn(connection_loop(ws_url, cmd_rx, transport));
 
         let (inbound_tx, inbound_rx) = mpsc::channel();
         Ok(Self {
@@ -589,21 +592,31 @@ impl Drop for WsRuntime {
 async fn connection_loop(
     ws_url: String,
     mut cmd_rx: tokio::sync::mpsc::UnboundedReceiver<ConnCmd>,
+    transport: Option<SessionHandle>,
 ) {
     let mut backoff = SESSION_BACKOFF_INITIAL;
     loop {
         match connect_async(&ws_url).await {
             Ok((ws, _)) => {
                 backoff = SESSION_BACKOFF_INITIAL;
+                if let Some(t) = &transport {
+                    t.note_transport_up("ws open");
+                }
                 match run_ws_connection(ws, &mut cmd_rx).await {
                     WsLoopExit::Shutdown => return,
                     WsLoopExit::Disconnected => {
                         log::warn!("ws {ws_url} disconnected; reconnecting");
+                        if let Some(t) = &transport {
+                            t.note_transport_down("ws closed");
+                        }
                     }
                 }
             }
             Err(err) => {
                 log::debug!("ws connect {ws_url} failed: {err}");
+                if let Some(t) = &transport {
+                    t.note_transport_down("ws connect failed");
+                }
                 if fail_pending_starts(
                     &mut cmd_rx,
                     BusError::Protocol(format!("ws connect failed: {err}")),
@@ -676,6 +689,12 @@ async fn run_ws_connection(
 ) -> WsLoopExit {
     let (mut sink, mut stream) = ws.split();
     let mut streams: HashMap<u32, StreamState> = HashMap::new();
+    let mut ping_interval = tokio::time::interval(SESSION_WS_PING_INTERVAL);
+    ping_interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+    ping_interval.tick().await;
+    let mut awaiting_pong = false;
+    let mut ping_misses: u32 = 0;
+    let mut heartbeat = true;
 
     let exit = loop {
         tokio::select! {
@@ -708,6 +727,24 @@ async fn run_ws_connection(
                     Some(ConnCmd::Shutdown) | None => break WsLoopExit::Shutdown,
                 }
             }
+            _ = ping_interval.tick(), if heartbeat => {
+                if awaiting_pong {
+                    ping_misses = ping_misses.saturating_add(1);
+                    if ping_misses >= SESSION_WS_PING_MISS_LIMIT {
+                        log::warn!("ws ping timeout; reconnecting");
+                        break WsLoopExit::Disconnected;
+                    }
+                }
+                awaiting_pong = true;
+                match encode_frame(&Frame::Ping { stream_id: 0 }) {
+                    Ok(bytes) => {
+                        if sink.send(WsMessage::Binary(bytes.into())).await.is_err() {
+                            break WsLoopExit::Disconnected;
+                        }
+                    }
+                    Err(_) => break WsLoopExit::Disconnected,
+                }
+            }
             msg = stream.next() => {
                 match msg {
                     Some(Ok(WsMessage::Binary(bin))) => {
@@ -718,7 +755,24 @@ async fn run_ws_connection(
                                 continue;
                             }
                         };
-                        handle_inbound_frame(&mut streams, frame);
+                        match &frame {
+                            Frame::Pong { .. } => {
+                                awaiting_pong = false;
+                                ping_misses = 0;
+                            }
+                            Frame::Ping { stream_id } => {
+                                if let Ok(bytes) = encode_frame(&Frame::Pong { stream_id: *stream_id }) {
+                                    if sink.send(WsMessage::Binary(bytes.into())).await.is_err() {
+                                        break WsLoopExit::Disconnected;
+                                    }
+                                }
+                            }
+                            Frame::Trailer { stream_id: 0, .. } => {
+                                heartbeat = false;
+                                awaiting_pong = false;
+                            }
+                            _ => handle_inbound_frame(&mut streams, frame),
+                        }
                     }
                     Some(Ok(WsMessage::Close(_))) | None => break WsLoopExit::Disconnected,
                     Some(Ok(_)) => {}
@@ -827,7 +881,7 @@ fn handle_inbound_frame(streams: &mut HashMap<u32, StreamState>, frame: Frame) {
                 }
             }
         }
-        Frame::Request { .. } | Frame::Cancel { .. } => {}
+        Frame::Request { .. } | Frame::Cancel { .. } | Frame::Ping { .. } | Frame::Pong { .. } => {}
     }
     let _ = stream_id;
 }

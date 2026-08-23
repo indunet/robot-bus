@@ -165,9 +165,9 @@ You can also use explicitly:
 import { WsNode } from "robot-bus"; // Node entry also exports WsNode
 ```
 
-### WebSocket frames (V1)
+### WebSocket frames (V2 multiplexed)
 
-Path: `ws://<host>:<port>/ws` (use `wss://` on HTTPS sites). Each connection carries one RPC:
+Path: `ws://<host>:<port>/ws` (use `wss://` on HTTPS sites). **One connection carries many RPCs** (`stream_id`; clients use odd ids). The session reconnects with 200ms–5s backoff; `connectionState` / `waitForBroker` follow this WebSocket, not an HTTP 200. In-flight Publish / Call / SendGoal **fail that attempt** (no automatic replay); subscriptions Subscribe again on the new socket.
 
 | type | value | meaning |
 |------|----|------|
@@ -175,8 +175,12 @@ Path: `ws://<host>:<port>/ws` (use `wss://` on HTTPS sites). Each connection car
 | DATA | 2 | Response / stream message payload |
 | CANCEL | 3 | Client soft cancel (SendGoal: submit cancel, connection stays open until RESULT; Subscribe: stop subscription) |
 | TRAILER | 4 | `u32 status` + UTF-8 message (0 = OK) |
+| PING | 5 | Application heartbeat (`stream_id = 0`) |
+| PONG | 6 | Heartbeat reply |
 
 Example methods: `robot_bus_interfaces.grpc.v1.MessageGateway/Subscribe` (also Publish / ServiceGateway/Call / ActionGateway/SendGoal). Business payload uses gateway protobuf (method names still include the historical `.grpc.v1` package path).
+
+The Node session contract (`connection_state` / `wait_for_broker` / auto-reconnect) is transport-agnostic; the browser client implements that contract over WebSocket.
 
 ## Action GoalHandle
 

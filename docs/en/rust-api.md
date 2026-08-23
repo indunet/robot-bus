@@ -5,9 +5,9 @@ English | [中文](../zh/rust-api.md)
 `Cargo.toml`:
 
 ```toml
-robot-bus = "1.3.0"
+robot-bus = "1.3.1"
 # Local: robot-bus = { path = "../robot-bus" }
-# WebSocket RPC gateway (`ws` feature) is on by default; to disable: robot-bus = { version = "1.3.0", default-features = false }
+# WebSocket RPC gateway (`ws` feature) is on by default; to disable: robot-bus = { version = "1.3.1", default-features = false }
 ```
 
 ## Broker startup
@@ -68,7 +68,7 @@ node.add_on_connection_event(|old, new, reason| {
 });
 ```
 
-`spin` / `start` keep retrying after a broker restart. `create_*` waits a few seconds for discover, then returns an error that names the current state.
+`spin` / `start` keep retrying after a broker restart. `create_*` waits a few seconds for discover, then returns an error that names the current state. WebSocket nodes share this session contract; Connected means the `/ws` socket is up.
 
 **Same-process inproc:** ZeroMQ `inproc://` is context-local. An embedded broker and Node must share the same [`Context`](../../src/runtime/context.rs):
 

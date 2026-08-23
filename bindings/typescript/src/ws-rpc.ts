@@ -10,6 +10,13 @@ export const FRAME_REQUEST = 1;
 export const FRAME_DATA = 2;
 export const FRAME_CANCEL = 3;
 export const FRAME_TRAILER = 4;
+export const FRAME_PING = 5;
+export const FRAME_PONG = 6;
+
+export const WS_BACKOFF_INITIAL_MS = 200;
+export const WS_BACKOFF_MAX_MS = 5000;
+export const WS_PING_INTERVAL_MS = 3000;
+export const WS_PING_MISS_LIMIT = 2;
 
 export const METHOD_SUBSCRIBE =
   "robot_bus_interfaces.grpc.v1.MessageGateway/Subscribe";
@@ -23,7 +30,9 @@ export type WsFrame =
   | { type: "request"; streamId: number; method: string; payload: Uint8Array }
   | { type: "data"; streamId: number; payload: Uint8Array }
   | { type: "cancel"; streamId: number }
-  | { type: "trailer"; streamId: number; status: number; message: string };
+  | { type: "trailer"; streamId: number; status: number; message: string }
+  | { type: "ping"; streamId: number }
+  | { type: "pong"; streamId: number };
 
 function concatBytes(chunks: Uint8Array[]): Uint8Array {
   let len = 0;
@@ -76,6 +85,18 @@ export function encodeFrame(frame: WsFrame): Uint8Array {
         u32le(frame.streamId),
         u32le(0),
       ]);
+    case "ping":
+      return concatBytes([
+        new Uint8Array([FRAME_PING]),
+        u32le(frame.streamId),
+        u32le(0),
+      ]);
+    case "pong":
+      return concatBytes([
+        new Uint8Array([FRAME_PONG]),
+        u32le(frame.streamId),
+        u32le(0),
+      ]);
     case "trailer": {
       const msg = enc.encode(frame.message);
       const payload = concatBytes([u32le(frame.status), msg]);
@@ -125,6 +146,8 @@ export function decodeFrame(bytes: Uint8Array): WsFrame {
     };
   }
   if (ty === FRAME_CANCEL) return { type: "cancel", streamId };
+  if (ty === FRAME_PING) return { type: "ping", streamId };
+  if (ty === FRAME_PONG) return { type: "pong", streamId };
   if (ty === FRAME_TRAILER) {
     if (bytes.length < 9) throw new Error("truncated TRAILER");
     const payloadLen = view.getUint32(5, true);
@@ -174,6 +197,27 @@ type StreamHandlers = {
   reject?: (err: Error) => void;
 };
 
+export type WsSessionEvent = "connecting" | "open" | "reconnecting" | "close";
+
+export type WsSessionOptions = {
+  backoffInitialMs?: number;
+  backoffMaxMs?: number;
+  pingIntervalMs?: number;
+  pingMissLimit?: number;
+  webSocket?: { new (url: string): WebSocket };
+};
+
+let websocketCtor: { new (url: string): WebSocket } | undefined;
+
+/** Test-only: inject a WebSocket constructor. Pass `undefined` to restore. */
+export function __setWebSocketForTests(
+  ctor?: { new (url: string): WebSocket },
+): void {
+  websocketCtor = ctor;
+}
+
+export type WsConnectionListener = (event: WsSessionEvent, reason: string) => void;
+
 /** One multiplexed WebSocket session (shared by a WsNode). */
 export class WsSession {
   private ws: WebSocket | null = null;
@@ -181,38 +225,132 @@ export class WsSession {
   private nextStreamId = 1;
   private readonly streams = new Map<number, StreamHandlers>();
   private closed = false;
+  private loopStarted = false;
+  private backoffMs: number;
+  private readonly backoffInitialMs: number;
+  private readonly backoffMaxMs: number;
+  private readonly pingIntervalMs: number;
+  private readonly pingMissLimit: number;
+  private pingTimer: ReturnType<typeof setInterval> | null = null;
+  private awaitingPong = false;
+  private pingMisses = 0;
+  private heartbeat = true;
+  private readonly listeners: WsConnectionListener[] = [];
+  private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+  private readonly ctor: { new (url: string): WebSocket };
 
-  constructor(readonly httpBaseUrl: string) {}
-
-  private allocStreamId(): number {
-    const id = this.nextStreamId;
-    this.nextStreamId += 2;
-    return id;
+  constructor(
+    readonly httpBaseUrl: string,
+    options: WsSessionOptions = {},
+  ) {
+    this.backoffInitialMs = options.backoffInitialMs ?? WS_BACKOFF_INITIAL_MS;
+    this.backoffMaxMs = options.backoffMaxMs ?? WS_BACKOFF_MAX_MS;
+    this.pingIntervalMs = options.pingIntervalMs ?? WS_PING_INTERVAL_MS;
+    this.pingMissLimit = options.pingMissLimit ?? WS_PING_MISS_LIMIT;
+    this.backoffMs = this.backoffInitialMs;
+    this.ctor =
+      options.webSocket ??
+      websocketCtor ??
+      (globalThis.WebSocket as { new (url: string): WebSocket });
   }
 
-  private async ensureSocket(): Promise<WebSocket> {
-    if (this.closed) throw new Error("websocket session closed");
-    if (this.ws && this.ws.readyState === WebSocket.OPEN) return this.ws;
+  /** Begin (or resume) the reconnect loop. Idempotent. */
+  start(): void {
+    this.startLoop();
+  }
+
+  onConnection(listener: WsConnectionListener): () => void {
+    this.listeners.push(listener);
+    return () => {
+      const i = this.listeners.indexOf(listener);
+      if (i >= 0) this.listeners.splice(i, 1);
+    };
+  }
+
+  private emit(event: WsSessionEvent, reason: string): void {
+    for (const cb of this.listeners) {
+      try {
+        cb(event, reason);
+      } catch (err) {
+        console.error("robot-bus ws session event error", err);
+      }
+    }
+  }
+
+  private socketOpen(): boolean {
+    return this.ws !== null && this.ws.readyState === 1;
+  }
+
+  private startLoop(): void {
+    if (this.loopStarted || this.closed) return;
+    this.loopStarted = true;
+    void this.connectLoop();
+  }
+
+  private async connectLoop(): Promise<void> {
+    while (!this.closed) {
+      this.emit("connecting", "ws connect");
+      try {
+        await this.openOnce();
+        this.backoffMs = this.backoffInitialMs;
+        this.emit("open", "ws open");
+        await this.waitUntilSocketClosed();
+        if (this.closed) break;
+        this.failStreams(new Error("websocket closed"));
+        this.emit("reconnecting", "ws closed");
+      } catch (err) {
+        if (this.closed) break;
+        this.emit("reconnecting", err instanceof Error ? err.message : "ws connect failed");
+      }
+      if (this.closed) break;
+      await this.sleepBackoff();
+      this.backoffMs = Math.min(this.backoffMs * 2, this.backoffMaxMs);
+    }
+    this.emit("close", "session closed");
+  }
+
+  private sleepBackoff(): Promise<void> {
+    return new Promise((resolve) => {
+      this.reconnectTimer = setTimeout(() => {
+        this.reconnectTimer = null;
+        resolve();
+      }, this.backoffMs);
+    });
+  }
+
+  private openOnce(): Promise<WebSocket> {
     if (this.connecting) return this.connecting;
     const wsUrl = httpUrlToWsRpc(this.httpBaseUrl);
     this.connecting = new Promise<WebSocket>((resolve, reject) => {
-      const ws = new WebSocket(wsUrl);
+      const ws = new this.ctor(wsUrl);
       ws.binaryType = "arraybuffer";
-      ws.onopen = () => {
+      const settleOpen = () => {
         this.ws = ws;
         this.connecting = null;
+        this.startHeartbeat(ws);
         resolve(ws);
       };
-      ws.onerror = () => {
+      const settleFail = (err: Error) => {
         this.connecting = null;
-        reject(new Error(`websocket error connecting to ${wsUrl}`));
+        this.stopHeartbeat();
+        this.ws = null;
+        reject(err);
+      };
+      ws.onopen = () => settleOpen();
+      ws.onerror = () => {
+        if (!this.socketOpen()) {
+          settleFail(new Error(`websocket error connecting to ${wsUrl}`));
+        }
       };
       ws.onclose = () => {
+        this.stopHeartbeat();
+        const pendingConnect = this.connecting !== null && this.ws !== ws;
         this.ws = null;
-        for (const [, h] of this.streams) {
-          h.reject?.(new Error("websocket closed"));
+        if (pendingConnect) {
+          settleFail(new Error("websocket closed during connect"));
         }
-        this.streams.clear();
+        this.socketClosedWaiter?.();
+        this.socketClosedWaiter = null;
       };
       ws.onmessage = (ev) => {
         const bin =
@@ -233,11 +371,106 @@ export class WsSession {
     return this.connecting;
   }
 
+  private socketClosedWaiter: (() => void) | null = null;
+
+  private waitUntilSocketClosed(): Promise<void> {
+    if (!this.socketOpen()) return Promise.resolve();
+    return new Promise((resolve) => {
+      this.socketClosedWaiter = resolve;
+    });
+  }
+
+  private startHeartbeat(ws: WebSocket): void {
+    this.stopHeartbeat();
+    this.heartbeat = true;
+    this.awaitingPong = false;
+    this.pingMisses = 0;
+    this.pingTimer = setInterval(() => {
+      if (!this.heartbeat || ws.readyState !== 1) return;
+      if (this.awaitingPong) {
+        this.pingMisses += 1;
+        if (this.pingMisses >= this.pingMissLimit) {
+          try {
+            ws.close();
+          } catch {
+            /* ignore */
+          }
+          return;
+        }
+      }
+      this.awaitingPong = true;
+      try {
+        ws.send(encodeFrame({ type: "ping", streamId: 0 }));
+      } catch {
+        try {
+          ws.close();
+        } catch {
+          /* ignore */
+        }
+      }
+    }, this.pingIntervalMs);
+  }
+
+  private stopHeartbeat(): void {
+    if (this.pingTimer !== null) {
+      clearInterval(this.pingTimer);
+      this.pingTimer = null;
+    }
+  }
+
+  private failStreams(err: Error): void {
+    for (const [, h] of this.streams) {
+      h.reject?.(err);
+    }
+    this.streams.clear();
+  }
+
+  private async ensureSocket(): Promise<WebSocket> {
+    if (this.closed) throw new Error("websocket session closed");
+    if (this.socketOpen() && this.ws) return this.ws;
+    this.startLoop();
+    if (this.connecting) return this.connecting;
+    return new Promise<WebSocket>((resolve, reject) => {
+      const unsub = this.onConnection((event, reason) => {
+        if (event === "open" && this.ws && this.socketOpen()) {
+          unsub();
+          resolve(this.ws);
+        } else if (this.closed) {
+          unsub();
+          reject(new Error("websocket session closed"));
+        } else if (event === "close") {
+          unsub();
+          reject(new Error(reason));
+        }
+      });
+    });
+  }
+
   private onBinary(bin: Uint8Array): void {
     let frame: WsFrame;
     try {
       frame = decodeFrame(bin);
     } catch {
+      return;
+    }
+    if (frame.type === "pong") {
+      this.awaitingPong = false;
+      this.pingMisses = 0;
+      return;
+    }
+    if (frame.type === "ping") {
+      if (this.socketOpen() && this.ws) {
+        try {
+          this.ws.send(encodeFrame({ type: "pong", streamId: frame.streamId }));
+        } catch {
+          /* ignore */
+        }
+      }
+      return;
+    }
+    if (frame.type === "trailer" && frame.streamId === 0) {
+      this.heartbeat = false;
+      this.awaitingPong = false;
       return;
     }
     const handlers = this.streams.get(frame.streamId);
@@ -251,11 +484,35 @@ export class WsSession {
       if (frame.status !== 0) {
         handlers.reject?.(new WsRpcError(frame.status, frame.message));
       } else {
-        handlers.resolve?.(
-          (handlers as { _data?: Uint8Array })._data,
-        );
+        handlers.resolve?.((handlers as { _data?: Uint8Array })._data);
       }
     }
+  }
+
+  async waitUntilOpen(timeoutMs?: number): Promise<boolean> {
+    if (this.closed) return false;
+    if (this.socketOpen()) return true;
+    this.startLoop();
+    return new Promise((resolve) => {
+      const timer =
+        timeoutMs === undefined
+          ? undefined
+          : setTimeout(() => {
+              unsub();
+              resolve(false);
+            }, timeoutMs);
+      const unsub = this.onConnection((event) => {
+        if (event === "open") {
+          if (timer) clearTimeout(timer);
+          unsub();
+          resolve(true);
+        } else if (this.closed || event === "close") {
+          if (timer) clearTimeout(timer);
+          unsub();
+          resolve(false);
+        }
+      });
+    });
   }
 
   async unary(method: string, requestPayload: Uint8Array): Promise<Uint8Array> {
@@ -322,13 +579,13 @@ export class WsSession {
     );
     const control: WsServerStreamControl = {
       cancel: () => {
-        if (ws.readyState === WebSocket.OPEN) {
+        if (ws.readyState === 1) {
           ws.send(encodeFrame({ type: "cancel", streamId }));
         }
       },
       close: () => {
         this.streams.delete(streamId);
-        if (ws.readyState === WebSocket.OPEN) {
+        if (ws.readyState === 1) {
           ws.send(encodeFrame({ type: "cancel", streamId }));
         }
         settleDone();
@@ -339,12 +596,26 @@ export class WsSession {
 
   close(): void {
     this.closed = true;
+    this.stopHeartbeat();
+    if (this.reconnectTimer !== null) {
+      clearTimeout(this.reconnectTimer);
+      this.reconnectTimer = null;
+    }
+    this.failStreams(new Error("websocket session closed"));
     try {
       this.ws?.close();
     } catch {
       /* ignore */
     }
     this.ws = null;
+    this.socketClosedWaiter?.();
+    this.socketClosedWaiter = null;
+  }
+
+  private allocStreamId(): number {
+    const id = this.nextStreamId;
+    this.nextStreamId += 2;
+    return id;
   }
 }
 

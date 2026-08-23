@@ -1,7 +1,9 @@
 import assert from "node:assert/strict";
-import { describe, it } from "node:test";
+import { afterEach, describe, it } from "node:test";
 import {
   METHOD_PUBLISH,
+  WsSession,
+  __setWebSocketForTests,
   decodeFrame,
   encodeFrame,
   httpUrlToWsRpc,
@@ -59,5 +61,100 @@ describe("ws-rpc framing V2", () => {
     assert.equal(httpUrlToWsRpc("http://127.0.0.1:15570"), "ws://127.0.0.1:15570/ws");
     assert.equal(httpUrlToWsRpc("https://example.com:443/"), "wss://example.com:443/ws");
     assert.equal(httpUrlToWsRpc("ws://127.0.0.1:15570/ws"), "ws://127.0.0.1:15570/ws");
+  });
+
+  it("round-trips PING / PONG", () => {
+    const ping = encodeFrame({ type: "ping", streamId: 0 });
+    const p = decodeFrame(ping);
+    assert.equal(p.type, "ping");
+    if (p.type === "ping") assert.equal(p.streamId, 0);
+
+    const pong = encodeFrame({ type: "pong", streamId: 0 });
+    const g = decodeFrame(pong);
+    assert.equal(g.type, "pong");
+    if (g.type === "pong") assert.equal(g.streamId, 0);
+  });
+});
+
+class FakeWebSocket {
+  static CONNECTING = 0;
+  static OPEN = 1;
+  static CLOSING = 2;
+  static CLOSED = 3;
+  static instances: FakeWebSocket[] = [];
+  readyState = FakeWebSocket.CONNECTING;
+  binaryType = "arraybuffer";
+  sent: Uint8Array[] = [];
+  onopen: ((ev?: unknown) => void) | null = null;
+  onclose: ((ev?: unknown) => void) | null = null;
+  onerror: ((ev?: unknown) => void) | null = null;
+  onmessage: ((ev: { data: ArrayBuffer }) => void) | null = null;
+  constructor(readonly url: string) {
+    FakeWebSocket.instances.push(this);
+    queueMicrotask(() => this.open());
+  }
+  open(): void {
+    if (this.readyState === FakeWebSocket.OPEN) return;
+    this.readyState = FakeWebSocket.OPEN;
+    this.onopen?.();
+  }
+  close(): void {
+    if (this.readyState === FakeWebSocket.CLOSED) return;
+    this.readyState = FakeWebSocket.CLOSED;
+    this.onclose?.({ code: 1000 });
+  }
+  send(data: Uint8Array): void {
+    this.sent.push(data instanceof Uint8Array ? data : new Uint8Array(data));
+  }
+  reply(data: Uint8Array): void {
+    const copy = data.slice();
+    this.onmessage?.({ data: copy.buffer });
+  }
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((r) => setTimeout(r, ms));
+}
+
+describe("WsSession reconnect", () => {
+  afterEach(() => {
+    __setWebSocketForTests(undefined);
+    FakeWebSocket.instances = [];
+  });
+
+  it("reconnects after close and fails in-flight unary", async () => {
+    __setWebSocketForTests(FakeWebSocket as unknown as typeof WebSocket);
+    const session = new WsSession("http://127.0.0.1:15570", {
+      backoffInitialMs: 20,
+      backoffMaxMs: 50,
+      pingIntervalMs: 10_000,
+    });
+    const opened = await session.waitUntilOpen(500);
+    assert.equal(opened, true);
+    assert.equal(FakeWebSocket.instances.length, 1);
+
+    const first = FakeWebSocket.instances[0]!;
+    const pending = session.unary(METHOD_PUBLISH, new Uint8Array([1]));
+    first.close();
+    await assert.rejects(pending, /websocket closed/);
+
+    await sleep(80);
+    assert.ok(FakeWebSocket.instances.length >= 2);
+    session.close();
+  });
+
+  it("stop reconnecting after close()", async () => {
+    __setWebSocketForTests(FakeWebSocket as unknown as typeof WebSocket);
+    const session = new WsSession("http://127.0.0.1:15570", {
+      backoffInitialMs: 10,
+      backoffMaxMs: 20,
+      pingIntervalMs: 10_000,
+    });
+    assert.equal(await session.waitUntilOpen(500), true);
+    session.close();
+    const n = FakeWebSocket.instances.length;
+    FakeWebSocket.instances.at(-1)?.close();
+    await sleep(80);
+    assert.equal(FakeWebSocket.instances.length, n);
   });
 });

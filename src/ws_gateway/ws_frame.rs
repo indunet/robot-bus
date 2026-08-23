@@ -13,6 +13,8 @@ pub const FRAME_REQUEST: u8 = 1;
 pub const FRAME_DATA: u8 = 2;
 pub const FRAME_CANCEL: u8 = 3;
 pub const FRAME_TRAILER: u8 = 4;
+pub const FRAME_PING: u8 = 5;
+pub const FRAME_PONG: u8 = 6;
 
 pub const METHOD_SUBSCRIBE: &str = "robot_bus_interfaces.grpc.v1.MessageGateway/Subscribe";
 pub const METHOD_PUBLISH: &str = "robot_bus_interfaces.grpc.v1.MessageGateway/Publish";
@@ -38,6 +40,12 @@ pub enum Frame {
         status: u32,
         message: String,
     },
+    Ping {
+        stream_id: u32,
+    },
+    Pong {
+        stream_id: u32,
+    },
 }
 
 impl Frame {
@@ -46,7 +54,9 @@ impl Frame {
             Frame::Request { stream_id, .. }
             | Frame::Data { stream_id, .. }
             | Frame::Cancel { stream_id }
-            | Frame::Trailer { stream_id, .. } => *stream_id,
+            | Frame::Trailer { stream_id, .. }
+            | Frame::Ping { stream_id }
+            | Frame::Pong { stream_id } => *stream_id,
         }
     }
 }
@@ -112,7 +122,17 @@ pub fn encode_frame(frame: &Frame) -> Result<Vec<u8>, FrameError> {
             out.extend_from_slice(&payload);
             Ok(out)
         }
+        Frame::Ping { stream_id } => encode_empty(FRAME_PING, *stream_id),
+        Frame::Pong { stream_id } => encode_empty(FRAME_PONG, *stream_id),
     }
+}
+
+fn encode_empty(ty: u8, stream_id: u32) -> Result<Vec<u8>, FrameError> {
+    let mut out = Vec::with_capacity(1 + 4 + 4);
+    out.push(ty);
+    out.extend_from_slice(&stream_id.to_le_bytes());
+    out.extend_from_slice(&0u32.to_le_bytes());
+    Ok(out)
 }
 
 pub fn decode_frame(bytes: &[u8]) -> Result<Frame, FrameError> {
@@ -157,6 +177,8 @@ pub fn decode_frame(bytes: &[u8]) -> Result<Frame, FrameError> {
             Ok(Frame::Data { stream_id, payload })
         }
         FRAME_CANCEL => Ok(Frame::Cancel { stream_id }),
+        FRAME_PING => Ok(Frame::Ping { stream_id }),
+        FRAME_PONG => Ok(Frame::Pong { stream_id }),
         FRAME_TRAILER => {
             let payload = read_payload_at(&bytes[5..])?;
             if payload.len() < 4 {
@@ -245,6 +267,20 @@ mod tests {
                 assert_eq!(status, 0);
                 assert_eq!(message, "ok");
             }
+            other => panic!("unexpected {other:?}"),
+        }
+    }
+
+    #[test]
+    fn roundtrip_ping_pong() {
+        let ping = Frame::Ping { stream_id: 0 };
+        match decode_frame(&encode_frame(&ping).unwrap()).unwrap() {
+            Frame::Ping { stream_id } => assert_eq!(stream_id, 0),
+            other => panic!("unexpected {other:?}"),
+        }
+        let pong = Frame::Pong { stream_id: 0 };
+        match decode_frame(&encode_frame(&pong).unwrap()).unwrap() {
+            Frame::Pong { stream_id } => assert_eq!(stream_id, 0),
             other => panic!("unexpected {other:?}"),
         }
     }

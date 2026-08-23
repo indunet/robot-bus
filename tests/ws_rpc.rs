@@ -380,3 +380,30 @@ async fn ws_multiplex_two_streams_on_one_connection() {
     assert!(saw_pub_trailer && saw_sub_data, "multiplex pub+sub failed");
     broker.stop().expect("stop");
 }
+
+#[tokio::test]
+async fn ws_gateway_echoes_ping_with_pong() {
+    let (_guard, broker) = start_bus();
+    let listen = broker.api_listen();
+    let url = format!("ws://{listen}/ws");
+    let (mut ws, _) = connect_async(&url).await.expect("ws connect");
+
+    let req = encode_frame(&Frame::Ping { stream_id: 0 }).unwrap();
+    ws.send(Message::Binary(req.into()))
+        .await
+        .expect("send ping");
+
+    let msg = tokio::time::timeout(Duration::from_secs(3), ws.next())
+        .await
+        .expect("timeout")
+        .expect("ws closed")
+        .expect("ws error");
+    let Message::Binary(bin) = msg else {
+        panic!("expected binary pong, got {msg:?}");
+    };
+    match decode_frame(&bin).expect("decode") {
+        Frame::Pong { stream_id } => assert_eq!(stream_id, 0),
+        other => panic!("expected PONG, got {other:?}"),
+    }
+    broker.stop().expect("stop");
+}

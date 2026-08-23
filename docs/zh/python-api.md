@@ -70,7 +70,7 @@ if not node.wait_for_broker(timeout=5.0):
 node.add_on_connection_event(lambda old, new, reason: print(old, "->", new, reason))
 ```
 
-`spin()` / `start()` 期间 broker 重启会自动重连。`create_*` 会短等 discover，仍未连上则报错。
+`spin()` / `start()` 期间 broker 重启会自动重连。`create_*` 会短等 discover，仍未连上则报错。WebSocket 节点使用同一套 `connection_state`；Connected 表示 `/ws` 套接字已连通（不只是 HTTP discover）。
 
 同进程 **inproc** 时必须共享 `Context`：
 

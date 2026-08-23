@@ -70,7 +70,7 @@ if not node.wait_for_broker(timeout=5.0):
 node.add_on_connection_event(lambda old, new, reason: print(old, "->", new, reason))
 ```
 
-`spin()` / `start()` keep retrying if the broker restarts. `create_*` waits a few seconds for discover, then raises if still disconnected.
+`spin()` / `start()` keep retrying if the broker restarts. `create_*` waits a few seconds for discover, then raises if still disconnected. WebSocket nodes use the same `connection_state` values; Connected means the `/ws` socket is up (not merely HTTP discover).
 
 Same-process **inproc** requires a shared `Context`:
 

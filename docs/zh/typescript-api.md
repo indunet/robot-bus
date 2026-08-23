@@ -166,9 +166,9 @@ node.start(); // 或 node.spin()
 import { WsNode } from "robot-bus"; // Node 入口也导出 WsNode
 ```
 
-### WebSocket 帧（V1）
+### WebSocket 帧（V2 多路复用）
 
-路径：`ws://<host>:<port>/ws`（HTTPS 站点用 `wss://`）。每条连接承载一次 RPC：
+路径：`ws://<host>:<port>/ws`（HTTPS 站点用 `wss://`）。**一条连接承载多个 RPC**（`stream_id`，客户端用奇数）。会话会自动退避重连（200ms–5s）；`connectionState` / `waitForBroker` 跟着这条 WebSocket，不是 HTTP 200。进行中的 Publish / Call / SendGoal **当次失败**，不自动重放；订阅在新连接上重新 Subscribe。
 
 | type | 值 | 含义 |
 |------|----|------|
@@ -176,8 +176,12 @@ import { WsNode } from "robot-bus"; // Node 入口也导出 WsNode
 | DATA | 2 | 响应 / 流消息 payload |
 | CANCEL | 3 | 客户端软取消（SendGoal：提交 cancel，连接保持至 RESULT；Subscribe：停订） |
 | TRAILER | 4 | `u32 status` + UTF-8 message（0 = OK） |
+| PING | 5 | 应用层心跳（`stream_id = 0`） |
+| PONG | 6 | 心跳应答 |
 
 method 示例：`robot_bus_interfaces.grpc.v1.MessageGateway/Subscribe`（以及 Publish / ServiceGateway/Call / ActionGateway/SendGoal）。业务 payload 为 gateway protobuf（method 名仍含历史 `.grpc.v1` 包路径）。
+
+Node 会话合同（`connection_state` / `wait_for_broker` / 自动重连）与传输无关；浏览器补的是 WebSocket 实现，不是另一套业务语义。
 
 ## Action GoalHandle
 

@@ -10,7 +10,7 @@ Does not depend on `org.indunet:robot-bus` (JVM Java package). Both artifacts ar
 
 ```bash
 # Maven Central (when published)
-# implementation("org.indunet:robot-bus-android:1.3.0")
+# implementation("org.indunet:robot-bus-android:1.3.1")
 
 # Local:
 just gen-android    # → bindings/android/generated/
@@ -38,7 +38,7 @@ class App : Application() {
 ```kotlin
 // build.gradle.kts
 dependencies {
-  implementation("org.indunet:robot-bus-android:1.3.0")
+  implementation("org.indunet:robot-bus-android:1.3.1")
 }
 ```
 

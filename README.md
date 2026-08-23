@@ -53,7 +53,7 @@ pip install robot-bus
 * Rust
 
 ```toml
-robot-bus = "1.3.0"
+robot-bus = "1.3.1"
 ```
 
 * npm
@@ -68,7 +68,7 @@ npm install robot-bus
 <dependency>
     <groupId>org.indunet</groupId>
     <artifactId>robot-bus</artifactId>
-    <version>1.3.0</version>
+    <version>1.3.1</version>
 </dependency>
 ```
 

@@ -18,6 +18,10 @@ pub const SESSION_LIVENESS_INTERVAL: Duration = Duration::from_secs(3);
 pub const SESSION_DISCOVER_TIMEOUT: Duration = Duration::from_millis(800);
 /// How long `create_*` waits for the session to become Connected.
 pub const SESSION_CREATE_WAIT: Duration = Duration::from_secs(3);
+/// Application-layer WS ping while the socket is Connected.
+pub const SESSION_WS_PING_INTERVAL: Duration = Duration::from_secs(3);
+/// Close the WS socket after this many unanswered pings.
+pub const SESSION_WS_PING_MISS_LIMIT: u32 = 2;
 
 /// Broker link state for a [`crate::Node`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -60,12 +64,55 @@ struct SessionInner {
     events: Vec<ConnectionEventCallback>,
     reconnect_hook: Option<ReconnectHook>,
     discover_fail_logged: bool,
+    /// When true (WebSocket nodes), Connected requires the data-plane socket.
+    requires_transport: bool,
+    transport_up: bool,
 }
 
 struct SessionShared {
     inner: Mutex<SessionInner>,
     cond: Condvar,
     stop: AtomicBool,
+}
+
+/// Drives Connected / Reconnecting from the WebSocket data plane.
+#[derive(Clone)]
+pub(crate) struct SessionHandle {
+    shared: Arc<SessionShared>,
+}
+
+impl SessionHandle {
+    pub(crate) fn note_transport_up(&self, reason: &str) {
+        {
+            let Ok(mut g) = self.shared.inner.lock() else {
+                return;
+            };
+            g.transport_up = true;
+            if g.state == ConnectionState::Shutdown {
+                return;
+            }
+        }
+        set_state(&self.shared, ConnectionState::Connected, reason);
+    }
+
+    pub(crate) fn note_transport_down(&self, reason: &str) {
+        let prev = {
+            let Ok(mut g) = self.shared.inner.lock() else {
+                return;
+            };
+            g.transport_up = false;
+            g.state
+        };
+        if prev == ConnectionState::Shutdown {
+            return;
+        }
+        if matches!(
+            prev,
+            ConnectionState::Connected | ConnectionState::Connecting
+        ) {
+            set_state(&self.shared, ConnectionState::Reconnecting, reason);
+        }
+    }
 }
 
 /// Background broker session owned by a [`crate::Node`].
@@ -79,10 +126,12 @@ impl BrokerSession {
         let shared = Arc::new(SessionShared {
             inner: Mutex::new(SessionInner {
                 state: ConnectionState::Created,
-                options,
+                options: options.clone(),
                 events: Vec::new(),
                 reconnect_hook: None,
                 discover_fail_logged: false,
+                requires_transport: options.is_ws(),
+                transport_up: !options.is_ws(),
             }),
             cond: Condvar::new(),
             stop: AtomicBool::new(false),
@@ -123,6 +172,13 @@ impl BrokerSession {
     pub fn set_reconnect_hook(&self, hook: ReconnectHook) {
         if let Ok(mut g) = self.shared.inner.lock() {
             g.reconnect_hook = Some(hook);
+        }
+    }
+
+    /// Cloneable handle so the WS runtime can drive Connected / Reconnecting.
+    pub(crate) fn handle(&self) -> SessionHandle {
+        SessionHandle {
+            shared: Arc::clone(&self.shared),
         }
     }
 
@@ -304,6 +360,13 @@ fn session_loop(shared: Arc<SessionShared>) {
                     backoff = SESSION_BACKOFF_INITIAL;
                     continue;
                 }
+                let (requires, up) = transport_gate(&shared);
+                if requires && !up && state == ConnectionState::Connecting {
+                    if wait_interruptible(&shared, SESSION_LIVENESS_INTERVAL) {
+                        break;
+                    }
+                    continue;
+                }
                 if state == ConnectionState::Discovering || state == ConnectionState::Created {
                     set_state(&shared, ConnectionState::Discovering, "discover");
                 } else if state == ConnectionState::Reconnecting {
@@ -312,12 +375,24 @@ fn session_loop(shared: Arc<SessionShared>) {
                 match try_discover(&shared) {
                     Ok(filled) => {
                         apply_discovered(&shared, filled);
-                        set_state(&shared, ConnectionState::Connected, "discover ok");
+                        let (requires, up) = transport_gate(&shared);
+                        if requires && !up {
+                            set_state(
+                                &shared,
+                                ConnectionState::Connecting,
+                                "discover ok, waiting for socket",
+                            );
+                        } else {
+                            set_state(&shared, ConnectionState::Connected, "discover ok");
+                        }
                         backoff = SESSION_BACKOFF_INITIAL;
                     }
                     Err(err) => {
                         log_discover_fail(&shared, &err);
-                        if state == ConnectionState::Reconnecting {
+                        let (requires, up) = transport_gate(&shared);
+                        if requires && up {
+                            set_state(&shared, ConnectionState::Connected, "ws up");
+                        } else if state == ConnectionState::Reconnecting {
                             set_state(&shared, ConnectionState::Reconnecting, "discover failed");
                         } else {
                             set_state(&shared, ConnectionState::Discovering, "discover failed");
@@ -342,6 +417,10 @@ fn session_loop(shared: Arc<SessionShared>) {
                     }
                     Err(err) => {
                         log::debug!("broker liveness lost: {err}");
+                        let (requires, up) = transport_gate(&shared);
+                        if requires && up {
+                            continue;
+                        }
                         set_state(&shared, ConnectionState::Reconnecting, "liveness lost");
                         backoff = SESSION_BACKOFF_INITIAL;
                     }
@@ -351,6 +430,14 @@ fn session_loop(shared: Arc<SessionShared>) {
         }
     }
     set_state(&shared, ConnectionState::Shutdown, "session stopped");
+}
+
+fn transport_gate(shared: &SessionShared) -> (bool, bool) {
+    shared
+        .inner
+        .lock()
+        .map(|g| (g.requires_transport, g.transport_up))
+        .unwrap_or((false, true))
 }
 
 fn log_discover_fail(shared: &SessionShared, err: &str) {

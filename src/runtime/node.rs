@@ -1085,6 +1085,21 @@ pub struct Node {
     session: BrokerSession,
 }
 
+#[cfg(feature = "ws")]
+fn start_ws_runtime(options: &NodeOptions, session: &BrokerSession) -> Option<WsRuntime> {
+    if !options.is_ws() {
+        return None;
+    }
+    let url = options.resolved_ws_url().ok()?;
+    match WsRuntime::new(url, Some(session.handle())) {
+        Ok(rt) => Some(rt),
+        Err(err) => {
+            log::error!("failed to start ws runtime: {err}");
+            None
+        }
+    }
+}
+
 impl Node {
     /// Convenience: tcp node with a **private** [`Context`].
     ///
@@ -1187,6 +1202,8 @@ impl Node {
         options: NodeOptions,
     ) -> Self {
         let session = BrokerSession::start(options.clone());
+        #[cfg(feature = "ws")]
+        let ws_runtime = start_ws_runtime(&options, &session);
         Self {
             name: name.into(),
             options,
@@ -1194,7 +1211,7 @@ impl Node {
             executor: None,
             owned_executor: None,
             #[cfg(feature = "ws")]
-            ws_runtime: None,
+            ws_runtime,
             publisher: None,
             subscriber_connected: false,
             default_callback_group: CallbackGroup::mutually_exclusive(),
@@ -1254,10 +1271,9 @@ impl Node {
                 "internal: ensure_ws called on non-gRPC node".into(),
             ));
         }
-        self.ensure_connected()?;
         if self.ws_runtime.is_none() {
             let url = self.options.resolved_ws_url()?;
-            self.ws_runtime = Some(WsRuntime::new(url)?);
+            self.ws_runtime = Some(WsRuntime::new(url, Some(self.session.handle()))?);
         }
         Ok(self.ws_runtime.as_ref().expect("ws runtime just created"))
     }

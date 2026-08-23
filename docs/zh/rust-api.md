@@ -5,9 +5,9 @@
 `Cargo.toml`：
 
 ```toml
-robot-bus = "1.3.0"
+robot-bus = "1.3.1"
 # 本地：robot-bus = { path = "../robot-bus" }
-# 默认已启用 WebSocket RPC 网关（`ws` feature）；若需关闭：robot-bus = { version = "1.3.0", default-features = false }
+# 默认已启用 WebSocket RPC 网关（`ws` feature）；若需关闭：robot-bus = { version = "1.3.1", default-features = false }
 ```
 
 ## Broker 启动
@@ -68,7 +68,7 @@ node.add_on_connection_event(|old, new, reason| {
 });
 ```
 
-`spin` / `start` 在 broker 重启后会继续重试。`create_*` 会短等 discover，仍未连上则返回带当前 state 的错误。
+`spin` / `start` 在 broker 重启后会继续重试。`create_*` 会短等 discover，仍未连上则返回带当前 state 的错误。WebSocket 节点共用这套会话合同；Connected 表示 `/ws` 套接字已连通。
 
 **同进程 inproc：** ZeroMQ 的 `inproc://` 是 context-local。嵌入式 broker 与 Node 必须共用同一个 [`Context`](../../src/runtime/context.rs)：
 

@@ -108,6 +108,12 @@ async fn handle_socket(socket: WebSocket, state: Arc<WsGatewayState>) {
                                     let _ = s.cmd_tx.try_send(StreamCmd::Cancel);
                                 }
                             }
+                            Frame::Ping { stream_id } => {
+                                let _ = out_tx
+                                    .send(Outbound::Frame(Frame::Pong { stream_id }))
+                                    .await;
+                            }
+                            Frame::Pong { .. } => {}
                             Frame::Data { stream_id, .. } | Frame::Trailer { stream_id, .. } => {
                                 let _ = out_tx.send(Outbound::Frame(Frame::Trailer {
                                     stream_id,
