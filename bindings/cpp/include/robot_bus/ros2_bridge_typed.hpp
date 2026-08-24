@@ -19,26 +19,35 @@ namespace robot_bus {
 template <typename Derived, typename RosMsg>
 class TypedTopicMapper : public TopicMapper {
  public:
-  void attach(TopicWireContext &ctx) override {
+  bool supports_lazy() const override { return true; }
+
+  rclcpp::SubscriptionBase::SharedPtr create_ros2_to_bus_subscription(
+      rclcpp::Node::SharedPtr ros_node, const std::string &ros_topic,
+      std::shared_ptr<TopicPublisher> bus_pub, std::shared_ptr<std::mutex> mtx) override {
     auto *self = static_cast<Derived *>(this);
+    return ros_node->template create_subscription<RosMsg>(
+        ros_topic, rclcpp::QoS(10),
+        [self, bus_pub, mtx](typename RosMsg::ConstSharedPtr msg) {
+          try {
+            auto bytes = self->ros_to_bus(*msg);
+            std::lock_guard<std::mutex> lock(*mtx);
+            bus_pub->publish(bytes);
+          } catch (...) {
+          }
+        });
+  }
+
+  void attach(TopicWireContext &ctx) override {
     if (ctx.direction == Direction::Ros2ToBus) {
       auto pub = std::make_shared<TopicPublisher>(
           ctx.bus_node.create_publisher(ctx.bus_topic.c_str()));
       auto mtx = std::make_shared<std::mutex>();
-      auto sub = ctx.ros_node->template create_subscription<RosMsg>(
-          ctx.ros_topic, rclcpp::QoS(10),
-          [self, pub, mtx](typename RosMsg::ConstSharedPtr msg) {
-            try {
-              auto bytes = self->ros_to_bus(*msg);
-              std::lock_guard<std::mutex> lock(*mtx);
-              pub->publish(bytes);
-            } catch (...) {
-            }
-          });
+      auto sub = create_ros2_to_bus_subscription(ctx.ros_node, ctx.ros_topic, pub, mtx);
       ctx.retain(std::move(pub));
       ctx.retain(std::move(mtx));
       ctx.retain(std::move(sub));
     } else {
+      auto *self = static_cast<Derived *>(this);
       auto ros_pub = ctx.ros_node->template create_publisher<RosMsg>(ctx.ros_topic, 10);
       auto weak_pub = std::weak_ptr<rclcpp::Publisher<RosMsg>>(ros_pub);
       ctx.retain(std::make_shared<SubscriptionHandle>(ctx.bus_node.create_subscription(

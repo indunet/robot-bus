@@ -9,6 +9,7 @@
 #include <vector>
 
 #ifdef ROBOT_BUS_HAS_ROS2
+#include <mutex>
 #include <rclcpp/rclcpp.hpp>
 #include <rclcpp_action/rclcpp_action.hpp>
 #endif
@@ -97,9 +98,16 @@ class TopicMapper {
  public:
   virtual ~TopicMapper() = default;
   virtual const char *type_name() const = 0;
+  /// Builtins and [`TypedTopicMapper`] support opt-in `.lazy()`. Attach-only
+  /// custom mappers return false (`.lazy().add()` throws).
+  virtual bool supports_lazy() const { return false; }
 #ifdef ROBOT_BUS_HAS_ROS2
   /// Wire this topic. Default throws — builtins use the library path instead.
   virtual void attach(TopicWireContext &ctx);
+  /// Create a ROS subscription that forwards onto `bus_pub`. Used by `.lazy()`.
+  virtual rclcpp::SubscriptionBase::SharedPtr create_ros2_to_bus_subscription(
+      rclcpp::Node::SharedPtr ros_node, const std::string &ros_topic,
+      std::shared_ptr<TopicPublisher> bus_pub, std::shared_ptr<std::mutex> mtx);
 #endif
 };
 
@@ -170,6 +178,7 @@ struct TopicRouteSpec {
   Direction direction = Direction::Ros2ToBus;
   TopicBuiltin builtin = TopicBuiltin::StdMsgsString;
   std::shared_ptr<TopicMapper> custom;
+  bool lazy = false;
   bool is_custom() const { return static_cast<bool>(custom); }
 };
 
@@ -257,6 +266,13 @@ class Ros2BridgeRoute {
     return std::move(*this);
   }
 
+  /// Opt-in lazy ROS 2 subscription for **ROS2→bus** topics only.
+  /// Default is eager (`build()` creates the ROS subscription immediately).
+  Ros2BridgeRoute &&lazy() && {
+    lazy_ = true;
+    return std::move(*this);
+  }
+
   Ros2BridgeBuilder add() &&;
 
  private:
@@ -267,6 +283,7 @@ class Ros2BridgeRoute {
   detail::TopicBuiltin builtin_ = detail::TopicBuiltin::StdMsgsString;
   std::shared_ptr<TopicMapper> custom_;
   bool mapper_set_ = false;
+  bool lazy_ = false;
 };
 
 /// Intermediate service route: `.mapper(...).timeout(...).direction(...).add()`.
@@ -471,6 +488,8 @@ class Ros2Bridge {
 
   void spin();
   void spin_once(double timeout_secs = 0.01);
+  /// True when this bridge currently holds a ROS subscription for `bus_topic`.
+  bool has_ros_subscription(const std::string &bus_topic) const;
 
  private:
   friend class Ros2BridgeBuilder;
@@ -488,12 +507,21 @@ inline Ros2BridgeBuilder Ros2BridgeRoute::add() && {
         "ros2 bridge route: call .mapper(...) before .add() "
         "(builtin ZST or std::shared_ptr<TopicMapper>)");
   }
+  if (lazy_ && direction_ != Direction::Ros2ToBus) {
+    throw Error("ros2 bridge route: .lazy() is only valid for Direction::Ros2ToBus");
+  }
+  if (lazy_ && custom_ && !custom_->supports_lazy()) {
+    throw Error(
+        "ros2 bridge route: .lazy() is not supported for this custom TopicMapper "
+        "(attach-only); use TypedTopicMapper");
+  }
   detail::TopicRouteSpec spec;
   spec.ros_topic = std::move(ros_topic_);
   spec.bus_topic = std::move(bus_topic_);
   spec.direction = direction_;
   spec.builtin = builtin_;
   spec.custom = std::move(custom_);
+  spec.lazy = lazy_;
   state_->routes.push_back(std::move(spec));
   return Ros2BridgeBuilder(std::move(state_));
 }

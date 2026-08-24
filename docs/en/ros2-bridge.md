@@ -59,7 +59,7 @@ Direction (`Direction`): `Ros2ToBus` (default) or `BusToRos2`; **`both` is not a
 ```text
 Ros2Bridge.new / New / new(name)
   .bus_tcp(...) | .bus_ipc() | .bus_discover(...)
-  .route(ros, bus).mapper(...).direction(...).add()
+  .route(ros, bus).mapper(...).direction(...).lazy().add()
   .service(ros, bus).mapper(...).timeout(...).direction(...).add()
   .action(ros, bus).mapper(...).timeout(...).direction(...).add()
   .build()
@@ -68,6 +68,44 @@ Ros2Bridge.new / New / new(name)
 
 - Default timeouts: service **5s**, action goal **30s**
 - **No** `from_yaml`; **no** `add_route(..., "pkg/msg/Type", ...)`
+- Topic routes default to **eager** ROS subscriptions (`build()` creates them immediately so the ROS graph shows the bridge). Opt in to on-demand ROS2→bus with `.lazy()` on that route only.
+
+### `.lazy()` (opt-in ROS2→bus)
+
+Default matches 1.3.1: `.route(...).mapper(...).add()` creates the ROS subscription at `build()`. Use `.lazy()` only on high-bandwidth ROS2→bus topics (camera, lidar) so the ROS graph has no bridge subscriber until a robot-bus subscriber exists.
+
+```rust
+.route("/camera/image", "/camera/image")
+    .mapper(SensorMsgsImageMapper)
+    .lazy()
+    .add()?
+```
+
+```python
+.route("/camera/image", "/camera/image")
+    .mapper(SensorMsgsImageMapper())
+    .lazy()
+    .add()
+```
+
+```cpp
+.route("/camera/image", "/camera/image")
+    .mapper(robot_bus::SensorMsgsImageMapper{})
+    .lazy()
+    .add()
+```
+
+Rules:
+
+- **Default eager.** Existing examples do not need `.lazy()`.
+- **No-arg.** `.lazy()` only; not `.lazy(true)`, not a new `Direction`.
+- **ROS2→bus only.** `.lazy()` on `BusToRos2` fails at `.add()`. Service / action builders have no `.lazy()`.
+- **No-console broker** (`--no-console`): `.lazy()` routes **fall back to eager** (there is no demand signal).
+- Demand counts `kind == subscriber` on the bus topic. A raw `Subscriber` (no `Node`) and a WebSocket client with topology off do **not** open a lazy route. After a crash, topology TTL is about 30s.
+
+The broker publishes immediate [`TopicDemand`](../../proto/robot_bus_interfaces/msg/v1/console_status.proto) on `/robot_bus/topic_demand` when a subscriber registers or unregisters. Bridges also read `/robot_bus/topics` so a late-starting lazy route still sees existing subscribers.
+
+C++ custom mappers that only override `attach` (entities stuffed into `keep_alive`) cannot tear the ROS subscription down; `.lazy().add()` throws. Use `TypedTopicMapper`.
 
 ### Phase-1 built-in mappers (objects, not strings)
 

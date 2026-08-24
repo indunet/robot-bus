@@ -117,3 +117,10 @@ message TopicTypeRegister {
   string topic = 1;
   string type_name = 2;
 }
+
+// Immediate subscriber-count event for lazy ROS2→bus topic routes.
+// `subscribers` is the live topology count of kind=subscriber on `topic`.
+message TopicDemand {
+  string topic = 1;
+  uint32 subscribers = 2;
+}

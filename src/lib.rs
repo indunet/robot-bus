@@ -4,6 +4,7 @@ pub mod action_bus;
 pub mod tank;
 pub mod broker;
 pub mod console_topics;
+pub mod lazy_subscribe;
 pub mod discovery;
 pub mod errors;
 pub mod message_bus;
@@ -64,6 +65,7 @@ pub use broker::WsGatewayConfig;
 
 #[cfg(feature = "console")]
 pub use broker::ConsoleBrokerConfig;
+pub use lazy_subscribe::{should_enable_ros_subscription, CONSOLE_DETECT_TIMEOUT};
 pub use errors::{BusError, Result, parse_error_body};
 pub use message_bus::{Publisher, Subscriber};
 pub use runtime::{

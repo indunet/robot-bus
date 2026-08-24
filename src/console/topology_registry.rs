@@ -233,9 +233,9 @@ impl TopologyRegistry {
         );
     }
 
-    pub fn unregister(&self, endpoint_id: &str) -> bool {
+    pub fn unregister(&self, endpoint_id: &str) -> Option<EndpointRecord> {
         let mut map = self.endpoints.lock().unwrap_or_else(|e| e.into_inner());
-        map.remove(endpoint_id).is_some()
+        map.remove(endpoint_id)
     }
 
     /// Drop endpoints that have not refreshed within [`ENDPOINT_TTL`].
@@ -318,7 +318,7 @@ mod tests {
         r.register("e1", "talker", EndpointKind::Publisher, "/imu");
         r.register("e2", "listener", EndpointKind::Subscriber, "/imu");
         assert_eq!(r.counts_for_topic("/imu"), (1, 1));
-        assert!(r.unregister("e1"));
+        assert!(r.unregister("e1").is_some());
         assert_eq!(r.counts_for_topic("/imu"), (0, 1));
     }
 

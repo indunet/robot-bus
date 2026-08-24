@@ -69,6 +69,8 @@ dev_note.md
 src/generated/**
 !src/generated/mod.rs
 bindings/python/robot_bus/*/
+!bindings/python/robot_bus/ros2_bridge/
+!bindings/python/robot_bus/ros2_bridge/**
 bindings/cpp/generated/
 bindings/typescript/generated/
 bindings/java/generated/

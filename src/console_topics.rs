@@ -15,6 +15,8 @@ pub const ACTIONS: &str = "/robot_bus/actions";
 pub const TOPOLOGY: &str = "/robot_bus/topology";
 /// Streaming [`crate::robot_bus_interfaces::msg::v1::ConsoleEvent`] log lines.
 pub const EVENTS: &str = "/robot_bus/events";
+/// Immediate [`crate::robot_bus_interfaces::msg::v1::TopicDemand`] (subscriber count).
+pub const TOPIC_DEMAND: &str = "/robot_bus/topic_demand";
 
 /// Client → broker: [`crate::robot_bus_interfaces::msg::v1::TopologyRegister`].
 pub const TOPOLOGY_REGISTER: &str = "/robot_bus/topology/register";

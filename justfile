@@ -175,6 +175,7 @@ test-rust-minimal: gen-rust
 test-python: proto
 	PYTHONPATH=bindings/python python3 bindings/python/tests/test_msgs_roundtrip.py
 	PYTHONPATH=bindings/python python3 bindings/python/tests/test_typed_api.py
+	PYTHONPATH=bindings/python python3 bindings/python/tests/test_ros2_bridge_builder.py
 
 # Native Python integration (requires `just python-dev`; fails if extension missing)
 test-python-native:

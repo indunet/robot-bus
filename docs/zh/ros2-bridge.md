@@ -59,7 +59,7 @@ cargo run --bin robot_bus_broker    # 或已安装的 robot-bus-broker
 ```text
 Ros2Bridge.new / New / new(name)
   .bus_tcp(...) | .bus_ipc() | .bus_discover(...)
-  .route(ros, bus).mapper(...).direction(...).add()
+  .route(ros, bus).mapper(...).direction(...).lazy().add()
   .service(ros, bus).mapper(...).timeout(...).direction(...).add()
   .action(ros, bus).mapper(...).timeout(...).direction(...).add()
   .build()
@@ -68,6 +68,44 @@ Ros2Bridge.new / New / new(name)
 
 - 默认超时：service **5s**，action goal **30s**
 - **无** `from_yaml`；**无** `add_route(..., "pkg/msg/Type", ...)`
+- Topic 路由默认 **eager**：`build()` 立刻建 ROS subscription，ROS 图上能看到这座桥。仅对需要按需开关的 ROS2→bus 路由写 `.lazy()`。
+
+### `.lazy()`（opt-in ROS2→bus）
+
+默认与 1.3.1 相同：`.route(...).mapper(...).add()` 在 `build()` 时就建 ROS subscription。相机、雷达等大流量 ROS2→bus 才用 `.lazy()`：没人订 bus 时，ROS 图上这座桥不是该 topic 的 subscriber。
+
+```rust
+.route("/camera/image", "/camera/image")
+    .mapper(SensorMsgsImageMapper)
+    .lazy()
+    .add()?
+```
+
+```python
+.route("/camera/image", "/camera/image")
+    .mapper(SensorMsgsImageMapper())
+    .lazy()
+    .add()
+```
+
+```cpp
+.route("/camera/image", "/camera/image")
+    .mapper(robot_bus::SensorMsgsImageMapper{})
+    .lazy()
+    .add()
+```
+
+规则：
+
+- **默认 eager。** 现有示例不用改。
+- **`.lazy()` 无参。** 不要 `.lazy(true)`，不要新的 `Direction`。
+- **只允许 ROS2→bus。** 配在 `BusToRos2` 上时 `.add()` 报错。Service / action builder 没有 `.lazy()`。
+- **无 console 的 broker**（`--no-console`）：`.lazy()` 路由 **降级为 eager**（没有 demand 信号）。
+- 需求只数 `kind == subscriber`。裸 `Subscriber`（不经 `Node`）以及关掉 topology 的 WebSocket **打不开** lazy。崩溃后 topology TTL 约 30s。
+
+broker 在 subscriber register/unregister 时立刻往 `/robot_bus/topic_demand` 发 [`TopicDemand`](../../proto/robot_bus_interfaces/msg/v1/console_status.proto)。桥启动时再读 `/robot_bus/topics`，避免订阅者先于桥启动时 lazy 路由一直关着。
+
+C++ 只 override `attach`、把实体塞进 `keep_alive` 的自定义 mapper **不支持** `.lazy()`（`.add()` 报错）。请用 `TypedTopicMapper`。
 
 ### 一期内置 mapper（对象，不是字符串）
 

@@ -735,6 +735,7 @@ impl RobotBusBroker {
                 let control_plane = ControlPlaneHandle::start(
                     state.clone(),
                     bind_to_connect(&message.xpub_bind),
+                    bind_to_connect(&message.xsub_bind),
                     bind_to_connect(&service.backend_bind),
                 )
                 .context("start console control plane")?;
