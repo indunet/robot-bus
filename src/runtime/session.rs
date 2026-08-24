@@ -113,6 +113,14 @@ impl SessionHandle {
             set_state(&self.shared, ConnectionState::Reconnecting, reason);
         }
     }
+
+    pub(crate) fn options(&self) -> NodeOptions {
+        self.shared
+            .inner
+            .lock()
+            .map(|g| g.options.clone())
+            .unwrap_or_else(|_| NodeOptions::tcp())
+    }
 }
 
 /// Background broker session owned by a [`crate::Node`].
@@ -240,7 +248,12 @@ impl Drop for BrokerSession {
 }
 
 fn requires_http_liveness(opts: &NodeOptions) -> bool {
-    opts.is_ws() || opts.needs_endpoint_discover()
+    opts.is_ws()
+        || opts.needs_endpoint_discover()
+        || opts
+            .console_url
+            .as_deref()
+            .is_some_and(|s| !s.is_empty())
 }
 
 fn discover_api_url(opts: &NodeOptions) -> String {

@@ -162,6 +162,26 @@ jobs:
             cmake g++ pkg-config libzmq3-dev \
             curl unzip ninja-build gnupg lsb-release
 
+      # Pre-install so setup-ros skips its unauthenticated GitHub API lookup
+      # (rate-limit → empty tag → 404 / curl 22). See ros-tooling/setup-ros#892
+      - name: Install ROS 2 apt source
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          codename="$(. /etc/os-release && echo "${UBUNTU_CODENAME:-${VERSION_CODENAME}}")"
+          version="$(curl -fsSL -H "Authorization: Bearer ${GH_TOKEN}" \
+            "https://api.github.com/repos/ros-infrastructure/ros-apt-source/releases/latest" \
+            | grep -F '"tag_name"' | head -n1 | awk -F'"' '{print $4}' || true)"
+          version="${version:-1.2.0}"
+          deb="ros2-apt-source_${version}.${codename}_all.deb"
+          url="https://github.com/ros-infrastructure/ros-apt-source/releases/download/${version}/${deb}"
+          echo "Installing ${deb}"
+          curl --fail --location --retry 5 --retry-delay 3 -o "/tmp/${deb}" "${url}"
+          sudo dpkg -i "/tmp/${deb}"
+          rm -f "/tmp/${deb}"
+          sudo apt-get update
+
       - name: Install ROS 2 ${{ matrix.distro }}
         uses: ros-tooling/setup-ros@v0.7
         with:

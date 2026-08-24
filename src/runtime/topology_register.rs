@@ -18,6 +18,9 @@ const REFRESH_INTERVAL: Duration = Duration::from_secs(10);
 pub struct TopologyEndpointGuard {
     endpoint_id: String,
     service_frontend: String,
+    node_name: String,
+    kind: String,
+    topic: String,
     stop: Arc<AtomicBool>,
 }
 
@@ -41,6 +44,9 @@ impl TopologyEndpointGuard {
         let guard = Arc::new(Self {
             endpoint_id: endpoint_id.clone(),
             service_frontend: frontend.clone().unwrap_or_default(),
+            node_name: node_name.to_string(),
+            kind: kind.to_string(),
+            topic: topic.to_string(),
             stop: Arc::clone(&stop),
         });
 
@@ -71,6 +77,20 @@ impl TopologyEndpointGuard {
         }
 
         guard
+    }
+
+    /// Re-post this endpoint to the broker (used after a broker restart).
+    pub(crate) fn refresh(&self) {
+        if self.service_frontend.is_empty() || self.stop.load(Ordering::Relaxed) {
+            return;
+        }
+        post_register(
+            &self.service_frontend,
+            &self.endpoint_id,
+            &self.node_name,
+            &self.kind,
+            &self.topic,
+        );
     }
 }
 

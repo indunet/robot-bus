@@ -6,6 +6,7 @@
 
 mod callback_group;
 mod console_ready;
+mod control_plane;
 mod context;
 mod dispatch;
 mod executor;

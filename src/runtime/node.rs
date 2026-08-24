@@ -39,6 +39,7 @@ use crate::runtime::queues::ActionMessageCallback;
 use crate::runtime::registrations::{ActionGoalHandler, MessageCallback, ServiceHandler};
 use crate::runtime::session::{BrokerSession, ConnectionState, SESSION_CREATE_WAIT};
 use crate::runtime::timers::{TimerCallback, TimerHandle, SubscriptionHandle};
+use crate::runtime::control_plane::ControlPlaneLedger;
 use crate::runtime::topic_type_register;
 use crate::runtime::topology_register::TopologyEndpointGuard;
 #[cfg(feature = "ws")]
@@ -1083,6 +1084,7 @@ pub struct Node {
     /// Action server id → topology guard (dropped on destroy_action_server).
     topology_actions: HashMap<u64, Arc<TopologyEndpointGuard>>,
     session: BrokerSession,
+    control_plane: Arc<ControlPlaneLedger>,
 }
 
 #[cfg(feature = "ws")]
@@ -1204,7 +1206,13 @@ impl Node {
         let session = BrokerSession::start(options.clone());
         #[cfg(feature = "ws")]
         let ws_runtime = start_ws_runtime(&options, &session);
-        Self {
+        let control_plane = ControlPlaneLedger::new();
+        control_plane.update_endpoints(
+            options.service_frontend.as_deref(),
+            &options.host,
+            &options.transport,
+        );
+        let node = Self {
             name: name.into(),
             options,
             context: context.clone(),
@@ -1220,7 +1228,10 @@ impl Node {
             topology_services: HashMap::new(),
             topology_actions: HashMap::new(),
             session,
-        }
+            control_plane,
+        };
+        node.install_reconnect_hook();
+        node
     }
 
     /// Shared runtime context used for ZMQ sockets.
@@ -1280,17 +1291,42 @@ impl Node {
 
     fn pull_options(&mut self) {
         self.options = self.session.options();
+        self.control_plane.update_endpoints(
+            self.options.service_frontend.as_deref(),
+            &self.options.host,
+            &self.options.transport,
+        );
     }
 
     fn install_reconnect_hook(&self) {
-        let Some(handle) = self.executor.clone() else {
-            return;
-        };
+        let ledger = Arc::clone(&self.control_plane);
+        let executor = self.executor.clone();
+        let session = self.session.handle();
         self.session.set_reconnect_hook(Arc::new(move || {
-            if let Ok(mut exec) = handle.lock() {
-                exec.resend_worker_ready();
+            let options = session.options();
+            ledger.update_endpoints(
+                options.service_frontend.as_deref(),
+                &options.host,
+                &options.transport,
+            );
+            ledger.restore();
+            if let Some(ref handle) = executor {
+                if let Ok(mut exec) = handle.lock() {
+                    exec.resend_worker_ready();
+                }
             }
         }));
+    }
+
+    fn remember_topic_type(&self, topic: &str, type_name: &str) {
+        self.control_plane.remember_topic_type(topic, type_name);
+        topic_type_register::register_topic_type(
+            self.options.service_frontend.as_deref(),
+            &self.options.host,
+            &self.options.transport,
+            topic,
+            type_name,
+        );
     }
 
     /// Wait until this node has a live broker control-plane (HTTP discover).
@@ -1459,13 +1495,7 @@ impl Node {
             inner: self.create_publisher_raw(topic.clone())?,
             _marker: PhantomData,
         };
-        topic_type_register::register_topic_type(
-            self.options.service_frontend.as_deref(),
-            &self.options.host,
-            &self.options.transport,
-            &topic,
-            &M::full_name(),
-        );
+        self.remember_topic_type(&topic, &M::full_name());
         Ok(pub_)
     }
 
@@ -1482,13 +1512,7 @@ impl Node {
             inner: self.create_publisher_raw_with_qos(topic.clone(), qos)?,
             _marker: PhantomData,
         };
-        topic_type_register::register_topic_type(
-            self.options.service_frontend.as_deref(),
-            &self.options.host,
-            &self.options.transport,
-            &topic,
-            &M::full_name(),
-        );
+        self.remember_topic_type(&topic, &M::full_name());
         Ok(pub_)
     }
 
@@ -1548,13 +1572,7 @@ impl Node {
             inner: self.create_publisher_raw_with_hwm(topic.clone(), Some(hwm))?,
             _marker: PhantomData,
         };
-        topic_type_register::register_topic_type(
-            self.options.service_frontend.as_deref(),
-            &self.options.host,
-            &self.options.transport,
-            &topic,
-            &M::full_name(),
-        );
+        self.remember_topic_type(&topic, &M::full_name());
         Ok(pub_)
     }
 
@@ -1675,13 +1693,7 @@ impl Node {
             Err(err) => log::warn!("typed subscription decode failed: {err}"),
         });
         let handle = self.create_subscription_raw(topic, cb, Some(&group))?;
-        topic_type_register::register_topic_type(
-            self.options.service_frontend.as_deref(),
-            &self.options.host,
-            &self.options.transport,
-            topic,
-            &M::full_name(),
-        );
+        self.remember_topic_type(topic, &M::full_name());
         Ok(handle)
     }
 
@@ -1709,13 +1721,7 @@ impl Node {
             Err(err) => log::warn!("typed subscription decode failed: {err}"),
         });
         let handle = self.create_subscription_raw_with_qos(topic, qos, cb, Some(&group))?;
-        topic_type_register::register_topic_type(
-            self.options.service_frontend.as_deref(),
-            &self.options.host,
-            &self.options.transport,
-            topic,
-            &M::full_name(),
-        );
+        self.remember_topic_type(topic, &M::full_name());
         Ok(handle)
     }
 
@@ -2090,14 +2096,16 @@ impl Node {
     }
 
     fn start_topology_guard(&self, kind: &str, name: &str) -> Arc<TopologyEndpointGuard> {
-        TopologyEndpointGuard::start(
+        let guard = TopologyEndpointGuard::start(
             self.options.service_frontend.as_deref(),
             &self.options.host,
             &self.options.transport,
             &self.name,
             kind,
             name,
-        )
+        );
+        self.control_plane.remember_topology(&guard);
+        guard
     }
 
     /// Connect the executor-owned action client used by callback-style [`send_goal`](Self::send_goal).
