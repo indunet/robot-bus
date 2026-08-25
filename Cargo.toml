@@ -70,7 +70,9 @@ ros2-shim = ["ros2", "rclrs/use_ros_shim", "rosidl_runtime_rs/use_ros_shim", "ro
 
 [dependencies]
 anyhow = "1"
-rclrs = { git = "https://github.com/ros2-rust/ros2_rust.git", rev = "4606ed41a212fb6c65ab01d1e79ddabde4e7cb05", optional = true }
+# `version` is required to publish; cargo strips `git` from the crates.io manifest.
+# This repo still uses the git rev (same 0.7.0 crate version, newer API than crates.io).
+rclrs = { version = "0.7", git = "https://github.com/ros2-rust/ros2_rust.git", rev = "4606ed41a212fb6c65ab01d1e79ddabde4e7cb05", optional = true }
 rosidl_runtime_rs = { version = "0.6", optional = true }
 ros-env = { version = "0.2", optional = true }
 axum = { version = "0.8", optional = true, default-features = false, features = ["http1", "tokio", "query", "json", "ws"] }
