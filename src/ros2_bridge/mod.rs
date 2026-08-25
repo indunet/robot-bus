@@ -16,6 +16,7 @@
 mod builder;
 mod dynamic_rpc_spike;
 mod mapper;
+mod ros_idl;
 mod spin;
 mod typed_rpc;
 mod typed_wire;
@@ -51,7 +52,7 @@ pub use builder::{
 };
 pub use mapper::{
     ActionMapper, ActionWireContext, Direction, ServiceMapper, ServiceWireContext,
-    TopicMapper, TypedActionMapper, TypedServiceMapper, lookup_topic_mapper,
+    TopicMapper, TopicRouteQos, TypedActionMapper, TypedServiceMapper, lookup_topic_mapper,
     lookup_topic_mapper_arc, registered_topic_types,
 };
 pub use mappers::action_bridges::FibonacciActionMapper;

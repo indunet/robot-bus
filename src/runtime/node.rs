@@ -357,6 +357,15 @@ impl TopicPublisherRaw {
             )),
         }
     }
+
+    /// Milliseconds; `0` fails immediately when the send HWM is full (drop newest).
+    pub fn set_send_timeout_ms(&self, ms: i32) -> Result<()> {
+        match &self.backend {
+            TopicPublisherBackend::Zmq(inner) => inner.set_send_timeout_ms(ms),
+            #[cfg(feature = "ws")]
+            TopicPublisherBackend::Ws(_) => Ok(()),
+        }
+    }
 }
 
 /// Typed topic publisher returned by [`Node::create_publisher`] (ROS 2 style).

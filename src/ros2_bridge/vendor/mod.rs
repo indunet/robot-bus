@@ -1,8 +1,8 @@
 //! Typed ROS IDL bindings used by the in-process bridge.
 //!
-//! rclrs vendors `example_interfaces` services with matching field layouts, but
-//! a different type name. Real ROS graphs use `std_srvs`, so we vendor those
-//! here and link against system `libstd_srvs__rosidl_*`.
+//! `std_srvs` is vendored here and links system `libstd_srvs__rosidl_*`
+//! (C typesupport, not rust IDL). `example_interfaces` Fibonacci uses
+//! `ros_env` overlay re-exports (see `ros_idl`).
 
 #![allow(non_camel_case_types)]
 

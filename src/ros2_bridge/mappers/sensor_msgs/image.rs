@@ -72,4 +72,66 @@ impl TopicMapper for SensorMsgsImageMapper {
             .map_err(|e| BusError::Protocol(format!("decode sensor_msgs/msg/Image: {e}")))?;
         image_bus_to_dyn(&bus)
     }
+
+    fn create_ros2_to_bus_subscription(
+        &self,
+        ros_node: &rclrs::Node,
+        bus_pub: crate::runtime::TopicPublisherRaw,
+        ros_topic: &str,
+        qos: crate::ros2_bridge::mapper::TopicRouteQos,
+    ) -> Result<Option<Box<dyn std::any::Any + Send + Sync>>> {
+        typed_image_subscription(ros_node, bus_pub, ros_topic, qos)
+    }
+}
+
+#[cfg(feature = "ros2-shim")]
+fn typed_image_subscription(
+    _ros_node: &rclrs::Node,
+    _bus_pub: crate::runtime::TopicPublisherRaw,
+    _ros_topic: &str,
+    _qos: crate::ros2_bridge::mapper::TopicRouteQos,
+) -> Result<Option<Box<dyn std::any::Any + Send + Sync>>> {
+    Ok(None)
+}
+
+#[cfg(not(feature = "ros2-shim"))]
+fn typed_image_subscription(
+    ros_node: &rclrs::Node,
+    bus_pub: crate::runtime::TopicPublisherRaw,
+    ros_topic: &str,
+    qos: crate::ros2_bridge::mapper::TopicRouteQos,
+) -> Result<Option<Box<dyn std::any::Any + Send + Sync>>> {
+    use crate::ros2_bridge::mapper::ros_topic_options;
+    use prost::Message as _;
+    use ros_env::sensor_msgs::msg::Image as RosImage;
+
+    let opts = ros_topic_options(ros_topic, qos);
+    let sub = ros_node
+        .create_subscription(opts, move |msg: RosImage| {
+            let payload = image_typed_to_bus(&msg).encode_to_vec();
+            if let Err(e) = bus_pub.publish(&payload) {
+                log::warn!("ros→bus sensor_msgs/msg/Image publish: {e}");
+            }
+        })
+        .map_err(|e| BusError::Protocol(format!("ros Image subscription: {e}")))?;
+    Ok(Some(Box::new(sub)))
+}
+
+#[cfg(not(feature = "ros2-shim"))]
+fn image_typed_to_bus(msg: &ros_env::sensor_msgs::msg::Image) -> crate::sensor_msgs::msg::v1::Image {
+    crate::sensor_msgs::msg::v1::Image {
+        header: Some(crate::std_msgs::msg::v1::Header {
+            stamp: Some(crate::builtin_interfaces::msg::v1::Time {
+                sec: msg.header.stamp.sec,
+                nanosec: msg.header.stamp.nanosec,
+            }),
+            frame_id: msg.header.frame_id.to_string(),
+        }),
+        height: msg.height,
+        width: msg.width,
+        encoding: msg.encoding.to_string(),
+        is_bigendian: msg.is_bigendian != 0,
+        step: msg.step,
+        data: msg.data.iter().copied().collect(),
+    }
 }

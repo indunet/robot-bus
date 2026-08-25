@@ -63,14 +63,16 @@ console = [
 ]
 # In-process ROS 2 ↔ robot-bus topic/service/action bridge (requires sourced ROS + linking rcl).
 # Not enabled by default — keep core SDK / maturin builds free of ROS.
-ros2 = ["dep:rclrs", "dep:rosidl_runtime_rs"]
+# Typed msgs (sensor_msgs / example_interfaces) need ament rust overlay; crates.io rclrs is still 0.7.
+ros2 = ["dep:rclrs", "dep:rosidl_runtime_rs", "dep:ros-env"]
 # Typecheck without a real ROS install (rclrs stub).
-ros2-shim = ["ros2", "rclrs/use_ros_shim", "rosidl_runtime_rs/use_ros_shim"]
+ros2-shim = ["ros2", "rclrs/use_ros_shim", "rosidl_runtime_rs/use_ros_shim", "ros-env/use_ros_shim"]
 
 [dependencies]
 anyhow = "1"
-rclrs = { version = "0.7", optional = true }
+rclrs = { git = "https://github.com/ros2-rust/ros2_rust.git", rev = "4606ed41a212fb6c65ab01d1e79ddabde4e7cb05", optional = true }
 rosidl_runtime_rs = { version = "0.6", optional = true }
+ros-env = { version = "0.2", optional = true }
 axum = { version = "0.8", optional = true, default-features = false, features = ["http1", "tokio", "query", "json", "ws"] }
 clap = { version = "4", features = ["derive"] }
 futures-util = { version = "0.3", optional = true, default-features = false, features = ["sink"] }
@@ -163,6 +165,11 @@ name = "robot_bus_perf"
 path = "benches/robot_bus_perf/main.rs"
 required-features = ["ws"]
 
+[[bin]]
+name = "ros2_bridge_perf"
+path = "benches/ros2_bridge_perf/main.rs"
+required-features = ["ros2"]
+
 [[example]]
 name = "topic_imu_listener"
 path = "examples/topic_imu/rust/listener.rs"
@@ -199,3 +206,7 @@ required-features = ["ros2"]
 
 [package.metadata.docs.rs]
 features = ["ws", "console"]
+
+[patch.crates-io]
+# rclrs 0.8 library code uses ros_env::* fields; crates.io ros-env 0.2 shim is empty.
+ros-env = { path = "third_party/ros-env-shim" }

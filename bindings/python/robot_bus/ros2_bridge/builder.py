@@ -33,6 +33,34 @@ def should_enable_ros_subscription(
     return subscribers > 0
 
 
+def _ros_qos(route: dict[str, Any]) -> Any:
+    from rclpy.qos import (
+        HistoryPolicy,
+        QoSProfile,
+        ReliabilityPolicy,
+        qos_profile_sensor_data,
+    )
+
+    if route.get("sensor_data"):
+        return qos_profile_sensor_data
+    depth = route.get("qos_depth")
+    best_effort = bool(route.get("best_effort"))
+    if depth is None and not best_effort:
+        return 10
+    profile = QoSProfile(
+        history=HistoryPolicy.KEEP_LAST,
+        depth=int(depth) if depth is not None else 10,
+    )
+    if best_effort:
+        profile.reliability = ReliabilityPolicy.BEST_EFFORT
+    return profile
+
+
+def _bus_qos_depth(route: dict[str, Any]) -> Optional[int]:
+    depth = route.get("qos_depth")
+    return int(depth) if depth is not None else None
+
+
 def _topic_supports_lazy(mapper: Any) -> bool:
     return callable(getattr(mapper, "ros_msg_type", None)) and callable(
         getattr(mapper, "ros_to_bus", None)
@@ -48,6 +76,8 @@ class TopicWireContext:
         bus_topic: str,
         direction: Direction,
         keep_alive: list,
+        qos: Any = 10,
+        bus_qos_depth: Optional[int] = None,
     ) -> None:
         self.ros_node = ros_node
         self.bus_node = bus_node
@@ -55,6 +85,8 @@ class TopicWireContext:
         self.bus_topic = bus_topic
         self.direction = direction
         self.keep_alive = keep_alive
+        self.qos = qos
+        self.bus_qos_depth = bus_qos_depth
 
     def retain(self, obj: Any) -> None:
         self.keep_alive.append(obj)
@@ -172,6 +204,9 @@ class RouteBuilder:
         self._mapper: Any = None
         self._direction = Direction.Ros2ToBus
         self._lazy = False
+        self._qos_depth: Optional[int] = None
+        self._best_effort = False
+        self._sensor_data = False
 
     def mapper(self, mapper: Any) -> "RouteBuilder":
         self._mapper = mapper
@@ -183,6 +218,20 @@ class RouteBuilder:
 
     def lazy(self) -> "RouteBuilder":
         self._lazy = True
+        return self
+
+    def qos_depth(self, n: int) -> "RouteBuilder":
+        self._qos_depth = int(n)
+        return self
+
+    def best_effort(self) -> "RouteBuilder":
+        self._best_effort = True
+        return self
+
+    def sensor_data(self) -> "RouteBuilder":
+        self._sensor_data = True
+        self._qos_depth = 5
+        self._best_effort = True
         return self
 
     def add(self) -> Ros2BridgeBuilder:
@@ -205,6 +254,9 @@ class RouteBuilder:
                 "mapper": self._mapper,
                 "direction": self._direction,
                 "lazy": self._lazy,
+                "qos_depth": self._qos_depth,
+                "best_effort": self._best_effort,
+                "sensor_data": self._sensor_data,
             }
         )
         return self._parent
@@ -345,17 +397,16 @@ class Ros2Bridge:
         return self
 
     def _ros_spin(self) -> None:
-        while not self._halt.is_set():
-            try:
-                self._executor.spin_once(timeout_sec=0.01)
-            except Exception:  # noqa: BLE001
-                time.sleep(0.01)
+        try:
+            self._executor.spin()
+        except Exception:  # noqa: BLE001
+            pass
 
     def spin(self) -> None:
         while True:
-            self.spin_once(0.01)
+            self.spin_once(None)
 
-    def spin_once(self, timeout: float = 0.01) -> None:
+    def spin_once(self, timeout: Optional[float] = 0.01) -> None:
         if self._first_spin_at is None:
             self._first_spin_at = time.monotonic()
         try:
@@ -372,6 +423,11 @@ class Ros2Bridge:
 
     def close(self) -> None:
         self._halt.set()
+        if self._executor is not None:
+            try:
+                self._executor.shutdown()
+            except Exception:  # noqa: BLE001
+                pass
         if self._spin_thread is not None:
             self._spin_thread.join(timeout=2.0)
             self._spin_thread = None
@@ -446,7 +502,14 @@ class Ros2Bridge:
 
         if callable(getattr(mapper, "attach", None)) and not _topic_supports_lazy(mapper):
             ctx = TopicWireContext(
-                self._ros_node, self._bus, ros_topic, bus_topic, direction, self._keep_alive
+                self._ros_node,
+                self._bus,
+                ros_topic,
+                bus_topic,
+                direction,
+                self._keep_alive,
+                qos=_ros_qos(route),
+                bus_qos_depth=_bus_qos_depth(route),
             )
             mapper.attach(ctx)
             if direction == Direction.Ros2ToBus:
@@ -454,8 +517,10 @@ class Ros2Bridge:
             return
 
         msg_type = mapper.ros_msg_type()
+        ros_qos = _ros_qos(route)
+        bus_depth = _bus_qos_depth(route)
         if direction == Direction.BusToRos2:
-            ros_pub = self._ros_node.create_publisher(msg_type, ros_topic, 10)
+            ros_pub = self._ros_node.create_publisher(msg_type, ros_topic, ros_qos)
 
             def on_bus(_topic: str, payload: bytes, m=mapper, pub=ros_pub) -> None:
                 try:
@@ -463,15 +528,21 @@ class Ros2Bridge:
                 except Exception:
                     pass
 
-            self._keep_alive.append(self._bus.create_subscription(bus_topic, on_bus))
+            sub_kw: dict[str, Any] = {}
+            if bus_depth is not None:
+                sub_kw["qos_depth"] = bus_depth
+            self._keep_alive.append(self._bus.create_subscription(bus_topic, on_bus, **sub_kw))
             self._keep_alive.append(ros_pub)
             return
 
-        bus_pub = self._bus.create_publisher(bus_topic)
+        pub_kw: dict[str, Any] = {}
+        if bus_depth is not None:
+            pub_kw["qos_depth"] = bus_depth
+        bus_pub = self._bus.create_publisher(bus_topic, **pub_kw)
         lock = threading.Lock()
 
         def create_sub(
-            m=mapper, t=msg_type, rt=ros_topic, pub=bus_pub, mtx=lock
+            m=mapper, t=msg_type, rt=ros_topic, pub=bus_pub, mtx=lock, rq=ros_qos
         ) -> Any:
             def on_ros(msg, pub=pub, mtx=mtx, m=m) -> None:
                 try:
@@ -481,7 +552,7 @@ class Ros2Bridge:
                 except Exception:
                     pass
 
-            return self._ros_node.create_subscription(t, rt, on_ros, 10)
+            return self._ros_node.create_subscription(t, rt, on_ros, rq)
 
         if lazy:
             self._lazy_routes[bus_topic] = {"create": create_sub, "sub": None}

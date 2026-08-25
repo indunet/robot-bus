@@ -177,6 +177,79 @@ def test_lazy_and_eager_routes_independent():
     assert b._routes[1]["lazy"] is True
 
 
+def test_qos_defaults_off():
+    from robot_bus.ros2_bridge import Ros2Bridge
+
+    class Dummy:
+        def type_name(self) -> str:
+            return "test/msg/Dummy"
+
+        def ros_msg_type(self):
+            return object
+
+        def ros_to_bus(self, _msg) -> bytes:
+            return b""
+
+        def bus_to_ros(self, _payload: bytes):
+            return None
+
+    b = Ros2Bridge.new("t").route("/a", "/a").mapper(Dummy()).add()
+    assert b._routes[0]["qos_depth"] is None
+    assert b._routes[0]["best_effort"] is False
+    assert b._routes[0]["sensor_data"] is False
+
+
+def test_qos_depth_and_best_effort():
+    from robot_bus.ros2_bridge import Ros2Bridge
+
+    class Dummy:
+        def type_name(self) -> str:
+            return "test/msg/Dummy"
+
+        def ros_msg_type(self):
+            return object
+
+        def ros_to_bus(self, _msg) -> bytes:
+            return b""
+
+        def bus_to_ros(self, _payload: bytes):
+            return None
+
+    b = (
+        Ros2Bridge.new("t")
+        .route("/a", "/a")
+        .mapper(Dummy())
+        .qos_depth(20)
+        .best_effort()
+        .add()
+    )
+    assert b._routes[0]["qos_depth"] == 20
+    assert b._routes[0]["best_effort"] is True
+    assert b._routes[0]["sensor_data"] is False
+
+
+def test_qos_sensor_data():
+    from robot_bus.ros2_bridge import Ros2Bridge
+
+    class Dummy:
+        def type_name(self) -> str:
+            return "test/msg/Dummy"
+
+        def ros_msg_type(self):
+            return object
+
+        def ros_to_bus(self, _msg) -> bytes:
+            return b""
+
+        def bus_to_ros(self, _payload: bytes):
+            return None
+
+    b = Ros2Bridge.new("t").route("/cam", "/cam").mapper(Dummy()).sensor_data().add()
+    assert b._routes[0]["qos_depth"] == 5
+    assert b._routes[0]["best_effort"] is True
+    assert b._routes[0]["sensor_data"] is True
+
+
 def test_ros2_available_checks_rclpy():
     import robot_bus
 
@@ -195,6 +268,9 @@ if __name__ == "__main__":
     test_lazy_rejects_bus_to_ros2()
     test_lazy_rejects_attach_only_mapper()
     test_lazy_and_eager_routes_independent()
+    test_qos_defaults_off()
+    test_qos_depth_and_best_effort()
+    test_qos_sensor_data()
     test_ros2_available_checks_rclpy()
     try:
         test_builder_accepts_concrete_mappers_without_build()

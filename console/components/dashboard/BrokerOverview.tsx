@@ -1,6 +1,6 @@
 'use client'
 
-import { type BrokerInfo } from '@/lib/mock-data'
+import { formatWsRpcAddr, type BrokerInfo } from '@/lib/mock-data'
 import { Server } from 'lucide-react'
 import { useI18n } from '@/lib/i18n'
 
@@ -16,6 +16,7 @@ export default function BrokerOverview({ broker }: Props) {
   const offline = broker.status === 'OFFLINE'
 
   const buses: BusEndpoint[] = [
+    { label: t('brokerWs'), addr: formatWsRpcAddr(broker.grpcAddr) },
     { label: t('brokerMsgXSub'), addr: broker.msgBusXSub },
     { label: t('brokerMsgXPub'), addr: broker.msgBusXPub },
     { label: t('brokerSvcFE'), addr: broker.svcFE },
@@ -41,7 +42,7 @@ export default function BrokerOverview({ broker }: Props) {
                       : 'bg-bus-red pulse-red'
                 }`}
               />
-              <span className="font-mono text-xs text-bus-muted w-20 shrink-0">{b.label}</span>
+              <span className="font-mono text-xs text-bus-muted w-24 shrink-0">{b.label}</span>
               {connecting ? (
                 <span className="flex-1 h-3 rounded-sm status-shimmer" aria-hidden />
               ) : (

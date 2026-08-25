@@ -22,7 +22,7 @@ mod my_pkg;
 use std::time::Duration;
 
 use prost::Message as ProstMessage;
-use rclrs::vendor::example_interfaces::srv as ros_srv;
+use ros_env::example_interfaces::srv as ros_srv;
 use robot_bus::ros2_bridge::{Direction, Ros2Bridge, TypedServiceMapper};
 use robot_bus::Node;
 

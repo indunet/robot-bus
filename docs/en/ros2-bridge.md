@@ -37,10 +37,12 @@ source /opt/ros/humble/setup.bash   # or jazzy
 cargo run --bin robot_bus_broker    # or installed robot-bus-broker
 ```
 
+**Rust `feature = "ros2"`** also needs a **ros2_rust + common_interfaces** overlay: `AMENT_PREFIX_PATH` must contain `rosidl_generator_rs` output at `share/<pkg>/rust/` (at least `std_msgs`, `sensor_msgs`, `example_interfaces`). Sourcing Humble alone **does not** compile `sensor_msgs::msg::Image` or typed Fibonacci. `apt install ros-humble-sensor-msgs` ships C typesupport only, not the rust IDL. See **Rust overlay** below.
+
 | Language | Dependencies |
 |----------|--------------|
 | Common | Reachable broker (tcp / ipc / discover) |
-| Rust | `robot-bus = { features = ["ros2"] }` |
+| Rust | `robot-bus = { features = ["ros2"] }` plus the rust message overlay |
 | Python | `robot_bus` + system **`rclpy`** (`just python-dev` / `python-dev-ros2`) |
 | C++ | `robot-bus-ros2-humble` or `…-jazzy`, or `just cpp-dev-ros2` (`-DROBOT_BUS_ROS2=ON`, links **rclcpp**) |
 
@@ -59,7 +61,7 @@ Direction (`Direction`): `Ros2ToBus` (default) or `BusToRos2`; **`both` is not a
 ```text
 Ros2Bridge.new / New / new(name)
   .bus_tcp(...) | .bus_ipc() | .bus_discover(...)
-  .route(ros, bus).mapper(...).direction(...).lazy().add()
+  .route(ros, bus).mapper(...).direction(...).qos_depth(n)|.best_effort()|.sensor_data().lazy().add()
   .service(ros, bus).mapper(...).timeout(...).direction(...).add()
   .action(ros, bus).mapper(...).timeout(...).direction(...).add()
   .build()
@@ -77,6 +79,7 @@ Default matches 1.3.1: `.route(...).mapper(...).add()` creates the ROS subscript
 ```rust
 .route("/camera/image", "/camera/image")
     .mapper(SensorMsgsImageMapper)
+    .sensor_data()
     .lazy()
     .add()?
 ```
@@ -84,6 +87,7 @@ Default matches 1.3.1: `.route(...).mapper(...).add()` creates the ROS subscript
 ```python
 .route("/camera/image", "/camera/image")
     .mapper(SensorMsgsImageMapper())
+    .sensor_data()
     .lazy()
     .add()
 ```
@@ -91,6 +95,7 @@ Default matches 1.3.1: `.route(...).mapper(...).add()` creates the ROS subscript
 ```cpp
 .route("/camera/image", "/camera/image")
     .mapper(robot_bus::SensorMsgsImageMapper{})
+    .sensor_data()
     .lazy()
     .add()
 ```
@@ -106,6 +111,18 @@ Rules:
 The broker publishes immediate [`TopicDemand`](../../proto/robot_bus_interfaces/msg/v1/console_status.proto) on `/robot_bus/topic_demand` when a subscriber registers or unregisters. Bridges also read `/robot_bus/topics` so a late-starting lazy route still sees existing subscribers.
 
 C++ custom mappers that only override `attach` (entities stuffed into `keep_alive`) cannot tear the ROS subscription down; `.lazy().add()` throws. Use `TypedTopicMapper`.
+
+### Topic route QoS helpers (opt-in)
+
+Defaults are unchanged: C++ / Python `QoS(10)` reliable; Rust `topics_default()`. Helpers apply to **topics only** (not service / action):
+
+| helper | ROS | bus |
+|--------|-----|-----|
+| `.qos_depth(n)` | KeepLast(n) | `QosProfile::keep_last(n)` |
+| `.best_effort()` | reliability = best effort | (bus HWM is already best-effort) |
+| `.sensor_data()` | `SensorDataQoS` (best-effort KeepLast 5) | depth 5 |
+
+Camera example: `.sensor_data().lazy()`. Image builtins do **not** default to SensorDataQoS.
 
 ### Phase-1 built-in mappers (objects, not strings)
 
@@ -253,7 +270,7 @@ Runnable: [`examples/ros2_bridge/rust/custom_add_two_ints.rs`](../../examples/ro
 
 ```rust
 use prost::Message as ProstMessage;
-use rclrs::vendor::example_interfaces::srv as ros_srv;
+use ros_env::example_interfaces::srv as ros_srv;
 use robot_bus::example_interfaces::srv::v1::{AddTwoIntsRequest, AddTwoIntsResponse};
 use robot_bus::ros2_bridge::TypedServiceMapper;
 
@@ -382,6 +399,29 @@ fn main() -> robot_bus::Result<()> {
 - Custom topic: `impl TopicMapper` + `mapper_support` (`DynamicMessage`)
 - Custom service/action: `TypedServiceMapper` / `TypedActionMapper` (see "User-defined" above)
 - Modules: `typed_service` (`wire_typed_*` / `attach_*`), `dynamic_rpc::spike_summary()`
+
+### Rust overlay (ament rust messages)
+
+crates.io `rclrs` may still be 0.7; this repo **git-pins** the `ros-env` re-export line. Typed messages come from overlay `share/<pkg>/rust/`, **not** from distro apt packages.
+
+Humble example (`colcon build` in a separate workspace, then `source install/setup.bash`):
+
+```bash
+mkdir -p ~/ros2_rust_ws/src && cd ~/ros2_rust_ws
+git clone -b humble https://github.com/ros2/common_interfaces.git src/common_interfaces
+git clone -b humble https://github.com/ros2/example_interfaces.git src/example_interfaces
+git clone -b humble https://github.com/ros2/rcl_interfaces.git src/rcl_interfaces
+git clone -b humble https://github.com/ros2/rosidl_core.git src/rosidl_core
+git clone -b humble https://github.com/ros2/rosidl_defaults.git src/rosidl_defaults
+git clone -b humble https://github.com/ros2/unique_identifier_msgs.git src/unique_identifier_msgs
+git clone https://github.com/ros2-rust/rosidl_rust.git src/rosidl_rust
+source /opt/ros/humble/setup.bash
+colcon build
+source install/setup.bash
+# cargo build --features ros2 can then see ros_env::sensor_msgs / example_interfaces
+```
+
+Without an overlay, use `just check-ros2-shim`. rclrs 0.8 talks to `ros_env::*`; crates.io `ros-env`'s shim is empty, so this repo patches it with field-complete stubs in [`third_party/ros-env-shim`](../../third_party/ros-env-shim). Our `std_srvs` vendor still uses system C typesupport and does not need rust IDL.
 
 ---
 

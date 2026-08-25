@@ -71,6 +71,9 @@ src/generated/**
 bindings/python/robot_bus/*/
 !bindings/python/robot_bus/ros2_bridge/
 !bindings/python/robot_bus/ros2_bridge/**
+# The un-ignore above would otherwise track bytecode under ros2_bridge/.
+bindings/python/robot_bus/ros2_bridge/**/__pycache__/
+bindings/python/robot_bus/ros2_bridge/**/*.py[cod]
 bindings/cpp/generated/
 bindings/typescript/generated/
 bindings/java/generated/

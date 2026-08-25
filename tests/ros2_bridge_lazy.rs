@@ -145,7 +145,7 @@ fn lazy_waits_for_bus_subscriber_then_tears_down() {
         !b.has_ros_subscription(&topic)
     });
 
-    let _ = received.lock().expect("lock");
+    drop(received.lock().expect("lock"));
     broker.stop().expect("stop");
 }
 

@@ -96,6 +96,7 @@ const en = {
 
   brokerTitle: 'BROKER',
   brokerSub: 'Endpoint health',
+  brokerWs: 'WS RPC',
   brokerMsgXSub: 'MSG XSUB',
   brokerMsgXPub: 'MSG XPUB',
   brokerSvcFE: 'SVC  FE',
@@ -299,6 +300,7 @@ const zh: Record<MessageKey, string> = {
 
   brokerTitle: '代理',
   brokerSub: '端点健康',
+  brokerWs: 'WebSocket',
   brokerMsgXSub: '发布接入',
   brokerMsgXPub: '订阅接入',
   brokerSvcFE: '服务前端',

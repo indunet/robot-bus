@@ -6,7 +6,7 @@ use crate::example_interfaces::action::v1::{
     FibonacciFeedback as BusFibonacciFeedback, FibonacciGoal as BusFibonacciGoal,
     FibonacciResult as BusFibonacciResult,
 };
-use rclrs::vendor::example_interfaces::action as ros_act;
+use crate::ros2_bridge::ros_idl::example_interfaces::action as ros_act;
 
 pub fn fibonacci_ros_goal_to_bus(goal: &ros_act::Fibonacci_Goal) -> BusFibonacciGoal {
     BusFibonacciGoal { order: goal.order }

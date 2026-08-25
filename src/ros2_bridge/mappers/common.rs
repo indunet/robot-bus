@@ -550,31 +550,35 @@ pub fn write_i64_seq(
 }
 
 pub fn read_f32_seq(view: &DynamicMessageView<'_>, field: &str) -> Result<Vec<f32>> {
-    Ok(read_f64_seq(view, field)?
-        .into_iter()
-        .map(|v| v as f32)
-        .collect())
+    match view.get(field) {
+        None => Ok(Vec::new()),
+        Some(value) => numeric_seq_to_vec!(value, f32)
+            .ok_or_else(|| err(format!("expected numeric sequence field `{field}`"))),
+    }
 }
 
 pub fn read_i32_seq(view: &DynamicMessageView<'_>, field: &str) -> Result<Vec<i32>> {
-    Ok(read_i64_seq(view, field)?
-        .into_iter()
-        .map(|v| v as i32)
-        .collect())
+    match view.get(field) {
+        None => Ok(Vec::new()),
+        Some(value) => numeric_seq_to_vec!(value, i32)
+            .ok_or_else(|| err(format!("expected numeric sequence field `{field}`"))),
+    }
 }
 
 pub fn read_u32_seq(view: &DynamicMessageView<'_>, field: &str) -> Result<Vec<u32>> {
-    Ok(read_i64_seq(view, field)?
-        .into_iter()
-        .map(|v| v as u32)
-        .collect())
+    match view.get(field) {
+        None => Ok(Vec::new()),
+        Some(value) => numeric_seq_to_vec!(value, u32)
+            .ok_or_else(|| err(format!("expected numeric sequence field `{field}`"))),
+    }
 }
 
 pub fn read_u64_seq(view: &DynamicMessageView<'_>, field: &str) -> Result<Vec<u64>> {
-    Ok(read_i64_seq(view, field)?
-        .into_iter()
-        .map(|v| v as u64)
-        .collect())
+    match view.get(field) {
+        None => Ok(Vec::new()),
+        Some(value) => numeric_seq_to_vec!(value, u64)
+            .ok_or_else(|| err(format!("expected numeric sequence field `{field}`"))),
+    }
 }
 
 pub fn write_f32_seq(
@@ -582,8 +586,11 @@ pub fn write_f32_seq(
     field: &str,
     values: &[f32],
 ) -> Result<()> {
-    let widened: Vec<f64> = values.iter().map(|v| f64::from(*v)).collect();
-    write_f64_seq(view, field, &widened)
+    match view.get_mut(field) {
+        None => Ok(()),
+        Some(slot) => numeric_seq_from_vec!(slot, values)
+            .ok_or_else(|| err(format!("expected mut numeric sequence field `{field}`"))),
+    }
 }
 
 pub fn write_i32_seq(
@@ -591,8 +598,11 @@ pub fn write_i32_seq(
     field: &str,
     values: &[i32],
 ) -> Result<()> {
-    let widened: Vec<i64> = values.iter().map(|v| i64::from(*v)).collect();
-    write_i64_seq(view, field, &widened)
+    match view.get_mut(field) {
+        None => Ok(()),
+        Some(slot) => numeric_seq_from_vec!(slot, values)
+            .ok_or_else(|| err(format!("expected mut numeric sequence field `{field}`"))),
+    }
 }
 
 pub fn write_u32_seq(
@@ -600,8 +610,11 @@ pub fn write_u32_seq(
     field: &str,
     values: &[u32],
 ) -> Result<()> {
-    let widened: Vec<i64> = values.iter().map(|v| i64::from(*v)).collect();
-    write_i64_seq(view, field, &widened)
+    match view.get_mut(field) {
+        None => Ok(()),
+        Some(slot) => numeric_seq_from_vec!(slot, values)
+            .ok_or_else(|| err(format!("expected mut numeric sequence field `{field}`"))),
+    }
 }
 
 pub fn write_u64_seq(
@@ -609,8 +622,11 @@ pub fn write_u64_seq(
     field: &str,
     values: &[u64],
 ) -> Result<()> {
-    let widened: Vec<i64> = values.iter().map(|v| *v as i64).collect();
-    write_i64_seq(view, field, &widened)
+    match view.get_mut(field) {
+        None => Ok(()),
+        Some(slot) => numeric_seq_from_vec!(slot, values)
+            .ok_or_else(|| err(format!("expected mut numeric sequence field `{field}`"))),
+    }
 }
 
 // --- byte sequences (protobuf `bytes` ↔ ROS `uint8[]` / `octet[]`) ---

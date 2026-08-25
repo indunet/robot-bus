@@ -37,10 +37,12 @@ source /opt/ros/humble/setup.bash   # 或 jazzy
 cargo run --bin robot_bus_broker    # 或已安装的 robot-bus-broker
 ```
 
+**Rust `feature = "ros2"`** 还要一层 **ros2_rust + common_interfaces** overlay：`AMENT_PREFIX_PATH` 里必须有 `rosidl_generator_rs` 生成的 `share/<pkg>/rust/`（至少 `std_msgs`、`sensor_msgs`、`example_interfaces`）。只 `source /opt/ros/humble` **编不出** `sensor_msgs::msg::Image` / Fibonacci typed 路径。`apt install ros-humble-sensor-msgs` 只提供 C typesupport，不含 rust IDL。overlay 搭法见下文「Rust overlay」。
+
 | 语言 | 依赖 |
 |------|------|
 | 通用 | 可达的 broker（tcp / ipc / discover） |
-| Rust | `robot-bus = { features = ["ros2"] }` |
+| Rust | `robot-bus = { features = ["ros2"] }` + 上述 rust 消息 overlay |
 | Python | `robot_bus` + 系统 **`rclpy`**（`just python-dev` / `python-dev-ros2`） |
 | C++ | `robot-bus-ros2-humble` 或 `…-jazzy`，或 `just cpp-dev-ros2`（`-DROBOT_BUS_ROS2=ON`，链 **rclcpp**） |
 
@@ -59,7 +61,7 @@ cargo run --bin robot_bus_broker    # 或已安装的 robot-bus-broker
 ```text
 Ros2Bridge.new / New / new(name)
   .bus_tcp(...) | .bus_ipc() | .bus_discover(...)
-  .route(ros, bus).mapper(...).direction(...).lazy().add()
+  .route(ros, bus).mapper(...).direction(...).qos_depth(n)|.best_effort()|.sensor_data().lazy().add()
   .service(ros, bus).mapper(...).timeout(...).direction(...).add()
   .action(ros, bus).mapper(...).timeout(...).direction(...).add()
   .build()
@@ -77,6 +79,7 @@ Ros2Bridge.new / New / new(name)
 ```rust
 .route("/camera/image", "/camera/image")
     .mapper(SensorMsgsImageMapper)
+    .sensor_data()
     .lazy()
     .add()?
 ```
@@ -84,6 +87,7 @@ Ros2Bridge.new / New / new(name)
 ```python
 .route("/camera/image", "/camera/image")
     .mapper(SensorMsgsImageMapper())
+    .sensor_data()
     .lazy()
     .add()
 ```
@@ -91,6 +95,7 @@ Ros2Bridge.new / New / new(name)
 ```cpp
 .route("/camera/image", "/camera/image")
     .mapper(robot_bus::SensorMsgsImageMapper{})
+    .sensor_data()
     .lazy()
     .add()
 ```
@@ -106,6 +111,18 @@ Ros2Bridge.new / New / new(name)
 broker 在 subscriber register/unregister 时立刻往 `/robot_bus/topic_demand` 发 [`TopicDemand`](../../proto/robot_bus_interfaces/msg/v1/console_status.proto)。桥启动时再读 `/robot_bus/topics`，避免订阅者先于桥启动时 lazy 路由一直关着。
 
 C++ 只 override `attach`、把实体塞进 `keep_alive` 的自定义 mapper **不支持** `.lazy()`（`.add()` 报错）。请用 `TypedTopicMapper`。
+
+### Topic 路由 QoS helper（opt-in）
+
+默认不变：C++ / Python `QoS(10)` reliable；Rust `topics_default()`。helper **只作用于 topic**（service / action 不动）：
+
+| helper | ROS | bus |
+|--------|-----|-----|
+| `.qos_depth(n)` | KeepLast(n) | `QosProfile::keep_last(n)` |
+| `.best_effort()` | reliability = best effort | （bus 仍是 best-effort HWM） |
+| `.sensor_data()` | `SensorDataQoS`（best-effort KeepLast 5） | depth 5 |
+
+相机示例用 `.sensor_data().lazy()`。不要把 Image builtin 默认改成 SensorDataQoS。
 
 ### 一期内置 mapper（对象，不是字符串）
 
@@ -250,7 +267,7 @@ Action：同一套流程——proto 里写 Goal / Feedback / Result 三个 messa
 
 ```rust
 use prost::Message as ProstMessage;
-use rclrs::vendor::example_interfaces::srv as ros_srv;
+use ros_env::example_interfaces::srv as ros_srv;
 use robot_bus::example_interfaces::srv::v1::{AddTwoIntsRequest, AddTwoIntsResponse};
 use robot_bus::ros2_bridge::TypedServiceMapper;
 
@@ -379,6 +396,29 @@ fn main() -> robot_bus::Result<()> {
 - 自定义 topic：`impl TopicMapper` + `mapper_support`（`DynamicMessage`）
 - 自定义 service/action：`TypedServiceMapper` / `TypedActionMapper`（见上文「用户自定义」）
 - 模块：`typed_service`（`wire_typed_*` / `attach_*`）、`dynamic_rpc::spike_summary()`
+
+### Rust overlay（ament rust 消息）
+
+crates.io 上 `rclrs` 仍可能是 0.7；本仓库 **git pin** 到带 `ros-env` 再导出的主线。typed 消息来自 overlay 的 `share/<pkg>/rust/`，**不是** distro apt 包自带的。
+
+Humble 示例（在独立 workspace 里 `colcon build` 后 `source install/setup.bash`）：
+
+```bash
+mkdir -p ~/ros2_rust_ws/src && cd ~/ros2_rust_ws
+git clone -b humble https://github.com/ros2/common_interfaces.git src/common_interfaces
+git clone -b humble https://github.com/ros2/example_interfaces.git src/example_interfaces
+git clone -b humble https://github.com/ros2/rcl_interfaces.git src/rcl_interfaces
+git clone -b humble https://github.com/ros2/rosidl_core.git src/rosidl_core
+git clone -b humble https://github.com/ros2/rosidl_defaults.git src/rosidl_defaults
+git clone -b humble https://github.com/ros2/unique_identifier_msgs.git src/unique_identifier_msgs
+git clone https://github.com/ros2-rust/rosidl_rust.git src/rosidl_rust
+source /opt/ros/humble/setup.bash
+colcon build
+source install/setup.bash
+# 之后 cargo build --features ros2 才能看到 ros_env::sensor_msgs / example_interfaces
+```
+
+无 overlay 时可用 `just check-ros2-shim`。`rclrs` 0.8 走 `ros_env::*`，crates.io 的 `ros-env` shim 是空的，本仓库用 [`third_party/ros-env-shim`](../../third_party/ros-env-shim) 通过 `[patch.crates-io]` 提供带字段的 stub。我们自己的 `std_srvs` vendor 仍走系统 C typesupport，不依赖 rust IDL。
 
 ---
 

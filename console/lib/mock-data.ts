@@ -110,6 +110,32 @@ export const EMPTY_BROKER: BrokerInfo = {
   totalErrors: 0,
 }
 
+/** Display a connectable WebSocket RPC URL (`ws://host:port/ws`). */
+export function formatWsRpcAddr(addr: string): string {
+  const raw = addr.trim()
+  if (!raw || raw === '—') return '—'
+  if (raw.startsWith('ws://') || raw.startsWith('wss://')) {
+    const trimmed = raw.replace(/\/$/, '')
+    return trimmed.endsWith('/ws') ? trimmed : `${trimmed}/ws`
+  }
+  if (raw.startsWith('http://') || raw.startsWith('https://')) {
+    const trimmed = raw.replace(/\/$/, '')
+    const rest = trimmed.startsWith('https://')
+      ? trimmed.slice('https://'.length)
+      : trimmed.slice('http://'.length)
+    const scheme = trimmed.startsWith('https://') ? 'wss' : 'ws'
+    const host = rest.endsWith('/ws') ? rest.slice(0, -3) : rest
+    return `${scheme}://${host}/ws`
+  }
+  let hostport = raw.replace(/\/ws\/?$/, '')
+  if (hostport.startsWith('[::]:') || hostport.startsWith('[::0]:')) {
+    hostport = `[::1]${hostport.slice(hostport.indexOf(']:') + 1)}`
+  } else if (hostport.startsWith('0.0.0.0:')) {
+    hostport = `127.0.0.1${hostport.slice('0.0.0.0'.length)}`
+  }
+  return `ws://${hostport}/ws`
+}
+
 export function u64(value: string | number | bigint | undefined | null): number {
   if (value == null || value === '') return 0
   if (typeof value === 'number') return value

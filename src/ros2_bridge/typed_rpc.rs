@@ -6,9 +6,13 @@
 
 use crate::errors::{BusError, Result};
 use crate::ros2_bridge::mapper::{ActionWireContext, ServiceWireContext};
-use crate::ros2_bridge::mappers::action_bridges::FibonacciActionMapper;
 use crate::ros2_bridge::mappers::service_bridges::{SetBoolServiceMapper, TriggerServiceMapper};
-use crate::ros2_bridge::typed_wire::{wire_typed_action, wire_typed_service};
+use crate::ros2_bridge::typed_wire::wire_typed_service;
+
+#[cfg(not(feature = "ros2-shim"))]
+use crate::ros2_bridge::mappers::action_bridges::FibonacciActionMapper;
+#[cfg(not(feature = "ros2-shim"))]
+use crate::ros2_bridge::typed_wire::wire_typed_action;
 
 /// Dispatch builtin service backends by ROS type string.
 pub fn attach_builtin_service(type_name: &str, ctx: ServiceWireContext<'_>) -> Result<()> {
@@ -47,5 +51,15 @@ pub fn attach_set_bool(ctx: ServiceWireContext<'_>) -> Result<()> {
 
 /// Wire `example_interfaces/action/Fibonacci`.
 pub fn attach_fibonacci(ctx: ActionWireContext<'_>) -> Result<()> {
+    #[cfg(feature = "ros2-shim")]
+    {
+        let _ = ctx;
+        return Err(BusError::Protocol(
+            "example_interfaces/action/Fibonacci requires ament rust overlay \
+             (unavailable with feature ros2-shim)"
+                .into(),
+        ));
+    }
+    #[cfg(not(feature = "ros2-shim"))]
     wire_typed_action(&FibonacciActionMapper, ctx)
 }

@@ -195,7 +195,7 @@ fn run() -> Result<()> {
             println!("version: {}", s.version);
             println!("uptime_secs: {}", s.uptime);
             println!("pid: {}", s.pid);
-            println!("grpc: {}", s.grpc_addr);
+            println!("ws: {}", s.grpc_addr);
             println!("console: {}", s.web_addr);
             println!("msg_xsub: {}", s.msg_bus_x_sub);
             println!("msg_xpub: {}", s.msg_bus_x_pub);

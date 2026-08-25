@@ -11,11 +11,11 @@ use std::collections::HashMap;
 use std::sync::{Arc, LazyLock};
 use std::time::Duration;
 
-use rclrs::{DynamicMessage, MessageTypeName};
+use rclrs::{DynamicMessage, IntoPrimitiveOptions, MessageTypeName};
 use rosidl_runtime_rs::{Action as ActionIdl, Service as ServiceIdl};
 
 use crate::errors::{BusError, Result as BusResult};
-use crate::runtime::Node;
+use crate::runtime::{Node, TopicPublisherRaw};
 
 use super::mappers::BUILTIN_MAPPER_LIST;
 use super::typed_rpc;
@@ -30,6 +30,40 @@ pub enum Direction {
     BusToRos2,
 }
 
+/// Opt-in ROS + bus topic QoS for a bridge route. Default leaves both stacks unchanged.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct TopicRouteQos {
+    /// ROS KeepLast depth and bus HWM when set.
+    pub depth: Option<i32>,
+    /// ROS reliability best-effort when true.
+    pub best_effort: bool,
+    /// Use ROS `SensorDataQoS` (best-effort KeepLast 5) plus bus depth 5.
+    pub sensor_data: bool,
+}
+
+impl TopicRouteQos {
+    /// rclcpp `SensorDataQoS` history: best-effort KeepLast(5).
+    pub const SENSOR_DATA: Self = Self {
+        depth: Some(5),
+        best_effort: true,
+        sensor_data: true,
+    };
+}
+
+pub(crate) fn ros_topic_options(topic: &str, qos: TopicRouteQos) -> rclrs::PrimitiveOptions<'_> {
+    if qos.sensor_data {
+        return topic.sensor_data_qos();
+    }
+    let mut opts = topic.into_primitive_options();
+    if let Some(depth) = qos.depth {
+        opts = opts.keep_last(depth.max(0) as u32);
+    }
+    if qos.best_effort {
+        opts = opts.best_effort();
+    }
+    opts
+}
+
 /// Bidirectional mapper between ROS [`DynamicMessage`] and bus protobuf bytes.
 pub trait TopicMapper: Send + Sync {
     /// Full ROS type name, e.g. `sensor_msgs/msg/Image` (for DynamicMessage create).
@@ -42,6 +76,18 @@ pub trait TopicMapper: Send + Sync {
 
     fn ros_to_bus(&self, msg: &DynamicMessage) -> Result<Vec<u8>>;
     fn bus_to_ros(&self, payload: &[u8]) -> Result<DynamicMessage>;
+
+    /// Optional typed ROS→bus subscription. `Ok(None)` uses the DynamicMessage path.
+    fn create_ros2_to_bus_subscription(
+        &self,
+        ros_node: &rclrs::Node,
+        bus_pub: TopicPublisherRaw,
+        ros_topic: &str,
+        qos: TopicRouteQos,
+    ) -> Result<Option<Box<dyn Any + Send + Sync>>> {
+        let _ = (ros_node, bus_pub, ros_topic, qos);
+        Ok(None)
+    }
 }
 
 /// Context passed to [`ServiceMapper::attach`].

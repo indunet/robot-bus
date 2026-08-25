@@ -176,6 +176,7 @@ test-python: proto
 	PYTHONPATH=bindings/python python3 bindings/python/tests/test_msgs_roundtrip.py
 	PYTHONPATH=bindings/python python3 bindings/python/tests/test_typed_api.py
 	PYTHONPATH=bindings/python python3 bindings/python/tests/test_ros2_bridge_builder.py
+	PYTHONPATH=bindings/python python3 bindings/python/tests/test_ros2_bridge_image_mapper.py
 
 # Native Python integration (requires `just python-dev`; fails if extension missing)
 test-python-native:
@@ -228,6 +229,10 @@ perf: gen-rust
 # ROS 2 comparison benches (Docker container `ros2`); writes docs/{zh,en}/ros2-perf-report.md
 perf-ros2:
 	./benches/ros2_perf/run.sh
+
+# ROS ↔ bus bridge benches (Docker container `ros2` + rust IDL overlay); writes docs/{zh,en}/ros2-bridge-perf-report.md
+perf-ros2-bridge:
+	./benches/ros2_bridge_perf/run.sh
 
 # Typecheck ros2 bridge without a full ROS install (rclrs use_ros_shim)
 check-ros2-shim:

@@ -67,10 +67,43 @@ int test_lazy_builder() {
   return 0;
 }
 
+int test_qos_builder() {
+  try {
+    auto b = robot_bus::Ros2Bridge::New("t")
+                 .route("/a", "/a")
+                 .mapper(robot_bus::StdMsgsStringMapper{})
+                 .qos_depth(20)
+                 .best_effort()
+                 .add();
+    (void)b;
+  } catch (const robot_bus::Error &e) {
+    std::fprintf(stderr, "qos_depth path threw: %s\n", e.what());
+    return 1;
+  }
+
+  try {
+    auto b = robot_bus::Ros2Bridge::New("t")
+                 .route("/cam", "/cam")
+                 .mapper(robot_bus::SensorMsgsImageMapper{})
+                 .sensor_data()
+                 .add();
+    (void)b;
+  } catch (const robot_bus::Error &e) {
+    std::fprintf(stderr, "sensor_data path threw: %s\n", e.what());
+    return 1;
+  }
+
+  std::printf("qos builder checks ok\n");
+  return 0;
+}
+
 }  // namespace
 
 int main() {
   if (int rc = test_lazy_builder()) {
+    return rc;
+  }
+  if (int rc = test_qos_builder()) {
     return rc;
   }
 

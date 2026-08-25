@@ -48,6 +48,25 @@ fn connect_url_for_listen(listen: SocketAddr) -> String {
     format!("http://{host}:{}", listen.port())
 }
 
+/// Connectable WebSocket RPC URL (`ws://127.0.0.1:port/ws` when the broker binds `0.0.0.0`).
+#[cfg(feature = "ws")]
+fn ws_rpc_url_for_listen(listen: SocketAddr) -> String {
+    let http = connect_url_for_listen(listen);
+    let ws = if let Some(rest) = http.strip_prefix("https://") {
+        format!("wss://{rest}")
+    } else if let Some(rest) = http.strip_prefix("http://") {
+        format!("ws://{rest}")
+    } else {
+        http
+    };
+    let ws = ws.trim_end_matches('/');
+    if ws.ends_with("/ws") {
+        ws.to_string()
+    } else {
+        format!("{ws}/ws")
+    }
+}
+
 fn join_broker_thread(name: &str, handle: JoinHandle<Result<()>>) -> Result<()> {
     handle
         .join()
@@ -634,7 +653,7 @@ impl RobotBusBroker {
             let grpc_addr = {
                 #[cfg(feature = "ws")]
                 {
-                    config.ws.listen.to_string()
+                    ws_rpc_url_for_listen(config.ws.listen)
                 }
                 #[cfg(not(feature = "ws"))]
                 {
@@ -1014,5 +1033,14 @@ mod tests {
         assert!(text.contains("tcp://127.0.0.1:1"));
         assert!(!text.contains("ipc://"));
         assert!(!text.contains("inproc://"));
+    }
+
+    #[cfg(feature = "ws")]
+    #[test]
+    fn ws_rpc_url_rewrites_unspecified_bind() {
+        let v4: SocketAddr = "0.0.0.0:15570".parse().unwrap();
+        assert_eq!(ws_rpc_url_for_listen(v4), "ws://127.0.0.1:15570/ws");
+        let v6: SocketAddr = "[::]:15570".parse().unwrap();
+        assert_eq!(ws_rpc_url_for_listen(v6), "ws://[::1]:15570/ws");
     }
 }

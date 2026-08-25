@@ -173,6 +173,7 @@ fn await_with_timeout<F: Future + Unpin>(
     }
 }
 
+#[allow(dead_code)]
 fn call_ros_action<A: ActionIdl>(
     client: &rclrs::ActionClient<A>,
     ros_goal: A::Goal,
@@ -386,8 +387,3 @@ where
 /// Keep `ros_entities` type in scope for docs / unused import silence.
 #[allow(dead_code)]
 fn _entity_slot(_: &mut Vec<Box<dyn Any + Send + Sync>>) {}
-
-#[allow(dead_code)]
-fn _unused_call_ros_action() {
-    let _ = call_ros_action::<rclrs::vendor::example_interfaces::action::Fibonacci>;
-}

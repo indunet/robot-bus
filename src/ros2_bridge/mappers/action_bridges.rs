@@ -1,20 +1,26 @@
 //! Builtin [`TypedActionMapper`] codec (Fibonacci).
 
-use prost::Message as ProstMessage;
-use rclrs::vendor::example_interfaces::action as ros_act;
+use crate::ros2_bridge::ros_idl::example_interfaces::action as ros_act;
 
+#[cfg(not(feature = "ros2-shim"))]
+use prost::Message as ProstMessage;
+#[cfg(not(feature = "ros2-shim"))]
 use crate::example_interfaces::action::v1::{
     FibonacciFeedback as BusFibonacciFeedback, FibonacciGoal as BusFibonacciGoal,
     FibonacciResult as BusFibonacciResult,
 };
+#[cfg(not(feature = "ros2-shim"))]
 use crate::errors::{BusError, Result};
+#[cfg(not(feature = "ros2-shim"))]
 use crate::ros2_bridge::mapper::TypedActionMapper;
+#[cfg(not(feature = "ros2-shim"))]
 use crate::ros2_bridge::mappers::action;
 
 /// Builtin codec for `example_interfaces/action/Fibonacci`.
 #[derive(Clone, Copy, Debug, Default)]
 pub struct FibonacciActionMapper;
 
+#[cfg(not(feature = "ros2-shim"))]
 impl TypedActionMapper for FibonacciActionMapper {
     type Ros = ros_act::Fibonacci;
 
@@ -52,3 +58,15 @@ impl TypedActionMapper for FibonacciActionMapper {
         Ok(action::fibonacci_bus_result_to_ros(&bus))
     }
 }
+
+#[cfg(feature = "ros2-shim")]
+impl crate::ros2_bridge::mapper::ActionMapper for FibonacciActionMapper {
+    fn type_name(&self) -> &str {
+        "example_interfaces/action/Fibonacci"
+    }
+}
+
+#[cfg(feature = "ros2-shim")]
+const _: fn() = || {
+    let _ = ros_act::Fibonacci_Goal { order: 0 };
+};

@@ -23,10 +23,11 @@ class TypedTopicMapper : public TopicMapper {
 
   rclcpp::SubscriptionBase::SharedPtr create_ros2_to_bus_subscription(
       rclcpp::Node::SharedPtr ros_node, const std::string &ros_topic,
-      std::shared_ptr<TopicPublisher> bus_pub, std::shared_ptr<std::mutex> mtx) override {
+      std::shared_ptr<TopicPublisher> bus_pub, std::shared_ptr<std::mutex> mtx,
+      const rclcpp::QoS &qos) override {
     auto *self = static_cast<Derived *>(this);
     return ros_node->template create_subscription<RosMsg>(
-        ros_topic, rclcpp::QoS(10),
+        ros_topic, qos,
         [self, bus_pub, mtx](typename RosMsg::ConstSharedPtr msg) {
           try {
             auto bytes = self->ros_to_bus(*msg);
@@ -40,15 +41,16 @@ class TypedTopicMapper : public TopicMapper {
   void attach(TopicWireContext &ctx) override {
     if (ctx.direction == Direction::Ros2ToBus) {
       auto pub = std::make_shared<TopicPublisher>(
-          ctx.bus_node.create_publisher(ctx.bus_topic.c_str()));
+          ctx.bus_qos_depth > 0 ? ctx.bus_node.create_publisher(ctx.bus_topic.c_str(), ctx.bus_qos_depth)
+                                : ctx.bus_node.create_publisher(ctx.bus_topic.c_str()));
       auto mtx = std::make_shared<std::mutex>();
-      auto sub = create_ros2_to_bus_subscription(ctx.ros_node, ctx.ros_topic, pub, mtx);
+      auto sub = create_ros2_to_bus_subscription(ctx.ros_node, ctx.ros_topic, pub, mtx, ctx.qos);
       ctx.retain(std::move(pub));
       ctx.retain(std::move(mtx));
       ctx.retain(std::move(sub));
     } else {
       auto *self = static_cast<Derived *>(this);
-      auto ros_pub = ctx.ros_node->template create_publisher<RosMsg>(ctx.ros_topic, 10);
+      auto ros_pub = ctx.ros_node->template create_publisher<RosMsg>(ctx.ros_topic, ctx.qos);
       auto weak_pub = std::weak_ptr<rclcpp::Publisher<RosMsg>>(ros_pub);
       ctx.retain(std::make_shared<SubscriptionHandle>(ctx.bus_node.create_subscription(
           ctx.bus_topic.c_str(),
@@ -61,7 +63,8 @@ class TypedTopicMapper : public TopicMapper {
               pub->publish(self->bus_to_ros(payload));
             } catch (...) {
             }
-          })));
+          },
+          nullptr, ctx.bus_qos_depth)));
       ctx.retain(std::move(ros_pub));
     }
   }

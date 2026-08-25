@@ -5,15 +5,14 @@
 
 use std::any::Any;
 use std::collections::{HashMap, HashSet};
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::mpsc::{self, Receiver, Sender, SyncSender};
+use std::sync::mpsc::{self, Receiver, Sender};
 use std::sync::Arc;
 use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant};
 
 use prost::Message;
 use rclrs::{
-    Context as RosContext, CreateBasicExecutor, DynamicPublisher, DynamicSubscription, SpinOptions,
+    Context as RosContext, CreateBasicExecutor, DynamicPublisher, SpinOptions,
 };
 
 use crate::console_topics;
@@ -22,11 +21,12 @@ use crate::errors::{BusError, Result};
 use crate::lazy_subscribe::{should_enable_ros_subscription, CONSOLE_DETECT_TIMEOUT};
 use crate::robot_bus_interfaces::msg::v1::{TopicDemand, TopicStatsList};
 use crate::runtime::{
-    MessageCallback, Node, NodeOptions, SubscriptionHandle, TopicPublisherRaw,
+    MessageCallback, Node, NodeOptions, QosProfile, SubscriptionHandle, TopicPublisherRaw,
 };
 
 use super::mapper::{
     ActionMapper, ActionWireContext, Direction, ServiceMapper, ServiceWireContext, TopicMapper,
+    ros_topic_options,
 };
 
 /// Default timeout for bridged service calls (ROS↔bus).
@@ -35,18 +35,22 @@ pub const SERVICE_CALL_TIMEOUT: Duration = Duration::from_secs(5);
 /// Default timeout for bridged action goals (ROS↔bus).
 pub const ACTION_CALL_TIMEOUT: Duration = Duration::from_secs(30);
 
+pub use super::mapper::TopicRouteQos;
+
 pub(crate) struct RouteSpec {
     ros_topic: String,
     bus_topic: String,
     mapper: Arc<dyn TopicMapper>,
     direction: Direction,
     lazy: bool,
+    qos: TopicRouteQos,
 }
 
 struct LazyRos2ToBus {
     ros_topic: String,
     mapper: Arc<dyn TopicMapper>,
-    sub: Option<DynamicSubscription>,
+    qos: TopicRouteQos,
+    sub: Option<Box<dyn Any + Send + Sync>>,
 }
 
 enum DemandEvent {
@@ -83,9 +87,6 @@ pub struct Ros2BridgeBuilder {
 pub struct Ros2Bridge {
     bus_node: Node,
     ros_node: rclrs::Node,
-    ros_to_bus_tx: SyncSender<(String, Vec<u8>)>,
-    /// ROS→bus payloads (ZMQ publisher is not `Send`; drain on the spin thread).
-    ros_to_bus_rx: Receiver<(String, Vec<u8>)>,
     bus_pubs: HashMap<String, TopicPublisherRaw>,
     lazy_routes: HashMap<String, LazyRos2ToBus>,
     demand_rx: Receiver<DemandEvent>,
@@ -95,17 +96,17 @@ pub struct Ros2Bridge {
     first_spin_at: Option<Instant>,
     _demand_subs: Vec<SubscriptionHandle>,
     eager_bus_topics: HashSet<String>,
-    _ros_subs: Vec<DynamicSubscription>,
+    _ros_subs: Vec<Box<dyn Any + Send + Sync>>,
     _ros_pubs: Vec<DynamicPublisher>,
     /// Keeps typed ROS services / clients / action entities alive for the bridge lifetime.
     _ros_entities: Vec<Box<dyn Any + Send + Sync>>,
-    ros_halt: Arc<AtomicBool>,
+    ros_commands: Arc<rclrs::ExecutorCommands>,
     _ros_spin: Option<JoinHandle<()>>,
 }
 
 impl Drop for Ros2Bridge {
     fn drop(&mut self) {
-        self.ros_halt.store(true, Ordering::SeqCst);
+        self.ros_commands.halt_spinning();
         if let Some(h) = self._ros_spin.take() {
             let _ = h.join();
         }
@@ -120,6 +121,7 @@ pub struct RouteBuilder {
     mapper: Option<Arc<dyn TopicMapper>>,
     direction: Direction,
     lazy: bool,
+    qos: TopicRouteQos,
 }
 
 /// Intermediate service route configuration before [`ServiceRouteBuilder::add`].
@@ -153,30 +155,35 @@ impl Ros2Bridge {
         }
     }
 
-    /// True when this bridge currently holds a ROS subscription for `bus_topic`.
+    /// Whether this bridge currently holds a ROS subscription for `bus_topic`.
     ///
-    /// Eager ROS2→bus routes are true after [`Ros2BridgeBuilder::build`].
-    /// Lazy routes follow live bus subscriber demand (or the no-console fallback).
+    /// Eager ROS2→bus routes are `true` immediately after [`Ros2BridgeBuilder::build`].
+    /// Lazy routes follow bus subscriber demand (or the no-console fallback).
     pub fn has_ros_subscription(&self, bus_topic: &str) -> bool {
         if let Some(route) = self.lazy_routes.get(bus_topic) {
-            return route.sub.is_some();
+            route.sub.is_some()
+        } else {
+            self.eager_bus_topics.contains(bus_topic)
         }
-        self.eager_ros_topics.contains(bus_topic)
     }
 
     pub fn spin(&mut self) -> Result<()> {
         loop {
-            self.spin_once(Duration::from_millis(10))?;
+            self.spin_once_inner(None)?;
         }
     }
 
     pub fn spin_once(&mut self, timeout: Duration) -> Result<()> {
+        self.spin_once_inner(Some(timeout))
+    }
+
+    fn spin_once_inner(&mut self, timeout: Option<Duration>) -> Result<()> {
         // ROS executor runs on a background thread so Bus→ROS service/action handlers
         // can wait on client Promises without nested-spin deadlocks.
         if self.first_spin_at.is_none() {
             self.first_spin_at = Some(Instant::now());
         }
-        let spin_result = match self.bus_node.spin_once(Some(timeout)) {
+        let spin_result = match self.bus_node.spin_once(timeout) {
             Err(BusError::Protocol(msg)) if msg.contains("nothing registered") => Ok(()),
             other => other.map(|_| ()),
         };
@@ -189,26 +196,7 @@ impl Ros2Bridge {
                 }
             }
         }
-        while let Ok((topic, payload)) = self.ros_to_bus_rx.try_recv() {
-            if let Some(pub_) = self.bus_pubs.get(&topic) {
-                if let Err(e) = pub_.publish(&payload) {
-                    log::warn!("ros→bus publish {topic}: {e}");
-                }
-            }
-        }
         spin_result
-    }
-
-    /// Whether this bridge currently holds a ROS subscription for `bus_topic`.
-    ///
-    /// Eager ROS2→bus routes are `true` immediately after [`Ros2BridgeBuilder::build`].
-    /// Lazy routes follow bus subscriber demand (or the no-console fallback).
-    pub fn has_ros_subscription(&self, bus_topic: &str) -> bool {
-        if let Some(route) = self.lazy_routes.get(bus_topic) {
-            route.sub.is_some()
-        } else {
-            self.eager_bus_topics.contains(bus_topic)
-        }
     }
 
     fn drain_demand(&mut self) {
@@ -239,7 +227,6 @@ impl Ros2Bridge {
         let console_live = self.console_live;
         let counts = &self.subscriber_counts;
         let ros_node = self.ros_node.clone();
-        let tx = self.ros_to_bus_tx.clone();
         let mut to_enable: Vec<String> = Vec::new();
         let mut to_disable: Vec<String> = Vec::new();
         for (bus_topic, route) in &self.lazy_routes {
@@ -257,16 +244,14 @@ impl Ros2Bridge {
             }
         }
         for topic in to_enable {
+            let Some(bus_pub) = self.bus_pubs.get(&topic).cloned() else {
+                continue;
+            };
             let Some(route) = self.lazy_routes.get_mut(&topic) else {
                 continue;
             };
-            match create_ros2_to_bus_sub(
-                &ros_node,
-                &tx,
-                &route.mapper,
-                &route.ros_topic,
-                &topic,
-            ) {
+            match create_ros2_to_bus_sub(&ros_node, bus_pub, &route.mapper, &route.ros_topic, route.qos)
+            {
                 Ok(sub) => route.sub = Some(sub),
                 Err(err) => log::warn!("lazy ros2 subscribe {topic}: {err}"),
             }
@@ -329,6 +314,7 @@ impl Ros2BridgeBuilder {
             mapper: None,
             direction: Direction::Ros2ToBus,
             lazy: false,
+            qos: TopicRouteQos::default(),
         }
     }
 
@@ -369,6 +355,7 @@ impl Ros2BridgeBuilder {
         mapper: Arc<dyn TopicMapper>,
         direction: Direction,
         lazy: bool,
+        qos: TopicRouteQos,
     ) -> Result<Self> {
         if lazy && direction != Direction::Ros2ToBus {
             return Err(BusError::Protocol(
@@ -381,6 +368,7 @@ impl Ros2BridgeBuilder {
             mapper,
             direction,
             lazy,
+            qos,
         });
         Ok(self)
     }
@@ -435,6 +423,7 @@ impl Ros2BridgeBuilder {
             mapper.into_topic_mapper(),
             direction,
             false,
+            TopicRouteQos::default(),
         )
     }
 
@@ -492,7 +481,6 @@ impl Ros2BridgeBuilder {
             .map_err(|e| BusError::Protocol(format!("rclrs create_node: {e}")))?;
 
         let mut bus_node = Node::with_options(format!("{}_bus", self.name), self.bus_options);
-        let (ros_to_bus_tx, ros_to_bus_rx) = mpsc::sync_channel::<(String, Vec<u8>)>(1024);
 
         let mut ros_subs = Vec::new();
         let mut ros_pubs = Vec::new();
@@ -505,7 +493,6 @@ impl Ros2BridgeBuilder {
             wire_route(
                 &ros_node,
                 &mut bus_node,
-                &ros_to_bus_tx,
                 &mut bus_pubs,
                 &mut lazy_routes,
                 &mut eager_bus_topics,
@@ -529,23 +516,17 @@ impl Ros2BridgeBuilder {
             demand_subs.extend(subscribe_demand(&mut bus_node, demand_tx)?);
         }
 
-        let ros_halt = Arc::new(AtomicBool::new(false));
-        let halt_flag = Arc::clone(&ros_halt);
+        let ros_commands = Arc::clone(ros_executor.commands());
         let ros_spin = thread::Builder::new()
             .name("ros2_bridge_spin".into())
             .spawn(move || {
-                while !halt_flag.load(Ordering::Relaxed) {
-                    let _ = ros_executor
-                        .spin(SpinOptions::spin_once().timeout(Duration::from_millis(10)));
-                }
+                let _ = ros_executor.spin(SpinOptions::default());
             })
             .map_err(|e| BusError::Protocol(format!("spawn ros2 spin thread: {e}")))?;
 
         Ok(Ros2Bridge {
             bus_node,
             ros_node,
-            ros_to_bus_tx,
-            ros_to_bus_rx,
             bus_pubs,
             lazy_routes,
             demand_rx,
@@ -557,7 +538,7 @@ impl Ros2BridgeBuilder {
             _ros_subs: ros_subs,
             _ros_pubs: ros_pubs,
             _ros_entities: ros_entities,
-            ros_halt,
+            ros_commands,
             _ros_spin: Some(ros_spin),
         })
     }
@@ -636,6 +617,24 @@ impl RouteBuilder {
         self
     }
 
+    /// ROS KeepLast(`n`) plus bus topic HWM `n`. Does not change reliability.
+    pub fn qos_depth(mut self, n: i32) -> Self {
+        self.qos.depth = Some(n);
+        self
+    }
+
+    /// ROS reliability best-effort (sensor-style). Bus reliability is unchanged.
+    pub fn best_effort(mut self) -> Self {
+        self.qos.best_effort = true;
+        self
+    }
+
+    /// Best-effort KeepLast(5) on ROS, bus depth 5. Opt-in; does not change route defaults.
+    pub fn sensor_data(mut self) -> Self {
+        self.qos = TopicRouteQos::SENSOR_DATA;
+        self
+    }
+
     pub fn add(self) -> Result<Ros2BridgeBuilder> {
         let mapper = self.mapper.ok_or_else(|| {
             BusError::Protocol(
@@ -650,6 +649,7 @@ impl RouteBuilder {
             mapper,
             self.direction,
             self.lazy,
+            self.qos,
         )
     }
 }
@@ -726,19 +726,39 @@ impl ActionRouteBuilder {
     }
 }
 
+fn create_ros2_to_bus_publisher(
+    bus_node: &mut Node,
+    bus_topic: &str,
+    qos: TopicRouteQos,
+) -> Result<TopicPublisherRaw> {
+    let pub_ = if let Some(depth) = qos.depth {
+        bus_node.create_publisher_raw_with_qos(bus_topic, QosProfile::keep_last(depth))?
+    } else {
+        bus_node.create_publisher_raw(bus_topic)?
+    };
+    if let Err(e) = pub_.set_send_timeout_ms(0) {
+        log::warn!("ros→bus {bus_topic} send timeout: {e}");
+    }
+    Ok(pub_)
+}
+
 fn create_ros2_to_bus_sub(
     ros_node: &rclrs::Node,
-    ros_to_bus_tx: &SyncSender<(String, Vec<u8>)>,
+    bus_pub: TopicPublisherRaw,
     mapper: &Arc<dyn TopicMapper>,
     ros_topic: &str,
-    bus_topic: &str,
-) -> Result<DynamicSubscription> {
+    qos: TopicRouteQos,
+) -> Result<Box<dyn Any + Send + Sync>> {
+    if let Some(sub) =
+        mapper.create_ros2_to_bus_subscription(ros_node, bus_pub.clone(), ros_topic, qos)?
+    {
+        return Ok(sub);
+    }
     let type_name = mapper.ros_type();
-    let tx = ros_to_bus_tx.clone();
-    let bus_topic_cb = bus_topic.to_string();
     let mapper = Arc::clone(mapper);
-    ros_node
-        .create_dynamic_subscription(type_name, ros_topic, move |dyn_msg, _info| {
+    let opts = ros_topic_options(ros_topic, qos);
+    let sub = ros_node
+        .create_dynamic_subscription(type_name, opts, move |dyn_msg, _info| {
             let payload = match mapper.ros_to_bus(&dyn_msg) {
                 Ok(p) => p,
                 Err(e) => {
@@ -746,11 +766,12 @@ fn create_ros2_to_bus_sub(
                     return;
                 }
             };
-            if let Err(e) = tx.send((bus_topic_cb.clone(), payload)) {
-                log::warn!("ros→bus channel: {e}");
+            if let Err(e) = bus_pub.publish(&payload) {
+                log::warn!("ros→bus {} publish: {e}", mapper.type_name());
             }
         })
-        .map_err(|e| BusError::Protocol(format!("ros dynamic subscription: {e}")))
+        .map_err(|e| BusError::Protocol(format!("ros dynamic subscription: {e}")))?;
+    Ok(Box::new(sub))
 }
 
 fn subscribe_demand(
@@ -792,23 +813,24 @@ fn subscribe_demand(
 fn wire_route(
     ros_node: &rclrs::Node,
     bus_node: &mut Node,
-    ros_to_bus_tx: &SyncSender<(String, Vec<u8>)>,
     bus_pubs: &mut HashMap<String, TopicPublisherRaw>,
     lazy_routes: &mut HashMap<String, LazyRos2ToBus>,
     eager_bus_topics: &mut HashSet<String>,
     route: &RouteSpec,
-    ros_subs: &mut Vec<DynamicSubscription>,
+    ros_subs: &mut Vec<Box<dyn Any + Send + Sync>>,
     ros_pubs: &mut Vec<DynamicPublisher>,
 ) -> Result<()> {
     let mapper = Arc::clone(&route.mapper);
     let ros_topic = route.ros_topic.clone();
     let bus_topic = route.bus_topic.clone();
+    let qos = route.qos;
 
     match route.direction {
         Direction::BusToRos2 => {
             let type_name = mapper.ros_type();
+            let opts = ros_topic_options(ros_topic.as_str(), qos);
             let ros_pub = ros_node
-                .create_dynamic_publisher(type_name, ros_topic.as_str())
+                .create_dynamic_publisher(type_name, opts)
                 .map_err(|e| BusError::Protocol(format!("ros dynamic publisher: {e}")))?;
             ros_pubs.push(ros_pub.clone());
             let mapper = Arc::clone(&mapper);
@@ -822,30 +844,33 @@ fn wire_route(
                     Err(e) => log::warn!("bus→ros {} convert: {e}", mapper.type_name()),
                 }
             });
-            bus_node.create_subscription_raw(bus_topic.as_str(), cb, None)?;
+            if let Some(depth) = qos.depth {
+                bus_node.create_subscription_raw_with_qos(
+                    bus_topic.as_str(),
+                    QosProfile::keep_last(depth),
+                    cb,
+                    None,
+                )?;
+            } else {
+                bus_node.create_subscription_raw(bus_topic.as_str(), cb, None)?;
+            }
         }
         Direction::Ros2ToBus => {
-            bus_pubs.insert(
-                bus_topic.clone(),
-                bus_node.create_publisher_raw(bus_topic.as_str())?,
-            );
+            let bus_pub = create_ros2_to_bus_publisher(bus_node, bus_topic.as_str(), qos)?;
+            bus_pubs.insert(bus_topic.clone(), bus_pub.clone());
             if route.lazy {
                 lazy_routes.insert(
                     bus_topic,
                     LazyRos2ToBus {
                         ros_topic,
                         mapper,
+                        qos,
                         sub: None,
                     },
                 );
             } else {
-                let sub = create_ros2_to_bus_sub(
-                    ros_node,
-                    ros_to_bus_tx,
-                    &mapper,
-                    &ros_topic,
-                    &bus_topic,
-                )?;
+                let sub =
+                    create_ros2_to_bus_sub(ros_node, bus_pub, &mapper, &ros_topic, qos)?;
                 ros_subs.push(sub);
                 eager_bus_topics.insert(bus_topic);
             }
@@ -1008,5 +1033,40 @@ mod route_mapper_tests {
             .unwrap();
         assert!(!b.routes[0].lazy);
         assert!(b.routes[1].lazy);
+    }
+
+    #[test]
+    fn qos_defaults_off() {
+        let b = Ros2Bridge::new("t")
+            .route("/a", "/a")
+            .mapper(DummyTopicMapper)
+            .add()
+            .expect("add");
+        assert_eq!(b.routes[0].qos, TopicRouteQos::default());
+    }
+
+    #[test]
+    fn qos_depth_and_best_effort() {
+        let b = Ros2Bridge::new("t")
+            .route("/a", "/a")
+            .mapper(DummyTopicMapper)
+            .qos_depth(20)
+            .best_effort()
+            .add()
+            .expect("add");
+        assert_eq!(b.routes[0].qos.depth, Some(20));
+        assert!(b.routes[0].qos.best_effort);
+        assert!(!b.routes[0].qos.sensor_data);
+    }
+
+    #[test]
+    fn qos_sensor_data() {
+        let b = Ros2Bridge::new("t")
+            .route("/cam", "/cam")
+            .mapper(DummyTopicMapper)
+            .sensor_data()
+            .add()
+            .expect("add");
+        assert_eq!(b.routes[0].qos, TopicRouteQos::SENSOR_DATA);
     }
 }

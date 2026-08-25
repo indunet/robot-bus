@@ -19,11 +19,12 @@ namespace robot_bus {
 namespace detail {
 
 inline std::vector<uint8_t> encode_message_lite(const google::protobuf::MessageLite &msg) {
-  std::string bytes;
-  if (!msg.SerializeToString(&bytes)) {
-    throw Error("protobuf SerializeToString failed");
+  const int size = static_cast<int>(msg.ByteSizeLong());
+  std::vector<uint8_t> bytes(static_cast<size_t>(size));
+  if (size > 0 && !msg.SerializeToArray(bytes.data(), size)) {
+    throw Error("protobuf SerializeToArray failed");
   }
-  return std::vector<uint8_t>(bytes.begin(), bytes.end());
+  return bytes;
 }
 
 template <typename Msg>

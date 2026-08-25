@@ -4,6 +4,7 @@
 
 #include <cstdint>
 #include <memory>
+#include <optional>
 #include <string>
 #include <utility>
 #include <vector>
@@ -49,6 +50,9 @@ struct TopicWireContext {
   const std::string &ros_topic;
   const std::string &bus_topic;
   Direction direction;
+  rclcpp::QoS qos{10};
+  /// Bus KeepLast HWM; `0` leaves the Node default.
+  int32_t bus_qos_depth{0};
   /// Keep ROS / bus entities alive for the bridge lifetime.
   std::vector<std::shared_ptr<void>> &keep_alive;
 
@@ -107,7 +111,8 @@ class TopicMapper {
   /// Create a ROS subscription that forwards onto `bus_pub`. Used by `.lazy()`.
   virtual rclcpp::SubscriptionBase::SharedPtr create_ros2_to_bus_subscription(
       rclcpp::Node::SharedPtr ros_node, const std::string &ros_topic,
-      std::shared_ptr<TopicPublisher> bus_pub, std::shared_ptr<std::mutex> mtx);
+      std::shared_ptr<TopicPublisher> bus_pub, std::shared_ptr<std::mutex> mtx,
+      const rclcpp::QoS &qos);
 #endif
 };
 
@@ -172,6 +177,12 @@ enum class TopicBuiltin { StdMsgsString, SensorMsgsImage };
 enum class ServiceBuiltin { Trigger, SetBool };
 enum class ActionBuiltin { Fibonacci };
 
+struct TopicRouteQos {
+  std::optional<int32_t> depth;
+  bool best_effort = false;
+  bool sensor_data = false;
+};
+
 struct TopicRouteSpec {
   std::string ros_topic;
   std::string bus_topic;
@@ -179,6 +190,7 @@ struct TopicRouteSpec {
   TopicBuiltin builtin = TopicBuiltin::StdMsgsString;
   std::shared_ptr<TopicMapper> custom;
   bool lazy = false;
+  TopicRouteQos qos;
   bool is_custom() const { return static_cast<bool>(custom); }
 };
 
@@ -273,6 +285,26 @@ class Ros2BridgeRoute {
     return std::move(*this);
   }
 
+  /// ROS KeepLast(`n`) plus bus topic HWM `n`.
+  Ros2BridgeRoute &&qos_depth(int32_t n) && {
+    qos_.depth = n;
+    return std::move(*this);
+  }
+
+  /// ROS reliability best-effort.
+  Ros2BridgeRoute &&best_effort() && {
+    qos_.best_effort = true;
+    return std::move(*this);
+  }
+
+  /// Best-effort KeepLast(5) on ROS (`SensorDataQoS`) and bus depth 5.
+  Ros2BridgeRoute &&sensor_data() && {
+    qos_.sensor_data = true;
+    qos_.depth = 5;
+    qos_.best_effort = true;
+    return std::move(*this);
+  }
+
   Ros2BridgeBuilder add() &&;
 
  private:
@@ -284,6 +316,7 @@ class Ros2BridgeRoute {
   std::shared_ptr<TopicMapper> custom_;
   bool mapper_set_ = false;
   bool lazy_ = false;
+  detail::TopicRouteQos qos_;
 };
 
 /// Intermediate service route: `.mapper(...).timeout(...).direction(...).add()`.
@@ -522,6 +555,7 @@ inline Ros2BridgeBuilder Ros2BridgeRoute::add() && {
   spec.builtin = builtin_;
   spec.custom = std::move(custom_);
   spec.lazy = lazy_;
+  spec.qos = qos_;
   state_->routes.push_back(std::move(spec));
   return Ros2BridgeBuilder(std::move(state_));
 }
