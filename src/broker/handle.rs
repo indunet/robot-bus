@@ -910,13 +910,13 @@ fn format_startup_banner(discover: &DiscoverResponse) -> String {
     )];
     let row = |label: &str, value: String| format!("  {label:<16}{value}");
     lines.push(String::new());
+    if let Some(console) = discover.console_url.as_deref().filter(|s| !s.is_empty()) {
+        lines.push(row("web console", console.to_string()));
+    }
     #[cfg(feature = "ws")]
     {
         let ws_url = discover.api_url.trim_end_matches('/').to_string() + "/ws";
         lines.push(row("ws", ws_url));
-    }
-    if let Some(console) = discover.console_url.as_deref().filter(|s| !s.is_empty()) {
-        lines.push(row("web console", console.to_string()));
     }
     lines.push(row(
         "message pub",
@@ -992,7 +992,8 @@ mod tests {
         #[cfg(feature = "ws")]
         {
             let ws_at = text.find("  ws ").expect("ws row");
-            assert!(ws_at < console_at);
+            assert!(console_at < ws_at);
+            assert!(ws_at < message_at);
             assert!(text.contains("http://127.0.0.1:15570/ws"));
         }
         #[cfg(not(feature = "ws"))]
