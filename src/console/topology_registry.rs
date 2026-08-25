@@ -79,7 +79,7 @@ pub struct TopologyGraphNode {
     pub kind: &'static str,
     pub label: String,
     pub type_name: Option<String>,
-    pub msg_per_sec: Option<u64>,
+    pub msg_per_sec: Option<f64>,
 }
 
 #[derive(Debug, Clone)]
@@ -104,9 +104,9 @@ pub struct TopologyGraph {
 pub fn build_topology_graph(
     endpoints: &[EndpointRecord],
     type_map: &HashMap<String, String>,
-    topic_ops: &HashMap<String, u64>,
-    service_ops: &HashMap<String, u64>,
-    action_ops: &HashMap<String, u64>,
+    topic_ops: &HashMap<String, f64>,
+    service_ops: &HashMap<String, f64>,
+    action_ops: &HashMap<String, f64>,
 ) -> TopologyGraph {
     let mut process_names: HashSet<String> = HashSet::new();
     let mut topic_names: HashSet<String> = HashSet::new();
@@ -368,16 +368,26 @@ mod tests {
         r.register("e1", "caller", EndpointKind::ServiceClient, "/set_bool");
         r.register("e2", "worker", EndpointKind::ServiceServer, "/set_bool");
         let mut svc_ops = HashMap::new();
-        svc_ops.insert("/set_bool".into(), 3);
-        let g = build_topology_graph(&r.snapshot(), &HashMap::new(), &HashMap::new(), &svc_ops, &HashMap::new());
-        assert!(g.nodes.iter().any(|n| n.id == "node:caller" && n.kind == "process"));
+        svc_ops.insert("/set_bool".into(), 3.0);
+        let g = build_topology_graph(
+            &r.snapshot(),
+            &HashMap::new(),
+            &HashMap::new(),
+            &svc_ops,
+            &HashMap::new(),
+        );
+        assert!(
+            g.nodes
+                .iter()
+                .any(|n| n.id == "node:caller" && n.kind == "process")
+        );
         assert!(g.nodes.iter().any(|n| n.id == "node:worker"));
         let hub = g
             .nodes
             .iter()
             .find(|n| n.kind == "service" && n.label == "/set_bool")
             .expect("service hub");
-        assert_eq!(hub.msg_per_sec, Some(3));
+        assert_eq!(hub.msg_per_sec, Some(3.0));
         let kinds: Vec<_> = g.edges.iter().map(|e| e.kind).collect();
         assert!(kinds.contains(&"service_client"));
         assert!(kinds.contains(&"service_server"));

@@ -30,7 +30,7 @@ import ThroughputChart, {
   type RatePoint,
 } from './ThroughputChart'
 import { formatHms } from '@/lib/utils'
-import { fetchTankStatus } from '@/lib/tank'
+import { fetchConsoleUiFlags } from '@/lib/console-ui'
 
 export default function Dashboard() {
   const [broker, setBroker] = useState<BrokerInfo>(EMPTY_BROKER)
@@ -45,13 +45,19 @@ export default function Dashboard() {
   const [activeTab, setActiveTab] = useState<Tab>('overview')
   const [tankOpen, setTankOpen] = useState(false)
   const [tankEnabled, setTankEnabled] = useState(true)
+  const [docsEnabled, setDocsEnabled] = useState(true)
   const seenLogIds = useRef(new Set<string>())
 
   useEffect(() => {
     let cancelled = false
-    void fetchTankStatus()
-      .then((st) => {
-        if (!cancelled) setTankEnabled(st.enabled)
+    void fetchConsoleUiFlags()
+      .then((flags) => {
+        if (cancelled) return
+        setTankEnabled(flags.tankEnabled)
+        setDocsEnabled(flags.docsEnabled)
+        if (!flags.docsEnabled) {
+          setActiveTab((tab) => (tab === 'docs' ? 'overview' : tab))
+        }
       })
       .catch(() => {
         /* broker offline — keep default visible until first success */
@@ -96,7 +102,9 @@ export default function Dashboard() {
           active={activeTab}
           onSelect={setActiveTab}
           onOpenTank={() => setTankOpen(true)}
+          tankOpen={tankOpen}
           tankEnabled={tankEnabled}
+          docsEnabled={docsEnabled}
         />
 
         <main className="flex-1 min-h-0 overflow-y-auto p-3 flex flex-col">
@@ -148,7 +156,7 @@ export default function Dashboard() {
               <EventStream logs={logs} />
             </div>
           )}
-          {activeTab === 'docs' && (
+          {docsEnabled && activeTab === 'docs' && (
             <div className="flex-1 min-h-0 flex flex-col">
               <DocsView />
             </div>

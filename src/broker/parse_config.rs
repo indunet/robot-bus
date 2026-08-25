@@ -296,6 +296,10 @@ pub fn parse_robot_bus_config(args: &[String]) -> Result<Option<RobotBusConfig>>
                 config.console.tank_enabled = false;
             }
             #[cfg(feature = "console")]
+            "--no-docs" => {
+                config.console.docs_enabled = false;
+            }
+            #[cfg(feature = "console")]
             "--console-cors-origin" => {
                 i += 1;
                 config
@@ -304,7 +308,8 @@ pub fn parse_robot_bus_config(args: &[String]) -> Result<Option<RobotBusConfig>>
                     .push(require_arg(args, i, arg)?.to_string());
             }
             #[cfg(not(feature = "console"))]
-            "--console-listen" | "--no-console" | "--no-tank" | "--console-cors-origin" => {
+            "--console-listen" | "--no-console" | "--no-tank" | "--no-docs"
+            | "--console-cors-origin" => {
                 bail!("{arg} requires the `console` feature");
             }
 
@@ -369,6 +374,7 @@ Console options (feature `console`, default on):\n  \
 --console-listen HOST:PORT     Alias of --api-listen (single-port UI + API)\n  \
 --no-console                   Do not start the Web console UI\n  \
 --no-tank                      Hide tank demo in console; reject /api/v1/tank/session\n  \
+--no-docs                      Hide docs sidebar in console (shown by default)\n  \
 --console-cors-origin ORIGIN   Allow browser origin (repeatable)\n\n\
 --help, -h                     Show this help\n\n\
 Embed in code: robot_bus::RobotBusBroker::start(RobotBusConfig { ... }).\n\
@@ -512,6 +518,14 @@ mod tests {
             .expect("config");
         assert!(config.console.enabled);
         assert!(!config.console.tank_enabled);
+        assert!(config.console.docs_enabled);
+
+        let config = parse_robot_bus_config(&args(&["--no-docs"]))
+            .unwrap()
+            .expect("config");
+        assert!(config.console.enabled);
+        assert!(config.console.tank_enabled);
+        assert!(!config.console.docs_enabled);
     }
 
     #[test]

@@ -12,7 +12,7 @@ use crate::robot_bus_interfaces::msg::v1::{
     TopicStats, TopicStatsList, TopologyEdge, TopologyNode, TopologySnapshot,
 };
 
-use super::state::{ConsoleState, LogEntryDto, TopicRate};
+use super::state::{ConsoleState, LogEntryDto, TopicRate, quantize_hz};
 use super::topology_registry::{self, TopologyGraph};
 
 pub fn encode_status(state: &ConsoleState) -> Vec<u8> {
@@ -32,10 +32,10 @@ pub fn encode_status(state: &ConsoleState) -> Vec<u8> {
         svc_be: state.endpoints.svc_be.clone(),
         act_fe: state.endpoints.act_fe.clone(),
         act_be: state.endpoints.act_be.clone(),
-        msg_per_sec: rates.msg_per_sec.round() as u64,
+        msg_per_sec: quantize_hz(rates.msg_per_sec),
         bytes_per_sec: rates.bytes_per_sec.round() as u64,
-        svc_calls_per_sec: svc.calls_per_sec.round() as u64,
-        act_runs_per_sec: act.runs_per_sec.round() as u64,
+        svc_calls_per_sec: quantize_hz(svc.calls_per_sec),
+        act_runs_per_sec: quantize_hz(act.runs_per_sec),
         total_messages: rates.total_msgs,
         total_errors: 0,
     }
@@ -58,7 +58,7 @@ pub fn encode_services(state: &ConsoleState) -> Vec<u8> {
             .map(|s| ServiceStats {
                 name: s.name,
                 calls: s.calls,
-                calls_per_sec: s.calls_per_sec.round() as u64,
+                calls_per_sec: quantize_hz(s.calls_per_sec),
                 errors: s.errors,
                 timeouts: 0,
                 avg_latency_ms: s.avg_latency_ms,
@@ -79,7 +79,7 @@ pub fn encode_actions(state: &ConsoleState) -> Vec<u8> {
             .map(|a| ActionStats {
                 name: a.name,
                 runs: a.runs,
-                runs_per_sec: a.runs_per_sec.round() as u64,
+                runs_per_sec: quantize_hz(a.runs_per_sec),
                 active: a.active,
                 errors: a.errors,
                 avg_duration_ms: a.avg_duration_ms,
@@ -134,7 +134,7 @@ fn merge_topic_stats(state: &ConsoleState) -> Vec<TopicStats> {
         .into_iter()
         .filter_map(|name| {
             let t = by_name.remove(&name)?;
-            let rate = t.msg_per_sec.round() as u64;
+            let rate = quantize_hz(t.msg_per_sec);
             let (publishers, subscribers) = counts.get(&name).copied().unwrap_or((0, 0));
             Some(TopicStats {
                 name: t.name,
@@ -154,22 +154,22 @@ fn merge_topic_stats(state: &ConsoleState) -> Vec<TopicStats> {
 pub(super) fn topology_graph(state: &ConsoleState) -> TopologyGraph {
     let type_map: HashMap<String, String> = state.topic_types.snapshot().into_iter().collect();
     let rates = state.rates();
-    let topic_ops: HashMap<String, u64> = rates
+    let topic_ops: HashMap<String, f64> = rates
         .topics
         .iter()
-        .map(|t| (t.name.clone(), t.msg_per_sec.round() as u64))
+        .map(|t| (t.name.clone(), quantize_hz(t.msg_per_sec)))
         .collect();
-    let service_ops: HashMap<String, u64> = state
+    let service_ops: HashMap<String, f64> = state
         .service_rates()
         .services
         .iter()
-        .map(|s| (s.name.clone(), s.calls_per_sec.round() as u64))
+        .map(|s| (s.name.clone(), quantize_hz(s.calls_per_sec)))
         .collect();
-    let action_ops: HashMap<String, u64> = state
+    let action_ops: HashMap<String, f64> = state
         .action_rates()
         .actions
         .iter()
-        .map(|a| (a.name.clone(), a.runs_per_sec.round() as u64))
+        .map(|a| (a.name.clone(), quantize_hz(a.runs_per_sec)))
         .collect();
     topology_registry::build_topology_graph(
         &state.topology.snapshot(),

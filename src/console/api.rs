@@ -14,7 +14,7 @@ use serde::Serialize;
 use tokio_stream::StreamExt;
 use tokio_stream::wrappers::BroadcastStream;
 
-use super::state::{ConsoleState, LogEntryDto, TopicRate};
+use super::state::{ConsoleState, LogEntryDto, TopicRate, quantize_hz};
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -35,10 +35,10 @@ struct StatusResponse {
     act_fe: String,
     #[serde(rename = "actBE")]
     act_be: String,
-    msg_per_sec: u64,
+    msg_per_sec: f64,
     bytes_per_sec: u64,
-    svc_calls_per_sec: u64,
-    act_runs_per_sec: u64,
+    svc_calls_per_sec: f64,
+    act_runs_per_sec: f64,
     total_messages: u64,
     total_errors: u64,
 }
@@ -49,11 +49,11 @@ struct TopicResponse {
     name: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     type_name: Option<String>,
-    msg_per_sec: u64,
+    msg_per_sec: f64,
     bytes_per_sec: u64,
     last_seen: u64,
     total_msgs: u64,
-    sparkline: Vec<u64>,
+    sparkline: Vec<f64>,
     subscribers: u64,
     publishers: u64,
 }
@@ -73,7 +73,7 @@ struct TopologyNodeDto {
     #[serde(skip_serializing_if = "Option::is_none")]
     type_name: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    msg_per_sec: Option<u64>,
+    msg_per_sec: Option<f64>,
 }
 
 #[derive(Serialize)]
@@ -98,7 +98,7 @@ struct TopologyResponse {
 struct ServiceResponse {
     name: String,
     calls: u64,
-    calls_per_sec: u64,
+    calls_per_sec: f64,
     errors: u64,
     timeouts: u64,
     avg_latency_ms: u64,
@@ -117,7 +117,7 @@ struct ServicesEnvelope {
 struct ActionResponse {
     name: String,
     runs: u64,
-    runs_per_sec: u64,
+    runs_per_sec: f64,
     active: u64,
     workers: u64,
     errors: u64,
@@ -148,10 +148,10 @@ pub async fn status(Extension(state): Extension<Arc<ConsoleState>>) -> impl Into
         svc_be: state.endpoints.svc_be.clone(),
         act_fe: state.endpoints.act_fe.clone(),
         act_be: state.endpoints.act_be.clone(),
-        msg_per_sec: rates.msg_per_sec.round() as u64,
+        msg_per_sec: quantize_hz(rates.msg_per_sec),
         bytes_per_sec: rates.bytes_per_sec.round() as u64,
-        svc_calls_per_sec: svc.calls_per_sec.round() as u64,
-        act_runs_per_sec: act.runs_per_sec.round() as u64,
+        svc_calls_per_sec: quantize_hz(svc.calls_per_sec),
+        act_runs_per_sec: quantize_hz(act.runs_per_sec),
         total_messages: rates.total_msgs,
         total_errors: 0,
     })
@@ -249,7 +249,7 @@ fn merge_topics(state: &ConsoleState) -> Vec<TopicResponse> {
         .into_iter()
         .filter_map(|name| {
             let t = by_name.remove(&name)?;
-            let rate = t.msg_per_sec.round() as u64;
+            let rate = quantize_hz(t.msg_per_sec);
             let (publishers, subscribers) = counts.get(&name).copied().unwrap_or((0, 0));
             Some(TopicResponse {
                 name: t.name,
@@ -287,7 +287,7 @@ pub async fn services(Extension(state): Extension<Arc<ConsoleState>>) -> impl In
         .map(|s| ServiceResponse {
             name: s.name,
             calls: s.calls,
-            calls_per_sec: s.calls_per_sec.round() as u64,
+            calls_per_sec: quantize_hz(s.calls_per_sec),
             errors: s.errors,
             timeouts: 0,
             avg_latency_ms: s.avg_latency_ms,
@@ -306,7 +306,7 @@ pub async fn actions(Extension(state): Extension<Arc<ConsoleState>>) -> impl Int
         .map(|a| ActionResponse {
             name: a.name,
             runs: a.runs,
-            runs_per_sec: a.runs_per_sec.round() as u64,
+            runs_per_sec: quantize_hz(a.runs_per_sec),
             active: a.active,
             workers: a.workers,
             errors: a.errors,
@@ -346,6 +346,15 @@ fn event_from_dto(e: &LogEntryDto) -> Event {
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
+struct ConsoleUiResponse {
+    /// False when broker was started with `--no-tank`.
+    tank_enabled: bool,
+    /// False when broker was started with `--no-docs`. Default true.
+    docs_enabled: bool,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
 struct TankStatusResponse {
     /// False when broker was started with `--no-tank` (menu hidden / acquire rejected).
     enabled: bool,
@@ -359,6 +368,13 @@ struct TankSessionResponse {
     session_id: String,
     lease_ms: u64,
     viewers: usize,
+}
+
+pub async fn console_ui(Extension(state): Extension<Arc<ConsoleState>>) -> impl IntoResponse {
+    Json(ConsoleUiResponse {
+        tank_enabled: state.tank_enabled,
+        docs_enabled: state.docs_enabled,
+    })
 }
 
 pub async fn tank_status(Extension(state): Extension<Arc<ConsoleState>>) -> impl IntoResponse {
@@ -421,11 +437,9 @@ pub async fn tank_session(Extension(state): Extension<Arc<ConsoleState>>) -> imp
                 .into_response()
         }
         Err(err) => {
-            state.events.emit(
-                "ERROR",
-                "tank",
-                format!("acquire task join failed: {err}"),
-            );
+            state
+                .events
+                .emit("ERROR", "tank", format!("acquire task join failed: {err}"));
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(serde_json::json!({ "error": "tank acquire interrupted" })),

@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { type BrokerInfo, fmtBytes, fmtNum } from '@/lib/mock-data'
+import { type BrokerInfo, fmtBytes, fmtNum, fmtRate } from '@/lib/mock-data'
 import { Activity, Server, Zap, AlertTriangle, Clock } from 'lucide-react'
 import { fmtUptimeLocalized, useI18n, type Locale } from '@/lib/i18n'
 
@@ -67,10 +67,10 @@ export default function StatusBar({ broker }: StatusBarProps) {
       <div className="w-px h-5 bg-bus-border shrink-0" />
 
       <div className="flex items-center gap-5 shrink-0">
-        <Metric icon={<Activity size={13} className="text-bus-muted" />} label={t('metricMsgS')} value={fmtNum(broker.msgPerSec)} accent />
+        <Metric icon={<Activity size={13} className="text-bus-muted" />} label={t('metricMsgS')} value={fmtRate(broker.msgPerSec)} accent />
         <Metric icon={<Server size={13} className="text-bus-muted" />} label={t('metricBw')} value={`${fmtBytes(broker.bytesPerSec)}/s`} />
-        <Metric label={t('metricSvcS')} value={fmtNum(broker.svcCallsPerSec)} />
-        <Metric label={t('metricActS')} value={fmtNum(broker.actRunsPerSec)} />
+        <Metric label={t('metricSvcS')} value={fmtRate(broker.svcCallsPerSec)} />
+        <Metric label={t('metricActS')} value={fmtRate(broker.actRunsPerSec)} />
         <Metric label={t('metricTotal')} value={fmtNum(broker.totalMessages)} />
         <Metric label={t('metricUptime')} value={fmtUptimeLocalized(broker.uptime, t)} />
         <Metric label={t('metricPid')} value={String(broker.pid)} />

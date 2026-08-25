@@ -1,6 +1,6 @@
 'use client'
 
-import { type ServiceInfo, type ActionInfo, fmtNum } from '@/lib/mock-data'
+import { type ServiceInfo, type ActionInfo, fmtNum, fmtRate } from '@/lib/mock-data'
 import { PanelHeader } from './BrokerOverview'
 import { Cpu, GitBranch } from 'lucide-react'
 import { fmtAgeLocalized, useI18n } from '@/lib/i18n'
@@ -71,7 +71,7 @@ function ServicesPanel({
             >
               <span className="font-mono text-[13px] text-bus-text truncate">{s.name}</span>
               <span className={`font-mono text-[13px] tabular-nums text-right ${s.callsPerSec > 0 ? 'text-bus-amber' : 'text-bus-muted'}`}>
-                {s.callsPerSec > 0 ? fmtNum(s.callsPerSec) : '—'}
+                {s.callsPerSec > 0 ? fmtRate(s.callsPerSec) : '—'}
               </span>
               <span className="font-mono text-[13px] text-bus-muted tabular-nums text-right">{fmtNum(s.calls)}</span>
               <span className="font-mono text-[13px] text-bus-muted tabular-nums text-right">{s.workers}</span>
@@ -126,7 +126,7 @@ function ActionsPanel({
             >
               <span className="font-mono text-[13px] text-bus-text truncate">{a.name}</span>
               <span className={`font-mono text-[13px] tabular-nums text-right ${a.runsPerSec > 0 ? 'text-bus-green' : 'text-bus-muted'}`}>
-                {a.runsPerSec > 0 ? fmtNum(a.runsPerSec) : '—'}
+                {a.runsPerSec > 0 ? fmtRate(a.runsPerSec) : '—'}
               </span>
               <span className="font-mono text-[13px] text-bus-muted tabular-nums text-right">{fmtNum(a.runs)}</span>
               <span className={`font-mono text-[13px] tabular-nums text-right ${a.active > 0 ? 'text-bus-green' : 'text-bus-muted'}`}>

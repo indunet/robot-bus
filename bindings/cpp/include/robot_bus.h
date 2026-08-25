@@ -95,6 +95,8 @@ typedef struct RobotBusBrokerOptions {
   size_t peer_count;
   /** When non-zero, hide tank demo and reject /api/v1/tank/session. */
   int no_tank;
+  /** When non-zero, hide docs in the console sidebar (shown by default). */
+  int no_docs;
 } RobotBusBrokerOptions;
 
 /** Client HTTP discovery options (NULL fields / 0 → defaults). */

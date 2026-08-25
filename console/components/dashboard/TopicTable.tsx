@@ -1,6 +1,6 @@
 'use client'
 
-import { type TopicInfo, fmtBytes, fmtNum } from '@/lib/mock-data'
+import { type TopicInfo, fmtBytes, fmtNum, fmtRate, topicIsIdle } from '@/lib/mock-data'
 import { PanelHeader } from './BrokerOverview'
 import TruncateTip from './TruncateTip'
 import { LineChart, Line, ResponsiveContainer } from 'recharts'
@@ -13,7 +13,7 @@ interface Props {
   maxBodyHeight?: string
 }
 
-const COLS = 'grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)_88px_96px_80px_64px_64px_96px]'
+const COLS = 'grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)_104px_96px_80px_64px_64px_96px]'
 
 export default function TopicTable({ topics, maxBodyHeight }: Props) {
   const { t, labelCase } = useI18n()
@@ -73,7 +73,7 @@ export default function TopicTable({ topics, maxBodyHeight }: Props) {
 
 function TopicRow({ topic }: { topic: TopicInfo }) {
   const { t } = useI18n()
-  const isIdle = topic.msgPerSec === 0
+  const isIdle = topicIsIdle(topic.lastSeen, topic.msgPerSec)
   const isHot = topic.msgPerSec > 80
 
   const sparkData = topic.sparkline.map((v, i) => ({ i, v }))
@@ -113,8 +113,8 @@ function TopicRow({ topic }: { topic: TopicInfo }) {
             </LineChart>
           </ResponsiveContainer>
         </div>
-        <span className={`font-mono text-[13px] tabular-nums ${rateColor} w-8 text-right`}>
-          {topic.msgPerSec}
+        <span className={`font-mono text-[13px] tabular-nums ${rateColor} w-10 text-right`}>
+          {fmtRate(topic.msgPerSec)}
         </span>
       </div>
 

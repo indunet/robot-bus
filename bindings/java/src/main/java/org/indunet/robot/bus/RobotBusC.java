@@ -436,7 +436,8 @@ interface RobotBusC extends Library {
         "advertiseHost",
         "peers",
         "peerCount",
-        "noTank"
+        "noTank",
+        "noDocs"
     })
     class BrokerOptions extends Structure {
         public String messageXsubBind;
@@ -462,6 +463,7 @@ interface RobotBusC extends Library {
         public Pointer peers;
         public long peerCount;
         public int noTank;
+        public int noDocs;
     }
 
     @Structure.FieldOrder({"apiUrl", "brokerId", "timeoutSecs"})

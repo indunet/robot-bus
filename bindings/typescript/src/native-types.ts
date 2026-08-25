@@ -262,6 +262,7 @@ export interface BrokerStartOptions {
   consoleListen?: string;
   noConsole?: boolean;
   noTank?: boolean;
+  noDocs?: boolean;
   brokerId?: string;
   messagePeers?: string[];
   servicePeers?: string[];

@@ -26,7 +26,7 @@ Monitoring data is published by the broker on system topics:
 - `/robot_bus/topology`
 - `/robot_bus/events`
 
-A REST shim remains for CLI tooling (`rbus`): `GET /api/v1/status|topics|services|actions|topology` and `SSE /api/v1/events`.
+A REST shim remains for CLI tooling (`rbus`): `GET /api/v1/status|topics|services|actions|topology|console` and `SSE /api/v1/events`. `GET /api/v1/console` returns `{ tankEnabled, docsEnabled }` for sidebar flags (`--no-tank` / `--no-docs`).
 
 UI copy supports EN / 中文 (default EN; preference in `localStorage` key `robot-bus-console-locale`).
 

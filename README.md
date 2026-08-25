@@ -53,7 +53,7 @@ pip install robot-bus
 * Rust
 
 ```toml
-robot-bus = "1.3.2"
+robot-bus = "1.3.3"
 ```
 
 * npm
@@ -68,7 +68,7 @@ npm install robot-bus
 <dependency>
     <groupId>org.indunet</groupId>
     <artifactId>robot-bus</artifactId>
-    <version>1.3.2</version>
+    <version>1.3.3</version>
 </dependency>
 ```
 
@@ -138,7 +138,7 @@ A built-in mini tank sim helps you see topics moving end-to-end without writing 
 2. Open **http://127.0.0.1:15570** and click **TANK** in the sidebar (or go to `/tank/`).
 3. Click the panel, then drive with **arrow keys**; or switch to point navigation and **click on the map** to send a goal.
 
-Opening the panel starts the in-process tank node. It subscribes to `/robot_bus/tank/cmd_vel` and publishes `/robot_bus/tank/pose`. Multiple browsers share one world (teleop is last-writer-wins). Disable with `--no-tank` if needed.
+Opening the panel starts the in-process tank node. It subscribes to `/robot_bus/tank/cmd_vel` and publishes `/robot_bus/tank/pose`. Multiple browsers share one world (teleop is last-writer-wins). Disable with `--no-tank` if needed. Sidebar **DOCS** is shown by default; hide with `--no-docs`.
 
 ### *3.3 Topic (publish / subscribe)*
 
@@ -238,7 +238,7 @@ The broker ships with an embedded monitoring UI (Overview, Topics, Services, Act
 
 **http://127.0.0.1:15570**
 
-For a hands-on walkthrough, try the [Tank demo](#32-tank-demo) from the sidebar **TANK** entry. Same port as the API / WebSocket gateway. Disable the UI with `--no-console` if needed. Frontend source: [`console/`](console/); local UI development: [`console/README.md`](console/README.md).
+For a hands-on walkthrough, try the [Tank demo](#32-tank-demo) from the sidebar **TANK** entry. Sidebar **DOCS** is shown by default (`--no-docs` to hide). Same port as the API / WebSocket gateway. Disable the UI with `--no-console` if needed. Frontend source: [`console/`](console/); local UI development: [`console/README.md`](console/README.md).
 
 ## *5. ROS 2 bridge*
 

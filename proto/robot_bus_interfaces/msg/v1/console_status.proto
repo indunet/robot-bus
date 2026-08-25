@@ -16,10 +16,10 @@ message BrokerStatus {
   string svc_be = 10;
   string act_fe = 11;
   string act_be = 12;
-  uint64 msg_per_sec = 13;
+  double msg_per_sec = 13;
   uint64 bytes_per_sec = 14;
-  uint64 svc_calls_per_sec = 15;
-  uint64 act_runs_per_sec = 16;
+  double svc_calls_per_sec = 15;
+  double act_runs_per_sec = 16;
   uint64 total_messages = 17;
   uint64 total_errors = 18;
 }
@@ -27,11 +27,11 @@ message BrokerStatus {
 message TopicStats {
   string name = 1;
   optional string type_name = 2;
-  uint64 msg_per_sec = 3;
+  double msg_per_sec = 3;
   uint64 bytes_per_sec = 4;
   uint64 last_seen = 5;
   uint64 total_msgs = 6;
-  repeated uint64 sparkline = 7;
+  repeated double sparkline = 7;
   uint64 subscribers = 8;
   uint64 publishers = 9;
 }
@@ -43,7 +43,7 @@ message TopicStatsList {
 message ServiceStats {
   string name = 1;
   uint64 calls = 2;
-  uint64 calls_per_sec = 3;
+  double calls_per_sec = 3;
   uint64 errors = 4;
   uint64 timeouts = 5;
   uint64 avg_latency_ms = 6;
@@ -58,7 +58,7 @@ message ServiceStatsList {
 message ActionStats {
   string name = 1;
   uint64 runs = 2;
-  uint64 runs_per_sec = 3;
+  double runs_per_sec = 3;
   uint64 active = 4;
   uint64 errors = 5;
   uint64 avg_duration_ms = 6;
@@ -74,7 +74,7 @@ message TopologyNode {
   string kind = 2;
   string label = 3;
   optional string type_name = 4;
-  optional uint64 msg_per_sec = 5;
+  optional double msg_per_sec = 5;
 }
 
 message TopologyEdge {

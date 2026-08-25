@@ -9,6 +9,7 @@ import {
 } from 'robot-bus/robot_bus_interfaces/msg/v1/console_status'
 import {
   EMPTY_BROKER,
+  f64,
   u64,
   type ActionInfo,
   type BrokerInfo,
@@ -44,10 +45,10 @@ function mapStatus(msg: BrokerStatusMsg): BrokerInfo {
     svcBE: msg.svcBe || '—',
     actFE: msg.actFe || '—',
     actBE: msg.actBe || '—',
-    msgPerSec: u64(msg.msgPerSec),
+    msgPerSec: f64(msg.msgPerSec),
     bytesPerSec: u64(msg.bytesPerSec),
-    svcCallsPerSec: u64(msg.svcCallsPerSec),
-    actRunsPerSec: u64(msg.actRunsPerSec),
+    svcCallsPerSec: f64(msg.svcCallsPerSec),
+    actRunsPerSec: f64(msg.actRunsPerSec),
     totalMessages: u64(msg.totalMessages),
     totalErrors: u64(msg.totalErrors),
   }
@@ -55,7 +56,7 @@ function mapStatus(msg: BrokerStatusMsg): BrokerInfo {
 
 function mapTopics(msg: TopicStatsList): TopicInfo[] {
   return (msg.topics ?? []).map((t) => {
-    const rate = u64(t.msgPerSec)
+    const rate = f64(t.msgPerSec)
     return {
       name: t.name,
       typeName: t.typeName || undefined,
@@ -63,7 +64,7 @@ function mapTopics(msg: TopicStatsList): TopicInfo[] {
       bytesPerSec: u64(t.bytesPerSec),
       lastSeen: u64(t.lastSeen),
       totalMsgs: u64(t.totalMsgs),
-      sparkline: (t.sparkline?.length ? t.sparkline : Array(20).fill(rate)).map((v) => u64(v)),
+      sparkline: (t.sparkline?.length ? t.sparkline : Array(20).fill(rate)).map((v) => f64(v)),
       subscribers: u64(t.subscribers),
       publishers: u64(t.publishers),
     }
@@ -74,7 +75,7 @@ function mapServices(msg: ServiceStatsList): ServiceInfo[] {
   return (msg.services ?? []).map((s) => ({
     name: s.name,
     calls: u64(s.calls),
-    callsPerSec: u64(s.callsPerSec),
+    callsPerSec: f64(s.callsPerSec),
     errors: u64(s.errors),
     timeouts: u64(s.timeouts),
     avgLatencyMs: u64(s.avgLatencyMs),
@@ -87,7 +88,7 @@ function mapActions(msg: ActionStatsList): ActionInfo[] {
   return (msg.actions ?? []).map((a) => ({
     name: a.name,
     runs: u64(a.runs),
-    runsPerSec: u64(a.runsPerSec),
+    runsPerSec: f64(a.runsPerSec),
     active: u64(a.active),
     errors: u64(a.errors),
     avgDurationMs: u64(a.avgDurationMs),
@@ -102,7 +103,7 @@ function mapTopology(msg: TopologySnapshot): TopologyInfo {
       kind: n.kind,
       label: n.label,
       typeName: n.typeName || undefined,
-      msgPerSec: n.msgPerSec != null && n.msgPerSec !== '' ? u64(n.msgPerSec) : undefined,
+      msgPerSec: n.msgPerSec != null ? f64(n.msgPerSec) : undefined,
     })),
     edges: (msg.edges ?? []).map((e) => ({
       id: e.id,

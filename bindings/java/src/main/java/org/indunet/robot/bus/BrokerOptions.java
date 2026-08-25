@@ -25,6 +25,7 @@ public final class BrokerOptions {
     private final String advertiseHost;
     private final List<String> peers;
     private final boolean noTank;
+    private final boolean noDocs;
 
     /** Keep-alive for native {@code char**} peer arrays until {@link Broker} start returns. */
     private transient StringArray messagePeersNative;
@@ -172,6 +173,50 @@ public final class BrokerOptions {
             String advertiseHost,
             List<String> peers,
             boolean noTank) {
+        this(
+                messageXsubBind,
+                messageXpubBind,
+                serviceFrontendBind,
+                serviceBackendBind,
+                actionFrontendBind,
+                actionBackendBind,
+                apiListen,
+                consoleListen,
+                tcpOnly,
+                noConsole,
+                brokerId,
+                messagePeers,
+                servicePeers,
+                actionPeers,
+                noDiscovery,
+                domainId,
+                advertiseHost,
+                peers,
+                noTank,
+                false);
+    }
+
+    public BrokerOptions(
+            String messageXsubBind,
+            String messageXpubBind,
+            String serviceFrontendBind,
+            String serviceBackendBind,
+            String actionFrontendBind,
+            String actionBackendBind,
+            String apiListen,
+            String consoleListen,
+            boolean tcpOnly,
+            boolean noConsole,
+            String brokerId,
+            List<String> messagePeers,
+            List<String> servicePeers,
+            List<String> actionPeers,
+            boolean noDiscovery,
+            int domainId,
+            String advertiseHost,
+            List<String> peers,
+            boolean noTank,
+            boolean noDocs) {
         this.messageXsubBind = messageXsubBind;
         this.messageXpubBind = messageXpubBind;
         this.serviceFrontendBind = serviceFrontendBind;
@@ -191,6 +236,7 @@ public final class BrokerOptions {
         this.advertiseHost = advertiseHost;
         this.peers = peers;
         this.noTank = noTank;
+        this.noDocs = noDocs;
     }
 
     public String getMessageXsubBind() {
@@ -235,6 +281,10 @@ public final class BrokerOptions {
 
     public boolean isNoTank() {
         return noTank;
+    }
+
+    public boolean isNoDocs() {
+        return noDocs;
     }
 
     public String getBrokerId() {
@@ -306,6 +356,7 @@ public final class BrokerOptions {
             o.peerCount = peers.size();
         }
         o.noTank = noTank ? 1 : 0;
+        o.noDocs = noDocs ? 1 : 0;
         o.write();
         return o;
     }

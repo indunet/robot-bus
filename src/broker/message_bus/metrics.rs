@@ -62,18 +62,16 @@ impl MessageMetrics {
                 c
             }
         };
-        let n = counters.total_msgs.fetch_add(1, Ordering::Relaxed) + 1;
+        counters.total_msgs.fetch_add(1, Ordering::Relaxed);
         counters
             .total_bytes
             .fetch_add(frame_bytes, Ordering::Relaxed);
-        // last_seen is monitoring-only; refresh every 16 msgs to cut clock cost.
-        if n == 1 || n & 0xf == 0 {
-            let now_ms = SystemTime::now()
-                .duration_since(UNIX_EPOCH)
-                .map(|d| d.as_millis() as u64)
-                .unwrap_or(0);
-            counters.last_seen_unix_ms.store(now_ms, Ordering::Relaxed);
-        }
+        // Capture side-thread only. Update every message so sub-1 Hz last-seen stays honest.
+        let now_ms = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map(|d| d.as_millis() as u64)
+            .unwrap_or(0);
+        counters.last_seen_unix_ms.store(now_ms, Ordering::Relaxed);
     }
 
     pub fn snapshot(&self) -> MessageMetricsSnapshot {

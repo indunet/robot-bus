@@ -21,6 +21,7 @@ import { Hexagon, Network } from 'lucide-react'
 import { PanelHeader } from './BrokerOverview'
 import { useI18n } from '@/lib/i18n'
 import type { TopologyInfo } from '@/lib/mock-data'
+import { fmtRate } from '@/lib/mock-data'
 
 interface Props {
   topology: TopologyInfo
@@ -419,7 +420,7 @@ const ProcessNode = memo(function ProcessNode({ data }: NodeProps) {
                 {p.typeName ?? '—'}
               </div>
               <span className="text-right text-[9px] tabular-nums text-bus-muted">
-                {Math.round(p.msgPerSec ?? 0)}/s
+                {fmtRate(p.msgPerSec ?? 0)}/s
               </span>
             </div>
           ))}
@@ -443,7 +444,7 @@ const ProcessNode = memo(function ProcessNode({ data }: NodeProps) {
                 {p.typeName ?? '—'}
               </div>
               <span className="text-right text-[9px] tabular-nums text-bus-muted">
-                {Math.round(p.msgPerSec ?? 0)}/s
+                {fmtRate(p.msgPerSec ?? 0)}/s
               </span>
               <Handle
                 type="source"
@@ -533,7 +534,7 @@ function RpcSection({
               {shortTopic(p.name)}
             </div>
             <span className="text-right text-[9px] tabular-nums text-bus-muted">
-              {Math.round(p.msgPerSec ?? 0)}/s
+              {fmtRate(p.msgPerSec ?? 0)}/s
             </span>
             {!server && (
               <Handle

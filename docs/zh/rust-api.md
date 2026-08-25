@@ -5,9 +5,9 @@
 `Cargo.toml`：
 
 ```toml
-robot-bus = "1.3.2"
+robot-bus = "1.3.3"
 # 本地：robot-bus = { path = "../robot-bus" }
-# 默认已启用 WebSocket RPC 网关（`ws` feature）；若需关闭：robot-bus = { version = "1.3.2", default-features = false }
+# 默认已启用 WebSocket RPC 网关（`ws` feature）；若需关闭：robot-bus = { version = "1.3.3", default-features = false }
 ```
 
 ## Broker 启动
@@ -21,6 +21,7 @@ cargo run --bin robot_bus_broker
 # API 口：--api-listen 0.0.0.0:15570（别名 --console-listen）
 # 对外可达主机：--advertise-host HOST
 # 邦联：--peer 10.0.0.2:15570（对端 API 口；可重复）
+# 控制台侧栏：--no-tank / --no-docs（文档默认显示）
 ```
 
 **默认端点：**

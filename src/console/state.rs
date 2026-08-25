@@ -1,6 +1,6 @@
 //! Shared console HTTP state (binds, metrics, event log).
 
-use std::collections::VecDeque;
+use std::collections::{HashMap, VecDeque};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
@@ -8,10 +8,10 @@ use std::time::{Duration, Instant};
 use serde::Serialize;
 use tokio::sync::broadcast;
 
-use crate::tank::TankManager;
 use crate::broker::action_bus::{ActionMetrics, ActionMetricsSnapshot};
 use crate::broker::message_bus::{MessageMetrics, MessageMetricsSnapshot};
 use crate::broker::service_bus::{ServiceMetrics, ServiceMetricsSnapshot};
+use crate::tank::TankManager;
 
 use super::topic_registry::TopicTypeRegistry;
 use super::topology_registry::TopologyRegistry;
@@ -19,6 +19,10 @@ use super::topology_registry::TopologyRegistry;
 const EVENT_RING_CAP: usize = 500;
 const EVENT_BROADCAST_CAP: usize = 64;
 const RATE_BASELINE_MS: u64 = 500;
+/// Long window so 0.2–0.5 Hz topics show a stable fractional rate.
+const RATE_WINDOW: Duration = Duration::from_secs(10);
+/// Instantaneous rates at or above this use the ~1 s sample (responsive).
+const RATE_SHORT_HZ: f64 = 2.0;
 
 /// Listen / bind addresses shown in the console.
 #[derive(Clone, Debug)]
@@ -97,22 +101,19 @@ impl EventLog {
 
 #[derive(Clone, Debug)]
 struct MsgRateSample {
-    at: Instant,
-    snap: MessageMetricsSnapshot,
+    history: VecDeque<(Instant, MessageMetricsSnapshot)>,
     view: RateView,
 }
 
 #[derive(Clone, Debug)]
 struct SvcRateSample {
-    at: Instant,
-    snap: ServiceMetricsSnapshot,
+    history: VecDeque<(Instant, ServiceMetricsSnapshot)>,
     view: ServiceRateView,
 }
 
 #[derive(Clone, Debug)]
 struct ActRateSample {
-    at: Instant,
-    snap: ActionMetricsSnapshot,
+    history: VecDeque<(Instant, ActionMetricsSnapshot)>,
     view: ActionRateView,
 }
 
@@ -132,6 +133,8 @@ pub struct ConsoleState {
     pub tank: Arc<TankManager>,
     /// When false, tank UI/API acquire is disabled (`--no-tank`).
     pub tank_enabled: bool,
+    /// When false, the docs sidebar entry is hidden (`--no-docs`).
+    pub docs_enabled: bool,
     msg_rate: Mutex<Option<MsgRateSample>>,
     svc_rate: Mutex<Option<SvcRateSample>>,
     act_rate: Mutex<Option<ActRateSample>>,
@@ -145,6 +148,7 @@ impl ConsoleState {
         action_metrics: Arc<ActionMetrics>,
         tank: Arc<TankManager>,
         tank_enabled: bool,
+        docs_enabled: bool,
     ) -> Arc<Self> {
         let state = Arc::new(Self {
             started_at: Instant::now(),
@@ -159,6 +163,7 @@ impl ConsoleState {
             events: EventLog::new(),
             tank,
             tank_enabled,
+            docs_enabled,
             msg_rate: Mutex::new(None),
             svc_rate: Mutex::new(None),
             act_rate: Mutex::new(None),
@@ -193,6 +198,13 @@ impl ConsoleState {
                 "tank demo disabled (--no-tank); console menu hidden",
             );
         }
+        if !state.docs_enabled {
+            state.events.emit(
+                "INFO",
+                "docs",
+                "docs sidebar disabled (--no-docs); console menu hidden",
+            );
+        }
         state
     }
 
@@ -208,7 +220,7 @@ impl ConsoleState {
         self.started_at.elapsed().as_secs()
     }
 
-    /// Compute message rates from the delta since the last baseline sample.
+    /// Compute message rates from a ~1 s sample blended with a 10 s window.
     ///
     /// Baseline advances at most once per ~500ms so concurrent `/status` + `/topics`
     /// reads share a stable window.
@@ -217,28 +229,27 @@ impl ConsoleState {
         let mut guard = self.msg_rate.lock().unwrap_or_else(|e| e.into_inner());
         let snap = self.metrics.snapshot();
 
-        if let Some(prev) = guard.as_ref()
-            && now.duration_since(prev.at) < Duration::from_millis(RATE_BASELINE_MS)
-            && snap.total_msgs == prev.snap.total_msgs
-            && snap.topics.len() == prev.snap.topics.len()
-        {
-            return prev.view.clone();
+        if reuse_view(
+            guard
+                .as_ref()
+                .and_then(|s| s.history.back().map(|(at, _)| *at)),
+            now,
+        ) {
+            return guard.as_ref().expect("reuse after Some").view.clone();
         }
 
-        let view = match guard.as_ref() {
-            Some(prev) => {
-                let dt = now.duration_since(prev.at).as_secs_f64().max(1e-3);
-                rate_view_from_delta(&snap, &prev.snap, dt)
+        let sample = guard.get_or_insert_with(|| MsgRateSample {
+            history: VecDeque::new(),
+            view: rate_view_zero(&snap),
+        });
+        push_history(&mut sample.history, now, snap.clone());
+        sample.view = match window_baselines(&sample.history) {
+            Some((short_prev, short_dt, long_prev, long_dt)) => {
+                rate_view_blended(&snap, short_prev, short_dt, long_prev, long_dt)
             }
             None => rate_view_zero(&snap),
         };
-
-        *guard = Some(MsgRateSample {
-            at: now,
-            snap,
-            view: view.clone(),
-        });
-        view
+        sample.view.clone()
     }
 
     /// Service call rates (accepted/forwarded calls per second).
@@ -247,28 +258,27 @@ impl ConsoleState {
         let mut guard = self.svc_rate.lock().unwrap_or_else(|e| e.into_inner());
         let snap = self.service_metrics.snapshot();
 
-        if let Some(prev) = guard.as_ref()
-            && now.duration_since(prev.at) < Duration::from_millis(RATE_BASELINE_MS)
-            && snap.total_calls == prev.snap.total_calls
-            && snap.services.len() == prev.snap.services.len()
-        {
-            return prev.view.clone();
+        if reuse_view(
+            guard
+                .as_ref()
+                .and_then(|s| s.history.back().map(|(at, _)| *at)),
+            now,
+        ) {
+            return guard.as_ref().expect("reuse after Some").view.clone();
         }
 
-        let view = match guard.as_ref() {
-            Some(prev) => {
-                let dt = now.duration_since(prev.at).as_secs_f64().max(1e-3);
-                service_rate_from_delta(&snap, &prev.snap, dt)
+        let sample = guard.get_or_insert_with(|| SvcRateSample {
+            history: VecDeque::new(),
+            view: service_rate_zero(&snap),
+        });
+        push_history(&mut sample.history, now, snap.clone());
+        sample.view = match window_baselines(&sample.history) {
+            Some((short_prev, short_dt, long_prev, long_dt)) => {
+                service_rate_blended(&snap, short_prev, short_dt, long_prev, long_dt)
             }
             None => service_rate_zero(&snap),
         };
-
-        *guard = Some(SvcRateSample {
-            at: now,
-            snap,
-            view: view.clone(),
-        });
-        view
+        sample.view.clone()
     }
 
     /// Action run rates (accepted goals per second).
@@ -277,28 +287,64 @@ impl ConsoleState {
         let mut guard = self.act_rate.lock().unwrap_or_else(|e| e.into_inner());
         let snap = self.action_metrics.snapshot();
 
-        if let Some(prev) = guard.as_ref()
-            && now.duration_since(prev.at) < Duration::from_millis(RATE_BASELINE_MS)
-            && snap.total_runs == prev.snap.total_runs
-            && snap.actions.len() == prev.snap.actions.len()
-        {
-            return prev.view.clone();
+        if reuse_view(
+            guard
+                .as_ref()
+                .and_then(|s| s.history.back().map(|(at, _)| *at)),
+            now,
+        ) {
+            return guard.as_ref().expect("reuse after Some").view.clone();
         }
 
-        let view = match guard.as_ref() {
-            Some(prev) => {
-                let dt = now.duration_since(prev.at).as_secs_f64().max(1e-3);
-                action_rate_from_delta(&snap, &prev.snap, dt)
+        let sample = guard.get_or_insert_with(|| ActRateSample {
+            history: VecDeque::new(),
+            view: action_rate_zero(&snap),
+        });
+        push_history(&mut sample.history, now, snap.clone());
+        sample.view = match window_baselines(&sample.history) {
+            Some((short_prev, short_dt, long_prev, long_dt)) => {
+                action_rate_blended(&snap, short_prev, short_dt, long_prev, long_dt)
             }
             None => action_rate_zero(&snap),
         };
+        sample.view.clone()
+    }
+}
 
-        *guard = Some(ActRateSample {
-            at: now,
-            snap,
-            view: view.clone(),
-        });
-        view
+fn reuse_view(last_at: Option<Instant>, now: Instant) -> bool {
+    last_at.is_some_and(|at| now.duration_since(at) < Duration::from_millis(RATE_BASELINE_MS))
+}
+
+fn push_history<T>(history: &mut VecDeque<(Instant, T)>, now: Instant, snap: T) {
+    history.push_back((now, snap));
+    while history.len() > 1 && now.duration_since(history[0].0) > RATE_WINDOW {
+        history.pop_front();
+    }
+}
+
+fn window_baselines<T>(history: &VecDeque<(Instant, T)>) -> Option<(&T, f64, &T, f64)> {
+    let n = history.len();
+    if n < 2 {
+        return None;
+    }
+    let (now, _) = history.back()?;
+    let (short_at, short_prev) = history.get(n - 2)?;
+    let (long_at, long_prev) = history.front()?;
+    let short_dt = now.duration_since(*short_at).as_secs_f64().max(1e-3);
+    let long_dt = now.duration_since(*long_at).as_secs_f64().max(1e-3);
+    Some((short_prev, short_dt, long_prev, long_dt))
+}
+
+/// High-rate traffic uses the ~1 s sample; sub-2 Hz uses the 10 s window.
+pub(crate) fn pick_rate(short: f64, long: f64) -> f64 {
+    if short >= RATE_SHORT_HZ { short } else { long }
+}
+
+pub(crate) fn quantize_hz(r: f64) -> f64 {
+    if !r.is_finite() || r <= 0.0 {
+        0.0
+    } else {
+        (r * 1000.0).round() / 1000.0
     }
 }
 
@@ -358,6 +404,46 @@ fn rate_view_from_delta(
     }
 }
 
+fn rate_view_blended(
+    snap: &MessageMetricsSnapshot,
+    short_prev: &MessageMetricsSnapshot,
+    short_dt: f64,
+    long_prev: &MessageMetricsSnapshot,
+    long_dt: f64,
+) -> RateView {
+    let short = rate_view_from_delta(snap, short_prev, short_dt);
+    let long = rate_view_from_delta(snap, long_prev, long_dt);
+    let long_by: HashMap<&str, (f64, f64)> = long
+        .topics
+        .iter()
+        .map(|t| (t.name.as_str(), (t.msg_per_sec, t.bytes_per_sec)))
+        .collect();
+    let topics = short
+        .topics
+        .into_iter()
+        .map(|mut t| {
+            let (long_hz, long_bytes) = long_by.get(t.name.as_str()).copied().unwrap_or((0.0, 0.0));
+            let use_short = t.msg_per_sec >= RATE_SHORT_HZ;
+            if !use_short {
+                t.msg_per_sec = long_hz;
+                t.bytes_per_sec = long_bytes;
+            }
+            t
+        })
+        .collect();
+    RateView {
+        msg_per_sec: pick_rate(short.msg_per_sec, long.msg_per_sec),
+        bytes_per_sec: if short.msg_per_sec >= RATE_SHORT_HZ {
+            short.bytes_per_sec
+        } else {
+            long.bytes_per_sec
+        },
+        total_msgs: short.total_msgs,
+        total_bytes: short.total_bytes,
+        topics,
+    }
+}
+
 fn service_rate_zero(snap: &ServiceMetricsSnapshot) -> ServiceRateView {
     ServiceRateView {
         calls_per_sec: 0.0,
@@ -404,6 +490,36 @@ fn service_rate_from_delta(
     ServiceRateView {
         calls_per_sec: call_delta / dt,
         total_calls: snap.total_calls,
+        services,
+    }
+}
+
+fn service_rate_blended(
+    snap: &ServiceMetricsSnapshot,
+    short_prev: &ServiceMetricsSnapshot,
+    short_dt: f64,
+    long_prev: &ServiceMetricsSnapshot,
+    long_dt: f64,
+) -> ServiceRateView {
+    let short = service_rate_from_delta(snap, short_prev, short_dt);
+    let long = service_rate_from_delta(snap, long_prev, long_dt);
+    let long_by: HashMap<&str, f64> = long
+        .services
+        .iter()
+        .map(|s| (s.name.as_str(), s.calls_per_sec))
+        .collect();
+    let services = short
+        .services
+        .into_iter()
+        .map(|mut s| {
+            let long_hz = long_by.get(s.name.as_str()).copied().unwrap_or(0.0);
+            s.calls_per_sec = pick_rate(s.calls_per_sec, long_hz);
+            s
+        })
+        .collect();
+    ServiceRateView {
+        calls_per_sec: pick_rate(short.calls_per_sec, long.calls_per_sec),
+        total_calls: short.total_calls,
         services,
     }
 }
@@ -456,6 +572,36 @@ fn action_rate_from_delta(
     ActionRateView {
         runs_per_sec: run_delta / dt,
         total_runs: snap.total_runs,
+        actions,
+    }
+}
+
+fn action_rate_blended(
+    snap: &ActionMetricsSnapshot,
+    short_prev: &ActionMetricsSnapshot,
+    short_dt: f64,
+    long_prev: &ActionMetricsSnapshot,
+    long_dt: f64,
+) -> ActionRateView {
+    let short = action_rate_from_delta(snap, short_prev, short_dt);
+    let long = action_rate_from_delta(snap, long_prev, long_dt);
+    let long_by: HashMap<&str, f64> = long
+        .actions
+        .iter()
+        .map(|a| (a.name.as_str(), a.runs_per_sec))
+        .collect();
+    let actions = short
+        .actions
+        .into_iter()
+        .map(|mut a| {
+            let long_hz = long_by.get(a.name.as_str()).copied().unwrap_or(0.0);
+            a.runs_per_sec = pick_rate(a.runs_per_sec, long_hz);
+            a
+        })
+        .collect();
+    ActionRateView {
+        runs_per_sec: pick_rate(short.runs_per_sec, long.runs_per_sec),
+        total_runs: short.total_runs,
         actions,
     }
 }
@@ -522,4 +668,27 @@ fn unix_ms() -> u64 {
         .duration_since(UNIX_EPOCH)
         .unwrap_or(Duration::ZERO)
         .as_millis() as u64
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{pick_rate, quantize_hz};
+
+    #[test]
+    fn pick_rate_keeps_short_when_busy() {
+        assert!((pick_rate(50.0, 40.0) - 50.0).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn pick_rate_uses_long_window_below_2hz() {
+        assert!((pick_rate(1.0, 0.2) - 0.2).abs() < f64::EPSILON);
+        assert!((pick_rate(0.0, 0.5) - 0.5).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn quantize_hz_three_decimals() {
+        assert_eq!(quantize_hz(0.2), 0.2);
+        assert_eq!(quantize_hz(0.0), 0.0);
+        assert!((quantize_hz(1.23456) - 1.235).abs() < 1e-9);
+    }
 }

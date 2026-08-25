@@ -6,6 +6,7 @@ Run after: just python-dev
 
 from __future__ import annotations
 
+import json
 import time
 import urllib.error
 import urllib.request
@@ -56,6 +57,12 @@ def test_console_index_and_status() -> None:
             assert resp.status == 200
         assert "ONLINE" in status or "status" in status.lower(), status
 
+        with urllib.request.urlopen(f"{base}/api/v1/console", timeout=3) as resp:
+            flags = json.loads(resp.read().decode())
+            assert resp.status == 200
+        assert flags["docsEnabled"] is True
+        assert flags["tankEnabled"] is True
+
 
 def test_no_console_skips_ui() -> None:
     import robot_bus
@@ -75,10 +82,26 @@ def test_no_console_skips_ui() -> None:
         assert b"<!doctype" not in body.lower()
 
 
+def test_no_docs_hides_sidebar_flag() -> None:
+    import robot_bus
+
+    binds = _ephemeral_binds()
+    binds["no_docs"] = True
+    with robot_bus.RobotBusBroker.start(**binds) as broker:
+        listen = broker.console_listen
+        assert listen, "console still starts when only docs are hidden"
+        time.sleep(0.2)
+        with urllib.request.urlopen(f"http://{listen}/api/v1/console", timeout=3) as resp:
+            flags = json.loads(resp.read().decode())
+        assert flags["docsEnabled"] is False
+        assert flags["tankEnabled"] is True
+
+
 def main() -> int:
     _require_native()
     test_console_index_and_status()
     test_no_console_skips_ui()
+    test_no_docs_hides_sidebar_flag()
     print("ok")
     return 0
 

@@ -204,7 +204,7 @@ internal interface RobotBusC : Library {
     }
     @Structure.FieldOrder("host","transport","wsUrl","messageXsub","messageXpub","serviceFrontend","serviceBackend","actionBackend","actionFrontend")
     class NodeOptions : Structure() { @JvmField var host:String?=null; @JvmField var transport:String?=null; @JvmField var wsUrl:String?=null; @JvmField var messageXsub:String?=null; @JvmField var messageXpub:String?=null; @JvmField var serviceFrontend:String?=null; @JvmField var serviceBackend:String?=null; @JvmField var actionBackend:String?=null; @JvmField var actionFrontend:String?=null }
-    @Structure.FieldOrder("messageXsubBind","messageXpubBind","serviceFrontendBind","serviceBackendBind","actionFrontendBind","actionBackendBind","apiListen","consoleListen","tcpOnly","noConsole","brokerId","messagePeers","messagePeerCount","servicePeers","servicePeerCount","actionPeers","actionPeerCount","noDiscovery","domainId","advertiseHost","peers","peerCount","noTank")
+    @Structure.FieldOrder("messageXsubBind","messageXpubBind","serviceFrontendBind","serviceBackendBind","actionFrontendBind","actionBackendBind","apiListen","consoleListen","tcpOnly","noConsole","brokerId","messagePeers","messagePeerCount","servicePeers","servicePeerCount","actionPeers","actionPeerCount","noDiscovery","domainId","advertiseHost","peers","peerCount","noTank","noDocs")
     class BrokerOptions : Structure() {
         @JvmField var messageXsubBind: String? = null
         @JvmField var messageXpubBind: String? = null
@@ -229,6 +229,7 @@ internal interface RobotBusC : Library {
         @JvmField var peers: Pointer? = null
         @JvmField var peerCount = 0L
         @JvmField var noTank = 0
+        @JvmField var noDocs = 0
     }
     @Structure.FieldOrder("apiUrl","brokerId","timeoutSecs")
     class DiscoverOpts : Structure() {

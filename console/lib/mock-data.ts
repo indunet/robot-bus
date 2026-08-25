@@ -152,6 +152,35 @@ export function fmtNum(n: number): string {
   return `${n}`
 }
 
+/** Format ops/sec so sub-1 Hz values stay visible (0.20, 0.50, 1.2, 48). */
+export function fmtRate(n: number): string {
+  if (!Number.isFinite(n) || n <= 0) return '0'
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(2)}M`
+  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`
+  if (n >= 100) return n.toFixed(0)
+  if (n >= 10) return n.toFixed(1)
+  if (n >= 1) return n.toFixed(1)
+  return n.toFixed(2)
+}
+
+/** Parse protobuf number / string / bigint into a finite float. */
+export function f64(value: string | number | bigint | undefined | null): number {
+  if (value == null || value === '') return 0
+  if (typeof value === 'number') return Number.isFinite(value) ? value : 0
+  if (typeof value === 'bigint') return Number(value)
+  const n = Number(value)
+  return Number.isFinite(n) ? n : 0
+}
+
+export function topicIsIdle(lastSeen: number, msgPerSec: number, now = Date.now()): boolean {
+  if (!lastSeen && msgPerSec < 0.05) return true
+  if (!lastSeen) return msgPerSec < 0.05
+  if (msgPerSec < 0.05) return now - lastSeen > 8_000
+  const periodMs = 1000 / msgPerSec
+  const idleAfter = Math.min(15_000, Math.max(2_500, 2.5 * periodMs))
+  return now - lastSeen > idleAfter
+}
+
 export function fmtAge(ts: number): string {
   if (!ts) return '—'
   const age = Date.now() - ts

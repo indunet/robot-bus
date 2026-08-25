@@ -1,6 +1,6 @@
 'use client'
 
-import type { ButtonHTMLAttributes } from 'react'
+import type { ButtonHTMLAttributes, ReactNode } from 'react'
 import { useI18n } from '@/lib/i18n'
 import {
   KEY_BUTTONS,
@@ -120,160 +120,72 @@ export default function TankControls({
         </p>
       </div>
 
-      <ul className="flex flex-col gap-1.5 mb-3">
+      <ul className="flex flex-col gap-1.5">
         {capabilities.map((item) => {
           const active = capability === item.id
           return (
-            <li key={item.id}>
-              <button
-                type="button"
-                onClick={() => onSelectCapability(item.id)}
-                className={`w-full text-center rounded-sm border px-2 py-1.5 transition-colors ${
-                  active
-                    ? 'border-bus-cyan bg-bus-cyan/15 text-bus-cyan'
-                    : 'border-bus-border bg-[#1f2428] hover:border-bus-cyan-dim text-bus-text'
-                }`}
-              >
-                <span className="text-[11px]">{item.label}</span>
-              </button>
-            </li>
+            <CapabilityBlock
+              key={item.id}
+              label={item.label}
+              active={active}
+              onSelect={() => onSelectCapability(item.id)}
+            >
+              {active && item.id === 'keyboard' && (
+                <KeyboardPad
+                  help={t('tankArrowHelp')}
+                  pressed={pressed}
+                  velocity={velocity}
+                  onPress={onPress}
+                  onRelease={onRelease}
+                />
+              )}
+              {active && item.id === 'point_nav' && (
+                <PointNavPad
+                  help={t('tankCapPointNavHelp')}
+                  goLabel={t('tankNavGo')}
+                  cancelLabel={t('tankNavCancel')}
+                  progressLabel={t('tankNavProgress')}
+                  thetaLabel={t('tankNavTheta')}
+                  pointGoal={pointGoal}
+                  navPhase={navPhase}
+                  navProgress={navProgress}
+                  navStatusLabel={navStatusLabel}
+                  onRun={onRunPointNav}
+                  onCancel={onCancelNav}
+                />
+              )}
+              {active && item.id === 'multi_waypoint' && (
+                <MultiNavPad
+                  help={t('tankCapMultiNavHelp')}
+                  waypointsLabel={t('tankNavWaypoints', { n: waypoints.length })}
+                  goLabel={t('tankNavGo')}
+                  undoLabel={t('tankNavUndo')}
+                  clearLabel={t('tankNavClear')}
+                  cancelLabel={t('tankNavCancel')}
+                  progressLabel={t('tankNavProgress')}
+                  thetaLabel={t('tankNavTheta')}
+                  waypoints={waypoints}
+                  navPhase={navPhase}
+                  navProgress={navProgress}
+                  navStatusLabel={navStatusLabel}
+                  onRun={onRunMultiNav}
+                  onUndo={onUndoWaypoint}
+                  onClear={onClearWaypoints}
+                  onCancel={onCancelNav}
+                />
+              )}
+              {active && item.id === 'reset' && (
+                <ResetPad
+                  hint={t('tankResetHint')}
+                  label={resetting ? t('tankResetting') : t('tankReset')}
+                  disabled={resetting || !sessionReady}
+                  onReset={onReset}
+                />
+              )}
+            </CapabilityBlock>
           )
         })}
       </ul>
-
-      {capability === 'keyboard' && (
-        <div className="border-t border-bus-border pt-3">
-          <p className="text-[10px] leading-5 text-bus-muted mb-2">{t('tankArrowHelp')}</p>
-          <div className="grid grid-cols-3 gap-2 mx-auto max-w-[200px] mb-3">
-            {KEY_BUTTONS.map(({ direction, label, className }) => (
-              <button
-                type="button"
-                key={direction}
-                onPointerDown={(event) => {
-                  event.currentTarget.setPointerCapture(event.pointerId)
-                  onPress(direction)
-                }}
-                onPointerUp={() => onRelease(direction)}
-                onPointerCancel={() => onRelease(direction)}
-                className={`${className} h-10 border rounded-sm text-xs transition-all ${
-                  pressed.has(direction)
-                    ? 'border-bus-cyan text-bus-cyan bg-bus-cyan/20 translate-y-px shadow-inner'
-                    : 'border-bus-border bg-[#1f2428] hover:border-bus-cyan-dim hover:text-bus-cyan'
-                }`}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
-          <dl className="grid grid-cols-2 gap-y-1 text-[11px]">
-            <dt className="text-bus-muted">linear.x</dt>
-            <dd className="text-right">{velocity.linear.toFixed(2)}</dd>
-            <dt className="text-bus-muted">angular.z</dt>
-            <dd className="text-right">{velocity.angular.toFixed(2)}</dd>
-          </dl>
-        </div>
-      )}
-
-      {capability === 'point_nav' && (
-        <div className="border-t border-bus-border pt-3 text-[10px] leading-5">
-          <p className="text-bus-muted mb-2">{t('tankCapPointNavHelp')}</p>
-          {pointGoal && (
-            <GoalStats
-              x={pointGoal.x}
-              y={pointGoal.y}
-              theta={pointGoal.theta}
-              thetaLabel={t('tankNavTheta')}
-              xLabel="goal.x"
-              yLabel="goal.y"
-            />
-          )}
-          <ActionButton
-            tone="go"
-            disabled={!pointGoal || navPhase === 'running'}
-            onClick={onRunPointNav}
-            className="w-full mb-2"
-          >
-            {t('tankNavGo')}
-          </ActionButton>
-          <NavProgress
-            phase={navPhase}
-            progress={navProgress}
-            label={navStatusLabel}
-            progressLabel={t('tankNavProgress')}
-          />
-          {navPhase === 'running' && (
-            <ActionButton tone="cancel" onClick={onCancelNav} className="mt-2 w-full">
-              {t('tankNavCancel')}
-            </ActionButton>
-          )}
-        </div>
-      )}
-
-      {capability === 'multi_waypoint' && (
-        <div className="border-t border-bus-border pt-3 text-[10px] leading-5">
-          <p className="text-bus-muted mb-2">{t('tankCapMultiNavHelp')}</p>
-          <p className="text-[11px] mb-2">{t('tankNavWaypoints', { n: waypoints.length })}</p>
-          {waypoints.length > 0 && (
-            <GoalStats
-              x={waypoints[waypoints.length - 1].x}
-              y={waypoints[waypoints.length - 1].y}
-              theta={waypoints[waypoints.length - 1].theta}
-              thetaLabel={t('tankNavTheta')}
-              xLabel="last.x"
-              yLabel="last.y"
-            />
-          )}
-          <div className="grid grid-cols-3 gap-1.5 mb-2">
-            <ActionButton
-              tone="go"
-              disabled={waypoints.length === 0 || navPhase === 'running'}
-              onClick={onRunMultiNav}
-            >
-              {t('tankNavGo')}
-            </ActionButton>
-            <ActionButton
-              tone="undo"
-              disabled={waypoints.length === 0 || navPhase === 'running'}
-              onClick={onUndoWaypoint}
-            >
-              {t('tankNavUndo')}
-            </ActionButton>
-            <ActionButton
-              tone="clear"
-              disabled={waypoints.length === 0 || navPhase === 'running'}
-              onClick={onClearWaypoints}
-            >
-              {t('tankNavClear')}
-            </ActionButton>
-          </div>
-          <NavProgress
-            phase={navPhase}
-            progress={navProgress}
-            label={navStatusLabel}
-            progressLabel={t('tankNavProgress')}
-          />
-          {navPhase === 'running' && (
-            <ActionButton tone="cancel" onClick={onCancelNav} className="mt-2 w-full">
-              {t('tankNavCancel')}
-            </ActionButton>
-          )}
-        </div>
-      )}
-
-      {capability === 'reset' && (
-        <div className="border-t border-bus-border pt-3 text-[10px] leading-5">
-          <p className="text-bus-muted mb-2">{t('tankResetHint')}</p>
-          <ActionButton
-            tone="reset"
-            disabled={resetting || !sessionReady}
-            title={t('tankResetHint')}
-            onClick={onReset}
-            className="w-full"
-          >
-            {resetting ? t('tankResetting') : t('tankReset')}
-          </ActionButton>
-        </div>
-      )}
     </aside>
   )
 }
@@ -299,6 +211,261 @@ function StatusChip({
     <div className="flex items-center justify-between gap-1 border border-bus-border rounded-sm px-1.5 py-1">
       <span className="text-bus-muted">{label}</span>
       <span className={color}>{value}</span>
+    </div>
+  )
+}
+
+function CapabilityBlock({
+  label,
+  active,
+  onSelect,
+  children,
+}: {
+  label: string
+  active: boolean
+  onSelect: () => void
+  children?: ReactNode
+}) {
+  return (
+    <li
+      className={
+        active
+          ? 'overflow-hidden rounded-sm border border-bus-cyan/60 bg-[#101417] shadow-[0_0_12px_rgb(0_212_255_/08%),inset_0_1px_0_rgb(255_255_255_/05%)]'
+          : undefined
+      }
+    >
+      <button
+        type="button"
+        onClick={onSelect}
+        className={`w-full text-center px-2 py-1.5 transition-colors ${
+          active
+            ? 'border-0 bg-bus-cyan/18 text-bus-cyan'
+            : 'rounded-sm border border-bus-border bg-[#1f2428] hover:border-bus-cyan-dim text-bus-text'
+        }`}
+      >
+        <span className="text-[11px]">{label}</span>
+      </button>
+      {active && children ? (
+        <div className="border-t border-bus-cyan/20 bg-black/35 px-2.5 py-2.5">
+          {children}
+        </div>
+      ) : null}
+    </li>
+  )
+}
+
+function KeyboardPad({
+  help,
+  pressed,
+  velocity,
+  onPress,
+  onRelease,
+}: {
+  help: string
+  pressed: Set<Direction>
+  velocity: { linear: number; angular: number }
+  onPress: (direction: Direction) => void
+  onRelease: (direction: Direction) => void
+}) {
+  return (
+    <div>
+      <p className="text-[10px] leading-5 text-bus-muted mb-2">{help}</p>
+      <div className="grid grid-cols-3 gap-2 mx-auto max-w-[200px] mb-3">
+        {KEY_BUTTONS.map(({ direction, label, className }) => (
+          <button
+            type="button"
+            key={direction}
+            onPointerDown={(event) => {
+              event.currentTarget.setPointerCapture(event.pointerId)
+              onPress(direction)
+            }}
+            onPointerUp={() => onRelease(direction)}
+            onPointerCancel={() => onRelease(direction)}
+            className={`${className} h-10 border rounded-sm text-xs transition-all ${
+              pressed.has(direction)
+                ? 'border-bus-cyan text-bus-cyan bg-bus-cyan/20 translate-y-px shadow-inner'
+                : 'border-bus-border bg-[#1f2428] hover:border-bus-cyan-dim hover:text-bus-cyan'
+            }`}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+      <dl className="grid grid-cols-2 gap-y-1 text-[11px]">
+        <dt className="text-bus-muted">linear.x</dt>
+        <dd className="text-right">{velocity.linear.toFixed(2)}</dd>
+        <dt className="text-bus-muted">angular.z</dt>
+        <dd className="text-right">{velocity.angular.toFixed(2)}</dd>
+      </dl>
+    </div>
+  )
+}
+
+function PointNavPad({
+  help,
+  goLabel,
+  cancelLabel,
+  progressLabel,
+  thetaLabel,
+  pointGoal,
+  navPhase,
+  navProgress,
+  navStatusLabel,
+  onRun,
+  onCancel,
+}: {
+  help: string
+  goLabel: string
+  cancelLabel: string
+  progressLabel: string
+  thetaLabel: string
+  pointGoal: Pose | null
+  navPhase: NavPhase
+  navProgress: number
+  navStatusLabel: string
+  onRun: () => void
+  onCancel: () => void
+}) {
+  return (
+    <div className="text-[10px] leading-5">
+      <p className="text-bus-muted mb-2">{help}</p>
+      {pointGoal && (
+        <GoalStats
+          x={pointGoal.x}
+          y={pointGoal.y}
+          theta={pointGoal.theta}
+          thetaLabel={thetaLabel}
+          xLabel="goal.x"
+          yLabel="goal.y"
+        />
+      )}
+      <ActionButton
+        tone="go"
+        disabled={!pointGoal || navPhase === 'running'}
+        onClick={onRun}
+        className="w-full mb-2"
+      >
+        {goLabel}
+      </ActionButton>
+      <NavProgress
+        phase={navPhase}
+        progress={navProgress}
+        label={navStatusLabel}
+        progressLabel={progressLabel}
+      />
+      {navPhase === 'running' && (
+        <ActionButton tone="cancel" onClick={onCancel} className="mt-2 w-full">
+          {cancelLabel}
+        </ActionButton>
+      )}
+    </div>
+  )
+}
+
+function MultiNavPad({
+  help,
+  waypointsLabel,
+  goLabel,
+  undoLabel,
+  clearLabel,
+  cancelLabel,
+  progressLabel,
+  thetaLabel,
+  waypoints,
+  navPhase,
+  navProgress,
+  navStatusLabel,
+  onRun,
+  onUndo,
+  onClear,
+  onCancel,
+}: {
+  help: string
+  waypointsLabel: string
+  goLabel: string
+  undoLabel: string
+  clearLabel: string
+  cancelLabel: string
+  progressLabel: string
+  thetaLabel: string
+  waypoints: Pose[]
+  navPhase: NavPhase
+  navProgress: number
+  navStatusLabel: string
+  onRun: () => void
+  onUndo: () => void
+  onClear: () => void
+  onCancel: () => void
+}) {
+  return (
+    <div className="text-[10px] leading-5">
+      <p className="text-bus-muted mb-2">{help}</p>
+      <p className="text-[11px] mb-2">{waypointsLabel}</p>
+      {waypoints.length > 0 && (
+        <GoalStats
+          x={waypoints[waypoints.length - 1].x}
+          y={waypoints[waypoints.length - 1].y}
+          theta={waypoints[waypoints.length - 1].theta}
+          thetaLabel={thetaLabel}
+          xLabel="last.x"
+          yLabel="last.y"
+        />
+      )}
+      <div className="grid grid-cols-3 gap-1.5 mb-2">
+        <ActionButton
+          tone="go"
+          disabled={waypoints.length === 0 || navPhase === 'running'}
+          onClick={onRun}
+        >
+          {goLabel}
+        </ActionButton>
+        <ActionButton
+          tone="undo"
+          disabled={waypoints.length === 0 || navPhase === 'running'}
+          onClick={onUndo}
+        >
+          {undoLabel}
+        </ActionButton>
+        <ActionButton
+          tone="clear"
+          disabled={waypoints.length === 0 || navPhase === 'running'}
+          onClick={onClear}
+        >
+          {clearLabel}
+        </ActionButton>
+      </div>
+      <NavProgress
+        phase={navPhase}
+        progress={navProgress}
+        label={navStatusLabel}
+        progressLabel={progressLabel}
+      />
+      {navPhase === 'running' && (
+        <ActionButton tone="cancel" onClick={onCancel} className="mt-2 w-full">
+          {cancelLabel}
+        </ActionButton>
+      )}
+    </div>
+  )
+}
+
+function ResetPad({
+  hint,
+  label,
+  disabled,
+  onReset,
+}: {
+  hint: string
+  label: string
+  disabled: boolean
+  onReset: () => void
+}) {
+  return (
+    <div className="text-[10px] leading-5">
+      <p className="text-bus-muted mb-2">{hint}</p>
+      <ActionButton tone="reset" disabled={disabled} title={hint} onClick={onReset} className="w-full">
+        {label}
+      </ActionButton>
     </div>
   )
 }

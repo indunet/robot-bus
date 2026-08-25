@@ -31,7 +31,7 @@ with robot_bus.RobotBusBroker.start(
     tcp_only=True,
 ) as broker:
     # broker.message_xsub_bind / message_xpub_bind / api_listen / console_listen
-    # Web console: http://127.0.0.1:15570（no_console=True 可关）
+    # Web console: http://127.0.0.1:15570（no_console=True 可关；no_tank / no_docs 可隐藏侧栏菜单）
     pass
 ```
 

@@ -53,7 +53,7 @@ pip install robot-bus
 * Rust
 
 ```toml
-robot-bus = "1.3.2"
+robot-bus = "1.3.3"
 ```
 
 * npm
@@ -68,7 +68,7 @@ npm install robot-bus
 <dependency>
     <groupId>org.indunet</groupId>
     <artifactId>robot-bus</artifactId>
-    <version>1.3.2</version>
+    <version>1.3.3</version>
 </dependency>
 ```
 
@@ -138,7 +138,7 @@ with robot_bus.RobotBusBroker.start() as broker:
 2. 打开 **http://127.0.0.1:15570**，在侧栏点击 **TANK**（或访问 `/tank/`）。
 3. 点击面板后，用 **方向键** 遥控；也可切换到点选导航，在地图上 **鼠标点击** 下发目标点。
 
-打开面板会拉起进程内 tank 节点：订阅 `/robot_bus/tank/cmd_vel`，发布 `/robot_bus/tank/pose`。多浏览器共享同一场景（遥控 last-writer-wins）。不需要时可加 `--no-tank`。
+打开面板会拉起进程内 tank 节点：订阅 `/robot_bus/tank/cmd_vel`，发布 `/robot_bus/tank/pose`。多浏览器共享同一场景（遥控 last-writer-wins）。不需要时可加 `--no-tank`。侧栏 **文档** 默认显示，可用 `--no-docs` 隐藏。
 
 ### *3.3 Topic（发布 / 订阅）*
 
@@ -238,7 +238,7 @@ Broker 内嵌监控界面（Overview、Topics、Services、Actions、Topology、
 
 **http://127.0.0.1:15570**
 
-上手可先试侧栏 **TANK** 的 [小坦克示例](#32-小坦克示例)。与 API / WebSocket 网关同端口。可用 `--no-console` 关闭。前端源码在 [`console/`](console/)；本地改 UI 见 [`console/README.md`](console/README.md)。
+上手可先试侧栏 **TANK** 的 [小坦克示例](#32-小坦克示例)。侧栏 **文档** 默认显示，可用 `--no-docs` 隐藏。与 API / WebSocket 网关同端口。可用 `--no-console` 关闭整个 UI。前端源码在 [`console/`](console/)；本地改 UI 见 [`console/README.md`](console/README.md)。
 
 ## *5. ROS 2 桥*
 

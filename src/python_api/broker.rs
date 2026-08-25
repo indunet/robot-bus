@@ -59,6 +59,7 @@ impl PyRobotBusBroker {
         console_listen = None,
         no_console = false,
         no_tank = false,
+        no_docs = false,
         broker_id = None,
         message_peers = None,
         service_peers = None,
@@ -99,6 +100,7 @@ impl PyRobotBusBroker {
         console_listen: Option<String>,
         no_console: bool,
         no_tank: bool,
+        no_docs: bool,
         broker_id: Option<String>,
         message_peers: Option<Vec<String>>,
         service_peers: Option<Vec<String>>,
@@ -213,6 +215,9 @@ impl PyRobotBusBroker {
             if no_tank {
                 config.console.tank_enabled = false;
             }
+            if no_docs {
+                config.console.docs_enabled = false;
+            }
             if let Some(v) = console_listen {
                 config.console.listen = v
                     .parse()
@@ -222,7 +227,7 @@ impl PyRobotBusBroker {
         }
         #[cfg(not(feature = "console"))]
         {
-            let _ = (console_listen, no_console, no_tank);
+            let _ = (console_listen, no_console, no_tank, no_docs);
         }
 
         apply_federation_opts(

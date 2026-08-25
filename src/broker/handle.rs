@@ -301,6 +301,9 @@ pub struct ConsoleBrokerConfig {
     /// When false, the in-console tank demo is hidden and cannot be started
     /// (`--no-tank`). Default true for local / sim use.
     pub tank_enabled: bool,
+    /// When false, the console docs sidebar entry is hidden (`--no-docs`).
+    /// Default true.
+    pub docs_enabled: bool,
     /// Listen address used only when the `grpc` feature is disabled.
     pub listen: SocketAddr,
     /// Explicit CORS allowlist for cross-origin browser clients.
@@ -314,6 +317,7 @@ impl Default for ConsoleBrokerConfig {
         Self {
             enabled: true,
             tank_enabled: true,
+            docs_enabled: true,
             listen: "0.0.0.0:15570".parse().expect("default console listen"),
             cors_origins: Vec::new(),
         }
@@ -672,6 +676,7 @@ impl RobotBusBroker {
                 action.metrics.clone(),
                 tank,
                 config.console.tank_enabled,
+                config.console.docs_enabled,
             ))
         } else {
             None

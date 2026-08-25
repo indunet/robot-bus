@@ -65,6 +65,7 @@ pub struct BrokerStartOptions {
     pub console_listen: Option<String>,
     pub no_console: Option<bool>,
     pub no_tank: Option<bool>,
+    pub no_docs: Option<bool>,
     pub broker_id: Option<String>,
     pub message_peers: Option<Vec<String>>,
     pub service_peers: Option<Vec<String>>,
@@ -171,6 +172,9 @@ impl RobotBusBroker {
             }
             if o.no_tank.unwrap_or(false) {
                 config.console.tank_enabled = false;
+            }
+            if o.no_docs.unwrap_or(false) {
+                config.console.docs_enabled = false;
             }
             if let Some(v) = o.console_listen {
                 config.console.listen = v

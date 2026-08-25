@@ -132,6 +132,7 @@ pub fn ephemeral_robot_bus_config() -> RobotBusConfig {
         console: ConsoleBrokerConfig {
             enabled: false,
             tank_enabled: false,
+            docs_enabled: true,
             listen: "127.0.0.1:0".parse().expect("console listen"),
             cors_origins: vec![],
         },

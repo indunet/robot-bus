@@ -47,6 +47,8 @@ pub(crate) struct RobotBusBrokerOptions {
     pub peer_count: usize,
     /// When non-zero, hide tank demo and reject tank session acquire.
     pub no_tank: c_int,
+    /// When non-zero, hide docs in the console sidebar.
+    pub no_docs: c_int,
 }
 
 #[unsafe(no_mangle)]
@@ -117,6 +119,9 @@ fn parse_broker_config(opts: *const RobotBusBrokerOptions) -> Result<RobotBusCon
     }
     if o.no_tank != 0 {
         config.console.tank_enabled = false;
+    }
+    if o.no_docs != 0 {
+        config.console.docs_enabled = false;
     }
     if let Some(v) = cstr_opt(o.console_listen) {
         match v.parse() {

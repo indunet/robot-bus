@@ -25,6 +25,7 @@ constructor(
     private val advertiseHost: String? = null,
     private val peers: List<String>? = null,
     private val noTank: Boolean = false,
+    private val noDocs: Boolean = false,
 ) {
     /** Keep-alive for native `char**` peer arrays until [Broker] start returns. */
     private var messagePeersNative: StringArray? = null
@@ -53,6 +54,8 @@ constructor(
     fun isNoConsole(): Boolean = noConsole
 
     fun isNoTank(): Boolean = noTank
+
+    fun isNoDocs(): Boolean = noDocs
 
     fun getBrokerId(): String? = brokerId
 
@@ -107,6 +110,7 @@ constructor(
             o.peerCount = peers.size.toLong()
         }
         o.noTank = if (noTank) 1 else 0
+        o.noDocs = if (noDocs) 1 else 0
         o.write()
         return o
     }

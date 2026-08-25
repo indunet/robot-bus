@@ -65,6 +65,7 @@ fn test_broker_config(
         console: ConsoleBrokerConfig {
             enabled: true,
             tank_enabled: false,
+            docs_enabled: true,
             listen: format!("127.0.0.1:{http}").parse().unwrap(),
             cors_origins: vec![],
         },

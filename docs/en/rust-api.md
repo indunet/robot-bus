@@ -5,9 +5,9 @@ English | [中文](../zh/rust-api.md)
 `Cargo.toml`:
 
 ```toml
-robot-bus = "1.3.2"
+robot-bus = "1.3.3"
 # Local: robot-bus = { path = "../robot-bus" }
-# WebSocket RPC gateway (`ws` feature) is on by default; to disable: robot-bus = { version = "1.3.2", default-features = false }
+# WebSocket RPC gateway (`ws` feature) is on by default; to disable: robot-bus = { version = "1.3.3", default-features = false }
 ```
 
 ## Broker startup
@@ -21,6 +21,7 @@ cargo run --bin robot_bus_broker
 # API port: --api-listen 0.0.0.0:15570 (alias --console-listen)
 # Externally reachable host: --advertise-host HOST
 # Federation: --peer 10.0.0.2:15570 (peer API port; repeatable)
+# Console sidebar: --no-tank / --no-docs (docs shown by default)
 ```
 
 **Default endpoints:**

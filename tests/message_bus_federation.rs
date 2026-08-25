@@ -86,6 +86,7 @@ fn federated_bus_config(
         console: ConsoleBrokerConfig {
             enabled: false,
             tank_enabled: false,
+            docs_enabled: true,
             listen: format!("127.0.0.1:{}", other[5])
                 .parse()
                 .expect("console listen"),

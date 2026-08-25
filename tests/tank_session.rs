@@ -61,6 +61,7 @@ fn test_broker_config(
         console: ConsoleBrokerConfig {
             enabled: true,
             tank_enabled: true,
+            docs_enabled: true,
             listen: format!("127.0.0.1:{http}").parse().unwrap(),
             cors_origins: vec![],
         },
@@ -85,6 +86,14 @@ fn tank_session_starts_physics_and_stops_after_release() {
         .expect("json");
     assert_eq!(idle["running"], false);
     assert_eq!(idle["viewers"], 0);
+
+    let ui: serde_json::Value = ureq::get(&format!("{base}/api/v1/console"))
+        .call()
+        .expect("console ui")
+        .into_json()
+        .expect("json");
+    assert_eq!(ui["tankEnabled"], true);
+    assert_eq!(ui["docsEnabled"], true);
 
     let session: serde_json::Value = ureq::post(&format!("{base}/api/v1/tank/session"))
         .call()

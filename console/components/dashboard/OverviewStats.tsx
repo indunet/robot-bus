@@ -7,6 +7,7 @@ import {
   type ActionInfo,
   fmtBytes,
   fmtNum,
+  fmtRate,
 } from '@/lib/mock-data'
 import { PanelHeader } from './BrokerOverview'
 import { Activity, Radio, Cpu, GitBranch, HardDrive, Layers, Hash, Clock } from 'lucide-react'
@@ -34,7 +35,7 @@ export default function OverviewStats({ broker, topics, services, actions }: Pro
         <StatTile
           icon={<Activity size={12} />}
           label={t('statMsgS')}
-          value={fmtNum(broker.msgPerSec)}
+          value={fmtRate(broker.msgPerSec)}
           accent="cyan"
         />
         <StatTile
@@ -58,7 +59,7 @@ export default function OverviewStats({ broker, topics, services, actions }: Pro
         <StatTile
           icon={<Cpu size={12} />}
           label={t('statSvcS')}
-          value={fmtNum(broker.svcCallsPerSec)}
+          value={fmtRate(broker.svcCallsPerSec)}
           accent="amber"
         />
         <StatTile
@@ -70,7 +71,7 @@ export default function OverviewStats({ broker, topics, services, actions }: Pro
         <StatTile
           icon={<GitBranch size={12} />}
           label={t('statActS')}
-          value={fmtNum(broker.actRunsPerSec)}
+          value={fmtRate(broker.actRunsPerSec)}
           accent="green"
         />
         <StatTile

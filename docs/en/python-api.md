@@ -31,7 +31,7 @@ with robot_bus.RobotBusBroker.start(
     tcp_only=True,
 ) as broker:
     # broker.message_xsub_bind / message_xpub_bind / api_listen / console_listen
-    # Web console: http://127.0.0.1:15570  (pass no_console=True to disable)
+    # Web console: http://127.0.0.1:15570  (pass no_console=True to disable; no_tank / no_docs hide sidebar entries)
     pass
 ```
 

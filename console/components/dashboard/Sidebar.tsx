@@ -25,11 +25,22 @@ interface Props {
   active: Tab
   onSelect: (tab: Tab) => void
   onOpenTank: () => void
+  /** Floating TANK window is open — sidebar entry shows pressed/active. */
+  tankOpen?: boolean
   /** When false, the TANK button is hidden (`--no-tank`). Default true. */
   tankEnabled?: boolean
+  /** When false, the DOCS button is hidden (`--no-docs`). Default true. */
+  docsEnabled?: boolean
 }
 
-export default function Sidebar({ active, onSelect, onOpenTank, tankEnabled = true }: Props) {
+export default function Sidebar({
+  active,
+  onSelect,
+  onOpenTank,
+  tankOpen = false,
+  tankEnabled = true,
+  docsEnabled = true,
+}: Props) {
   const { t } = useI18n()
 
   const items: { id: Tab; label: string; short: string; icon: React.ReactNode }[] = [
@@ -68,25 +79,28 @@ export default function Sidebar({ active, onSelect, onOpenTank, tankEnabled = tr
             type="button"
             onClick={onOpenTank}
             title={t('navTankWindows')}
-            className="relative w-12 h-12 flex flex-col items-center justify-center gap-0.5 rounded transition-colors text-bus-muted hover:text-bus-cyan hover:bg-bus-panel"
+            aria-pressed={tankOpen}
+            className={navButtonClass(tankOpen)}
           >
             <Bot size={17} />
             <span className="font-mono text-[9px] tracking-widest">{t('navTankShort')}</span>
           </button>
         </>
       )}
-      <div className="mt-auto flex flex-col items-center gap-1.5 pt-1.5">
-        <div className="w-8 border-t border-bus-border" />
-        <button
-          type="button"
-          onClick={() => onSelect('docs')}
-          title={t('navDocs')}
-          className={navButtonClass(active === 'docs')}
-        >
-          <BookOpen size={16} />
-          <span className="font-mono text-[9px] tracking-widest">{t('navDocsShort')}</span>
-        </button>
-      </div>
+      {docsEnabled && (
+        <div className="mt-auto flex flex-col items-center gap-1.5 pt-1.5">
+          <div className="w-8 border-t border-bus-border" />
+          <button
+            type="button"
+            onClick={() => onSelect('docs')}
+            title={t('navDocs')}
+            className={navButtonClass(active === 'docs')}
+          >
+            <BookOpen size={16} />
+            <span className="font-mono text-[9px] tracking-widest">{t('navDocsShort')}</span>
+          </button>
+        </div>
+      )}
     </aside>
   )
 }

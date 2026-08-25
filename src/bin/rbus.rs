@@ -95,7 +95,7 @@ struct TopicRow {
     #[serde(default)]
     type_name: Option<String>,
     #[serde(default)]
-    msg_per_sec: u64,
+    msg_per_sec: f64,
     #[serde(default)]
     bytes_per_sec: u64,
     #[serde(default)]
@@ -127,10 +127,10 @@ struct StatusResponse {
     act_fe: String,
     #[serde(rename = "actBE")]
     act_be: String,
-    msg_per_sec: u64,
+    msg_per_sec: f64,
     bytes_per_sec: u64,
-    svc_calls_per_sec: u64,
-    act_runs_per_sec: u64,
+    svc_calls_per_sec: f64,
+    act_runs_per_sec: f64,
     total_messages: u64,
     total_errors: u64,
 }
