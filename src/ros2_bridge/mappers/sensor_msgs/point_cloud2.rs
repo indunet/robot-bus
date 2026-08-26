@@ -145,10 +145,10 @@ fn point_cloud2_typed_to_bus(
                 count: f.count,
             })
             .collect(),
-        is_bigendian: msg.is_bigendian != 0,
+        is_bigendian: msg.is_bigendian,
         point_step: msg.point_step,
         row_step: msg.row_step,
         data: msg.data.iter().copied().collect(),
-        is_dense: msg.is_dense != 0,
+        is_dense: msg.is_dense,
     }
 }

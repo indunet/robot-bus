@@ -8,14 +8,22 @@ use std::{env, fs};
 fn is_marked_for_inclusion(path: &PathBuf) -> bool {
     Manifest::from_path(path)
         .map(|manifest| {
-            manifest
+            let metadata = manifest
                 .package
                 .as_ref()
-                .and_then(|pkg| pkg.metadata.as_ref())
-                .and_then(|metadata| metadata.get("ros-env"))
+                .and_then(|pkg| pkg.metadata.as_ref());
+            let ros_env_include = metadata
+                .and_then(|m| m.get("ros-env"))
                 .and_then(|ros_env| ros_env.get("include"))
                 .and_then(|include| include.as_bool())
-                .unwrap_or(false)
+                .unwrap_or(false);
+            // Older Humble rust IDL used this key before ros-env existed.
+            let rclrs_reexport = metadata
+                .and_then(|m| m.get("rclrs"))
+                .and_then(|rclrs| rclrs.get("reexport"))
+                .and_then(|reexport| reexport.as_bool())
+                .unwrap_or(false);
+            ros_env_include || rclrs_reexport
         })
         .unwrap_or(false)
 }

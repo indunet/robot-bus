@@ -18,9 +18,12 @@ fn main() {
 }
 
 #[cfg(not(feature = "ros2-shim"))]
-mod run {
 #[path = "../robot_bus_perf/support.rs"]
 mod support;
+
+#[cfg(not(feature = "ros2-shim"))]
+mod run {
+use super::support;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 use std::thread;
@@ -339,7 +342,7 @@ fn bench_ros_to_bus_string(ros_node: &rclrs::Node, bus_ctx: &Context) -> Scenari
     }
     let (_spin, shutdown) = spin_bus(bus);
 
-    let ros_pub = match ros_node.create_publisher::<RosString, _>(
+    let ros_pub = match ros_node.create_publisher::<RosString>(
         topic.keep_last(MSG_HWM as u32).best_effort(),
     ) {
         Ok(p) => p,
@@ -452,7 +455,7 @@ fn bench_ros_to_bus_image(ros_node: &rclrs::Node, bus_ctx: &Context) -> Scenario
     }
     let (_spin, shutdown) = spin_bus(bus);
 
-    let ros_pub = match ros_node.create_publisher::<RosImage, _>(
+    let ros_pub = match ros_node.create_publisher::<RosImage>(
         topic.keep_last(MSG_HWM as u32).best_effort(),
     ) {
         Ok(p) => p,

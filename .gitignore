@@ -34,6 +34,9 @@ bindings/cpp/native/target/
 bindings/cpp/native/Cargo.lock
 bindings/cpp/build/
 bindings/cpp/build-*/
+# Stray cmake probe output if cmake is run at the repo root (no root CMakeLists.txt).
+/CMakeFiles/
+/CMakeCache.txt
 
 # Java (Maven) / Android (Gradle) / build trees
 bindings/java/target/

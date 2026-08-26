@@ -1,6 +1,9 @@
 // Smoke: without ROBOT_BUS_HAS_ROS2, builder.build() throws a clear error.
 // Builder `.lazy()` checks run with or without ROS.
+// With ROBOT_BUS_HAS_ROS2, also build()+spin_once against an in-process broker.
 #include <robot_bus/ros2_bridge.hpp>
+
+#include "harness.hpp"
 
 #include <cstdio>
 #include <cstdlib>
@@ -108,8 +111,30 @@ int main() {
   }
 
   if (robot_bus::ros2_available()) {
+#ifdef ROBOT_BUS_HAS_ROS2
+    try {
+      RobotBusBrokerOptions opts = robot_bus::test::ephemeral_tcp_opts(0, 1);
+      robot_bus::Broker broker(opts);
+      auto bridge = robot_bus::Ros2Bridge::New("cpp_ros2_smoke")
+                        .bus_ipc()
+                        .route("/rb_cpp_smoke_chatter", "/rb_cpp_smoke_chatter")
+                        .mapper(robot_bus::StdMsgsStringMapper{})
+                        .add()
+                        .build();
+      bridge.spin_once(0.05);
+      std::printf("cpp live ros2 bridge ok\n");
+    } catch (const robot_bus::Error &e) {
+      std::fprintf(stderr, "live ros2 bridge failed: %s\n", e.what());
+      return 1;
+    } catch (const std::exception &e) {
+      std::fprintf(stderr, "live ros2 bridge exception: %s\n", e.what());
+      return 1;
+    }
+    return 0;
+#else
     std::printf("ros2_bridge_stub: ros2 available (skipping unavailable checks)\n");
     return 0;
+#endif
   }
 
   try {
