@@ -10,7 +10,7 @@ Package: `org.indunet.robot.bus`
 
 ```bash
 # Maven Central (when published)
-# implementation("org.indunet:robot-bus-android:1.3.3")
+# implementation("org.indunet:robot-bus-android:1.3.4")
 
 # 本地：
 just gen-android    # → bindings/android/generated/
@@ -38,7 +38,7 @@ class App : Application() {
 ```kotlin
 // build.gradle.kts
 dependencies {
-  implementation("org.indunet:robot-bus-android:1.3.3")
+  implementation("org.indunet:robot-bus-android:1.3.4")
 }
 ```
 

@@ -20,7 +20,7 @@ pub(crate) fn occupancy_grid_from_view(
             .as_ref()
             .map(super::map_meta_data::map_meta_data_from_view)
             .transpose()?,
-        data: read_i32_seq(view, "data")?,
+        data: read_byte_seq(view, "data")?,
     })
 }
 
@@ -36,7 +36,7 @@ pub(crate) fn occupancy_grid_write(
     if let Some(v) = &bus.info {
         with_nested_mut(view, "info", |nested| super::map_meta_data::map_meta_data_write(nested, v))?;
     }
-    write_i32_seq(view, "data", &bus.data)?;
+    write_byte_seq(view, "data", &bus.data)?;
     Ok(())
 }
 

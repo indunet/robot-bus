@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.16)
-project(robot_bus_cpp VERSION 1.3.3 LANGUAGES CXX)
+project(robot_bus_cpp VERSION 1.3.4 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)

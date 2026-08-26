@@ -4,7 +4,7 @@ English | [中文](../zh/java-api.md)
 
 ```bash
 # Maven Central (when published)
-# implementation("org.indunet:robot-bus:1.3.3")           // JVM
+# implementation("org.indunet:robot-bus:1.3.4")           // JVM
 
 # Local:
 just java-dev       # gen-java + cargo FFI + mvn test

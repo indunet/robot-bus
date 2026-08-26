@@ -28,11 +28,11 @@ message OccupancyGrid {
   std_msgs.msg.v1.Header header = 1;
   MapMetaData info = 2;
 
-  // Cell data in row-major order, starting with (0,0). Values:
-  //   -1 = unknown
-  //    0 = free
-  //  100 = occupied
+  // Cell data in row-major order, starting with (0,0). ROS 2 `int8[]`.
+  // Protobuf has no int8, so this is two's-complement bytes (same layout as CDR):
+  //   0xFF (-1) = unknown
+  //   0x00 (0)  = free
+  //   0x64 (100) = occupied
   // Other values are probabilities [0..100].
-  // int8[] in ROS 2; modeled as int32 for protobuf / prost.
-  repeated int32 data = 3;
+  bytes data = 3;
 }

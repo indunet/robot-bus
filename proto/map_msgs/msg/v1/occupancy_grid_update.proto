@@ -11,6 +11,7 @@ message OccupancyGridUpdate {
   int32 y = 3;
   uint32 width = 4;
   uint32 height = 5;
-  // int8[] in ROS 2; modeled as int32 for protobuf / prost.
-  repeated int32 data = 6;
+  // Patch cells in row-major order. ROS 2 `int8[]` as two's-complement bytes
+  // (same layout as OccupancyGrid.data / CDR). 0xFF = unknown.
+  bytes data = 6;
 }

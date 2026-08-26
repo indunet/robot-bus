@@ -629,13 +629,19 @@ pub fn write_u64_seq(
     }
 }
 
-// --- byte sequences (protobuf `bytes` ↔ ROS `uint8[]` / `octet[]`) ---
+// --- byte sequences (protobuf `bytes` ↔ ROS `uint8[]` / `octet[]` / `int8[]`) ---
 
 pub fn read_byte_seq(view: &DynamicMessageView<'_>, field: &str) -> Result<Vec<u8>> {
     match view.get(field) {
         Some(Value::Sequence(SequenceValue::Uint8Sequence(seq)))
         | Some(Value::Sequence(SequenceValue::OctetSequence(seq)))
         | Some(Value::Sequence(SequenceValue::CharSequence(seq))) => Ok(seq.as_slice().to_vec()),
+        Some(Value::Sequence(SequenceValue::Int8Sequence(seq))) => {
+            Ok(seq.as_slice().iter().map(|v| *v as u8).collect())
+        }
+        Some(Value::Array(ArrayValue::Int8Array(items))) => {
+            Ok(items.iter().map(|v| *v as u8).collect())
+        }
         _ => Ok(read_i64_seq(view, field)?
             .into_iter()
             .map(|v| v as u8)
@@ -653,6 +659,17 @@ pub fn write_byte_seq(
         | Some(ValueMut::Sequence(SequenceValueMut::OctetSequence(seq)))
         | Some(ValueMut::Sequence(SequenceValueMut::CharSequence(seq))) => {
             *seq = Sequence::from(data);
+            true
+        }
+        Some(ValueMut::Sequence(SequenceValueMut::Int8Sequence(seq))) => {
+            let signed: Vec<i8> = data.iter().map(|v| *v as i8).collect();
+            *seq = Sequence::from(&signed[..]);
+            true
+        }
+        Some(ValueMut::Array(ArrayValueMut::Int8Array(items))) => {
+            for (slot, v) in items.iter_mut().zip(data) {
+                *slot = *v as i8;
+            }
             true
         }
         _ => false,

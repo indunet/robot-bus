@@ -262,7 +262,7 @@ fn service_bus_nav_msgs_get_map() {
                     height: 2,
                     origin: None,
                 }),
-                data: vec![0, 100, -1, 50],
+                data: vec![0, 100, 255, 50],
             }),
         }
         .encode_to_vec()
@@ -284,7 +284,7 @@ fn service_bus_nav_msgs_get_map() {
     let map = reply.map.expect("map");
     assert_eq!(map.header.as_ref().unwrap().frame_id, "map");
     assert_eq!(map.info.as_ref().unwrap().width, 2);
-    assert_eq!(map.data, vec![0, 100, -1, 50]);
+    assert_eq!(map.data, vec![0u8, 100, 255, 50]);
 
     worker.stop();
     broker.stop().expect("stop");
@@ -345,7 +345,7 @@ fn service_bus_nav_msgs_set_map_and_get_plan() {
                         height: 1,
                         origin: None,
                     }),
-                    data: vec![0],
+                    data: vec![0u8],
                 }),
                 initial_pose: Some(PoseWithCovarianceStamped {
                     header: Some(Header {
@@ -481,4 +481,38 @@ fn action_bus_pose2d_goal_proto() {
 
     worker.stop();
     broker.stop().expect("stop");
+}
+
+#[test]
+fn occupancy_grid_unknown_cells_encode_as_single_bytes() {
+    // ROS 2 int8[] two's complement: -1 unknown → 0xFF. Four cells must not
+    // balloon the way packed proto3 int32 would (a single -1 is 10 varint bytes).
+    let grid = OccupancyGrid {
+        header: None,
+        info: None,
+        data: vec![0, 100, 255, 50],
+    };
+    let encoded = grid.encode_to_vec();
+    assert!(
+        encoded.len() < 16,
+        "expected compact bytes encoding, got {} bytes: {encoded:?}",
+        encoded.len()
+    );
+    let decoded = OccupancyGrid::decode(encoded.as_slice()).expect("decode");
+    assert_eq!(decoded.data, vec![0u8, 100, 255, 50]);
+
+    let update = robot_bus::map_msgs::msg::v1::OccupancyGridUpdate {
+        header: None,
+        x: 0,
+        y: 0,
+        width: 2,
+        height: 2,
+        data: vec![0, 100, 255, 50],
+    };
+    let encoded = update.encode_to_vec();
+    assert!(
+        encoded.len() < 24,
+        "expected compact OccupancyGridUpdate bytes, got {} bytes: {encoded:?}",
+        encoded.len()
+    );
 }
