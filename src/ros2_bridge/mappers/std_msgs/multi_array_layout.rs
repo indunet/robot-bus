@@ -4,15 +4,18 @@ use prost::Message as ProstMessage;
 use rclrs::DynamicMessage;
 
 use super::super::common::*;
-use crate::ros2_bridge::mapper::TopicMapper;
 use crate::BusError;
-
+use crate::ros2_bridge::mapper::TopicMapper;
 
 pub(crate) fn multi_array_layout_from_view(
     view: &rclrs::DynamicMessageView<'_>,
 ) -> Result<crate::std_msgs::msg::v1::MultiArrayLayout> {
     Ok(crate::std_msgs::msg::v1::MultiArrayLayout {
-        dim: read_message_seq(view, "dim", super::multi_array_dimension::multi_array_dimension_from_view)?,
+        dim: read_message_seq(
+            view,
+            "dim",
+            super::multi_array_dimension::multi_array_dimension_from_view,
+        )?,
         data_offset: read_u32(view, "data_offset")?,
     })
 }
@@ -21,7 +24,12 @@ pub(crate) fn multi_array_layout_write(
     view: &mut rclrs::DynamicMessageViewMut<'_>,
     bus: &crate::std_msgs::msg::v1::MultiArrayLayout,
 ) -> Result<()> {
-    write_message_seq(view, "dim", &bus.dim, super::multi_array_dimension::multi_array_dimension_write)?;
+    write_message_seq(
+        view,
+        "dim",
+        &bus.dim,
+        super::multi_array_dimension::multi_array_dimension_write,
+    )?;
     write_u32(view, "data_offset", bus.data_offset)?;
     Ok(())
 }

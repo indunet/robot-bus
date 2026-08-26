@@ -4,9 +4,8 @@ use prost::Message as ProstMessage;
 use rclrs::DynamicMessage;
 
 use super::super::common::*;
-use crate::ros2_bridge::mapper::TopicMapper;
 use crate::BusError;
-
+use crate::ros2_bridge::mapper::TopicMapper;
 
 pub(crate) fn joint_trajectory_from_view(
     view: &rclrs::DynamicMessageView<'_>,
@@ -17,7 +16,11 @@ pub(crate) fn joint_trajectory_from_view(
             .map(super::super::std_msgs::header::header_from_view)
             .transpose()?,
         joint_names: read_string_seq(view, "joint_names")?,
-        points: read_message_seq(view, "points", super::joint_trajectory_point::joint_trajectory_point_from_view)?,
+        points: read_message_seq(
+            view,
+            "points",
+            super::joint_trajectory_point::joint_trajectory_point_from_view,
+        )?,
     })
 }
 
@@ -31,7 +34,12 @@ pub(crate) fn joint_trajectory_write(
         })?;
     }
     write_string_seq(view, "joint_names", &bus.joint_names)?;
-    write_message_seq(view, "points", &bus.points, super::joint_trajectory_point::joint_trajectory_point_write)?;
+    write_message_seq(
+        view,
+        "points",
+        &bus.points,
+        super::joint_trajectory_point::joint_trajectory_point_write,
+    )?;
     Ok(())
 }
 

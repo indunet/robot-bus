@@ -4,9 +4,8 @@ use prost::Message as ProstMessage;
 use rclrs::DynamicMessage;
 
 use super::super::common::*;
-use crate::ros2_bridge::mapper::TopicMapper;
 use crate::BusError;
-
+use crate::ros2_bridge::mapper::TopicMapper;
 
 pub(crate) fn route_from_view(
     view: &rclrs::DynamicMessageView<'_>,
@@ -21,8 +20,18 @@ pub(crate) fn route_write(
     view: &mut rclrs::DynamicMessageViewMut<'_>,
     bus: &crate::nav2_msgs::msg::v1::Route,
 ) -> Result<()> {
-    write_message_seq(view, "nodes", &bus.nodes, super::route_node::route_node_write)?;
-    write_message_seq(view, "edges", &bus.edges, super::route_edge::route_edge_write)?;
+    write_message_seq(
+        view,
+        "nodes",
+        &bus.nodes,
+        super::route_node::route_node_write,
+    )?;
+    write_message_seq(
+        view,
+        "edges",
+        &bus.edges,
+        super::route_edge::route_edge_write,
+    )?;
     Ok(())
 }
 

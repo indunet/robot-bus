@@ -16,6 +16,18 @@ use uuid::Uuid;
 
 use crate::action_bus::{ActionKind, ActionMessage};
 use crate::errors::{BusError, Result};
+use crate::runtime::callback_group::{CallbackGroup, SubscriptionCallback};
+use crate::runtime::executor::ShutdownHandle;
+use crate::runtime::node::RawActionFeedbackCallback;
+use crate::runtime::registrations::MessageCallback;
+use crate::runtime::session::{
+    SESSION_BACKOFF_INITIAL, SESSION_BACKOFF_MAX, SESSION_WS_PING_INTERVAL,
+    SESSION_WS_PING_MISS_LIMIT, SessionHandle,
+};
+use crate::runtime::timers::{
+    SubscriptionHandle, Timer, TimerCallback, TimerHandle, effective_poll_timeout_ms, tick_timers,
+};
+use crate::runtime::topic_callbacks::for_each_matching_callback;
 use crate::ws_gateway::pb::{
     ActionKind as PbActionKind, GoalCommand, PublishResponse, ServiceCallRequest,
     ServiceCallResponse, SubscribeRequest, TopicMessage,
@@ -24,18 +36,6 @@ use crate::ws_gateway::rpc_status::Code;
 use crate::ws_gateway::ws_frame::{
     Frame, METHOD_CALL, METHOD_PUBLISH, METHOD_SEND_GOAL, METHOD_SUBSCRIBE, decode_frame,
     encode_frame,
-};
-use crate::runtime::callback_group::{CallbackGroup, SubscriptionCallback};
-use crate::runtime::executor::ShutdownHandle;
-use crate::runtime::node::RawActionFeedbackCallback;
-use crate::runtime::registrations::MessageCallback;
-use crate::runtime::timers::{
-    Timer, TimerCallback, TimerHandle, SubscriptionHandle, effective_poll_timeout_ms, tick_timers,
-};
-use crate::runtime::topic_callbacks::for_each_matching_callback;
-use crate::runtime::session::{
-    SESSION_BACKOFF_INITIAL, SESSION_BACKOFF_MAX, SESSION_WS_PING_INTERVAL,
-    SESSION_WS_PING_MISS_LIMIT, SessionHandle,
 };
 
 const DEFAULT_WS_URL: &str = "http://127.0.0.1:15570";
@@ -95,7 +95,6 @@ pub(crate) struct WsClientContext {
     conn: Arc<WsConnection>,
 }
 
-
 /// Soft-cancel handle for a live SendGoal stream (replaces tonic AbortHandle).
 #[derive(Clone)]
 pub(crate) struct WsCancelHandle {
@@ -123,7 +122,6 @@ pub(crate) struct WsGoalSession {
     pub(crate) events: Receiver<Result<ActionMessage>>,
     pub(crate) abort: WsCancelHandle,
 }
-
 
 impl WsConnection {
     fn alloc_stream_id(&self) -> u32 {
@@ -272,7 +270,6 @@ pub struct WsRuntime {
     inbound_rx: Mutex<Receiver<TopicEvent>>,
     state: Arc<Mutex<WsState>>,
 }
-
 
 impl WsRuntime {
     pub fn new(url: impl Into<String>, transport: Option<SessionHandle>) -> Result<Self> {

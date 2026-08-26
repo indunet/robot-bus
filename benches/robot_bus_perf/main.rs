@@ -91,8 +91,8 @@ fn main() {
         println!("service iters={svc_iters} action iters={act_iters}");
     }
     let ctx = Context::new();
-    let broker = RobotBusBroker::start_with_context(&ctx, perf_broker_config())
-        .expect("start broker");
+    let broker =
+        RobotBusBroker::start_with_context(&ctx, perf_broker_config()).expect("start broker");
     thread::sleep(Duration::from_millis(300));
 
     let mut results: Vec<ScenarioResult> = Vec::new();

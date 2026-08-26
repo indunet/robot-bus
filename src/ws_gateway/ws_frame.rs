@@ -297,6 +297,9 @@ mod tests {
             payload: b"odom".to_vec(),
         })
         .unwrap();
-        assert_ne!(decode_frame(&a).unwrap().stream_id(), decode_frame(&b).unwrap().stream_id());
+        assert_ne!(
+            decode_frame(&a).unwrap().stream_id(),
+            decode_frame(&b).unwrap().stream_id()
+        );
     }
 }

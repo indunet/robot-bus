@@ -4,9 +4,8 @@ use prost::Message as ProstMessage;
 use rclrs::DynamicMessage;
 
 use super::super::common::*;
-use crate::ros2_bridge::mapper::TopicMapper;
 use crate::BusError;
-
+use crate::ros2_bridge::mapper::TopicMapper;
 
 pub(crate) fn joint_trajectory_controller_state_from_view(
     view: &rclrs::DynamicMessageView<'_>,
@@ -67,22 +66,30 @@ pub(crate) fn joint_trajectory_controller_state_write(
     write_string_seq(view, "joint_names", &bus.joint_names)?;
     if let Some(v) = &bus.reference {
         with_nested_mut(view, "reference", |nested| {
-            super::super::trajectory_msgs::joint_trajectory_point::joint_trajectory_point_write(nested, v)
+            super::super::trajectory_msgs::joint_trajectory_point::joint_trajectory_point_write(
+                nested, v,
+            )
         })?;
     }
     if let Some(v) = &bus.feedback {
         with_nested_mut(view, "feedback", |nested| {
-            super::super::trajectory_msgs::joint_trajectory_point::joint_trajectory_point_write(nested, v)
+            super::super::trajectory_msgs::joint_trajectory_point::joint_trajectory_point_write(
+                nested, v,
+            )
         })?;
     }
     if let Some(v) = &bus.error {
         with_nested_mut(view, "error", |nested| {
-            super::super::trajectory_msgs::joint_trajectory_point::joint_trajectory_point_write(nested, v)
+            super::super::trajectory_msgs::joint_trajectory_point::joint_trajectory_point_write(
+                nested, v,
+            )
         })?;
     }
     if let Some(v) = &bus.output {
         with_nested_mut(view, "output", |nested| {
-            super::super::trajectory_msgs::joint_trajectory_point::joint_trajectory_point_write(nested, v)
+            super::super::trajectory_msgs::joint_trajectory_point::joint_trajectory_point_write(
+                nested, v,
+            )
         })?;
     }
     write_string_seq(view, "multi_dof_joint_names", &bus.multi_dof_joint_names)?;
@@ -130,10 +137,7 @@ impl TopicMapper for ControlMsgsJointTrajectoryControllerStateMapper {
     }
 
     fn ros_to_bus(&self, msg: &DynamicMessage) -> Result<Vec<u8>> {
-        Ok(
-            joint_trajectory_controller_state_dyn_to_bus(msg)?
-                .encode_to_vec(),
-        )
+        Ok(joint_trajectory_controller_state_dyn_to_bus(msg)?.encode_to_vec())
     }
 
     fn bus_to_ros(&self, payload: &[u8]) -> Result<DynamicMessage> {

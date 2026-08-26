@@ -13,7 +13,7 @@ use robot_bus::broker::action_bus::ActionBusConfig;
 use robot_bus::broker::message_bus::BusConfig;
 use robot_bus::broker::service_bus::ServiceBusConfig;
 use robot_bus::broker::{
-    ConsoleBrokerConfig, DiscoveryConfig, WsGatewayConfig, RobotBusBroker, RobotBusConfig,
+    ConsoleBrokerConfig, DiscoveryConfig, RobotBusBroker, RobotBusConfig, WsGatewayConfig,
 };
 use robot_bus::geometry_msgs::msg::v1::{Pose2D, Twist, Vector3};
 use robot_bus::{CMD_VEL_TOPIC, Node, NodeOptions, POSE_TOPIC};

@@ -4,9 +4,8 @@ use prost::Message as ProstMessage;
 use rclrs::DynamicMessage;
 
 use super::super::common::*;
-use crate::ros2_bridge::mapper::TopicMapper;
 use crate::BusError;
-
+use crate::ros2_bridge::mapper::TopicMapper;
 
 pub(crate) fn camera_info_from_view(
     view: &rclrs::DynamicMessageView<'_>,
@@ -51,7 +50,9 @@ pub(crate) fn camera_info_write(
     write_u32(view, "binning_x", bus.binning_x)?;
     write_u32(view, "binning_y", bus.binning_y)?;
     if let Some(v) = &bus.roi {
-        with_nested_mut(view, "roi", |nested| super::region_of_interest::region_of_interest_write(nested, v))?;
+        with_nested_mut(view, "roi", |nested| {
+            super::region_of_interest::region_of_interest_write(nested, v)
+        })?;
     }
     Ok(())
 }

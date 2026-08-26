@@ -4,9 +4,8 @@ use prost::Message as ProstMessage;
 use rclrs::DynamicMessage;
 
 use super::super::common::*;
-use crate::ros2_bridge::mapper::TopicMapper;
 use crate::BusError;
-
+use crate::ros2_bridge::mapper::TopicMapper;
 
 pub(crate) fn multi_dof_joint_trajectory_point_from_view(
     view: &rclrs::DynamicMessageView<'_>,
@@ -87,10 +86,7 @@ impl TopicMapper for TrajectoryMsgsMultiDofJointTrajectoryPointMapper {
     }
 
     fn ros_to_bus(&self, msg: &DynamicMessage) -> Result<Vec<u8>> {
-        Ok(
-            multi_dof_joint_trajectory_point_dyn_to_bus(msg)?
-                .encode_to_vec(),
-        )
+        Ok(multi_dof_joint_trajectory_point_dyn_to_bus(msg)?.encode_to_vec())
     }
 
     fn bus_to_ros(&self, payload: &[u8]) -> Result<DynamicMessage> {

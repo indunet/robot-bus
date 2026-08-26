@@ -155,7 +155,9 @@ async fn run_rpc(
         METHOD_PUBLISH => run_publish(stream_id, &state, payload, &out_tx).await,
         METHOD_CALL => run_call(stream_id, &state, payload, &out_tx).await,
         METHOD_SEND_GOAL => run_send_goal(stream_id, &state, payload, &out_tx, &mut cmd_rx).await,
-        other => Err(RpcStatus::unimplemented(format!("unknown method '{other}'"))),
+        other => Err(RpcStatus::unimplemented(format!(
+            "unknown method '{other}'"
+        ))),
     };
     let status = match result {
         Ok(()) => RpcStatus::ok(),
@@ -301,5 +303,7 @@ type WsSink = futures_util::stream::SplitSink<WebSocket, Message>;
 
 async fn send_frame(sink: &mut WsSink, frame: &Frame) -> Result<(), ()> {
     let bytes = encode_frame(frame).map_err(|_| ())?;
-    sink.send(Message::Binary(bytes.into())).await.map_err(|_| ())
+    sink.send(Message::Binary(bytes.into()))
+        .await
+        .map_err(|_| ())
 }

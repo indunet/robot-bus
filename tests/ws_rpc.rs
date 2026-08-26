@@ -11,7 +11,9 @@ use std::time::Duration;
 
 use futures_util::{SinkExt, StreamExt};
 use prost::Message as ProstMessage;
-use robot_bus::ws_gateway::pb::{ActionEvent, ActionKind, GoalCommand, SubscribeRequest, TopicMessage};
+use robot_bus::ws_gateway::pb::{
+    ActionEvent, ActionKind, GoalCommand, SubscribeRequest, TopicMessage,
+};
 use robot_bus::ws_gateway::ws_frame::{
     Frame, METHOD_PUBLISH, METHOD_SEND_GOAL, METHOD_SUBSCRIBE, decode_frame, encode_frame,
 };
@@ -191,7 +193,7 @@ async fn ws_send_goal_soft_cancel_keeps_connection_for_result() {
     .encode_to_vec();
     ws.send(Message::Binary(
         encode_frame(&Frame::Request {
-        stream_id: 1,
+            stream_id: 1,
             method: METHOD_SEND_GOAL.to_string(),
             payload,
         })
@@ -203,7 +205,9 @@ async fn ws_send_goal_soft_cancel_keeps_connection_for_result() {
 
     tokio::time::sleep(Duration::from_millis(150)).await;
     ws.send(Message::Binary(
-        encode_frame(&Frame::Cancel { stream_id: 1 }).unwrap().into(),
+        encode_frame(&Frame::Cancel { stream_id: 1 })
+            .unwrap()
+            .into(),
     ))
     .await
     .expect("send CANCEL");
@@ -280,7 +284,7 @@ async fn ws_send_goal_disconnect_still_submits_cancel() {
     .encode_to_vec();
     ws.send(Message::Binary(
         encode_frame(&Frame::Request {
-        stream_id: 1,
+            stream_id: 1,
             method: METHOD_SEND_GOAL.to_string(),
             payload,
         })

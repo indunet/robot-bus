@@ -228,7 +228,12 @@ impl PyNode {
 
     /// Declare a local parameter (`bool` / `int` / `float` / `str`).
     /// Returns a dict `{"name", "value"}` (ROS 2 returns a Parameter).
-    fn declare_parameter(&mut self, py: Python<'_>, name: &str, value: &Bound<'_, PyAny>) -> PyResult<PyObject> {
+    fn declare_parameter(
+        &mut self,
+        py: Python<'_>,
+        name: &str,
+        value: &Bound<'_, PyAny>,
+    ) -> PyResult<PyObject> {
         let param = self
             .inner
             .declare_parameter(name, parameter_value_from_py(value)?)
@@ -518,15 +523,9 @@ impl PyNode {
 
     /// Wait for one message on `topic`. Returns payload bytes or `None` on timeout.
     #[pyo3(signature = (topic, timeout=None))]
-    fn wait_for_message(
-        &mut self,
-        topic: &str,
-        timeout: Option<f64>,
-    ) -> PyResult<Option<Vec<u8>>> {
+    fn wait_for_message(&mut self, topic: &str, timeout: Option<f64>) -> PyResult<Option<Vec<u8>>> {
         let timeout = timeout.map(Duration::from_secs_f64);
-        self.inner
-            .wait_for_message(topic, timeout)
-            .map_err(bus_err)
+        self.inner.wait_for_message(topic, timeout).map_err(bus_err)
     }
 
     fn spin(&mut self) -> PyResult<()> {

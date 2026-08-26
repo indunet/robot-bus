@@ -77,9 +77,7 @@ fn trigger_ros2_to_bus_roundtrip() {
         }
         let _ = bus_server.spin_once(Some(Duration::from_millis(5)));
         let _ = bridge.spin_once(Duration::from_millis(5));
-        let _ = exec.spin(
-            rclrs::SpinOptions::spin_once().timeout(Duration::from_millis(20)),
-        );
+        let _ = exec.spin(rclrs::SpinOptions::spin_once().timeout(Duration::from_millis(20)));
     }
 
     let (tx, rx) = std::sync::mpsc::channel();
@@ -104,9 +102,7 @@ fn trigger_ros2_to_bus_roundtrip() {
         }
         let _ = bus_server.spin_once(Some(Duration::from_millis(5)));
         let _ = bridge.spin_once(Duration::from_millis(5));
-        let _ = exec.spin(
-            rclrs::SpinOptions::spin_once().timeout(Duration::from_millis(20)),
-        );
+        let _ = exec.spin(rclrs::SpinOptions::spin_once().timeout(Duration::from_millis(20)));
     };
 
     assert!(resp.success, "resp={resp:?}");
@@ -139,9 +135,7 @@ fn trigger_bus_to_ros2_roundtrip() {
             })
             .expect("ros Trigger server");
         for _ in 0..800 {
-            let _ = exec.spin(
-                rclrs::SpinOptions::spin_once().timeout(Duration::from_millis(20)),
-            );
+            let _ = exec.spin(rclrs::SpinOptions::spin_once().timeout(Duration::from_millis(20)));
         }
     });
 

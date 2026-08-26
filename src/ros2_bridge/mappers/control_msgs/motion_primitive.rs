@@ -4,9 +4,8 @@ use prost::Message as ProstMessage;
 use rclrs::DynamicMessage;
 
 use super::super::common::*;
-use crate::ros2_bridge::mapper::TopicMapper;
 use crate::BusError;
-
+use crate::ros2_bridge::mapper::TopicMapper;
 
 pub(crate) fn motion_primitive_from_view(
     view: &rclrs::DynamicMessageView<'_>,
@@ -19,7 +18,11 @@ pub(crate) fn motion_primitive_from_view(
             "additional_arguments",
             super::motion_argument::motion_argument_from_view,
         )?,
-        poses: read_message_seq(view, "poses", super::super::geometry_msgs::pose_stamped::pose_stamped_from_view)?,
+        poses: read_message_seq(
+            view,
+            "poses",
+            super::super::geometry_msgs::pose_stamped::pose_stamped_from_view,
+        )?,
         joint_positions: read_f64_seq(view, "joint_positions")?,
     })
 }

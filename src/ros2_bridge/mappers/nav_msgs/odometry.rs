@@ -4,9 +4,8 @@ use prost::Message as ProstMessage;
 use rclrs::DynamicMessage;
 
 use super::super::common::*;
-use crate::ros2_bridge::mapper::TopicMapper;
 use crate::BusError;
-
+use crate::ros2_bridge::mapper::TopicMapper;
 
 pub(crate) fn odometry_from_view(
     view: &rclrs::DynamicMessageView<'_>,
@@ -23,7 +22,9 @@ pub(crate) fn odometry_from_view(
             .transpose()?,
         twist: nested_view(view, "twist")?
             .as_ref()
-            .map(super::super::geometry_msgs::twist_with_covariance::twist_with_covariance_from_view)
+            .map(
+                super::super::geometry_msgs::twist_with_covariance::twist_with_covariance_from_view,
+            )
             .transpose()?,
     })
 }
@@ -45,7 +46,9 @@ pub(crate) fn odometry_write(
     }
     if let Some(v) = &bus.twist {
         with_nested_mut(view, "twist", |nested| {
-            super::super::geometry_msgs::twist_with_covariance::twist_with_covariance_write(nested, v)
+            super::super::geometry_msgs::twist_with_covariance::twist_with_covariance_write(
+                nested, v,
+            )
         })?;
     }
     Ok(())

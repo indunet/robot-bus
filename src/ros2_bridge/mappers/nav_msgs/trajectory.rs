@@ -4,9 +4,8 @@ use prost::Message as ProstMessage;
 use rclrs::DynamicMessage;
 
 use super::super::common::*;
-use crate::ros2_bridge::mapper::TopicMapper;
 use crate::BusError;
-
+use crate::ros2_bridge::mapper::TopicMapper;
 
 pub(crate) fn trajectory_from_view(
     view: &rclrs::DynamicMessageView<'_>,
@@ -16,7 +15,11 @@ pub(crate) fn trajectory_from_view(
             .as_ref()
             .map(super::super::std_msgs::header::header_from_view)
             .transpose()?,
-        points: read_message_seq(view, "points", super::trajectory_point::trajectory_point_from_view)?,
+        points: read_message_seq(
+            view,
+            "points",
+            super::trajectory_point::trajectory_point_from_view,
+        )?,
     })
 }
 
@@ -29,7 +32,12 @@ pub(crate) fn trajectory_write(
             super::super::std_msgs::header::header_write(nested, v)
         })?;
     }
-    write_message_seq(view, "points", &bus.points, super::trajectory_point::trajectory_point_write)?;
+    write_message_seq(
+        view,
+        "points",
+        &bus.points,
+        super::trajectory_point::trajectory_point_write,
+    )?;
     Ok(())
 }
 

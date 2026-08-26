@@ -31,6 +31,7 @@ use crate::message_bus::{Publisher as BusPublisher, Subscriber as BusSubscriber}
 use crate::runtime::callback_group::{CallbackGroup, CallbackGroupType};
 use crate::runtime::console_ready::{self, ReadyKind};
 use crate::runtime::context::Context;
+use crate::runtime::control_plane::ControlPlaneLedger;
 use crate::runtime::executor::{Executor, ShutdownHandle};
 use crate::runtime::executors::{ExecutorHandle, SingleThreadedExecutor};
 use crate::runtime::parameters::{ListParametersResult, Parameter, ParameterStore, ParameterValue};
@@ -38,8 +39,7 @@ use crate::runtime::qos::QosProfile;
 use crate::runtime::queues::ActionMessageCallback;
 use crate::runtime::registrations::{ActionGoalHandler, MessageCallback, ServiceHandler};
 use crate::runtime::session::{BrokerSession, ConnectionState, SESSION_CREATE_WAIT};
-use crate::runtime::timers::{TimerCallback, TimerHandle, SubscriptionHandle};
-use crate::runtime::control_plane::ControlPlaneLedger;
+use crate::runtime::timers::{SubscriptionHandle, TimerCallback, TimerHandle};
 use crate::runtime::topic_type_register;
 use crate::runtime::topology_register::TopologyEndpointGuard;
 #[cfg(feature = "ws")]
@@ -431,7 +431,11 @@ impl NodeServiceClientRaw {
 
     /// Best-effort: console reports `workers > 0` for this service.
     pub fn service_is_ready(&self) -> bool {
-        console_ready::is_ready(self.console_url.as_deref(), ReadyKind::Service, &self.service_name)
+        console_ready::is_ready(
+            self.console_url.as_deref(),
+            ReadyKind::Service,
+            &self.service_name,
+        )
     }
 
     /// Poll until [`service_is_ready`](Self::service_is_ready) or `timeout`.
@@ -859,7 +863,11 @@ impl NodeActionClientRaw {
 
     /// Best-effort: console reports `workers > 0` for this action.
     pub fn action_server_is_ready(&self) -> bool {
-        console_ready::is_ready(self.console_url.as_deref(), ReadyKind::Action, &self.action_name)
+        console_ready::is_ready(
+            self.console_url.as_deref(),
+            ReadyKind::Action,
+            &self.action_name,
+        )
     }
 
     /// Poll until [`action_server_is_ready`](Self::action_server_is_ready) or `timeout`.
@@ -1269,7 +1277,8 @@ impl Node {
     fn ensure_executor(&mut self) -> Result<&ExecutorHandle> {
         if self.options.is_ws() {
             return Err(BusError::Protocol(
-                "WebSocket RPC node does not use a ZMQ executor; use spin() on the node directly".into(),
+                "WebSocket RPC node does not use a ZMQ executor; use spin() on the node directly"
+                    .into(),
             ));
         }
         if self.executor.is_none() {
@@ -2138,9 +2147,7 @@ impl Node {
         goal_id: Option<&str>,
     ) -> Result<String> {
         if self.options.is_ws() {
-            return Err(ws_mode_unsupported(
-                "send_goal (use create_action_client)",
-            ));
+            return Err(ws_mode_unsupported("send_goal (use create_action_client)"));
         }
         self.lock_executor()?
             .send_goal(action_name, body, callback, goal_id)
@@ -2352,7 +2359,10 @@ mod tests {
             ParameterValue::Double(1.5)
         );
         assert_eq!(
-            node.get_parameter("max_speed").unwrap().as_double().unwrap(),
+            node.get_parameter("max_speed")
+                .unwrap()
+                .as_double()
+                .unwrap(),
             1.5
         );
         node.set_parameter(Parameter::new("max_speed", 2.0))
@@ -2393,19 +2403,23 @@ ros__parameters:
         node.load_parameters_from_yaml_str("max_speed: 3.0\n")
             .unwrap();
         assert_eq!(
-            node.get_parameter("max_speed").unwrap().as_double().unwrap(),
+            node.get_parameter("max_speed")
+                .unwrap()
+                .as_double()
+                .unwrap(),
             3.0
         );
-        let batch = node
-            .get_parameters(&["max_speed", "frame_id"])
-            .unwrap();
+        let batch = node.get_parameters(&["max_speed", "frame_id"]).unwrap();
         assert_eq!(batch.len(), 2);
         node.set_parameters([
             Parameter::new("max_speed", 4.0),
             Parameter::new("frame_id", "odom"),
         ])
         .unwrap();
-        assert_eq!(node.get_parameter("frame_id").unwrap().as_string().unwrap(), "odom");
+        assert_eq!(
+            node.get_parameter("frame_id").unwrap().as_string().unwrap(),
+            "odom"
+        );
     }
 
     #[test]

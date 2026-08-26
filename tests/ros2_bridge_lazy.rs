@@ -9,8 +9,8 @@ mod support;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
-use rclrs::CreateBasicExecutor;
 use prost::Message as ProstMessage;
+use rclrs::CreateBasicExecutor;
 use robot_bus::lazy_subscribe::CONSOLE_DETECT_TIMEOUT;
 use robot_bus::ros2_bridge::{Ros2Bridge, StdMsgsStringMapper, TopicMapper};
 use robot_bus::std_msgs::msg::v1::String as BusString;

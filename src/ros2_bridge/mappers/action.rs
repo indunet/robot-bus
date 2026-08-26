@@ -40,7 +40,6 @@ pub fn fibonacci_bus_result_to_ros(res: &BusFibonacciResult) -> ros_act::Fibonac
     }
 }
 
-
 #[cfg(test)]
 mod action_convert_tests {
     use super::*;

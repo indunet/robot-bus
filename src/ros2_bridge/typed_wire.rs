@@ -14,10 +14,10 @@ use rosidl_runtime_rs::{Action as ActionIdl, Service as ServiceIdl};
 
 use crate::ActionKind;
 use crate::errors::{BusError, Result};
-use crate::runtime::{ActionGoalHandler, ServiceHandler};
 use crate::ros2_bridge::mapper::{
     ActionWireContext, Direction, ServiceWireContext, TypedActionMapper, TypedServiceMapper,
 };
+use crate::runtime::{ActionGoalHandler, ServiceHandler};
 
 fn wait_service_ready(
     client_ready: impl Fn() -> bool,
@@ -65,9 +65,7 @@ where
     let mapper = mapper.clone();
     match ctx.direction {
         Direction::Ros2ToBus => {
-            let bus_client = Arc::new(Mutex::new(
-                ctx.bus_node.create_client_raw(ctx.bus_service)?,
-            ));
+            let bus_client = Arc::new(Mutex::new(ctx.bus_node.create_client_raw(ctx.bus_service)?));
             let timeout = ctx.timeout;
             let type_name = mapper.type_name().to_string();
             let cb_mapper = mapper.clone();
@@ -90,16 +88,16 @@ where
                             }
                         };
                         match guard.call(&bus_req, Some(timeout)) {
-                            Ok(bus_resp) => cb_mapper.bus_resp_to_ros(&bus_resp).unwrap_or_else(
-                                |e| cb_mapper.error_response(&format!("decode: {e}")),
-                            ),
+                            Ok(bus_resp) => {
+                                cb_mapper.bus_resp_to_ros(&bus_resp).unwrap_or_else(|e| {
+                                    cb_mapper.error_response(&format!("decode: {e}"))
+                                })
+                            }
                             Err(e) => cb_mapper.error_response(&format!("bus call failed: {e}")),
                         }
                     },
                 )
-                .map_err(|e| {
-                    BusError::Protocol(format!("ros create_service {type_name}: {e}"))
-                })?;
+                .map_err(|e| BusError::Protocol(format!("ros create_service {type_name}: {e}")))?;
             ctx.ros_entities.push(Box::new(srv));
         }
         Direction::BusToRos2 => {
@@ -107,9 +105,7 @@ where
             let ros_client = ctx
                 .ros_node
                 .create_client::<M::Ros>(ctx.ros_service)
-                .map_err(|e| {
-                    BusError::Protocol(format!("ros create_client {type_name}: {e}"))
-                })?;
+                .map_err(|e| BusError::Protocol(format!("ros create_client {type_name}: {e}")))?;
             ctx.ros_entities.push(Box::new(Arc::clone(&ros_client)));
             let timeout = ctx.timeout;
             let handler: ServiceHandler = Arc::new(move |body| {
@@ -117,7 +113,9 @@ where
                     Ok(r) => r,
                     Err(e) => {
                         return mapper
-                            .ros_resp_to_bus(&mapper.error_response(&format!("decode request: {e}")))
+                            .ros_resp_to_bus(
+                                &mapper.error_response(&format!("decode request: {e}")),
+                            )
                             .unwrap_or_default();
                     }
                 };
@@ -207,83 +205,76 @@ where
             let type_name = mapper.type_name().to_string();
             let srv = ctx
                 .ros_node
-                .create_action_server::<M::Ros, _>(
-                    ctx.ros_action,
-                    move |requested| {
-                        let bus_client = Arc::clone(&bus_client);
-                        let mapper = mapper.clone();
-                        async move {
-                            let goal = (**requested.goal()).clone();
-                            let accepted = requested.accept();
-                            let executing = match accepted.begin() {
-                                BeginAcceptedGoal::Execute(e) => e,
-                                BeginAcceptedGoal::Cancel(c) => {
-                                    return c.cancelled_with(Default::default());
-                                }
-                            };
-                            let bus_goal = match mapper.ros_goal_to_bus(&goal) {
-                                Ok(b) => b,
-                                Err(e) => {
-                                    log::warn!("ros→bus encode goal failed: {e}");
-                                    return executing.aborted_with(Default::default());
-                                }
-                            };
-                            let call = tokio::task::spawn_blocking(move || {
-                                let guard = bus_client.lock().map_err(|e| {
-                                    format!("bus action client lock poisoned: {e}")
-                                })?;
-                                guard
-                                    .send_goal_and_wait(&bus_goal, None, Some(timeout))
-                                    .map_err(|e| e.to_string())
-                            })
-                            .await;
-                            match call {
-                                Ok(Ok(messages)) => {
-                                    let mut result = <M::Ros as ActionIdl>::Result::default();
-                                    let mut got_result = false;
-                                    for msg in &messages {
-                                        match msg.kind {
-                                            ActionKind::Feedback => {
-                                                if let Ok(fb) =
-                                                    mapper.bus_feedback_to_ros(&msg.body)
-                                                {
-                                                    executing.publish_feedback(fb);
-                                                }
+                .create_action_server::<M::Ros, _>(ctx.ros_action, move |requested| {
+                    let bus_client = Arc::clone(&bus_client);
+                    let mapper = mapper.clone();
+                    async move {
+                        let goal = (**requested.goal()).clone();
+                        let accepted = requested.accept();
+                        let executing = match accepted.begin() {
+                            BeginAcceptedGoal::Execute(e) => e,
+                            BeginAcceptedGoal::Cancel(c) => {
+                                return c.cancelled_with(Default::default());
+                            }
+                        };
+                        let bus_goal = match mapper.ros_goal_to_bus(&goal) {
+                            Ok(b) => b,
+                            Err(e) => {
+                                log::warn!("ros→bus encode goal failed: {e}");
+                                return executing.aborted_with(Default::default());
+                            }
+                        };
+                        let call = tokio::task::spawn_blocking(move || {
+                            let guard = bus_client
+                                .lock()
+                                .map_err(|e| format!("bus action client lock poisoned: {e}"))?;
+                            guard
+                                .send_goal_and_wait(&bus_goal, None, Some(timeout))
+                                .map_err(|e| e.to_string())
+                        })
+                        .await;
+                        match call {
+                            Ok(Ok(messages)) => {
+                                let mut result = <M::Ros as ActionIdl>::Result::default();
+                                let mut got_result = false;
+                                for msg in &messages {
+                                    match msg.kind {
+                                        ActionKind::Feedback => {
+                                            if let Ok(fb) = mapper.bus_feedback_to_ros(&msg.body) {
+                                                executing.publish_feedback(fb);
                                             }
-                                            ActionKind::Result => {
-                                                match mapper.bus_result_to_ros(&msg.body) {
-                                                    Ok(r) => {
-                                                        result = r;
-                                                        got_result = true;
-                                                    }
-                                                    Err(e) => {
-                                                        log::warn!(
-                                                            "ros→bus decode result failed: {e}"
-                                                        );
-                                                    }
-                                                }
-                                            }
-                                            _ => {}
                                         }
-                                    }
-                                    if got_result {
-                                        executing.succeeded_with(result)
-                                    } else {
-                                        executing.aborted_with(Default::default())
+                                        ActionKind::Result => {
+                                            match mapper.bus_result_to_ros(&msg.body) {
+                                                Ok(r) => {
+                                                    result = r;
+                                                    got_result = true;
+                                                }
+                                                Err(e) => {
+                                                    log::warn!("ros→bus decode result failed: {e}");
+                                                }
+                                            }
+                                        }
+                                        _ => {}
                                     }
                                 }
-                                Ok(Err(e)) => {
-                                    log::warn!("ros→bus action goal failed: {e}");
-                                    executing.aborted_with(Default::default())
-                                }
-                                Err(e) => {
-                                    log::warn!("ros→bus action join failed: {e}");
+                                if got_result {
+                                    executing.succeeded_with(result)
+                                } else {
                                     executing.aborted_with(Default::default())
                                 }
                             }
+                            Ok(Err(e)) => {
+                                log::warn!("ros→bus action goal failed: {e}");
+                                executing.aborted_with(Default::default())
+                            }
+                            Err(e) => {
+                                log::warn!("ros→bus action join failed: {e}");
+                                executing.aborted_with(Default::default())
+                            }
                         }
-                    },
-                )
+                    }
+                })
                 .map_err(|e| {
                     BusError::Protocol(format!("ros create_action_server {type_name}: {e}"))
                 })?;
@@ -361,16 +352,12 @@ where
     let mut result_fut = result;
     loop {
         while let Ok(fb) = feedback.try_recv() {
-            let bus_fb = mapper
-                .ros_feedback_to_bus(&fb)
-                .map_err(|e| e.to_string())?;
+            let bus_fb = mapper.ros_feedback_to_bus(&fb).map_err(|e| e.to_string())?;
             replies.push(("FEEDBACK".into(), bus_fb));
         }
         match poll_once(&mut result_fut) {
             Poll::Ready((_status, res)) => {
-                let bus_res = mapper
-                    .ros_result_to_bus(&res)
-                    .map_err(|e| e.to_string())?;
+                let bus_res = mapper.ros_result_to_bus(&res).map_err(|e| e.to_string())?;
                 replies.push(("RESULT".into(), bus_res));
                 return Ok(replies);
             }

@@ -4,9 +4,8 @@ use prost::Message as ProstMessage;
 use rclrs::DynamicMessage;
 
 use super::super::common::*;
-use crate::ros2_bridge::mapper::TopicMapper;
 use crate::BusError;
-
+use crate::ros2_bridge::mapper::TopicMapper;
 
 pub(crate) fn marker_from_view(
     view: &rclrs::DynamicMessageView<'_>,
@@ -37,14 +36,26 @@ pub(crate) fn marker_from_view(
             .map(super::super::builtin_interfaces::duration::duration_from_view)
             .transpose()?,
         frame_locked: read_bool(view, "frame_locked")?,
-        points: read_message_seq(view, "points", super::super::geometry_msgs::point::point_from_view)?,
-        colors: read_message_seq(view, "colors", super::super::std_msgs::color_rgba::color_rgba_from_view)?,
+        points: read_message_seq(
+            view,
+            "points",
+            super::super::geometry_msgs::point::point_from_view,
+        )?,
+        colors: read_message_seq(
+            view,
+            "colors",
+            super::super::std_msgs::color_rgba::color_rgba_from_view,
+        )?,
         texture_resource: read_string(view, "texture_resource")?,
         texture: nested_view(view, "texture")?
             .as_ref()
             .map(super::super::sensor_msgs::compressed_image::compressed_image_from_view)
             .transpose()?,
-        uv_coordinates: read_message_seq(view, "uv_coordinates", super::uv_coordinate::uv_coordinate_from_view)?,
+        uv_coordinates: read_message_seq(
+            view,
+            "uv_coordinates",
+            super::uv_coordinate::uv_coordinate_from_view,
+        )?,
         text: read_string(view, "text")?,
         mesh_resource: read_string(view, "mesh_resource")?,
         mesh_file: nested_view(view, "mesh_file")?
@@ -116,7 +127,9 @@ pub(crate) fn marker_write(
     write_string(view, "text", &bus.text)?;
     write_string(view, "mesh_resource", &bus.mesh_resource)?;
     if let Some(v) = &bus.mesh_file {
-        with_nested_mut(view, "mesh_file", |nested| super::mesh_file::mesh_file_write(nested, v))?;
+        with_nested_mut(view, "mesh_file", |nested| {
+            super::mesh_file::mesh_file_write(nested, v)
+        })?;
     }
     write_bool(
         view,

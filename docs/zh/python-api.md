@@ -201,7 +201,7 @@ result = goal.result(timeout=10.0)
 # node.spin()
 ```
 
-多节点共享或需多线程 service/action handler 时再显式用 Executor：
+多节点共享或需多线程回调时再显式用 Executor：
 
 ```python
 executor = robot_bus.MultiThreadedExecutor(num_threads=4)
@@ -423,7 +423,7 @@ print(robot_bus.__version__)
 | `node.wait_for_message(topic, timeout=None)` | 等到一条消息或超时（返回 `bytes` / `None`） |
 | `Context()` | 共享 ZMQ context（同进程 inproc 必需） |
 | `SingleThreadedExecutor(context=None)` | 显式单线程执行器（多节点共享时用） |
-| `MultiThreadedExecutor(num_threads=4, context=None)` | service/action handler 可并行 |
+| `MultiThreadedExecutor(num_threads=4, context=None)` | n 条常驻 worker；订阅 / timer / service / action 按 callback group 调度 |
 | `executor.add_node(node)` | 把节点挂到执行器（须在该节点尚未 auto-attach 之前） |
 | `node.create_publisher(topic, msg_type=None, qos_depth=None)` | typed → `TypedTopicPublisher.publish(Message)`；省略类型 → raw；`qos_depth>0` → KeepLast HWM（WS 发布忽略） |
 | `node.create_timer(period, callback)` → `TimerHandle` | 定时器（与 topic 一样挂在 Node） |

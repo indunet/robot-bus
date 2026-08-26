@@ -4,9 +4,8 @@ use prost::Message as ProstMessage;
 use rclrs::DynamicMessage;
 
 use super::super::common::*;
-use crate::ros2_bridge::mapper::TopicMapper;
 use crate::BusError;
-
+use crate::ros2_bridge::mapper::TopicMapper;
 
 pub(crate) fn behavior_tree_log_from_view(
     view: &rclrs::DynamicMessageView<'_>,
@@ -16,7 +15,11 @@ pub(crate) fn behavior_tree_log_from_view(
             .as_ref()
             .map(super::super::builtin_interfaces::time::time_from_view)
             .transpose()?,
-        event_log: read_message_seq(view, "event_log", super::behavior_tree_status_change::behavior_tree_status_change_from_view)?,
+        event_log: read_message_seq(
+            view,
+            "event_log",
+            super::behavior_tree_status_change::behavior_tree_status_change_from_view,
+        )?,
     })
 }
 

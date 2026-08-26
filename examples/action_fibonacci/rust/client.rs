@@ -3,8 +3,8 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use robot_bus::example_interfaces::action::v1::{Fibonacci, FibonacciGoal};
 use robot_bus::Node;
+use robot_bus::example_interfaces::action::v1::{Fibonacci, FibonacciGoal};
 
 fn main() -> robot_bus::Result<()> {
     let mut node = Node::new("examples_fibonacci_client");

@@ -228,16 +228,17 @@ use robot_bus::{MultiThreadedExecutor, Node, SingleThreadedExecutor};
 let mut node = Node::new("pilot");
 let executor = SingleThreadedExecutor::new();
 executor.add_node(&mut node)?;
-// Or MultiThreadedExecutor::new(4) — up to n workers; with Reentrant
-// callback groups, subscriptions / timers / services / actions can run in parallel.
+// Or MultiThreadedExecutor::new(4) — n resident workers pulling from a queue;
+// with Reentrant callback groups, subscriptions / timers / services / actions
+// can run in parallel. With a pool, callbacks do not run on the poll thread.
 executor.spin()?;
 ```
 
-Callbacks within a `MutuallyExclusive` group remain serial.
+Callbacks within a `MutuallyExclusive` group remain serial (at most one in flight, occupying one worker).
 
 ### Callback group
 
-Close to ROS 2: `MutuallyExclusive` (exclusive within the group) and `Reentrant` (parallel within the group, with `MultiThreadedExecutor`). The node has a default mutually exclusive group; when `callback_group` is `None`, the default group is used (same as ROS 2 passing the group as a parameter).
+Close to ROS 2: `MutuallyExclusive` (exclusive within the group — at most one callback in flight, extras queued per group) and `Reentrant` (parallel within the group, with `MultiThreadedExecutor`'s resident worker pool). The node has a default mutually exclusive group; when `callback_group` is `None`, the default group is used (same as ROS 2 passing the group as a parameter). On `SingleThreadedExecutor` both group types run serially on the poll thread.
 
 ```rust
 use robot_bus::{CallbackGroupType, MultiThreadedExecutor, Node};

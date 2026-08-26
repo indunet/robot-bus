@@ -9,7 +9,7 @@ use std::time::Duration;
 
 use robot_bus::message_bus::Publisher;
 use robot_bus::{MessageCallback, Node, NodeOptions, RobotBusBroker};
-use support::{ephemeral_robot_bus_config, lock_brokers, MessageProxy};
+use support::{MessageProxy, ephemeral_robot_bus_config, lock_brokers};
 
 fn node_options_from_broker(broker: &RobotBusBroker) -> NodeOptions {
     NodeOptions {

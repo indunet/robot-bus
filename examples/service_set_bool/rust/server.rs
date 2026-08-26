@@ -1,7 +1,7 @@
 //! Service server for `/examples/set_bool` (`std_srvs/srv/SetBool`).
 
-use robot_bus::std_srvs::srv::v1::{SetBool, SetBoolRequest, SetBoolResponse};
 use robot_bus::Node;
+use robot_bus::std_srvs::srv::v1::{SetBool, SetBoolRequest, SetBoolResponse};
 
 fn main() -> robot_bus::Result<()> {
     let mut node = Node::new("examples_set_bool_server");

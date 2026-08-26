@@ -4,9 +4,8 @@ use prost::Message as ProstMessage;
 use rclrs::DynamicMessage;
 
 use super::super::common::*;
-use crate::ros2_bridge::mapper::TopicMapper;
 use crate::BusError;
-
+use crate::ros2_bridge::mapper::TopicMapper;
 
 pub(crate) fn voxel_grid_from_view(
     view: &rclrs::DynamicMessageView<'_>,
@@ -27,7 +26,11 @@ pub(crate) fn voxel_grid_from_view(
         slice_stride: read_u32(view, "slice_stride")?,
         row_stride: read_u32(view, "row_stride")?,
         cell_stride: read_u32(view, "cell_stride")?,
-        fields: read_message_seq(view, "fields", super::packed_element_field::packed_element_field_from_view)?,
+        fields: read_message_seq(
+            view,
+            "fields",
+            super::packed_element_field::packed_element_field_from_view,
+        )?,
         data: read_byte_seq(view, "data")?,
     })
 }
@@ -46,12 +49,19 @@ pub(crate) fn voxel_grid_write(
     write_u32(view, "row_count", bus.row_count)?;
     write_u32(view, "column_count", bus.column_count)?;
     if let Some(v) = &bus.cell_size {
-        with_nested_mut(view, "cell_size", |nested| super::vector3::vector3_write(nested, v))?;
+        with_nested_mut(view, "cell_size", |nested| {
+            super::vector3::vector3_write(nested, v)
+        })?;
     }
     write_u32(view, "slice_stride", bus.slice_stride)?;
     write_u32(view, "row_stride", bus.row_stride)?;
     write_u32(view, "cell_stride", bus.cell_stride)?;
-    write_message_seq(view, "fields", &bus.fields, super::packed_element_field::packed_element_field_write)?;
+    write_message_seq(
+        view,
+        "fields",
+        &bus.fields,
+        super::packed_element_field::packed_element_field_write,
+    )?;
     write_byte_seq(view, "data", &bus.data)?;
     Ok(())
 }

@@ -105,10 +105,18 @@ pub fn run_with_shutdown_ctx_bound(
 
     let (resolved_xsub, xsub_endpoints, resolved_xpub, xpub_endpoints) =
         if config.bind_all_transports {
-            let (rx, xsub_eps) =
-                bind_all(&xsub, &config.xsub_bind, ports::XSUB_CHANNEL, &config.bind_opts)?;
-            let (rp, xpub_eps) =
-                bind_all(&xpub, &config.xpub_bind, ports::XPUB_CHANNEL, &config.bind_opts)?;
+            let (rx, xsub_eps) = bind_all(
+                &xsub,
+                &config.xsub_bind,
+                ports::XSUB_CHANNEL,
+                &config.bind_opts,
+            )?;
+            let (rp, xpub_eps) = bind_all(
+                &xpub,
+                &config.xpub_bind,
+                ports::XPUB_CHANNEL,
+                &config.bind_opts,
+            )?;
             (rx, xsub_eps, rp, xpub_eps)
         } else {
             let rx = bind_tcp(&xsub, &config.xsub_bind)?;

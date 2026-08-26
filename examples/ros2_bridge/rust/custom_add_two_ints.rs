@@ -22,9 +22,9 @@ mod my_pkg;
 use std::time::Duration;
 
 use prost::Message as ProstMessage;
-use ros_env::example_interfaces::srv as ros_srv;
-use robot_bus::ros2_bridge::{Direction, Ros2Bridge, TypedServiceMapper};
 use robot_bus::Node;
+use robot_bus::ros2_bridge::{Direction, Ros2Bridge, TypedServiceMapper};
+use ros_env::example_interfaces::srv as ros_srv;
 
 use my_pkg::{AddTwoIntsRequest, AddTwoIntsResponse};
 
@@ -41,21 +41,13 @@ impl TypedServiceMapper for AddTwoIntsServiceMapper {
     }
 
     fn ros_req_to_bus(&self, req: &ros_srv::AddTwoInts_Request) -> robot_bus::Result<Vec<u8>> {
-        Ok(AddTwoIntsRequest {
-            a: req.a,
-            b: req.b,
-        }
-        .encode_to_vec())
+        Ok(AddTwoIntsRequest { a: req.a, b: req.b }.encode_to_vec())
     }
 
     fn bus_req_to_ros(&self, payload: &[u8]) -> robot_bus::Result<ros_srv::AddTwoInts_Request> {
-        let bus = AddTwoIntsRequest::decode(payload).map_err(|e| {
-            robot_bus::BusError::Protocol(format!("decode AddTwoIntsRequest: {e}"))
-        })?;
-        Ok(ros_srv::AddTwoInts_Request {
-            a: bus.a,
-            b: bus.b,
-        })
+        let bus = AddTwoIntsRequest::decode(payload)
+            .map_err(|e| robot_bus::BusError::Protocol(format!("decode AddTwoIntsRequest: {e}")))?;
+        Ok(ros_srv::AddTwoInts_Request { a: bus.a, b: bus.b })
     }
 
     fn ros_resp_to_bus(&self, resp: &ros_srv::AddTwoInts_Response) -> robot_bus::Result<Vec<u8>> {
@@ -75,10 +67,7 @@ fn main() -> robot_bus::Result<()> {
     bus.create_service_raw(
         "/examples/add_two_ints",
         |body| match AddTwoIntsRequest::decode(body) {
-            Ok(req) => AddTwoIntsResponse {
-                sum: req.a + req.b,
-            }
-            .encode_to_vec(),
+            Ok(req) => AddTwoIntsResponse { sum: req.a + req.b }.encode_to_vec(),
             Err(err) => {
                 log::warn!("decode AddTwoIntsRequest: {err}");
                 Vec::new()

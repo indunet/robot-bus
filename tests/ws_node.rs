@@ -85,7 +85,10 @@ fn ws_node_subscribe_with_qos_receives_published_payload() {
             .expect("spin_once");
     }
 
-    assert_eq!(got.lock().unwrap().clone().expect("callback fired"), b"qos-hi");
+    assert_eq!(
+        got.lock().unwrap().clone().expect("callback fired"),
+        b"qos-hi"
+    );
     broker.stop().expect("stop");
 }
 
@@ -278,7 +281,10 @@ fn ws_node_connection_state_follows_socket() {
         "expected connected, state={}",
         node.connection_state()
     );
-    assert_eq!(node.connection_state(), robot_bus::ConnectionState::Connected);
+    assert_eq!(
+        node.connection_state(),
+        robot_bus::ConnectionState::Connected
+    );
 
     broker.stop().expect("stop");
     let deadline = std::time::Instant::now() + Duration::from_secs(8);

@@ -4,9 +4,8 @@ use prost::Message as ProstMessage;
 use rclrs::DynamicMessage;
 
 use super::super::common::*;
-use crate::ros2_bridge::mapper::TopicMapper;
 use crate::BusError;
-
+use crate::ros2_bridge::mapper::TopicMapper;
 
 pub(crate) fn scene_entity_from_view(
     view: &rclrs::DynamicMessageView<'_>,
@@ -17,15 +16,51 @@ pub(crate) fn scene_entity_from_view(
         id: read_string(view, "id")?,
         lifetime: read_duration(view, "lifetime")?,
         frame_locked: read_bool(view, "frame_locked")?,
-        metadata: read_message_seq(view, "metadata", super::key_value_pair::key_value_pair_from_view)?,
-        arrows: read_message_seq(view, "arrows", super::arrow_primitive::arrow_primitive_from_view)?,
-        cubes: read_message_seq(view, "cubes", super::cube_primitive::cube_primitive_from_view)?,
-        spheres: read_message_seq(view, "spheres", super::sphere_primitive::sphere_primitive_from_view)?,
-        cylinders: read_message_seq(view, "cylinders", super::cylinder_primitive::cylinder_primitive_from_view)?,
-        lines: read_message_seq(view, "lines", super::line_primitive::line_primitive_from_view)?,
-        triangles: read_message_seq(view, "triangles", super::triangle_list_primitive::triangle_list_primitive_from_view)?,
-        texts: read_message_seq(view, "texts", super::text_primitive::text_primitive_from_view)?,
-        models: read_message_seq(view, "models", super::model_primitive::model_primitive_from_view)?,
+        metadata: read_message_seq(
+            view,
+            "metadata",
+            super::key_value_pair::key_value_pair_from_view,
+        )?,
+        arrows: read_message_seq(
+            view,
+            "arrows",
+            super::arrow_primitive::arrow_primitive_from_view,
+        )?,
+        cubes: read_message_seq(
+            view,
+            "cubes",
+            super::cube_primitive::cube_primitive_from_view,
+        )?,
+        spheres: read_message_seq(
+            view,
+            "spheres",
+            super::sphere_primitive::sphere_primitive_from_view,
+        )?,
+        cylinders: read_message_seq(
+            view,
+            "cylinders",
+            super::cylinder_primitive::cylinder_primitive_from_view,
+        )?,
+        lines: read_message_seq(
+            view,
+            "lines",
+            super::line_primitive::line_primitive_from_view,
+        )?,
+        triangles: read_message_seq(
+            view,
+            "triangles",
+            super::triangle_list_primitive::triangle_list_primitive_from_view,
+        )?,
+        texts: read_message_seq(
+            view,
+            "texts",
+            super::text_primitive::text_primitive_from_view,
+        )?,
+        models: read_message_seq(
+            view,
+            "models",
+            super::model_primitive::model_primitive_from_view,
+        )?,
     })
 }
 
@@ -42,20 +77,60 @@ pub(crate) fn scene_entity_write(
         write_duration(view, "lifetime", v)?;
     }
     write_bool(view, "frame_locked", bus.frame_locked)?;
-    write_message_seq(view, "metadata", &bus.metadata, super::key_value_pair::key_value_pair_write)?;
-    write_message_seq(view, "arrows", &bus.arrows, super::arrow_primitive::arrow_primitive_write)?;
-    write_message_seq(view, "cubes", &bus.cubes, super::cube_primitive::cube_primitive_write)?;
-    write_message_seq(view, "spheres", &bus.spheres, super::sphere_primitive::sphere_primitive_write)?;
-    write_message_seq(view, "cylinders", &bus.cylinders, super::cylinder_primitive::cylinder_primitive_write)?;
-    write_message_seq(view, "lines", &bus.lines, super::line_primitive::line_primitive_write)?;
+    write_message_seq(
+        view,
+        "metadata",
+        &bus.metadata,
+        super::key_value_pair::key_value_pair_write,
+    )?;
+    write_message_seq(
+        view,
+        "arrows",
+        &bus.arrows,
+        super::arrow_primitive::arrow_primitive_write,
+    )?;
+    write_message_seq(
+        view,
+        "cubes",
+        &bus.cubes,
+        super::cube_primitive::cube_primitive_write,
+    )?;
+    write_message_seq(
+        view,
+        "spheres",
+        &bus.spheres,
+        super::sphere_primitive::sphere_primitive_write,
+    )?;
+    write_message_seq(
+        view,
+        "cylinders",
+        &bus.cylinders,
+        super::cylinder_primitive::cylinder_primitive_write,
+    )?;
+    write_message_seq(
+        view,
+        "lines",
+        &bus.lines,
+        super::line_primitive::line_primitive_write,
+    )?;
     write_message_seq(
         view,
         "triangles",
         &bus.triangles,
         super::triangle_list_primitive::triangle_list_primitive_write,
     )?;
-    write_message_seq(view, "texts", &bus.texts, super::text_primitive::text_primitive_write)?;
-    write_message_seq(view, "models", &bus.models, super::model_primitive::model_primitive_write)?;
+    write_message_seq(
+        view,
+        "texts",
+        &bus.texts,
+        super::text_primitive::text_primitive_write,
+    )?;
+    write_message_seq(
+        view,
+        "models",
+        &bus.models,
+        super::model_primitive::model_primitive_write,
+    )?;
     Ok(())
 }
 

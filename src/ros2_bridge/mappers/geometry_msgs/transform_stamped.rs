@@ -4,9 +4,8 @@ use prost::Message as ProstMessage;
 use rclrs::DynamicMessage;
 
 use super::super::common::*;
-use crate::ros2_bridge::mapper::TopicMapper;
 use crate::BusError;
-
+use crate::ros2_bridge::mapper::TopicMapper;
 
 pub(crate) fn transform_stamped_from_view(
     view: &rclrs::DynamicMessageView<'_>,
@@ -35,7 +34,9 @@ pub(crate) fn transform_stamped_write(
     }
     write_string(view, "child_frame_id", &bus.child_frame_id)?;
     if let Some(v) = &bus.transform {
-        with_nested_mut(view, "transform", |nested| super::transform::transform_write(nested, v))?;
+        with_nested_mut(view, "transform", |nested| {
+            super::transform::transform_write(nested, v)
+        })?;
     }
     Ok(())
 }

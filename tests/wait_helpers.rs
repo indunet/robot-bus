@@ -12,11 +12,11 @@ use robot_bus::broker::action_bus::ActionBusConfig;
 use robot_bus::broker::message_bus::BusConfig;
 use robot_bus::broker::service_bus::ServiceBusConfig;
 use robot_bus::broker::{
-    ConsoleBrokerConfig, DiscoveryConfig, WsGatewayConfig, RobotBusBroker, RobotBusConfig,
+    ConsoleBrokerConfig, DiscoveryConfig, RobotBusBroker, RobotBusConfig, WsGatewayConfig,
 };
 use robot_bus::message_bus::Publisher;
 use robot_bus::{Node, NodeOptions};
-use support::{free_port, lock_brokers, MessageProxy};
+use support::{MessageProxy, free_port, lock_brokers};
 
 fn test_broker_config(
     msg_xsub: u16,
@@ -132,11 +132,7 @@ fn wait_for_service_ready_via_console_workers() {
 
     let mut server = Node::with_options("svc-server", server_opts);
     server
-        .create_service_raw(
-            "/wait/echo",
-            Arc::new(|body| body.to_vec()),
-            None,
-        )
+        .create_service_raw("/wait/echo", Arc::new(|body| body.to_vec()), None)
         .expect("create_service");
     server.start().expect("start server");
     thread::sleep(Duration::from_millis(200));

@@ -4,9 +4,8 @@ use prost::Message as ProstMessage;
 use rclrs::DynamicMessage;
 
 use super::super::common::*;
-use crate::ros2_bridge::mapper::TopicMapper;
 use crate::BusError;
-
+use crate::ros2_bridge::mapper::TopicMapper;
 
 pub(crate) fn multi_echo_laser_scan_from_view(
     view: &rclrs::DynamicMessageView<'_>,
@@ -24,7 +23,11 @@ pub(crate) fn multi_echo_laser_scan_from_view(
         range_min: read_f32(view, "range_min")?,
         range_max: read_f32(view, "range_max")?,
         ranges: read_message_seq(view, "ranges", super::laser_echo::laser_echo_from_view)?,
-        intensities: read_message_seq(view, "intensities", super::laser_echo::laser_echo_from_view)?,
+        intensities: read_message_seq(
+            view,
+            "intensities",
+            super::laser_echo::laser_echo_from_view,
+        )?,
     })
 }
 
@@ -44,8 +47,18 @@ pub(crate) fn multi_echo_laser_scan_write(
     write_f32(view, "scan_time", bus.scan_time)?;
     write_f32(view, "range_min", bus.range_min)?;
     write_f32(view, "range_max", bus.range_max)?;
-    write_message_seq(view, "ranges", &bus.ranges, super::laser_echo::laser_echo_write)?;
-    write_message_seq(view, "intensities", &bus.intensities, super::laser_echo::laser_echo_write)?;
+    write_message_seq(
+        view,
+        "ranges",
+        &bus.ranges,
+        super::laser_echo::laser_echo_write,
+    )?;
+    write_message_seq(
+        view,
+        "intensities",
+        &bus.intensities,
+        super::laser_echo::laser_echo_write,
+    )?;
     Ok(())
 }
 

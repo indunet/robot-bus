@@ -4,9 +4,8 @@ use prost::Message as ProstMessage;
 use rclrs::DynamicMessage;
 
 use super::super::common::*;
-use crate::ros2_bridge::mapper::TopicMapper;
 use crate::BusError;
-
+use crate::ros2_bridge::mapper::TopicMapper;
 
 pub(crate) fn multi_dof_joint_state_from_view(
     view: &rclrs::DynamicMessageView<'_>,
@@ -22,8 +21,16 @@ pub(crate) fn multi_dof_joint_state_from_view(
             "transforms",
             super::super::geometry_msgs::transform::transform_from_view,
         )?,
-        twist: read_message_seq(view, "twist", super::super::geometry_msgs::twist::twist_from_view)?,
-        wrench: read_message_seq(view, "wrench", super::super::geometry_msgs::wrench::wrench_from_view)?,
+        twist: read_message_seq(
+            view,
+            "twist",
+            super::super::geometry_msgs::twist::twist_from_view,
+        )?,
+        wrench: read_message_seq(
+            view,
+            "wrench",
+            super::super::geometry_msgs::wrench::wrench_from_view,
+        )?,
     })
 }
 
@@ -43,7 +50,12 @@ pub(crate) fn multi_dof_joint_state_write(
         &bus.transforms,
         super::super::geometry_msgs::transform::transform_write,
     )?;
-    write_message_seq(view, "twist", &bus.twist, super::super::geometry_msgs::twist::twist_write)?;
+    write_message_seq(
+        view,
+        "twist",
+        &bus.twist,
+        super::super::geometry_msgs::twist::twist_write,
+    )?;
     write_message_seq(
         view,
         "wrench",

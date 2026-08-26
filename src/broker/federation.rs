@@ -50,8 +50,8 @@ pub fn resolve_peer_from_api(api: &str) -> Result<FederationPeerEndpoints> {
 /// Apply `--peer` API URLs onto a [`super::RobotBusConfig`] (message/service/action peers).
 pub fn apply_api_peers(config: &mut super::RobotBusConfig, peers: &[String]) -> Result<()> {
     for peer in peers {
-        let resolved = resolve_peer_from_api(peer)
-            .with_context(|| format!("invalid --peer {peer}"))?;
+        let resolved =
+            resolve_peer_from_api(peer).with_context(|| format!("invalid --peer {peer}"))?;
         config.message.peers.push(resolved.message);
         config.service.peers.push(resolved.service);
         config.action.peers.push(resolved.action);

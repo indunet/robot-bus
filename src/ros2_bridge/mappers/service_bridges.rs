@@ -31,9 +31,8 @@ impl TypedServiceMapper for TriggerServiceMapper {
     }
 
     fn bus_req_to_ros(&self, payload: &[u8]) -> Result<ros_srv::Trigger_Request> {
-        let bus = BusTriggerRequest::decode(payload).map_err(|e| {
-            BusError::Protocol(format!("decode TriggerRequest: {e}"))
-        })?;
+        let bus = BusTriggerRequest::decode(payload)
+            .map_err(|e| BusError::Protocol(format!("decode TriggerRequest: {e}")))?;
         Ok(service::trigger_bus_req_to_ros(&bus))
     }
 
@@ -42,9 +41,8 @@ impl TypedServiceMapper for TriggerServiceMapper {
     }
 
     fn bus_resp_to_ros(&self, payload: &[u8]) -> Result<ros_srv::Trigger_Response> {
-        let bus = BusTriggerResponse::decode(payload).map_err(|e| {
-            BusError::Protocol(format!("decode TriggerResponse: {e}"))
-        })?;
+        let bus = BusTriggerResponse::decode(payload)
+            .map_err(|e| BusError::Protocol(format!("decode TriggerResponse: {e}")))?;
         Ok(service::trigger_bus_resp_to_ros(&bus))
     }
 
@@ -68,9 +66,8 @@ impl TypedServiceMapper for SetBoolServiceMapper {
     }
 
     fn bus_req_to_ros(&self, payload: &[u8]) -> Result<ros_srv::SetBool_Request> {
-        let bus = BusSetBoolRequest::decode(payload).map_err(|e| {
-            BusError::Protocol(format!("decode SetBoolRequest: {e}"))
-        })?;
+        let bus = BusSetBoolRequest::decode(payload)
+            .map_err(|e| BusError::Protocol(format!("decode SetBoolRequest: {e}")))?;
         Ok(service::set_bool_bus_req_to_ros(&bus))
     }
 
@@ -79,9 +76,8 @@ impl TypedServiceMapper for SetBoolServiceMapper {
     }
 
     fn bus_resp_to_ros(&self, payload: &[u8]) -> Result<ros_srv::SetBool_Response> {
-        let bus = BusSetBoolResponse::decode(payload).map_err(|e| {
-            BusError::Protocol(format!("decode SetBoolResponse: {e}"))
-        })?;
+        let bus = BusSetBoolResponse::decode(payload)
+            .map_err(|e| BusError::Protocol(format!("decode SetBoolResponse: {e}")))?;
         Ok(service::set_bool_bus_resp_to_ros(&bus))
     }
 

@@ -3,18 +3,18 @@
 use crate::ros2_bridge::ros_idl::example_interfaces::action as ros_act;
 
 #[cfg(not(feature = "ros2-shim"))]
-use prost::Message as ProstMessage;
+use crate::errors::{BusError, Result};
 #[cfg(not(feature = "ros2-shim"))]
 use crate::example_interfaces::action::v1::{
     FibonacciFeedback as BusFibonacciFeedback, FibonacciGoal as BusFibonacciGoal,
     FibonacciResult as BusFibonacciResult,
 };
 #[cfg(not(feature = "ros2-shim"))]
-use crate::errors::{BusError, Result};
-#[cfg(not(feature = "ros2-shim"))]
 use crate::ros2_bridge::mapper::TypedActionMapper;
 #[cfg(not(feature = "ros2-shim"))]
 use crate::ros2_bridge::mappers::action;
+#[cfg(not(feature = "ros2-shim"))]
+use prost::Message as ProstMessage;
 
 /// Builtin codec for `example_interfaces/action/Fibonacci`.
 #[derive(Clone, Copy, Debug, Default)]

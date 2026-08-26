@@ -4,9 +4,8 @@ use prost::Message as ProstMessage;
 use rclrs::DynamicMessage;
 
 use super::super::common::*;
-use crate::ros2_bridge::mapper::TopicMapper;
 use crate::BusError;
-
+use crate::ros2_bridge::mapper::TopicMapper;
 
 pub(crate) fn velocity_stamped_from_view(
     view: &rclrs::DynamicMessageView<'_>,
@@ -37,7 +36,9 @@ pub(crate) fn velocity_stamped_write(
     write_string(view, "body_frame_id", &bus.body_frame_id)?;
     write_string(view, "reference_frame_id", &bus.reference_frame_id)?;
     if let Some(v) = &bus.velocity {
-        with_nested_mut(view, "velocity", |nested| super::twist::twist_write(nested, v))?;
+        with_nested_mut(view, "velocity", |nested| {
+            super::twist::twist_write(nested, v)
+        })?;
     }
     Ok(())
 }

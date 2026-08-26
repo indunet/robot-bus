@@ -96,9 +96,8 @@ pub fn fetch_discover(api_base: &str, timeout: Duration) -> Result<DiscoverRespo
             "discover GET {url} failed: {e} (is the broker API listening? default --api-listen 0.0.0.0:15570)"
         ))
     })?;
-    resp.into_json::<DiscoverResponse>().map_err(|e| {
-        BusError::Protocol(format!("discover decode {url}: {e}"))
-    })
+    resp.into_json::<DiscoverResponse>()
+        .map_err(|e| BusError::Protocol(format!("discover decode {url}: {e}")))
 }
 
 pub fn wait(opts: DiscoverOpts) -> Result<BrokerAnnouncement> {

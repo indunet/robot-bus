@@ -4,9 +4,8 @@ use prost::Message as ProstMessage;
 use rclrs::DynamicMessage;
 
 use super::super::common::*;
-use crate::ros2_bridge::mapper::TopicMapper;
 use crate::BusError;
-
+use crate::ros2_bridge::mapper::TopicMapper;
 
 pub(crate) fn frame_transform_from_view(
     view: &rclrs::DynamicMessageView<'_>,
@@ -36,10 +35,14 @@ pub(crate) fn frame_transform_write(
     write_string(view, "parent_frame_id", &bus.parent_frame_id)?;
     write_string(view, "child_frame_id", &bus.child_frame_id)?;
     if let Some(v) = &bus.translation {
-        with_nested_mut(view, "translation", |nested| super::vector3::vector3_write(nested, v))?;
+        with_nested_mut(view, "translation", |nested| {
+            super::vector3::vector3_write(nested, v)
+        })?;
     }
     if let Some(v) = &bus.rotation {
-        with_nested_mut(view, "rotation", |nested| super::quaternion::quaternion_write(nested, v))?;
+        with_nested_mut(view, "rotation", |nested| {
+            super::quaternion::quaternion_write(nested, v)
+        })?;
     }
     Ok(())
 }

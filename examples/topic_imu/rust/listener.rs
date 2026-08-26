@@ -2,9 +2,9 @@
 //!
 //! Run `robot-bus-broker` first, then this listener, then `topic_imu_talker`.
 
+use robot_bus::Node;
 use robot_bus::geometry_msgs::msg::v1::Vector3;
 use robot_bus::sensor_msgs::msg::v1::Imu;
-use robot_bus::Node;
 
 fn main() -> robot_bus::Result<()> {
     let mut node = Node::new("examples_imu_listener");

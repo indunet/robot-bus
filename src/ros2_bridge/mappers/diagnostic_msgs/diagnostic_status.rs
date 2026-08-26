@@ -4,9 +4,8 @@ use prost::Message as ProstMessage;
 use rclrs::DynamicMessage;
 
 use super::super::common::*;
-use crate::ros2_bridge::mapper::TopicMapper;
 use crate::BusError;
-
+use crate::ros2_bridge::mapper::TopicMapper;
 
 pub(crate) fn diagnostic_status_from_view(
     view: &rclrs::DynamicMessageView<'_>,
@@ -28,7 +27,12 @@ pub(crate) fn diagnostic_status_write(
     write_string(view, "name", &bus.name)?;
     write_string(view, "message", &bus.message)?;
     write_string(view, "hardware_id", &bus.hardware_id)?;
-    write_message_seq(view, "values", &bus.values, super::key_value::key_value_write)?;
+    write_message_seq(
+        view,
+        "values",
+        &bus.values,
+        super::key_value::key_value_write,
+    )?;
     Ok(())
 }
 

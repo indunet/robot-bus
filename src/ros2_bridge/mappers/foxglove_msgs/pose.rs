@@ -4,9 +4,8 @@ use prost::Message as ProstMessage;
 use rclrs::DynamicMessage;
 
 use super::super::common::*;
-use crate::ros2_bridge::mapper::TopicMapper;
 use crate::BusError;
-
+use crate::ros2_bridge::mapper::TopicMapper;
 
 pub(crate) fn pose_from_view(
     view: &rclrs::DynamicMessageView<'_>,
@@ -28,10 +27,14 @@ pub(crate) fn pose_write(
     bus: &crate::foxglove_msgs::msg::v1::Pose,
 ) -> Result<()> {
     if let Some(v) = &bus.position {
-        with_nested_mut(view, "position", |nested| super::vector3::vector3_write(nested, v))?;
+        with_nested_mut(view, "position", |nested| {
+            super::vector3::vector3_write(nested, v)
+        })?;
     }
     if let Some(v) = &bus.orientation {
-        with_nested_mut(view, "orientation", |nested| super::quaternion::quaternion_write(nested, v))?;
+        with_nested_mut(view, "orientation", |nested| {
+            super::quaternion::quaternion_write(nested, v)
+        })?;
     }
     Ok(())
 }

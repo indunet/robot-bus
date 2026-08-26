@@ -1,10 +1,10 @@
 //! Action server for `/examples/fibonacci` (`example_interfaces/action/Fibonacci`).
 
+use robot_bus::Node;
 use robot_bus::example_interfaces::action::v1::{
     Fibonacci, FibonacciFeedback, FibonacciGoal, FibonacciResult,
 };
 use robot_bus::typed::ActionOutcome;
-use robot_bus::Node;
 
 fn main() -> robot_bus::Result<()> {
     let mut node = Node::new("examples_fibonacci_server");

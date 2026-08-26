@@ -4,9 +4,8 @@ use prost::Message as ProstMessage;
 use rclrs::DynamicMessage;
 
 use super::super::common::*;
-use crate::ros2_bridge::mapper::TopicMapper;
 use crate::BusError;
-
+use crate::ros2_bridge::mapper::TopicMapper;
 
 pub(crate) fn circle_annotation_from_view(
     view: &rclrs::DynamicMessageView<'_>,
@@ -27,7 +26,11 @@ pub(crate) fn circle_annotation_from_view(
             .as_ref()
             .map(super::color::color_from_view)
             .transpose()?,
-        metadata: read_message_seq(view, "metadata", super::key_value_pair::key_value_pair_from_view)?,
+        metadata: read_message_seq(
+            view,
+            "metadata",
+            super::key_value_pair::key_value_pair_from_view,
+        )?,
     })
 }
 
@@ -39,17 +42,28 @@ pub(crate) fn circle_annotation_write(
         write_timestamp(view, "timestamp", v)?;
     }
     if let Some(v) = &bus.position {
-        with_nested_mut(view, "position", |nested| super::point2::point2_write(nested, v))?;
+        with_nested_mut(view, "position", |nested| {
+            super::point2::point2_write(nested, v)
+        })?;
     }
     write_f64(view, "diameter", bus.diameter)?;
     write_f64(view, "thickness", bus.thickness)?;
     if let Some(v) = &bus.fill_color {
-        with_nested_mut(view, "fill_color", |nested| super::color::color_write(nested, v))?;
+        with_nested_mut(view, "fill_color", |nested| {
+            super::color::color_write(nested, v)
+        })?;
     }
     if let Some(v) = &bus.outline_color {
-        with_nested_mut(view, "outline_color", |nested| super::color::color_write(nested, v))?;
+        with_nested_mut(view, "outline_color", |nested| {
+            super::color::color_write(nested, v)
+        })?;
     }
-    write_message_seq(view, "metadata", &bus.metadata, super::key_value_pair::key_value_pair_write)?;
+    write_message_seq(
+        view,
+        "metadata",
+        &bus.metadata,
+        super::key_value_pair::key_value_pair_write,
+    )?;
     Ok(())
 }
 

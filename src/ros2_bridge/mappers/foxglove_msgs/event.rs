@@ -4,9 +4,8 @@ use prost::Message as ProstMessage;
 use rclrs::DynamicMessage;
 
 use super::super::common::*;
-use crate::ros2_bridge::mapper::TopicMapper;
 use crate::BusError;
-
+use crate::ros2_bridge::mapper::TopicMapper;
 
 pub(crate) fn event_from_view(
     view: &rclrs::DynamicMessageView<'_>,
@@ -14,7 +13,11 @@ pub(crate) fn event_from_view(
     Ok(crate::foxglove_msgs::msg::v1::Event {
         start_time: read_timestamp(view, "start_time")?,
         end_time: read_timestamp(view, "end_time")?,
-        metadata: read_message_seq(view, "metadata", super::key_value_pair::key_value_pair_from_view)?,
+        metadata: read_message_seq(
+            view,
+            "metadata",
+            super::key_value_pair::key_value_pair_from_view,
+        )?,
     })
 }
 
@@ -28,7 +31,12 @@ pub(crate) fn event_write(
     if let Some(v) = &bus.end_time {
         write_timestamp(view, "end_time", v)?;
     }
-    write_message_seq(view, "metadata", &bus.metadata, super::key_value_pair::key_value_pair_write)?;
+    write_message_seq(
+        view,
+        "metadata",
+        &bus.metadata,
+        super::key_value_pair::key_value_pair_write,
+    )?;
     Ok(())
 }
 

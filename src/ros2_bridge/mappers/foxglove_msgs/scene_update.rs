@@ -4,16 +4,23 @@ use prost::Message as ProstMessage;
 use rclrs::DynamicMessage;
 
 use super::super::common::*;
-use crate::ros2_bridge::mapper::TopicMapper;
 use crate::BusError;
-
+use crate::ros2_bridge::mapper::TopicMapper;
 
 pub(crate) fn scene_update_from_view(
     view: &rclrs::DynamicMessageView<'_>,
 ) -> Result<crate::foxglove_msgs::msg::v1::SceneUpdate> {
     Ok(crate::foxglove_msgs::msg::v1::SceneUpdate {
-        deletions: read_message_seq(view, "deletions", super::scene_entity_deletion::scene_entity_deletion_from_view)?,
-        entities: read_message_seq(view, "entities", super::scene_entity::scene_entity_from_view)?,
+        deletions: read_message_seq(
+            view,
+            "deletions",
+            super::scene_entity_deletion::scene_entity_deletion_from_view,
+        )?,
+        entities: read_message_seq(
+            view,
+            "entities",
+            super::scene_entity::scene_entity_from_view,
+        )?,
     })
 }
 
@@ -27,7 +34,12 @@ pub(crate) fn scene_update_write(
         &bus.deletions,
         super::scene_entity_deletion::scene_entity_deletion_write,
     )?;
-    write_message_seq(view, "entities", &bus.entities, super::scene_entity::scene_entity_write)?;
+    write_message_seq(
+        view,
+        "entities",
+        &bus.entities,
+        super::scene_entity::scene_entity_write,
+    )?;
     Ok(())
 }
 

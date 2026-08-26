@@ -6,8 +6,8 @@ use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Duration;
 
-use tokio::sync::mpsc;
 use super::rpc_status::RpcStatus;
+use tokio::sync::mpsc;
 
 use crate::message_bus::Subscriber;
 use crate::runtime::ws_subscribe_queue_capacity;

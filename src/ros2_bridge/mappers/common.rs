@@ -1,6 +1,5 @@
 //! Shared DynamicMessage field accessors for topic mappers.
 
-
 use prost_types::{Duration as ProstDuration, Timestamp};
 use rclrs::{
     ArrayValue, ArrayValueMut, BoundedSequenceValue, BoundedSequenceValueMut, DynamicMessage,
@@ -10,7 +9,6 @@ use rclrs::{
 use rosidl_runtime_rs::Sequence;
 
 use crate::BusError;
-
 
 pub type Result<T> = std::result::Result<T, BusError>;
 
@@ -112,11 +110,7 @@ pub fn read_f64(view: &DynamicMessageView<'_>, field: &str) -> Result<f64> {
     }
 }
 
-pub fn write_i64(
-    view: &mut DynamicMessageViewMut<'_>,
-    field: &str,
-    value: i64,
-) -> Result<()> {
+pub fn write_i64(view: &mut DynamicMessageViewMut<'_>, field: &str, value: i64) -> Result<()> {
     match view.get_mut(field) {
         None => Ok(()),
         Some(ValueMut::Simple(v)) => {
@@ -132,11 +126,7 @@ pub fn write_i64(
     }
 }
 
-pub fn write_f64(
-    view: &mut DynamicMessageViewMut<'_>,
-    field: &str,
-    value: f64,
-) -> Result<()> {
+pub fn write_f64(view: &mut DynamicMessageViewMut<'_>, field: &str, value: f64) -> Result<()> {
     match view.get_mut(field) {
         None => Ok(()),
         Some(ValueMut::Simple(v)) => {
@@ -216,11 +206,7 @@ pub fn read_string(view: &DynamicMessageView<'_>, field: &str) -> Result<String>
     }
 }
 
-pub fn write_string(
-    view: &mut DynamicMessageViewMut<'_>,
-    field: &str,
-    value: &str,
-) -> Result<()> {
+pub fn write_string(view: &mut DynamicMessageViewMut<'_>, field: &str, value: &str) -> Result<()> {
     match view.get_mut(field) {
         None => Ok(()),
         Some(ValueMut::Simple(SimpleValueMut::String(s))) => {
@@ -760,10 +746,7 @@ pub fn write_string_seq(
 
 // --- google.protobuf.Timestamp / Duration ↔ builtin_interfaces Time / Duration ---
 
-pub fn read_timestamp(
-    view: &DynamicMessageView<'_>,
-    field: &str,
-) -> Result<Option<Timestamp>> {
+pub fn read_timestamp(view: &DynamicMessageView<'_>, field: &str) -> Result<Option<Timestamp>> {
     let Some(stamp) = nested_view(view, field)? else {
         return Ok(None);
     };
@@ -784,10 +767,7 @@ pub fn write_timestamp(
     })
 }
 
-pub fn read_duration(
-    view: &DynamicMessageView<'_>,
-    field: &str,
-) -> Result<Option<ProstDuration>> {
+pub fn read_duration(view: &DynamicMessageView<'_>, field: &str) -> Result<Option<ProstDuration>> {
     let Some(d) = nested_view(view, field)? else {
         return Ok(None);
     };

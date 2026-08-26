@@ -16,7 +16,7 @@ use robot_bus::broker::action_bus::ActionBusConfig;
 use robot_bus::broker::message_bus::BusConfig;
 use robot_bus::broker::service_bus::ServiceBusConfig;
 use robot_bus::broker::{
-    ConsoleBrokerConfig, DiscoveryConfig, WsGatewayConfig, RobotBusBroker, RobotBusConfig,
+    ConsoleBrokerConfig, DiscoveryConfig, RobotBusBroker, RobotBusConfig, WsGatewayConfig,
 };
 use robot_bus::message_bus::{Publisher, Subscriber};
 use robot_bus::service_bus::ServiceClient;
@@ -118,7 +118,12 @@ fn message_metrics_count_published_topics() {
     );
 
     let status = std::process::Command::new("curl")
-        .args(["-s", "--max-time", "3", "http://127.0.0.1:25770/api/v1/status"])
+        .args([
+            "-s",
+            "--max-time",
+            "3",
+            "http://127.0.0.1:25770/api/v1/status",
+        ])
         .output()
         .map(|o| String::from_utf8_lossy(&o.stdout).into_owned())
         .unwrap_or_default();
@@ -198,7 +203,12 @@ fn service_and_action_metrics_via_console_api() {
     );
 
     let services_json = std::process::Command::new("curl")
-        .args(["-s", "--max-time", "3", "http://127.0.0.1:26770/api/v1/services"])
+        .args([
+            "-s",
+            "--max-time",
+            "3",
+            "http://127.0.0.1:26770/api/v1/services",
+        ])
         .output()
         .map(|o| String::from_utf8_lossy(&o.stdout).into_owned())
         .unwrap_or_default();
@@ -208,7 +218,12 @@ fn service_and_action_metrics_via_console_api() {
     );
 
     let actions_json = std::process::Command::new("curl")
-        .args(["-s", "--max-time", "3", "http://127.0.0.1:26770/api/v1/actions"])
+        .args([
+            "-s",
+            "--max-time",
+            "3",
+            "http://127.0.0.1:26770/api/v1/actions",
+        ])
         .output()
         .map(|o| String::from_utf8_lossy(&o.stdout).into_owned())
         .unwrap_or_default();

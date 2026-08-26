@@ -4,9 +4,8 @@ use prost::Message as ProstMessage;
 use rclrs::DynamicMessage;
 
 use super::super::common::*;
-use crate::ros2_bridge::mapper::TopicMapper;
 use crate::BusError;
-
+use crate::ros2_bridge::mapper::TopicMapper;
 
 pub(crate) fn image_marker_from_view(
     view: &rclrs::DynamicMessageView<'_>,
@@ -38,7 +37,11 @@ pub(crate) fn image_marker_from_view(
             .as_ref()
             .map(super::super::builtin_interfaces::duration::duration_from_view)
             .transpose()?,
-        points: read_message_seq(view, "points", super::super::geometry_msgs::point::point_from_view)?,
+        points: read_message_seq(
+            view,
+            "points",
+            super::super::geometry_msgs::point::point_from_view,
+        )?,
         outline_colors: read_message_seq(
             view,
             "outline_colors",

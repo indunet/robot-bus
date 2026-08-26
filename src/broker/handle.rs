@@ -21,16 +21,16 @@ use crate::discovery::{
 use crate::runtime::Context as BusContext;
 use crate::transports::{
     ACTION_BACKEND_CHANNEL, ACTION_FRONTEND_CHANNEL, BindAllOpts, SERVICE_BACKEND_CHANNEL,
-    SERVICE_FRONTEND_CHANNEL, XPUB_CHANNEL, XSUB_CHANNEL, ipc_endpoint_in,
-    inproc_endpoint_with_prefix,
+    SERVICE_FRONTEND_CHANNEL, XPUB_CHANNEL, XSUB_CHANNEL, inproc_endpoint_with_prefix,
+    ipc_endpoint_in,
 };
 
-#[cfg(feature = "console")]
-use crate::tank::{TankEndpoints, TankManager};
 #[cfg(all(feature = "console", not(feature = "ws")))]
 use crate::console::serve_with_shutdown as serve_console_with_shutdown;
 #[cfg(feature = "console")]
 use crate::console::{BrokerEndpoints, ConsoleState, ControlPlaneHandle, StatusPublisherHandle};
+#[cfg(feature = "console")]
+use crate::tank::{TankEndpoints, TankManager};
 #[cfg(feature = "ws")]
 use crate::ws_gateway::{GatewayConfig, serve_on_listener};
 use std::net::SocketAddr;
@@ -94,9 +94,7 @@ fn recv_bound_endpoints(
                 Ok(Err(err)) => format!("{err:#}"),
                 Err(panic) => format!("thread panicked: {panic:?}"),
             };
-            Err(anyhow!(
-                "{name} failed to report bound endpoints: {detail}"
-            ))
+            Err(anyhow!("{name} failed to report bound endpoints: {detail}"))
         }
     }
 }
@@ -915,11 +913,7 @@ fn transport_aliases(tcp: &str, channel: &str, discover: &DiscoverResponse) -> S
     if let Some(dir) = discover.ipc_dir.as_deref().filter(|s| !s.is_empty()) {
         parts.push(ipc_endpoint_in(dir, channel));
     }
-    if let Some(prefix) = discover
-        .inproc_prefix
-        .as_deref()
-        .filter(|s| !s.is_empty())
-    {
+    if let Some(prefix) = discover.inproc_prefix.as_deref().filter(|s| !s.is_empty()) {
         parts.push(inproc_endpoint_with_prefix(prefix, channel));
     }
     parts.join("  ")
@@ -960,11 +954,7 @@ fn format_startup_banner(discover: &DiscoverResponse) -> String {
     ));
     lines.push(row(
         "service worker",
-        transport_aliases(
-            &discover.service_backend,
-            SERVICE_BACKEND_CHANNEL,
-            discover,
-        ),
+        transport_aliases(&discover.service_backend, SERVICE_BACKEND_CHANNEL, discover),
     ));
     lines.push(row(
         "action client",

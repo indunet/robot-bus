@@ -291,7 +291,9 @@ fn reserved_robot_bus_topics_stay_local() {
         "reserved /robot_bus/status must not cross federation"
     );
 
-    pub_a.publish("fleet/pose", b"from-a").expect("publish pose");
+    pub_a
+        .publish("fleet/pose", b"from-a")
+        .expect("publish pose");
     assert_eq!(
         recv_exact(&sub_b, b"from-a", Duration::from_secs(2)),
         "fleet/pose",
@@ -340,18 +342,12 @@ fn federation_peer_via_api_discover() {
     thread::sleep(Duration::from_millis(100));
 
     // Restart with bidirectional peers resolved from /api/v1/discover (not XPUB-1).
-    let broker_a = RobotBusBroker::start(federated_bus_config(
-        "api-peer-a",
-        vec![peer_b.message],
-        a,
-    ))
-    .expect("broker a federated");
-    let broker_b = RobotBusBroker::start(federated_bus_config(
-        "api-peer-b",
-        vec![peer_a.message],
-        b,
-    ))
-    .expect("broker b federated");
+    let broker_a =
+        RobotBusBroker::start(federated_bus_config("api-peer-a", vec![peer_b.message], a))
+            .expect("broker a federated");
+    let broker_b =
+        RobotBusBroker::start(federated_bus_config("api-peer-b", vec![peer_a.message], b))
+            .expect("broker b federated");
     thread::sleep(Duration::from_millis(200));
 
     let sub_b = Subscriber::new(Some(&connect_addr(&broker_b.message.xpub_bind))).expect("sub b");

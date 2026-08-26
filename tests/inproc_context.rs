@@ -36,8 +36,7 @@ fn inproc_broker_config() -> RobotBusConfig {
 fn inproc_pubsub_with_shared_context() {
     let _guard = lock_brokers();
     let ctx = Context::new();
-    let broker =
-        RobotBusBroker::start_with_context(&ctx, inproc_broker_config()).expect("broker");
+    let broker = RobotBusBroker::start_with_context(&ctx, inproc_broker_config()).expect("broker");
     thread::sleep(Duration::from_millis(150));
 
     let hits = Arc::new(AtomicUsize::new(0));
@@ -99,8 +98,7 @@ fn inproc_pubsub_with_shared_context() {
 fn inproc_action_goal_handle() {
     let _guard = lock_brokers();
     let ctx = Context::new();
-    let broker =
-        RobotBusBroker::start_with_context(&ctx, inproc_broker_config()).expect("broker");
+    let broker = RobotBusBroker::start_with_context(&ctx, inproc_broker_config()).expect("broker");
     thread::sleep(Duration::from_millis(150));
 
     let mut server = Node::inproc_with_context(&ctx, "inproc-action-server");

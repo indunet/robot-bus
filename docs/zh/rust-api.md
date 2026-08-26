@@ -229,16 +229,17 @@ use robot_bus::{MultiThreadedExecutor, Node, SingleThreadedExecutor};
 let mut node = Node::new("pilot");
 let executor = SingleThreadedExecutor::new();
 executor.add_node(&mut node)?;
-// 或 MultiThreadedExecutor::new(4) — 最多 n 个 worker；配合 Reentrant
-// callback group 时订阅 / timer / service / action 都可并行。
+// 或 MultiThreadedExecutor::new(4) — n 条常驻 worker 从队列取任务；
+// 配合 Reentrant callback group 时订阅 / timer / service / action 可并行。
+// 有 worker 池时回调不会在 poll 线程上跑。
 executor.spin()?;
 ```
 
-`MutuallyExclusive` 组内仍串行。
+`MutuallyExclusive` 组内仍串行（同时最多一个在跑，只占一条 worker）。
 
 ### Callback group
 
-接近 ROS 2：`MutuallyExclusive`（组内互斥）与 `Reentrant`（组内可并行，配合 `MultiThreadedExecutor`）。节点默认有一个互斥 group；`callback_group` 传 `None` 时用默认组（与 ROS 2 把 group 作为参数传入一致）。
+接近 ROS 2：`MutuallyExclusive`（组内互斥，同时最多一个回调，多余的在组内排队）与 `Reentrant`（组内可并行，配合 `MultiThreadedExecutor` 的常驻线程池）。节点默认有一个互斥 group；`callback_group` 传 `None` 时用默认组（与 ROS 2 把 group 作为参数传入一致）。`SingleThreadedExecutor` 上两种 group 都在 poll 线程串行执行。
 
 ```rust
 use robot_bus::{CallbackGroupType, MultiThreadedExecutor, Node};

@@ -4,9 +4,8 @@ use prost::Message as ProstMessage;
 use rclrs::DynamicMessage;
 
 use super::super::common::*;
-use crate::ros2_bridge::mapper::TopicMapper;
 use crate::BusError;
-
+use crate::ros2_bridge::mapper::TopicMapper;
 
 pub(crate) fn interactive_marker_init_from_view(
     view: &rclrs::DynamicMessageView<'_>,
@@ -14,7 +13,11 @@ pub(crate) fn interactive_marker_init_from_view(
     Ok(crate::visualization_msgs::msg::v1::InteractiveMarkerInit {
         server_id: read_string(view, "server_id")?,
         seq_num: read_u64(view, "seq_num")?,
-        markers: read_message_seq(view, "markers", super::interactive_marker::interactive_marker_from_view)?,
+        markers: read_message_seq(
+            view,
+            "markers",
+            super::interactive_marker::interactive_marker_from_view,
+        )?,
     })
 }
 
@@ -24,7 +27,12 @@ pub(crate) fn interactive_marker_init_write(
 ) -> Result<()> {
     write_string(view, "server_id", &bus.server_id)?;
     write_u64(view, "seq_num", bus.seq_num)?;
-    write_message_seq(view, "markers", &bus.markers, super::interactive_marker::interactive_marker_write)?;
+    write_message_seq(
+        view,
+        "markers",
+        &bus.markers,
+        super::interactive_marker::interactive_marker_write,
+    )?;
     Ok(())
 }
 

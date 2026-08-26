@@ -4,9 +4,8 @@ use prost::Message as ProstMessage;
 use rclrs::DynamicMessage;
 
 use super::super::common::*;
-use crate::ros2_bridge::mapper::TopicMapper;
 use crate::BusError;
-
+use crate::ros2_bridge::mapper::TopicMapper;
 
 pub(crate) fn wrench_from_view(
     view: &rclrs::DynamicMessageView<'_>,
@@ -28,10 +27,14 @@ pub(crate) fn wrench_write(
     bus: &crate::geometry_msgs::msg::v1::Wrench,
 ) -> Result<()> {
     if let Some(v) = &bus.force {
-        with_nested_mut(view, "force", |nested| super::vector3::vector3_write(nested, v))?;
+        with_nested_mut(view, "force", |nested| {
+            super::vector3::vector3_write(nested, v)
+        })?;
     }
     if let Some(v) = &bus.torque {
-        with_nested_mut(view, "torque", |nested| super::vector3::vector3_write(nested, v))?;
+        with_nested_mut(view, "torque", |nested| {
+            super::vector3::vector3_write(nested, v)
+        })?;
     }
     Ok(())
 }

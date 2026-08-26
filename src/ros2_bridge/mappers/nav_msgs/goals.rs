@@ -4,9 +4,8 @@ use prost::Message as ProstMessage;
 use rclrs::DynamicMessage;
 
 use super::super::common::*;
-use crate::ros2_bridge::mapper::TopicMapper;
 use crate::BusError;
-
+use crate::ros2_bridge::mapper::TopicMapper;
 
 pub(crate) fn goals_from_view(
     view: &rclrs::DynamicMessageView<'_>,
@@ -16,7 +15,11 @@ pub(crate) fn goals_from_view(
             .as_ref()
             .map(super::super::std_msgs::header::header_from_view)
             .transpose()?,
-        goals: read_message_seq(view, "goals", super::super::geometry_msgs::pose_stamped::pose_stamped_from_view)?,
+        goals: read_message_seq(
+            view,
+            "goals",
+            super::super::geometry_msgs::pose_stamped::pose_stamped_from_view,
+        )?,
     })
 }
 

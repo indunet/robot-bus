@@ -137,15 +137,17 @@ impl ControlPlaneLedger {
         let weak = Arc::downgrade(self);
         thread::Builder::new()
             .name("rbus-meta-refresh".into())
-            .spawn(move || loop {
-                thread::sleep(KEEP_ALIVE);
-                let Some(this) = weak.upgrade() else {
-                    break;
-                };
-                if this.stop.load(Ordering::Relaxed) {
-                    break;
+            .spawn(move || {
+                loop {
+                    thread::sleep(KEEP_ALIVE);
+                    let Some(this) = weak.upgrade() else {
+                        break;
+                    };
+                    if this.stop.load(Ordering::Relaxed) {
+                        break;
+                    }
+                    this.restore_now();
                 }
-                this.restore_now();
             })
             .ok();
     }

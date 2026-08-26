@@ -4,9 +4,8 @@ use prost::Message as ProstMessage;
 use rclrs::DynamicMessage;
 
 use super::super::common::*;
-use crate::ros2_bridge::mapper::TopicMapper;
 use crate::BusError;
-
+use crate::ros2_bridge::mapper::TopicMapper;
 
 pub(crate) fn u_int32_multi_array_from_view(
     view: &rclrs::DynamicMessageView<'_>,
@@ -25,7 +24,9 @@ pub(crate) fn u_int32_multi_array_write(
     bus: &crate::std_msgs::msg::v1::UInt32MultiArray,
 ) -> Result<()> {
     if let Some(v) = &bus.layout {
-        with_nested_mut(view, "layout", |nested| super::multi_array_layout::multi_array_layout_write(nested, v))?;
+        with_nested_mut(view, "layout", |nested| {
+            super::multi_array_layout::multi_array_layout_write(nested, v)
+        })?;
     }
     write_u32_seq(view, "data", &bus.data)?;
     Ok(())

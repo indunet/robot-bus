@@ -4,9 +4,8 @@ use prost::Message as ProstMessage;
 use rclrs::DynamicMessage;
 
 use super::super::common::*;
-use crate::ros2_bridge::mapper::TopicMapper;
 use crate::BusError;
-
+use crate::ros2_bridge::mapper::TopicMapper;
 
 pub(crate) fn image_from_view(
     view: &rclrs::DynamicMessageView<'_>,
@@ -118,7 +117,9 @@ fn typed_image_subscription(
 }
 
 #[cfg(not(feature = "ros2-shim"))]
-fn image_typed_to_bus(msg: &ros_env::sensor_msgs::msg::Image) -> crate::sensor_msgs::msg::v1::Image {
+fn image_typed_to_bus(
+    msg: &ros_env::sensor_msgs::msg::Image,
+) -> crate::sensor_msgs::msg::v1::Image {
     crate::sensor_msgs::msg::v1::Image {
         header: Some(crate::std_msgs::msg::v1::Header {
             stamp: Some(crate::builtin_interfaces::msg::v1::Time {

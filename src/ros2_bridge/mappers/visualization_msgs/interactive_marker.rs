@@ -4,9 +4,8 @@ use prost::Message as ProstMessage;
 use rclrs::DynamicMessage;
 
 use super::super::common::*;
-use crate::ros2_bridge::mapper::TopicMapper;
 use crate::BusError;
-
+use crate::ros2_bridge::mapper::TopicMapper;
 
 pub(crate) fn interactive_marker_from_view(
     view: &rclrs::DynamicMessageView<'_>,
@@ -23,8 +22,16 @@ pub(crate) fn interactive_marker_from_view(
         name: read_string(view, "name")?,
         description: read_string(view, "description")?,
         scale: read_f32(view, "scale")?,
-        menu_entries: read_message_seq(view, "menu_entries", super::menu_entry::menu_entry_from_view)?,
-        controls: read_message_seq(view, "controls", super::interactive_marker_control::interactive_marker_control_from_view)?,
+        menu_entries: read_message_seq(
+            view,
+            "menu_entries",
+            super::menu_entry::menu_entry_from_view,
+        )?,
+        controls: read_message_seq(
+            view,
+            "controls",
+            super::interactive_marker_control::interactive_marker_control_from_view,
+        )?,
     })
 }
 
@@ -45,7 +52,12 @@ pub(crate) fn interactive_marker_write(
     write_string(view, "name", &bus.name)?;
     write_string(view, "description", &bus.description)?;
     write_f32(view, "scale", bus.scale)?;
-    write_message_seq(view, "menu_entries", &bus.menu_entries, super::menu_entry::menu_entry_write)?;
+    write_message_seq(
+        view,
+        "menu_entries",
+        &bus.menu_entries,
+        super::menu_entry::menu_entry_write,
+    )?;
     write_message_seq(
         view,
         "controls",

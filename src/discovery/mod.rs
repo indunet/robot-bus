@@ -13,15 +13,13 @@ mod net;
 mod packet;
 
 #[allow(deprecated)]
-pub use config::{
-    DEFAULT_API_DISCOVER_PATH, DEFAULT_DISCOVERY_TIMEOUT, DEFAULT_MULTICAST_ADDR,
-    DiscoverOpts, DiscoveryConfig, MAGIC, SCHEMA_VERSION,
-};
-#[allow(deprecated)]
 pub use config::DEFAULT_DISCOVERY_PORT;
-pub use http::{
-    DiscoverResponse, fetch_discover, normalize_api_base, rewrite_bind_host,
+#[allow(deprecated)]
+pub use config::{
+    DEFAULT_API_DISCOVER_PATH, DEFAULT_DISCOVERY_TIMEOUT, DEFAULT_MULTICAST_ADDR, DiscoverOpts,
+    DiscoveryConfig, MAGIC, SCHEMA_VERSION,
 };
+pub use http::{DiscoverResponse, fetch_discover, normalize_api_base, rewrite_bind_host};
 pub use net::{infer_advertise_host, resolve_advertise_host, tcp_port_from_bind};
 pub use packet::{BrokerAnnouncement, decode_announce, encode_announce, try_parse_datagram};
 
@@ -170,10 +168,9 @@ impl BrokerAnnouncement {
     }
 
     fn apply_ws(&self, opts: &mut NodeOptions) -> Result<()> {
-        let url = self
-            .ws_url
-            .as_deref()
-            .ok_or_else(|| BusError::Protocol("discovery announce has no ws_url / apiUrl".into()))?;
+        let url = self.ws_url.as_deref().ok_or_else(|| {
+            BusError::Protocol("discovery announce has no ws_url / apiUrl".into())
+        })?;
         if opts.ws_url.is_none() {
             opts.ws_url = Some(url.to_string());
         }

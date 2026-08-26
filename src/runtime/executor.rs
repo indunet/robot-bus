@@ -10,14 +10,15 @@
 //! - stop with [`Executor::shutdown`] (from any thread)
 //!
 //! Default mode is single-threaded: callbacks run on the spin/I/O thread.
-//! [`Executor::with_worker_pool`] offloads callbacks to a bounded worker pool
-//! according to each [`crate::runtime::CallbackGroup`] (subscription callbacks
-//! included when the group is reentrant).
+//! [`Executor::with_worker_pool`] offloads callbacks to a resident worker pool
+//! according to each [`crate::runtime::CallbackGroup`]. Mutually exclusive
+//! groups serialize (at most one in flight); reentrant groups may run in
+//! parallel. The poll thread never runs those callbacks itself.
 
 use std::collections::HashMap;
-use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{self, Receiver, Sender};
+use std::sync::Arc;
 use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant};
 
@@ -38,14 +39,14 @@ use crate::runtime::registrations::{
     ServiceHandler, ServiceRegistration, SubRegistration,
 };
 use crate::runtime::timers::{
-    Timer, TimerCallback, TimerHandle, SubscriptionHandle, effective_poll_timeout_ms, tick_timers,
+    effective_poll_timeout_ms, tick_timers, SubscriptionHandle, Timer, TimerCallback, TimerHandle,
 };
 use crate::runtime::worker_pool::WorkerPool;
 use crate::transports::{
     action_backend_endpoint, action_frontend_endpoint, message_xpub_endpoint,
     service_backend_endpoint,
 };
-use crate::zmq_helpers::{HighWaterMark, apply_subscriber_options_with, wait_for_connection};
+use crate::zmq_helpers::{apply_subscriber_options_with, wait_for_connection, HighWaterMark};
 
 const DEFAULT_POLL_TIMEOUT_MS: i64 = 250;
 const DEFAULT_HEARTBEAT_INTERVAL_MS: u64 = 2500;
@@ -109,9 +110,8 @@ impl Executor {
         Self::with_options(context, DEFAULT_HEARTBEAT_INTERVAL_MS, None)
     }
 
-    /// Offload service/action handlers to at most `max_workers` threads.
-    /// Subscription and action-client callbacks still run on the I/O thread.
-    /// If the pool is saturated, handlers fall back to inline execution.
+    /// Offload callbacks to `max_workers` resident threads (subscriptions,
+    /// timers, services, and action servers), subject to each callback group.
     pub fn with_worker_pool(max_workers: usize) -> Self {
         Self::with_options(
             Context::new(),
@@ -505,9 +505,11 @@ impl Executor {
             reg.disconnect();
             return Ok(());
         }
-        if let Some(pos) = self.socket_registrations.iter().position(|r| {
-            matches!(r, Registration::Service(s) if s.id == id)
-        }) {
+        if let Some(pos) = self
+            .socket_registrations
+            .iter()
+            .position(|r| matches!(r, Registration::Service(s) if s.id == id))
+        {
             let reg = self.socket_registrations.remove(pos);
             if let Registration::Service(worker) = reg {
                 worker.disconnect();
@@ -570,9 +572,11 @@ impl Executor {
             reg.disconnect();
             return Ok(());
         }
-        if let Some(pos) = self.socket_registrations.iter().position(|r| {
-            matches!(r, Registration::Action(a) if a.id == id)
-        }) {
+        if let Some(pos) = self
+            .socket_registrations
+            .iter()
+            .position(|r| matches!(r, Registration::Action(a) if a.id == id))
+        {
             let reg = self.socket_registrations.remove(pos);
             if let Registration::Action(worker) = reg {
                 worker.disconnect();
@@ -759,6 +763,8 @@ impl Executor {
         }
         self.disconnect_workers();
         self.close_sockets();
+        // Join resident workers after the poll thread has stopped submitting.
+        self.worker_pool = None;
         self.started = false;
         self.closed = true;
     }
@@ -950,7 +956,7 @@ fn spin_once_inner(
         had_work = true;
     }
 
-    // Flush replies produced by inline / worker handlers during this step.
+    // Flush replies produced by workers (or inline handlers) during this step.
     flush_reply_queue(registrations, reply_rx);
 
     if tick_timers(timers, Instant::now(), worker_pool) {

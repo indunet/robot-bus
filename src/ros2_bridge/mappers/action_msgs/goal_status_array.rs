@@ -4,15 +4,18 @@ use prost::Message as ProstMessage;
 use rclrs::DynamicMessage;
 
 use super::super::common::*;
-use crate::ros2_bridge::mapper::TopicMapper;
 use crate::BusError;
-
+use crate::ros2_bridge::mapper::TopicMapper;
 
 pub(crate) fn goal_status_array_from_view(
     view: &rclrs::DynamicMessageView<'_>,
 ) -> Result<crate::action_msgs::msg::v1::GoalStatusArray> {
     Ok(crate::action_msgs::msg::v1::GoalStatusArray {
-        status_list: read_message_seq(view, "status_list", super::goal_status::goal_status_from_view)?,
+        status_list: read_message_seq(
+            view,
+            "status_list",
+            super::goal_status::goal_status_from_view,
+        )?,
     })
 }
 
@@ -20,7 +23,12 @@ pub(crate) fn goal_status_array_write(
     view: &mut rclrs::DynamicMessageViewMut<'_>,
     bus: &crate::action_msgs::msg::v1::GoalStatusArray,
 ) -> Result<()> {
-    write_message_seq(view, "status_list", &bus.status_list, super::goal_status::goal_status_write)?;
+    write_message_seq(
+        view,
+        "status_list",
+        &bus.status_list,
+        super::goal_status::goal_status_write,
+    )?;
     Ok(())
 }
 

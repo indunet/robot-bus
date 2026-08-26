@@ -4,9 +4,8 @@ use prost::Message as ProstMessage;
 use rclrs::DynamicMessage;
 
 use super::super::common::*;
-use crate::ros2_bridge::mapper::TopicMapper;
 use crate::BusError;
-
+use crate::ros2_bridge::mapper::TopicMapper;
 
 pub(crate) fn point_cloud_from_view(
     view: &rclrs::DynamicMessageView<'_>,
@@ -19,7 +18,11 @@ pub(crate) fn point_cloud_from_view(
             .map(super::pose::pose_from_view)
             .transpose()?,
         point_stride: read_u32(view, "point_stride")?,
-        fields: read_message_seq(view, "fields", super::packed_element_field::packed_element_field_from_view)?,
+        fields: read_message_seq(
+            view,
+            "fields",
+            super::packed_element_field::packed_element_field_from_view,
+        )?,
         data: read_byte_seq(view, "data")?,
     })
 }
@@ -36,7 +39,12 @@ pub(crate) fn point_cloud_write(
         with_nested_mut(view, "pose", |nested| super::pose::pose_write(nested, v))?;
     }
     write_u32(view, "point_stride", bus.point_stride)?;
-    write_message_seq(view, "fields", &bus.fields, super::packed_element_field::packed_element_field_write)?;
+    write_message_seq(
+        view,
+        "fields",
+        &bus.fields,
+        super::packed_element_field::packed_element_field_write,
+    )?;
     write_byte_seq(view, "data", &bus.data)?;
     Ok(())
 }

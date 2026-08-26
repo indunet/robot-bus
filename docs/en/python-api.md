@@ -201,7 +201,7 @@ result = goal.result(timeout=10.0)
 # node.spin()
 ```
 
-Use an Executor explicitly when sharing multiple nodes or needing multi-threaded service/action handlers:
+Use an Executor explicitly when sharing multiple nodes or needing multi-threaded callbacks:
 
 ```python
 executor = robot_bus.MultiThreadedExecutor(num_threads=4)
@@ -423,7 +423,7 @@ print(robot_bus.__version__)
 | `node.wait_for_message(topic, timeout=None)` | Wait for one message or timeout (`bytes` / `None`) |
 | `Context()` | Shared ZMQ context (required for same-process inproc) |
 | `SingleThreadedExecutor(context=None)` | Explicit single-threaded executor (for shared multi-node use) |
-| `MultiThreadedExecutor(num_threads=4, context=None)` | Parallel service/action handlers |
+| `MultiThreadedExecutor(num_threads=4, context=None)` | n resident workers; subscriptions / timers / services / actions follow callback groups |
 | `executor.add_node(node)` | Attach node to executor (must be before auto-attach on that node) |
 | `node.create_publisher(topic, msg_type=None, qos_depth=None)` | typed → `TypedTopicPublisher`; omit type → raw; `qos_depth>0` → KeepLast HWM (ignored on WS publish) |
 | `node.create_timer(period, callback)` → `TimerHandle` | Timer (attached to Node like topic) |

@@ -127,7 +127,9 @@ fn bus_status(err: BusError) -> RpcStatus {
     match err {
         BusError::Timeout(msg) => RpcStatus::deadline_exceeded(msg),
         BusError::NoWorker { name } => RpcStatus::unavailable(format!("no worker for '{name}'")),
-        BusError::WorkerDied { name } => RpcStatus::unavailable(format!("worker died for '{name}'")),
+        BusError::WorkerDied { name } => {
+            RpcStatus::unavailable(format!("worker died for '{name}'"))
+        }
         BusError::Cancelled { name } => RpcStatus::cancelled(format!("cancelled '{name}'")),
         other => RpcStatus::internal(other.to_string()),
     }

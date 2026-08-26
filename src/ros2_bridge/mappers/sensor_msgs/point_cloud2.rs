@@ -4,9 +4,8 @@ use prost::Message as ProstMessage;
 use rclrs::DynamicMessage;
 
 use super::super::common::*;
-use crate::ros2_bridge::mapper::TopicMapper;
 use crate::BusError;
-
+use crate::ros2_bridge::mapper::TopicMapper;
 
 pub(crate) fn point_cloud2_from_view(
     view: &rclrs::DynamicMessageView<'_>,
@@ -38,7 +37,12 @@ pub(crate) fn point_cloud2_write(
     }
     write_u32(view, "height", bus.height)?;
     write_u32(view, "width", bus.width)?;
-    write_message_seq(view, "fields", &bus.fields, super::point_field::point_field_write)?;
+    write_message_seq(
+        view,
+        "fields",
+        &bus.fields,
+        super::point_field::point_field_write,
+    )?;
     write_bool(view, "is_bigendian", bus.is_bigendian)?;
     write_u32(view, "point_step", bus.point_step)?;
     write_u32(view, "row_step", bus.row_step)?;

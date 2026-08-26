@@ -194,8 +194,8 @@ impl SingleThreadedExecutor {
     }
 }
 
-/// Service / action / subscription / timer callbacks may use a bounded worker
-/// pool (simplified ROS 2 `MultiThreadedExecutor`), subject to each
+/// Service / action / subscription / timer callbacks run on a resident worker
+/// pool (ROS 2 `MultiThreadedExecutor`), subject to each
 /// [`crate::runtime::CallbackGroup`]'s type.
 #[derive(Clone)]
 pub struct MultiThreadedExecutor {
@@ -203,7 +203,7 @@ pub struct MultiThreadedExecutor {
 }
 
 impl MultiThreadedExecutor {
-    /// `num_threads` is the max concurrent service/action handler workers.
+    /// `num_threads` resident worker threads pulling from a shared job queue.
     pub fn new(num_threads: usize) -> Self {
         Self {
             handle: ExecutorHandle::new(Executor::with_worker_pool(num_threads)),

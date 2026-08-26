@@ -117,10 +117,7 @@ pub fn bind_all(
         .bind(&inproc)
         .with_context(|| format!("bind {inproc}"))?;
     socket.bind(&ipc).with_context(|| format!("bind {ipc}"))?;
-    Ok((
-        resolved_tcp.clone(),
-        vec![resolved_tcp, inproc, ipc],
-    ))
+    Ok((resolved_tcp.clone(), vec![resolved_tcp, inproc, ipc]))
 }
 
 /// Bind a single TCP endpoint and return the resolved address (`:0` → real port).

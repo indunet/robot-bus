@@ -16,7 +16,7 @@ use robot_bus::broker::action_bus::ActionBusConfig;
 use robot_bus::broker::message_bus::BusConfig;
 use robot_bus::broker::service_bus::ServiceBusConfig;
 use robot_bus::broker::{
-    ConsoleBrokerConfig, DiscoveryConfig, WsGatewayConfig, RobotBusBroker, RobotBusConfig,
+    ConsoleBrokerConfig, DiscoveryConfig, RobotBusBroker, RobotBusConfig, WsGatewayConfig,
 };
 use robot_bus::message_bus::{Publisher, Subscriber};
 use robot_bus::service_bus::ServiceClient;

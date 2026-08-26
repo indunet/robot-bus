@@ -1,16 +1,16 @@
 //! ZeroMQ message bus: broker routing and participant SDK.
 
 pub mod action_bus;
-pub mod tank;
 pub mod broker;
 pub mod console_topics;
-pub mod lazy_subscribe;
 pub mod discovery;
 pub mod errors;
+pub mod lazy_subscribe;
 pub mod message_bus;
 pub mod runtime;
 pub mod service_bus;
 pub mod shutdown;
+pub mod tank;
 pub mod transports;
 pub mod typed;
 pub mod worker_thread;
@@ -42,10 +42,6 @@ pub mod ros2_bridge;
 mod python_api;
 
 pub use action_bus::{ActionClient, ActionKind, ActionMessage, ActionWorker};
-pub use tank::{
-    TankEndpoints, TankHandle, TankManager, TankSession, TankStatus, CMD_VEL_TOPIC,
-    MULTI_WAYPOINT_NAV_ACTION, POINT_NAV_ACTION, POSE_TOPIC, RESET_SERVICE, WORLD_SIZE,
-};
 pub use broker::{
     ActionPeer, DiscoveryConfig, FederationPeerEndpoints, MessagePeer, RobotBusBroker,
     RobotBusConfig, ServicePeer, apply_api_peers, apply_federation_opts, parse_robot_bus_config,
@@ -56,6 +52,10 @@ pub use discovery::{
     MAGIC as DISCOVERY_MAGIC, SCHEMA_VERSION as DISCOVERY_SCHEMA_VERSION, decode_announce,
     encode_announce, fetch_discover, wait as discover_wait,
 };
+pub use tank::{
+    CMD_VEL_TOPIC, MULTI_WAYPOINT_NAV_ACTION, POINT_NAV_ACTION, POSE_TOPIC, RESET_SERVICE,
+    TankEndpoints, TankHandle, TankManager, TankSession, TankStatus, WORLD_SIZE,
+};
 
 #[allow(deprecated)]
 pub use discovery::{DEFAULT_DISCOVERY_PORT, DEFAULT_MULTICAST_ADDR};
@@ -65,17 +65,17 @@ pub use broker::WsGatewayConfig;
 
 #[cfg(feature = "console")]
 pub use broker::ConsoleBrokerConfig;
-pub use lazy_subscribe::{should_enable_ros_subscription, CONSOLE_DETECT_TIMEOUT};
 pub use errors::{BusError, Result, parse_error_body};
+pub use lazy_subscribe::{CONSOLE_DETECT_TIMEOUT, should_enable_ros_subscription};
 pub use message_bus::{Publisher, Subscriber};
 pub use runtime::{
     ActionGoalHandler, CallbackGroup, CallbackGroupType, ConnectionState, Context, Executor,
-    ExecutorHandle, GoalHandle, MessageCallback, MultiThreadedExecutor, Node, NodeActionClient,
-    NodeActionClientRaw, NodeActionServer, NodeOptions, NodeService, NodeServiceClient,
-    NodeServiceClientRaw, Parameter, ParameterValue, QOS_PROFILE_DEFAULT, QosProfile,
-    ListParametersResult, PARAMETER_DEPTH_RECURSIVE, RawActionFeedbackCallback, RawGoalHandle,
-    ServiceHandler, ShutdownHandle, SingleThreadedExecutor, TimerCallback, TimerHandle,
-    SubscriptionHandle, TopicPublisher, TopicPublisherRaw,
+    ExecutorHandle, GoalHandle, ListParametersResult, MessageCallback, MultiThreadedExecutor, Node,
+    NodeActionClient, NodeActionClientRaw, NodeActionServer, NodeOptions, NodeService,
+    NodeServiceClient, NodeServiceClientRaw, PARAMETER_DEPTH_RECURSIVE, Parameter, ParameterValue,
+    QOS_PROFILE_DEFAULT, QosProfile, RawActionFeedbackCallback, RawGoalHandle, ServiceHandler,
+    ShutdownHandle, SingleThreadedExecutor, SubscriptionHandle, TimerCallback, TimerHandle,
+    TopicPublisher, TopicPublisherRaw,
 };
 pub use service_bus::{ServiceClient, ServiceWorker};
 pub use transports::{

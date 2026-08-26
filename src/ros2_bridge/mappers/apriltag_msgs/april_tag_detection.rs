@@ -4,9 +4,8 @@ use prost::Message as ProstMessage;
 use rclrs::DynamicMessage;
 
 use super::super::common::*;
-use crate::ros2_bridge::mapper::TopicMapper;
 use crate::BusError;
-
+use crate::ros2_bridge::mapper::TopicMapper;
 
 pub(crate) fn april_tag_detection_from_view(
     view: &rclrs::DynamicMessageView<'_>,
@@ -36,7 +35,9 @@ pub(crate) fn april_tag_detection_write(
     write_f32(view, "goodness", bus.goodness)?;
     write_f32(view, "decision_margin", bus.decision_margin)?;
     if let Some(v) = &bus.centre {
-        with_nested_mut(view, "centre", |nested| super::point::point_write(nested, v))?;
+        with_nested_mut(view, "centre", |nested| {
+            super::point::point_write(nested, v)
+        })?;
     }
     write_message_seq(view, "corners", &bus.corners, super::point::point_write)?;
     write_f64_seq(view, "homography", &bus.homography)?;

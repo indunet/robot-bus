@@ -5,20 +5,18 @@
 
 use std::any::Any;
 use std::collections::{HashMap, HashSet};
-use std::sync::mpsc::{self, Receiver, Sender};
 use std::sync::Arc;
+use std::sync::mpsc::{self, Receiver, Sender};
 use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant};
 
 use prost::Message;
-use rclrs::{
-    Context as RosContext, CreateBasicExecutor, DynamicPublisher, SpinOptions,
-};
+use rclrs::{Context as RosContext, CreateBasicExecutor, DynamicPublisher, SpinOptions};
 
 use crate::console_topics;
 use crate::discovery::DiscoverOpts;
 use crate::errors::{BusError, Result};
-use crate::lazy_subscribe::{should_enable_ros_subscription, CONSOLE_DETECT_TIMEOUT};
+use crate::lazy_subscribe::{CONSOLE_DETECT_TIMEOUT, should_enable_ros_subscription};
 use crate::robot_bus_interfaces::msg::v1::{TopicDemand, TopicStatsList};
 use crate::runtime::{
     MessageCallback, Node, NodeOptions, QosProfile, SubscriptionHandle, TopicPublisherRaw,
@@ -205,10 +203,7 @@ impl Ros2Bridge {
             self.console_live = Some(true);
             dirty = true;
             match event {
-                DemandEvent::Count {
-                    topic,
-                    subscribers,
-                } => {
+                DemandEvent::Count { topic, subscribers } => {
                     self.subscriber_counts.insert(topic, subscribers);
                 }
                 DemandEvent::Snapshot { counts } => {
@@ -250,8 +245,13 @@ impl Ros2Bridge {
             let Some(route) = self.lazy_routes.get_mut(&topic) else {
                 continue;
             };
-            match create_ros2_to_bus_sub(&ros_node, bus_pub, &route.mapper, &route.ros_topic, route.qos)
-            {
+            match create_ros2_to_bus_sub(
+                &ros_node,
+                bus_pub,
+                &route.mapper,
+                &route.ros_topic,
+                route.qos,
+            ) {
                 Ok(sub) => route.sub = Some(sub),
                 Err(err) => log::warn!("lazy ros2 subscribe {topic}: {err}"),
             }
@@ -544,8 +544,6 @@ impl Ros2BridgeBuilder {
     }
 }
 
-
-
 /// Accept either a concrete [`TopicMapper`] or an [`Arc<dyn TopicMapper>`].
 pub trait IntoTopicMapper {
     fn into_topic_mapper(self) -> Arc<dyn TopicMapper>;
@@ -779,8 +777,8 @@ fn subscribe_demand(
     demand_tx: Sender<DemandEvent>,
 ) -> Result<Vec<SubscriptionHandle>> {
     let tx_demand = demand_tx.clone();
-    let demand_cb: MessageCallback = Arc::new(move |_topic, payload| {
-        match TopicDemand::decode(payload) {
+    let demand_cb: MessageCallback =
+        Arc::new(move |_topic, payload| match TopicDemand::decode(payload) {
             Ok(msg) => {
                 let _ = tx_demand.send(DemandEvent::Count {
                     topic: msg.topic,
@@ -788,23 +786,22 @@ fn subscribe_demand(
                 });
             }
             Err(err) => log::warn!("decode TopicDemand: {err}"),
-        }
-    });
+        });
     let h1 = bus_node.create_subscription_raw(console_topics::TOPIC_DEMAND, demand_cb, None)?;
 
     let tx_topics = demand_tx;
-    let topics_cb: MessageCallback = Arc::new(move |_topic, payload| {
-        match TopicStatsList::decode(payload) {
-            Ok(list) => {
-                let counts = list
-                    .topics
-                    .into_iter()
-                    .map(|t| (t.name, t.subscribers as u32))
-                    .collect();
-                let _ = tx_topics.send(DemandEvent::Snapshot { counts });
-            }
-            Err(err) => log::warn!("decode TopicStatsList: {err}"),
+    let topics_cb: MessageCallback = Arc::new(move |_topic, payload| match TopicStatsList::decode(
+        payload,
+    ) {
+        Ok(list) => {
+            let counts = list
+                .topics
+                .into_iter()
+                .map(|t| (t.name, t.subscribers as u32))
+                .collect();
+            let _ = tx_topics.send(DemandEvent::Snapshot { counts });
         }
+        Err(err) => log::warn!("decode TopicStatsList: {err}"),
     });
     let h2 = bus_node.create_subscription_raw(console_topics::TOPICS, topics_cb, None)?;
     Ok(vec![h1, h2])
@@ -834,16 +831,15 @@ fn wire_route(
                 .map_err(|e| BusError::Protocol(format!("ros dynamic publisher: {e}")))?;
             ros_pubs.push(ros_pub.clone());
             let mapper = Arc::clone(&mapper);
-            let cb: MessageCallback = Arc::new(move |_topic, payload| {
-                match mapper.bus_to_ros(payload) {
+            let cb: MessageCallback =
+                Arc::new(move |_topic, payload| match mapper.bus_to_ros(payload) {
                     Ok(dyn_msg) => {
                         if let Err(e) = ros_pub.publish(dyn_msg) {
                             log::warn!("bus→ros {} publish: {e}", mapper.type_name());
                         }
                     }
                     Err(e) => log::warn!("bus→ros {} convert: {e}", mapper.type_name()),
-                }
-            });
+                });
             if let Some(depth) = qos.depth {
                 bus_node.create_subscription_raw_with_qos(
                     bus_topic.as_str(),
@@ -869,8 +865,7 @@ fn wire_route(
                     },
                 );
             } else {
-                let sub =
-                    create_ros2_to_bus_sub(ros_node, bus_pub, &mapper, &ros_topic, qos)?;
+                let sub = create_ros2_to_bus_sub(ros_node, bus_pub, &mapper, &ros_topic, qos)?;
                 ros_subs.push(sub);
                 eager_bus_topics.insert(bus_topic);
             }
@@ -913,7 +908,6 @@ fn wire_action_route(
         ros_entities,
     })
 }
-
 
 #[cfg(test)]
 mod route_mapper_tests {

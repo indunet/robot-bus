@@ -149,10 +149,7 @@ impl BrokerSession {
             .name("rbus-session".into())
             .spawn(move || session_loop(thread_shared))
             .ok();
-        Self {
-            shared,
-            thread,
-        }
+        Self { shared, thread }
     }
 
     pub fn state(&self) -> ConnectionState {
@@ -250,10 +247,7 @@ impl Drop for BrokerSession {
 fn requires_http_liveness(opts: &NodeOptions) -> bool {
     opts.is_ws()
         || opts.needs_endpoint_discover()
-        || opts
-            .console_url
-            .as_deref()
-            .is_some_and(|s| !s.is_empty())
+        || opts.console_url.as_deref().is_some_and(|s| !s.is_empty())
 }
 
 fn discover_api_url(opts: &NodeOptions) -> String {
@@ -366,7 +360,9 @@ fn session_loop(shared: Arc<SessionShared>) {
             .unwrap_or(true);
 
         match state {
-            ConnectionState::Created | ConnectionState::Discovering | ConnectionState::Connecting
+            ConnectionState::Created
+            | ConnectionState::Discovering
+            | ConnectionState::Connecting
             | ConnectionState::Reconnecting => {
                 if !requires_http {
                     set_state(&shared, ConnectionState::Connected, "local endpoints");

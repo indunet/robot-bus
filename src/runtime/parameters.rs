@@ -237,7 +237,10 @@ impl ParameterStore {
         self.set(&parameter.name, parameter.value)
     }
 
-    pub(crate) fn set_many(&mut self, parameters: impl IntoIterator<Item = Parameter>) -> Result<()> {
+    pub(crate) fn set_many(
+        &mut self,
+        parameters: impl IntoIterator<Item = Parameter>,
+    ) -> Result<()> {
         for parameter in parameters {
             self.set_parameter(parameter)?;
         }
@@ -466,10 +469,7 @@ mod tests {
             .declare("frame_id", ParameterValue::String("base_link".into()))
             .unwrap();
 
-        assert_eq!(
-            store.get("max_speed").unwrap().as_double().unwrap(),
-            1.5
-        );
+        assert_eq!(store.get("max_speed").unwrap().as_double().unwrap(), 1.5);
         store.set("max_speed", ParameterValue::Double(2.0)).unwrap();
         assert_eq!(
             store.get("max_speed").unwrap().value,
@@ -486,9 +486,7 @@ mod tests {
     fn list_parameters_prefix_and_depth() {
         let mut store = ParameterStore::new();
         for name in ["foo", "foo.bar", "foo.bar.baz", "other"] {
-            store
-                .declare(name, ParameterValue::Bool(true))
-                .unwrap();
+            store.declare(name, ParameterValue::Bool(true)).unwrap();
         }
 
         let all = store.list_parameters(&[], PARAMETER_DEPTH_RECURSIVE);
@@ -554,13 +552,22 @@ count: 3
 "#,
             )
             .unwrap();
-        assert_eq!(store.get("max_speed").unwrap().value, ParameterValue::Double(1.5));
+        assert_eq!(
+            store.get("max_speed").unwrap().value,
+            ParameterValue::Double(1.5)
+        );
         assert_eq!(
             store.get("frame_id").unwrap().value,
             ParameterValue::String("base_link".into())
         );
-        assert_eq!(store.get("enabled").unwrap().value, ParameterValue::Bool(true));
-        assert_eq!(store.get("count").unwrap().value, ParameterValue::Integer(3));
+        assert_eq!(
+            store.get("enabled").unwrap().value,
+            ParameterValue::Bool(true)
+        );
+        assert_eq!(
+            store.get("count").unwrap().value,
+            ParameterValue::Integer(3)
+        );
     }
 
     #[test]
@@ -578,7 +585,10 @@ ros__parameters:
 "#,
             )
             .unwrap();
-        assert_eq!(store.get("max_speed").unwrap().value, ParameterValue::Double(2.5));
+        assert_eq!(
+            store.get("max_speed").unwrap().value,
+            ParameterValue::Double(2.5)
+        );
         assert_eq!(
             store.get("frame_id").unwrap().value,
             ParameterValue::String("map".into())
@@ -597,7 +607,10 @@ ros__parameters:
 "#,
             )
             .unwrap();
-        assert_eq!(store.get("enabled").unwrap().value, ParameterValue::Bool(false));
+        assert_eq!(
+            store.get("enabled").unwrap().value,
+            ParameterValue::Bool(false)
+        );
     }
 
     #[test]
@@ -622,7 +635,10 @@ ros__parameters:
         let mut store = ParameterStore::new();
         store.load_from_yaml_file(&path).unwrap();
         let _ = std::fs::remove_file(&path);
-        assert_eq!(store.get("max_speed").unwrap().value, ParameterValue::Double(9.0));
+        assert_eq!(
+            store.get("max_speed").unwrap().value,
+            ParameterValue::Double(9.0)
+        );
         assert_eq!(
             store.get("frame_id").unwrap().value,
             ParameterValue::String("odom".into())
@@ -636,11 +652,17 @@ ros__parameters:
             .declare("max_speed", ParameterValue::Double(1.5))
             .unwrap();
         store.set("max_speed", ParameterValue::Integer(2)).unwrap();
-        assert_eq!(store.get("max_speed").unwrap().value, ParameterValue::Double(2.0));
+        assert_eq!(
+            store.get("max_speed").unwrap().value,
+            ParameterValue::Double(2.0)
+        );
 
         store.declare("count", ParameterValue::Integer(3)).unwrap();
         store.set("count", ParameterValue::Double(9.0)).unwrap();
-        assert_eq!(store.get("count").unwrap().value, ParameterValue::Integer(9));
+        assert_eq!(
+            store.get("count").unwrap().value,
+            ParameterValue::Integer(9)
+        );
         assert!(matches!(
             store.set("count", ParameterValue::Double(1.5)),
             Err(BusError::ParameterTypeMismatch { .. })

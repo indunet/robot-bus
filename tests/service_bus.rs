@@ -44,9 +44,8 @@ fn service_client_concurrent_calls() {
         thread::sleep(Duration::from_millis(20));
         [b"echo:", body].concat()
     });
-    let worker =
-        WorkerThread::spawn_service("svc.concurrent", handler, &broker.backend_endpoint)
-            .expect("worker");
+    let worker = WorkerThread::spawn_service("svc.concurrent", handler, &broker.backend_endpoint)
+        .expect("worker");
     thread::sleep(Duration::from_millis(100));
 
     let client = Arc::new(ServiceClient::new(Some(&broker.frontend_endpoint)).expect("client"));

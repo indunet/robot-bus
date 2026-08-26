@@ -173,11 +173,7 @@ impl Drop for TankHandle {
     }
 }
 
-fn run_loop(
-    endpoints: TankEndpoints,
-    stop: Arc<AtomicBool>,
-    ready: Arc<AtomicBool>,
-) -> Result<()> {
+fn run_loop(endpoints: TankEndpoints, stop: Arc<AtomicBool>, ready: Arc<AtomicBool>) -> Result<()> {
     let mut opts = NodeOptions::tcp();
     opts.message_xsub = Some(endpoints.message_xsub);
     opts.message_xpub = Some(endpoints.message_xpub);
@@ -254,10 +250,7 @@ fn run_loop(
                             progress,
                         })
                         .collect(),
-                    result: PointNavigationResult {
-                        success: ok,
-                        msg,
-                    },
+                    result: PointNavigationResult { success: ok, msg },
                 }
             },
             Some(&rpc_group),
@@ -291,10 +284,7 @@ fn run_loop(
                             progress,
                         })
                         .collect(),
-                    result: MultiWaypointNavigationResult {
-                        success: ok,
-                        msg,
-                    },
+                    result: MultiWaypointNavigationResult { success: ok, msg },
                 }
             },
             Some(&rpc_group),

@@ -4,16 +4,23 @@ use prost::Message as ProstMessage;
 use rclrs::DynamicMessage;
 
 use super::super::common::*;
-use crate::ros2_bridge::mapper::TopicMapper;
 use crate::BusError;
-
+use crate::ros2_bridge::mapper::TopicMapper;
 
 pub(crate) fn mesh_from_view(
     view: &rclrs::DynamicMessageView<'_>,
 ) -> Result<crate::shape_msgs::msg::v1::Mesh> {
     Ok(crate::shape_msgs::msg::v1::Mesh {
-        triangles: read_message_seq(view, "triangles", super::mesh_triangle::mesh_triangle_from_view)?,
-        vertices: read_message_seq(view, "vertices", super::super::geometry_msgs::point::point_from_view)?,
+        triangles: read_message_seq(
+            view,
+            "triangles",
+            super::mesh_triangle::mesh_triangle_from_view,
+        )?,
+        vertices: read_message_seq(
+            view,
+            "vertices",
+            super::super::geometry_msgs::point::point_from_view,
+        )?,
     })
 }
 
@@ -21,7 +28,12 @@ pub(crate) fn mesh_write(
     view: &mut rclrs::DynamicMessageViewMut<'_>,
     bus: &crate::shape_msgs::msg::v1::Mesh,
 ) -> Result<()> {
-    write_message_seq(view, "triangles", &bus.triangles, super::mesh_triangle::mesh_triangle_write)?;
+    write_message_seq(
+        view,
+        "triangles",
+        &bus.triangles,
+        super::mesh_triangle::mesh_triangle_write,
+    )?;
     write_message_seq(
         view,
         "vertices",

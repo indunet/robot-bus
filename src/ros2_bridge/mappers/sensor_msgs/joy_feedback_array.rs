@@ -4,9 +4,8 @@ use prost::Message as ProstMessage;
 use rclrs::DynamicMessage;
 
 use super::super::common::*;
-use crate::ros2_bridge::mapper::TopicMapper;
 use crate::BusError;
-
+use crate::ros2_bridge::mapper::TopicMapper;
 
 pub(crate) fn joy_feedback_array_from_view(
     view: &rclrs::DynamicMessageView<'_>,
@@ -20,7 +19,12 @@ pub(crate) fn joy_feedback_array_write(
     view: &mut rclrs::DynamicMessageViewMut<'_>,
     bus: &crate::sensor_msgs::msg::v1::JoyFeedbackArray,
 ) -> Result<()> {
-    write_message_seq(view, "array", &bus.array, super::joy_feedback::joy_feedback_write)?;
+    write_message_seq(
+        view,
+        "array",
+        &bus.array,
+        super::joy_feedback::joy_feedback_write,
+    )?;
     Ok(())
 }
 

@@ -4,9 +4,8 @@ use prost::Message as ProstMessage;
 use rclrs::DynamicMessage;
 
 use super::super::common::*;
-use crate::ros2_bridge::mapper::TopicMapper;
 use crate::BusError;
-
+use crate::ros2_bridge::mapper::TopicMapper;
 
 pub(crate) fn interactive_marker_update_from_view(
     view: &rclrs::DynamicMessageView<'_>,
@@ -16,8 +15,16 @@ pub(crate) fn interactive_marker_update_from_view(
             server_id: read_string(view, "server_id")?,
             seq_num: read_u64(view, "seq_num")?,
             r#type: read_u32(view, "type")?,
-            markers: read_message_seq(view, "markers", super::interactive_marker::interactive_marker_from_view)?,
-            poses: read_message_seq(view, "poses", super::interactive_marker_pose::interactive_marker_pose_from_view)?,
+            markers: read_message_seq(
+                view,
+                "markers",
+                super::interactive_marker::interactive_marker_from_view,
+            )?,
+            poses: read_message_seq(
+                view,
+                "poses",
+                super::interactive_marker_pose::interactive_marker_pose_from_view,
+            )?,
             erases: read_string_seq(view, "erases")?,
         },
     )
@@ -30,8 +37,18 @@ pub(crate) fn interactive_marker_update_write(
     write_string(view, "server_id", &bus.server_id)?;
     write_u64(view, "seq_num", bus.seq_num)?;
     write_u32(view, "type", bus.r#type)?;
-    write_message_seq(view, "markers", &bus.markers, super::interactive_marker::interactive_marker_write)?;
-    write_message_seq(view, "poses", &bus.poses, super::interactive_marker_pose::interactive_marker_pose_write)?;
+    write_message_seq(
+        view,
+        "markers",
+        &bus.markers,
+        super::interactive_marker::interactive_marker_write,
+    )?;
+    write_message_seq(
+        view,
+        "poses",
+        &bus.poses,
+        super::interactive_marker_pose::interactive_marker_pose_write,
+    )?;
     write_string_seq(view, "erases", &bus.erases)?;
     Ok(())
 }

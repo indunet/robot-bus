@@ -41,9 +41,7 @@ pub mod typed_service {
 
 /// Historical note on dynamic service/action feasibility (not a product path).
 pub mod dynamic_rpc {
-    pub use super::dynamic_rpc_spike::{
-        DynamicServiceSpikeResult, SPIKE_RESULT, spike_summary,
-    };
+    pub use super::dynamic_rpc_spike::{DynamicServiceSpikeResult, SPIKE_RESULT, spike_summary};
 }
 
 pub use builder::{
@@ -51,8 +49,8 @@ pub use builder::{
     Ros2Bridge, Ros2BridgeBuilder, RouteBuilder, SERVICE_CALL_TIMEOUT, ServiceRouteBuilder,
 };
 pub use mapper::{
-    ActionMapper, ActionWireContext, Direction, ServiceMapper, ServiceWireContext,
-    TopicMapper, TopicRouteQos, TypedActionMapper, TypedServiceMapper, lookup_topic_mapper,
+    ActionMapper, ActionWireContext, Direction, ServiceMapper, ServiceWireContext, TopicMapper,
+    TopicRouteQos, TypedActionMapper, TypedServiceMapper, lookup_topic_mapper,
     lookup_topic_mapper_arc, registered_topic_types,
 };
 pub use mappers::action_bridges::FibonacciActionMapper;

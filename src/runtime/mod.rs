@@ -6,24 +6,24 @@
 
 mod callback_group;
 mod console_ready;
-mod control_plane;
 mod context;
+mod control_plane;
 mod dispatch;
 mod executor;
 mod executors;
-#[cfg(feature = "ws")]
-mod ws_runtime;
 mod node;
-mod session;
 mod parameters;
 mod qos;
 mod queues;
 mod registrations;
+mod session;
 mod timers;
 mod topic_callbacks;
 mod topic_type_register;
 mod topology_register;
 mod worker_pool;
+#[cfg(feature = "ws")]
+mod ws_runtime;
 
 pub use callback_group::{CallbackGroup, CallbackGroupType};
 pub use console_ready::{DEFAULT_CONSOLE_URL, ReadyKind};
@@ -35,10 +35,10 @@ pub use node::{
     NodeService, NodeServiceClient, NodeServiceClientRaw, RawActionFeedbackCallback, RawGoalHandle,
     TopicPublisher, TopicPublisherRaw,
 };
-pub use session::ConnectionState;
-pub use parameters::{ListParametersResult, Parameter, ParameterValue, PARAMETER_DEPTH_RECURSIVE};
-pub use qos::{QOS_PROFILE_DEFAULT, QosProfile};
+pub use parameters::{ListParametersResult, PARAMETER_DEPTH_RECURSIVE, Parameter, ParameterValue};
 pub(crate) use qos::ws_subscribe_queue_capacity;
+pub use qos::{QOS_PROFILE_DEFAULT, QosProfile};
 pub use queues::ActionMessageCallback;
 pub use registrations::{ActionGoalHandler, MessageCallback, ServiceHandler};
-pub use timers::{TimerCallback, TimerHandle, SubscriptionHandle};
+pub use session::ConnectionState;
+pub use timers::{SubscriptionHandle, TimerCallback, TimerHandle};

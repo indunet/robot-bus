@@ -170,10 +170,7 @@ pub trait TypedActionMapper: Clone + Send + Sync + 'static {
         &self,
         feedback: &<Self::Ros as ActionIdl>::Feedback,
     ) -> BusResult<Vec<u8>>;
-    fn bus_feedback_to_ros(
-        &self,
-        payload: &[u8],
-    ) -> BusResult<<Self::Ros as ActionIdl>::Feedback>;
+    fn bus_feedback_to_ros(&self, payload: &[u8]) -> BusResult<<Self::Ros as ActionIdl>::Feedback>;
     fn ros_result_to_bus(&self, result: &<Self::Ros as ActionIdl>::Result) -> BusResult<Vec<u8>>;
     fn bus_result_to_ros(&self, payload: &[u8]) -> BusResult<<Self::Ros as ActionIdl>::Result>;
 }

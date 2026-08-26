@@ -14,9 +14,9 @@ use clients::{PyActionGoalHandle, PyNodeActionClient, PyNodeServiceClient};
 use node::PyNode;
 use pub_sub::{PyPublisher, PySubscriber, PyTopicPublisher};
 use runtime::{
-    PyActionServerHandle, PyCallbackGroup, PyCallbackGroupType, PyContext,
-    PyMultiThreadedExecutor, PyServiceHandle, PyShutdownHandle, PySingleThreadedExecutor,
-    PySubscriptionHandle, PyTimerHandle,
+    PyActionServerHandle, PyCallbackGroup, PyCallbackGroupType, PyContext, PyMultiThreadedExecutor,
+    PyServiceHandle, PyShutdownHandle, PySingleThreadedExecutor, PySubscriptionHandle,
+    PyTimerHandle,
 };
 use util::{message_xpub_endpoint, message_xsub_endpoint, ros2_available};
 

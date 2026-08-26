@@ -184,7 +184,13 @@ fn topics_snapshot_subscriber_count_matches_demand() {
     let _sub = listener
         .create_subscription_raw("/lazy/snap", Arc::new(|_, _| {}), None)
         .expect("sub");
-    wait_demand(&mut watcher, &demand, "/lazy/snap", 1, Duration::from_secs(3));
+    wait_demand(
+        &mut watcher,
+        &demand,
+        "/lazy/snap",
+        1,
+        Duration::from_secs(3),
+    );
 
     let deadline = Instant::now() + Duration::from_secs(3);
     loop {

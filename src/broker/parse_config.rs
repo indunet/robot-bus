@@ -308,7 +308,10 @@ pub fn parse_robot_bus_config(args: &[String]) -> Result<Option<RobotBusConfig>>
                     .push(require_arg(args, i, arg)?.to_string());
             }
             #[cfg(not(feature = "console"))]
-            "--console-listen" | "--no-console" | "--no-tank" | "--no-docs"
+            "--console-listen"
+            | "--no-console"
+            | "--no-tank"
+            | "--no-docs"
             | "--console-cors-origin" => {
                 bail!("{arg} requires the `console` feature");
             }
@@ -447,7 +450,12 @@ mod tests {
             args(&["--tcp-only", "--no-console"])
         );
         assert_eq!(
-            strip_runtime_argv(args(&["tsx", "broker.ts", "--api-listen", "127.0.0.1:15570"])),
+            strip_runtime_argv(args(&[
+                "tsx",
+                "broker.ts",
+                "--api-listen",
+                "127.0.0.1:15570"
+            ])),
             args(&["--api-listen", "127.0.0.1:15570"])
         );
         assert_eq!(

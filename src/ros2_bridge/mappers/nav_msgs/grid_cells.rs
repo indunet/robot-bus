@@ -4,9 +4,8 @@ use prost::Message as ProstMessage;
 use rclrs::DynamicMessage;
 
 use super::super::common::*;
-use crate::ros2_bridge::mapper::TopicMapper;
 use crate::BusError;
-
+use crate::ros2_bridge::mapper::TopicMapper;
 
 pub(crate) fn grid_cells_from_view(
     view: &rclrs::DynamicMessageView<'_>,
@@ -18,7 +17,11 @@ pub(crate) fn grid_cells_from_view(
             .transpose()?,
         cell_width: read_f32(view, "cell_width")?,
         cell_height: read_f32(view, "cell_height")?,
-        cells: read_message_seq(view, "cells", super::super::geometry_msgs::point::point_from_view)?,
+        cells: read_message_seq(
+            view,
+            "cells",
+            super::super::geometry_msgs::point::point_from_view,
+        )?,
     })
 }
 
@@ -33,7 +36,12 @@ pub(crate) fn grid_cells_write(
     }
     write_f32(view, "cell_width", bus.cell_width)?;
     write_f32(view, "cell_height", bus.cell_height)?;
-    write_message_seq(view, "cells", &bus.cells, super::super::geometry_msgs::point::point_write)?;
+    write_message_seq(
+        view,
+        "cells",
+        &bus.cells,
+        super::super::geometry_msgs::point::point_write,
+    )?;
     Ok(())
 }
 

@@ -4,9 +4,8 @@ use prost::Message as ProstMessage;
 use rclrs::DynamicMessage;
 
 use super::super::common::*;
-use crate::ros2_bridge::mapper::TopicMapper;
 use crate::BusError;
-
+use crate::ros2_bridge::mapper::TopicMapper;
 
 pub(crate) fn point3_in_frame_from_view(
     view: &rclrs::DynamicMessageView<'_>,
@@ -30,7 +29,9 @@ pub(crate) fn point3_in_frame_write(
     }
     write_string(view, "frame_id", &bus.frame_id)?;
     if let Some(v) = &bus.point {
-        with_nested_mut(view, "point", |nested| super::point3::point3_write(nested, v))?;
+        with_nested_mut(view, "point", |nested| {
+            super::point3::point3_write(nested, v)
+        })?;
     }
     Ok(())
 }

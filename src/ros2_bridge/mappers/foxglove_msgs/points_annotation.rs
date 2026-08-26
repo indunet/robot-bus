@@ -4,9 +4,8 @@ use prost::Message as ProstMessage;
 use rclrs::DynamicMessage;
 
 use super::super::common::*;
-use crate::ros2_bridge::mapper::TopicMapper;
 use crate::BusError;
-
+use crate::ros2_bridge::mapper::TopicMapper;
 
 pub(crate) fn points_annotation_from_view(
     view: &rclrs::DynamicMessageView<'_>,
@@ -25,7 +24,11 @@ pub(crate) fn points_annotation_from_view(
             .map(super::color::color_from_view)
             .transpose()?,
         thickness: read_f64(view, "thickness")?,
-        metadata: read_message_seq(view, "metadata", super::key_value_pair::key_value_pair_from_view)?,
+        metadata: read_message_seq(
+            view,
+            "metadata",
+            super::key_value_pair::key_value_pair_from_view,
+        )?,
     })
 }
 
@@ -39,14 +42,28 @@ pub(crate) fn points_annotation_write(
     write_i32(view, "type", bus.r#type)?;
     write_message_seq(view, "points", &bus.points, super::point2::point2_write)?;
     if let Some(v) = &bus.outline_color {
-        with_nested_mut(view, "outline_color", |nested| super::color::color_write(nested, v))?;
+        with_nested_mut(view, "outline_color", |nested| {
+            super::color::color_write(nested, v)
+        })?;
     }
-    write_message_seq(view, "outline_colors", &bus.outline_colors, super::color::color_write)?;
+    write_message_seq(
+        view,
+        "outline_colors",
+        &bus.outline_colors,
+        super::color::color_write,
+    )?;
     if let Some(v) = &bus.fill_color {
-        with_nested_mut(view, "fill_color", |nested| super::color::color_write(nested, v))?;
+        with_nested_mut(view, "fill_color", |nested| {
+            super::color::color_write(nested, v)
+        })?;
     }
     write_f64(view, "thickness", bus.thickness)?;
-    write_message_seq(view, "metadata", &bus.metadata, super::key_value_pair::key_value_pair_write)?;
+    write_message_seq(
+        view,
+        "metadata",
+        &bus.metadata,
+        super::key_value_pair::key_value_pair_write,
+    )?;
     Ok(())
 }
 
