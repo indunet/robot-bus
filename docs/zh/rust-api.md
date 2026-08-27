@@ -5,9 +5,9 @@
 `Cargo.toml`：
 
 ```toml
-robot-bus = "1.3.4"
+robot-bus = "2.0.0"
 # 本地：robot-bus = { path = "../robot-bus" }
-# 默认已启用 WebSocket RPC 网关（`ws` feature）；若需关闭：robot-bus = { version = "1.3.4", default-features = false }
+# 默认已启用 WebSocket RPC 网关（`ws` feature）；若需关闭：robot-bus = { version = "2.0.0", default-features = false }
 ```
 
 ## Broker 启动
@@ -461,111 +461,22 @@ let result = goal.result(Some(Duration::from_secs(10)))?;
 node.spin()?;
 ```
 
-底层仍是网关 RPC（`MessageGateway.Subscribe` / `MessageGateway.Publish` / `ServiceGateway.Call` / `ActionGateway.SendGoal`）。需要更底层控制时，可直接用下一节的客户端。
+底层是多路复用 WebSocket RPC（V3 opcode：Subscribe / Publish / Call / SendGoal）。请用 `Node::ws`，不要直接拼帧。
 
 ---
 
 ## WebSocket RPC 网关
 
-由 `RobotBusBroker` / `robot_bus_broker` 一并启动（feature `ws`，默认开启）。**WebSocket RPC**（HTTP/2）与浏览器 **WebSocket RPC**（`/ws`，一 RPC 一连接）**同端口**（默认 `0.0.0.0:15570`）。已移除 gRPC-Web。
+由 `RobotBusBroker` / `robot_bus_broker` 一并启动（feature `ws`，默认开启）。原生与浏览器客户端共用 API 端口上的 **`/ws`**（默认 `0.0.0.0:15570`）。**不兼容旧版：** V3 成帧；不再接受 V2 的 method 字符串和 `TopicMessage` 信封。
 
-| RPC | 说明 |
-|-----|------|
-| `MessageGateway.Subscribe` | server stream：topic 前缀 → `TopicMessage` |
-| `MessageGateway.Publish` | 一元：`TopicMessage` → 写入 message bus XSUB |
-| `ServiceGateway.Call` | 一元：`service_name` + request bytes → response bytes |
-| `ActionGateway.SendGoal` | 一元 `GoalRequest` → server stream `ActionEvent`（实时 `FEEDBACK`，最终 `RESULT`） |
+| Opcode | RPC | REQUEST 头 | DATA payload |
+|--------|-----|------------|--------------|
+| 1 | Subscribe | topic 前缀 + `qos_depth` | `u16 topic_len` + topic + 原始总线字节 |
+| 2 | Publish | topic；body = 原始总线字节 | 无（成功只回 TRAILER） |
+| 3 | Call | 服务名 + timeout + request id；body = 原始请求 | 原始响应 |
+| 4 | SendGoal | action 名 + goal id + timeout；body = 原始 goal | `u8 kind` + 原始 body（`FEEDBACK` 后接 `RESULT`） |
 
-Action cancel：WebSocket RPC（原生与浏览器）发显式 `CANCEL` 帧并继续等到 `RESULT`，连接断开时仍会提交 cancel。ZMQ transport 由 GoalHandle 发显式 `CANCEL` 帧。均不表示服务端已确认。
-
-Subscribe 示例：
-
-```rust
-use robot_bus::ws_gateway::pb::message_gateway_client::MessageGatewayClient;
-use robot_bus::ws_gateway::pb::SubscribeRequest;
-use tonic::Request;
-
-#[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let mut client = MessageGatewayClient::connect("http://127.0.0.1:15570").await?;
-    let mut stream = client
-        .subscribe(Request::new(SubscribeRequest {
-            topic: "imu".into(),
-        }))
-        .await?
-        .into_inner();
-
-    use tokio_stream::StreamExt;
-    while let Some(msg) = stream.next().await {
-        let msg = msg?;
-        println!("{}: {} bytes", msg.topic, msg.payload.len());
-    }
-    Ok(())
-}
-```
-
-Publish 示例：
-
-```rust
-use robot_bus::ws_gateway::pb::message_gateway_client::MessageGatewayClient;
-use robot_bus::ws_gateway::pb::TopicMessage;
-use tonic::Request;
-
-#[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let mut client = MessageGatewayClient::connect("http://127.0.0.1:15570").await?;
-    client
-        .publish(Request::new(TopicMessage {
-            topic: "imu".into(),
-            payload: b"hello".to_vec(),
-        }))
-        .await?;
-    Ok(())
-}
-```
-
-Service / Action 示例：
-
-```rust
-use robot_bus::ws_gateway::pb::action_gateway_client::ActionGatewayClient;
-use robot_bus::ws_gateway::pb::service_gateway_client::ServiceGatewayClient;
-use robot_bus::ws_gateway::pb::{ActionKind, GoalRequest, ServiceCallRequest};
-use tonic::Request;
-use tokio_stream::StreamExt;
-
-#[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let mut svc = ServiceGatewayClient::connect("http://127.0.0.1:15570").await?;
-    let resp = svc
-        .call(Request::new(ServiceCallRequest {
-            service_name: "svc.echo".into(),
-            request: b"ping".to_vec(),
-            request_id: String::new(),
-            timeout_ms: 5_000,
-        }))
-        .await?
-        .into_inner();
-    println!("service: {} bytes", resp.response.len());
-
-    let mut act = ActionGatewayClient::connect("http://127.0.0.1:15570").await?;
-    let mut stream = act
-        .send_goal(Request::new(GoalRequest {
-            action_name: "act.demo".into(),
-            goal: b"go".to_vec(),
-            goal_id: String::new(),
-            timeout_ms: 10_000,
-        }))
-        .await?
-        .into_inner();
-    while let Some(ev) = stream.next().await {
-        let ev = ev?;
-        println!("{:?}: {} bytes", ActionKind::try_from(ev.kind), ev.body.len());
-    }
-    Ok(())
-}
-```
-
-Proto 包名：`robot_bus_interfaces.grpc.v1`。见 `proto/robot_bus_interfaces/grpc/v1/{message,service,action}_gateway.proto`。
+`CANCEL` / `TRAILER` / `PING` / `PONG` 含义不变（`stream_id`；客户端用奇数 id）。Action cancel：WebSocket 发显式 `CANCEL` 帧并继续等到 `RESULT`，断连仍会提交 cancel。ZMQ transport 由 GoalHandle 发显式 `CANCEL` 帧。均不表示服务端已确认。
 
 HTTP 发现：`GET /api/v1/discover`（JSON）；历史 protobuf `BrokerAnnounce` 仅作兼容编码辅助，UDP 组播路径已移除。
 

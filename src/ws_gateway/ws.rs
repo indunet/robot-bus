@@ -1,4 +1,4 @@
-//! Multiplexed WebSocket RPC gateway (V2: one connection, many streams).
+//! Multiplexed WebSocket RPC gateway (V3: one connection, many streams).
 
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -7,17 +7,15 @@ use axum::extract::State;
 use axum::extract::ws::{Message, WebSocket, WebSocketUpgrade};
 use axum::response::IntoResponse;
 use futures_util::{SinkExt, StreamExt};
-use prost::Message as ProstMessage;
 use tokio::sync::mpsc;
 
-use super::action::{ActionGatewayService, SendGoalSession};
+use super::action::{ActionGatewayService, GoalSpec, SendGoalSession};
 use super::message::MessageGatewayService;
-use super::pb::ActionKind;
 use super::rpc_status::{Code, RpcStatus};
 use super::service::ServiceGatewayService;
 use super::ws_frame::{
-    Frame, METHOD_CALL, METHOD_PUBLISH, METHOD_SEND_GOAL, METHOD_SUBSCRIBE, decode_frame,
-    encode_frame,
+    ACTION_KIND_RESULT, Frame, Opcode, RequestHeader, decode_frame, encode_action_data,
+    encode_frame, encode_subscribe_data,
 };
 
 #[derive(Clone)]
@@ -36,6 +34,7 @@ pub async fn ws_upgrade(
 
 enum Outbound {
     Frame(Frame),
+    Bytes(Vec<u8>),
 }
 
 enum StreamCmd {
@@ -61,6 +60,11 @@ async fn handle_socket(socket: WebSocket, state: Arc<WsGatewayState>) {
                             break;
                         }
                     }
+                    Some(Outbound::Bytes(bytes)) => {
+                        if sink.send(Message::Binary(bytes.into())).await.is_err() {
+                            break;
+                        }
+                    }
                     None => break,
                 }
             }
@@ -79,7 +83,7 @@ async fn handle_socket(socket: WebSocket, state: Arc<WsGatewayState>) {
                             }
                         };
                         match frame {
-                            Frame::Request { stream_id, method, payload } => {
+                            Frame::Request { stream_id, header, body } => {
                                 if live.contains_key(&stream_id) {
                                     let _ = out_tx.send(Outbound::Frame(Frame::Trailer {
                                         stream_id,
@@ -95,8 +99,8 @@ async fn handle_socket(socket: WebSocket, state: Arc<WsGatewayState>) {
                                 tokio::spawn(async move {
                                     run_rpc(
                                         stream_id,
-                                        method,
-                                        payload,
+                                        header,
+                                        body,
                                         state,
                                         out_tx,
                                         cmd_rx,
@@ -144,20 +148,21 @@ async fn handle_socket(socket: WebSocket, state: Arc<WsGatewayState>) {
 
 async fn run_rpc(
     stream_id: u32,
-    method: String,
-    payload: Vec<u8>,
+    header: RequestHeader,
+    body: Vec<u8>,
     state: Arc<WsGatewayState>,
     out_tx: mpsc::Sender<Outbound>,
     mut cmd_rx: mpsc::Receiver<StreamCmd>,
 ) {
-    let result = match method.as_str() {
-        METHOD_SUBSCRIBE => run_subscribe(stream_id, &state, payload, &out_tx, &mut cmd_rx).await,
-        METHOD_PUBLISH => run_publish(stream_id, &state, payload, &out_tx).await,
-        METHOD_CALL => run_call(stream_id, &state, payload, &out_tx).await,
-        METHOD_SEND_GOAL => run_send_goal(stream_id, &state, payload, &out_tx, &mut cmd_rx).await,
-        other => Err(RpcStatus::unimplemented(format!(
-            "unknown method '{other}'"
-        ))),
+    let result = match header.opcode() {
+        Opcode::Subscribe => {
+            run_subscribe(stream_id, &state, header, &out_tx, &mut cmd_rx).await
+        }
+        Opcode::Publish => run_publish(&state, header, body).await,
+        Opcode::Call => run_call(stream_id, &state, header, body, &out_tx).await,
+        Opcode::SendGoal => {
+            run_send_goal(stream_id, &state, header, body, &out_tx, &mut cmd_rx).await
+        }
     };
     let status = match result {
         Ok(()) => RpcStatus::ok(),
@@ -175,11 +180,14 @@ async fn run_rpc(
 async fn run_subscribe(
     stream_id: u32,
     state: &WsGatewayState,
-    payload: Vec<u8>,
+    header: RequestHeader,
     out_tx: &mpsc::Sender<Outbound>,
     cmd_rx: &mut mpsc::Receiver<StreamCmd>,
 ) -> Result<(), RpcStatus> {
-    let (_topic, mut rx) = state.message.handle_subscribe_request(&payload)?;
+    let RequestHeader::Subscribe { topic, qos_depth } = header else {
+        return Err(RpcStatus::internal("subscribe header mismatch"));
+    };
+    let mut rx = state.message.open_subscribe(topic, qos_depth)?;
     loop {
         tokio::select! {
             biased;
@@ -191,15 +199,9 @@ async fn run_subscribe(
             item = rx.recv() => {
                 match item {
                     Some(Ok(msg)) => {
-                        let bytes = msg.encode_to_vec();
-                        if out_tx
-                            .send(Outbound::Frame(Frame::Data {
-                                stream_id,
-                                payload: bytes,
-                            }))
-                            .await
-                            .is_err()
-                        {
+                        let bytes = encode_subscribe_data(stream_id, &msg.topic, &msg.payload)
+                            .map_err(|err| RpcStatus::internal(err.to_string()))?;
+                        if out_tx.send(Outbound::Bytes(bytes)).await.is_err() {
                             break;
                         }
                     }
@@ -213,35 +215,39 @@ async fn run_subscribe(
 }
 
 async fn run_publish(
-    stream_id: u32,
     state: &WsGatewayState,
-    payload: Vec<u8>,
-    out_tx: &mpsc::Sender<Outbound>,
+    header: RequestHeader,
+    body: Vec<u8>,
 ) -> Result<(), RpcStatus> {
-    let resp = state.message.handle_publish(&payload).await?;
-    let bytes = resp.encode_to_vec();
-    out_tx
-        .send(Outbound::Frame(Frame::Data {
-            stream_id,
-            payload: bytes,
-        }))
-        .await
-        .map_err(|_| RpcStatus::internal("send publish ack failed"))?;
-    Ok(())
+    let RequestHeader::Publish { topic } = header else {
+        return Err(RpcStatus::internal("publish header mismatch"));
+    };
+    state.message.publish_message(topic, body).await
 }
 
 async fn run_call(
     stream_id: u32,
     state: &WsGatewayState,
-    payload: Vec<u8>,
+    header: RequestHeader,
+    body: Vec<u8>,
     out_tx: &mpsc::Sender<Outbound>,
 ) -> Result<(), RpcStatus> {
-    let resp = state.service.handle_call(&payload).await?;
-    let bytes = resp.encode_to_vec();
+    let RequestHeader::Call {
+        service_name,
+        timeout_ms,
+        request_id,
+    } = header
+    else {
+        return Err(RpcStatus::internal("call header mismatch"));
+    };
+    let response = state
+        .service
+        .call_service(service_name, body, request_id, timeout_ms)
+        .await?;
     out_tx
         .send(Outbound::Frame(Frame::Data {
             stream_id,
-            payload: bytes,
+            payload: response,
         }))
         .await
         .map_err(|_| RpcStatus::internal("send call response failed"))?;
@@ -251,11 +257,25 @@ async fn run_call(
 async fn run_send_goal(
     stream_id: u32,
     state: &WsGatewayState,
-    payload: Vec<u8>,
+    header: RequestHeader,
+    body: Vec<u8>,
     out_tx: &mpsc::Sender<Outbound>,
     cmd_rx: &mut mpsc::Receiver<StreamCmd>,
 ) -> Result<(), RpcStatus> {
-    let mut session: SendGoalSession = state.action.handle_send_goal(&payload)?;
+    let RequestHeader::SendGoal {
+        action_name,
+        goal_id,
+        timeout_ms,
+    } = header
+    else {
+        return Err(RpcStatus::internal("send_goal header mismatch"));
+    };
+    let mut session: SendGoalSession = state.action.open_send_goal(GoalSpec {
+        action_name,
+        goal: body,
+        goal_id,
+        timeout_ms,
+    })?;
     loop {
         tokio::select! {
             biased;
@@ -273,16 +293,9 @@ async fn run_send_goal(
             item = session.events.recv() => {
                 match item {
                     Some(Ok(ev)) => {
-                        let is_result = ev.kind == i32::from(ActionKind::Result);
-                        let bytes = ev.encode_to_vec();
-                        if out_tx
-                            .send(Outbound::Frame(Frame::Data {
-                                stream_id,
-                                payload: bytes,
-                            }))
-                            .await
-                            .is_err()
-                        {
+                        let is_result = ev.kind == ACTION_KIND_RESULT;
+                        let bytes = encode_action_data(stream_id, ev.kind, &ev.body);
+                        if out_tx.send(Outbound::Bytes(bytes)).await.is_err() {
                             drop(session);
                             return Ok(());
                         }

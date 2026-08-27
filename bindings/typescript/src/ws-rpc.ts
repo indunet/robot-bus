@@ -1,8 +1,8 @@
 /**
- * Multiplexed WebSocket RPC (V2: one connection, many streams).
+ * Multiplexed WebSocket RPC (V3: one connection, many streams).
  *
- * Frame layout matches Rust `src/grpc/ws_frame.rs` (little-endian):
- * - REQUEST: type | stream_id | method_len | method | payload_len | payload
+ * Frame layout matches Rust `src/ws_gateway/ws_frame.rs` (little-endian):
+ * - REQUEST: type | stream_id | opcode | opcode-specific header | body
  * - DATA/CANCEL/TRAILER: type | stream_id | …
  */
 
@@ -13,21 +13,39 @@ export const FRAME_TRAILER = 4;
 export const FRAME_PING = 5;
 export const FRAME_PONG = 6;
 
+export const OPCODE_SUBSCRIBE = 1;
+export const OPCODE_PUBLISH = 2;
+export const OPCODE_CALL = 3;
+export const OPCODE_SEND_GOAL = 4;
+
+export const ACTION_KIND_GOAL = 1;
+export const ACTION_KIND_FEEDBACK = 2;
+export const ACTION_KIND_RESULT = 3;
+export const ACTION_KIND_CANCEL = 4;
+
 export const WS_BACKOFF_INITIAL_MS = 200;
 export const WS_BACKOFF_MAX_MS = 5000;
 export const WS_PING_INTERVAL_MS = 3000;
 export const WS_PING_MISS_LIMIT = 2;
 
-export const METHOD_SUBSCRIBE =
-  "robot_bus_interfaces.grpc.v1.MessageGateway/Subscribe";
-export const METHOD_PUBLISH =
-  "robot_bus_interfaces.grpc.v1.MessageGateway/Publish";
-export const METHOD_CALL = "robot_bus_interfaces.grpc.v1.ServiceGateway/Call";
-export const METHOD_SEND_GOAL =
-  "robot_bus_interfaces.grpc.v1.ActionGateway/SendGoal";
+export type RequestHeader =
+  | { opcode: typeof OPCODE_SUBSCRIBE; topic: string; qosDepth: number }
+  | { opcode: typeof OPCODE_PUBLISH; topic: string }
+  | {
+      opcode: typeof OPCODE_CALL;
+      serviceName: string;
+      timeoutMs: number;
+      requestId: string;
+    }
+  | {
+      opcode: typeof OPCODE_SEND_GOAL;
+      actionName: string;
+      goalId: string;
+      timeoutMs: number;
+    };
 
 export type WsFrame =
-  | { type: "request"; streamId: number; method: string; payload: Uint8Array }
+  | { type: "request"; streamId: number; header: RequestHeader; body: Uint8Array }
   | { type: "data"; streamId: number; payload: Uint8Array }
   | { type: "cancel"; streamId: number }
   | { type: "trailer"; streamId: number; status: number; message: string }
@@ -58,20 +76,90 @@ function u32le(n: number): Uint8Array {
   return b;
 }
 
+function i32le(n: number): Uint8Array {
+  const b = new Uint8Array(4);
+  new DataView(b.buffer).setInt32(0, n, true);
+  return b;
+}
+
+function encodeStr(s: string): Uint8Array {
+  const enc = new TextEncoder();
+  const bytes = enc.encode(s);
+  return concatBytes([u16le(bytes.length), bytes]);
+}
+
+function encodeRequestHeader(header: RequestHeader, body: Uint8Array): Uint8Array {
+  switch (header.opcode) {
+    case OPCODE_SUBSCRIBE:
+      return concatBytes([
+        new Uint8Array([OPCODE_SUBSCRIBE]),
+        encodeStr(header.topic),
+        i32le(header.qosDepth),
+      ]);
+    case OPCODE_PUBLISH:
+      return concatBytes([
+        new Uint8Array([OPCODE_PUBLISH]),
+        encodeStr(header.topic),
+        body,
+      ]);
+    case OPCODE_CALL:
+      return concatBytes([
+        new Uint8Array([OPCODE_CALL]),
+        encodeStr(header.serviceName),
+        u32le(header.timeoutMs),
+        encodeStr(header.requestId),
+        body,
+      ]);
+    case OPCODE_SEND_GOAL:
+      return concatBytes([
+        new Uint8Array([OPCODE_SEND_GOAL]),
+        encodeStr(header.actionName),
+        encodeStr(header.goalId),
+        u32le(header.timeoutMs),
+        body,
+      ]);
+  }
+}
+
+export function encodeSubscribeData(topic: string, payload: Uint8Array): Uint8Array {
+  const enc = new TextEncoder();
+  const t = enc.encode(topic);
+  return concatBytes([u16le(t.length), t, payload]);
+}
+
+export function decodeSubscribeData(payload: Uint8Array): {
+  topic: string;
+  payload: Uint8Array;
+} {
+  if (payload.length < 2) throw new Error("truncated subscribe DATA");
+  const view = new DataView(payload.buffer, payload.byteOffset, payload.byteLength);
+  const topicLen = view.getUint16(0, true);
+  if (payload.length < 2 + topicLen) throw new Error("truncated subscribe DATA topic");
+  const topic = new TextDecoder().decode(payload.subarray(2, 2 + topicLen));
+  return { topic, payload: payload.subarray(2 + topicLen) };
+}
+
+export function encodeActionData(kind: number, body: Uint8Array): Uint8Array {
+  return concatBytes([new Uint8Array([kind]), body]);
+}
+
+export function decodeActionData(payload: Uint8Array): {
+  kind: number;
+  body: Uint8Array;
+} {
+  if (payload.length < 1) throw new Error("truncated action DATA");
+  return { kind: payload[0]!, body: payload.subarray(1) };
+}
+
 export function encodeFrame(frame: WsFrame): Uint8Array {
   const enc = new TextEncoder();
   switch (frame.type) {
-    case "request": {
-      const method = enc.encode(frame.method);
+    case "request":
       return concatBytes([
         new Uint8Array([FRAME_REQUEST]),
         u32le(frame.streamId),
-        u16le(method.length),
-        method,
-        u32le(frame.payload.length),
-        frame.payload,
+        encodeRequestHeader(frame.header, frame.body),
       ]);
-    }
     case "data":
       return concatBytes([
         new Uint8Array([FRAME_DATA]),
@@ -116,21 +204,49 @@ export function decodeFrame(bytes: Uint8Array): WsFrame {
   const ty = bytes[0]!;
   const streamId = view.getUint32(1, true);
   if (ty === FRAME_REQUEST) {
-    if (bytes.length < 7) throw new Error("truncated REQUEST");
-    const methodLen = view.getUint16(5, true);
-    const methodStart = 7;
-    const methodEnd = methodStart + methodLen;
-    if (bytes.length < methodEnd + 4) throw new Error("truncated REQUEST");
-    const method = new TextDecoder().decode(bytes.subarray(methodStart, methodEnd));
-    const payloadLen = view.getUint32(methodEnd, true);
-    const payloadStart = methodEnd + 4;
-    const payloadEnd = payloadStart + payloadLen;
-    if (bytes.length < payloadEnd) throw new Error("truncated REQUEST payload");
+    if (bytes.length < 6) throw new Error("truncated REQUEST");
+    const opcode = bytes[5]!;
+    let off = 6;
+    const readStr = (): string => {
+      if (bytes.length < off + 2) throw new Error("truncated REQUEST string");
+      const len = view.getUint16(off, true);
+      off += 2;
+      if (bytes.length < off + len) throw new Error("truncated REQUEST string body");
+      const s = new TextDecoder().decode(bytes.subarray(off, off + len));
+      off += len;
+      return s;
+    };
+    let header: RequestHeader;
+    if (opcode === OPCODE_SUBSCRIBE) {
+      const topic = readStr();
+      if (bytes.length < off + 4) throw new Error("truncated Subscribe qos");
+      const qosDepth = view.getInt32(off, true);
+      off += 4;
+      header = { opcode: OPCODE_SUBSCRIBE, topic, qosDepth };
+    } else if (opcode === OPCODE_PUBLISH) {
+      header = { opcode: OPCODE_PUBLISH, topic: readStr() };
+    } else if (opcode === OPCODE_CALL) {
+      const serviceName = readStr();
+      if (bytes.length < off + 4) throw new Error("truncated Call timeout");
+      const timeoutMs = view.getUint32(off, true);
+      off += 4;
+      const requestId = readStr();
+      header = { opcode: OPCODE_CALL, serviceName, timeoutMs, requestId };
+    } else if (opcode === OPCODE_SEND_GOAL) {
+      const actionName = readStr();
+      const goalId = readStr();
+      if (bytes.length < off + 4) throw new Error("truncated SendGoal timeout");
+      const timeoutMs = view.getUint32(off, true);
+      off += 4;
+      header = { opcode: OPCODE_SEND_GOAL, actionName, goalId, timeoutMs };
+    } else {
+      throw new Error(`unknown opcode ${opcode}`);
+    }
     return {
       type: "request",
       streamId,
-      method,
-      payload: bytes.subarray(payloadStart, payloadEnd),
+      header,
+      body: bytes.subarray(off),
     };
   }
   if (ty === FRAME_DATA) {
@@ -515,31 +631,28 @@ export class WsSession {
     });
   }
 
-  async unary(method: string, requestPayload: Uint8Array): Promise<Uint8Array> {
+  async unary(header: RequestHeader, requestBody: Uint8Array): Promise<Uint8Array> {
     const ws = await this.ensureSocket();
     const streamId = this.allocStreamId();
     return new Promise<Uint8Array>((resolve, reject) => {
       this.streams.set(streamId, {
-        resolve: (data) => {
-          if (!data) reject(new Error(`rpc ${method} trailer without DATA`));
-          else resolve(data);
-        },
+        resolve: (data) => resolve(data ?? new Uint8Array()),
         reject,
       });
       ws.send(
         encodeFrame({
           type: "request",
           streamId,
-          method,
-          payload: requestPayload,
+          header,
+          body: requestBody,
         }),
       );
     });
   }
 
   async serverStream(
-    method: string,
-    requestPayload: Uint8Array,
+    header: RequestHeader,
+    requestBody: Uint8Array,
     handlers: {
       onData: (payload: Uint8Array) => void;
       onTrailer?: (status: number, message: string) => void;
@@ -573,8 +686,8 @@ export class WsSession {
       encodeFrame({
         type: "request",
         streamId,
-        method,
-        payload: requestPayload,
+        header,
+        body: requestBody,
       }),
     );
     const control: WsServerStreamControl = {
@@ -627,13 +740,13 @@ export type WsServerStreamControl = {
 /** @deprecated Prefer WsSession; kept for tests that open one-shot RPCs. */
 export async function wsUnary(
   httpBaseUrl: string,
-  method: string,
-  requestPayload: Uint8Array,
+  header: RequestHeader,
+  requestBody: Uint8Array,
   _signal?: AbortSignal,
 ): Promise<Uint8Array> {
   const session = new WsSession(httpBaseUrl);
   try {
-    return await session.unary(method, requestPayload);
+    return await session.unary(header, requestBody);
   } finally {
     session.close();
   }
@@ -648,16 +761,16 @@ export type ServerStreamHandlers = {
 /** @deprecated Prefer WsSession.serverStream. */
 export async function wsServerStream(
   httpBaseUrl: string,
-  method: string,
-  requestPayload: Uint8Array,
+  header: RequestHeader,
+  requestBody: Uint8Array,
   handlers: ServerStreamHandlers,
   _signal?: AbortSignal,
 ): Promise<void> {
   const session = new WsSession(httpBaseUrl);
   try {
     const { control, done } = await session.serverStream(
-      method,
-      requestPayload,
+      header,
+      requestBody,
       handlers,
     );
     handlers.onControl?.(control);

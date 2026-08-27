@@ -12,11 +12,16 @@ use tokio::sync::mpsc;
 use crate::message_bus::Subscriber;
 use crate::runtime::ws_subscribe_queue_capacity;
 
-use super::pb::TopicMessage;
-
 const POLL_TIMEOUT: Duration = Duration::from_millis(200);
 
-type WatcherTx = mpsc::Sender<Result<TopicMessage, RpcStatus>>;
+/// One bus message fanned out to WS subscribe streams.
+#[derive(Clone)]
+pub struct BusMsg {
+    pub topic: String,
+    pub payload: Arc<[u8]>,
+}
+
+type WatcherTx = mpsc::Sender<Result<BusMsg, RpcStatus>>;
 
 struct Watcher {
     id: u64,
@@ -89,7 +94,7 @@ impl SubDemux {
         &self,
         topic: String,
         qos_depth: i32,
-    ) -> Result<mpsc::Receiver<Result<TopicMessage, RpcStatus>>, RpcStatus> {
+    ) -> Result<mpsc::Receiver<Result<BusMsg, RpcStatus>>, RpcStatus> {
         self.ensure_started()?;
         let (tx, rx) = mpsc::channel(ws_subscribe_queue_capacity(qos_depth));
         let id = self.inner.next_id.fetch_add(1, Ordering::Relaxed);
@@ -172,6 +177,7 @@ fn demux_loop(
 
         match sub.receive(Some(POLL_TIMEOUT)) {
             Ok((msg_topic, payload)) => {
+                let payload: Arc<[u8]> = Arc::from(payload);
                 let mut dead: Vec<(String, u64)> = Vec::new();
                 let Ok(guard) = state.lock() else {
                     return;
@@ -181,9 +187,9 @@ fn demux_loop(
                         continue;
                     }
                     for w in watchers {
-                        let msg = TopicMessage {
+                        let msg = BusMsg {
                             topic: msg_topic.clone(),
-                            payload: payload.clone(),
+                            payload: Arc::clone(&payload),
                         };
                         match w.tx.try_send(Ok(msg)) {
                             Ok(()) => {}

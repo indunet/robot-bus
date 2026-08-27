@@ -263,7 +263,14 @@ impl ConsoleState {
                 .as_ref()
                 .and_then(|s| s.history.back().map(|(at, _)| *at)),
             now,
-        ) {
+        ) && guard.as_ref().is_some_and(|s| {
+            s.view.services.len() == snap.services.len()
+                && s.view
+                    .services
+                    .iter()
+                    .map(|x| x.name.as_str())
+                    .eq(snap.services.iter().map(|x| x.name.as_str()))
+        }) {
             return guard.as_ref().expect("reuse after Some").view.clone();
         }
 
@@ -292,7 +299,14 @@ impl ConsoleState {
                 .as_ref()
                 .and_then(|s| s.history.back().map(|(at, _)| *at)),
             now,
-        ) {
+        ) && guard.as_ref().is_some_and(|s| {
+            s.view.actions.len() == snap.actions.len()
+                && s.view
+                    .actions
+                    .iter()
+                    .map(|x| x.name.as_str())
+                    .eq(snap.actions.iter().map(|x| x.name.as_str()))
+        }) {
             return guard.as_ref().expect("reuse after Some").view.clone();
         }
 
@@ -337,7 +351,11 @@ fn window_baselines<T>(history: &VecDeque<(Instant, T)>) -> Option<(&T, f64, &T,
 
 /// High-rate traffic uses the ~1 s sample; sub-2 Hz uses the 10 s window.
 pub(crate) fn pick_rate(short: f64, long: f64) -> f64 {
-    if short >= RATE_SHORT_HZ { short } else { long }
+    if short >= RATE_SHORT_HZ {
+        short
+    } else {
+        long
+    }
 }
 
 pub(crate) fn quantize_hz(r: f64) -> f64 {

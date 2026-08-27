@@ -8,7 +8,7 @@ use zmq::{Context, Socket, SocketType};
 
 use crate::errors::{BusError, Result};
 use crate::transports;
-use crate::zmq_helpers::{HighWaterMark, apply_action_options_with, poll_readable};
+use crate::zmq_helpers::{apply_action_options_with, poll_readable, HighWaterMark};
 
 pub type ActionGoalHandler = Arc<dyn Fn(&[u8]) -> Vec<(String, Vec<u8>)> + Send + Sync>;
 
@@ -132,7 +132,13 @@ impl ActionWorker {
 
     fn maybe_send_heartbeat(&mut self) {
         if self.last_heartbeat.elapsed() >= self.heartbeat_interval {
-            let _ = self.send_control(b"HEARTBEAT");
+            if let Some(socket) = &self.socket {
+                // Must not block serve_once / worker join if the backend HWM is full.
+                let _ = socket.send_multipart(
+                    [b"HEARTBEAT".as_slice(), self.action_name.as_bytes()],
+                    zmq::DONTWAIT,
+                );
+            }
             self.last_heartbeat = Instant::now();
         }
     }
@@ -201,7 +207,12 @@ impl ActionWorker {
     }
 
     pub fn close(&mut self) {
-        let _ = self.send_control(b"DISCONNECT");
+        if let Some(socket) = &self.socket {
+            let _ = socket.send_multipart(
+                [b"DISCONNECT".as_slice(), self.action_name.as_bytes()],
+                zmq::DONTWAIT,
+            );
+        }
         self.socket = None;
     }
 }

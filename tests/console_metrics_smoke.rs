@@ -23,6 +23,29 @@ use robot_bus::service_bus::ServiceClient;
 use robot_bus::worker_thread::WorkerThread;
 use support::lock_brokers;
 
+fn curl_body(url: &str) -> String {
+    std::process::Command::new("curl")
+        .args(["-s", "--max-time", "3", url])
+        .output()
+        .map(|o| String::from_utf8_lossy(&o.stdout).into_owned())
+        .unwrap_or_default()
+}
+
+/// Console `/api/v1/services|actions` reuses a ~500ms rate window, so a service
+/// that appears just after a snapshot can be missing from the next GET.
+fn wait_for_api_contains(url: &str, needle: &str) -> String {
+    let deadline = std::time::Instant::now() + Duration::from_secs(2);
+    let mut body = String::new();
+    while std::time::Instant::now() < deadline {
+        body = curl_body(url);
+        if body.contains(needle) {
+            return body;
+        }
+        thread::sleep(Duration::from_millis(100));
+    }
+    body
+}
+
 fn test_broker_config(
     msg_xsub: u16,
     msg_xpub: u16,
@@ -202,31 +225,15 @@ fn service_and_action_metrics_via_console_api() {
         act_snap.actions
     );
 
-    let services_json = std::process::Command::new("curl")
-        .args([
-            "-s",
-            "--max-time",
-            "3",
-            "http://127.0.0.1:26770/api/v1/services",
-        ])
-        .output()
-        .map(|o| String::from_utf8_lossy(&o.stdout).into_owned())
-        .unwrap_or_default();
+    let services_json =
+        wait_for_api_contains("http://127.0.0.1:26770/api/v1/services", "svc.console");
     assert!(
         services_json.contains("svc.console"),
         "services api={services_json}"
     );
 
-    let actions_json = std::process::Command::new("curl")
-        .args([
-            "-s",
-            "--max-time",
-            "3",
-            "http://127.0.0.1:26770/api/v1/actions",
-        ])
-        .output()
-        .map(|o| String::from_utf8_lossy(&o.stdout).into_owned())
-        .unwrap_or_default();
+    let actions_json =
+        wait_for_api_contains("http://127.0.0.1:26770/api/v1/actions", "act.console");
     assert!(
         actions_json.contains("act.console"),
         "actions api={actions_json}"

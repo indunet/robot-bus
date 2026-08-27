@@ -1,7 +1,7 @@
 //! WebSocket-mode runtime for [`super::Node`]: multiplexed `/ws` client.
 //!
 //! One WebSocket connection per node carries all subscribe / publish / service /
-//! action RPCs (V2 framing with `stream_id`).
+//! action RPCs (V3 framing with `stream_id`).
 
 use std::collections::{HashMap, HashSet};
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
@@ -10,7 +10,6 @@ use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use futures_util::{SinkExt, StreamExt};
-use prost::Message as ProstMessage;
 use tokio_tungstenite::{connect_async, tungstenite::Message as WsMessage};
 use uuid::Uuid;
 
@@ -28,14 +27,10 @@ use crate::runtime::timers::{
     SubscriptionHandle, Timer, TimerCallback, TimerHandle, effective_poll_timeout_ms, tick_timers,
 };
 use crate::runtime::topic_callbacks::for_each_matching_callback;
-use crate::ws_gateway::pb::{
-    ActionKind as PbActionKind, GoalCommand, PublishResponse, ServiceCallRequest,
-    ServiceCallResponse, SubscribeRequest, TopicMessage,
-};
 use crate::ws_gateway::rpc_status::Code;
 use crate::ws_gateway::ws_frame::{
-    Frame, METHOD_CALL, METHOD_PUBLISH, METHOD_SEND_GOAL, METHOD_SUBSCRIBE, decode_frame,
-    encode_frame,
+    ACTION_KIND_CANCEL, ACTION_KIND_FEEDBACK, ACTION_KIND_GOAL, ACTION_KIND_RESULT, Frame,
+    RequestHeader, decode_action_data, decode_frame, decode_subscribe_data, encode_frame,
 };
 
 const DEFAULT_WS_URL: &str = "http://127.0.0.1:15570";
@@ -50,8 +45,8 @@ struct TopicEvent {
 enum ConnCmd {
     Start {
         stream_id: u32,
-        method: String,
-        payload: Vec<u8>,
+        header: RequestHeader,
+        body: Vec<u8>,
         kind: StreamKind,
         reply: tokio::sync::oneshot::Sender<Result<()>>,
     },
@@ -74,6 +69,7 @@ enum StreamKind {
     },
     Action {
         action_name: String,
+        goal_id: String,
         event_tx: Sender<Result<ActionMessage>>,
         feedback_callback: Option<RawActionFeedbackCallback>,
     },
@@ -86,7 +82,7 @@ struct StreamState {
 struct WsConnection {
     cmd_tx: tokio::sync::mpsc::UnboundedSender<ConnCmd>,
     next_stream_id: AtomicU32,
-    runtime: Arc<tokio::runtime::Runtime>,
+    handle: tokio::runtime::Handle,
 }
 
 /// Shared handle used by WS service / action clients.
@@ -131,14 +127,12 @@ impl WsConnection {
 
 impl WsClientContext {
     pub(crate) fn publish(&self, topic: &str, payload: &[u8]) -> Result<()> {
-        let payload = TopicMessage {
-            topic: topic.to_string(),
-            payload: payload.to_vec(),
-        }
-        .encode_to_vec();
-        let data = self.unary(METHOD_PUBLISH, payload)?;
-        let _ = PublishResponse::decode(data.as_slice())
-            .map_err(|err| BusError::Protocol(format!("decode PublishResponse: {err}")))?;
+        let _ = self.unary(
+            RequestHeader::Publish {
+                topic: topic.to_string(),
+            },
+            payload.to_vec(),
+        )?;
         Ok(())
     }
 
@@ -149,17 +143,14 @@ impl WsClientContext {
         request_id: Option<&str>,
         timeout: Option<Duration>,
     ) -> Result<Vec<u8>> {
-        let payload = ServiceCallRequest {
-            service_name: service_name.to_string(),
-            request: body.to_vec(),
-            request_id: request_id.unwrap_or("").to_string(),
-            timeout_ms: timeout_ms_u32(timeout),
-        }
-        .encode_to_vec();
-        let data = self.unary(METHOD_CALL, payload)?;
-        let resp = ServiceCallResponse::decode(data.as_slice())
-            .map_err(|err| BusError::Protocol(format!("decode ServiceCallResponse: {err}")))?;
-        Ok(resp.response)
+        self.unary(
+            RequestHeader::Call {
+                service_name: service_name.to_string(),
+                timeout_ms: timeout_ms_u32(timeout),
+                request_id: request_id.unwrap_or("").to_string(),
+            },
+            body.to_vec(),
+        )
     }
 
     pub(crate) fn send_goal(
@@ -173,22 +164,19 @@ impl WsClientContext {
         let goal_id = goal_id
             .map(str::to_string)
             .unwrap_or_else(|| Uuid::new_v4().simple().to_string());
-        let payload = GoalCommand {
-            action_name: action_name.to_string(),
-            goal: body.to_vec(),
-            goal_id: goal_id.clone(),
-            timeout_ms: timeout_ms_u32(timeout),
-        }
-        .encode_to_vec();
-
         let (event_tx, event_rx) = mpsc::channel();
         let stream_id = self.conn.alloc_stream_id();
-        self.conn.runtime.block_on(self.start_stream(
+        self.conn.handle.block_on(self.start_stream(
             stream_id,
-            METHOD_SEND_GOAL,
-            payload,
+            RequestHeader::SendGoal {
+                action_name: action_name.to_string(),
+                goal_id: goal_id.clone(),
+                timeout_ms: timeout_ms_u32(timeout),
+            },
+            body.to_vec(),
             StreamKind::Action {
                 action_name: action_name.to_string(),
+                goal_id: goal_id.clone(),
                 event_tx,
                 feedback_callback,
             },
@@ -205,14 +193,14 @@ impl WsClientContext {
         })
     }
 
-    fn unary(&self, method: &str, payload: Vec<u8>) -> Result<Vec<u8>> {
-        self.conn.runtime.block_on(async {
+    fn unary(&self, header: RequestHeader, body: Vec<u8>) -> Result<Vec<u8>> {
+        self.conn.handle.block_on(async {
             let stream_id = self.conn.alloc_stream_id();
             let (data_tx, data_rx) = tokio::sync::oneshot::channel();
             self.start_stream(
                 stream_id,
-                method,
-                payload,
+                header,
+                body,
                 StreamKind::Unary {
                     reply: data_tx,
                     data: None,
@@ -228,8 +216,8 @@ impl WsClientContext {
     async fn start_stream(
         &self,
         stream_id: u32,
-        method: &str,
-        payload: Vec<u8>,
+        header: RequestHeader,
+        body: Vec<u8>,
         kind: StreamKind,
     ) -> Result<()> {
         let (reply_tx, reply_rx) = tokio::sync::oneshot::channel();
@@ -237,8 +225,8 @@ impl WsClientContext {
             .cmd_tx
             .send(ConnCmd::Start {
                 stream_id,
-                method: method.to_string(),
-                payload,
+                header,
+                body,
                 kind,
                 reply: reply_tx,
             })
@@ -252,7 +240,7 @@ impl WsClientContext {
 struct WsState {
     topic_callbacks: HashMap<String, Vec<SubscriptionCallback>>,
     active_topics: HashSet<String>,
-    /// KeepLast depth sent on SubscribeRequest (`0` = gateway default).
+    /// KeepLast depth sent on Subscribe REQUEST (`0` = gateway default).
     topic_qos: HashMap<String, i32>,
     /// Latest WS stream id for each active topic (for Cancel on destroy).
     topic_stream_ids: HashMap<String, u32>,
@@ -262,7 +250,13 @@ struct WsState {
 }
 
 /// Owns a tokio runtime and dispatches WS subscription / timer callbacks.
+///
+/// `runtime` is declared first so it is dropped **last** (after `conn` and
+/// spawned tasks that only hold a [`tokio::runtime::Handle`], not the Runtime).
 pub struct WsRuntime {
+    /// Owned runtime; tasks only hold a Handle. Declared first so it drops last.
+    #[allow(dead_code)]
+    runtime: tokio::runtime::Runtime,
     conn: Arc<WsConnection>,
     running: Arc<AtomicBool>,
     alive: Arc<AtomicBool>,
@@ -280,19 +274,19 @@ impl WsRuntime {
             .thread_name("robot-bus-ws")
             .build()
             .map_err(|err| BusError::Protocol(format!("tokio runtime: {err}")))?;
-        let runtime = Arc::new(runtime);
 
         let (cmd_tx, cmd_rx) = tokio::sync::mpsc::unbounded_channel();
         let conn = Arc::new(WsConnection {
             cmd_tx,
             next_stream_id: AtomicU32::new(1),
-            runtime: Arc::clone(&runtime),
+            handle: runtime.handle().clone(),
         });
 
         runtime.spawn(connection_loop(ws_url, cmd_rx, transport));
 
         let (inbound_tx, inbound_rx) = mpsc::channel();
         Ok(Self {
+            runtime,
             conn,
             running: Arc::new(AtomicBool::new(false)),
             alive: Arc::new(AtomicBool::new(true)),
@@ -500,7 +494,7 @@ impl WsRuntime {
         let alive = Arc::clone(&self.alive);
         let conn = Arc::clone(&self.conn);
         let state = Arc::clone(&self.state);
-        self.conn.runtime.spawn(async move {
+        self.conn.handle.spawn(async move {
             let mut backoff = SESSION_BACKOFF_INITIAL;
             loop {
                 {
@@ -524,19 +518,18 @@ impl WsRuntime {
                     };
                     guard.topic_qos.get(&topic).copied().unwrap_or(0)
                 };
-                let payload = SubscribeRequest {
+                let header = RequestHeader::Subscribe {
                     topic: topic.clone(),
                     qos_depth,
-                }
-                .encode_to_vec();
+                };
                 let (reply_tx, reply_rx) = tokio::sync::oneshot::channel();
                 let (done_tx, done_rx) = tokio::sync::oneshot::channel();
                 if conn
                     .cmd_tx
                     .send(ConnCmd::Start {
                         stream_id,
-                        method: METHOD_SUBSCRIBE.to_string(),
-                        payload,
+                        header,
+                        body: Vec::new(),
                         kind: StreamKind::Subscribe {
                             topic: topic.clone(),
                             tx: tx.clone(),
@@ -697,8 +690,8 @@ async fn run_ws_connection(
         tokio::select! {
             cmd = cmd_rx.recv() => {
                 match cmd {
-                    Some(ConnCmd::Start { stream_id, method, payload, kind, reply }) => {
-                        let frame = Frame::Request { stream_id, method, payload };
+                    Some(ConnCmd::Start { stream_id, header, body, kind, reply }) => {
+                        let frame = Frame::Request { stream_id, header, body };
                         match encode_frame(&frame) {
                             Ok(bytes) => {
                                 if let Err(err) = sink.send(WsMessage::Binary(bytes.into())).await {
@@ -797,11 +790,8 @@ fn handle_inbound_frame(streams: &mut HashMap<u32, StreamState>, frame: Frame) {
             };
             match &mut st.kind {
                 StreamKind::Subscribe { tx, .. } => {
-                    if let Ok(msg) = TopicMessage::decode(payload.as_slice()) {
-                        let _ = tx.send(TopicEvent {
-                            topic: msg.topic,
-                            payload: msg.payload,
-                        });
+                    if let Ok((topic, payload)) = decode_subscribe_data(&payload) {
+                        let _ = tx.send(TopicEvent { topic, payload });
                     }
                 }
                 StreamKind::Unary { data, .. } => {
@@ -809,18 +799,19 @@ fn handle_inbound_frame(streams: &mut HashMap<u32, StreamState>, frame: Frame) {
                 }
                 StreamKind::Action {
                     action_name,
+                    goal_id,
                     event_tx,
                     feedback_callback,
                 } => {
-                    if let Ok(ev) = crate::ws_gateway::pb::ActionEvent::decode(payload.as_slice()) {
-                        match pb_action_kind(ev.kind) {
+                    if let Ok((kind_u8, body)) = decode_action_data(&payload) {
+                        match ws_action_kind(kind_u8) {
                             Ok(kind) => {
                                 let done = kind == ActionKind::Result;
                                 let message = ActionMessage {
-                                    action_name: ev.action_name,
-                                    goal_id: ev.goal_id,
+                                    action_name: action_name.clone(),
+                                    goal_id: goal_id.clone(),
                                     kind,
-                                    body: ev.body,
+                                    body,
                                 };
                                 if kind == ActionKind::Feedback {
                                     if let Some(callback) = feedback_callback {
@@ -844,7 +835,6 @@ fn handle_inbound_frame(streams: &mut HashMap<u32, StreamState>, frame: Frame) {
                                 let _ = event_tx.send(Err(err));
                             }
                         }
-                        let _ = action_name;
                     }
                 }
             }
@@ -863,10 +853,7 @@ fn handle_inbound_frame(streams: &mut HashMap<u32, StreamState>, frame: Frame) {
             }
             match st.kind {
                 StreamKind::Unary { reply, data } => {
-                    let _ = reply.send(match data {
-                        Some(d) => Ok(d),
-                        None => Err(BusError::Protocol("unary trailer without DATA".into())),
-                    });
+                    let _ = reply.send(Ok(data.unwrap_or_default()));
                 }
                 StreamKind::Subscribe { done, .. } => {
                     if let Some(done) = done {
@@ -924,14 +911,14 @@ fn timeout_ms_u32(timeout: Option<Duration>) -> u32 {
     }
 }
 
-fn pb_action_kind(kind: i32) -> Result<ActionKind> {
-    match PbActionKind::try_from(kind) {
-        Ok(PbActionKind::Goal) => Ok(ActionKind::Goal),
-        Ok(PbActionKind::Feedback) => Ok(ActionKind::Feedback),
-        Ok(PbActionKind::Result) => Ok(ActionKind::Result),
-        Ok(PbActionKind::Cancel) => Ok(ActionKind::Cancel),
-        Ok(PbActionKind::Unspecified) | Err(_) => Err(BusError::Protocol(format!(
-            "unknown ws action kind: {kind}"
+fn ws_action_kind(kind: u8) -> Result<ActionKind> {
+    match kind {
+        ACTION_KIND_GOAL => Ok(ActionKind::Goal),
+        ACTION_KIND_FEEDBACK => Ok(ActionKind::Feedback),
+        ACTION_KIND_RESULT => Ok(ActionKind::Result),
+        ACTION_KIND_CANCEL => Ok(ActionKind::Cancel),
+        other => Err(BusError::Protocol(format!(
+            "unknown ws action kind: {other}"
         ))),
     }
 }

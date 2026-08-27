@@ -5,9 +5,9 @@ English | [中文](../zh/rust-api.md)
 `Cargo.toml`:
 
 ```toml
-robot-bus = "1.3.4"
+robot-bus = "2.0.0"
 # Local: robot-bus = { path = "../robot-bus" }
-# WebSocket RPC gateway (`ws` feature) is on by default; to disable: robot-bus = { version = "1.3.4", default-features = false }
+# WebSocket RPC gateway (`ws` feature) is on by default; to disable: robot-bus = { version = "2.0.0", default-features = false }
 ```
 
 ## Broker startup
@@ -460,111 +460,22 @@ let result = goal.result(Some(Duration::from_secs(10)))?;
 node.spin()?;
 ```
 
-Under the hood this is gateway RPC (`MessageGateway.Subscribe` / `MessageGateway.Publish` / `ServiceGateway.Call` / `ActionGateway.SendGoal`). For lower-level control, use the client in the next section directly.
+Under the hood this is multiplexed WebSocket RPC (V3 opcodes: Subscribe / Publish / Call / SendGoal). Prefer `Node::ws` rather than speaking the frame protocol directly.
 
 ---
 
 ## WebSocket RPC gateway
 
-Started together by `RobotBusBroker` / `robot_bus_broker` (feature `ws`, on by default). **WebSocket RPC** (HTTP/2) and browser **WebSocket RPC** (`/ws`, one RPC per connection) share **the same port** (default `0.0.0.0:15570`). gRPC-Web has been removed.
+Started together by `RobotBusBroker` / `robot_bus_broker` (feature `ws`, on by default). Native and browser clients share **`/ws`** on the API port (default `0.0.0.0:15570`). **Breaking:** V3 framing; V2 method-string + `TopicMessage` envelopes are not accepted.
 
-| RPC | Description |
-|-----|-------------|
-| `MessageGateway.Subscribe` | Server stream: topic prefix → `TopicMessage` |
-| `MessageGateway.Publish` | Unary: `TopicMessage` → write to message bus XSUB |
-| `ServiceGateway.Call` | Unary: `service_name` + request bytes → response bytes |
-| `ActionGateway.SendGoal` | Unary `GoalRequest` → server stream `ActionEvent` (live `FEEDBACK`, final `RESULT`) |
+| Opcode | RPC | Request header | DATA payload |
+|--------|-----|----------------|--------------|
+| 1 | Subscribe | topic prefix + `qos_depth` | `u16 topic_len` + topic + raw bus bytes |
+| 2 | Publish | topic; body = raw bus bytes | none (success is TRAILER only) |
+| 3 | Call | service name + timeout + request id; body = raw request | raw response |
+| 4 | SendGoal | action name + goal id + timeout; body = raw goal | `u8 kind` + raw body (`FEEDBACK` then `RESULT`) |
 
-Action cancel: WebSocket RPC (native and browser) sends an explicit `CANCEL` frame and still waits for `RESULT`; disconnect still submits cancel. ZMQ transport sends an explicit `CANCEL` frame via GoalHandle. None imply server acknowledgment.
-
-Subscribe example:
-
-```rust
-use robot_bus::ws_gateway::pb::message_gateway_client::MessageGatewayClient;
-use robot_bus::ws_gateway::pb::SubscribeRequest;
-use tonic::Request;
-
-#[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let mut client = MessageGatewayClient::connect("http://127.0.0.1:15570").await?;
-    let mut stream = client
-        .subscribe(Request::new(SubscribeRequest {
-            topic: "imu".into(),
-        }))
-        .await?
-        .into_inner();
-
-    use tokio_stream::StreamExt;
-    while let Some(msg) = stream.next().await {
-        let msg = msg?;
-        println!("{}: {} bytes", msg.topic, msg.payload.len());
-    }
-    Ok(())
-}
-```
-
-Publish example:
-
-```rust
-use robot_bus::ws_gateway::pb::message_gateway_client::MessageGatewayClient;
-use robot_bus::ws_gateway::pb::TopicMessage;
-use tonic::Request;
-
-#[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let mut client = MessageGatewayClient::connect("http://127.0.0.1:15570").await?;
-    client
-        .publish(Request::new(TopicMessage {
-            topic: "imu".into(),
-            payload: b"hello".to_vec(),
-        }))
-        .await?;
-    Ok(())
-}
-```
-
-Service / Action example:
-
-```rust
-use robot_bus::ws_gateway::pb::action_gateway_client::ActionGatewayClient;
-use robot_bus::ws_gateway::pb::service_gateway_client::ServiceGatewayClient;
-use robot_bus::ws_gateway::pb::{ActionKind, GoalRequest, ServiceCallRequest};
-use tonic::Request;
-use tokio_stream::StreamExt;
-
-#[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let mut svc = ServiceGatewayClient::connect("http://127.0.0.1:15570").await?;
-    let resp = svc
-        .call(Request::new(ServiceCallRequest {
-            service_name: "svc.echo".into(),
-            request: b"ping".to_vec(),
-            request_id: String::new(),
-            timeout_ms: 5_000,
-        }))
-        .await?
-        .into_inner();
-    println!("service: {} bytes", resp.response.len());
-
-    let mut act = ActionGatewayClient::connect("http://127.0.0.1:15570").await?;
-    let mut stream = act
-        .send_goal(Request::new(GoalRequest {
-            action_name: "act.demo".into(),
-            goal: b"go".to_vec(),
-            goal_id: String::new(),
-            timeout_ms: 10_000,
-        }))
-        .await?
-        .into_inner();
-    while let Some(ev) = stream.next().await {
-        let ev = ev?;
-        println!("{:?}: {} bytes", ActionKind::try_from(ev.kind), ev.body.len());
-    }
-    Ok(())
-}
-```
-
-Proto package name: `robot_bus_interfaces.grpc.v1`. See `proto/robot_bus_interfaces/grpc/v1/{message,service,action}_gateway.proto`.
+`CANCEL` / `TRAILER` / `PING` / `PONG` are unchanged (`stream_id`; clients use odd ids). Action cancel: WebSocket sends an explicit `CANCEL` frame and still waits for `RESULT`; disconnect still submits cancel. ZMQ transport sends an explicit `CANCEL` frame via GoalHandle. None imply server acknowledgment.
 
 HTTP discovery: `GET /api/v1/discover` (JSON); legacy protobuf `BrokerAnnounce` is encoding compatibility only—UDP multicast path removed.
 

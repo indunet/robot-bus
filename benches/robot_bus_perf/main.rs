@@ -12,10 +12,10 @@ use std::thread;
 use std::time::{Duration, Instant};
 
 use robot_bus::worker_thread::WorkerThread;
-use robot_bus::{Context, HighWaterMark, Node, Publisher, RobotBusBroker};
+use robot_bus::{Context, HighWaterMark, Node, Publisher, RobotBusBroker, Subscriber};
 use support::{
-    LatencyStats, ScenarioResult, env_f64, env_summary, env_usize, lock_broker, node_for, now_ns,
-    options_for, perf_broker_config, write_report,
+    env_f64, env_summary, env_usize, lock_broker, node_for, now_ns, perf_broker_config,
+    write_report, LatencyStats, ScenarioResult,
 };
 
 const PAYLOAD_LEN: usize = 64;
@@ -108,6 +108,7 @@ fn main() {
 
     let ws_url = broker.api_url();
     println!("=== ws ({ws_url}) ===");
+    results.push(bench_ws_publish(&broker, &ws_url));
     results.push(bench_ws_subscribe(&broker, &ws_url));
     if !only_message {
         results.push(bench_ws_service(&broker, &ws_url, svc_iters));
@@ -313,21 +314,22 @@ fn find_max_goodput(
 fn bench_pubsub(ctx: &Context, transport: &str) -> ScenarioResult {
     let scenario = "message pub/sub";
     let transport = transport.to_string();
-    let options = options_for(&transport);
     let topic = format!("perf/{transport}/msg");
-
-    let xsub = match options.message_xsub_endpoint() {
-        Ok(ep) => ep,
-        Err(err) => {
-            return ScenarioResult::skipped(&transport, scenario, format!("xsub endpoint: {err}"));
-        }
-    };
 
     let latencies = Arc::new(Mutex::new(Vec::<u64>::with_capacity(msg_latency_samples())));
     let count = Arc::new(AtomicUsize::new(0));
     let record_latency = Arc::new(AtomicBool::new(true));
 
     let mut sub = node_for(ctx, format!("perf-sub-{transport}"), &transport);
+    if !sub.wait_for_broker(Some(Duration::from_secs(5))) {
+        return ScenarioResult::skipped(&transport, scenario, "wait_for_broker timed out");
+    }
+    let xsub = match sub.options().message_xsub_endpoint() {
+        Ok(ep) => ep,
+        Err(err) => {
+            return ScenarioResult::skipped(&transport, scenario, format!("xsub endpoint: {err}"));
+        }
+    };
     let hwm = HighWaterMark {
         snd: MSG_HWM,
         rcv: MSG_HWM,
@@ -677,6 +679,155 @@ fn bench_action(ctx: &Context, transport: &str, n: usize) -> ScenarioResult {
 
     let _ = server.spin();
     worker.join().expect("action client thread")
+}
+
+fn bench_ws_publish(broker: &RobotBusBroker, url: &str) -> ScenarioResult {
+    let transport = "ws";
+    let scenario = "message Publish";
+    let topic = "perf/ws/pub";
+
+    let mut node = Node::ws_at("perf-ws-pub", url);
+    let publisher = match node.create_publisher_raw(topic) {
+        Ok(p) => p,
+        Err(err) => {
+            return ScenarioResult::skipped(transport, scenario, format!("publisher: {err}"));
+        }
+    };
+
+    let hwm = HighWaterMark {
+        snd: MSG_HWM,
+        rcv: MSG_HWM,
+    };
+    let sub = match Subscriber::with_hwm(Some(&broker.message.xpub_bind), hwm) {
+        Ok(s) => s,
+        Err(err) => {
+            return ScenarioResult::skipped(transport, scenario, format!("subscriber: {err}"));
+        }
+    };
+    if let Err(err) = sub.subscribe(topic) {
+        return ScenarioResult::skipped(transport, scenario, format!("subscribe: {err}"));
+    }
+
+    let count = Arc::new(AtomicUsize::new(0));
+    let latencies = Arc::new(Mutex::new(Vec::<u64>::with_capacity(msg_latency_samples())));
+    let running = Arc::new(AtomicBool::new(true));
+    let record_latency = Arc::new(AtomicBool::new(true));
+    let recv = thread::spawn({
+        let count = Arc::clone(&count);
+        let latencies = Arc::clone(&latencies);
+        let running = Arc::clone(&running);
+        let record_latency = Arc::clone(&record_latency);
+        move || {
+            while running.load(Ordering::Relaxed) {
+                match sub.receive(Some(Duration::from_millis(50))) {
+                    Ok((_, payload)) => {
+                        if record_latency.load(Ordering::Relaxed) {
+                            if let Some(sent) = read_ts(&payload) {
+                                let now = now_ns();
+                                if now >= sent {
+                                    latencies.lock().unwrap().push(now - sent);
+                                }
+                            }
+                        }
+                        count.fetch_add(1, Ordering::Relaxed);
+                    }
+                    Err(_) => {}
+                }
+            }
+        }
+    });
+    thread::sleep(Duration::from_millis(400));
+
+    for _ in 0..WARMUP {
+        let _ = publisher.publish(&make_payload(now_ns()));
+    }
+    thread::sleep(Duration::from_millis(50));
+    count.store(0, Ordering::Relaxed);
+    latencies.lock().unwrap().clear();
+
+    record_latency.store(true, Ordering::Relaxed);
+    for _ in 0..msg_latency_samples() {
+        let before = count.load(Ordering::Relaxed);
+        if publisher.publish(&make_payload(now_ns())).is_err() {
+            running.store(false, Ordering::Relaxed);
+            let _ = recv.join();
+            return ScenarioResult::skipped(transport, scenario, "publish failed");
+        }
+        let deadline = Instant::now() + Duration::from_secs(2);
+        while count.load(Ordering::Relaxed) <= before && Instant::now() < deadline {
+            thread::sleep(Duration::from_millis(1));
+        }
+        if count.load(Ordering::Relaxed) <= before {
+            running.store(false, Ordering::Relaxed);
+            let _ = recv.join();
+            return ScenarioResult::skipped(transport, scenario, "latency sample timed out");
+        }
+    }
+    let latency = LatencyStats::from_ns(latencies.lock().unwrap().clone());
+
+    record_latency.store(false, Ordering::Relaxed);
+    let settle = goodput_settle();
+    let goodput = match find_max_goodput(transport, |rate_hz| {
+        count.store(0, Ordering::Relaxed);
+        let trial_secs = Duration::from_secs_f64(goodput_trial_secs());
+        let interval = Duration::from_secs_f64(1.0 / (rate_hz as f64).max(1.0));
+        let t0 = Instant::now();
+        let mut next = t0;
+        let mut sent = 0usize;
+        let fixed_n = trial_msg_count(rate_hz);
+        loop {
+            let done = match fixed_n {
+                Some(n) => sent >= n,
+                None => Instant::now() >= t0 + trial_secs,
+            };
+            if done {
+                break;
+            }
+            if publisher.publish(&make_payload(now_ns())).is_err() {
+                break;
+            }
+            sent += 1;
+            next += interval;
+            wait_deadline(next);
+        }
+        let send_elapsed = t0.elapsed();
+        let received_at_send_end = count.load(Ordering::Relaxed);
+        thread::sleep(settle);
+        let received = count.load(Ordering::Relaxed);
+        Ok(GoodputTrial {
+            target_hz: rate_hz,
+            sent,
+            received_at_send_end,
+            received,
+            elapsed: send_elapsed,
+        })
+    }) {
+        Ok(g) => g,
+        Err(note) => {
+            running.store(false, Ordering::Relaxed);
+            let _ = recv.join();
+            return ScenarioResult::skipped(transport, scenario, note);
+        }
+    };
+
+    running.store(false, Ordering::Relaxed);
+    let _ = recv.join();
+
+    println!(
+        "  … ws publish max goodput ≈ {} Hz target (loss≤{:.1}%)",
+        goodput.target_hz,
+        max_loss_pct()
+    );
+
+    ScenarioResult::ok_message(
+        transport,
+        scenario,
+        goodput.sent,
+        goodput.received_at_send_end,
+        goodput.received,
+        goodput.elapsed,
+        latency,
+    )
 }
 
 fn bench_ws_subscribe(broker: &RobotBusBroker, url: &str) -> ScenarioResult {

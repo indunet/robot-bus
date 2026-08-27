@@ -9,13 +9,13 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::thread::{self, JoinHandle};
 use std::time::Duration;
 
+use robot_bus::broker::action_bus::ActionBusConfig;
+use robot_bus::broker::message_bus::BusConfig;
+use robot_bus::broker::service_bus::ServiceBusConfig;
 #[cfg(feature = "console")]
 use robot_bus::ConsoleBrokerConfig;
 #[cfg(feature = "ws")]
 use robot_bus::WsGatewayConfig;
-use robot_bus::broker::action_bus::ActionBusConfig;
-use robot_bus::broker::message_bus::BusConfig;
-use robot_bus::broker::service_bus::ServiceBusConfig;
 use robot_bus::{DiscoveryConfig, RobotBusBroker, RobotBusConfig};
 use zmq::{Context, Socket, SocketType};
 

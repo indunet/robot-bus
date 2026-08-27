@@ -142,7 +142,7 @@ const node = Node.ws("web-client");
 
 ## Browser (WebSocket RPC)
 
-Browser clients use the broker’s **`/ws`** (gRPC-like over WebSocket, **single connection multiplexed (V2 stream_id)**), not gRPC-Web.
+Browser clients use the broker’s **`/ws`** (multiplexed V3 WebSocket RPC, **one connection, many streams**), not gRPC-Web.
 
 ```ts
 import { Node } from "robot-bus";
@@ -165,20 +165,20 @@ You can also use explicitly:
 import { WsNode } from "robot-bus"; // Node entry also exports WsNode
 ```
 
-### WebSocket frames (V2 multiplexed)
+### WebSocket frames (V3 multiplexed)
 
 Path: `ws://<host>:<port>/ws` (use `wss://` on HTTPS sites). **One connection carries many RPCs** (`stream_id`; clients use odd ids). The session reconnects with 200ms–5s backoff; `connectionState` / `waitForBroker` follow this WebSocket, not an HTTP 200. In-flight Publish / Call / SendGoal **fail that attempt** (no automatic replay); subscriptions Subscribe again on the new socket.
 
 | type | value | meaning |
 |------|----|------|
-| REQUEST | 1 | First frame: method + protobuf request body |
-| DATA | 2 | Response / stream message payload |
+| REQUEST | 1 | First frame: `u8 opcode` + routing header + raw body |
+| DATA | 2 | Stream payload (raw bus bytes; Subscribe prefixes topic, SendGoal prefixes kind) |
 | CANCEL | 3 | Client soft cancel (SendGoal: submit cancel, connection stays open until RESULT; Subscribe: stop subscription) |
 | TRAILER | 4 | `u32 status` + UTF-8 message (0 = OK) |
 | PING | 5 | Application heartbeat (`stream_id = 0`) |
 | PONG | 6 | Heartbeat reply |
 
-Example methods: `robot_bus_interfaces.grpc.v1.MessageGateway/Subscribe` (also Publish / ServiceGateway/Call / ActionGateway/SendGoal). Business payload uses gateway protobuf (method names still include the historical `.grpc.v1` package path).
+Opcodes: `1=Subscribe`, `2=Publish`, `3=Call`, `4=SendGoal`. Publish success is TRAILER only (no DATA ack). **Breaking:** V2 method strings and `TopicMessage` protobuf envelopes are not accepted.
 
 The Node session contract (`connection_state` / `wait_for_broker` / auto-reconnect) is transport-agnostic; the browser client implements that contract over WebSocket.
 
@@ -214,7 +214,7 @@ const result = await goal.result();
 - **Native WebSocket RPC**: same as browser — send CANCEL frame.
 - **ZMQ**: send explicit `CANCEL` frame.
 
-None of the three provide server-side cancel acknowledgment. Underlying RPC is `ActionGateway.SendGoal`: unary goal request, server streams `FEEDBACK`, then returns `RESULT`.
+None of the three provide server-side cancel acknowledgment. SendGoal is opcode `4`: unary goal REQUEST, server streams `FEEDBACK` then `RESULT`.
 
 ## Protobuf messages
 

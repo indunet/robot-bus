@@ -2,7 +2,7 @@
 //!
 //! Enabled with `--features ws`. Covers message Subscribe / Publish, service
 //! Call, and action SendGoal (one GOAL request → FEEDBACK / RESULT stream).
-//! Native and browser clients share `/ws` (V2: one WebSocket, many streams).
+//! Native and browser clients share `/ws` (V3: one WebSocket, many streams).
 
 pub mod action;
 pub mod message;
@@ -12,12 +12,6 @@ pub mod service;
 pub mod sub_demux;
 pub mod ws;
 pub mod ws_frame;
-
-pub mod pb {
-    // Messages-only (no tonic). Regenerated via `just gen-rust` / scripts/gen_rust_msgs
-    // is switched to prost-only for gateway protos.
-    include!("../generated/robot_bus_interfaces/grpc/v1/messages.inc.rs");
-}
 
 pub use action::ActionGatewayService;
 pub use message::MessageGatewayService;

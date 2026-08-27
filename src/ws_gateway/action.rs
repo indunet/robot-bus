@@ -9,7 +9,6 @@ use std::sync::Arc;
 use std::thread;
 use std::time::{Duration, Instant};
 
-use prost::Message as ProstMessage;
 use tokio::sync::mpsc;
 use zmq::Context;
 
@@ -17,10 +16,25 @@ use crate::action_bus::{ActionClient, ActionKind as WireKind, ActionMessage};
 use crate::errors::{BusError, parse_error_body};
 use crate::zmq_helpers::HighWaterMark;
 
-use super::pb::{ActionEvent, ActionKind, GoalCommand};
 use super::rpc_status::RpcStatus;
+use super::ws_frame::{
+    ACTION_KIND_CANCEL, ACTION_KIND_FEEDBACK, ACTION_KIND_GOAL, ACTION_KIND_RESULT,
+};
 
 const POLL_TICK: Duration = Duration::from_millis(5);
+
+pub struct GoalSpec {
+    pub action_name: String,
+    pub goal: Vec<u8>,
+    pub goal_id: String,
+    pub timeout_ms: u32,
+}
+
+/// Wire action event: kind byte matches V3 DATA payload.
+pub struct ActionWireEvent {
+    pub kind: u8,
+    pub body: Vec<u8>,
+}
 
 #[derive(Clone)]
 pub struct ActionGatewayService {
@@ -48,14 +62,14 @@ impl ActionGatewayService {
     ///
     /// - Send on [`SendGoalSession::cancel`] for soft cancel (wait for RESULT).
     /// - Drop [`SendGoalSession::events`] for hard disconnect cancel.
-    pub fn open_send_goal(&self, goal: GoalCommand) -> Result<SendGoalSession, RpcStatus> {
+    pub fn open_send_goal(&self, goal: GoalSpec) -> Result<SendGoalSession, RpcStatus> {
         if goal.action_name.is_empty() {
             return Err(RpcStatus::invalid_argument("action_name is required"));
         }
 
         let frontend = self.action_frontend.clone();
         let context = Arc::clone(&self.context);
-        let (event_tx, event_rx) = mpsc::channel::<Result<ActionEvent, RpcStatus>>(64);
+        let (event_tx, event_rx) = mpsc::channel::<Result<ActionWireEvent, RpcStatus>>(64);
         let (cancel_tx, cancel_rx) = mpsc::channel::<Vec<u8>>(4);
         thread::Builder::new()
             .name("ws-zmq-action-goal".into())
@@ -66,17 +80,11 @@ impl ActionGatewayService {
             cancel: cancel_tx,
         })
     }
-
-    pub fn handle_send_goal(&self, payload: &[u8]) -> Result<SendGoalSession, RpcStatus> {
-        let goal = GoalCommand::decode(payload)
-            .map_err(|err| RpcStatus::invalid_argument(format!("decode GoalCommand: {err}")))?;
-        self.open_send_goal(goal)
-    }
 }
 
 /// Live SendGoal session: events plus an explicit cancel channel.
 pub struct SendGoalSession {
-    pub events: mpsc::Receiver<Result<ActionEvent, RpcStatus>>,
+    pub events: mpsc::Receiver<Result<ActionWireEvent, RpcStatus>>,
     /// Soft cancel: submit CANCEL on the bus and keep waiting for RESULT.
     pub cancel: mpsc::Sender<Vec<u8>>,
 }
@@ -102,20 +110,18 @@ fn timeout_from_ms(timeout_ms: u32) -> Option<Duration> {
     }
 }
 
-fn wire_kind_to_proto(kind: WireKind) -> ActionKind {
+fn wire_kind_to_u8(kind: WireKind) -> u8 {
     match kind {
-        WireKind::Goal => ActionKind::Goal,
-        WireKind::Feedback => ActionKind::Feedback,
-        WireKind::Result => ActionKind::Result,
-        WireKind::Cancel => ActionKind::Cancel,
+        WireKind::Goal => ACTION_KIND_GOAL,
+        WireKind::Feedback => ACTION_KIND_FEEDBACK,
+        WireKind::Result => ACTION_KIND_RESULT,
+        WireKind::Cancel => ACTION_KIND_CANCEL,
     }
 }
 
-fn to_event(msg: ActionMessage) -> ActionEvent {
-    ActionEvent {
-        action_name: msg.action_name,
-        goal_id: msg.goal_id,
-        kind: wire_kind_to_proto(msg.kind).into(),
+fn to_event(msg: ActionMessage) -> ActionWireEvent {
+    ActionWireEvent {
+        kind: wire_kind_to_u8(msg.kind),
         body: msg.body,
     }
 }
@@ -123,8 +129,8 @@ fn to_event(msg: ActionMessage) -> ActionEvent {
 fn run_goal(
     context: Arc<Context>,
     frontend: String,
-    goal: GoalCommand,
-    event_tx: mpsc::Sender<Result<ActionEvent, RpcStatus>>,
+    goal: GoalSpec,
+    event_tx: mpsc::Sender<Result<ActionWireEvent, RpcStatus>>,
     mut cancel_rx: mpsc::Receiver<Vec<u8>>,
 ) {
     let client = match ActionClient::with_context_hwm(

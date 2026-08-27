@@ -1,4 +1,4 @@
-//! Multiplexed WebSocket RPC smoke tests (V2: stream_id).
+//! Multiplexed WebSocket RPC smoke tests (V3: stream_id + opcode).
 
 #![cfg(feature = "ws")]
 
@@ -10,12 +10,9 @@ use std::thread;
 use std::time::Duration;
 
 use futures_util::{SinkExt, StreamExt};
-use prost::Message as ProstMessage;
-use robot_bus::ws_gateway::pb::{
-    ActionEvent, ActionKind, GoalCommand, SubscribeRequest, TopicMessage,
-};
 use robot_bus::ws_gateway::ws_frame::{
-    Frame, METHOD_PUBLISH, METHOD_SEND_GOAL, METHOD_SUBSCRIBE, decode_frame, encode_frame,
+    ACTION_KIND_RESULT, Frame, RequestHeader, decode_action_data, decode_frame,
+    decode_subscribe_data, encode_frame,
 };
 use robot_bus::{Publisher, RobotBusBroker, Subscriber};
 use support::{ephemeral_robot_bus_config, lock_brokers};
@@ -41,15 +38,12 @@ async fn ws_publish_reaches_zmq_subscriber() {
     let url = format!("ws://{listen}/ws");
     let (mut ws, _) = connect_async(&url).await.expect("ws connect");
 
-    let payload = TopicMessage {
-        topic: "ws.pub".into(),
-        payload: b"from-ws".to_vec(),
-    }
-    .encode_to_vec();
     let req = encode_frame(&Frame::Request {
         stream_id: 1,
-        method: METHOD_PUBLISH.to_string(),
-        payload,
+        header: RequestHeader::Publish {
+            topic: "ws.pub".into(),
+        },
+        body: b"from-ws".to_vec(),
     })
     .unwrap();
     ws.send(Message::Binary(req.into()))
@@ -67,7 +61,7 @@ async fn ws_publish_reaches_zmq_subscriber() {
             continue;
         };
         match decode_frame(&bin).expect("decode") {
-            Frame::Data { .. } => {}
+            Frame::Data { .. } => panic!("publish must not send DATA ack"),
             Frame::Trailer { status, .. } => {
                 assert_eq!(status, 0);
                 saw_trailer = true;
@@ -93,15 +87,13 @@ async fn ws_subscribe_receives_published_payload() {
     let url = format!("ws://{listen}/ws");
     let (mut ws, _) = connect_async(&url).await.expect("ws connect");
 
-    let payload = SubscribeRequest {
-        topic: "ws.sub".into(),
-        qos_depth: 8,
-    }
-    .encode_to_vec();
     let req = encode_frame(&Frame::Request {
         stream_id: 1,
-        method: METHOD_SUBSCRIBE.to_string(),
-        payload,
+        header: RequestHeader::Subscribe {
+            topic: "ws.sub".into(),
+            qos_depth: 8,
+        },
+        body: Vec::new(),
     })
     .unwrap();
     ws.send(Message::Binary(req.into()))
@@ -124,14 +116,14 @@ async fn ws_subscribe_receives_published_payload() {
             continue;
         };
         if let Frame::Data { payload, .. } = decode_frame(&bin).expect("decode") {
-            let tm = TopicMessage::decode(payload.as_slice()).expect("topic message");
-            assert_eq!(tm.topic, "ws.sub");
-            assert_eq!(tm.payload, b"hello-ws");
+            let (topic, body) = decode_subscribe_data(&payload).expect("subscribe data");
+            assert_eq!(topic, "ws.sub");
+            assert_eq!(body, b"hello-ws");
             got = true;
             break;
         }
     }
-    assert!(got, "expected DATA TopicMessage");
+    assert!(got, "expected DATA with topic header");
     let _ = ws.close(None).await;
     broker.stop().expect("stop");
 }
@@ -184,18 +176,15 @@ async fn ws_send_goal_soft_cancel_keeps_connection_for_result() {
 
     let url = format!("ws://{listen}/ws");
     let (mut ws, _) = connect_async(&url).await.expect("ws connect");
-    let payload = GoalCommand {
-        action_name: "act.ws_soft_cancel".into(),
-        goal: b"wait".to_vec(),
-        goal_id: "soft-goal".into(),
-        timeout_ms: 10_000,
-    }
-    .encode_to_vec();
     ws.send(Message::Binary(
         encode_frame(&Frame::Request {
             stream_id: 1,
-            method: METHOD_SEND_GOAL.to_string(),
-            payload,
+            header: RequestHeader::SendGoal {
+                action_name: "act.ws_soft_cancel".into(),
+                goal_id: "soft-goal".into(),
+                timeout_ms: 10_000,
+            },
+            body: b"wait".to_vec(),
         })
         .unwrap()
         .into(),
@@ -224,9 +213,9 @@ async fn ws_send_goal_soft_cancel_keeps_connection_for_result() {
         };
         match decode_frame(&bin).expect("decode") {
             Frame::Data { payload, .. } => {
-                let ev = ActionEvent::decode(payload.as_slice()).expect("event");
-                if ev.kind == i32::from(ActionKind::Result) {
-                    assert_eq!(ev.body, b"cancelled-ok");
+                let (kind, body) = decode_action_data(&payload).expect("event");
+                if kind == ACTION_KIND_RESULT {
+                    assert_eq!(body, b"cancelled-ok");
                     got_result = true;
                 }
             }
@@ -275,18 +264,15 @@ async fn ws_send_goal_disconnect_still_submits_cancel() {
 
     let url = format!("ws://{listen}/ws");
     let (mut ws, _) = connect_async(&url).await.expect("ws connect");
-    let payload = GoalCommand {
-        action_name: "act.ws_disconnect_cancel".into(),
-        goal: b"wait".to_vec(),
-        goal_id: "disconnect-goal".into(),
-        timeout_ms: 10_000,
-    }
-    .encode_to_vec();
     ws.send(Message::Binary(
         encode_frame(&Frame::Request {
             stream_id: 1,
-            method: METHOD_SEND_GOAL.to_string(),
-            payload,
+            header: RequestHeader::SendGoal {
+                action_name: "act.ws_disconnect_cancel".into(),
+                goal_id: "disconnect-goal".into(),
+                timeout_ms: 10_000,
+            },
+            body: b"wait".to_vec(),
         })
         .unwrap()
         .into(),
@@ -316,16 +302,14 @@ async fn ws_multiplex_two_streams_on_one_connection() {
     let url = format!("ws://{listen}/ws");
     let (mut ws, _) = connect_async(&url).await.expect("ws connect");
 
-    let sub_req = SubscribeRequest {
-        topic: "mux.a".into(),
-        qos_depth: 0,
-    }
-    .encode_to_vec();
     ws.send(Message::Binary(
         encode_frame(&Frame::Request {
             stream_id: 1,
-            method: METHOD_SUBSCRIBE.to_string(),
-            payload: sub_req,
+            header: RequestHeader::Subscribe {
+                topic: "mux.a".into(),
+                qos_depth: 0,
+            },
+            body: Vec::new(),
         })
         .unwrap()
         .into(),
@@ -335,16 +319,13 @@ async fn ws_multiplex_two_streams_on_one_connection() {
 
     tokio::time::sleep(Duration::from_millis(200)).await;
 
-    let pub_payload = TopicMessage {
-        topic: "mux.a".into(),
-        payload: b"mux-hi".to_vec(),
-    }
-    .encode_to_vec();
     ws.send(Message::Binary(
         encode_frame(&Frame::Request {
             stream_id: 3,
-            method: METHOD_PUBLISH.to_string(),
-            payload: pub_payload,
+            header: RequestHeader::Publish {
+                topic: "mux.a".into(),
+            },
+            body: b"mux-hi".to_vec(),
         })
         .unwrap()
         .into(),
@@ -365,8 +346,8 @@ async fn ws_multiplex_two_streams_on_one_connection() {
         };
         match decode_frame(&bin).expect("decode") {
             Frame::Data { stream_id, payload } if stream_id == 1 => {
-                let msg = TopicMessage::decode(payload.as_slice()).expect("topic");
-                assert_eq!(msg.payload, b"mux-hi");
+                let (_topic, body) = decode_subscribe_data(&payload).expect("topic");
+                assert_eq!(body, b"mux-hi");
                 saw_sub_data = true;
             }
             Frame::Trailer {

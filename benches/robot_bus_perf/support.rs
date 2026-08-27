@@ -294,7 +294,7 @@ fn render_perf_report(
             );
             md.push_str("- 指标为单机本机回环，机器相关，不作为 CI 门槛。\n\n");
             md.push_str("## 横比\n\n");
-            md.push_str("message 为 **max goodput**（丢包阈值内的最大可持续订阅速率）；括号为该档实测投递率。service/action 为完成速率。WS Node 本报告未测 publish，发布格为 —。\n\n");
+            md.push_str("message 为 **max goodput**（丢包阈值内的最大可持续订阅速率）；括号为该档实测投递率。service/action 为完成速率。\n\n");
             md.push_str("| 场景 | tcp | ipc | inproc | ws |\n");
         }
         ReportLang::En => {
@@ -327,7 +327,7 @@ fn render_perf_report(
                 "- Numbers are single-host loopback and machine-dependent; not CI gates.\n\n",
             );
             md.push_str("## Cross-compare\n\n");
-            md.push_str("message is **max goodput** (max sustainable subscribe rate within the loss budget); parentheses show measured delivery at that rate. service/action are completion rates. WS Node publish is not included in this report (cell is —).\n\n");
+            md.push_str("message is **max goodput** (max sustainable subscribe rate within the loss budget); parentheses show measured delivery at that rate. service/action are completion rates.\n\n");
             md.push_str("| Scenario | tcp | ipc | inproc | ws |\n");
         }
     }
@@ -337,10 +337,11 @@ fn render_perf_report(
         ReportLang::En => "message publish",
     };
     md.push_str(&format!(
-        "| {pub_label} | {} | {} | {} | — |\n",
+        "| {pub_label} | {} | {} | {} | {} |\n",
         cell_pub(results, "tcp", "message pub/sub"),
         cell_pub(results, "ipc", "message pub/sub"),
         cell_pub(results, "inproc", "message pub/sub"),
+        cell_pub(results, "ws", "message Publish"),
     ));
     md.push_str(&format!(
         "| message max goodput | {} | {} | {} | {} |\n",
@@ -556,7 +557,11 @@ fn sysctl_string(key: &str) -> Option<String> {
         return None;
     }
     let v = String::from_utf8_lossy(&out.stdout).trim().to_string();
-    if v.is_empty() { None } else { Some(v) }
+    if v.is_empty() {
+        None
+    } else {
+        Some(v)
+    }
 }
 
 fn sysctl_u64(key: &str) -> Option<u64> {

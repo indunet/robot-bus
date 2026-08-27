@@ -4,14 +4,12 @@ use std::collections::VecDeque;
 use std::sync::{Arc, Condvar, Mutex};
 use std::time::Duration;
 
-use prost::Message as ProstMessage;
 use zmq::Context;
 
 use crate::errors::BusError;
 use crate::service_bus::ServiceClient;
 use crate::zmq_helpers::HighWaterMark;
 
-use super::pb::{ServiceCallRequest, ServiceCallResponse};
 use super::rpc_status::RpcStatus;
 
 const SERVICE_CLIENT_POOL_SIZE: usize = 8;
@@ -87,20 +85,24 @@ impl ServiceGatewayService {
         }
     }
 
-    pub async fn call_service(&self, req: ServiceCallRequest) -> Result<Vec<u8>, RpcStatus> {
-        if req.service_name.is_empty() {
+    pub async fn call_service(
+        &self,
+        service_name: String,
+        body: Vec<u8>,
+        request_id: String,
+        timeout_ms: u32,
+    ) -> Result<Vec<u8>, RpcStatus> {
+        if service_name.is_empty() {
             return Err(RpcStatus::invalid_argument("service_name is required"));
         }
 
         let pool = Arc::clone(&self.pool);
-        let service_name = req.service_name;
-        let body = req.request;
-        let request_id = if req.request_id.is_empty() {
+        let request_id = if request_id.is_empty() {
             None
         } else {
-            Some(req.request_id)
+            Some(request_id)
         };
-        let timeout = timeout_from_ms(req.timeout_ms);
+        let timeout = timeout_from_ms(timeout_ms);
 
         tokio::task::spawn_blocking(move || {
             let client = pool.checkout()?;
@@ -112,14 +114,6 @@ impl ServiceGatewayService {
         })
         .await
         .map_err(|err| RpcStatus::internal(format!("service call join: {err}")))?
-    }
-
-    pub async fn handle_call(&self, payload: &[u8]) -> Result<ServiceCallResponse, RpcStatus> {
-        let req = ServiceCallRequest::decode(payload).map_err(|err| {
-            RpcStatus::invalid_argument(format!("decode ServiceCallRequest: {err}"))
-        })?;
-        let response = self.call_service(req).await?;
-        Ok(ServiceCallResponse { response })
     }
 }
 
