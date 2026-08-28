@@ -472,6 +472,7 @@ impl Node {
         service_name: String,
         handler: JsFunction,
         callback_group: Option<&JsCallbackGroup>,
+        qos_depth: Option<i32>,
     ) -> Result<ServiceHandle> {
         let tsfn: ServiceTsfn = handler.create_threadsafe_function(0, |ctx| {
             Ok(vec![Buffer::from(ctx.value)])
@@ -491,10 +492,17 @@ impl Node {
                 .unwrap_or_default()
         });
         let group = callback_group.map(|g| &g.inner);
-        let handle = self
-            .inner
-            .create_service_raw(&service_name, cb, group)
-            .map_err(bus_err)?;
+        use robot_bus::runtime::QosProfile;
+        let handle = match qos_depth.filter(|d| *d > 0) {
+            Some(depth) => self.inner.create_service_raw_with_qos(
+                &service_name,
+                QosProfile::keep_last(depth),
+                cb,
+                group,
+            ),
+            None => self.inner.create_service_raw(&service_name, cb, group),
+        }
+        .map_err(bus_err)?;
         Ok(ServiceHandle {
             inner: Some(handle),
         })
@@ -509,13 +517,20 @@ impl Node {
     }
 
     #[napi]
-    pub fn create_client(&mut self, service_name: String) -> Result<ServiceClient> {
-        Ok(ServiceClient {
-            inner: self
+    pub fn create_client(
+        &mut self,
+        service_name: String,
+        qos_depth: Option<i32>,
+    ) -> Result<ServiceClient> {
+        use robot_bus::runtime::QosProfile;
+        let inner = match qos_depth.filter(|d| *d > 0) {
+            Some(depth) => self
                 .inner
-                .create_client_raw(&service_name)
-                .map_err(bus_err)?,
-        })
+                .create_client_raw_with_qos(&service_name, QosProfile::keep_last(depth)),
+            None => self.inner.create_client_raw(&service_name),
+        }
+        .map_err(bus_err)?;
+        Ok(ServiceClient { inner })
     }
 
     /// Register an action server.
@@ -526,6 +541,7 @@ impl Node {
         action_name: String,
         handler: JsFunction,
         callback_group: Option<&JsCallbackGroup>,
+        qos_depth: Option<i32>,
     ) -> Result<ActionServerHandle> {
         let tsfn: ActionTsfn = handler.create_threadsafe_function(0, |ctx| {
             Ok(vec![Buffer::from(ctx.value)])
@@ -549,10 +565,17 @@ impl Node {
                 .unwrap_or_default()
         });
         let group = callback_group.map(|g| &g.inner);
-        let handle = self
-            .inner
-            .create_action_server_raw(&action_name, cb, group)
-            .map_err(bus_err)?;
+        use robot_bus::runtime::QosProfile;
+        let handle = match qos_depth.filter(|d| *d > 0) {
+            Some(depth) => self.inner.create_action_server_raw_with_qos(
+                &action_name,
+                QosProfile::keep_last(depth),
+                cb,
+                group,
+            ),
+            None => self.inner.create_action_server_raw(&action_name, cb, group),
+        }
+        .map_err(bus_err)?;
         Ok(ActionServerHandle {
             inner: Some(handle),
         })
@@ -567,13 +590,20 @@ impl Node {
     }
 
     #[napi]
-    pub fn create_action_client(&mut self, action_name: String) -> Result<ActionClient> {
-        Ok(ActionClient {
-            inner: self
+    pub fn create_action_client(
+        &mut self,
+        action_name: String,
+        qos_depth: Option<i32>,
+    ) -> Result<ActionClient> {
+        use robot_bus::runtime::QosProfile;
+        let inner = match qos_depth.filter(|d| *d > 0) {
+            Some(depth) => self
                 .inner
-                .create_action_client_raw(&action_name)
-                .map_err(bus_err)?,
-        })
+                .create_action_client_raw_with_qos(&action_name, QosProfile::keep_last(depth)),
+            None => self.inner.create_action_client_raw(&action_name),
+        }
+        .map_err(bus_err)?;
+        Ok(ActionClient { inner })
     }
 
     #[napi]

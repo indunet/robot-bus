@@ -35,9 +35,9 @@ class TopicQosKeepLast:
 class TopicQos:
     """KeepLast depth plus reliability.
 
-    Same type on ROS endpoints for topics, services, and actions.
-    Bus only uses it on topics (must be ``.best_effort()``); service / action
-    bus names have no QoS.
+    Same type on ROS and bus endpoints for topics, services, and actions.
+    ROS honors depth + reliability. Bus uses depth as ZMQ HWM and must be
+    ``.best_effort()`` (no DDS reliability).
     """
 
     def __init__(self, depth: int, best_effort: bool) -> None:
@@ -131,7 +131,7 @@ def _require_bus_best_effort(qos: TopicQos) -> None:
     if qos.is_reliable:
         raise ValueError(
             "ros2 bridge: bus TopicQos must be .best_effort() "
-            "(PUB/SUB has no reliable delivery)"
+            "(bus has no DDS reliability)"
         )
 
 
@@ -178,6 +178,7 @@ class ServiceWireContext:
         callback_group: Any,
         keep_alive: list,
         ros_qos: Any = None,
+        bus_qos_depth: Optional[int] = None,
     ) -> None:
         self.ros_node = ros_node
         self.bus_node = bus_node
@@ -188,6 +189,7 @@ class ServiceWireContext:
         self.callback_group = callback_group
         self.keep_alive = keep_alive
         self.ros_qos = ros_qos
+        self.bus_qos_depth = bus_qos_depth
 
     def retain(self, obj: Any) -> None:
         self.keep_alive.append(obj)
@@ -205,6 +207,7 @@ class ActionWireContext:
         callback_group: Any,
         keep_alive: list,
         ros_qos: Any = None,
+        bus_qos_depth: Optional[int] = None,
     ) -> None:
         self.ros_node = ros_node
         self.bus_node = bus_node
@@ -215,6 +218,7 @@ class ActionWireContext:
         self.callback_group = callback_group
         self.keep_alive = keep_alive
         self.ros_qos = ros_qos
+        self.bus_qos_depth = bus_qos_depth
 
     def retain(self, obj: Any) -> None:
         self.keep_alive.append(obj)
@@ -444,8 +448,10 @@ class Service:
     def from_ros(self, ros_service: str, ros_qos: TopicQos) -> "ServiceFromRos":
         return ServiceFromRos(self._parent, ros_service, _require_topic_qos(ros_qos, "from_ros"))
 
-    def from_bus(self, bus_service: str) -> "ServiceFromBus":
-        return ServiceFromBus(self._parent, bus_service)
+    def from_bus(self, bus_service: str, bus_qos: TopicQos) -> "ServiceFromBus":
+        qos = _require_topic_qos(bus_qos, "from_bus")
+        _require_bus_best_effort(qos)
+        return ServiceFromBus(self._parent, bus_service, qos)
 
 
 class ServiceFromRos:
@@ -454,16 +460,24 @@ class ServiceFromRos:
         self._ros_service = ros_service
         self._ros_qos = ros_qos
 
-    def to_bus(self, bus_service: str) -> "ServicePair":
+    def to_bus(self, bus_service: str, bus_qos: TopicQos) -> "ServicePair":
+        qos = _require_topic_qos(bus_qos, "to_bus")
+        _require_bus_best_effort(qos)
         return ServicePair(
-            self._parent, self._ros_service, bus_service, self._ros_qos, Direction.Ros2ToBus
+            self._parent,
+            self._ros_service,
+            bus_service,
+            self._ros_qos,
+            qos,
+            Direction.Ros2ToBus,
         )
 
 
 class ServiceFromBus:
-    def __init__(self, parent: Ros2BridgeBuilder, bus_service: str) -> None:
+    def __init__(self, parent: Ros2BridgeBuilder, bus_service: str, bus_qos: TopicQos) -> None:
         self._parent = parent
         self._bus_service = bus_service
+        self._bus_qos = bus_qos
 
     def to_ros(self, ros_service: str, ros_qos: TopicQos) -> "ServicePair":
         return ServicePair(
@@ -471,6 +485,7 @@ class ServiceFromBus:
             ros_service,
             self._bus_service,
             _require_topic_qos(ros_qos, "to_ros"),
+            self._bus_qos,
             Direction.BusToRos2,
         )
 
@@ -482,12 +497,14 @@ class ServicePair:
         ros_service: str,
         bus_service: str,
         ros_qos: TopicQos,
+        bus_qos: TopicQos,
         direction: Direction,
     ) -> None:
         self._parent = parent
         self._ros_service = ros_service
         self._bus_service = bus_service
         self._ros_qos = ros_qos
+        self._bus_qos = bus_qos
         self._direction = direction
 
     def mapper(self, mapper: Any) -> "ServiceReady":
@@ -498,6 +515,7 @@ class ServicePair:
             mapper,
             self._direction,
             self._ros_qos,
+            self._bus_qos,
         )
 
 
@@ -510,6 +528,7 @@ class ServiceReady:
         mapper: Any,
         direction: Direction,
         ros_qos: TopicQos,
+        bus_qos: TopicQos,
     ) -> None:
         self._parent = parent
         self._ros_service = ros_service
@@ -517,6 +536,7 @@ class ServiceReady:
         self._mapper = mapper
         self._direction = direction
         self._ros_qos = ros_qos
+        self._bus_qos = bus_qos
         self._timeout = SERVICE_CALL_TIMEOUT
 
     def timeout(self, timeout_secs: float) -> "ServiceReady":
@@ -532,6 +552,7 @@ class ServiceReady:
                 "direction": self._direction,
                 "timeout": self._timeout,
                 "ros_qos": self._ros_qos,
+                "bus_qos": self._bus_qos,
             }
         )
         return self._parent
@@ -544,8 +565,10 @@ class Action:
     def from_ros(self, ros_action: str, ros_qos: TopicQos) -> "ActionFromRos":
         return ActionFromRos(self._parent, ros_action, _require_topic_qos(ros_qos, "from_ros"))
 
-    def from_bus(self, bus_action: str) -> "ActionFromBus":
-        return ActionFromBus(self._parent, bus_action)
+    def from_bus(self, bus_action: str, bus_qos: TopicQos) -> "ActionFromBus":
+        qos = _require_topic_qos(bus_qos, "from_bus")
+        _require_bus_best_effort(qos)
+        return ActionFromBus(self._parent, bus_action, qos)
 
 
 class ActionFromRos:
@@ -554,16 +577,24 @@ class ActionFromRos:
         self._ros_action = ros_action
         self._ros_qos = ros_qos
 
-    def to_bus(self, bus_action: str) -> "ActionPair":
+    def to_bus(self, bus_action: str, bus_qos: TopicQos) -> "ActionPair":
+        qos = _require_topic_qos(bus_qos, "to_bus")
+        _require_bus_best_effort(qos)
         return ActionPair(
-            self._parent, self._ros_action, bus_action, self._ros_qos, Direction.Ros2ToBus
+            self._parent,
+            self._ros_action,
+            bus_action,
+            self._ros_qos,
+            qos,
+            Direction.Ros2ToBus,
         )
 
 
 class ActionFromBus:
-    def __init__(self, parent: Ros2BridgeBuilder, bus_action: str) -> None:
+    def __init__(self, parent: Ros2BridgeBuilder, bus_action: str, bus_qos: TopicQos) -> None:
         self._parent = parent
         self._bus_action = bus_action
+        self._bus_qos = bus_qos
 
     def to_ros(self, ros_action: str, ros_qos: TopicQos) -> "ActionPair":
         return ActionPair(
@@ -571,6 +602,7 @@ class ActionFromBus:
             ros_action,
             self._bus_action,
             _require_topic_qos(ros_qos, "to_ros"),
+            self._bus_qos,
             Direction.BusToRos2,
         )
 
@@ -582,12 +614,14 @@ class ActionPair:
         ros_action: str,
         bus_action: str,
         ros_qos: TopicQos,
+        bus_qos: TopicQos,
         direction: Direction,
     ) -> None:
         self._parent = parent
         self._ros_action = ros_action
         self._bus_action = bus_action
         self._ros_qos = ros_qos
+        self._bus_qos = bus_qos
         self._direction = direction
 
     def mapper(self, mapper: Any) -> "ActionReady":
@@ -598,6 +632,7 @@ class ActionPair:
             mapper,
             self._direction,
             self._ros_qos,
+            self._bus_qos,
         )
 
 
@@ -610,6 +645,7 @@ class ActionReady:
         mapper: Any,
         direction: Direction,
         ros_qos: TopicQos,
+        bus_qos: TopicQos,
     ) -> None:
         self._parent = parent
         self._ros_action = ros_action
@@ -617,6 +653,7 @@ class ActionReady:
         self._mapper = mapper
         self._direction = direction
         self._ros_qos = ros_qos
+        self._bus_qos = bus_qos
         self._timeout = ACTION_CALL_TIMEOUT
 
     def timeout(self, timeout_secs: float) -> "ActionReady":
@@ -632,6 +669,7 @@ class ActionReady:
                 "direction": self._direction,
                 "timeout": self._timeout,
                 "ros_qos": self._ros_qos,
+                "bus_qos": self._bus_qos,
             }
         )
         return self._parent
@@ -871,6 +909,7 @@ class Ros2Bridge:
                 self._callback_group,
                 self._keep_alive,
                 _ros_service_qos(route["ros_qos"]),
+                bus_qos_depth=route["bus_qos"].depth,
             )
             mapper.attach(ctx)
             return
@@ -879,7 +918,9 @@ class Ros2Bridge:
         timeout = route["timeout"]
         ros_qos = _ros_service_qos(route["ros_qos"])
         if route["direction"] == Direction.Ros2ToBus:
-            bus_client = self._bus.create_client(route["bus_service"])
+            bus_client = self._bus.create_client(
+                route["bus_service"], qos_depth=route["bus_qos"].depth
+            )
             lock = threading.Lock()
 
             def on_ros(request, response, m=mapper, client=bus_client, mtx=lock) -> Any:
@@ -929,7 +970,11 @@ class Ros2Bridge:
                 return b""
             return m.ros_resp_to_bus(resp)
 
-        self._keep_alive.append(self._bus.create_service(route["bus_service"], on_bus))
+        self._keep_alive.append(
+            self._bus.create_service(
+                route["bus_service"], on_bus, qos_depth=route["bus_qos"].depth
+            )
+        )
         self._keep_alive.append(ros_client)
 
     def _wire_action(self, route: dict[str, Any]) -> None:
@@ -947,6 +992,7 @@ class Ros2Bridge:
                 self._callback_group,
                 self._keep_alive,
                 route["ros_qos"],
+                bus_qos_depth=route["bus_qos"].depth,
             )
             mapper.attach(ctx)
             return
@@ -958,7 +1004,9 @@ class Ros2Bridge:
         srv_qos = _ros_service_qos(route["ros_qos"])
         fb_qos = _ros_qos(route["ros_qos"])
         if route["direction"] == Direction.Ros2ToBus:
-            bus_client = self._bus.create_action_client(route["bus_action"])
+            bus_client = self._bus.create_action_client(
+                route["bus_action"], qos_depth=route["bus_qos"].depth
+            )
             lock = threading.Lock()
 
             def execute_cb(goal_handle, m=mapper, client=bus_client, mtx=lock):
@@ -1047,7 +1095,11 @@ class Ros2Bridge:
             phases.append(("RESULT", m.ros_result_to_bus(result)))
             return phases
 
-        self._keep_alive.append(self._bus.create_action_server(route["bus_action"], on_bus))
+        self._keep_alive.append(
+            self._bus.create_action_server(
+                route["bus_action"], on_bus, qos_depth=route["bus_qos"].depth
+            )
+        )
         self._keep_alive.append(ros_client)
 
 

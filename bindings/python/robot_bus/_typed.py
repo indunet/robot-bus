@@ -374,6 +374,7 @@ def install_typed_node_api(Node: Any) -> None:
         service_name: str,
         handler: Callable[..., Any],
         callback_group: Any = None,
+        qos_depth: Any = None,
         *,
         request_type: Any = None,
         response_type: Any = None,
@@ -381,10 +382,18 @@ def install_typed_node_api(Node: Any) -> None:
         pair = _pair_types(
             request_type, response_type, what="create_service"
         )
-        if pair is None:
+
+        def _raw_svc(cb: Callable[..., Any]):
+            if qos_depth is None:
+                return _raw_create_service(
+                    self, service_name, cb, callback_group
+                )
             return _raw_create_service(
-                self, service_name, handler, callback_group
+                self, service_name, cb, callback_group, qos_depth=qos_depth
             )
+
+        if pair is None:
+            return _raw_svc(handler)
         req_t, resp_t = pair
 
         def _wrapped(body: bytes) -> bytes:
@@ -399,13 +408,12 @@ def install_typed_node_api(Node: Any) -> None:
                 )
             return _encode(resp)
 
-        return _raw_create_service(
-            self, service_name, _wrapped, callback_group
-        )
+        return _raw_svc(_wrapped)
 
     def create_client(
         self,
         service_name: str,
+        qos_depth: Any = None,
         *,
         request_type: Any = None,
         response_type: Any = None,
@@ -413,7 +421,10 @@ def install_typed_node_api(Node: Any) -> None:
         pair = _pair_types(
             request_type, response_type, what="create_client"
         )
-        raw = _raw_create_client(self, service_name)
+        if qos_depth is None:
+            raw = _raw_create_client(self, service_name)
+        else:
+            raw = _raw_create_client(self, service_name, qos_depth=qos_depth)
         if pair is None:
             return raw
         req_t, resp_t = pair
@@ -424,6 +435,7 @@ def install_typed_node_api(Node: Any) -> None:
         action_name: str,
         handler: Callable[..., Any],
         callback_group: Any = None,
+        qos_depth: Any = None,
         *,
         goal_type: Any = None,
         feedback_type: Any = None,
@@ -435,10 +447,18 @@ def install_typed_node_api(Node: Any) -> None:
             result_type,
             what="create_action_server",
         )
-        if types is None:
+
+        def _raw_act(cb: Callable[..., Any]):
+            if qos_depth is None:
+                return _raw_create_action_server(
+                    self, action_name, cb, callback_group
+                )
             return _raw_create_action_server(
-                self, action_name, handler, callback_group
+                self, action_name, cb, callback_group, qos_depth=qos_depth
             )
+
+        if types is None:
+            return _raw_act(handler)
         goal_t, fb_t, res_t = types
 
         def _wrapped(payload: bytes):
@@ -470,13 +490,12 @@ def install_typed_node_api(Node: Any) -> None:
                 out.append((phase, _encode(body)))
             return out
 
-        return _raw_create_action_server(
-            self, action_name, _wrapped, callback_group
-        )
+        return _raw_act(_wrapped)
 
     def create_action_client(
         self,
         action_name: str,
+        qos_depth: Any = None,
         *,
         goal_type: Any = None,
         feedback_type: Any = None,
@@ -488,7 +507,10 @@ def install_typed_node_api(Node: Any) -> None:
             result_type,
             what="create_action_client",
         )
-        raw = _raw_create_action_client(self, action_name)
+        if qos_depth is None:
+            raw = _raw_create_action_client(self, action_name)
+        else:
+            raw = _raw_create_action_client(self, action_name, qos_depth=qos_depth)
         if types is None:
             return raw
         goal_t, fb_t, res_t = types

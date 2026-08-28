@@ -262,11 +262,11 @@ node.create_timer(
 ```
 
 
-### 高水位（HWM）与 Topic QoS
+### 高水位（HWM）与 QoS
 
-Topic 可用 `QosProfile::keep_last(depth)`（ZMQ 节点上 → HWM）。**仅对 topic 生效**；reliability 固定 best-effort。Service / action 暂不接 QoS。
+`QosProfile::keep_last(depth)` 映射为 ZMQ HWM。Topic 用 PUB/SUB HWM；service / action 用 DEALER HWM（`snd` / `rcv` 都等于 depth）。reliability 固定 best-effort（RPC 也没有 DDS reliability）。不传 QoS 则用节点默认（topic 8/8，service 4/4，action 8/8）。
 
-**WebSocket** Node 上 KeepLast **只兑现订阅侧**：作为网关到客户端的队列深度（满则丢；不传则用网关默认 64）。发布侧 QoS 忽略（所有 WS 发布者共用网关的一个 PUB）。
+**WebSocket** Node 上 KeepLast **只兑现订阅侧**：作为网关到客户端的队列深度（满则丢；不传则用网关默认 64）。发布侧 QoS 忽略（所有 WS 发布者共用网关的一个 PUB）。WS 的 service / action 客户端没有 ZMQ socket，HWM 被忽略。
 
 ```rust
 use robot_bus::{Node, QosProfile, Publisher, HighWaterMark};
@@ -282,6 +282,12 @@ node.create_subscription_with_qos::<robot_bus::sensor_msgs::msg::v1::Imu, _>(
     |_topic, _imu| {},
     None,
 )?;
+
+// Service / action：同样 KeepLast → DEALER HWM
+// node.create_service_with_qos::<SetBool, _>("/reset", QosProfile::keep_last(16), handler, None)?;
+// let client = node.create_client_with_qos::<SetBool>("/reset", QosProfile::keep_last(16))?;
+// node.create_action_server_with_qos::<Fibonacci, _>("/fib", QosProfile::keep_last(16), handler, None)?;
+// let act = node.create_action_client_with_qos::<Fibonacci>("/fib", QosProfile::keep_last(16))?;
 
 // 底层仍可直接设 HWM：
 let raw = Publisher::with_hwm(None, HighWaterMark::new(10, 10))?;
@@ -328,7 +334,7 @@ fn main() -> robot_bus::Result<()> {
 }
 ```
 
-Raw bytes：`create_service_raw` / `create_client_raw`。endpoint 取自 `NodeOptions`（`service_frontend` / `service_backend`）。
+Raw bytes：`create_service_raw` / `create_client_raw`。KeepLast：`create_service_with_qos` / `create_client_with_qos`（以及 `*_raw_with_qos`）。endpoint 取自 `NodeOptions`（`service_frontend` / `service_backend`）。
 
 ---
 
@@ -359,7 +365,7 @@ fn main() -> robot_bus::Result<()> {
 
 完整可运行程序：[`examples/service_set_bool/`](../../examples/service_set_bool/)、[`examples/action_fibonacci/`](../../examples/action_fibonacci/)。
 
-Raw bytes：`create_action_server_raw` / `create_action_client_raw`。ZMQ 的 `cancel()` 发送显式 `CANCEL` 帧；gRPC 的 `cancel()` 取消对应的 server stream，两者都不提供“服务端已确认取消”的保证。
+Raw bytes：`create_action_server_raw` / `create_action_client_raw`。KeepLast：`create_action_server_with_qos` / `create_action_client_with_qos`（以及 `*_raw_with_qos`）。ZMQ 的 `cancel()` 发送显式 `CANCEL` 帧；gRPC 的 `cancel()` 取消对应的 server stream，两者都不提供“服务端已确认取消”的保证。
 
 ---
 

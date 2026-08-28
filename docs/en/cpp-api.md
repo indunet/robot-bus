@@ -174,7 +174,7 @@ pub.publish(imu);
 
 Full runnable programs: [`examples/topic_imu/`](../../examples/topic_imu/), [`examples/service_set_bool/`](../../examples/service_set_bool/), [`examples/action_fibonacci/`](../../examples/action_fibonacci/).
 
-Optional QoS: `qos_depth > 0` → KeepLast. `create_wall_timer` aliases `create_timer`. See also `wait_for_message` / client `wait_for_*`. Parameters: `list_parameters` → `{names, prefixes}`; `list_all_parameters`; `undeclare_parameter`.
+Optional QoS: `qos_depth > 0` → KeepLast (topic PUB/SUB HWM; service / action DEALER HWM). `create_publisher(topic, qos_depth)` / `create_subscription(..., group, qos_depth)` / `create_service(..., group, qos_depth)` / `create_client(name, qos_depth)` / `create_action_server(..., group, qos_depth)` / `create_action_client(name, qos_depth)`. `create_wall_timer` aliases `create_timer`. See also `wait_for_message` / client `wait_for_*`. Parameters: `list_parameters` → `{names, prefixes}`; `list_all_parameters`; `undeclare_parameter`.
 
 Raw bytes still work via `create_publisher` / `create_subscription` with manual Serialize/Parse.
 
@@ -246,7 +246,7 @@ auto bridge = robot_bus::Ros2Bridge::New("ros_bridge")
     .add()
     .service()
     .from_ros("/reset", robot_bus::TopicQos::keep_last(10).reliable())
-    .to_bus("/reset")
+    .to_bus("/reset", robot_bus::TopicQos::keep_last(8).best_effort())
     .mapper(robot_bus::TriggerServiceMapper{})
     .add()
     .build();

@@ -428,7 +428,8 @@ void wire_trigger(rclcpp::Node::SharedPtr ros_node, Node &bus_node, const Servic
   const double timeout = route.timeout_secs;
   if (route.direction == Direction::Ros2ToBus) {
     auto bus_client =
-        std::make_shared<ServiceClient>(bus_node.create_client(route.bus_service.c_str()));
+        std::make_shared<ServiceClient>(bus_node.create_client(route.bus_service.c_str(),
+                                                              route.bus_qos.depth()));
     auto mtx = std::make_shared<std::mutex>();
     auto srv = ros_node->create_service<std_srvs::srv::Trigger>(
         route.ros_service,
@@ -477,7 +478,8 @@ void wire_trigger(rclcpp::Node::SharedPtr ros_node, Node &bus_node, const Servic
             return trigger_resp_ros_to_bus(err);
           }
           return trigger_resp_ros_to_bus(*future.get());
-        })));
+        },
+        nullptr, route.bus_qos.depth()));
   }
 }
 
@@ -490,7 +492,8 @@ void wire_set_bool(rclcpp::Node::SharedPtr ros_node, Node &bus_node, const Servi
   const double timeout = route.timeout_secs;
   if (route.direction == Direction::Ros2ToBus) {
     auto bus_client =
-        std::make_shared<ServiceClient>(bus_node.create_client(route.bus_service.c_str()));
+        std::make_shared<ServiceClient>(bus_node.create_client(route.bus_service.c_str(),
+                                                              route.bus_qos.depth()));
     auto mtx = std::make_shared<std::mutex>();
     auto srv = ros_node->create_service<std_srvs::srv::SetBool>(
         route.ros_service,
@@ -538,7 +541,8 @@ void wire_set_bool(rclcpp::Node::SharedPtr ros_node, Node &bus_node, const Servi
             return set_bool_resp_ros_to_bus(err);
           }
           return set_bool_resp_ros_to_bus(*future.get());
-        })));
+        },
+        nullptr, route.bus_qos.depth()));
   }
 }
 
@@ -568,9 +572,9 @@ void wire_service(rclcpp::Node::SharedPtr ros_node, Node &bus_node, const Servic
                   std::vector<std::shared_ptr<void>> &keep_alive) {
   if (route.is_custom()) {
     keep_alive.push_back(std::shared_ptr<void>(route.custom));
-    ServiceWireContext ctx{ros_node,        bus_node,          route.ros_service, route.bus_service,
-                           route.direction, route.timeout_secs, route.ros_qos,     group,
-                           keep_alive};
+    ServiceWireContext ctx{ros_node,        bus_node,           route.ros_service, route.bus_service,
+                           route.direction, route.timeout_secs, route.ros_qos,     route.bus_qos,
+                           group,           keep_alive};
     route.custom->attach(ctx);
     return;
   }
@@ -587,7 +591,8 @@ void wire_fibonacci_ros_to_bus(
     std::vector<std::shared_ptr<rclcpp_action::ServerBase>> &ros_actions,
     std::vector<std::shared_ptr<ActionClient>> &bus_action_clients) {
   auto bus_client =
-      std::make_shared<ActionClient>(bus_node.create_action_client(route.bus_action.c_str()));
+      std::make_shared<ActionClient>(
+          bus_node.create_action_client(route.bus_action.c_str(), route.bus_qos.depth()));
   auto mtx = std::make_shared<std::mutex>();
   const double timeout = route.timeout_secs;
 
@@ -723,7 +728,8 @@ void wire_fibonacci_bus_to_ros(
           return fibonacci_empty_result_phases();
         }
         return phases;
-      })));
+      },
+      nullptr, route.bus_qos.depth()));
 }
 
 void wire_action_builtin(
@@ -754,9 +760,9 @@ void wire_action(rclcpp::Node::SharedPtr ros_node, Node &bus_node, const ActionR
                  std::vector<std::shared_ptr<void>> &keep_alive) {
   if (route.is_custom()) {
     keep_alive.push_back(std::shared_ptr<void>(route.custom));
-    ActionWireContext ctx{ros_node,        bus_node,           route.ros_action, route.bus_action,
-                          route.direction, route.timeout_secs, route.ros_qos,    group,
-                          keep_alive};
+    ActionWireContext ctx{ros_node,        bus_node,           route.ros_action,  route.bus_action,
+                          route.direction, route.timeout_secs, route.ros_qos,     route.bus_qos,
+                          group,           keep_alive};
     route.custom->attach(ctx);
     return;
   }

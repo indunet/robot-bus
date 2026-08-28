@@ -66,9 +66,9 @@ impl TopicQosKeepLast {
 
 /// Bridge QoS: KeepLast depth plus reliability.
 ///
-/// Same type on **ROS** endpoints for topics, services, and actions.
-/// Bus only uses it on **topics** (depth → HWM; must be `.best_effort()`).
-/// Service / action bus names have no QoS.
+/// Same type on **ROS** and **bus** endpoints for topics, services, and actions.
+/// ROS honors depth + reliability. Bus uses depth as ZMQ HWM (PUB/SUB or DEALER)
+/// and must be [`.best_effort()`](TopicQosKeepLast::best_effort) (no DDS reliability).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct TopicQos {
     depth: i32,
@@ -202,6 +202,7 @@ pub struct ServiceWireContext<'a> {
     pub direction: Direction,
     pub timeout: Duration,
     pub ros_qos: TopicQos,
+    pub bus_qos: TopicQos,
     pub ros_entities: &'a mut Vec<Box<dyn Any + Send + Sync>>,
 }
 
@@ -260,6 +261,7 @@ pub struct ActionWireContext<'a> {
     pub direction: Direction,
     pub timeout: Duration,
     pub ros_qos: TopicQos,
+    pub bus_qos: TopicQos,
     pub ros_entities: &'a mut Vec<Box<dyn Any + Send + Sync>>,
 }
 

@@ -384,7 +384,7 @@ bridge = (
     .add()
     .service()
     .from_ros("/reset", TopicQos.keep_last(10).reliable())
-    .to_bus("/reset")
+    .to_bus("/reset", TopicQos.keep_last(8).best_effort())
     .mapper(TriggerServiceMapper())
     .add()
     .build()
@@ -431,10 +431,10 @@ print(robot_bus.__version__)
 | `node.create_timer(period, callback)` → `TimerHandle` | Timer (attached to Node like topic) |
 | `CallbackGroupType` / `create_callback_group` | `MutuallyExclusive` / `Reentrant` |
 | `create_subscription(..., msg_type=, callback_group=, qos_depth=)` | typed: `callback(topic, Message)`; omit type: `callback(topic, bytes)`; WS: `qos_depth` sizes the gateway subscribe queue |
-| `create_service(..., request_type=, response_type=)` | typed: `handler(Request) -> Response`; otherwise raw bytes |
-| `create_client(..., request_type=, response_type=)` | typed → `TypedServiceClient`; `service_is_ready` / `wait_for_service` (console workers) |
-| `create_action_server(..., goal_type=, feedback_type=, result_type=)` | typed handler publishes feedback in real time via context and returns result; otherwise raw bytes |
-| `create_action_client(..., goal_type=, feedback_type=, result_type=)` | typed → `TypedActionClient`; `wait_for_action_server`; `send_goal` → GoalHandle |
+| `create_service(..., request_type=, response_type=, qos_depth=)` | typed: `handler(Request) -> Response`; otherwise raw bytes; `qos_depth>0` → KeepLast DEALER HWM |
+| `create_client(..., request_type=, response_type=, qos_depth=)` | typed → `TypedServiceClient`; `service_is_ready` / `wait_for_service` (console workers); `qos_depth>0` → KeepLast DEALER HWM |
+| `create_action_server(..., goal_type=, feedback_type=, result_type=, qos_depth=)` | typed handler publishes feedback in real time via context and returns result; otherwise raw bytes; `qos_depth>0` → KeepLast DEALER HWM |
+| `create_action_client(..., goal_type=, feedback_type=, result_type=, qos_depth=)` | typed → `TypedActionClient`; `wait_for_action_server`; `send_goal` → GoalHandle; `qos_depth>0` → KeepLast DEALER HWM |
 | `ActionGoalHandle` / `TypedActionGoalHandle` | Goal id, action name, blocking wait for result, best-effort cancel |
 | `Publisher(endpoint=None)` | Low-level XSUB connection (without Node) |
 | `ros2_available()` | Whether `import rclpy` succeeds (native Python bridge) |

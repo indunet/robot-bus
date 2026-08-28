@@ -174,7 +174,7 @@ pub.publish(imu);
 
 完整可运行程序：[`examples/topic_imu/`](../../examples/topic_imu/)、[`examples/service_set_bool/`](../../examples/service_set_bool/)、[`examples/action_fibonacci/`](../../examples/action_fibonacci/)。
 
-可选 QoS：`create_publisher(node, topic, qos_depth)` / `create_subscription(..., group, qos_depth)`（`depth > 0` → KeepLast）。  
+可选 QoS：`qos_depth > 0` → KeepLast（topic 为 PUB/SUB HWM；service / action 为 DEALER HWM）。`create_publisher(topic, qos_depth)` / `create_subscription(..., group, qos_depth)` / `create_service(..., group, qos_depth)` / `create_client(name, qos_depth)` / `create_action_server(..., group, qos_depth)` / `create_action_client(name, qos_depth)`。  
 `create_wall_timer` = `create_timer` 别名。`wait_for_message` / service·action client 的 `wait_for_*` 见 Node API。
 
 Raw bytes（手动 Serialize/Parse）仍可用：
@@ -257,7 +257,7 @@ auto bridge = robot_bus::Ros2Bridge::New("ros_bridge")
     .add()
     .service()
     .from_ros("/reset", robot_bus::TopicQos::keep_last(10).reliable())
-    .to_bus("/reset")
+    .to_bus("/reset", robot_bus::TopicQos::keep_last(8).best_effort())
     .mapper(robot_bus::TriggerServiceMapper{})
     .add()
     .build();

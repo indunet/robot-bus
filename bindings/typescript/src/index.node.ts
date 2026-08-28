@@ -411,28 +411,39 @@ export class Node {
     serviceName: string,
     handler: (body: Buffer) => Buffer,
     callbackGroup?: import("./native-types.js").JsCallbackGroup,
+    qosDepth?: number,
   ) {
-    return this.inner.createService(serviceName, handler, callbackGroup);
+    return this.inner.createService(
+      serviceName,
+      handler,
+      callbackGroup,
+      qosDepth,
+    );
   }
 
   destroyService(handle: import("./native-types.js").ServiceHandle): void {
     this.inner.destroyService(handle);
   }
 
-  createClient(serviceName: string): NativeServiceClient;
+  createClient(serviceName: string, qosDepth?: number): NativeServiceClient;
   createClient<Req extends object, Res extends object>(
     serviceName: string,
     requestType: MessageType<Req>,
     responseType: MessageType<Res>,
+    qosDepth?: number,
   ): TypedServiceClient<Req, Res>;
   createClient(
     serviceName: string,
-    requestType?: MessageType<object>,
+    requestTypeOrDepth?: MessageType<object> | number,
     responseType?: MessageType<object>,
+    qosDepth?: number,
   ): NativeServiceClient | TypedServiceClient<object, object> {
-    const client = this.inner.createClient(serviceName);
-    if (requestType && responseType) {
-      return new TypedServiceClient(client, requestType, responseType);
+    if (typeof requestTypeOrDepth === "number" || requestTypeOrDepth === undefined) {
+      return this.inner.createClient(serviceName, requestTypeOrDepth);
+    }
+    const client = this.inner.createClient(serviceName, qosDepth);
+    if (responseType) {
+      return new TypedServiceClient(client, requestTypeOrDepth, responseType);
     }
     return client;
   }
@@ -441,30 +452,46 @@ export class Node {
     actionName: string,
     handler: (payload: Buffer) => Array<{ phase: string; body: Buffer }>,
     callbackGroup?: import("./native-types.js").JsCallbackGroup,
+    qosDepth?: number,
   ) {
-    return this.inner.createActionServer(actionName, handler, callbackGroup);
+    return this.inner.createActionServer(
+      actionName,
+      handler,
+      callbackGroup,
+      qosDepth,
+    );
   }
 
   destroyActionServer(handle: import("./native-types.js").ActionServerHandle): void {
     this.inner.destroyActionServer(handle);
   }
 
-  createActionClient(actionName: string): NativeActionClient;
+  createActionClient(actionName: string, qosDepth?: number): NativeActionClient;
   createActionClient<G extends object, F extends object, R extends object>(
     actionName: string,
     goalType: MessageType<G>,
     feedbackType: MessageType<F>,
     resultType: MessageType<R>,
+    qosDepth?: number,
   ): TypedActionClient<G, F, R>;
   createActionClient(
     actionName: string,
-    goalType?: MessageType<object>,
+    goalTypeOrDepth?: MessageType<object> | number,
     feedbackType?: MessageType<object>,
     resultType?: MessageType<object>,
+    qosDepth?: number,
   ): NativeActionClient | TypedActionClient<object, object, object> {
-    const client = this.inner.createActionClient(actionName);
-    if (goalType && feedbackType && resultType) {
-      return new TypedActionClient(client, goalType, feedbackType, resultType);
+    if (typeof goalTypeOrDepth === "number" || goalTypeOrDepth === undefined) {
+      return this.inner.createActionClient(actionName, goalTypeOrDepth);
+    }
+    const client = this.inner.createActionClient(actionName, qosDepth);
+    if (feedbackType && resultType) {
+      return new TypedActionClient(
+        client,
+        goalTypeOrDepth,
+        feedbackType,
+        resultType,
+      );
     }
     return client;
   }

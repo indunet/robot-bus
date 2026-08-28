@@ -87,7 +87,7 @@ Canonical side-by-side examples: [api-compare.md](../zh/api-compare.md).
 | Service | `create_service` / `create_client` | same names; client `call` takes timeout |
 | Action | `ActionServer` / `ActionClient` | `create_action_server` / `create_action_client` + GoalHandle |
 | Timer | `create_wall_timer` | `create_timer(period, cb, group?)` |
-| QoS | full DDS QoS | Topic only: `QosProfile::keep_last(depth)` → ZMQ HWM / WS subscribe queue; **reliability fixed best-effort**. WS publish ignores QoS. Service/action: no QoS yet |
+| QoS | full DDS QoS | `QosProfile::keep_last(depth)` → ZMQ HWM (topic PUB/SUB; service/action DEALER) / WS subscribe queue; **reliability fixed best-effort**. WS publish ignores QoS. WS service/action ignore HWM |
 | Params | declare/get/set + remote/CLI | Same local shape + YAML load; **no** remote param server / CLI `-p` |
 | Callback groups | MutuallyExclusive / Reentrant | `CallbackGroupType::MutuallyExclusive` / `Reentrant` |
 
@@ -153,8 +153,8 @@ Ros2Bridge.new(name)
   .bus_tcp(...) | .bus_ipc() | .bus_discover(...)
   .from_ros(ros, TopicQos).to_bus(bus, TopicQos).mapper(...).lazy()?.add()
   .from_bus(bus, TopicQos).to_ros(ros, TopicQos).mapper(...).add()
-  .service().from_ros(ros, TopicQos).to_bus(bus).mapper(...).timeout(...).add()
-  .action().from_ros(ros, TopicQos).to_bus(bus).mapper(...).timeout(...).add()
+  .service().from_ros(ros, TopicQos).to_bus(bus, TopicQos).mapper(...).timeout(...).add()
+  .action().from_ros(ros, TopicQos).to_bus(bus, TopicQos).mapper(...).timeout(...).add()
   .build()
   .spin()
 ```
@@ -162,7 +162,7 @@ Ros2Bridge.new(name)
 Rules (from [ros2-bridge.md](../zh/ros2-bridge.md)):
 
 - Topic endpoints are **name + `TopicQos`**: `keep_last(n).reliable()` or `.best_effort()`. Bus must be `.best_effort()`.
-- Service / action: `TopicQos` on the ROS name only (`from_ros` / `to_ros`); bus RPC names have no QoS. **no `both`**.
+- Service / action: `TopicQos` on both names (`from_ros` / `to_ros` / `from_bus` / `to_bus`); bus must be `.best_effort()`. **no `both`**.
 - Mount with **concrete mapper objects**, not type-name strings
 - Built-ins: `StdMsgsStringMapper`, `SensorMsgsImageMapper`, `TriggerServiceMapper`, `SetBoolServiceMapper`, `FibonacciActionMapper`
 - Custom service/action: implement typed field converters (`TypedServiceMapper` / duck-typed Python / C++ CRTP)

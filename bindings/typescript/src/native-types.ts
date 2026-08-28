@@ -159,16 +159,18 @@ export declare class Node {
     serviceName: string,
     handler: (body: Buffer) => Buffer,
     callbackGroup?: JsCallbackGroup,
+    qosDepth?: number,
   ): ServiceHandle;
   destroyService(handle: ServiceHandle): void;
-  createClient(serviceName: string): ServiceClient;
+  createClient(serviceName: string, qosDepth?: number): ServiceClient;
   createActionServer(
     actionName: string,
     handler: (payload: Buffer) => Array<{ phase: string; body: Buffer }>,
     callbackGroup?: JsCallbackGroup,
+    qosDepth?: number,
   ): ActionServerHandle;
   destroyActionServer(handle: ActionServerHandle): void;
-  createActionClient(actionName: string): ActionClient;
+  createActionClient(actionName: string, qosDepth?: number): ActionClient;
   connectActionClient(): void;
   shutdownHandle(): ShutdownHandle;
   shutdown(): void;

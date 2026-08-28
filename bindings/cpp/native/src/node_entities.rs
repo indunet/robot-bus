@@ -237,6 +237,19 @@ pub extern "C" fn robot_bus_node_create_service(
     user: *mut c_void,
     group: *const RobotBusCallbackGroup,
 ) -> *mut RobotBusServiceHandle {
+    robot_bus_node_create_service_with_qos(n, service_name, handler, user, group, 0)
+}
+
+/** `depth <= 0` keeps the node RPC HWM; `depth > 0` maps to KeepLast. */
+#[unsafe(no_mangle)]
+pub extern "C" fn robot_bus_node_create_service_with_qos(
+    n: *mut RobotBusNode,
+    service_name: *const c_char,
+    handler: RobotBusServiceHandler,
+    user: *mut c_void,
+    group: *const RobotBusCallbackGroup,
+    depth: i32,
+) -> *mut RobotBusServiceHandle {
     if n.is_null() {
         set_error("null node");
         return ptr::null_mut();
@@ -272,10 +285,18 @@ pub extern "C" fn robot_bus_node_create_service(
     } else {
         Some(&unsafe { &*group }.inner)
     };
-    match unsafe { &mut *n }
-        .inner
-        .create_service_raw(service_name, cb, group)
-    {
+    match if depth > 0 {
+        unsafe { &mut *n }.inner.create_service_raw_with_qos(
+            service_name,
+            QosProfile::keep_last(depth),
+            cb,
+            group,
+        )
+    } else {
+        unsafe { &mut *n }
+            .inner
+            .create_service_raw(service_name, cb, group)
+    } {
         Ok(inner) => {
             clear_error();
             Box::into_raw(Box::new(RobotBusServiceHandle { inner }))
@@ -309,6 +330,16 @@ pub extern "C" fn robot_bus_node_create_client(
     n: *mut RobotBusNode,
     service_name: *const c_char,
 ) -> *mut RobotBusServiceClient {
+    robot_bus_node_create_client_with_qos(n, service_name, 0)
+}
+
+/** `depth <= 0` keeps the node RPC HWM; `depth > 0` maps to KeepLast. */
+#[unsafe(no_mangle)]
+pub extern "C" fn robot_bus_node_create_client_with_qos(
+    n: *mut RobotBusNode,
+    service_name: *const c_char,
+    depth: i32,
+) -> *mut RobotBusServiceClient {
     if n.is_null() {
         set_error("null node");
         return ptr::null_mut();
@@ -317,7 +348,13 @@ pub extern "C" fn robot_bus_node_create_client(
         Ok(s) => s,
         Err(_) => return ptr::null_mut(),
     };
-    match unsafe { &mut *n }.inner.create_client_raw(service_name) {
+    match if depth > 0 {
+        unsafe { &mut *n }
+            .inner
+            .create_client_raw_with_qos(service_name, QosProfile::keep_last(depth))
+    } else {
+        unsafe { &mut *n }.inner.create_client_raw(service_name)
+    } {
         Ok(inner) => {
             clear_error();
             Box::into_raw(Box::new(RobotBusServiceClient { inner }))
@@ -336,6 +373,19 @@ pub extern "C" fn robot_bus_node_create_action_server(
     handler: RobotBusActionHandler,
     user: *mut c_void,
     group: *const RobotBusCallbackGroup,
+) -> *mut RobotBusActionServerHandle {
+    robot_bus_node_create_action_server_with_qos(n, action_name, handler, user, group, 0)
+}
+
+/** `depth <= 0` keeps the node action HWM; `depth > 0` maps to KeepLast. */
+#[unsafe(no_mangle)]
+pub extern "C" fn robot_bus_node_create_action_server_with_qos(
+    n: *mut RobotBusNode,
+    action_name: *const c_char,
+    handler: RobotBusActionHandler,
+    user: *mut c_void,
+    group: *const RobotBusCallbackGroup,
+    depth: i32,
 ) -> *mut RobotBusActionServerHandle {
     if n.is_null() {
         set_error("null node");
@@ -391,10 +441,18 @@ pub extern "C" fn robot_bus_node_create_action_server(
     } else {
         Some(&unsafe { &*group }.inner)
     };
-    match unsafe { &mut *n }
-        .inner
-        .create_action_server_raw(action_name, cb, group)
-    {
+    match if depth > 0 {
+        unsafe { &mut *n }.inner.create_action_server_raw_with_qos(
+            action_name,
+            QosProfile::keep_last(depth),
+            cb,
+            group,
+        )
+    } else {
+        unsafe { &mut *n }
+            .inner
+            .create_action_server_raw(action_name, cb, group)
+    } {
         Ok(inner) => {
             clear_error();
             Box::into_raw(Box::new(RobotBusActionServerHandle { inner }))
@@ -428,6 +486,16 @@ pub extern "C" fn robot_bus_node_create_action_client(
     n: *mut RobotBusNode,
     action_name: *const c_char,
 ) -> *mut RobotBusActionClient {
+    robot_bus_node_create_action_client_with_qos(n, action_name, 0)
+}
+
+/** `depth <= 0` keeps the node action HWM; `depth > 0` maps to KeepLast. */
+#[unsafe(no_mangle)]
+pub extern "C" fn robot_bus_node_create_action_client_with_qos(
+    n: *mut RobotBusNode,
+    action_name: *const c_char,
+    depth: i32,
+) -> *mut RobotBusActionClient {
     if n.is_null() {
         set_error("null node");
         return ptr::null_mut();
@@ -436,7 +504,13 @@ pub extern "C" fn robot_bus_node_create_action_client(
         Ok(s) => s,
         Err(_) => return ptr::null_mut(),
     };
-    match unsafe { &mut *n }.inner.create_action_client_raw(action_name) {
+    match if depth > 0 {
+        unsafe { &mut *n }
+            .inner
+            .create_action_client_raw_with_qos(action_name, QosProfile::keep_last(depth))
+    } else {
+        unsafe { &mut *n }.inner.create_action_client_raw(action_name)
+    } {
         Ok(inner) => {
             clear_error();
             Box::into_raw(Box::new(RobotBusActionClient { inner }))

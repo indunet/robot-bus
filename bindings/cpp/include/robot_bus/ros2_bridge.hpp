@@ -58,9 +58,9 @@ class TopicQosKeepLast {
   int32_t depth_;
 };
 
-/// KeepLast depth plus reliability. Same type on **ROS** endpoints for topics,
-/// services, and actions. Bus only uses it on **topics** (must be `.best_effort()`);
-/// service / action bus names have no QoS.
+/// KeepLast depth plus reliability. Same type on **ROS** and **bus** endpoints
+/// for topics, services, and actions. ROS honors depth + reliability. Bus uses
+/// depth as ZMQ HWM and must be `.best_effort()` (no DDS reliability).
 class TopicQos {
  public:
   static TopicQosKeepLast keep_last(int32_t depth) { return TopicQosKeepLast(depth); }
@@ -82,7 +82,7 @@ inline void require_bus_best_effort(const TopicQos &qos) {
   if (qos.is_reliable()) {
     throw Error(
         "ros2 bridge: bus TopicQos must be .best_effort() "
-        "(PUB/SUB has no reliable delivery)");
+        "(bus has no DDS reliability)");
   }
 }
 
@@ -154,6 +154,7 @@ struct ServiceWireContext {
   Direction direction;
   double timeout_secs;
   TopicQos ros_qos;
+  TopicQos bus_qos;
   rclcpp::CallbackGroup::SharedPtr callback_group;
   std::vector<std::shared_ptr<void>> &keep_alive;
 
@@ -172,6 +173,7 @@ struct ActionWireContext {
   Direction direction;
   double timeout_secs;
   TopicQos ros_qos;
+  TopicQos bus_qos;
   rclcpp::CallbackGroup::SharedPtr callback_group;
   std::vector<std::shared_ptr<void>> &keep_alive;
 
@@ -295,6 +297,7 @@ struct ServiceRouteSpec {
   ServiceBuiltin builtin = ServiceBuiltin::Trigger;
   std::shared_ptr<ServiceMapper> custom;
   TopicQos ros_qos = TopicQos::keep_last(10).reliable();
+  TopicQos bus_qos = TopicQos::keep_last(8).best_effort();
   bool is_custom() const { return static_cast<bool>(custom); }
 };
 
@@ -306,6 +309,7 @@ struct ActionRouteSpec {
   ActionBuiltin builtin = ActionBuiltin::Fibonacci;
   std::shared_ptr<ActionMapper> custom;
   TopicQos ros_qos = TopicQos::keep_last(10).reliable();
+  TopicQos bus_qos = TopicQos::keep_last(8).best_effort();
   bool is_custom() const { return static_cast<bool>(custom); }
 };
 
@@ -504,7 +508,7 @@ class Ros2BridgeService {
   Ros2BridgeService &operator=(Ros2BridgeService &&) noexcept = default;
 
   Ros2BridgeServiceFromRos from_ros(std::string ros_service, TopicQos ros_qos) &&;
-  Ros2BridgeServiceFromBus from_bus(std::string bus_service) &&;
+  Ros2BridgeServiceFromBus from_bus(std::string bus_service, TopicQos bus_qos) &&;
 
  private:
   std::shared_ptr<detail::BuilderState> state_;
@@ -521,7 +525,7 @@ class Ros2BridgeServiceFromRos {
   Ros2BridgeServiceFromRos(Ros2BridgeServiceFromRos &&) noexcept = default;
   Ros2BridgeServiceFromRos &operator=(Ros2BridgeServiceFromRos &&) noexcept = default;
 
-  Ros2BridgeServicePair to_bus(std::string bus_service) &&;
+  Ros2BridgeServicePair to_bus(std::string bus_service, TopicQos bus_qos) &&;
 
  private:
   std::shared_ptr<detail::BuilderState> state_;
@@ -531,8 +535,9 @@ class Ros2BridgeServiceFromRos {
 
 class Ros2BridgeServiceFromBus {
  public:
-  Ros2BridgeServiceFromBus(std::shared_ptr<detail::BuilderState> state, std::string bus_service)
-      : state_(std::move(state)), bus_service_(std::move(bus_service)) {}
+  Ros2BridgeServiceFromBus(std::shared_ptr<detail::BuilderState> state, std::string bus_service,
+                           TopicQos bus_qos)
+      : state_(std::move(state)), bus_service_(std::move(bus_service)), bus_qos_(bus_qos) {}
 
   Ros2BridgeServiceFromBus(const Ros2BridgeServiceFromBus &) = delete;
   Ros2BridgeServiceFromBus &operator=(const Ros2BridgeServiceFromBus &) = delete;
@@ -544,16 +549,19 @@ class Ros2BridgeServiceFromBus {
  private:
   std::shared_ptr<detail::BuilderState> state_;
   std::string bus_service_;
+  TopicQos bus_qos_;
 };
 
 class Ros2BridgeServicePair {
  public:
   Ros2BridgeServicePair(std::shared_ptr<detail::BuilderState> state, std::string ros_service,
-                        std::string bus_service, TopicQos ros_qos, Direction direction)
+                        std::string bus_service, TopicQos ros_qos, TopicQos bus_qos,
+                        Direction direction)
       : state_(std::move(state)),
         ros_service_(std::move(ros_service)),
         bus_service_(std::move(bus_service)),
         ros_qos_(ros_qos),
+        bus_qos_(bus_qos),
         direction_(direction) {}
 
   Ros2BridgeServicePair(const Ros2BridgeServicePair &) = delete;
@@ -570,6 +578,7 @@ class Ros2BridgeServicePair {
   std::string ros_service_;
   std::string bus_service_;
   TopicQos ros_qos_;
+  TopicQos bus_qos_;
   Direction direction_;
 };
 
@@ -577,12 +586,14 @@ class Ros2BridgeServiceReady {
  public:
   Ros2BridgeServiceReady(std::shared_ptr<detail::BuilderState> state, std::string ros_service,
                          std::string bus_service, Direction direction, TopicQos ros_qos,
-                         detail::ServiceBuiltin builtin, std::shared_ptr<ServiceMapper> custom)
+                         TopicQos bus_qos, detail::ServiceBuiltin builtin,
+                         std::shared_ptr<ServiceMapper> custom)
       : state_(std::move(state)),
         ros_service_(std::move(ros_service)),
         bus_service_(std::move(bus_service)),
         direction_(direction),
         ros_qos_(ros_qos),
+        bus_qos_(bus_qos),
         builtin_(builtin),
         custom_(std::move(custom)) {}
 
@@ -604,6 +615,7 @@ class Ros2BridgeServiceReady {
   std::string bus_service_;
   Direction direction_;
   TopicQos ros_qos_ = TopicQos::keep_last(10).reliable();
+  TopicQos bus_qos_ = TopicQos::keep_last(8).best_effort();
   double timeout_secs_ = kServiceCallTimeoutSecs;
   detail::ServiceBuiltin builtin_ = detail::ServiceBuiltin::Trigger;
   std::shared_ptr<ServiceMapper> custom_;
@@ -621,7 +633,7 @@ class Ros2BridgeAction {
   Ros2BridgeAction &operator=(Ros2BridgeAction &&) noexcept = default;
 
   Ros2BridgeActionFromRos from_ros(std::string ros_action, TopicQos ros_qos) &&;
-  Ros2BridgeActionFromBus from_bus(std::string bus_action) &&;
+  Ros2BridgeActionFromBus from_bus(std::string bus_action, TopicQos bus_qos) &&;
 
  private:
   std::shared_ptr<detail::BuilderState> state_;
@@ -638,7 +650,7 @@ class Ros2BridgeActionFromRos {
   Ros2BridgeActionFromRos(Ros2BridgeActionFromRos &&) noexcept = default;
   Ros2BridgeActionFromRos &operator=(Ros2BridgeActionFromRos &&) noexcept = default;
 
-  Ros2BridgeActionPair to_bus(std::string bus_action) &&;
+  Ros2BridgeActionPair to_bus(std::string bus_action, TopicQos bus_qos) &&;
 
  private:
   std::shared_ptr<detail::BuilderState> state_;
@@ -648,8 +660,9 @@ class Ros2BridgeActionFromRos {
 
 class Ros2BridgeActionFromBus {
  public:
-  Ros2BridgeActionFromBus(std::shared_ptr<detail::BuilderState> state, std::string bus_action)
-      : state_(std::move(state)), bus_action_(std::move(bus_action)) {}
+  Ros2BridgeActionFromBus(std::shared_ptr<detail::BuilderState> state, std::string bus_action,
+                          TopicQos bus_qos)
+      : state_(std::move(state)), bus_action_(std::move(bus_action)), bus_qos_(bus_qos) {}
 
   Ros2BridgeActionFromBus(const Ros2BridgeActionFromBus &) = delete;
   Ros2BridgeActionFromBus &operator=(const Ros2BridgeActionFromBus &) = delete;
@@ -661,16 +674,19 @@ class Ros2BridgeActionFromBus {
  private:
   std::shared_ptr<detail::BuilderState> state_;
   std::string bus_action_;
+  TopicQos bus_qos_;
 };
 
 class Ros2BridgeActionPair {
  public:
   Ros2BridgeActionPair(std::shared_ptr<detail::BuilderState> state, std::string ros_action,
-                       std::string bus_action, TopicQos ros_qos, Direction direction)
+                       std::string bus_action, TopicQos ros_qos, TopicQos bus_qos,
+                       Direction direction)
       : state_(std::move(state)),
         ros_action_(std::move(ros_action)),
         bus_action_(std::move(bus_action)),
         ros_qos_(ros_qos),
+        bus_qos_(bus_qos),
         direction_(direction) {}
 
   Ros2BridgeActionPair(const Ros2BridgeActionPair &) = delete;
@@ -686,6 +702,7 @@ class Ros2BridgeActionPair {
   std::string ros_action_;
   std::string bus_action_;
   TopicQos ros_qos_;
+  TopicQos bus_qos_;
   Direction direction_;
 };
 
@@ -693,12 +710,14 @@ class Ros2BridgeActionReady {
  public:
   Ros2BridgeActionReady(std::shared_ptr<detail::BuilderState> state, std::string ros_action,
                         std::string bus_action, Direction direction, TopicQos ros_qos,
-                        detail::ActionBuiltin builtin, std::shared_ptr<ActionMapper> custom)
+                        TopicQos bus_qos, detail::ActionBuiltin builtin,
+                        std::shared_ptr<ActionMapper> custom)
       : state_(std::move(state)),
         ros_action_(std::move(ros_action)),
         bus_action_(std::move(bus_action)),
         direction_(direction),
         ros_qos_(ros_qos),
+        bus_qos_(bus_qos),
         builtin_(builtin),
         custom_(std::move(custom)) {}
 
@@ -720,6 +739,7 @@ class Ros2BridgeActionReady {
   std::string bus_action_;
   Direction direction_;
   TopicQos ros_qos_ = TopicQos::keep_last(10).reliable();
+  TopicQos bus_qos_ = TopicQos::keep_last(8).best_effort();
   double timeout_secs_ = kActionCallTimeoutSecs;
   detail::ActionBuiltin builtin_ = detail::ActionBuiltin::Fibonacci;
   std::shared_ptr<ActionMapper> custom_;
@@ -937,30 +957,34 @@ inline Ros2BridgeServiceFromRos Ros2BridgeService::from_ros(std::string ros_serv
   return Ros2BridgeServiceFromRos(std::move(state_), std::move(ros_service), ros_qos);
 }
 
-inline Ros2BridgeServiceFromBus Ros2BridgeService::from_bus(std::string bus_service) && {
-  return Ros2BridgeServiceFromBus(std::move(state_), std::move(bus_service));
+inline Ros2BridgeServiceFromBus Ros2BridgeService::from_bus(std::string bus_service,
+                                                            TopicQos bus_qos) && {
+  require_bus_best_effort(bus_qos);
+  return Ros2BridgeServiceFromBus(std::move(state_), std::move(bus_service), bus_qos);
 }
 
-inline Ros2BridgeServicePair Ros2BridgeServiceFromRos::to_bus(std::string bus_service) && {
+inline Ros2BridgeServicePair Ros2BridgeServiceFromRos::to_bus(std::string bus_service,
+                                                             TopicQos bus_qos) && {
+  require_bus_best_effort(bus_qos);
   return Ros2BridgeServicePair(std::move(state_), std::move(ros_service_), std::move(bus_service),
-                               ros_qos_, Direction::Ros2ToBus);
+                               ros_qos_, bus_qos, Direction::Ros2ToBus);
 }
 
 inline Ros2BridgeServicePair Ros2BridgeServiceFromBus::to_ros(std::string ros_service,
                                                              TopicQos ros_qos) && {
   return Ros2BridgeServicePair(std::move(state_), std::move(ros_service), std::move(bus_service_),
-                               ros_qos, Direction::BusToRos2);
+                               ros_qos, bus_qos_, Direction::BusToRos2);
 }
 
 inline Ros2BridgeServiceReady Ros2BridgeServicePair::mapper(TriggerServiceMapper) && {
   return Ros2BridgeServiceReady(std::move(state_), std::move(ros_service_),
-                                std::move(bus_service_), direction_, ros_qos_,
+                                std::move(bus_service_), direction_, ros_qos_, bus_qos_,
                                 detail::ServiceBuiltin::Trigger, nullptr);
 }
 
 inline Ros2BridgeServiceReady Ros2BridgeServicePair::mapper(SetBoolServiceMapper) && {
   return Ros2BridgeServiceReady(std::move(state_), std::move(ros_service_),
-                                std::move(bus_service_), direction_, ros_qos_,
+                                std::move(bus_service_), direction_, ros_qos_, bus_qos_,
                                 detail::ServiceBuiltin::SetBool, nullptr);
 }
 
@@ -970,7 +994,7 @@ inline Ros2BridgeServiceReady Ros2BridgeServicePair::mapper(
     throw Error("ros2 bridge service: mapper shared_ptr must not be null");
   }
   return Ros2BridgeServiceReady(std::move(state_), std::move(ros_service_),
-                                std::move(bus_service_), direction_, ros_qos_,
+                                std::move(bus_service_), direction_, ros_qos_, bus_qos_,
                                 detail::ServiceBuiltin::Trigger, std::move(mapper));
 }
 
@@ -983,6 +1007,7 @@ inline Ros2BridgeBuilder Ros2BridgeServiceReady::add() && {
   spec.builtin = builtin_;
   spec.custom = std::move(custom_);
   spec.ros_qos = ros_qos_;
+  spec.bus_qos = bus_qos_;
   state_->services.push_back(std::move(spec));
   return Ros2BridgeBuilder(std::move(state_));
 }
@@ -992,24 +1017,29 @@ inline Ros2BridgeActionFromRos Ros2BridgeAction::from_ros(std::string ros_action
   return Ros2BridgeActionFromRos(std::move(state_), std::move(ros_action), ros_qos);
 }
 
-inline Ros2BridgeActionFromBus Ros2BridgeAction::from_bus(std::string bus_action) && {
-  return Ros2BridgeActionFromBus(std::move(state_), std::move(bus_action));
+inline Ros2BridgeActionFromBus Ros2BridgeAction::from_bus(std::string bus_action,
+                                                         TopicQos bus_qos) && {
+  require_bus_best_effort(bus_qos);
+  return Ros2BridgeActionFromBus(std::move(state_), std::move(bus_action), bus_qos);
 }
 
-inline Ros2BridgeActionPair Ros2BridgeActionFromRos::to_bus(std::string bus_action) && {
+inline Ros2BridgeActionPair Ros2BridgeActionFromRos::to_bus(std::string bus_action,
+                                                           TopicQos bus_qos) && {
+  require_bus_best_effort(bus_qos);
   return Ros2BridgeActionPair(std::move(state_), std::move(ros_action_), std::move(bus_action),
-                              ros_qos_, Direction::Ros2ToBus);
+                              ros_qos_, bus_qos, Direction::Ros2ToBus);
 }
 
 inline Ros2BridgeActionPair Ros2BridgeActionFromBus::to_ros(std::string ros_action,
                                                            TopicQos ros_qos) && {
   return Ros2BridgeActionPair(std::move(state_), std::move(ros_action), std::move(bus_action_),
-                              ros_qos, Direction::BusToRos2);
+                              ros_qos, bus_qos_, Direction::BusToRos2);
 }
 
 inline Ros2BridgeActionReady Ros2BridgeActionPair::mapper(FibonacciActionMapper) && {
   return Ros2BridgeActionReady(std::move(state_), std::move(ros_action_), std::move(bus_action_),
-                               direction_, ros_qos_, detail::ActionBuiltin::Fibonacci, nullptr);
+                               direction_, ros_qos_, bus_qos_, detail::ActionBuiltin::Fibonacci,
+                               nullptr);
 }
 
 inline Ros2BridgeActionReady Ros2BridgeActionPair::mapper(
@@ -1018,7 +1048,7 @@ inline Ros2BridgeActionReady Ros2BridgeActionPair::mapper(
     throw Error("ros2 bridge action: mapper shared_ptr must not be null");
   }
   return Ros2BridgeActionReady(std::move(state_), std::move(ros_action_), std::move(bus_action_),
-                               direction_, ros_qos_, detail::ActionBuiltin::Fibonacci,
+                               direction_, ros_qos_, bus_qos_, detail::ActionBuiltin::Fibonacci,
                                std::move(mapper));
 }
 
@@ -1031,6 +1061,7 @@ inline Ros2BridgeBuilder Ros2BridgeActionReady::add() && {
   spec.builtin = builtin_;
   spec.custom = std::move(custom_);
   spec.ros_qos = ros_qos_;
+  spec.bus_qos = bus_qos_;
   state_->actions.push_back(std::move(spec));
   return Ros2BridgeBuilder(std::move(state_));
 }

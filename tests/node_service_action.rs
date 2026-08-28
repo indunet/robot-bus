@@ -241,6 +241,65 @@ fn node_action_client_fibonacci_typed() {
 }
 
 #[test]
+fn node_service_action_qos_keep_last_maps_to_hwm() {
+    let _guard = lock_brokers();
+    let broker = RobotBusBroker::start(ephemeral_robot_bus_config()).expect("broker");
+    let options = node_options_from_broker(&broker);
+    let qos = robot_bus::QosProfile::keep_last(16);
+
+    {
+        let mut server = Node::with_options("qos_server", options.clone());
+        let mut client_node = Node::with_options("qos_client", options);
+        let executor = SingleThreadedExecutor::new();
+        executor.add_node(&mut server).expect("add server");
+
+        server
+            .create_service_raw_with_qos(
+                "echo",
+                qos,
+                Arc::new(|body| body.to_vec()),
+                None,
+            )
+            .expect("create_service_raw_with_qos");
+        assert_eq!(
+            server.rpc_hwm().expect("server default rpc hwm"),
+            robot_bus::HighWaterMark::RPC
+        );
+
+        let client = client_node
+            .create_client_raw_with_qos("echo", qos)
+            .expect("create_client_raw_with_qos");
+        assert_eq!(
+            client.high_water_mark().expect("client hwm"),
+            robot_bus::HighWaterMark::new(16, 16)
+        );
+
+        server
+            .create_action_server_raw_with_qos(
+                "fib",
+                qos,
+                Arc::new(|_| vec![("RESULT".into(), Vec::new())]),
+                None,
+            )
+            .expect("create_action_server_raw_with_qos");
+        assert_eq!(
+            server.action_hwm().expect("server default action hwm"),
+            robot_bus::HighWaterMark::ACTION
+        );
+
+        let action = client_node
+            .create_action_client_raw_with_qos("fib", qos)
+            .expect("create_action_client_raw_with_qos");
+        assert_eq!(
+            action.high_water_mark().expect("action client hwm"),
+            robot_bus::HighWaterMark::new(16, 16)
+        );
+    }
+
+    broker.stop().expect("stop broker");
+}
+
+#[test]
 fn service_frontend_option_override() {
     let opts = NodeOptions {
         service_frontend: Some("tcp://127.0.0.1:19999".into()),

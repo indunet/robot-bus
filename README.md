@@ -271,7 +271,7 @@ bridge = (
     .add()
     .service()
     .from_ros("/reset", TopicQos.keep_last(10).reliable())
-    .to_bus("/reset")
+    .to_bus("/reset", TopicQos.keep_last(8).best_effort())
     .mapper(TriggerServiceMapper())
     .add()
     .build()

@@ -51,7 +51,7 @@ From the robot-bus project collect:
 - Topic / service / action **names** and protobuf type full names (`sensor_msgs.msg.v1.Imu`)
 - Custom `.proto` under the app or only built-in bus types
 - Local parameters / YAML (`ros__parameters`) — note lack of remote param server on bus
-- QoS: only KeepLast depth on topics; reliability is best-effort — when moving to ROS, pick explicit QoS (often `SensorDataQoS` / reliable as appropriate)
+- QoS: KeepLast depth on topics, services, and actions; reliability is best-effort — when moving to ROS, pick explicit QoS (often `SensorDataQoS` / reliable as appropriate)
 - Any existing `ros2_bridge` usage (already half-migrated)
 
 Target ROS client library usually matches the bus language:
@@ -97,7 +97,7 @@ Reverse of [api-compare.md](../zh/api-compare.md).
 | Service client | `call(req, Some(timeout))` | `call` / async patterns per client lib |
 | Action | `send_goal` → GoalHandle → `result` / `cancel` | Same conceptual split; use rcl* action APIs |
 | Timer | `create_timer` | `create_wall_timer` / equivalent |
-| QoS | KeepLast depth only, best-effort | Full DDS profiles — **choose deliberately** |
+| QoS | KeepLast depth only (topic PUB/SUB HWM, service/action DEALER HWM), best-effort | Full DDS profiles — **choose deliberately** |
 | Params | local declare/get/set + YAML | declare/get/set + remote/CLI/launch overrides |
 
 ### Rust (rclrs) sketch

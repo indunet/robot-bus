@@ -84,7 +84,8 @@ class TypedServiceMapper : public ServiceMapper {
     const double timeout = ctx.timeout_secs;
     if (ctx.direction == Direction::Ros2ToBus) {
       auto bus_client =
-          std::make_shared<ServiceClient>(ctx.bus_node.create_client(ctx.bus_service.c_str()));
+          std::make_shared<ServiceClient>(
+              ctx.bus_node.create_client(ctx.bus_service.c_str(), ctx.bus_qos.depth()));
       auto mtx = std::make_shared<std::mutex>();
       auto srv = ctx.ros_node->template create_service<RosSrv>(
           ctx.ros_service,
@@ -127,7 +128,8 @@ class TypedServiceMapper : public ServiceMapper {
                   self->error_response("timed out waiting for ROS response"));
             }
             return self->ros_resp_to_bus(*future.get());
-          })));
+          },
+          nullptr, ctx.bus_qos.depth()));
     }
   }
 
@@ -150,7 +152,7 @@ class TypedActionMapper : public ActionMapper {
     const double timeout = ctx.timeout_secs;
     if (ctx.direction == Direction::Ros2ToBus) {
       auto bus_client = std::make_shared<ActionClient>(
-          ctx.bus_node.create_action_client(ctx.bus_action.c_str()));
+          ctx.bus_node.create_action_client(ctx.bus_action.c_str(), ctx.bus_qos.depth()));
       auto mtx = std::make_shared<std::mutex>();
 
       auto handle_goal = [](const rclcpp_action::GoalUUID &, std::shared_ptr<const Goal>) {
@@ -271,7 +273,8 @@ class TypedActionMapper : public ActionMapper {
               return {{"RESULT", self->ros_result_to_bus(Result{})}};
             }
             return phases;
-          })));
+          },
+          nullptr, ctx.bus_qos.depth()));
     }
   }
 };

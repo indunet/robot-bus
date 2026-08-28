@@ -50,18 +50,18 @@ cargo run --bin robot_bus_broker    # 或已安装的 robot-bus-broker
 
 ## 统一契约
 
-Topic 两端各写 **名字 + `TopicQos`**。ROS 的 service / action 端点用同一份 `TopicQos`（bus RPC 名字不带 QoS）：
+Topic / service / action 两端各写 **名字 + `TopicQos`**：
 
 ```text
 .from_ros(ros名, TopicQos).to_bus(bus名, TopicQos).mapper(...).lazy()?.add()
 .from_bus(bus名, TopicQos).to_ros(ros名, TopicQos).mapper(...).add()
-.service().from_ros(ros名, TopicQos).to_bus(bus名).mapper(...).timeout()?.add()
-.service().from_bus(bus名).to_ros(ros名, TopicQos).mapper(...).timeout()?.add()
-.action().from_ros(ros名, TopicQos).to_bus(bus名).mapper(...).timeout()?.add()
-.action().from_bus(bus名).to_ros(ros名, TopicQos).mapper(...).timeout()?.add()
+.service().from_ros(ros名, TopicQos).to_bus(bus名, TopicQos).mapper(...).timeout()?.add()
+.service().from_bus(bus名, TopicQos).to_ros(ros名, TopicQos).mapper(...).timeout()?.add()
+.action().from_ros(ros名, TopicQos).to_bus(bus名, TopicQos).mapper(...).timeout()?.add()
+.action().from_bus(bus名, TopicQos).to_ros(ros名, TopicQos).mapper(...).timeout()?.add()
 ```
 
-`TopicQos.keep_last(n)` 之后必须 `.reliable()` 或 `.best_effort()`。ROS 端两者都行；bus **topic** 端只能 `.best_effort()`（PUB/SUB 没有可靠投递）。Bus 的 service / action 名字没有 QoS。方向写在 `from_ros → to_bus` / `from_bus → to_ros` 链上，**禁止** `both`。对上 ROS `services_default` 时写 `TopicQos.keep_last(10).reliable()`。Action 把这份 profile 用在 goal / result / cancel 三个 service 以及 feedback topic；status topic 保持 ROS action-status 默认。
+`TopicQos.keep_last(n)` 之后必须 `.reliable()` 或 `.best_effort()`。ROS 端两者都行；**bus** 端（topic / service / action）只能 `.best_effort()`（没有 DDS reliability）。方向写在 `from_ros → to_bus` / `from_bus → to_ros` 链上，**禁止** `both`。对上 ROS `services_default` 时写 `TopicQos.keep_last(10).reliable()`。Bus RPC 常用 `TopicQos.keep_last(8).best_effort()`（depth → DEALER HWM）。Action 把 ROS 这份 profile 用在 goal / result / cancel 三个 service 以及 feedback topic；status topic 保持 ROS action-status 默认。
 
 - 默认超时：service **5s**，action goal **30s**
 - Topic 路由默认 **eager**：`build()` 立刻建 ROS subscription，ROS 图上能看到这座桥。仅对需要按需开关的 ROS2→bus 路由写 `.lazy()`。
@@ -116,8 +116,7 @@ C++ 只 override `attach`、把实体塞进 `keep_alive` 的自定义 mapper **�
 | 尽力 KeepLast 5 | `TopicQos.keep_last(5).best_effort()` |
 
 - **ROS**（`from_ros` / `to_ros`）：映射为 KeepLast(depth) + 指定的 reliability。Topic / service / action 的 ROS 端都用同一份 `TopicQos`。
-- **bus topic**（`from_bus` / `to_bus`）：只兑现 depth → HWM；必须 `.best_effort()`。
-- **bus service / action**：只写名字，没有 `TopicQos`。
+- **bus**（`from_bus` / `to_bus`）：只兑现 depth → HWM（topic 为 PUB/SUB，service / action 为 DEALER）；必须 `.best_effort()`。
 
 相机要对上 ROS 图上的 best-effort KeepLast(5) 时，topic 两端都写 `keep_last(5).best_effort()`。Service 对上 `services_default` 写 `keep_last(10).reliable()`。
 
@@ -247,7 +246,7 @@ bridge = (
     .bus_tcp("localhost")
     .service()
     .from_ros("/examples/add_two_ints", TopicQos.keep_last(10).reliable())
-    .to_bus("/examples/add_two_ints")
+    .to_bus("/examples/add_two_ints", TopicQos.keep_last(8).best_effort())
     .mapper(AddTwoIntsServiceMapper())
     .timeout(5.0)
     .add()
@@ -297,7 +296,7 @@ impl TypedServiceMapper for AddTwoIntsServiceMapper {
     }
 }
 
-// .service().from_ros("/examples/add_two_ints", TopicQos::keep_last(10).reliable()).to_bus("/examples/add_two_ints")
+// .service().from_ros("/examples/add_two_ints", TopicQos::keep_last(10).reliable()).to_bus("/examples/add_two_ints", TopicQos::keep_last(8).best_effort())
 //     .mapper(AddTwoIntsServiceMapper)
 //     .add()?
 ```
@@ -382,7 +381,7 @@ struct AddTwoIntsServiceMapper
   }
 };
 
-// .service().from_ros("/examples/add_two_ints", TopicQos::keep_last(10).reliable()).to_bus("/examples/add_two_ints")
+// .service().from_ros("/examples/add_two_ints", TopicQos::keep_last(10).reliable()).to_bus("/examples/add_two_ints", TopicQos::keep_last(8).best_effort())
 //     .mapper(std::make_shared<AddTwoIntsServiceMapper>())
 //     .add()
 ```
@@ -407,7 +406,7 @@ fn main() -> robot_bus::Result<()> {
             .add()?
         .service()
             .from_ros("/reset", TopicQos::keep_last(10).reliable())
-            .to_bus("/reset")
+            .to_bus("/reset", TopicQos::keep_last(8).best_effort())
             .mapper(TriggerServiceMapper)
             .timeout(std::time::Duration::from_secs(3))
             .add()?
@@ -479,7 +478,7 @@ bridge = (
     .add()
     .service()
     .from_ros("/reset", TopicQos.keep_last(10).reliable())
-    .to_bus("/reset")
+    .to_bus("/reset", TopicQos.keep_last(8).best_effort())
     .mapper(TriggerServiceMapper())
     .add()
     .build()
@@ -508,7 +507,7 @@ auto bridge = robot_bus::Ros2Bridge::New("ros_bridge")
     .add()
     .service()
     .from_ros("/reset", robot_bus::TopicQos::keep_last(10).reliable())
-    .to_bus("/reset")
+    .to_bus("/reset", robot_bus::TopicQos::keep_last(8).best_effort())
     .mapper(robot_bus::TriggerServiceMapper{})
     .add()
     .build();

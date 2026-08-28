@@ -87,7 +87,7 @@ def main() -> None:
         .bus_tcp("localhost")
         .service()
         .from_ros("/examples/add_two_ints", TopicQos.keep_last(10).reliable())
-        .to_bus("/examples/add_two_ints")
+        .to_bus("/examples/add_two_ints", TopicQos.keep_last(8).best_effort())
         .mapper(AddTwoIntsServiceMapper())
         .timeout(5.0)
         .add()

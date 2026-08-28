@@ -9,7 +9,7 @@
 | 运行时 | DDS（需 `ros2` / daemon） | 先起 `robot_bus_broker`（或进程内嵌入） |
 | 入口 | `Context` → `Node` → `rclrs::spin` | **推荐** `Context` → `Node::with_context`；tcp/ipc 仍可用便捷的 `Node::new`（私有 Context） |
 | 消息 | `.msg` / `.srv` / `.action` 生成类型 | crate 内 protobuf（如 `sensor_msgs::msg::v1::Imu`） |
-| QoS | `QOS_PROFILE_DEFAULT` 等 | Topic：`QosProfile::keep_last(depth)` → ZMQ 上为 HWM（各语言可选 `qos_depth` / `qosDepth`）；固定 best-effort。WebSocket 订阅用同一 depth 作为网关到客户端的队列；WS 发布忽略 QoS（共用网关 PUB）。Service / action 暂不接 QoS |
+| QoS | `QOS_PROFILE_DEFAULT` 等 | `QosProfile::keep_last(depth)` → ZMQ 上为 HWM（各语言可选 `qos_depth` / `qosDepth`）；固定 best-effort。Topic：PUB/SUB HWM。Service / action：DEALER HWM。WebSocket 订阅用同一 depth 作为网关到客户端的队列；WS 发布忽略 QoS（共用网关 PUB）。WS 的 service / action 忽略 HWM（没有 ZMQ socket） |
 | 回调组 | Worker / callback group（较新 API） | `CallbackGroupType::MutuallyExclusive` / `Reentrant` |
 | 参数 | `declare_parameter` / `get_parameter` → Parameter；`set_parameter(Parameter)`；`list_parameters(prefixes, depth)`（可远程 / YAML / CLI） | 同形本地 API（`Parameter` + `as_*` + 批量 get/set）；`list_parameters` → `{names, prefixes}`，便利 API `list_all_parameters`；`undeclare_parameter`；YAML 加载；无远程 / CLI |
 | 就绪等待 | `wait_for_message` / `wait_for_service` / `wait_for_action_server` | 同名辅助：`wait_for_message`；service/action 通过 console `workers > 0` 轮询（best-effort，非 DDS discovery）。另有与 broker 的会话：`connection_state` / `wait_for_broker`（构造不阻塞；TCP/WS 自动重连） |
@@ -124,7 +124,7 @@ fn main() -> robot_bus::Result<()> {
 }
 ```
 
-要点：rclrs 创建时要带完整 QoS；robot-bus 的 `QosProfile` **仅对 topic 生效**，且只兑现 KeepLast depth（ZMQ 上 → 发送/接收 HWM；WebSocket 上 → 网关订阅队列）。reliability 固定 best-effort。WS **发布** QoS 忽略（共用网关 PUB）。不传 QoS 的 `create_publisher` / `create_subscription` 仍可用（不改动已有 HWM）。第三个参数是 callback group。topic 名按传入原样使用（建议写全路径）。
+要点：rclrs 创建时要带完整 QoS；robot-bus 的 `QosProfile` 只兑现 KeepLast depth（topic → PUB/SUB HWM；service / action → DEALER HWM；WebSocket 订阅 → 网关队列）。reliability 固定 best-effort。WS **发布** QoS 忽略（共用网关 PUB）。不传 QoS 的 `create_publisher` / `create_subscription` / `create_service` / `create_client` / `create_action_*` 仍可用（不改动已有 HWM）。服务端最后一个参数是 callback group。topic 名按传入原样使用（建议写全路径）。
 
 ---
 
@@ -264,10 +264,10 @@ node.spin()?;
 | 建节点 | `Node::new(&context, "name")` | `Node::with_context(&context, "name")`（或便捷 `Node::new("name")`） |
 | 发布 | `create_publisher::<T>(topic, qos)` | `create_publisher_with_qos::<T>(topic, qos)`（或无 QoS 的 `create_publisher`；各语言可选 depth） |
 | 订阅 | `create_subscription(topic, qos, cb)` | `create_subscription_with_qos(topic, qos, cb, group)`（或无 QoS 的 `create_subscription`） |
-| 服务端 | `create_service::<S, _>(name, cb)` | `create_service::<S, _>(name, cb, group)` |
-| 客户端 | `create_client::<S>(name)` + `call` | `create_client::<S>(name)` + `call(..., timeout)` + `wait_for_service` |
-| Action 服务端 | `create_action_server` | `create_action_server::<A, _>(..., group)` |
-| Action 客户端 | `create_action_client` + GoalHandle | `create_action_client` + `wait_for_action_server` + `send_goal` → GoalHandle |
+| 服务端 | `create_service::<S, _>(name, cb)` | `create_service::<S, _>(name, cb, group)` / `create_service_with_qos` |
+| 客户端 | `create_client::<S>(name)` + `call` | `create_client::<S>(name)` / `create_client_with_qos` + `call(..., timeout)` + `wait_for_service` |
+| Action 服务端 | `create_action_server` | `create_action_server::<A, _>(..., group)` / `create_action_server_with_qos` |
+| Action 客户端 | `create_action_client` + GoalHandle | `create_action_client` / `create_action_client_with_qos` + `wait_for_action_server` + `send_goal` → GoalHandle |
 | 转起来 | `rclrs::spin(node)` | `node.spin()` / `wait_for_message` |
 | 原始字节 | 动态消息 / 有限支持 | `create_*_raw` |
 

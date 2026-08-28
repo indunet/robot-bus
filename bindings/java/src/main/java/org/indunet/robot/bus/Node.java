@@ -252,10 +252,16 @@ public final class Node implements AutoCloseable {
     }
 
     public ServiceHandle createService(String serviceName, ServiceHandler handler) {
-        return createService(serviceName, handler, null);
+        return createService(serviceName, handler, null, 0);
     }
 
     public ServiceHandle createService(String serviceName, ServiceHandler handler, CallbackGroup group) {
+        return createService(serviceName, handler, group, 0);
+    }
+
+    /** {@code qosDepth <= 0} keeps the default RPC HWM; {@code qosDepth > 0} sets KeepLast depth. */
+    public ServiceHandle createService(
+            String serviceName, ServiceHandler handler, CallbackGroup group, int qosDepth) {
         RobotBusC.ServiceCb cb =
                 (data, len, outData, outLen, user) -> {
                     try {
@@ -277,8 +283,8 @@ public final class Node implements AutoCloseable {
         return new ServiceHandle(
                 ptr,
                 Errors.checkPtr(
-                        RobotBusC.Holder.INSTANCE.robot_bus_node_create_service(
-                                ptr, serviceName, cb, null, group != null ? group.raw() : null),
+                        RobotBusC.Holder.INSTANCE.robot_bus_node_create_service_with_qos(
+                                ptr, serviceName, cb, null, group != null ? group.raw() : null, qosDepth),
                         "create_service"));
     }
 
@@ -324,9 +330,15 @@ public final class Node implements AutoCloseable {
     }
 
     public ServiceClient createClient(String serviceName) {
+        return createClient(serviceName, 0);
+    }
+
+    /** {@code qosDepth <= 0} keeps the default RPC HWM; {@code qosDepth > 0} sets KeepLast depth. */
+    public ServiceClient createClient(String serviceName, int qosDepth) {
         return new ServiceClient(
                 Errors.checkPtr(
-                        RobotBusC.Holder.INSTANCE.robot_bus_node_create_client(ptr, serviceName),
+                        RobotBusC.Holder.INSTANCE.robot_bus_node_create_client_with_qos(
+                                ptr, serviceName, qosDepth),
                         "create_client"));
     }
 
@@ -343,11 +355,17 @@ public final class Node implements AutoCloseable {
     }
 
     public ActionServerHandle createActionServer(String actionName, ActionHandler handler) {
-        return createActionServer(actionName, handler, null);
+        return createActionServer(actionName, handler, null, 0);
     }
 
     public ActionServerHandle createActionServer(
             String actionName, ActionHandler handler, CallbackGroup group) {
+        return createActionServer(actionName, handler, group, 0);
+    }
+
+    /** {@code qosDepth <= 0} keeps the default action HWM; {@code qosDepth > 0} sets KeepLast depth. */
+    public ActionServerHandle createActionServer(
+            String actionName, ActionHandler handler, CallbackGroup group, int qosDepth) {
         RobotBusC.ActionCb cb =
                 (data, len, outPhases, outCount, user) -> {
                     try {
@@ -390,8 +408,8 @@ public final class Node implements AutoCloseable {
         return new ActionServerHandle(
                 ptr,
                 Errors.checkPtr(
-                        RobotBusC.Holder.INSTANCE.robot_bus_node_create_action_server(
-                                ptr, actionName, cb, null, group != null ? group.raw() : null),
+                        RobotBusC.Holder.INSTANCE.robot_bus_node_create_action_server_with_qos(
+                                ptr, actionName, cb, null, group != null ? group.raw() : null, qosDepth),
                         "create_action_server"));
     }
 
@@ -456,9 +474,15 @@ public final class Node implements AutoCloseable {
     }
 
     public ActionClient createActionClient(String actionName) {
+        return createActionClient(actionName, 0);
+    }
+
+    /** {@code qosDepth <= 0} keeps the default action HWM; {@code qosDepth > 0} sets KeepLast depth. */
+    public ActionClient createActionClient(String actionName, int qosDepth) {
         return new ActionClient(
                 Errors.checkPtr(
-                        RobotBusC.Holder.INSTANCE.robot_bus_node_create_action_client(ptr, actionName),
+                        RobotBusC.Holder.INSTANCE.robot_bus_node_create_action_client_with_qos(
+                                ptr, actionName, qosDepth),
                         "create_action_client"));
     }
 

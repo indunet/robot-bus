@@ -18,7 +18,7 @@ use crate::ros2_bridge::mapper::{
     Direction, ServiceWireContext, TopicQos, TopicWireContext, TypedActionMapper,
     TypedServiceMapper, TypedTopicMapper,
 };
-use crate::runtime::{ActionGoalHandler, MessageCallback, ServiceHandler, TopicPublisherRaw};
+use crate::runtime::{ActionGoalHandler, MessageCallback, QosProfile, ServiceHandler, TopicPublisherRaw};
 use crate::ActionKind;
 
 /// Typed ROS→bus subscription: `create_subscription<Ros>` then convert + publish.
@@ -89,7 +89,7 @@ where
     });
         ctx.bus_node.create_subscription_raw_with_qos(
             ctx.bus_topic,
-            crate::runtime::QosProfile::keep_last(ctx.bus_qos.depth()),
+            QosProfile::keep_last(ctx.bus_qos.depth()),
             cb,
             None,
         )?;
@@ -142,7 +142,10 @@ where
     let mapper = mapper.clone();
     match ctx.direction {
         Direction::Ros2ToBus => {
-            let bus_client = Arc::new(Mutex::new(ctx.bus_node.create_client_raw(ctx.bus_service)?));
+            let bus_client = Arc::new(Mutex::new(ctx.bus_node.create_client_raw_with_qos(
+                ctx.bus_service,
+                QosProfile::keep_last(ctx.bus_qos.depth()),
+            )?));
             let timeout = ctx.timeout;
             let type_name = mapper.type_name().to_string();
             let cb_mapper = mapper.clone();
@@ -203,9 +206,12 @@ where
                         .unwrap_or_default(),
                 }
             });
-            let _ = ctx
-                .bus_node
-                .create_service_raw(ctx.bus_service, handler, None)?;
+            let _ = ctx.bus_node.create_service_raw_with_qos(
+                ctx.bus_service,
+                QosProfile::keep_last(ctx.bus_qos.depth()),
+                handler,
+                None,
+            )?;
         }
     }
     Ok(())
@@ -276,7 +282,10 @@ where
     match ctx.direction {
         Direction::Ros2ToBus => {
             let bus_client = Arc::new(Mutex::new(
-                ctx.bus_node.create_action_client_raw(ctx.bus_action)?,
+                ctx.bus_node.create_action_client_raw_with_qos(
+                    ctx.bus_action,
+                    QosProfile::keep_last(ctx.bus_qos.depth()),
+                )?,
             ));
             let timeout = ctx.timeout;
             let type_name = mapper.type_name().to_string();
@@ -409,9 +418,12 @@ where
                     }
                 }
             });
-            let _ = ctx
-                .bus_node
-                .create_action_server_raw(ctx.bus_action, handler, None)?;
+            let _ = ctx.bus_node.create_action_server_raw_with_qos(
+                ctx.bus_action,
+                QosProfile::keep_last(ctx.bus_qos.depth()),
+                handler,
+                None,
+            )?;
         }
     }
     Ok(())

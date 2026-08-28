@@ -202,6 +202,7 @@ fn main() -> robot_bus::Result<()> {
     // reject while executor start() is active (same as cancel_timer).
     // wait_for_broker / connection_state / add_on_connection_event
     // wait_for_message / client.wait_for_service / wait_for_action_server available.
+    // create_*_with_qos(..., QosProfile::keep_last(n), ...) sets KeepLast depth.
 
     let handle = node.shutdown_handle()?;
     std::thread::spawn(move || {
@@ -261,11 +262,11 @@ node.create_timer(
 ```
 
 
-### High water mark (HWM) and topic QoS
+### High water mark (HWM) and QoS
 
-Topics can use `QosProfile::keep_last(depth)` (→ HWM on ZMQ nodes). **Topics only**; reliability is fixed best-effort. Service / action do not take QoS yet.
+`QosProfile::keep_last(depth)` maps to ZMQ HWM. Topics use PUB/SUB HWM; service and action use DEALER HWM (`snd` / `rcv` both = depth). Reliability is fixed best-effort (RPC has no DDS reliability either). Omit QoS to keep the node default (topic 8/8, service 4/4, action 8/8).
 
-On a **WebSocket** Node, KeepLast applies to **subscribe** only: it sizes the gateway→client queue (drop-on-full; omitted depth keeps the gateway default of 64). Publish QoS is ignored (all WS publishers share one gateway PUB).
+On a **WebSocket** Node, KeepLast applies to **subscribe** only: it sizes the gateway→client queue (drop-on-full; omitted depth keeps the gateway default of 64). Publish QoS is ignored (all WS publishers share one gateway PUB). WS service / action clients have no ZMQ socket, so HWM is ignored.
 
 ```rust
 use robot_bus::{Node, QosProfile, Publisher, HighWaterMark};
@@ -281,6 +282,12 @@ node.create_subscription_with_qos::<robot_bus::sensor_msgs::msg::v1::Imu, _>(
     |_topic, _imu| {},
     None,
 )?;
+
+// Service / action: same KeepLast → DEALER HWM
+// node.create_service_with_qos::<SetBool, _>("/reset", QosProfile::keep_last(16), handler, None)?;
+// let client = node.create_client_with_qos::<SetBool>("/reset", QosProfile::keep_last(16))?;
+// node.create_action_server_with_qos::<Fibonacci, _>("/fib", QosProfile::keep_last(16), handler, None)?;
+// let act = node.create_action_client_with_qos::<Fibonacci>("/fib", QosProfile::keep_last(16))?;
 
 // Lower-level HWM still available:
 let raw = Publisher::with_hwm(None, HighWaterMark::new(10, 10))?;
@@ -327,7 +334,7 @@ fn main() -> robot_bus::Result<()> {
 }
 ```
 
-Raw bytes: `create_service_raw` / `create_client_raw`. Endpoints come from `NodeOptions` (`service_frontend` / `service_backend`).
+Raw bytes: `create_service_raw` / `create_client_raw`. KeepLast: `create_service_with_qos` / `create_client_with_qos` (and `*_raw_with_qos`). Endpoints come from `NodeOptions` (`service_frontend` / `service_backend`).
 
 ---
 
@@ -358,7 +365,7 @@ fn main() -> robot_bus::Result<()> {
 
 Full runnable programs: [`examples/service_set_bool/`](../../examples/service_set_bool/), [`examples/action_fibonacci/`](../../examples/action_fibonacci/).
 
-Raw bytes: `create_action_server_raw` / `create_action_client_raw`. ZMQ `cancel()` sends an explicit `CANCEL` frame; gRPC `cancel()` cancels the corresponding server stream—neither guarantees “server acknowledged cancel”.
+Raw bytes: `create_action_server_raw` / `create_action_client_raw`. KeepLast: `create_action_server_with_qos` / `create_action_client_with_qos` (and `*_raw_with_qos`). ZMQ `cancel()` sends an explicit `CANCEL` frame; gRPC `cancel()` cancels the corresponding server stream—neither guarantees “server acknowledged cancel”.
 
 ---
 

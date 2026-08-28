@@ -1,14 +1,16 @@
-//! Topic QoS profile (v1).
+//! Topic / RPC QoS profile (v1).
 //!
-//! This is intentionally **not** a full ROS 2 / DDS QoS facsimile. For topics we only
-//! honor a KeepLast-style depth. On ZMQ nodes that maps to socket high-water marks.
-//! On WebSocket nodes, subscribe depth sizes the gateway→client queue (drop-on-full);
-//! publish QoS is ignored because WS publishers share one gateway PUB. Reliability is
-//! fixed to best-effort (PUB/SUB has no ACK). Service and action ignore this type for now.
+//! This is intentionally **not** a full ROS 2 / DDS QoS facsimile. We only
+//! honor a KeepLast-style depth, which maps to ZeroMQ high-water marks.
+//! On ZMQ topic sockets that is PUB/SUB HWM; on ZMQ service / action sockets
+//! it is DEALER HWM (`snd` / `rcv` both = depth). On WebSocket nodes, subscribe
+//! depth sizes the gateway→client queue (drop-on-full); publish QoS is ignored
+//! because WS publishers share one gateway PUB. Reliability is fixed to
+//! best-effort (PUB/SUB has no ACK; RPC has no DDS reliability either).
 
 use crate::zmq_helpers::HighWaterMark;
 
-/// Topic QoS: KeepLast depth → ZMQ HWM. Service / action do not use this yet.
+/// KeepLast depth → ZMQ HWM. Topics, services, and actions all use this.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct QosProfile {
     depth: i32,
@@ -21,8 +23,9 @@ impl QosProfile {
     /// ROS 2–style `KeepLast(depth)` history depth.
     ///
     /// On a ZMQ publisher this primarily sets send HWM; on a ZMQ subscriber, receive HWM.
-    /// Both directions are set to `depth` on the local socket. On a WebSocket node,
-    /// subscribe depth sizes the gateway→client queue; publish depth is ignored.
+    /// Both directions are set to `depth` on the local socket. Service / action DEALER
+    /// sockets use the same mapping. On a WebSocket node, subscribe depth sizes the
+    /// gateway→client queue; publish / RPC depth is ignored.
     pub const fn keep_last(depth: i32) -> Self {
         Self { depth }
     }

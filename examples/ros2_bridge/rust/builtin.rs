@@ -22,13 +22,13 @@ fn main() -> robot_bus::Result<()> {
         .add()?
         .service()
         .from_ros("/examples/reset", TopicQos::keep_last(10).reliable())
-        .to_bus("/examples/reset")
+        .to_bus("/examples/reset", TopicQos::keep_last(8).best_effort())
         .mapper(TriggerServiceMapper)
         .timeout(Duration::from_secs(5))
         .add()?
         .action()
         .from_ros("/examples/fibonacci", TopicQos::keep_last(10).reliable())
-        .to_bus("/examples/fibonacci")
+        .to_bus("/examples/fibonacci", TopicQos::keep_last(8).best_effort())
         .mapper(FibonacciActionMapper)
         .add()?
         .build()?;

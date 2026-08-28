@@ -70,16 +70,20 @@ class _RawNode:
         self._sub_cb = callback
         self.last_sub_qos = qos_depth
 
-    def create_service(self, service_name, handler, callback_group=None):
+    def create_service(self, service_name, handler, callback_group=None, qos_depth=None):
         self._svc_handler = handler
+        self.last_svc_qos = qos_depth
 
-    def create_client(self, service_name: str):
+    def create_client(self, service_name: str, qos_depth=None):
+        self.last_cli_qos = qos_depth
         return _FakeServiceClient()
 
-    def create_action_server(self, action_name, handler, callback_group=None):
+    def create_action_server(self, action_name, handler, callback_group=None, qos_depth=None):
         self._action_handler = handler
+        self.last_act_qos = qos_depth
 
-    def create_action_client(self, action_name: str):
+    def create_action_client(self, action_name: str, qos_depth=None):
+        self.last_act_cli_qos = qos_depth
         return object()
 
 
@@ -161,17 +165,48 @@ def test_install_typed_node_api_service() -> None:
         handler,
         request_type=BoolValue,
         response_type=StringValue,
+        qos_depth=16,
     )
+    assert node.last_svc_qos == 16
     out = node._svc_handler(BoolValue(value=True).SerializeToString())
     resp = StringValue()
     resp.ParseFromString(out)
     assert resp.value == "echo:True"
 
     client = node.create_client(
-        "set", request_type=BoolValue, response_type=StringValue
+        "set", qos_depth=16, request_type=BoolValue, response_type=StringValue
     )
+    assert node.last_cli_qos == 16
     assert isinstance(client, TypedServiceClient)
     assert client.call(BoolValue(value=False)).value == "ok:False"
+
+
+def test_install_typed_node_api_action() -> None:
+    install_typed_node_api(_RawNode)
+    node = _RawNode()
+
+    def handler(goal: BoolValue):
+        return [("RESULT", StringValue(value=f"done:{goal.value}"))]
+
+    node.create_action_server(
+        "fib",
+        handler,
+        goal_type=BoolValue,
+        feedback_type=StringValue,
+        result_type=StringValue,
+        qos_depth=16,
+    )
+    assert node.last_act_qos == 16
+
+    client = node.create_action_client(
+        "fib",
+        qos_depth=16,
+        goal_type=BoolValue,
+        feedback_type=StringValue,
+        result_type=StringValue,
+    )
+    assert node.last_act_cli_qos == 16
+    assert isinstance(client, TypedActionClient)
 
 
 if __name__ == "__main__":
@@ -181,4 +216,5 @@ if __name__ == "__main__":
     test_typed_action_goal_handle_roundtrip()
     test_install_typed_node_api_publisher_and_subscription()
     test_install_typed_node_api_service()
+    test_install_typed_node_api_action()
     print("python typed api smoke ok")

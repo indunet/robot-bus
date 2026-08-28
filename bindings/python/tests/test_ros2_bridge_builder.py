@@ -93,7 +93,7 @@ def test_builder_accepts_concrete_mappers_without_build():
         .add()
         .service()
         .from_ros("/reset", _qos_ros())
-        .to_bus("/reset")
+        .to_bus("/reset", _qos_bus())
         .mapper(TriggerServiceMapper())
         .timeout(2.0)
         .add()
@@ -218,7 +218,7 @@ def test_service_from_bus_to_ros():
     b = (
         Ros2Bridge.new("t")
         .service()
-        .from_bus("/a")
+        .from_bus("/a", _qos_bus())
         .to_ros("/a", _qos_ros())
         .mapper(DummyService())
         .timeout(1.0)
@@ -227,6 +227,7 @@ def test_service_from_bus_to_ros():
     assert b._services[0]["direction"] == Direction.BusToRos2
     assert b._services[0]["timeout"] == 1.0
     assert b._services[0]["ros_qos"] == _qos_ros()
+    assert b._services[0]["bus_qos"] == _qos_bus()
 
 
 def test_action_stores_ros_qos():
@@ -240,12 +241,13 @@ def test_action_stores_ros_qos():
         Ros2Bridge.new("t")
         .action()
         .from_ros("/f", _qos_ros())
-        .to_bus("/f")
+        .to_bus("/f", _qos_bus())
         .mapper(DummyAction())
         .add()
     )
     assert b._actions[0]["direction"] == Direction.Ros2ToBus
     assert b._actions[0]["ros_qos"] == _qos_ros()
+    assert b._actions[0]["bus_qos"] == _qos_bus()
 
 
 def test_service_qos_required_on_ros_endpoint():
@@ -260,7 +262,35 @@ def test_service_qos_required_on_ros_endpoint():
             Ros2Bridge.new("t")
             .service()
             .from_ros("/a", TopicQos.keep_last(10))
-            .to_bus("/a")
+            .to_bus("/a", _qos_bus())
+            .mapper(DummyService())
+            .add()
+        )
+
+
+def test_service_qos_required_on_bus_endpoint():
+    from robot_bus.ros2_bridge import Ros2Bridge, TopicQos
+
+    class DummyService:
+        def type_name(self) -> str:
+            return "test/srv/Dummy"
+
+    with pytest.raises(TypeError, match="TopicQos"):
+        (
+            Ros2Bridge.new("t")
+            .service()
+            .from_ros("/a", _qos_ros())
+            .to_bus("/a", TopicQos.keep_last(8))
+            .mapper(DummyService())
+            .add()
+        )
+
+    with pytest.raises(ValueError, match="best_effort"):
+        (
+            Ros2Bridge.new("t")
+            .service()
+            .from_ros("/a", _qos_ros())
+            .to_bus("/a", TopicQos.keep_last(8).reliable())
             .mapper(DummyService())
             .add()
         )
@@ -289,6 +319,7 @@ if __name__ == "__main__":
     test_bus_reliable_rejected()
     test_service_from_bus_to_ros()
     test_service_qos_required_on_ros_endpoint()
+    test_service_qos_required_on_bus_endpoint()
     test_action_stores_ros_qos()
     test_ros2_available_checks_rclpy()
     try:
