@@ -1,74 +1,47 @@
-//! Mapper for `foxglove_msgs/msg/LaserScan`.
+//! Typed mapper for `foxglove_msgs/msg/LaserScan`.
 
-use prost::Message as ProstMessage;
-use rclrs::DynamicMessage;
+use crate::ros2_bridge::mapper::TypedTopicMapper;
 
-use super::super::common::*;
-use crate::BusError;
-use crate::ros2_bridge::mapper::TopicMapper;
-
-pub(crate) fn laser_scan_from_view(
-    view: &rclrs::DynamicMessageView<'_>,
-) -> Result<crate::foxglove_msgs::msg::v1::LaserScan> {
-    Ok(crate::foxglove_msgs::msg::v1::LaserScan {
-        timestamp: read_timestamp(view, "timestamp")?,
-        frame_id: read_string(view, "frame_id")?,
-        pose: nested_view(view, "pose")?
-            .as_ref()
-            .map(super::pose::pose_from_view)
-            .transpose()?,
-        start_angle: read_f64(view, "start_angle")?,
-        end_angle: read_f64(view, "end_angle")?,
-        ranges: read_f64_seq(view, "ranges")?,
-        intensities: read_f64_seq(view, "intensities")?,
-    })
-}
-
-pub(crate) fn laser_scan_write(
-    view: &mut rclrs::DynamicMessageViewMut<'_>,
-    bus: &crate::foxglove_msgs::msg::v1::LaserScan,
-) -> Result<()> {
-    if let Some(v) = &bus.timestamp {
-        write_timestamp(view, "timestamp", v)?;
+pub(crate) fn laser_scan_to_bus(msg: ros_env::foxglove_msgs::msg::LaserScan) -> crate::foxglove_msgs::msg::v1::LaserScan {
+    crate::foxglove_msgs::msg::v1::LaserScan {
+        timestamp: Some(crate::ros2_bridge::mappers::convert::time_to_timestamp(msg.timestamp)),
+        frame_id: crate::ros2_bridge::mappers::convert::from_ros_string(msg.frame_id),
+        pose: Some(crate::ros2_bridge::mappers::foxglove_msgs::pose::pose_to_bus(msg.pose)),
+        start_angle: msg.start_angle,
+        end_angle: msg.end_angle,
+        ranges: crate::ros2_bridge::mappers::convert::f64_seq(msg.ranges),
+        intensities: crate::ros2_bridge::mappers::convert::f64_seq(msg.intensities),
     }
-    write_string(view, "frame_id", &bus.frame_id)?;
-    if let Some(v) = &bus.pose {
-        with_nested_mut(view, "pose", |nested| super::pose::pose_write(nested, v))?;
+}
+
+pub(crate) fn laser_scan_to_ros(bus: crate::foxglove_msgs::msg::v1::LaserScan) -> ros_env::foxglove_msgs::msg::LaserScan {
+    ros_env::foxglove_msgs::msg::LaserScan {
+        timestamp: crate::ros2_bridge::mappers::convert::timestamp_to_time(bus.timestamp.unwrap_or_default()),
+        frame_id: crate::ros2_bridge::mappers::convert::to_ros_string(bus.frame_id),
+        pose: crate::ros2_bridge::mappers::foxglove_msgs::pose::pose_to_ros(bus.pose.unwrap_or_default()),
+        start_angle: bus.start_angle,
+        end_angle: bus.end_angle,
+        ranges: crate::ros2_bridge::mappers::convert::FromF64Seq::from_f64_seq(bus.ranges),
+        intensities: crate::ros2_bridge::mappers::convert::FromF64Seq::from_f64_seq(bus.intensities),
     }
-    write_f64(view, "start_angle", bus.start_angle)?;
-    write_f64(view, "end_angle", bus.end_angle)?;
-    write_f64_seq(view, "ranges", &bus.ranges)?;
-    write_f64_seq(view, "intensities", &bus.intensities)?;
-    Ok(())
 }
 
-pub(crate) fn laser_scan_dyn_to_bus(
-    msg: &rclrs::DynamicMessage,
-) -> Result<crate::foxglove_msgs::msg::v1::LaserScan> {
-    laser_scan_from_view(&msg.view())
-}
-
-pub(crate) fn laser_scan_bus_to_dyn(
-    bus: &crate::foxglove_msgs::msg::v1::LaserScan,
-) -> Result<rclrs::DynamicMessage> {
-    let mut msg = new_message("foxglove_msgs/msg/LaserScan")?;
-    laser_scan_write(&mut msg.view_mut(), bus)?;
-    Ok(msg)
-}
-
+#[derive(Clone, Copy, Debug, Default)]
 pub struct FoxgloveMsgsLaserScanMapper;
-impl TopicMapper for FoxgloveMsgsLaserScanMapper {
+
+impl TypedTopicMapper for FoxgloveMsgsLaserScanMapper {
+    type Ros = ros_env::foxglove_msgs::msg::LaserScan;
+    type Bus = crate::foxglove_msgs::msg::v1::LaserScan;
+
     fn type_name(&self) -> &'static str {
         "foxglove_msgs/msg/LaserScan"
     }
 
-    fn ros_to_bus(&self, msg: &DynamicMessage) -> Result<Vec<u8>> {
-        Ok(laser_scan_dyn_to_bus(msg)?.encode_to_vec())
+    fn ros_to_bus(&self, msg: Self::Ros) -> crate::errors::Result<Self::Bus> {
+        Ok(laser_scan_to_bus(msg))
     }
 
-    fn bus_to_ros(&self, payload: &[u8]) -> Result<DynamicMessage> {
-        let bus = <crate::foxglove_msgs::msg::v1::LaserScan as ProstMessage>::decode(payload)
-            .map_err(|e| BusError::Protocol(format!("decode foxglove_msgs/msg/LaserScan: {e}")))?;
-        laser_scan_bus_to_dyn(&bus)
+    fn bus_to_ros(&self, msg: Self::Bus) -> crate::errors::Result<Self::Ros> {
+        Ok(laser_scan_to_ros(msg))
     }
 }

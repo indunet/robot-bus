@@ -1,76 +1,37 @@
-//! Mapper for `control_msgs/msg/SingleDOFStateStamped`.
+//! Typed mapper for `control_msgs/msg/SingleDOFStateStamped`.
 
-use prost::Message as ProstMessage;
-use rclrs::DynamicMessage;
+use crate::ros2_bridge::mapper::TypedTopicMapper;
 
-use super::super::common::*;
-use crate::BusError;
-use crate::ros2_bridge::mapper::TopicMapper;
-
-pub(crate) fn single_dof_state_stamped_from_view(
-    view: &rclrs::DynamicMessageView<'_>,
-) -> Result<crate::control_msgs::msg::v1::SingleDofStateStamped> {
-    Ok(crate::control_msgs::msg::v1::SingleDofStateStamped {
-        header: nested_view(view, "header")?
-            .as_ref()
-            .map(super::super::std_msgs::header::header_from_view)
-            .transpose()?,
-        state: nested_view(view, "state")?
-            .as_ref()
-            .map(super::single_dof_state::single_dof_state_from_view)
-            .transpose()?,
-    })
-}
-
-pub(crate) fn single_dof_state_stamped_write(
-    view: &mut rclrs::DynamicMessageViewMut<'_>,
-    bus: &crate::control_msgs::msg::v1::SingleDofStateStamped,
-) -> Result<()> {
-    if let Some(v) = &bus.header {
-        with_nested_mut(view, "header", |nested| {
-            super::super::std_msgs::header::header_write(nested, v)
-        })?;
+pub(crate) fn single_dof_state_stamped_to_bus(msg: ros_env::control_msgs::msg::SingleDOFStateStamped) -> crate::control_msgs::msg::v1::SingleDofStateStamped {
+    crate::control_msgs::msg::v1::SingleDofStateStamped {
+        header: Some(crate::ros2_bridge::mappers::std_msgs::header::header_to_bus(msg.header)),
+        state: Some(crate::ros2_bridge::mappers::control_msgs::single_dof_state::single_dof_state_to_bus(msg.state)),
     }
-    if let Some(v) = &bus.state {
-        with_nested_mut(view, "state", |nested| {
-            super::single_dof_state::single_dof_state_write(nested, v)
-        })?;
+}
+
+pub(crate) fn single_dof_state_stamped_to_ros(bus: crate::control_msgs::msg::v1::SingleDofStateStamped) -> ros_env::control_msgs::msg::SingleDOFStateStamped {
+    ros_env::control_msgs::msg::SingleDOFStateStamped {
+        header: crate::ros2_bridge::mappers::std_msgs::header::header_to_ros(bus.header.unwrap_or_default()),
+        state: crate::ros2_bridge::mappers::control_msgs::single_dof_state::single_dof_state_to_ros(bus.state.unwrap_or_default()),
     }
-    Ok(())
 }
 
-pub(crate) fn single_dof_state_stamped_dyn_to_bus(
-    msg: &rclrs::DynamicMessage,
-) -> Result<crate::control_msgs::msg::v1::SingleDofStateStamped> {
-    single_dof_state_stamped_from_view(&msg.view())
-}
-
-pub(crate) fn single_dof_state_stamped_bus_to_dyn(
-    bus: &crate::control_msgs::msg::v1::SingleDofStateStamped,
-) -> Result<rclrs::DynamicMessage> {
-    let mut msg = new_message("control_msgs/msg/SingleDOFStateStamped")?;
-    single_dof_state_stamped_write(&mut msg.view_mut(), bus)?;
-    Ok(msg)
-}
-
+#[derive(Clone, Copy, Debug, Default)]
 pub struct ControlMsgsSingleDofStateStampedMapper;
-impl TopicMapper for ControlMsgsSingleDofStateStampedMapper {
+
+impl TypedTopicMapper for ControlMsgsSingleDofStateStampedMapper {
+    type Ros = ros_env::control_msgs::msg::SingleDOFStateStamped;
+    type Bus = crate::control_msgs::msg::v1::SingleDofStateStamped;
+
     fn type_name(&self) -> &'static str {
         "control_msgs/msg/SingleDOFStateStamped"
     }
 
-    fn ros_to_bus(&self, msg: &DynamicMessage) -> Result<Vec<u8>> {
-        Ok(single_dof_state_stamped_dyn_to_bus(msg)?.encode_to_vec())
+    fn ros_to_bus(&self, msg: Self::Ros) -> crate::errors::Result<Self::Bus> {
+        Ok(single_dof_state_stamped_to_bus(msg))
     }
 
-    fn bus_to_ros(&self, payload: &[u8]) -> Result<DynamicMessage> {
-        let bus =
-            <crate::control_msgs::msg::v1::SingleDofStateStamped as ProstMessage>::decode(payload)
-                .map_err(|e| {
-                    BusError::Protocol(format!(
-                        "decode control_msgs/msg/SingleDOFStateStamped: {e}"
-                    ))
-                })?;
-        single_dof_state_stamped_bus_to_dyn(&bus)
+    fn bus_to_ros(&self, msg: Self::Bus) -> crate::errors::Result<Self::Ros> {
+        Ok(single_dof_state_stamped_to_ros(msg))
     }
 }

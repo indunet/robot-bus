@@ -1,82 +1,39 @@
-//! Mapper for `control_msgs/msg/DynamicInterfaceGroupValues`.
+//! Typed mapper for `control_msgs/msg/DynamicInterfaceGroupValues`.
 
-use prost::Message as ProstMessage;
-use rclrs::DynamicMessage;
+use crate::ros2_bridge::mapper::TypedTopicMapper;
 
-use super::super::common::*;
-use crate::BusError;
-use crate::ros2_bridge::mapper::TopicMapper;
-
-pub(crate) fn dynamic_interface_group_values_from_view(
-    view: &rclrs::DynamicMessageView<'_>,
-) -> Result<crate::control_msgs::msg::v1::DynamicInterfaceGroupValues> {
-    Ok(crate::control_msgs::msg::v1::DynamicInterfaceGroupValues {
-        header: nested_view(view, "header")?
-            .as_ref()
-            .map(super::super::std_msgs::header::header_from_view)
-            .transpose()?,
-        interface_groups: read_string_seq(view, "interface_groups")?,
-        interface_values: read_message_seq(
-            view,
-            "interface_values",
-            super::interface_value::interface_value_from_view,
-        )?,
-    })
-}
-
-pub(crate) fn dynamic_interface_group_values_write(
-    view: &mut rclrs::DynamicMessageViewMut<'_>,
-    bus: &crate::control_msgs::msg::v1::DynamicInterfaceGroupValues,
-) -> Result<()> {
-    if let Some(v) = &bus.header {
-        with_nested_mut(view, "header", |nested| {
-            super::super::std_msgs::header::header_write(nested, v)
-        })?;
+pub(crate) fn dynamic_interface_group_values_to_bus(msg: ros_env::control_msgs::msg::DynamicInterfaceGroupValues) -> crate::control_msgs::msg::v1::DynamicInterfaceGroupValues {
+    crate::control_msgs::msg::v1::DynamicInterfaceGroupValues {
+        header: Some(crate::ros2_bridge::mappers::std_msgs::header::header_to_bus(msg.header)),
+        interface_groups: crate::ros2_bridge::mappers::convert::string_seq(msg.interface_groups),
+        interface_values: msg.interface_values.into_iter().map(crate::ros2_bridge::mappers::control_msgs::interface_value::interface_value_to_bus).collect(),
     }
-    write_string_seq(view, "interface_groups", &bus.interface_groups)?;
-    write_message_seq(
-        view,
-        "interface_values",
-        &bus.interface_values,
-        super::interface_value::interface_value_write,
-    )?;
-    Ok(())
 }
 
-pub(crate) fn dynamic_interface_group_values_dyn_to_bus(
-    msg: &rclrs::DynamicMessage,
-) -> Result<crate::control_msgs::msg::v1::DynamicInterfaceGroupValues> {
-    dynamic_interface_group_values_from_view(&msg.view())
+pub(crate) fn dynamic_interface_group_values_to_ros(bus: crate::control_msgs::msg::v1::DynamicInterfaceGroupValues) -> ros_env::control_msgs::msg::DynamicInterfaceGroupValues {
+    ros_env::control_msgs::msg::DynamicInterfaceGroupValues {
+        header: crate::ros2_bridge::mappers::std_msgs::header::header_to_ros(bus.header.unwrap_or_default()),
+        interface_groups: crate::ros2_bridge::mappers::convert::ros_string_seq(bus.interface_groups),
+        interface_values: bus.interface_values.into_iter().map(crate::ros2_bridge::mappers::control_msgs::interface_value::interface_value_to_ros).collect(),
+    }
 }
 
-pub(crate) fn dynamic_interface_group_values_bus_to_dyn(
-    bus: &crate::control_msgs::msg::v1::DynamicInterfaceGroupValues,
-) -> Result<rclrs::DynamicMessage> {
-    let mut msg = new_message("control_msgs/msg/DynamicInterfaceGroupValues")?;
-    dynamic_interface_group_values_write(&mut msg.view_mut(), bus)?;
-    Ok(msg)
-}
-
+#[derive(Clone, Copy, Debug, Default)]
 pub struct ControlMsgsDynamicInterfaceGroupValuesMapper;
-impl TopicMapper for ControlMsgsDynamicInterfaceGroupValuesMapper {
+
+impl TypedTopicMapper for ControlMsgsDynamicInterfaceGroupValuesMapper {
+    type Ros = ros_env::control_msgs::msg::DynamicInterfaceGroupValues;
+    type Bus = crate::control_msgs::msg::v1::DynamicInterfaceGroupValues;
+
     fn type_name(&self) -> &'static str {
         "control_msgs/msg/DynamicInterfaceGroupValues"
     }
 
-    fn ros_to_bus(&self, msg: &DynamicMessage) -> Result<Vec<u8>> {
-        Ok(dynamic_interface_group_values_dyn_to_bus(msg)?.encode_to_vec())
+    fn ros_to_bus(&self, msg: Self::Ros) -> crate::errors::Result<Self::Bus> {
+        Ok(dynamic_interface_group_values_to_bus(msg))
     }
 
-    fn bus_to_ros(&self, payload: &[u8]) -> Result<DynamicMessage> {
-        let bus =
-            <crate::control_msgs::msg::v1::DynamicInterfaceGroupValues as ProstMessage>::decode(
-                payload,
-            )
-            .map_err(|e| {
-                BusError::Protocol(format!(
-                    "decode control_msgs/msg/DynamicInterfaceGroupValues: {e}"
-                ))
-            })?;
-        dynamic_interface_group_values_bus_to_dyn(&bus)
+    fn bus_to_ros(&self, msg: Self::Bus) -> crate::errors::Result<Self::Ros> {
+        Ok(dynamic_interface_group_values_to_ros(msg))
     }
 }

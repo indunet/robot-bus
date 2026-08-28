@@ -1,70 +1,43 @@
-//! Mapper for `sensor_msgs/msg/JointState`.
+//! Typed mapper for `sensor_msgs/msg/JointState`.
 
-use prost::Message as ProstMessage;
-use rclrs::DynamicMessage;
+use crate::ros2_bridge::mapper::TypedTopicMapper;
 
-use super::super::common::*;
-use crate::BusError;
-use crate::ros2_bridge::mapper::TopicMapper;
-
-pub(crate) fn joint_state_from_view(
-    view: &rclrs::DynamicMessageView<'_>,
-) -> Result<crate::sensor_msgs::msg::v1::JointState> {
-    Ok(crate::sensor_msgs::msg::v1::JointState {
-        header: nested_view(view, "header")?
-            .as_ref()
-            .map(super::super::std_msgs::header::header_from_view)
-            .transpose()?,
-        name: read_string_seq(view, "name")?,
-        position: read_f64_seq(view, "position")?,
-        velocity: read_f64_seq(view, "velocity")?,
-        effort: read_f64_seq(view, "effort")?,
-    })
-}
-
-pub(crate) fn joint_state_write(
-    view: &mut rclrs::DynamicMessageViewMut<'_>,
-    bus: &crate::sensor_msgs::msg::v1::JointState,
-) -> Result<()> {
-    if let Some(v) = &bus.header {
-        with_nested_mut(view, "header", |nested| {
-            super::super::std_msgs::header::header_write(nested, v)
-        })?;
+pub(crate) fn joint_state_to_bus(msg: ros_env::sensor_msgs::msg::JointState) -> crate::sensor_msgs::msg::v1::JointState {
+    crate::sensor_msgs::msg::v1::JointState {
+        header: Some(crate::ros2_bridge::mappers::std_msgs::header::header_to_bus(msg.header)),
+        name: crate::ros2_bridge::mappers::convert::string_seq(msg.name),
+        position: crate::ros2_bridge::mappers::convert::f64_seq(msg.position),
+        velocity: crate::ros2_bridge::mappers::convert::f64_seq(msg.velocity),
+        effort: crate::ros2_bridge::mappers::convert::f64_seq(msg.effort),
     }
-    write_string_seq(view, "name", &bus.name)?;
-    write_f64_seq(view, "position", &bus.position)?;
-    write_f64_seq(view, "velocity", &bus.velocity)?;
-    write_f64_seq(view, "effort", &bus.effort)?;
-    Ok(())
 }
 
-pub(crate) fn joint_state_dyn_to_bus(
-    msg: &rclrs::DynamicMessage,
-) -> Result<crate::sensor_msgs::msg::v1::JointState> {
-    joint_state_from_view(&msg.view())
+pub(crate) fn joint_state_to_ros(bus: crate::sensor_msgs::msg::v1::JointState) -> ros_env::sensor_msgs::msg::JointState {
+    ros_env::sensor_msgs::msg::JointState {
+        header: crate::ros2_bridge::mappers::std_msgs::header::header_to_ros(bus.header.unwrap_or_default()),
+        name: crate::ros2_bridge::mappers::convert::ros_string_seq(bus.name),
+        position: crate::ros2_bridge::mappers::convert::FromF64Seq::from_f64_seq(bus.position),
+        velocity: crate::ros2_bridge::mappers::convert::FromF64Seq::from_f64_seq(bus.velocity),
+        effort: crate::ros2_bridge::mappers::convert::FromF64Seq::from_f64_seq(bus.effort),
+    }
 }
 
-pub(crate) fn joint_state_bus_to_dyn(
-    bus: &crate::sensor_msgs::msg::v1::JointState,
-) -> Result<rclrs::DynamicMessage> {
-    let mut msg = new_message("sensor_msgs/msg/JointState")?;
-    joint_state_write(&mut msg.view_mut(), bus)?;
-    Ok(msg)
-}
-
+#[derive(Clone, Copy, Debug, Default)]
 pub struct SensorMsgsJointStateMapper;
-impl TopicMapper for SensorMsgsJointStateMapper {
+
+impl TypedTopicMapper for SensorMsgsJointStateMapper {
+    type Ros = ros_env::sensor_msgs::msg::JointState;
+    type Bus = crate::sensor_msgs::msg::v1::JointState;
+
     fn type_name(&self) -> &'static str {
         "sensor_msgs/msg/JointState"
     }
 
-    fn ros_to_bus(&self, msg: &DynamicMessage) -> Result<Vec<u8>> {
-        Ok(joint_state_dyn_to_bus(msg)?.encode_to_vec())
+    fn ros_to_bus(&self, msg: Self::Ros) -> crate::errors::Result<Self::Bus> {
+        Ok(joint_state_to_bus(msg))
     }
 
-    fn bus_to_ros(&self, payload: &[u8]) -> Result<DynamicMessage> {
-        let bus = <crate::sensor_msgs::msg::v1::JointState as ProstMessage>::decode(payload)
-            .map_err(|e| BusError::Protocol(format!("decode sensor_msgs/msg/JointState: {e}")))?;
-        joint_state_bus_to_dyn(&bus)
+    fn bus_to_ros(&self, msg: Self::Bus) -> crate::errors::Result<Self::Ros> {
+        Ok(joint_state_to_ros(msg))
     }
 }

@@ -1,102 +1,47 @@
-//! Mapper for `foxglove_msgs/msg/CircleAnnotation`.
+//! Typed mapper for `foxglove_msgs/msg/CircleAnnotation`.
 
-use prost::Message as ProstMessage;
-use rclrs::DynamicMessage;
+use crate::ros2_bridge::mapper::TypedTopicMapper;
 
-use super::super::common::*;
-use crate::BusError;
-use crate::ros2_bridge::mapper::TopicMapper;
-
-pub(crate) fn circle_annotation_from_view(
-    view: &rclrs::DynamicMessageView<'_>,
-) -> Result<crate::foxglove_msgs::msg::v1::CircleAnnotation> {
-    Ok(crate::foxglove_msgs::msg::v1::CircleAnnotation {
-        timestamp: read_timestamp(view, "timestamp")?,
-        position: nested_view(view, "position")?
-            .as_ref()
-            .map(super::point2::point2_from_view)
-            .transpose()?,
-        diameter: read_f64(view, "diameter")?,
-        thickness: read_f64(view, "thickness")?,
-        fill_color: nested_view(view, "fill_color")?
-            .as_ref()
-            .map(super::color::color_from_view)
-            .transpose()?,
-        outline_color: nested_view(view, "outline_color")?
-            .as_ref()
-            .map(super::color::color_from_view)
-            .transpose()?,
-        metadata: read_message_seq(
-            view,
-            "metadata",
-            super::key_value_pair::key_value_pair_from_view,
-        )?,
-    })
+pub(crate) fn circle_annotation_to_bus(msg: ros_env::foxglove_msgs::msg::CircleAnnotation) -> crate::foxglove_msgs::msg::v1::CircleAnnotation {
+    crate::foxglove_msgs::msg::v1::CircleAnnotation {
+        timestamp: Some(crate::ros2_bridge::mappers::convert::time_to_timestamp(msg.timestamp)),
+        position: Some(crate::ros2_bridge::mappers::foxglove_msgs::point2::point2_to_bus(msg.position)),
+        diameter: msg.diameter,
+        thickness: msg.thickness,
+        fill_color: Some(crate::ros2_bridge::mappers::foxglove_msgs::color::color_to_bus(msg.fill_color)),
+        outline_color: Some(crate::ros2_bridge::mappers::foxglove_msgs::color::color_to_bus(msg.outline_color)),
+        metadata: msg.metadata.into_iter().map(crate::ros2_bridge::mappers::foxglove_msgs::key_value_pair::key_value_pair_to_bus).collect(),
+    }
 }
 
-pub(crate) fn circle_annotation_write(
-    view: &mut rclrs::DynamicMessageViewMut<'_>,
-    bus: &crate::foxglove_msgs::msg::v1::CircleAnnotation,
-) -> Result<()> {
-    if let Some(v) = &bus.timestamp {
-        write_timestamp(view, "timestamp", v)?;
+pub(crate) fn circle_annotation_to_ros(bus: crate::foxglove_msgs::msg::v1::CircleAnnotation) -> ros_env::foxglove_msgs::msg::CircleAnnotation {
+    ros_env::foxglove_msgs::msg::CircleAnnotation {
+        timestamp: crate::ros2_bridge::mappers::convert::timestamp_to_time(bus.timestamp.unwrap_or_default()),
+        position: crate::ros2_bridge::mappers::foxglove_msgs::point2::point2_to_ros(bus.position.unwrap_or_default()),
+        diameter: bus.diameter,
+        thickness: bus.thickness,
+        fill_color: crate::ros2_bridge::mappers::foxglove_msgs::color::color_to_ros(bus.fill_color.unwrap_or_default()),
+        outline_color: crate::ros2_bridge::mappers::foxglove_msgs::color::color_to_ros(bus.outline_color.unwrap_or_default()),
+        metadata: bus.metadata.into_iter().map(crate::ros2_bridge::mappers::foxglove_msgs::key_value_pair::key_value_pair_to_ros).collect(),
     }
-    if let Some(v) = &bus.position {
-        with_nested_mut(view, "position", |nested| {
-            super::point2::point2_write(nested, v)
-        })?;
-    }
-    write_f64(view, "diameter", bus.diameter)?;
-    write_f64(view, "thickness", bus.thickness)?;
-    if let Some(v) = &bus.fill_color {
-        with_nested_mut(view, "fill_color", |nested| {
-            super::color::color_write(nested, v)
-        })?;
-    }
-    if let Some(v) = &bus.outline_color {
-        with_nested_mut(view, "outline_color", |nested| {
-            super::color::color_write(nested, v)
-        })?;
-    }
-    write_message_seq(
-        view,
-        "metadata",
-        &bus.metadata,
-        super::key_value_pair::key_value_pair_write,
-    )?;
-    Ok(())
 }
 
-pub(crate) fn circle_annotation_dyn_to_bus(
-    msg: &rclrs::DynamicMessage,
-) -> Result<crate::foxglove_msgs::msg::v1::CircleAnnotation> {
-    circle_annotation_from_view(&msg.view())
-}
-
-pub(crate) fn circle_annotation_bus_to_dyn(
-    bus: &crate::foxglove_msgs::msg::v1::CircleAnnotation,
-) -> Result<rclrs::DynamicMessage> {
-    let mut msg = new_message("foxglove_msgs/msg/CircleAnnotation")?;
-    circle_annotation_write(&mut msg.view_mut(), bus)?;
-    Ok(msg)
-}
-
+#[derive(Clone, Copy, Debug, Default)]
 pub struct FoxgloveMsgsCircleAnnotationMapper;
-impl TopicMapper for FoxgloveMsgsCircleAnnotationMapper {
+
+impl TypedTopicMapper for FoxgloveMsgsCircleAnnotationMapper {
+    type Ros = ros_env::foxglove_msgs::msg::CircleAnnotation;
+    type Bus = crate::foxglove_msgs::msg::v1::CircleAnnotation;
+
     fn type_name(&self) -> &'static str {
         "foxglove_msgs/msg/CircleAnnotation"
     }
 
-    fn ros_to_bus(&self, msg: &DynamicMessage) -> Result<Vec<u8>> {
-        Ok(circle_annotation_dyn_to_bus(msg)?.encode_to_vec())
+    fn ros_to_bus(&self, msg: Self::Ros) -> crate::errors::Result<Self::Bus> {
+        Ok(circle_annotation_to_bus(msg))
     }
 
-    fn bus_to_ros(&self, payload: &[u8]) -> Result<DynamicMessage> {
-        let bus =
-            <crate::foxglove_msgs::msg::v1::CircleAnnotation as ProstMessage>::decode(payload)
-                .map_err(|e| {
-                    BusError::Protocol(format!("decode foxglove_msgs/msg/CircleAnnotation: {e}"))
-                })?;
-        circle_annotation_bus_to_dyn(&bus)
+    fn bus_to_ros(&self, msg: Self::Bus) -> crate::errors::Result<Self::Ros> {
+        Ok(circle_annotation_to_ros(msg))
     }
 }

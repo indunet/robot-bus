@@ -1,77 +1,43 @@
-//! Mapper for `nav_msgs/msg/MapMetaData`.
+//! Typed mapper for `nav_msgs/msg/MapMetaData`.
 
-use prost::Message as ProstMessage;
-use rclrs::DynamicMessage;
+use crate::ros2_bridge::mapper::TypedTopicMapper;
 
-use super::super::common::*;
-use crate::BusError;
-use crate::ros2_bridge::mapper::TopicMapper;
-
-pub(crate) fn map_meta_data_from_view(
-    view: &rclrs::DynamicMessageView<'_>,
-) -> Result<crate::nav_msgs::msg::v1::MapMetaData> {
-    Ok(crate::nav_msgs::msg::v1::MapMetaData {
-        map_load_time: nested_view(view, "map_load_time")?
-            .as_ref()
-            .map(super::super::builtin_interfaces::time::time_from_view)
-            .transpose()?,
-        resolution: read_f32(view, "resolution")?,
-        width: read_u32(view, "width")?,
-        height: read_u32(view, "height")?,
-        origin: nested_view(view, "origin")?
-            .as_ref()
-            .map(super::super::geometry_msgs::pose::pose_from_view)
-            .transpose()?,
-    })
-}
-
-pub(crate) fn map_meta_data_write(
-    view: &mut rclrs::DynamicMessageViewMut<'_>,
-    bus: &crate::nav_msgs::msg::v1::MapMetaData,
-) -> Result<()> {
-    if let Some(v) = &bus.map_load_time {
-        with_nested_mut(view, "map_load_time", |nested| {
-            super::super::builtin_interfaces::time::time_write(nested, v)
-        })?;
+pub(crate) fn map_meta_data_to_bus(msg: ros_env::nav_msgs::msg::MapMetaData) -> crate::nav_msgs::msg::v1::MapMetaData {
+    crate::nav_msgs::msg::v1::MapMetaData {
+        map_load_time: Some(crate::ros2_bridge::mappers::builtin_interfaces::time::time_to_bus(msg.map_load_time)),
+        resolution: msg.resolution,
+        width: msg.width,
+        height: msg.height,
+        origin: Some(crate::ros2_bridge::mappers::geometry_msgs::pose::pose_to_bus(msg.origin)),
     }
-    write_f32(view, "resolution", bus.resolution)?;
-    write_u32(view, "width", bus.width)?;
-    write_u32(view, "height", bus.height)?;
-    if let Some(v) = &bus.origin {
-        with_nested_mut(view, "origin", |nested| {
-            super::super::geometry_msgs::pose::pose_write(nested, v)
-        })?;
+}
+
+pub(crate) fn map_meta_data_to_ros(bus: crate::nav_msgs::msg::v1::MapMetaData) -> ros_env::nav_msgs::msg::MapMetaData {
+    ros_env::nav_msgs::msg::MapMetaData {
+        map_load_time: crate::ros2_bridge::mappers::builtin_interfaces::time::time_to_ros(bus.map_load_time.unwrap_or_default()),
+        resolution: bus.resolution,
+        width: bus.width,
+        height: bus.height,
+        origin: crate::ros2_bridge::mappers::geometry_msgs::pose::pose_to_ros(bus.origin.unwrap_or_default()),
     }
-    Ok(())
 }
 
-pub(crate) fn map_meta_data_dyn_to_bus(
-    msg: &rclrs::DynamicMessage,
-) -> Result<crate::nav_msgs::msg::v1::MapMetaData> {
-    map_meta_data_from_view(&msg.view())
-}
-
-pub(crate) fn map_meta_data_bus_to_dyn(
-    bus: &crate::nav_msgs::msg::v1::MapMetaData,
-) -> Result<rclrs::DynamicMessage> {
-    let mut msg = new_message("nav_msgs/msg/MapMetaData")?;
-    map_meta_data_write(&mut msg.view_mut(), bus)?;
-    Ok(msg)
-}
-
+#[derive(Clone, Copy, Debug, Default)]
 pub struct NavMsgsMapMetaDataMapper;
-impl TopicMapper for NavMsgsMapMetaDataMapper {
+
+impl TypedTopicMapper for NavMsgsMapMetaDataMapper {
+    type Ros = ros_env::nav_msgs::msg::MapMetaData;
+    type Bus = crate::nav_msgs::msg::v1::MapMetaData;
+
     fn type_name(&self) -> &'static str {
         "nav_msgs/msg/MapMetaData"
     }
 
-    fn ros_to_bus(&self, msg: &DynamicMessage) -> Result<Vec<u8>> {
-        Ok(map_meta_data_dyn_to_bus(msg)?.encode_to_vec())
+    fn ros_to_bus(&self, msg: Self::Ros) -> crate::errors::Result<Self::Bus> {
+        Ok(map_meta_data_to_bus(msg))
     }
 
-    fn bus_to_ros(&self, payload: &[u8]) -> Result<DynamicMessage> {
-        let bus = <crate::nav_msgs::msg::v1::MapMetaData as ProstMessage>::decode(payload)
-            .map_err(|e| BusError::Protocol(format!("decode nav_msgs/msg/MapMetaData: {e}")))?;
-        map_meta_data_bus_to_dyn(&bus)
+    fn bus_to_ros(&self, msg: Self::Bus) -> crate::errors::Result<Self::Ros> {
+        Ok(map_meta_data_to_ros(msg))
     }
 }

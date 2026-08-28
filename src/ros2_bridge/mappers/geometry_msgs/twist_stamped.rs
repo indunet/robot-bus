@@ -1,71 +1,37 @@
-//! Mapper for `geometry_msgs/msg/TwistStamped`.
+//! Typed mapper for `geometry_msgs/msg/TwistStamped`.
 
-use prost::Message as ProstMessage;
-use rclrs::DynamicMessage;
+use crate::ros2_bridge::mapper::TypedTopicMapper;
 
-use super::super::common::*;
-use crate::BusError;
-use crate::ros2_bridge::mapper::TopicMapper;
-
-pub(crate) fn twist_stamped_from_view(
-    view: &rclrs::DynamicMessageView<'_>,
-) -> Result<crate::geometry_msgs::msg::v1::TwistStamped> {
-    Ok(crate::geometry_msgs::msg::v1::TwistStamped {
-        header: nested_view(view, "header")?
-            .as_ref()
-            .map(super::super::std_msgs::header::header_from_view)
-            .transpose()?,
-        twist: nested_view(view, "twist")?
-            .as_ref()
-            .map(super::twist::twist_from_view)
-            .transpose()?,
-    })
-}
-
-pub(crate) fn twist_stamped_write(
-    view: &mut rclrs::DynamicMessageViewMut<'_>,
-    bus: &crate::geometry_msgs::msg::v1::TwistStamped,
-) -> Result<()> {
-    if let Some(v) = &bus.header {
-        with_nested_mut(view, "header", |nested| {
-            super::super::std_msgs::header::header_write(nested, v)
-        })?;
+pub(crate) fn twist_stamped_to_bus(msg: ros_env::geometry_msgs::msg::TwistStamped) -> crate::geometry_msgs::msg::v1::TwistStamped {
+    crate::geometry_msgs::msg::v1::TwistStamped {
+        header: Some(crate::ros2_bridge::mappers::std_msgs::header::header_to_bus(msg.header)),
+        twist: Some(crate::ros2_bridge::mappers::geometry_msgs::twist::twist_to_bus(msg.twist)),
     }
-    if let Some(v) = &bus.twist {
-        with_nested_mut(view, "twist", |nested| super::twist::twist_write(nested, v))?;
+}
+
+pub(crate) fn twist_stamped_to_ros(bus: crate::geometry_msgs::msg::v1::TwistStamped) -> ros_env::geometry_msgs::msg::TwistStamped {
+    ros_env::geometry_msgs::msg::TwistStamped {
+        header: crate::ros2_bridge::mappers::std_msgs::header::header_to_ros(bus.header.unwrap_or_default()),
+        twist: crate::ros2_bridge::mappers::geometry_msgs::twist::twist_to_ros(bus.twist.unwrap_or_default()),
     }
-    Ok(())
 }
 
-pub(crate) fn twist_stamped_dyn_to_bus(
-    msg: &rclrs::DynamicMessage,
-) -> Result<crate::geometry_msgs::msg::v1::TwistStamped> {
-    twist_stamped_from_view(&msg.view())
-}
-
-pub(crate) fn twist_stamped_bus_to_dyn(
-    bus: &crate::geometry_msgs::msg::v1::TwistStamped,
-) -> Result<rclrs::DynamicMessage> {
-    let mut msg = new_message("geometry_msgs/msg/TwistStamped")?;
-    twist_stamped_write(&mut msg.view_mut(), bus)?;
-    Ok(msg)
-}
-
+#[derive(Clone, Copy, Debug, Default)]
 pub struct GeometryMsgsTwistStampedMapper;
-impl TopicMapper for GeometryMsgsTwistStampedMapper {
+
+impl TypedTopicMapper for GeometryMsgsTwistStampedMapper {
+    type Ros = ros_env::geometry_msgs::msg::TwistStamped;
+    type Bus = crate::geometry_msgs::msg::v1::TwistStamped;
+
     fn type_name(&self) -> &'static str {
         "geometry_msgs/msg/TwistStamped"
     }
 
-    fn ros_to_bus(&self, msg: &DynamicMessage) -> Result<Vec<u8>> {
-        Ok(twist_stamped_dyn_to_bus(msg)?.encode_to_vec())
+    fn ros_to_bus(&self, msg: Self::Ros) -> crate::errors::Result<Self::Bus> {
+        Ok(twist_stamped_to_bus(msg))
     }
 
-    fn bus_to_ros(&self, payload: &[u8]) -> Result<DynamicMessage> {
-        let bus = <crate::geometry_msgs::msg::v1::TwistStamped as ProstMessage>::decode(payload)
-            .map_err(|e| {
-                BusError::Protocol(format!("decode geometry_msgs/msg/TwistStamped: {e}"))
-            })?;
-        twist_stamped_bus_to_dyn(&bus)
+    fn bus_to_ros(&self, msg: Self::Bus) -> crate::errors::Result<Self::Ros> {
+        Ok(twist_stamped_to_ros(msg))
     }
 }

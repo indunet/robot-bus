@@ -33,6 +33,10 @@ gen-android:
 gen-rust:
 	python3 scripts/generate_rust_msgs.py
 
+# Typed ROS↔protobuf topic mappers + ros-env-shim stubs
+gen-topic-mappers:
+	python3 scripts/generate_topic_mappers.py
+
 # All language stubs (protoc 35.1)
 gen-all: gen-rust proto gen-typescript gen-cpp gen-java gen-android
 

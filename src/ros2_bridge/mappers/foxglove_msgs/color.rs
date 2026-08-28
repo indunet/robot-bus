@@ -1,61 +1,41 @@
-//! Mapper for `foxglove_msgs/msg/Color`.
+//! Typed mapper for `foxglove_msgs/msg/Color`.
 
-use prost::Message as ProstMessage;
-use rclrs::DynamicMessage;
+use crate::ros2_bridge::mapper::TypedTopicMapper;
 
-use super::super::common::*;
-use crate::BusError;
-use crate::ros2_bridge::mapper::TopicMapper;
-
-pub(crate) fn color_from_view(
-    view: &rclrs::DynamicMessageView<'_>,
-) -> Result<crate::foxglove_msgs::msg::v1::Color> {
-    Ok(crate::foxglove_msgs::msg::v1::Color {
-        r: read_f64(view, "r")?,
-        g: read_f64(view, "g")?,
-        b: read_f64(view, "b")?,
-        a: read_f64(view, "a")?,
-    })
+pub(crate) fn color_to_bus(msg: ros_env::foxglove_msgs::msg::Color) -> crate::foxglove_msgs::msg::v1::Color {
+    crate::foxglove_msgs::msg::v1::Color {
+        r: msg.r,
+        g: msg.g,
+        b: msg.b,
+        a: msg.a,
+    }
 }
 
-pub(crate) fn color_write(
-    view: &mut rclrs::DynamicMessageViewMut<'_>,
-    bus: &crate::foxglove_msgs::msg::v1::Color,
-) -> Result<()> {
-    write_f64(view, "r", bus.r)?;
-    write_f64(view, "g", bus.g)?;
-    write_f64(view, "b", bus.b)?;
-    write_f64(view, "a", bus.a)?;
-    Ok(())
+pub(crate) fn color_to_ros(bus: crate::foxglove_msgs::msg::v1::Color) -> ros_env::foxglove_msgs::msg::Color {
+    ros_env::foxglove_msgs::msg::Color {
+        r: bus.r,
+        g: bus.g,
+        b: bus.b,
+        a: bus.a,
+    }
 }
 
-pub(crate) fn color_dyn_to_bus(
-    msg: &rclrs::DynamicMessage,
-) -> Result<crate::foxglove_msgs::msg::v1::Color> {
-    color_from_view(&msg.view())
-}
-
-pub(crate) fn color_bus_to_dyn(
-    bus: &crate::foxglove_msgs::msg::v1::Color,
-) -> Result<rclrs::DynamicMessage> {
-    let mut msg = new_message("foxglove_msgs/msg/Color")?;
-    color_write(&mut msg.view_mut(), bus)?;
-    Ok(msg)
-}
-
+#[derive(Clone, Copy, Debug, Default)]
 pub struct FoxgloveMsgsColorMapper;
-impl TopicMapper for FoxgloveMsgsColorMapper {
+
+impl TypedTopicMapper for FoxgloveMsgsColorMapper {
+    type Ros = ros_env::foxglove_msgs::msg::Color;
+    type Bus = crate::foxglove_msgs::msg::v1::Color;
+
     fn type_name(&self) -> &'static str {
         "foxglove_msgs/msg/Color"
     }
 
-    fn ros_to_bus(&self, msg: &DynamicMessage) -> Result<Vec<u8>> {
-        Ok(color_dyn_to_bus(msg)?.encode_to_vec())
+    fn ros_to_bus(&self, msg: Self::Ros) -> crate::errors::Result<Self::Bus> {
+        Ok(color_to_bus(msg))
     }
 
-    fn bus_to_ros(&self, payload: &[u8]) -> Result<DynamicMessage> {
-        let bus = <crate::foxglove_msgs::msg::v1::Color as ProstMessage>::decode(payload)
-            .map_err(|e| BusError::Protocol(format!("decode foxglove_msgs/msg/Color: {e}")))?;
-        color_bus_to_dyn(&bus)
+    fn bus_to_ros(&self, msg: Self::Bus) -> crate::errors::Result<Self::Ros> {
+        Ok(color_to_ros(msg))
     }
 }

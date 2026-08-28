@@ -5,18 +5,18 @@
 
 use std::any::Any;
 use std::collections::{HashMap, HashSet};
-use std::sync::Arc;
 use std::sync::mpsc::{self, Receiver, Sender};
+use std::sync::Arc;
 use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant};
 
 use prost::Message;
-use rclrs::{Context as RosContext, CreateBasicExecutor, DynamicPublisher, SpinOptions};
+use rclrs::{Context as RosContext, CreateBasicExecutor, SpinOptions};
 
 use crate::console_topics;
 use crate::discovery::DiscoverOpts;
 use crate::errors::{BusError, Result};
-use crate::lazy_subscribe::{CONSOLE_DETECT_TIMEOUT, should_enable_ros_subscription};
+use crate::lazy_subscribe::{should_enable_ros_subscription, CONSOLE_DETECT_TIMEOUT};
 use crate::robot_bus_interfaces::msg::v1::{TopicDemand, TopicStatsList};
 use crate::runtime::{
     MessageCallback, Node, NodeOptions, QosProfile, SubscriptionHandle, TopicPublisherRaw,
@@ -24,7 +24,7 @@ use crate::runtime::{
 
 use super::mapper::{
     ActionMapper, ActionWireContext, Direction, ServiceMapper, ServiceWireContext, TopicMapper,
-    ros_topic_options,
+    TopicWireContext,
 };
 
 /// Default timeout for bridged service calls (ROS↔bus).
@@ -95,7 +95,6 @@ pub struct Ros2Bridge {
     _demand_subs: Vec<SubscriptionHandle>,
     eager_bus_topics: HashSet<String>,
     _ros_subs: Vec<Box<dyn Any + Send + Sync>>,
-    _ros_pubs: Vec<DynamicPublisher>,
     /// Keeps typed ROS services / clients / action entities alive for the bridge lifetime.
     _ros_entities: Vec<Box<dyn Any + Send + Sync>>,
     ros_commands: Arc<rclrs::ExecutorCommands>,
@@ -483,7 +482,6 @@ impl Ros2BridgeBuilder {
         let mut bus_node = Node::with_options(format!("{}_bus", self.name), self.bus_options);
 
         let mut ros_subs = Vec::new();
-        let mut ros_pubs = Vec::new();
         let mut bus_pubs = HashMap::new();
         let mut lazy_routes: HashMap<String, LazyRos2ToBus> = HashMap::new();
         let mut eager_bus_topics = HashSet::new();
@@ -498,7 +496,7 @@ impl Ros2BridgeBuilder {
                 &mut eager_bus_topics,
                 route,
                 &mut ros_subs,
-                &mut ros_pubs,
+                &mut ros_entities,
             )?;
         }
 
@@ -536,7 +534,6 @@ impl Ros2BridgeBuilder {
             _demand_subs: demand_subs,
             eager_bus_topics,
             _ros_subs: ros_subs,
-            _ros_pubs: ros_pubs,
             _ros_entities: ros_entities,
             ros_commands,
             _ros_spin: Some(ros_spin),
@@ -747,29 +744,7 @@ fn create_ros2_to_bus_sub(
     ros_topic: &str,
     qos: TopicRouteQos,
 ) -> Result<Box<dyn Any + Send + Sync>> {
-    if let Some(sub) =
-        mapper.create_ros2_to_bus_subscription(ros_node, bus_pub.clone(), ros_topic, qos)?
-    {
-        return Ok(sub);
-    }
-    let type_name = mapper.ros_type();
-    let mapper = Arc::clone(mapper);
-    let opts = ros_topic_options(ros_topic, qos);
-    let sub = ros_node
-        .create_dynamic_subscription(type_name, opts, move |dyn_msg, _info| {
-            let payload = match mapper.ros_to_bus(&dyn_msg) {
-                Ok(p) => p,
-                Err(e) => {
-                    log::warn!("ros→bus {} convert: {e}", mapper.type_name());
-                    return;
-                }
-            };
-            if let Err(e) = bus_pub.publish(&payload) {
-                log::warn!("ros→bus {} publish: {e}", mapper.type_name());
-            }
-        })
-        .map_err(|e| BusError::Protocol(format!("ros dynamic subscription: {e}")))?;
-    Ok(Box::new(sub))
+    mapper.create_ros2_to_bus_subscription(ros_node, bus_pub, ros_topic, qos)
 }
 
 fn subscribe_demand(
@@ -815,7 +790,7 @@ fn wire_route(
     eager_bus_topics: &mut HashSet<String>,
     route: &RouteSpec,
     ros_subs: &mut Vec<Box<dyn Any + Send + Sync>>,
-    ros_pubs: &mut Vec<DynamicPublisher>,
+    ros_entities: &mut Vec<Box<dyn Any + Send + Sync>>,
 ) -> Result<()> {
     let mapper = Arc::clone(&route.mapper);
     let ros_topic = route.ros_topic.clone();
@@ -824,32 +799,14 @@ fn wire_route(
 
     match route.direction {
         Direction::BusToRos2 => {
-            let type_name = mapper.ros_type();
-            let opts = ros_topic_options(ros_topic.as_str(), qos);
-            let ros_pub = ros_node
-                .create_dynamic_publisher(type_name, opts)
-                .map_err(|e| BusError::Protocol(format!("ros dynamic publisher: {e}")))?;
-            ros_pubs.push(ros_pub.clone());
-            let mapper = Arc::clone(&mapper);
-            let cb: MessageCallback =
-                Arc::new(move |_topic, payload| match mapper.bus_to_ros(payload) {
-                    Ok(dyn_msg) => {
-                        if let Err(e) = ros_pub.publish(dyn_msg) {
-                            log::warn!("bus→ros {} publish: {e}", mapper.type_name());
-                        }
-                    }
-                    Err(e) => log::warn!("bus→ros {} convert: {e}", mapper.type_name()),
-                });
-            if let Some(depth) = qos.depth {
-                bus_node.create_subscription_raw_with_qos(
-                    bus_topic.as_str(),
-                    QosProfile::keep_last(depth),
-                    cb,
-                    None,
-                )?;
-            } else {
-                bus_node.create_subscription_raw(bus_topic.as_str(), cb, None)?;
-            }
+            mapper.attach_bus_to_ros(TopicWireContext {
+                ros_node,
+                bus_node,
+                ros_topic: ros_topic.as_str(),
+                bus_topic: bus_topic.as_str(),
+                qos,
+                ros_entities,
+            })?;
         }
         Direction::Ros2ToBus => {
             let bus_pub = create_ros2_to_bus_publisher(bus_node, bus_topic.as_str(), qos)?;
@@ -912,17 +869,25 @@ fn wire_action_route(
 #[cfg(test)]
 mod route_mapper_tests {
     use super::*;
-    use rclrs::DynamicMessage;
 
     struct DummyTopicMapper;
     impl TopicMapper for DummyTopicMapper {
         fn type_name(&self) -> &'static str {
             "test_msgs/msg/Dummy"
         }
-        fn ros_to_bus(&self, _msg: &DynamicMessage) -> std::result::Result<Vec<u8>, BusError> {
-            Ok(Vec::new())
+        fn create_ros2_to_bus_subscription(
+            &self,
+            _ros_node: &rclrs::Node,
+            _bus_pub: TopicPublisherRaw,
+            _ros_topic: &str,
+            _qos: TopicRouteQos,
+        ) -> std::result::Result<Box<dyn Any + Send + Sync>, BusError> {
+            Err(BusError::Protocol("dummy".into()))
         }
-        fn bus_to_ros(&self, _payload: &[u8]) -> std::result::Result<DynamicMessage, BusError> {
+        fn attach_bus_to_ros(
+            &self,
+            _ctx: TopicWireContext<'_>,
+        ) -> std::result::Result<(), BusError> {
             Err(BusError::Protocol("dummy".into()))
         }
     }

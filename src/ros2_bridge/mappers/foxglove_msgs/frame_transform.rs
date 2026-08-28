@@ -1,81 +1,43 @@
-//! Mapper for `foxglove_msgs/msg/FrameTransform`.
+//! Typed mapper for `foxglove_msgs/msg/FrameTransform`.
 
-use prost::Message as ProstMessage;
-use rclrs::DynamicMessage;
+use crate::ros2_bridge::mapper::TypedTopicMapper;
 
-use super::super::common::*;
-use crate::BusError;
-use crate::ros2_bridge::mapper::TopicMapper;
-
-pub(crate) fn frame_transform_from_view(
-    view: &rclrs::DynamicMessageView<'_>,
-) -> Result<crate::foxglove_msgs::msg::v1::FrameTransform> {
-    Ok(crate::foxglove_msgs::msg::v1::FrameTransform {
-        timestamp: read_timestamp(view, "timestamp")?,
-        parent_frame_id: read_string(view, "parent_frame_id")?,
-        child_frame_id: read_string(view, "child_frame_id")?,
-        translation: nested_view(view, "translation")?
-            .as_ref()
-            .map(super::vector3::vector3_from_view)
-            .transpose()?,
-        rotation: nested_view(view, "rotation")?
-            .as_ref()
-            .map(super::quaternion::quaternion_from_view)
-            .transpose()?,
-    })
-}
-
-pub(crate) fn frame_transform_write(
-    view: &mut rclrs::DynamicMessageViewMut<'_>,
-    bus: &crate::foxglove_msgs::msg::v1::FrameTransform,
-) -> Result<()> {
-    if let Some(v) = &bus.timestamp {
-        write_timestamp(view, "timestamp", v)?;
+pub(crate) fn frame_transform_to_bus(msg: ros_env::foxglove_msgs::msg::FrameTransform) -> crate::foxglove_msgs::msg::v1::FrameTransform {
+    crate::foxglove_msgs::msg::v1::FrameTransform {
+        timestamp: Some(crate::ros2_bridge::mappers::convert::time_to_timestamp(msg.timestamp)),
+        parent_frame_id: crate::ros2_bridge::mappers::convert::from_ros_string(msg.parent_frame_id),
+        child_frame_id: crate::ros2_bridge::mappers::convert::from_ros_string(msg.child_frame_id),
+        translation: Some(crate::ros2_bridge::mappers::foxglove_msgs::vector3::vector3_to_bus(msg.translation)),
+        rotation: Some(crate::ros2_bridge::mappers::foxglove_msgs::quaternion::quaternion_to_bus(msg.rotation)),
     }
-    write_string(view, "parent_frame_id", &bus.parent_frame_id)?;
-    write_string(view, "child_frame_id", &bus.child_frame_id)?;
-    if let Some(v) = &bus.translation {
-        with_nested_mut(view, "translation", |nested| {
-            super::vector3::vector3_write(nested, v)
-        })?;
+}
+
+pub(crate) fn frame_transform_to_ros(bus: crate::foxglove_msgs::msg::v1::FrameTransform) -> ros_env::foxglove_msgs::msg::FrameTransform {
+    ros_env::foxglove_msgs::msg::FrameTransform {
+        timestamp: crate::ros2_bridge::mappers::convert::timestamp_to_time(bus.timestamp.unwrap_or_default()),
+        parent_frame_id: crate::ros2_bridge::mappers::convert::to_ros_string(bus.parent_frame_id),
+        child_frame_id: crate::ros2_bridge::mappers::convert::to_ros_string(bus.child_frame_id),
+        translation: crate::ros2_bridge::mappers::foxglove_msgs::vector3::vector3_to_ros(bus.translation.unwrap_or_default()),
+        rotation: crate::ros2_bridge::mappers::foxglove_msgs::quaternion::quaternion_to_ros(bus.rotation.unwrap_or_default()),
     }
-    if let Some(v) = &bus.rotation {
-        with_nested_mut(view, "rotation", |nested| {
-            super::quaternion::quaternion_write(nested, v)
-        })?;
-    }
-    Ok(())
 }
 
-pub(crate) fn frame_transform_dyn_to_bus(
-    msg: &rclrs::DynamicMessage,
-) -> Result<crate::foxglove_msgs::msg::v1::FrameTransform> {
-    frame_transform_from_view(&msg.view())
-}
-
-pub(crate) fn frame_transform_bus_to_dyn(
-    bus: &crate::foxglove_msgs::msg::v1::FrameTransform,
-) -> Result<rclrs::DynamicMessage> {
-    let mut msg = new_message("foxglove_msgs/msg/FrameTransform")?;
-    frame_transform_write(&mut msg.view_mut(), bus)?;
-    Ok(msg)
-}
-
+#[derive(Clone, Copy, Debug, Default)]
 pub struct FoxgloveMsgsFrameTransformMapper;
-impl TopicMapper for FoxgloveMsgsFrameTransformMapper {
+
+impl TypedTopicMapper for FoxgloveMsgsFrameTransformMapper {
+    type Ros = ros_env::foxglove_msgs::msg::FrameTransform;
+    type Bus = crate::foxglove_msgs::msg::v1::FrameTransform;
+
     fn type_name(&self) -> &'static str {
         "foxglove_msgs/msg/FrameTransform"
     }
 
-    fn ros_to_bus(&self, msg: &DynamicMessage) -> Result<Vec<u8>> {
-        Ok(frame_transform_dyn_to_bus(msg)?.encode_to_vec())
+    fn ros_to_bus(&self, msg: Self::Ros) -> crate::errors::Result<Self::Bus> {
+        Ok(frame_transform_to_bus(msg))
     }
 
-    fn bus_to_ros(&self, payload: &[u8]) -> Result<DynamicMessage> {
-        let bus = <crate::foxglove_msgs::msg::v1::FrameTransform as ProstMessage>::decode(payload)
-            .map_err(|e| {
-                BusError::Protocol(format!("decode foxglove_msgs/msg/FrameTransform: {e}"))
-            })?;
-        frame_transform_bus_to_dyn(&bus)
+    fn bus_to_ros(&self, msg: Self::Bus) -> crate::errors::Result<Self::Ros> {
+        Ok(frame_transform_to_ros(msg))
     }
 }

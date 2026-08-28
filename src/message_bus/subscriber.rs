@@ -83,7 +83,7 @@ impl Subscriber {
             self.socket.set_rcvtimeo(-1)?;
         }
 
-        let frames = match self.socket.recv_multipart(0) {
+        let mut frames = match self.socket.recv_multipart(0) {
             Ok(frames) => frames,
             Err(zmq::Error::EAGAIN) => {
                 let secs = timeout.map(|d| d.as_secs_f64()).unwrap_or(0.0);
@@ -99,7 +99,8 @@ impl Subscriber {
             )));
         }
         let topic = String::from_utf8_lossy(&frames[0]).into_owned();
-        Ok((topic, frames[1].clone()))
+        let payload = std::mem::take(&mut frames[1]);
+        Ok((topic, payload))
     }
 }
 

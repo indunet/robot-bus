@@ -1,86 +1,47 @@
-//! Mapper for `foxglove_msgs/msg/ModelPrimitive`.
+//! Typed mapper for `foxglove_msgs/msg/ModelPrimitive`.
 
-use prost::Message as ProstMessage;
-use rclrs::DynamicMessage;
+use crate::ros2_bridge::mapper::TypedTopicMapper;
 
-use super::super::common::*;
-use crate::BusError;
-use crate::ros2_bridge::mapper::TopicMapper;
-
-pub(crate) fn model_primitive_from_view(
-    view: &rclrs::DynamicMessageView<'_>,
-) -> Result<crate::foxglove_msgs::msg::v1::ModelPrimitive> {
-    Ok(crate::foxglove_msgs::msg::v1::ModelPrimitive {
-        pose: nested_view(view, "pose")?
-            .as_ref()
-            .map(super::pose::pose_from_view)
-            .transpose()?,
-        scale: nested_view(view, "scale")?
-            .as_ref()
-            .map(super::vector3::vector3_from_view)
-            .transpose()?,
-        color: nested_view(view, "color")?
-            .as_ref()
-            .map(super::color::color_from_view)
-            .transpose()?,
-        override_color: read_bool(view, "override_color")?,
-        url: read_string(view, "url")?,
-        media_type: read_string(view, "media_type")?,
-        data: read_byte_seq(view, "data")?,
-    })
-}
-
-pub(crate) fn model_primitive_write(
-    view: &mut rclrs::DynamicMessageViewMut<'_>,
-    bus: &crate::foxglove_msgs::msg::v1::ModelPrimitive,
-) -> Result<()> {
-    if let Some(v) = &bus.pose {
-        with_nested_mut(view, "pose", |nested| super::pose::pose_write(nested, v))?;
+pub(crate) fn model_primitive_to_bus(msg: ros_env::foxglove_msgs::msg::ModelPrimitive) -> crate::foxglove_msgs::msg::v1::ModelPrimitive {
+    crate::foxglove_msgs::msg::v1::ModelPrimitive {
+        pose: Some(crate::ros2_bridge::mappers::foxglove_msgs::pose::pose_to_bus(msg.pose)),
+        scale: Some(crate::ros2_bridge::mappers::foxglove_msgs::vector3::vector3_to_bus(msg.scale)),
+        color: Some(crate::ros2_bridge::mappers::foxglove_msgs::color::color_to_bus(msg.color)),
+        override_color: msg.override_color,
+        url: crate::ros2_bridge::mappers::convert::from_ros_string(msg.url),
+        media_type: crate::ros2_bridge::mappers::convert::from_ros_string(msg.media_type),
+        data: crate::ros2_bridge::mappers::convert::IntoU8Vec::into_u8_vec(msg.data),
     }
-    if let Some(v) = &bus.scale {
-        with_nested_mut(view, "scale", |nested| {
-            super::vector3::vector3_write(nested, v)
-        })?;
+}
+
+pub(crate) fn model_primitive_to_ros(bus: crate::foxglove_msgs::msg::v1::ModelPrimitive) -> ros_env::foxglove_msgs::msg::ModelPrimitive {
+    ros_env::foxglove_msgs::msg::ModelPrimitive {
+        pose: crate::ros2_bridge::mappers::foxglove_msgs::pose::pose_to_ros(bus.pose.unwrap_or_default()),
+        scale: crate::ros2_bridge::mappers::foxglove_msgs::vector3::vector3_to_ros(bus.scale.unwrap_or_default()),
+        color: crate::ros2_bridge::mappers::foxglove_msgs::color::color_to_ros(bus.color.unwrap_or_default()),
+        override_color: bus.override_color,
+        url: crate::ros2_bridge::mappers::convert::to_ros_string(bus.url),
+        media_type: crate::ros2_bridge::mappers::convert::to_ros_string(bus.media_type),
+        data: crate::ros2_bridge::mappers::convert::FromByteSeq::from_byte_seq(bus.data),
     }
-    if let Some(v) = &bus.color {
-        with_nested_mut(view, "color", |nested| super::color::color_write(nested, v))?;
-    }
-    write_bool(view, "override_color", bus.override_color)?;
-    write_string(view, "url", &bus.url)?;
-    write_string(view, "media_type", &bus.media_type)?;
-    write_byte_seq(view, "data", &bus.data)?;
-    Ok(())
 }
 
-pub(crate) fn model_primitive_dyn_to_bus(
-    msg: &rclrs::DynamicMessage,
-) -> Result<crate::foxglove_msgs::msg::v1::ModelPrimitive> {
-    model_primitive_from_view(&msg.view())
-}
-
-pub(crate) fn model_primitive_bus_to_dyn(
-    bus: &crate::foxglove_msgs::msg::v1::ModelPrimitive,
-) -> Result<rclrs::DynamicMessage> {
-    let mut msg = new_message("foxglove_msgs/msg/ModelPrimitive")?;
-    model_primitive_write(&mut msg.view_mut(), bus)?;
-    Ok(msg)
-}
-
+#[derive(Clone, Copy, Debug, Default)]
 pub struct FoxgloveMsgsModelPrimitiveMapper;
-impl TopicMapper for FoxgloveMsgsModelPrimitiveMapper {
+
+impl TypedTopicMapper for FoxgloveMsgsModelPrimitiveMapper {
+    type Ros = ros_env::foxglove_msgs::msg::ModelPrimitive;
+    type Bus = crate::foxglove_msgs::msg::v1::ModelPrimitive;
+
     fn type_name(&self) -> &'static str {
         "foxglove_msgs/msg/ModelPrimitive"
     }
 
-    fn ros_to_bus(&self, msg: &DynamicMessage) -> Result<Vec<u8>> {
-        Ok(model_primitive_dyn_to_bus(msg)?.encode_to_vec())
+    fn ros_to_bus(&self, msg: Self::Ros) -> crate::errors::Result<Self::Bus> {
+        Ok(model_primitive_to_bus(msg))
     }
 
-    fn bus_to_ros(&self, payload: &[u8]) -> Result<DynamicMessage> {
-        let bus = <crate::foxglove_msgs::msg::v1::ModelPrimitive as ProstMessage>::decode(payload)
-            .map_err(|e| {
-                BusError::Protocol(format!("decode foxglove_msgs/msg/ModelPrimitive: {e}"))
-            })?;
-        model_primitive_bus_to_dyn(&bus)
+    fn bus_to_ros(&self, msg: Self::Bus) -> crate::errors::Result<Self::Ros> {
+        Ok(model_primitive_to_ros(msg))
     }
 }

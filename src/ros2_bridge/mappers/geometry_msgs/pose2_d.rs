@@ -1,59 +1,39 @@
-//! Mapper for `geometry_msgs/msg/Pose2D`.
+//! Typed mapper for `geometry_msgs/msg/Pose2D`.
 
-use prost::Message as ProstMessage;
-use rclrs::DynamicMessage;
+use crate::ros2_bridge::mapper::TypedTopicMapper;
 
-use super::super::common::*;
-use crate::BusError;
-use crate::ros2_bridge::mapper::TopicMapper;
-
-pub(crate) fn pose2_d_from_view(
-    view: &rclrs::DynamicMessageView<'_>,
-) -> Result<crate::geometry_msgs::msg::v1::Pose2D> {
-    Ok(crate::geometry_msgs::msg::v1::Pose2D {
-        x: read_f64(view, "x")?,
-        y: read_f64(view, "y")?,
-        theta: read_f64(view, "theta")?,
-    })
+pub(crate) fn pose2_d_to_bus(msg: ros_env::geometry_msgs::msg::Pose2D) -> crate::geometry_msgs::msg::v1::Pose2D {
+    crate::geometry_msgs::msg::v1::Pose2D {
+        x: msg.x,
+        y: msg.y,
+        theta: msg.theta,
+    }
 }
 
-pub(crate) fn pose2_d_write(
-    view: &mut rclrs::DynamicMessageViewMut<'_>,
-    bus: &crate::geometry_msgs::msg::v1::Pose2D,
-) -> Result<()> {
-    write_f64(view, "x", bus.x)?;
-    write_f64(view, "y", bus.y)?;
-    write_f64(view, "theta", bus.theta)?;
-    Ok(())
+pub(crate) fn pose2_d_to_ros(bus: crate::geometry_msgs::msg::v1::Pose2D) -> ros_env::geometry_msgs::msg::Pose2D {
+    ros_env::geometry_msgs::msg::Pose2D {
+        x: bus.x,
+        y: bus.y,
+        theta: bus.theta,
+    }
 }
 
-pub(crate) fn pose2_d_dyn_to_bus(
-    msg: &rclrs::DynamicMessage,
-) -> Result<crate::geometry_msgs::msg::v1::Pose2D> {
-    pose2_d_from_view(&msg.view())
-}
-
-pub(crate) fn pose2_d_bus_to_dyn(
-    bus: &crate::geometry_msgs::msg::v1::Pose2D,
-) -> Result<rclrs::DynamicMessage> {
-    let mut msg = new_message("geometry_msgs/msg/Pose2D")?;
-    pose2_d_write(&mut msg.view_mut(), bus)?;
-    Ok(msg)
-}
-
+#[derive(Clone, Copy, Debug, Default)]
 pub struct GeometryMsgsPose2DMapper;
-impl TopicMapper for GeometryMsgsPose2DMapper {
+
+impl TypedTopicMapper for GeometryMsgsPose2DMapper {
+    type Ros = ros_env::geometry_msgs::msg::Pose2D;
+    type Bus = crate::geometry_msgs::msg::v1::Pose2D;
+
     fn type_name(&self) -> &'static str {
         "geometry_msgs/msg/Pose2D"
     }
 
-    fn ros_to_bus(&self, msg: &DynamicMessage) -> Result<Vec<u8>> {
-        Ok(pose2_d_dyn_to_bus(msg)?.encode_to_vec())
+    fn ros_to_bus(&self, msg: Self::Ros) -> crate::errors::Result<Self::Bus> {
+        Ok(pose2_d_to_bus(msg))
     }
 
-    fn bus_to_ros(&self, payload: &[u8]) -> Result<DynamicMessage> {
-        let bus = <crate::geometry_msgs::msg::v1::Pose2D as ProstMessage>::decode(payload)
-            .map_err(|e| BusError::Protocol(format!("decode geometry_msgs/msg/Pose2D: {e}")))?;
-        pose2_d_bus_to_dyn(&bus)
+    fn bus_to_ros(&self, msg: Self::Bus) -> crate::errors::Result<Self::Ros> {
+        Ok(pose2_d_to_ros(msg))
     }
 }

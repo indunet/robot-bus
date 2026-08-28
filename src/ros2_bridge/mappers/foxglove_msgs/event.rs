@@ -1,72 +1,39 @@
-//! Mapper for `foxglove_msgs/msg/Event`.
+//! Typed mapper for `foxglove_msgs/msg/Event`.
 
-use prost::Message as ProstMessage;
-use rclrs::DynamicMessage;
+use crate::ros2_bridge::mapper::TypedTopicMapper;
 
-use super::super::common::*;
-use crate::BusError;
-use crate::ros2_bridge::mapper::TopicMapper;
-
-pub(crate) fn event_from_view(
-    view: &rclrs::DynamicMessageView<'_>,
-) -> Result<crate::foxglove_msgs::msg::v1::Event> {
-    Ok(crate::foxglove_msgs::msg::v1::Event {
-        start_time: read_timestamp(view, "start_time")?,
-        end_time: read_timestamp(view, "end_time")?,
-        metadata: read_message_seq(
-            view,
-            "metadata",
-            super::key_value_pair::key_value_pair_from_view,
-        )?,
-    })
-}
-
-pub(crate) fn event_write(
-    view: &mut rclrs::DynamicMessageViewMut<'_>,
-    bus: &crate::foxglove_msgs::msg::v1::Event,
-) -> Result<()> {
-    if let Some(v) = &bus.start_time {
-        write_timestamp(view, "start_time", v)?;
+pub(crate) fn event_to_bus(msg: ros_env::foxglove_msgs::msg::Event) -> crate::foxglove_msgs::msg::v1::Event {
+    crate::foxglove_msgs::msg::v1::Event {
+        start_time: Some(crate::ros2_bridge::mappers::convert::time_to_timestamp(msg.start_time)),
+        end_time: Some(crate::ros2_bridge::mappers::convert::time_to_timestamp(msg.end_time)),
+        metadata: msg.metadata.into_iter().map(crate::ros2_bridge::mappers::foxglove_msgs::key_value_pair::key_value_pair_to_bus).collect(),
     }
-    if let Some(v) = &bus.end_time {
-        write_timestamp(view, "end_time", v)?;
+}
+
+pub(crate) fn event_to_ros(bus: crate::foxglove_msgs::msg::v1::Event) -> ros_env::foxglove_msgs::msg::Event {
+    ros_env::foxglove_msgs::msg::Event {
+        start_time: crate::ros2_bridge::mappers::convert::timestamp_to_time(bus.start_time.unwrap_or_default()),
+        end_time: crate::ros2_bridge::mappers::convert::timestamp_to_time(bus.end_time.unwrap_or_default()),
+        metadata: bus.metadata.into_iter().map(crate::ros2_bridge::mappers::foxglove_msgs::key_value_pair::key_value_pair_to_ros).collect(),
     }
-    write_message_seq(
-        view,
-        "metadata",
-        &bus.metadata,
-        super::key_value_pair::key_value_pair_write,
-    )?;
-    Ok(())
 }
 
-pub(crate) fn event_dyn_to_bus(
-    msg: &rclrs::DynamicMessage,
-) -> Result<crate::foxglove_msgs::msg::v1::Event> {
-    event_from_view(&msg.view())
-}
-
-pub(crate) fn event_bus_to_dyn(
-    bus: &crate::foxglove_msgs::msg::v1::Event,
-) -> Result<rclrs::DynamicMessage> {
-    let mut msg = new_message("foxglove_msgs/msg/Event")?;
-    event_write(&mut msg.view_mut(), bus)?;
-    Ok(msg)
-}
-
+#[derive(Clone, Copy, Debug, Default)]
 pub struct FoxgloveMsgsEventMapper;
-impl TopicMapper for FoxgloveMsgsEventMapper {
+
+impl TypedTopicMapper for FoxgloveMsgsEventMapper {
+    type Ros = ros_env::foxglove_msgs::msg::Event;
+    type Bus = crate::foxglove_msgs::msg::v1::Event;
+
     fn type_name(&self) -> &'static str {
         "foxglove_msgs/msg/Event"
     }
 
-    fn ros_to_bus(&self, msg: &DynamicMessage) -> Result<Vec<u8>> {
-        Ok(event_dyn_to_bus(msg)?.encode_to_vec())
+    fn ros_to_bus(&self, msg: Self::Ros) -> crate::errors::Result<Self::Bus> {
+        Ok(event_to_bus(msg))
     }
 
-    fn bus_to_ros(&self, payload: &[u8]) -> Result<DynamicMessage> {
-        let bus = <crate::foxglove_msgs::msg::v1::Event as ProstMessage>::decode(payload)
-            .map_err(|e| BusError::Protocol(format!("decode foxglove_msgs/msg/Event: {e}")))?;
-        event_bus_to_dyn(&bus)
+    fn bus_to_ros(&self, msg: Self::Bus) -> crate::errors::Result<Self::Ros> {
+        Ok(event_to_ros(msg))
     }
 }

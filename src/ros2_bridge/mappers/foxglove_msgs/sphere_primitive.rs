@@ -1,78 +1,39 @@
-//! Mapper for `foxglove_msgs/msg/SpherePrimitive`.
+//! Typed mapper for `foxglove_msgs/msg/SpherePrimitive`.
 
-use prost::Message as ProstMessage;
-use rclrs::DynamicMessage;
+use crate::ros2_bridge::mapper::TypedTopicMapper;
 
-use super::super::common::*;
-use crate::BusError;
-use crate::ros2_bridge::mapper::TopicMapper;
-
-pub(crate) fn sphere_primitive_from_view(
-    view: &rclrs::DynamicMessageView<'_>,
-) -> Result<crate::foxglove_msgs::msg::v1::SpherePrimitive> {
-    Ok(crate::foxglove_msgs::msg::v1::SpherePrimitive {
-        pose: nested_view(view, "pose")?
-            .as_ref()
-            .map(super::pose::pose_from_view)
-            .transpose()?,
-        size: nested_view(view, "size")?
-            .as_ref()
-            .map(super::vector3::vector3_from_view)
-            .transpose()?,
-        color: nested_view(view, "color")?
-            .as_ref()
-            .map(super::color::color_from_view)
-            .transpose()?,
-    })
-}
-
-pub(crate) fn sphere_primitive_write(
-    view: &mut rclrs::DynamicMessageViewMut<'_>,
-    bus: &crate::foxglove_msgs::msg::v1::SpherePrimitive,
-) -> Result<()> {
-    if let Some(v) = &bus.pose {
-        with_nested_mut(view, "pose", |nested| super::pose::pose_write(nested, v))?;
+pub(crate) fn sphere_primitive_to_bus(msg: ros_env::foxglove_msgs::msg::SpherePrimitive) -> crate::foxglove_msgs::msg::v1::SpherePrimitive {
+    crate::foxglove_msgs::msg::v1::SpherePrimitive {
+        pose: Some(crate::ros2_bridge::mappers::foxglove_msgs::pose::pose_to_bus(msg.pose)),
+        size: Some(crate::ros2_bridge::mappers::foxglove_msgs::vector3::vector3_to_bus(msg.size)),
+        color: Some(crate::ros2_bridge::mappers::foxglove_msgs::color::color_to_bus(msg.color)),
     }
-    if let Some(v) = &bus.size {
-        with_nested_mut(view, "size", |nested| {
-            super::vector3::vector3_write(nested, v)
-        })?;
+}
+
+pub(crate) fn sphere_primitive_to_ros(bus: crate::foxglove_msgs::msg::v1::SpherePrimitive) -> ros_env::foxglove_msgs::msg::SpherePrimitive {
+    ros_env::foxglove_msgs::msg::SpherePrimitive {
+        pose: crate::ros2_bridge::mappers::foxglove_msgs::pose::pose_to_ros(bus.pose.unwrap_or_default()),
+        size: crate::ros2_bridge::mappers::foxglove_msgs::vector3::vector3_to_ros(bus.size.unwrap_or_default()),
+        color: crate::ros2_bridge::mappers::foxglove_msgs::color::color_to_ros(bus.color.unwrap_or_default()),
     }
-    if let Some(v) = &bus.color {
-        with_nested_mut(view, "color", |nested| super::color::color_write(nested, v))?;
-    }
-    Ok(())
 }
 
-pub(crate) fn sphere_primitive_dyn_to_bus(
-    msg: &rclrs::DynamicMessage,
-) -> Result<crate::foxglove_msgs::msg::v1::SpherePrimitive> {
-    sphere_primitive_from_view(&msg.view())
-}
-
-pub(crate) fn sphere_primitive_bus_to_dyn(
-    bus: &crate::foxglove_msgs::msg::v1::SpherePrimitive,
-) -> Result<rclrs::DynamicMessage> {
-    let mut msg = new_message("foxglove_msgs/msg/SpherePrimitive")?;
-    sphere_primitive_write(&mut msg.view_mut(), bus)?;
-    Ok(msg)
-}
-
+#[derive(Clone, Copy, Debug, Default)]
 pub struct FoxgloveMsgsSpherePrimitiveMapper;
-impl TopicMapper for FoxgloveMsgsSpherePrimitiveMapper {
+
+impl TypedTopicMapper for FoxgloveMsgsSpherePrimitiveMapper {
+    type Ros = ros_env::foxglove_msgs::msg::SpherePrimitive;
+    type Bus = crate::foxglove_msgs::msg::v1::SpherePrimitive;
+
     fn type_name(&self) -> &'static str {
         "foxglove_msgs/msg/SpherePrimitive"
     }
 
-    fn ros_to_bus(&self, msg: &DynamicMessage) -> Result<Vec<u8>> {
-        Ok(sphere_primitive_dyn_to_bus(msg)?.encode_to_vec())
+    fn ros_to_bus(&self, msg: Self::Ros) -> crate::errors::Result<Self::Bus> {
+        Ok(sphere_primitive_to_bus(msg))
     }
 
-    fn bus_to_ros(&self, payload: &[u8]) -> Result<DynamicMessage> {
-        let bus = <crate::foxglove_msgs::msg::v1::SpherePrimitive as ProstMessage>::decode(payload)
-            .map_err(|e| {
-                BusError::Protocol(format!("decode foxglove_msgs/msg/SpherePrimitive: {e}"))
-            })?;
-        sphere_primitive_bus_to_dyn(&bus)
+    fn bus_to_ros(&self, msg: Self::Bus) -> crate::errors::Result<Self::Ros> {
+        Ok(sphere_primitive_to_ros(msg))
     }
 }

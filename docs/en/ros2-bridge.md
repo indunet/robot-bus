@@ -8,7 +8,7 @@ In-process bridge between **ROS 2** and **robot-bus**: Topic / Service / Action.
 
 | Language | ROS client | Entry | Notes |
 |----------|------------|-------|-------|
-| **Rust** | `rclrs` | `robot_bus::ros2_bridge` (Cargo feature **`ros2`**) | Topics can use `DynamicMessage`; service/action use typed `attach` |
+| **Rust** | `rclrs` | `robot_bus::ros2_bridge` (Cargo feature **`ros2`**) | Topics / services / actions all use typed `attach` (`TypedTopicMapper` / `TypedServiceMapper` / `TypedActionMapper`) |
 | **Python** | **`rclpy`** | `robot_bus.ros2_bridge` | Pure Python, **not** via Rust FFI / `rclrs` |
 | **C++** | **`rclcpp`** | `<robot_bus/ros2_bridge.hpp>` + `robot_bus_ros2_bridge` | Native C++, **not** via Rust FFI / `rclrs` |
 
@@ -18,7 +18,7 @@ C++:     rclcpp ──mapper──► robot_bus::Node
 Rust:    rclrs  ──mapper──► robot_bus::Node
 ```
 
-**Why per language:** ROS service/action can only be created with compile-time concrete types (`create_service<T>`, etc.). `rclrs` has no dynamic service API like topics (string-based creation). If C++/Python only pass type names to Rust, `T` won't match. Each language therefore creates ROS entities with concrete types on its side, then forwards via its own bus `Node`.
+**Why per language:** Topic / service / action all need compile-time concrete types (`create_subscription<T>`, `create_service<T>`, etc.). If C++/Python only pass type names to Rust, `T` won't match. Each language therefore creates ROS entities with concrete types on its side, then forwards via its own bus `Node`.
 
 | Supported | Not supported |
 |-----------|---------------|
@@ -37,7 +37,7 @@ source /opt/ros/humble/setup.bash   # or jazzy
 cargo run --bin robot_bus_broker    # or installed robot-bus-broker
 ```
 
-**Rust `feature = "ros2"`** also needs a **ros2_rust + common_interfaces** overlay: `AMENT_PREFIX_PATH` must contain `rosidl_generator_rs` output at `share/<pkg>/rust/` (at least `std_msgs`, `sensor_msgs`, `example_interfaces`). Sourcing Humble alone **does not** compile `sensor_msgs::msg::Image` or typed Fibonacci. `apt install ros-humble-sensor-msgs` ships C typesupport only, not the rust IDL. See **Rust overlay** below.
+**Rust `feature = "ros2"`** also needs a **ros2_rust** overlay: `AMENT_PREFIX_PATH` must contain `rosidl_generator_rs` output at `share/<pkg>/rust/` for **every package used by the topic mappers** (not just `std_msgs` / `sensor_msgs`). Sourcing Humble alone **does not** compile typed paths. `apt install ros-humble-sensor-msgs` ships C typesupport only, not the rust IDL. See **Rust overlay** below.
 
 | Language | Dependencies |
 |----------|--------------|
@@ -138,15 +138,15 @@ Rust also has a full topic mapper registry (`src/ros2_bridge/mappers/`); mountin
 
 ---
 
-## User-defined service / action: yes
+## User-defined mappers: yes
 
-**Yes.** First write a **bus protobuf** (fields aligned with the ROS `.srv` / `.action`), generate language stubs with `protoc`, then only write **field ↔ protobuf conversion**; the library handles `create_service` / client wiring. Typed APIs accept any protobuf message class — they do not have to live in this repository.
+**Yes.** First write a **bus protobuf** (fields aligned with the ROS `.msg` / `.srv` / `.action`), generate language stubs with `protoc`, then only write **field ↔ protobuf conversion**; the library handles subscribe/publish/service wiring. Typed APIs accept any protobuf message class — they do not have to live in this repository.
 
 | | Works? |
 |--|--------|
 | Python: duck-typed convert methods + `.mapper(MyFoo())` | **Yes** |
-| Rust: `impl TypedServiceMapper` / `TypedActionMapper` | **Yes** |
-| C++: `TypedServiceMapper<Derived, RosSrv>` CRTP + `.mapper(shared_ptr)` | **Yes** (requires `ROBOT_BUS_HAS_ROS2`) |
+| Rust: `impl TypedTopicMapper` / `TypedServiceMapper` / `TypedActionMapper` | **Yes** |
+| C++: `TypedTopicMapper` / `TypedServiceMapper` CRTP + `.mapper(shared_ptr)` | **Yes** (requires `ROBOT_BUS_HAS_ROS2`) |
 | YAML / type-name strings only | **No** |
 
 Advanced: you can still override `ServiceMapper::attach` / `ActionMapper::attach` directly (special QoS, etc.).
@@ -310,6 +310,32 @@ impl TypedServiceMapper for AddTwoIntsServiceMapper {
 
 Action: `impl TypedActionMapper` (`type Ros = …` + six-way goal/feedback/result conversion). The library's `wire_typed_*` handles wiring.
 
+Custom topic: `impl TypedTopicMapper` (associated `Ros` IDL type and `Bus` protobuf type), conversion only; the library owns `create_subscription` / `create_publisher`.
+
+```rust
+use robot_bus::ros2_bridge::TypedTopicMapper;
+
+#[derive(Clone, Copy)]
+struct MyStringMapper;
+
+impl TypedTopicMapper for MyStringMapper {
+    type Ros = ros_env::std_msgs::msg::String;
+    type Bus = robot_bus::std_msgs::msg::v1::String;
+
+    fn type_name(&self) -> &str {
+        "std_msgs/msg/String"
+    }
+
+    fn ros_to_bus(&self, msg: Self::Ros) -> robot_bus::Result<Self::Bus> {
+        Ok(Self::Bus { data: msg.data.to_string() })
+    }
+
+    fn bus_to_ros(&self, msg: Self::Bus) -> robot_bus::Result<Self::Ros> {
+        Ok(Self::Ros { data: msg.data.into() })
+    }
+}
+```
+
 ### C++: custom Service (`TypedServiceMapper` CRTP)
 
 Built-ins use ZSTs: `.mapper(TriggerServiceMapper{})`. Custom mappers inherit CRTP, implement conversion only; the library auto `attach` / `retain`.
@@ -396,9 +422,9 @@ fn main() -> robot_bus::Result<()> {
 }
 ```
 
-- Custom topic: `impl TopicMapper` + `mapper_support` (`DynamicMessage`)
+- Custom topic: `impl TypedTopicMapper` (associated `Ros` / `Bus`, field-wise `ros_to_bus` / `bus_to_ros`; the library wires subscribe/publish)
 - Custom service/action: `TypedServiceMapper` / `TypedActionMapper` (see "User-defined" above)
-- Modules: `typed_service` (`wire_typed_*` / `attach_*`), `dynamic_rpc::spike_summary()`
+- Modules: `typed_service` (`wire_typed_*` / `attach_*`)
 
 ### Rust overlay (ament rust messages)
 
@@ -415,13 +441,17 @@ git clone -b humble https://github.com/ros2/rosidl_core.git src/rosidl_core
 git clone -b humble https://github.com/ros2/rosidl_defaults.git src/rosidl_defaults
 git clone -b humble https://github.com/ros2/unique_identifier_msgs.git src/unique_identifier_msgs
 git clone https://github.com/ros2-rust/rosidl_rust.git src/rosidl_rust
+# Topic mappers also need rust IDL for these packages (same overlay workspace):
+#   nav_msgs nav2_msgs geometry_msgs visualization_msgs tf2_msgs
+#   diagnostic_msgs trajectory_msgs shape_msgs stereo_msgs
+#   control_msgs foxglove_msgs apriltag_msgs action_msgs builtin_interfaces
 source /opt/ros/humble/setup.bash
 colcon build
 source install/setup.bash
-# cargo build --features ros2 can then see ros_env::sensor_msgs / example_interfaces
+# cargo build --features ros2 can then see ros_env::<pkg>::msg
 ```
 
-Without an overlay, use `just check-ros2-shim`. rclrs 0.8 talks to `ros_env::*`; crates.io `ros-env`'s shim is empty, so this repo patches it with field-complete stubs in [`third_party/ros-env-shim`](../../third_party/ros-env-shim). Our `std_srvs` vendor still uses system C typesupport and does not need rust IDL.
+Without an overlay, use `just check-ros2-shim`. rclrs 0.8 talks to `ros_env::*`; crates.io `ros-env`'s shim is empty, so this repo patches it with **typed field stubs** in [`third_party/ros-env-shim`](../../third_party/ros-env-shim) (generated from proto; not a DynamicMessage fallback). Our `std_srvs` vendor still uses system C typesupport and does not need rust IDL.
 
 ---
 

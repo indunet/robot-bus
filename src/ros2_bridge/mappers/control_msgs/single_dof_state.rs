@@ -1,71 +1,49 @@
-//! Mapper for `control_msgs/msg/SingleDOFState`.
+//! Typed mapper for `control_msgs/msg/SingleDOFState`.
 
-use prost::Message as ProstMessage;
-use rclrs::DynamicMessage;
+use crate::ros2_bridge::mapper::TypedTopicMapper;
 
-use super::super::common::*;
-use crate::BusError;
-use crate::ros2_bridge::mapper::TopicMapper;
-
-pub(crate) fn single_dof_state_from_view(
-    view: &rclrs::DynamicMessageView<'_>,
-) -> Result<crate::control_msgs::msg::v1::SingleDofState> {
-    Ok(crate::control_msgs::msg::v1::SingleDofState {
-        name: read_string(view, "name")?,
-        reference: read_f64(view, "reference")?,
-        feedback: read_f64(view, "feedback")?,
-        feedback_dot: read_f64(view, "feedback_dot")?,
-        error: read_f64(view, "error")?,
-        error_dot: read_f64(view, "error_dot")?,
-        time_step: read_f64(view, "time_step")?,
-        output: read_f64(view, "output")?,
-    })
+pub(crate) fn single_dof_state_to_bus(msg: ros_env::control_msgs::msg::SingleDOFState) -> crate::control_msgs::msg::v1::SingleDofState {
+    crate::control_msgs::msg::v1::SingleDofState {
+        name: crate::ros2_bridge::mappers::convert::from_ros_string(msg.name),
+        reference: msg.reference,
+        feedback: msg.feedback,
+        feedback_dot: msg.feedback_dot,
+        error: msg.error,
+        error_dot: msg.error_dot,
+        time_step: msg.time_step,
+        output: msg.output,
+    }
 }
 
-pub(crate) fn single_dof_state_write(
-    view: &mut rclrs::DynamicMessageViewMut<'_>,
-    bus: &crate::control_msgs::msg::v1::SingleDofState,
-) -> Result<()> {
-    write_string(view, "name", &bus.name)?;
-    write_f64(view, "reference", bus.reference)?;
-    write_f64(view, "feedback", bus.feedback)?;
-    write_f64(view, "feedback_dot", bus.feedback_dot)?;
-    write_f64(view, "error", bus.error)?;
-    write_f64(view, "error_dot", bus.error_dot)?;
-    write_f64(view, "time_step", bus.time_step)?;
-    write_f64(view, "output", bus.output)?;
-    Ok(())
+pub(crate) fn single_dof_state_to_ros(bus: crate::control_msgs::msg::v1::SingleDofState) -> ros_env::control_msgs::msg::SingleDOFState {
+    ros_env::control_msgs::msg::SingleDOFState {
+        name: crate::ros2_bridge::mappers::convert::to_ros_string(bus.name),
+        reference: bus.reference,
+        feedback: bus.feedback,
+        feedback_dot: bus.feedback_dot,
+        error: bus.error,
+        error_dot: bus.error_dot,
+        time_step: bus.time_step,
+        output: bus.output,
+    }
 }
 
-pub(crate) fn single_dof_state_dyn_to_bus(
-    msg: &rclrs::DynamicMessage,
-) -> Result<crate::control_msgs::msg::v1::SingleDofState> {
-    single_dof_state_from_view(&msg.view())
-}
-
-pub(crate) fn single_dof_state_bus_to_dyn(
-    bus: &crate::control_msgs::msg::v1::SingleDofState,
-) -> Result<rclrs::DynamicMessage> {
-    let mut msg = new_message("control_msgs/msg/SingleDOFState")?;
-    single_dof_state_write(&mut msg.view_mut(), bus)?;
-    Ok(msg)
-}
-
+#[derive(Clone, Copy, Debug, Default)]
 pub struct ControlMsgsSingleDofStateMapper;
-impl TopicMapper for ControlMsgsSingleDofStateMapper {
+
+impl TypedTopicMapper for ControlMsgsSingleDofStateMapper {
+    type Ros = ros_env::control_msgs::msg::SingleDOFState;
+    type Bus = crate::control_msgs::msg::v1::SingleDofState;
+
     fn type_name(&self) -> &'static str {
         "control_msgs/msg/SingleDOFState"
     }
 
-    fn ros_to_bus(&self, msg: &DynamicMessage) -> Result<Vec<u8>> {
-        Ok(single_dof_state_dyn_to_bus(msg)?.encode_to_vec())
+    fn ros_to_bus(&self, msg: Self::Ros) -> crate::errors::Result<Self::Bus> {
+        Ok(single_dof_state_to_bus(msg))
     }
 
-    fn bus_to_ros(&self, payload: &[u8]) -> Result<DynamicMessage> {
-        let bus = <crate::control_msgs::msg::v1::SingleDofState as ProstMessage>::decode(payload)
-            .map_err(|e| {
-            BusError::Protocol(format!("decode control_msgs/msg/SingleDOFState: {e}"))
-        })?;
-        single_dof_state_bus_to_dyn(&bus)
+    fn bus_to_ros(&self, msg: Self::Bus) -> crate::errors::Result<Self::Ros> {
+        Ok(single_dof_state_to_ros(msg))
     }
 }

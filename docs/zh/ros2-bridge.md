@@ -8,7 +8,7 @@
 
 | 语言 | ROS 客户端 | 入口 | 说明 |
 |------|------------|------|------|
-| **Rust** | `rclrs` | `robot_bus::ros2_bridge`（Cargo feature **`ros2`**） | Topic 可用 `DynamicMessage`；service/action 走 typed `attach` |
+| **Rust** | `rclrs` | `robot_bus::ros2_bridge`（Cargo feature **`ros2`**） | Topic / service / action 都走 typed `attach`（`TypedTopicMapper` / `TypedServiceMapper` / `TypedActionMapper`） |
 | **Python** | **`rclpy`** | `robot_bus.ros2_bridge` | 纯 Python，**不经** Rust FFI / `rclrs` |
 | **C++** | **`rclcpp`** | `<robot_bus/ros2_bridge.hpp>` + `robot_bus_ros2_bridge` | 原生 C++，**不经** Rust FFI / `rclrs` |
 
@@ -18,7 +18,7 @@ C++:     rclcpp ──mapper──► robot_bus::Node
 Rust:    rclrs  ──mapper──► robot_bus::Node
 ```
 
-**为什么分语言：** ROS service/action 只能用编译期具体类型 create（`create_service<T>` 等）。`rclrs` 没有 topic 那种按字符串建动态 service 的 API。若 C++/Python 只把类型名交给 Rust，`T` 对不上。因此各语言在本侧用具体类型建 ROS 实体，再用本语言 bus `Node` 转发。
+**为什么分语言：** Topic / service / action 都要用编译期具体类型（`create_subscription<T>` / `create_service<T>` 等）。若 C++/Python 只把类型名交给 Rust，`T` 对不上。因此各语言在本侧用具体类型建 ROS 实体，再用本语言 bus `Node` 转发。
 
 | 支持 | 不支持 |
 |------|--------|
@@ -37,7 +37,7 @@ source /opt/ros/humble/setup.bash   # 或 jazzy
 cargo run --bin robot_bus_broker    # 或已安装的 robot-bus-broker
 ```
 
-**Rust `feature = "ros2"`** 还要一层 **ros2_rust + common_interfaces** overlay：`AMENT_PREFIX_PATH` 里必须有 `rosidl_generator_rs` 生成的 `share/<pkg>/rust/`（至少 `std_msgs`、`sensor_msgs`、`example_interfaces`）。只 `source /opt/ros/humble` **编不出** `sensor_msgs::msg::Image` / Fibonacci typed 路径。`apt install ros-humble-sensor-msgs` 只提供 C typesupport，不含 rust IDL。overlay 搭法见下文「Rust overlay」。
+**Rust `feature = "ros2"`** 还要一层 **ros2_rust** overlay：`AMENT_PREFIX_PATH` 里必须有 `rosidl_generator_rs` 生成的 `share/<pkg>/rust/`，覆盖 **mappers 里全部包**（不只是 `std_msgs` / `sensor_msgs`）。只 `source /opt/ros/humble` **编不出** typed 路径。`apt install ros-humble-sensor-msgs` 只提供 C typesupport，不含 rust IDL。overlay 搭法见下文「Rust overlay」。
 
 | 语言 | 依赖 |
 |------|------|
@@ -138,15 +138,15 @@ Rust 另有完整 topic mapper 注册表（`src/ros2_bridge/mappers/`），挂�
 
 ---
 
-## 用户自定义 service / action：可以
+## 用户自定义 mapper：可以
 
-**可以。** 先写 **bus protobuf**（字段对齐 ROS `.srv` / `.action`），`protoc` 生成本语言 stubs，再只写 **字段 ↔ protobuf 转换**；库负责 `create_service` / client 接线。typed API 接受任意 protobuf 消息类，不必放进 robot-bus 仓库。
+**可以。** 先写 **bus protobuf**（字段对齐 ROS `.msg` / `.srv` / `.action`），`protoc` 生成本语言 stubs，再只写 **字段 ↔ protobuf 转换**；库负责订阅/发布/service 接线。typed API 接受任意 protobuf 消息类，不必放进 robot-bus 仓库。
 
 | | 行不行 |
 |--|--------|
 | Python：duck-typed convert 方法 + `.mapper(MyFoo())` | **行** |
-| Rust：`impl TypedServiceMapper` / `TypedActionMapper` | **行** |
-| C++：`TypedServiceMapper<Derived, RosSrv>` CRTP + `.mapper(shared_ptr)` | **行**（需 `ROBOT_BUS_HAS_ROS2`） |
+| Rust：`impl TypedTopicMapper` / `TypedServiceMapper` / `TypedActionMapper` | **行** |
+| C++：`TypedTopicMapper` / `TypedServiceMapper` CRTP + `.mapper(shared_ptr)` | **行**（需 `ROBOT_BUS_HAS_ROS2`） |
 | 只写 YAML / 类型名字符串 | **不行** |
 
 高级：仍可直接 override `ServiceMapper::attach` / `ActionMapper::attach`（特殊 QoS 等）。
@@ -307,6 +307,32 @@ impl TypedServiceMapper for AddTwoIntsServiceMapper {
 
 Action：`impl TypedActionMapper`（`type Ros = …` + goal/feedback/result 六向转换）。库内 `wire_typed_*` 负责接线。
 
+自定义 topic：`impl TypedTopicMapper`（关联 `Ros` IDL 类型与 `Bus` protobuf 类型），只写字段转换；库负责 `create_subscription` / `create_publisher`。
+
+```rust
+use robot_bus::ros2_bridge::TypedTopicMapper;
+
+#[derive(Clone, Copy)]
+struct MyStringMapper;
+
+impl TypedTopicMapper for MyStringMapper {
+    type Ros = ros_env::std_msgs::msg::String;
+    type Bus = robot_bus::std_msgs::msg::v1::String;
+
+    fn type_name(&self) -> &str {
+        "std_msgs/msg/String"
+    }
+
+    fn ros_to_bus(&self, msg: Self::Ros) -> robot_bus::Result<Self::Bus> {
+        Ok(Self::Bus { data: msg.data.to_string() })
+    }
+
+    fn bus_to_ros(&self, msg: Self::Bus) -> robot_bus::Result<Self::Ros> {
+        Ok(Self::Ros { data: msg.data.into() })
+    }
+}
+```
+
 ### C++：自定义 Service（`TypedServiceMapper` CRTP）
 
 内置仍用 ZST：`.mapper(TriggerServiceMapper{})`。自定义继承 CRTP，只写转换；库自动 `attach` / `retain`。
@@ -393,9 +419,9 @@ fn main() -> robot_bus::Result<()> {
 }
 ```
 
-- 自定义 topic：`impl TopicMapper` + `mapper_support`（`DynamicMessage`）
+- 自定义 topic：`impl TypedTopicMapper`（关联 `Ros` / `Bus`，`ros_to_bus` / `bus_to_ros` 做字段直拷；库负责订阅/发布）
 - 自定义 service/action：`TypedServiceMapper` / `TypedActionMapper`（见上文「用户自定义」）
-- 模块：`typed_service`（`wire_typed_*` / `attach_*`）、`dynamic_rpc::spike_summary()`
+- 模块：`typed_service`（`wire_typed_*` / `attach_*`）
 
 ### Rust overlay（ament rust 消息）
 
@@ -412,13 +438,17 @@ git clone -b humble https://github.com/ros2/rosidl_core.git src/rosidl_core
 git clone -b humble https://github.com/ros2/rosidl_defaults.git src/rosidl_defaults
 git clone -b humble https://github.com/ros2/unique_identifier_msgs.git src/unique_identifier_msgs
 git clone https://github.com/ros2-rust/rosidl_rust.git src/rosidl_rust
+# Topic mappers also need rust IDL for these packages (same overlay workspace):
+#   nav_msgs nav2_msgs geometry_msgs visualization_msgs tf2_msgs
+#   diagnostic_msgs trajectory_msgs shape_msgs stereo_msgs
+#   control_msgs foxglove_msgs apriltag_msgs action_msgs builtin_interfaces
 source /opt/ros/humble/setup.bash
 colcon build
 source install/setup.bash
-# 之后 cargo build --features ros2 才能看到 ros_env::sensor_msgs / example_interfaces
+# 之后 cargo build --features ros2 才能看到 ros_env::<pkg>::msg
 ```
 
-无 overlay 时可用 `just check-ros2-shim`。`rclrs` 0.8 走 `ros_env::*`，crates.io 的 `ros-env` shim 是空的，本仓库用 [`third_party/ros-env-shim`](../../third_party/ros-env-shim) 通过 `[patch.crates-io]` 提供带字段的 stub。我们自己的 `std_srvs` vendor 仍走系统 C typesupport，不依赖 rust IDL。
+无 overlay 时可用 `just check-ros2-shim`。`rclrs` 0.8 走 `ros_env::*`，crates.io 的 `ros-env` shim 是空的，本仓库用 [`third_party/ros-env-shim`](../../third_party/ros-env-shim) 通过 `[patch.crates-io]` 提供 **typed 字段桩**（按 proto 生成，不是 DynamicMessage 退路）。我们自己的 `std_srvs` vendor 仍走系统 C typesupport，不依赖 rust IDL。
 
 ---
 

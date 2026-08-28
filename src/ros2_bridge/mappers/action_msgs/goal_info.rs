@@ -1,71 +1,37 @@
-//! Mapper for `action_msgs/msg/GoalInfo`.
+//! Typed mapper for `action_msgs/msg/GoalInfo`.
 
-use prost::Message as ProstMessage;
-use rclrs::DynamicMessage;
+use crate::ros2_bridge::mapper::TypedTopicMapper;
 
-use super::super::common::*;
-use crate::BusError;
-use crate::ros2_bridge::mapper::TopicMapper;
-
-pub(crate) fn goal_info_from_view(
-    view: &rclrs::DynamicMessageView<'_>,
-) -> Result<crate::action_msgs::msg::v1::GoalInfo> {
-    Ok(crate::action_msgs::msg::v1::GoalInfo {
-        goal_id: nested_view(view, "goal_id")?
-            .as_ref()
-            .map(super::super::unique_identifier_msgs::uuid::uuid_from_view)
-            .transpose()?,
-        stamp: nested_view(view, "stamp")?
-            .as_ref()
-            .map(super::super::builtin_interfaces::time::time_from_view)
-            .transpose()?,
-    })
-}
-
-pub(crate) fn goal_info_write(
-    view: &mut rclrs::DynamicMessageViewMut<'_>,
-    bus: &crate::action_msgs::msg::v1::GoalInfo,
-) -> Result<()> {
-    if let Some(v) = &bus.goal_id {
-        with_nested_mut(view, "goal_id", |nested| {
-            super::super::unique_identifier_msgs::uuid::uuid_write(nested, v)
-        })?;
+pub(crate) fn goal_info_to_bus(msg: ros_env::action_msgs::msg::GoalInfo) -> crate::action_msgs::msg::v1::GoalInfo {
+    crate::action_msgs::msg::v1::GoalInfo {
+        goal_id: Some(crate::ros2_bridge::mappers::unique_identifier_msgs::uuid::uuid_to_bus(msg.goal_id)),
+        stamp: Some(crate::ros2_bridge::mappers::builtin_interfaces::time::time_to_bus(msg.stamp)),
     }
-    if let Some(v) = &bus.stamp {
-        with_nested_mut(view, "stamp", |nested| {
-            super::super::builtin_interfaces::time::time_write(nested, v)
-        })?;
+}
+
+pub(crate) fn goal_info_to_ros(bus: crate::action_msgs::msg::v1::GoalInfo) -> ros_env::action_msgs::msg::GoalInfo {
+    ros_env::action_msgs::msg::GoalInfo {
+        goal_id: crate::ros2_bridge::mappers::unique_identifier_msgs::uuid::uuid_to_ros(bus.goal_id.unwrap_or_default()),
+        stamp: crate::ros2_bridge::mappers::builtin_interfaces::time::time_to_ros(bus.stamp.unwrap_or_default()),
     }
-    Ok(())
 }
 
-pub(crate) fn goal_info_dyn_to_bus(
-    msg: &rclrs::DynamicMessage,
-) -> Result<crate::action_msgs::msg::v1::GoalInfo> {
-    goal_info_from_view(&msg.view())
-}
-
-pub(crate) fn goal_info_bus_to_dyn(
-    bus: &crate::action_msgs::msg::v1::GoalInfo,
-) -> Result<rclrs::DynamicMessage> {
-    let mut msg = new_message("action_msgs/msg/GoalInfo")?;
-    goal_info_write(&mut msg.view_mut(), bus)?;
-    Ok(msg)
-}
-
+#[derive(Clone, Copy, Debug, Default)]
 pub struct ActionMsgsGoalInfoMapper;
-impl TopicMapper for ActionMsgsGoalInfoMapper {
+
+impl TypedTopicMapper for ActionMsgsGoalInfoMapper {
+    type Ros = ros_env::action_msgs::msg::GoalInfo;
+    type Bus = crate::action_msgs::msg::v1::GoalInfo;
+
     fn type_name(&self) -> &'static str {
         "action_msgs/msg/GoalInfo"
     }
 
-    fn ros_to_bus(&self, msg: &DynamicMessage) -> Result<Vec<u8>> {
-        Ok(goal_info_dyn_to_bus(msg)?.encode_to_vec())
+    fn ros_to_bus(&self, msg: Self::Ros) -> crate::errors::Result<Self::Bus> {
+        Ok(goal_info_to_bus(msg))
     }
 
-    fn bus_to_ros(&self, payload: &[u8]) -> Result<DynamicMessage> {
-        let bus = <crate::action_msgs::msg::v1::GoalInfo as ProstMessage>::decode(payload)
-            .map_err(|e| BusError::Protocol(format!("decode action_msgs/msg/GoalInfo: {e}")))?;
-        goal_info_bus_to_dyn(&bus)
+    fn bus_to_ros(&self, msg: Self::Bus) -> crate::errors::Result<Self::Ros> {
+        Ok(goal_info_to_ros(msg))
     }
 }

@@ -1,59 +1,39 @@
-//! Mapper for `geometry_msgs/msg/Point`.
+//! Typed mapper for `geometry_msgs/msg/Point`.
 
-use prost::Message as ProstMessage;
-use rclrs::DynamicMessage;
+use crate::ros2_bridge::mapper::TypedTopicMapper;
 
-use super::super::common::*;
-use crate::BusError;
-use crate::ros2_bridge::mapper::TopicMapper;
-
-pub(crate) fn point_from_view(
-    view: &rclrs::DynamicMessageView<'_>,
-) -> Result<crate::geometry_msgs::msg::v1::Point> {
-    Ok(crate::geometry_msgs::msg::v1::Point {
-        x: read_f64(view, "x")?,
-        y: read_f64(view, "y")?,
-        z: read_f64(view, "z")?,
-    })
+pub(crate) fn point_to_bus(msg: ros_env::geometry_msgs::msg::Point) -> crate::geometry_msgs::msg::v1::Point {
+    crate::geometry_msgs::msg::v1::Point {
+        x: msg.x,
+        y: msg.y,
+        z: msg.z,
+    }
 }
 
-pub(crate) fn point_write(
-    view: &mut rclrs::DynamicMessageViewMut<'_>,
-    bus: &crate::geometry_msgs::msg::v1::Point,
-) -> Result<()> {
-    write_f64(view, "x", bus.x)?;
-    write_f64(view, "y", bus.y)?;
-    write_f64(view, "z", bus.z)?;
-    Ok(())
+pub(crate) fn point_to_ros(bus: crate::geometry_msgs::msg::v1::Point) -> ros_env::geometry_msgs::msg::Point {
+    ros_env::geometry_msgs::msg::Point {
+        x: bus.x,
+        y: bus.y,
+        z: bus.z,
+    }
 }
 
-pub(crate) fn point_dyn_to_bus(
-    msg: &rclrs::DynamicMessage,
-) -> Result<crate::geometry_msgs::msg::v1::Point> {
-    point_from_view(&msg.view())
-}
-
-pub(crate) fn point_bus_to_dyn(
-    bus: &crate::geometry_msgs::msg::v1::Point,
-) -> Result<rclrs::DynamicMessage> {
-    let mut msg = new_message("geometry_msgs/msg/Point")?;
-    point_write(&mut msg.view_mut(), bus)?;
-    Ok(msg)
-}
-
+#[derive(Clone, Copy, Debug, Default)]
 pub struct GeometryMsgsPointMapper;
-impl TopicMapper for GeometryMsgsPointMapper {
+
+impl TypedTopicMapper for GeometryMsgsPointMapper {
+    type Ros = ros_env::geometry_msgs::msg::Point;
+    type Bus = crate::geometry_msgs::msg::v1::Point;
+
     fn type_name(&self) -> &'static str {
         "geometry_msgs/msg/Point"
     }
 
-    fn ros_to_bus(&self, msg: &DynamicMessage) -> Result<Vec<u8>> {
-        Ok(point_dyn_to_bus(msg)?.encode_to_vec())
+    fn ros_to_bus(&self, msg: Self::Ros) -> crate::errors::Result<Self::Bus> {
+        Ok(point_to_bus(msg))
     }
 
-    fn bus_to_ros(&self, payload: &[u8]) -> Result<DynamicMessage> {
-        let bus = <crate::geometry_msgs::msg::v1::Point as ProstMessage>::decode(payload)
-            .map_err(|e| BusError::Protocol(format!("decode geometry_msgs/msg/Point: {e}")))?;
-        point_bus_to_dyn(&bus)
+    fn bus_to_ros(&self, msg: Self::Bus) -> crate::errors::Result<Self::Ros> {
+        Ok(point_to_ros(msg))
     }
 }

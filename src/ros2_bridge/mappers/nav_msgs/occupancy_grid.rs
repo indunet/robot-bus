@@ -1,73 +1,70 @@
-//! Mapper for `nav_msgs/msg/OccupancyGrid`.
+//! Typed mapper for `nav_msgs/msg/OccupancyGrid`.
+//!
+//! Owned `ros_to_bus` so occupancy `data` (`int8[]` ↔ proto `bytes`) moves
+//! instead of element-wise copies.
 
-use prost::Message as ProstMessage;
-use rclrs::DynamicMessage;
+use crate::ros2_bridge::mapper::TypedTopicMapper;
 
-use super::super::common::*;
-use crate::BusError;
-use crate::ros2_bridge::mapper::TopicMapper;
-
-pub(crate) fn occupancy_grid_from_view(
-    view: &rclrs::DynamicMessageView<'_>,
-) -> Result<crate::nav_msgs::msg::v1::OccupancyGrid> {
-    Ok(crate::nav_msgs::msg::v1::OccupancyGrid {
-        header: nested_view(view, "header")?
-            .as_ref()
-            .map(super::super::std_msgs::header::header_from_view)
-            .transpose()?,
-        info: nested_view(view, "info")?
-            .as_ref()
-            .map(super::map_meta_data::map_meta_data_from_view)
-            .transpose()?,
-        data: read_byte_seq(view, "data")?,
-    })
-}
-
-pub(crate) fn occupancy_grid_write(
-    view: &mut rclrs::DynamicMessageViewMut<'_>,
-    bus: &crate::nav_msgs::msg::v1::OccupancyGrid,
-) -> Result<()> {
-    if let Some(v) = &bus.header {
-        with_nested_mut(view, "header", |nested| {
-            super::super::std_msgs::header::header_write(nested, v)
-        })?;
+pub(crate) fn occupancy_grid_to_bus(
+    msg: ros_env::nav_msgs::msg::OccupancyGrid,
+) -> crate::nav_msgs::msg::v1::OccupancyGrid {
+    crate::nav_msgs::msg::v1::OccupancyGrid {
+        header: Some(crate::ros2_bridge::mappers::std_msgs::header::header_to_bus(msg.header)),
+        info: Some(
+            crate::ros2_bridge::mappers::nav_msgs::map_meta_data::map_meta_data_to_bus(msg.info),
+        ),
+        data: crate::ros2_bridge::mappers::convert::i8_seq_to_bytes(msg.data),
     }
-    if let Some(v) = &bus.info {
-        with_nested_mut(view, "info", |nested| {
-            super::map_meta_data::map_meta_data_write(nested, v)
-        })?;
+}
+
+pub(crate) fn occupancy_grid_to_ros(
+    bus: crate::nav_msgs::msg::v1::OccupancyGrid,
+) -> ros_env::nav_msgs::msg::OccupancyGrid {
+    ros_env::nav_msgs::msg::OccupancyGrid {
+        header: crate::ros2_bridge::mappers::std_msgs::header::header_to_ros(
+            bus.header.unwrap_or_default(),
+        ),
+        info: crate::ros2_bridge::mappers::nav_msgs::map_meta_data::map_meta_data_to_ros(
+            bus.info.unwrap_or_default(),
+        ),
+        data: crate::ros2_bridge::mappers::convert::bytes_to_i8_seq(bus.data),
     }
-    write_byte_seq(view, "data", &bus.data)?;
-    Ok(())
 }
 
-pub(crate) fn occupancy_grid_dyn_to_bus(
-    msg: &rclrs::DynamicMessage,
-) -> Result<crate::nav_msgs::msg::v1::OccupancyGrid> {
-    occupancy_grid_from_view(&msg.view())
-}
-
-pub(crate) fn occupancy_grid_bus_to_dyn(
-    bus: &crate::nav_msgs::msg::v1::OccupancyGrid,
-) -> Result<rclrs::DynamicMessage> {
-    let mut msg = new_message("nav_msgs/msg/OccupancyGrid")?;
-    occupancy_grid_write(&mut msg.view_mut(), bus)?;
-    Ok(msg)
-}
-
+#[derive(Clone, Copy, Debug, Default)]
 pub struct NavMsgsOccupancyGridMapper;
-impl TopicMapper for NavMsgsOccupancyGridMapper {
+
+impl TypedTopicMapper for NavMsgsOccupancyGridMapper {
+    type Ros = ros_env::nav_msgs::msg::OccupancyGrid;
+    type Bus = crate::nav_msgs::msg::v1::OccupancyGrid;
+
     fn type_name(&self) -> &'static str {
         "nav_msgs/msg/OccupancyGrid"
     }
 
-    fn ros_to_bus(&self, msg: &DynamicMessage) -> Result<Vec<u8>> {
-        Ok(occupancy_grid_dyn_to_bus(msg)?.encode_to_vec())
+    fn ros_to_bus(&self, msg: Self::Ros) -> crate::errors::Result<Self::Bus> {
+        Ok(occupancy_grid_to_bus(msg))
     }
 
-    fn bus_to_ros(&self, payload: &[u8]) -> Result<DynamicMessage> {
-        let bus = <crate::nav_msgs::msg::v1::OccupancyGrid as ProstMessage>::decode(payload)
-            .map_err(|e| BusError::Protocol(format!("decode nav_msgs/msg/OccupancyGrid: {e}")))?;
-        occupancy_grid_bus_to_dyn(&bus)
+    fn bus_to_ros(&self, msg: Self::Bus) -> crate::errors::Result<Self::Ros> {
+        Ok(occupancy_grid_to_ros(msg))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn occupancy_grid_i8_bytes_roundtrip() {
+        let ros = ros_env::nav_msgs::msg::OccupancyGrid {
+            header: Default::default(),
+            info: Default::default(),
+            data: vec![0, 1, -1, 100],
+        };
+        let bus = occupancy_grid_to_bus(ros);
+        assert_eq!(bus.data, vec![0, 1, 255, 100]);
+        let back = occupancy_grid_to_ros(bus);
+        assert_eq!(back.data, vec![0, 1, -1, 100]);
     }
 }

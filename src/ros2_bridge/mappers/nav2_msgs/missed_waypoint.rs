@@ -1,66 +1,39 @@
-//! Mapper for `nav2_msgs/msg/MissedWaypoint`.
+//! Typed mapper for `nav2_msgs/msg/MissedWaypoint`.
 
-use prost::Message as ProstMessage;
-use rclrs::DynamicMessage;
+use crate::ros2_bridge::mapper::TypedTopicMapper;
 
-use super::super::common::*;
-use crate::BusError;
-use crate::ros2_bridge::mapper::TopicMapper;
-
-pub(crate) fn missed_waypoint_from_view(
-    view: &rclrs::DynamicMessageView<'_>,
-) -> Result<crate::nav2_msgs::msg::v1::MissedWaypoint> {
-    Ok(crate::nav2_msgs::msg::v1::MissedWaypoint {
-        index: read_u32(view, "index")?,
-        goal: nested_view(view, "goal")?
-            .as_ref()
-            .map(super::super::geometry_msgs::pose_stamped::pose_stamped_from_view)
-            .transpose()?,
-        error_code: read_u32(view, "error_code")?,
-    })
-}
-
-pub(crate) fn missed_waypoint_write(
-    view: &mut rclrs::DynamicMessageViewMut<'_>,
-    bus: &crate::nav2_msgs::msg::v1::MissedWaypoint,
-) -> Result<()> {
-    write_u32(view, "index", bus.index)?;
-    if let Some(v) = &bus.goal {
-        with_nested_mut(view, "goal", |nested| {
-            super::super::geometry_msgs::pose_stamped::pose_stamped_write(nested, v)
-        })?;
+pub(crate) fn missed_waypoint_to_bus(msg: ros_env::nav2_msgs::msg::MissedWaypoint) -> crate::nav2_msgs::msg::v1::MissedWaypoint {
+    crate::nav2_msgs::msg::v1::MissedWaypoint {
+        index: msg.index,
+        goal: Some(crate::ros2_bridge::mappers::geometry_msgs::pose_stamped::pose_stamped_to_bus(msg.goal)),
+        error_code: msg.error_code,
     }
-    write_u32(view, "error_code", bus.error_code)?;
-    Ok(())
 }
 
-pub(crate) fn missed_waypoint_dyn_to_bus(
-    msg: &rclrs::DynamicMessage,
-) -> Result<crate::nav2_msgs::msg::v1::MissedWaypoint> {
-    missed_waypoint_from_view(&msg.view())
+pub(crate) fn missed_waypoint_to_ros(bus: crate::nav2_msgs::msg::v1::MissedWaypoint) -> ros_env::nav2_msgs::msg::MissedWaypoint {
+    ros_env::nav2_msgs::msg::MissedWaypoint {
+        index: bus.index,
+        goal: crate::ros2_bridge::mappers::geometry_msgs::pose_stamped::pose_stamped_to_ros(bus.goal.unwrap_or_default()),
+        error_code: bus.error_code,
+    }
 }
 
-pub(crate) fn missed_waypoint_bus_to_dyn(
-    bus: &crate::nav2_msgs::msg::v1::MissedWaypoint,
-) -> Result<rclrs::DynamicMessage> {
-    let mut msg = new_message("nav2_msgs/msg/MissedWaypoint")?;
-    missed_waypoint_write(&mut msg.view_mut(), bus)?;
-    Ok(msg)
-}
-
+#[derive(Clone, Copy, Debug, Default)]
 pub struct Nav2MsgsMissedWaypointMapper;
-impl TopicMapper for Nav2MsgsMissedWaypointMapper {
+
+impl TypedTopicMapper for Nav2MsgsMissedWaypointMapper {
+    type Ros = ros_env::nav2_msgs::msg::MissedWaypoint;
+    type Bus = crate::nav2_msgs::msg::v1::MissedWaypoint;
+
     fn type_name(&self) -> &'static str {
         "nav2_msgs/msg/MissedWaypoint"
     }
 
-    fn ros_to_bus(&self, msg: &DynamicMessage) -> Result<Vec<u8>> {
-        Ok(missed_waypoint_dyn_to_bus(msg)?.encode_to_vec())
+    fn ros_to_bus(&self, msg: Self::Ros) -> crate::errors::Result<Self::Bus> {
+        Ok(missed_waypoint_to_bus(msg))
     }
 
-    fn bus_to_ros(&self, payload: &[u8]) -> Result<DynamicMessage> {
-        let bus = <crate::nav2_msgs::msg::v1::MissedWaypoint as ProstMessage>::decode(payload)
-            .map_err(|e| BusError::Protocol(format!("decode nav2_msgs/msg/MissedWaypoint: {e}")))?;
-        missed_waypoint_bus_to_dyn(&bus)
+    fn bus_to_ros(&self, msg: Self::Bus) -> crate::errors::Result<Self::Ros> {
+        Ok(missed_waypoint_to_ros(msg))
     }
 }

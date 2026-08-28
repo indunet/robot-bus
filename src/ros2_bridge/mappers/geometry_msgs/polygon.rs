@@ -1,55 +1,35 @@
-//! Mapper for `geometry_msgs/msg/Polygon`.
+//! Typed mapper for `geometry_msgs/msg/Polygon`.
 
-use prost::Message as ProstMessage;
-use rclrs::DynamicMessage;
+use crate::ros2_bridge::mapper::TypedTopicMapper;
 
-use super::super::common::*;
-use crate::BusError;
-use crate::ros2_bridge::mapper::TopicMapper;
-
-pub(crate) fn polygon_from_view(
-    view: &rclrs::DynamicMessageView<'_>,
-) -> Result<crate::geometry_msgs::msg::v1::Polygon> {
-    Ok(crate::geometry_msgs::msg::v1::Polygon {
-        points: read_message_seq(view, "points", super::point32::point32_from_view)?,
-    })
+pub(crate) fn polygon_to_bus(msg: ros_env::geometry_msgs::msg::Polygon) -> crate::geometry_msgs::msg::v1::Polygon {
+    crate::geometry_msgs::msg::v1::Polygon {
+        points: msg.points.into_iter().map(crate::ros2_bridge::mappers::geometry_msgs::point32::point32_to_bus).collect(),
+    }
 }
 
-pub(crate) fn polygon_write(
-    view: &mut rclrs::DynamicMessageViewMut<'_>,
-    bus: &crate::geometry_msgs::msg::v1::Polygon,
-) -> Result<()> {
-    write_message_seq(view, "points", &bus.points, super::point32::point32_write)?;
-    Ok(())
+pub(crate) fn polygon_to_ros(bus: crate::geometry_msgs::msg::v1::Polygon) -> ros_env::geometry_msgs::msg::Polygon {
+    ros_env::geometry_msgs::msg::Polygon {
+        points: bus.points.into_iter().map(crate::ros2_bridge::mappers::geometry_msgs::point32::point32_to_ros).collect(),
+    }
 }
 
-pub(crate) fn polygon_dyn_to_bus(
-    msg: &rclrs::DynamicMessage,
-) -> Result<crate::geometry_msgs::msg::v1::Polygon> {
-    polygon_from_view(&msg.view())
-}
-
-pub(crate) fn polygon_bus_to_dyn(
-    bus: &crate::geometry_msgs::msg::v1::Polygon,
-) -> Result<rclrs::DynamicMessage> {
-    let mut msg = new_message("geometry_msgs/msg/Polygon")?;
-    polygon_write(&mut msg.view_mut(), bus)?;
-    Ok(msg)
-}
-
+#[derive(Clone, Copy, Debug, Default)]
 pub struct GeometryMsgsPolygonMapper;
-impl TopicMapper for GeometryMsgsPolygonMapper {
+
+impl TypedTopicMapper for GeometryMsgsPolygonMapper {
+    type Ros = ros_env::geometry_msgs::msg::Polygon;
+    type Bus = crate::geometry_msgs::msg::v1::Polygon;
+
     fn type_name(&self) -> &'static str {
         "geometry_msgs/msg/Polygon"
     }
 
-    fn ros_to_bus(&self, msg: &DynamicMessage) -> Result<Vec<u8>> {
-        Ok(polygon_dyn_to_bus(msg)?.encode_to_vec())
+    fn ros_to_bus(&self, msg: Self::Ros) -> crate::errors::Result<Self::Bus> {
+        Ok(polygon_to_bus(msg))
     }
 
-    fn bus_to_ros(&self, payload: &[u8]) -> Result<DynamicMessage> {
-        let bus = <crate::geometry_msgs::msg::v1::Polygon as ProstMessage>::decode(payload)
-            .map_err(|e| BusError::Protocol(format!("decode geometry_msgs/msg/Polygon: {e}")))?;
-        polygon_bus_to_dyn(&bus)
+    fn bus_to_ros(&self, msg: Self::Bus) -> crate::errors::Result<Self::Ros> {
+        Ok(polygon_to_ros(msg))
     }
 }

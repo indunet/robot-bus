@@ -1,75 +1,37 @@
-//! Mapper for `nav2_msgs/msg/BehaviorTreeLog`.
+//! Typed mapper for `nav2_msgs/msg/BehaviorTreeLog`.
 
-use prost::Message as ProstMessage;
-use rclrs::DynamicMessage;
+use crate::ros2_bridge::mapper::TypedTopicMapper;
 
-use super::super::common::*;
-use crate::BusError;
-use crate::ros2_bridge::mapper::TopicMapper;
-
-pub(crate) fn behavior_tree_log_from_view(
-    view: &rclrs::DynamicMessageView<'_>,
-) -> Result<crate::nav2_msgs::msg::v1::BehaviorTreeLog> {
-    Ok(crate::nav2_msgs::msg::v1::BehaviorTreeLog {
-        timestamp: nested_view(view, "timestamp")?
-            .as_ref()
-            .map(super::super::builtin_interfaces::time::time_from_view)
-            .transpose()?,
-        event_log: read_message_seq(
-            view,
-            "event_log",
-            super::behavior_tree_status_change::behavior_tree_status_change_from_view,
-        )?,
-    })
-}
-
-pub(crate) fn behavior_tree_log_write(
-    view: &mut rclrs::DynamicMessageViewMut<'_>,
-    bus: &crate::nav2_msgs::msg::v1::BehaviorTreeLog,
-) -> Result<()> {
-    if let Some(v) = &bus.timestamp {
-        with_nested_mut(view, "timestamp", |nested| {
-            super::super::builtin_interfaces::time::time_write(nested, v)
-        })?;
+pub(crate) fn behavior_tree_log_to_bus(msg: ros_env::nav2_msgs::msg::BehaviorTreeLog) -> crate::nav2_msgs::msg::v1::BehaviorTreeLog {
+    crate::nav2_msgs::msg::v1::BehaviorTreeLog {
+        timestamp: Some(crate::ros2_bridge::mappers::builtin_interfaces::time::time_to_bus(msg.timestamp)),
+        event_log: msg.event_log.into_iter().map(crate::ros2_bridge::mappers::nav2_msgs::behavior_tree_status_change::behavior_tree_status_change_to_bus).collect(),
     }
-    write_message_seq(
-        view,
-        "event_log",
-        &bus.event_log,
-        super::behavior_tree_status_change::behavior_tree_status_change_write,
-    )?;
-    Ok(())
 }
 
-pub(crate) fn behavior_tree_log_dyn_to_bus(
-    msg: &rclrs::DynamicMessage,
-) -> Result<crate::nav2_msgs::msg::v1::BehaviorTreeLog> {
-    behavior_tree_log_from_view(&msg.view())
+pub(crate) fn behavior_tree_log_to_ros(bus: crate::nav2_msgs::msg::v1::BehaviorTreeLog) -> ros_env::nav2_msgs::msg::BehaviorTreeLog {
+    ros_env::nav2_msgs::msg::BehaviorTreeLog {
+        timestamp: crate::ros2_bridge::mappers::builtin_interfaces::time::time_to_ros(bus.timestamp.unwrap_or_default()),
+        event_log: bus.event_log.into_iter().map(crate::ros2_bridge::mappers::nav2_msgs::behavior_tree_status_change::behavior_tree_status_change_to_ros).collect(),
+    }
 }
 
-pub(crate) fn behavior_tree_log_bus_to_dyn(
-    bus: &crate::nav2_msgs::msg::v1::BehaviorTreeLog,
-) -> Result<rclrs::DynamicMessage> {
-    let mut msg = new_message("nav2_msgs/msg/BehaviorTreeLog")?;
-    behavior_tree_log_write(&mut msg.view_mut(), bus)?;
-    Ok(msg)
-}
-
+#[derive(Clone, Copy, Debug, Default)]
 pub struct Nav2MsgsBehaviorTreeLogMapper;
-impl TopicMapper for Nav2MsgsBehaviorTreeLogMapper {
+
+impl TypedTopicMapper for Nav2MsgsBehaviorTreeLogMapper {
+    type Ros = ros_env::nav2_msgs::msg::BehaviorTreeLog;
+    type Bus = crate::nav2_msgs::msg::v1::BehaviorTreeLog;
+
     fn type_name(&self) -> &'static str {
         "nav2_msgs/msg/BehaviorTreeLog"
     }
 
-    fn ros_to_bus(&self, msg: &DynamicMessage) -> Result<Vec<u8>> {
-        Ok(behavior_tree_log_dyn_to_bus(msg)?.encode_to_vec())
+    fn ros_to_bus(&self, msg: Self::Ros) -> crate::errors::Result<Self::Bus> {
+        Ok(behavior_tree_log_to_bus(msg))
     }
 
-    fn bus_to_ros(&self, payload: &[u8]) -> Result<DynamicMessage> {
-        let bus = <crate::nav2_msgs::msg::v1::BehaviorTreeLog as ProstMessage>::decode(payload)
-            .map_err(|e| {
-                BusError::Protocol(format!("decode nav2_msgs/msg/BehaviorTreeLog: {e}"))
-            })?;
-        behavior_tree_log_bus_to_dyn(&bus)
+    fn bus_to_ros(&self, msg: Self::Bus) -> crate::errors::Result<Self::Ros> {
+        Ok(behavior_tree_log_to_ros(msg))
     }
 }

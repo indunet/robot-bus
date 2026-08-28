@@ -1,76 +1,39 @@
-//! Mapper for `geometry_msgs/msg/TransformStamped`.
+//! Typed mapper for `geometry_msgs/msg/TransformStamped`.
 
-use prost::Message as ProstMessage;
-use rclrs::DynamicMessage;
+use crate::ros2_bridge::mapper::TypedTopicMapper;
 
-use super::super::common::*;
-use crate::BusError;
-use crate::ros2_bridge::mapper::TopicMapper;
-
-pub(crate) fn transform_stamped_from_view(
-    view: &rclrs::DynamicMessageView<'_>,
-) -> Result<crate::geometry_msgs::msg::v1::TransformStamped> {
-    Ok(crate::geometry_msgs::msg::v1::TransformStamped {
-        header: nested_view(view, "header")?
-            .as_ref()
-            .map(super::super::std_msgs::header::header_from_view)
-            .transpose()?,
-        child_frame_id: read_string(view, "child_frame_id")?,
-        transform: nested_view(view, "transform")?
-            .as_ref()
-            .map(super::transform::transform_from_view)
-            .transpose()?,
-    })
-}
-
-pub(crate) fn transform_stamped_write(
-    view: &mut rclrs::DynamicMessageViewMut<'_>,
-    bus: &crate::geometry_msgs::msg::v1::TransformStamped,
-) -> Result<()> {
-    if let Some(v) = &bus.header {
-        with_nested_mut(view, "header", |nested| {
-            super::super::std_msgs::header::header_write(nested, v)
-        })?;
+pub(crate) fn transform_stamped_to_bus(msg: ros_env::geometry_msgs::msg::TransformStamped) -> crate::geometry_msgs::msg::v1::TransformStamped {
+    crate::geometry_msgs::msg::v1::TransformStamped {
+        header: Some(crate::ros2_bridge::mappers::std_msgs::header::header_to_bus(msg.header)),
+        child_frame_id: crate::ros2_bridge::mappers::convert::from_ros_string(msg.child_frame_id),
+        transform: Some(crate::ros2_bridge::mappers::geometry_msgs::transform::transform_to_bus(msg.transform)),
     }
-    write_string(view, "child_frame_id", &bus.child_frame_id)?;
-    if let Some(v) = &bus.transform {
-        with_nested_mut(view, "transform", |nested| {
-            super::transform::transform_write(nested, v)
-        })?;
+}
+
+pub(crate) fn transform_stamped_to_ros(bus: crate::geometry_msgs::msg::v1::TransformStamped) -> ros_env::geometry_msgs::msg::TransformStamped {
+    ros_env::geometry_msgs::msg::TransformStamped {
+        header: crate::ros2_bridge::mappers::std_msgs::header::header_to_ros(bus.header.unwrap_or_default()),
+        child_frame_id: crate::ros2_bridge::mappers::convert::to_ros_string(bus.child_frame_id),
+        transform: crate::ros2_bridge::mappers::geometry_msgs::transform::transform_to_ros(bus.transform.unwrap_or_default()),
     }
-    Ok(())
 }
 
-pub(crate) fn transform_stamped_dyn_to_bus(
-    msg: &rclrs::DynamicMessage,
-) -> Result<crate::geometry_msgs::msg::v1::TransformStamped> {
-    transform_stamped_from_view(&msg.view())
-}
-
-pub(crate) fn transform_stamped_bus_to_dyn(
-    bus: &crate::geometry_msgs::msg::v1::TransformStamped,
-) -> Result<rclrs::DynamicMessage> {
-    let mut msg = new_message("geometry_msgs/msg/TransformStamped")?;
-    transform_stamped_write(&mut msg.view_mut(), bus)?;
-    Ok(msg)
-}
-
+#[derive(Clone, Copy, Debug, Default)]
 pub struct GeometryMsgsTransformStampedMapper;
-impl TopicMapper for GeometryMsgsTransformStampedMapper {
+
+impl TypedTopicMapper for GeometryMsgsTransformStampedMapper {
+    type Ros = ros_env::geometry_msgs::msg::TransformStamped;
+    type Bus = crate::geometry_msgs::msg::v1::TransformStamped;
+
     fn type_name(&self) -> &'static str {
         "geometry_msgs/msg/TransformStamped"
     }
 
-    fn ros_to_bus(&self, msg: &DynamicMessage) -> Result<Vec<u8>> {
-        Ok(transform_stamped_dyn_to_bus(msg)?.encode_to_vec())
+    fn ros_to_bus(&self, msg: Self::Ros) -> crate::errors::Result<Self::Bus> {
+        Ok(transform_stamped_to_bus(msg))
     }
 
-    fn bus_to_ros(&self, payload: &[u8]) -> Result<DynamicMessage> {
-        let bus =
-            <crate::geometry_msgs::msg::v1::TransformStamped as ProstMessage>::decode(payload)
-                .map_err(|e| {
-                    BusError::Protocol(format!("decode geometry_msgs/msg/TransformStamped: {e}"))
-                })?;
-        transform_stamped_bus_to_dyn(&bus)
+    fn bus_to_ros(&self, msg: Self::Bus) -> crate::errors::Result<Self::Ros> {
+        Ok(transform_stamped_to_ros(msg))
     }
 }

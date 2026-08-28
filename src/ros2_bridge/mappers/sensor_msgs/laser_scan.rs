@@ -1,80 +1,53 @@
-//! Mapper for `sensor_msgs/msg/LaserScan`.
+//! Typed mapper for `sensor_msgs/msg/LaserScan`.
 
-use prost::Message as ProstMessage;
-use rclrs::DynamicMessage;
+use crate::ros2_bridge::mapper::TypedTopicMapper;
 
-use super::super::common::*;
-use crate::BusError;
-use crate::ros2_bridge::mapper::TopicMapper;
-
-pub(crate) fn laser_scan_from_view(
-    view: &rclrs::DynamicMessageView<'_>,
-) -> Result<crate::sensor_msgs::msg::v1::LaserScan> {
-    Ok(crate::sensor_msgs::msg::v1::LaserScan {
-        header: nested_view(view, "header")?
-            .as_ref()
-            .map(super::super::std_msgs::header::header_from_view)
-            .transpose()?,
-        angle_min: read_f32(view, "angle_min")?,
-        angle_max: read_f32(view, "angle_max")?,
-        angle_increment: read_f32(view, "angle_increment")?,
-        time_increment: read_f32(view, "time_increment")?,
-        scan_time: read_f32(view, "scan_time")?,
-        range_min: read_f32(view, "range_min")?,
-        range_max: read_f32(view, "range_max")?,
-        ranges: read_f32_seq(view, "ranges")?,
-        intensities: read_f32_seq(view, "intensities")?,
-    })
-}
-
-pub(crate) fn laser_scan_write(
-    view: &mut rclrs::DynamicMessageViewMut<'_>,
-    bus: &crate::sensor_msgs::msg::v1::LaserScan,
-) -> Result<()> {
-    if let Some(v) = &bus.header {
-        with_nested_mut(view, "header", |nested| {
-            super::super::std_msgs::header::header_write(nested, v)
-        })?;
+pub(crate) fn laser_scan_to_bus(msg: ros_env::sensor_msgs::msg::LaserScan) -> crate::sensor_msgs::msg::v1::LaserScan {
+    crate::sensor_msgs::msg::v1::LaserScan {
+        header: Some(crate::ros2_bridge::mappers::std_msgs::header::header_to_bus(msg.header)),
+        angle_min: msg.angle_min,
+        angle_max: msg.angle_max,
+        angle_increment: msg.angle_increment,
+        time_increment: msg.time_increment,
+        scan_time: msg.scan_time,
+        range_min: msg.range_min,
+        range_max: msg.range_max,
+        ranges: crate::ros2_bridge::mappers::convert::f32_seq(msg.ranges),
+        intensities: crate::ros2_bridge::mappers::convert::f32_seq(msg.intensities),
     }
-    write_f32(view, "angle_min", bus.angle_min)?;
-    write_f32(view, "angle_max", bus.angle_max)?;
-    write_f32(view, "angle_increment", bus.angle_increment)?;
-    write_f32(view, "time_increment", bus.time_increment)?;
-    write_f32(view, "scan_time", bus.scan_time)?;
-    write_f32(view, "range_min", bus.range_min)?;
-    write_f32(view, "range_max", bus.range_max)?;
-    write_f32_seq(view, "ranges", &bus.ranges)?;
-    write_f32_seq(view, "intensities", &bus.intensities)?;
-    Ok(())
 }
 
-pub(crate) fn laser_scan_dyn_to_bus(
-    msg: &rclrs::DynamicMessage,
-) -> Result<crate::sensor_msgs::msg::v1::LaserScan> {
-    laser_scan_from_view(&msg.view())
+pub(crate) fn laser_scan_to_ros(bus: crate::sensor_msgs::msg::v1::LaserScan) -> ros_env::sensor_msgs::msg::LaserScan {
+    ros_env::sensor_msgs::msg::LaserScan {
+        header: crate::ros2_bridge::mappers::std_msgs::header::header_to_ros(bus.header.unwrap_or_default()),
+        angle_min: bus.angle_min,
+        angle_max: bus.angle_max,
+        angle_increment: bus.angle_increment,
+        time_increment: bus.time_increment,
+        scan_time: bus.scan_time,
+        range_min: bus.range_min,
+        range_max: bus.range_max,
+        ranges: bus.ranges,
+        intensities: bus.intensities,
+    }
 }
 
-pub(crate) fn laser_scan_bus_to_dyn(
-    bus: &crate::sensor_msgs::msg::v1::LaserScan,
-) -> Result<rclrs::DynamicMessage> {
-    let mut msg = new_message("sensor_msgs/msg/LaserScan")?;
-    laser_scan_write(&mut msg.view_mut(), bus)?;
-    Ok(msg)
-}
-
+#[derive(Clone, Copy, Debug, Default)]
 pub struct SensorMsgsLaserScanMapper;
-impl TopicMapper for SensorMsgsLaserScanMapper {
+
+impl TypedTopicMapper for SensorMsgsLaserScanMapper {
+    type Ros = ros_env::sensor_msgs::msg::LaserScan;
+    type Bus = crate::sensor_msgs::msg::v1::LaserScan;
+
     fn type_name(&self) -> &'static str {
         "sensor_msgs/msg/LaserScan"
     }
 
-    fn ros_to_bus(&self, msg: &DynamicMessage) -> Result<Vec<u8>> {
-        Ok(laser_scan_dyn_to_bus(msg)?.encode_to_vec())
+    fn ros_to_bus(&self, msg: Self::Ros) -> crate::errors::Result<Self::Bus> {
+        Ok(laser_scan_to_bus(msg))
     }
 
-    fn bus_to_ros(&self, payload: &[u8]) -> Result<DynamicMessage> {
-        let bus = <crate::sensor_msgs::msg::v1::LaserScan as ProstMessage>::decode(payload)
-            .map_err(|e| BusError::Protocol(format!("decode sensor_msgs/msg/LaserScan: {e}")))?;
-        laser_scan_bus_to_dyn(&bus)
+    fn bus_to_ros(&self, msg: Self::Bus) -> crate::errors::Result<Self::Ros> {
+        Ok(laser_scan_to_ros(msg))
     }
 }

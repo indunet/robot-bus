@@ -1,55 +1,35 @@
-//! Mapper for `shape_msgs/msg/MeshTriangle`.
+//! Typed mapper for `shape_msgs/msg/MeshTriangle`.
 
-use prost::Message as ProstMessage;
-use rclrs::DynamicMessage;
+use crate::ros2_bridge::mapper::TypedTopicMapper;
 
-use super::super::common::*;
-use crate::BusError;
-use crate::ros2_bridge::mapper::TopicMapper;
-
-pub(crate) fn mesh_triangle_from_view(
-    view: &rclrs::DynamicMessageView<'_>,
-) -> Result<crate::shape_msgs::msg::v1::MeshTriangle> {
-    Ok(crate::shape_msgs::msg::v1::MeshTriangle {
-        vertex_indices: read_u32_seq(view, "vertex_indices")?,
-    })
+pub(crate) fn mesh_triangle_to_bus(msg: ros_env::shape_msgs::msg::MeshTriangle) -> crate::shape_msgs::msg::v1::MeshTriangle {
+    crate::shape_msgs::msg::v1::MeshTriangle {
+        vertex_indices: crate::ros2_bridge::mappers::convert::u32_seq(msg.vertex_indices),
+    }
 }
 
-pub(crate) fn mesh_triangle_write(
-    view: &mut rclrs::DynamicMessageViewMut<'_>,
-    bus: &crate::shape_msgs::msg::v1::MeshTriangle,
-) -> Result<()> {
-    write_u32_seq(view, "vertex_indices", &bus.vertex_indices)?;
-    Ok(())
+pub(crate) fn mesh_triangle_to_ros(bus: crate::shape_msgs::msg::v1::MeshTriangle) -> ros_env::shape_msgs::msg::MeshTriangle {
+    ros_env::shape_msgs::msg::MeshTriangle {
+        vertex_indices: crate::ros2_bridge::mappers::convert::FromU32Seq::from_u32_seq(bus.vertex_indices),
+    }
 }
 
-pub(crate) fn mesh_triangle_dyn_to_bus(
-    msg: &rclrs::DynamicMessage,
-) -> Result<crate::shape_msgs::msg::v1::MeshTriangle> {
-    mesh_triangle_from_view(&msg.view())
-}
-
-pub(crate) fn mesh_triangle_bus_to_dyn(
-    bus: &crate::shape_msgs::msg::v1::MeshTriangle,
-) -> Result<rclrs::DynamicMessage> {
-    let mut msg = new_message("shape_msgs/msg/MeshTriangle")?;
-    mesh_triangle_write(&mut msg.view_mut(), bus)?;
-    Ok(msg)
-}
-
+#[derive(Clone, Copy, Debug, Default)]
 pub struct ShapeMsgsMeshTriangleMapper;
-impl TopicMapper for ShapeMsgsMeshTriangleMapper {
+
+impl TypedTopicMapper for ShapeMsgsMeshTriangleMapper {
+    type Ros = ros_env::shape_msgs::msg::MeshTriangle;
+    type Bus = crate::shape_msgs::msg::v1::MeshTriangle;
+
     fn type_name(&self) -> &'static str {
         "shape_msgs/msg/MeshTriangle"
     }
 
-    fn ros_to_bus(&self, msg: &DynamicMessage) -> Result<Vec<u8>> {
-        Ok(mesh_triangle_dyn_to_bus(msg)?.encode_to_vec())
+    fn ros_to_bus(&self, msg: Self::Ros) -> crate::errors::Result<Self::Bus> {
+        Ok(mesh_triangle_to_bus(msg))
     }
 
-    fn bus_to_ros(&self, payload: &[u8]) -> Result<DynamicMessage> {
-        let bus = <crate::shape_msgs::msg::v1::MeshTriangle as ProstMessage>::decode(payload)
-            .map_err(|e| BusError::Protocol(format!("decode shape_msgs/msg/MeshTriangle: {e}")))?;
-        mesh_triangle_bus_to_dyn(&bus)
+    fn bus_to_ros(&self, msg: Self::Bus) -> crate::errors::Result<Self::Ros> {
+        Ok(mesh_triangle_to_ros(msg))
     }
 }

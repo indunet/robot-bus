@@ -1,55 +1,35 @@
-//! Mapper for `std_msgs/msg/Int16`.
+//! Typed mapper for `std_msgs/msg/Int16`.
 
-use prost::Message as ProstMessage;
-use rclrs::DynamicMessage;
+use crate::ros2_bridge::mapper::TypedTopicMapper;
 
-use super::super::common::*;
-use crate::BusError;
-use crate::ros2_bridge::mapper::TopicMapper;
-
-pub(crate) fn int16_from_view(
-    view: &rclrs::DynamicMessageView<'_>,
-) -> Result<crate::std_msgs::msg::v1::Int16> {
-    Ok(crate::std_msgs::msg::v1::Int16 {
-        data: read_i32(view, "data")?,
-    })
+pub(crate) fn int16_to_bus(msg: ros_env::std_msgs::msg::Int16) -> crate::std_msgs::msg::v1::Int16 {
+    crate::std_msgs::msg::v1::Int16 {
+        data: msg.data as i32,
+    }
 }
 
-pub(crate) fn int16_write(
-    view: &mut rclrs::DynamicMessageViewMut<'_>,
-    bus: &crate::std_msgs::msg::v1::Int16,
-) -> Result<()> {
-    write_i32(view, "data", bus.data)?;
-    Ok(())
+pub(crate) fn int16_to_ros(bus: crate::std_msgs::msg::v1::Int16) -> ros_env::std_msgs::msg::Int16 {
+    ros_env::std_msgs::msg::Int16 {
+        data: bus.data as i16,
+    }
 }
 
-pub(crate) fn int16_dyn_to_bus(
-    msg: &rclrs::DynamicMessage,
-) -> Result<crate::std_msgs::msg::v1::Int16> {
-    int16_from_view(&msg.view())
-}
-
-pub(crate) fn int16_bus_to_dyn(
-    bus: &crate::std_msgs::msg::v1::Int16,
-) -> Result<rclrs::DynamicMessage> {
-    let mut msg = new_message("std_msgs/msg/Int16")?;
-    int16_write(&mut msg.view_mut(), bus)?;
-    Ok(msg)
-}
-
+#[derive(Clone, Copy, Debug, Default)]
 pub struct StdMsgsInt16Mapper;
-impl TopicMapper for StdMsgsInt16Mapper {
+
+impl TypedTopicMapper for StdMsgsInt16Mapper {
+    type Ros = ros_env::std_msgs::msg::Int16;
+    type Bus = crate::std_msgs::msg::v1::Int16;
+
     fn type_name(&self) -> &'static str {
         "std_msgs/msg/Int16"
     }
 
-    fn ros_to_bus(&self, msg: &DynamicMessage) -> Result<Vec<u8>> {
-        Ok(int16_dyn_to_bus(msg)?.encode_to_vec())
+    fn ros_to_bus(&self, msg: Self::Ros) -> crate::errors::Result<Self::Bus> {
+        Ok(int16_to_bus(msg))
     }
 
-    fn bus_to_ros(&self, payload: &[u8]) -> Result<DynamicMessage> {
-        let bus = <crate::std_msgs::msg::v1::Int16 as ProstMessage>::decode(payload)
-            .map_err(|e| BusError::Protocol(format!("decode std_msgs/msg/Int16: {e}")))?;
-        int16_bus_to_dyn(&bus)
+    fn bus_to_ros(&self, msg: Self::Bus) -> crate::errors::Result<Self::Ros> {
+        Ok(int16_to_ros(msg))
     }
 }

@@ -1,60 +1,37 @@
-//! Mapper for `nav2_msgs/msg/CollisionMonitorState`.
+//! Typed mapper for `nav2_msgs/msg/CollisionMonitorState`.
 
-use prost::Message as ProstMessage;
-use rclrs::DynamicMessage;
+use crate::ros2_bridge::mapper::TypedTopicMapper;
 
-use super::super::common::*;
-use crate::BusError;
-use crate::ros2_bridge::mapper::TopicMapper;
-
-pub(crate) fn collision_monitor_state_from_view(
-    view: &rclrs::DynamicMessageView<'_>,
-) -> Result<crate::nav2_msgs::msg::v1::CollisionMonitorState> {
-    Ok(crate::nav2_msgs::msg::v1::CollisionMonitorState {
-        action_type: read_u32(view, "action_type")?,
-        polygon_name: read_string(view, "polygon_name")?,
-    })
+pub(crate) fn collision_monitor_state_to_bus(msg: ros_env::nav2_msgs::msg::CollisionMonitorState) -> crate::nav2_msgs::msg::v1::CollisionMonitorState {
+    crate::nav2_msgs::msg::v1::CollisionMonitorState {
+        action_type: msg.action_type,
+        polygon_name: crate::ros2_bridge::mappers::convert::from_ros_string(msg.polygon_name),
+    }
 }
 
-pub(crate) fn collision_monitor_state_write(
-    view: &mut rclrs::DynamicMessageViewMut<'_>,
-    bus: &crate::nav2_msgs::msg::v1::CollisionMonitorState,
-) -> Result<()> {
-    write_u32(view, "action_type", bus.action_type)?;
-    write_string(view, "polygon_name", &bus.polygon_name)?;
-    Ok(())
+pub(crate) fn collision_monitor_state_to_ros(bus: crate::nav2_msgs::msg::v1::CollisionMonitorState) -> ros_env::nav2_msgs::msg::CollisionMonitorState {
+    ros_env::nav2_msgs::msg::CollisionMonitorState {
+        action_type: bus.action_type,
+        polygon_name: crate::ros2_bridge::mappers::convert::to_ros_string(bus.polygon_name),
+    }
 }
 
-pub(crate) fn collision_monitor_state_dyn_to_bus(
-    msg: &rclrs::DynamicMessage,
-) -> Result<crate::nav2_msgs::msg::v1::CollisionMonitorState> {
-    collision_monitor_state_from_view(&msg.view())
-}
-
-pub(crate) fn collision_monitor_state_bus_to_dyn(
-    bus: &crate::nav2_msgs::msg::v1::CollisionMonitorState,
-) -> Result<rclrs::DynamicMessage> {
-    let mut msg = new_message("nav2_msgs/msg/CollisionMonitorState")?;
-    collision_monitor_state_write(&mut msg.view_mut(), bus)?;
-    Ok(msg)
-}
-
+#[derive(Clone, Copy, Debug, Default)]
 pub struct Nav2MsgsCollisionMonitorStateMapper;
-impl TopicMapper for Nav2MsgsCollisionMonitorStateMapper {
+
+impl TypedTopicMapper for Nav2MsgsCollisionMonitorStateMapper {
+    type Ros = ros_env::nav2_msgs::msg::CollisionMonitorState;
+    type Bus = crate::nav2_msgs::msg::v1::CollisionMonitorState;
+
     fn type_name(&self) -> &'static str {
         "nav2_msgs/msg/CollisionMonitorState"
     }
 
-    fn ros_to_bus(&self, msg: &DynamicMessage) -> Result<Vec<u8>> {
-        Ok(collision_monitor_state_dyn_to_bus(msg)?.encode_to_vec())
+    fn ros_to_bus(&self, msg: Self::Ros) -> crate::errors::Result<Self::Bus> {
+        Ok(collision_monitor_state_to_bus(msg))
     }
 
-    fn bus_to_ros(&self, payload: &[u8]) -> Result<DynamicMessage> {
-        let bus =
-            <crate::nav2_msgs::msg::v1::CollisionMonitorState as ProstMessage>::decode(payload)
-                .map_err(|e| {
-                    BusError::Protocol(format!("decode nav2_msgs/msg/CollisionMonitorState: {e}"))
-                })?;
-        collision_monitor_state_bus_to_dyn(&bus)
+    fn bus_to_ros(&self, msg: Self::Bus) -> crate::errors::Result<Self::Ros> {
+        Ok(collision_monitor_state_to_ros(msg))
     }
 }

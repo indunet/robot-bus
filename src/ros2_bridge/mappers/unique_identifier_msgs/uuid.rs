@@ -1,57 +1,35 @@
-//! Mapper for `unique_identifier_msgs/msg/UUID`.
+//! Typed mapper for `unique_identifier_msgs/msg/UUID`.
 
-use prost::Message as ProstMessage;
-use rclrs::DynamicMessage;
+use crate::ros2_bridge::mapper::TypedTopicMapper;
 
-use super::super::common::*;
-use crate::BusError;
-use crate::ros2_bridge::mapper::TopicMapper;
-
-pub(crate) fn uuid_from_view(
-    view: &rclrs::DynamicMessageView<'_>,
-) -> Result<crate::unique_identifier_msgs::msg::v1::Uuid> {
-    Ok(crate::unique_identifier_msgs::msg::v1::Uuid {
-        uuid: read_byte_seq(view, "uuid")?,
-    })
+pub(crate) fn uuid_to_bus(msg: ros_env::unique_identifier_msgs::msg::UUID) -> crate::unique_identifier_msgs::msg::v1::Uuid {
+    crate::unique_identifier_msgs::msg::v1::Uuid {
+        uuid: crate::ros2_bridge::mappers::convert::IntoU8Vec::into_u8_vec(msg.uuid),
+    }
 }
 
-pub(crate) fn uuid_write(
-    view: &mut rclrs::DynamicMessageViewMut<'_>,
-    bus: &crate::unique_identifier_msgs::msg::v1::Uuid,
-) -> Result<()> {
-    write_byte_seq(view, "uuid", &bus.uuid)?;
-    Ok(())
+pub(crate) fn uuid_to_ros(bus: crate::unique_identifier_msgs::msg::v1::Uuid) -> ros_env::unique_identifier_msgs::msg::UUID {
+    ros_env::unique_identifier_msgs::msg::UUID {
+        uuid: crate::ros2_bridge::mappers::convert::FromByteSeq::from_byte_seq(bus.uuid),
+    }
 }
 
-pub(crate) fn uuid_dyn_to_bus(
-    msg: &rclrs::DynamicMessage,
-) -> Result<crate::unique_identifier_msgs::msg::v1::Uuid> {
-    uuid_from_view(&msg.view())
-}
-
-pub(crate) fn uuid_bus_to_dyn(
-    bus: &crate::unique_identifier_msgs::msg::v1::Uuid,
-) -> Result<rclrs::DynamicMessage> {
-    let mut msg = new_message("unique_identifier_msgs/msg/UUID")?;
-    uuid_write(&mut msg.view_mut(), bus)?;
-    Ok(msg)
-}
-
+#[derive(Clone, Copy, Debug, Default)]
 pub struct UniqueIdentifierMsgsUuidMapper;
-impl TopicMapper for UniqueIdentifierMsgsUuidMapper {
+
+impl TypedTopicMapper for UniqueIdentifierMsgsUuidMapper {
+    type Ros = ros_env::unique_identifier_msgs::msg::UUID;
+    type Bus = crate::unique_identifier_msgs::msg::v1::Uuid;
+
     fn type_name(&self) -> &'static str {
         "unique_identifier_msgs/msg/UUID"
     }
 
-    fn ros_to_bus(&self, msg: &DynamicMessage) -> Result<Vec<u8>> {
-        Ok(uuid_dyn_to_bus(msg)?.encode_to_vec())
+    fn ros_to_bus(&self, msg: Self::Ros) -> crate::errors::Result<Self::Bus> {
+        Ok(uuid_to_bus(msg))
     }
 
-    fn bus_to_ros(&self, payload: &[u8]) -> Result<DynamicMessage> {
-        let bus = <crate::unique_identifier_msgs::msg::v1::Uuid as ProstMessage>::decode(payload)
-            .map_err(|e| {
-            BusError::Protocol(format!("decode unique_identifier_msgs/msg/UUID: {e}"))
-        })?;
-        uuid_bus_to_dyn(&bus)
+    fn bus_to_ros(&self, msg: Self::Bus) -> crate::errors::Result<Self::Ros> {
+        Ok(uuid_to_ros(msg))
     }
 }

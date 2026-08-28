@@ -1,173 +1,71 @@
-//! Mapper for `visualization_msgs/msg/Marker`.
+//! Typed mapper for `visualization_msgs/msg/Marker`.
 
-use prost::Message as ProstMessage;
-use rclrs::DynamicMessage;
+use crate::ros2_bridge::mapper::TypedTopicMapper;
 
-use super::super::common::*;
-use crate::BusError;
-use crate::ros2_bridge::mapper::TopicMapper;
-
-pub(crate) fn marker_from_view(
-    view: &rclrs::DynamicMessageView<'_>,
-) -> Result<crate::visualization_msgs::msg::v1::Marker> {
-    Ok(crate::visualization_msgs::msg::v1::Marker {
-        header: nested_view(view, "header")?
-            .as_ref()
-            .map(super::super::std_msgs::header::header_from_view)
-            .transpose()?,
-        ns: read_string(view, "ns")?,
-        id: read_i32(view, "id")?,
-        r#type: read_i32(view, "type")?,
-        action: read_i32(view, "action")?,
-        pose: nested_view(view, "pose")?
-            .as_ref()
-            .map(super::super::geometry_msgs::pose::pose_from_view)
-            .transpose()?,
-        scale: nested_view(view, "scale")?
-            .as_ref()
-            .map(super::super::geometry_msgs::vector3::vector3_from_view)
-            .transpose()?,
-        color: nested_view(view, "color")?
-            .as_ref()
-            .map(super::super::std_msgs::color_rgba::color_rgba_from_view)
-            .transpose()?,
-        lifetime: nested_view(view, "lifetime")?
-            .as_ref()
-            .map(super::super::builtin_interfaces::duration::duration_from_view)
-            .transpose()?,
-        frame_locked: read_bool(view, "frame_locked")?,
-        points: read_message_seq(
-            view,
-            "points",
-            super::super::geometry_msgs::point::point_from_view,
-        )?,
-        colors: read_message_seq(
-            view,
-            "colors",
-            super::super::std_msgs::color_rgba::color_rgba_from_view,
-        )?,
-        texture_resource: read_string(view, "texture_resource")?,
-        texture: nested_view(view, "texture")?
-            .as_ref()
-            .map(super::super::sensor_msgs::compressed_image::compressed_image_from_view)
-            .transpose()?,
-        uv_coordinates: read_message_seq(
-            view,
-            "uv_coordinates",
-            super::uv_coordinate::uv_coordinate_from_view,
-        )?,
-        text: read_string(view, "text")?,
-        mesh_resource: read_string(view, "mesh_resource")?,
-        mesh_file: nested_view(view, "mesh_file")?
-            .as_ref()
-            .map(super::mesh_file::mesh_file_from_view)
-            .transpose()?,
-        mesh_use_embedded_materials: read_bool(view, "mesh_use_embedded_materials")?,
-    })
+pub(crate) fn marker_to_bus(msg: ros_env::visualization_msgs::msg::Marker) -> crate::visualization_msgs::msg::v1::Marker {
+    crate::visualization_msgs::msg::v1::Marker {
+        header: Some(crate::ros2_bridge::mappers::std_msgs::header::header_to_bus(msg.header)),
+        ns: crate::ros2_bridge::mappers::convert::from_ros_string(msg.ns),
+        id: msg.id,
+        r#type: msg.type_,
+        action: msg.action,
+        pose: Some(crate::ros2_bridge::mappers::geometry_msgs::pose::pose_to_bus(msg.pose)),
+        scale: Some(crate::ros2_bridge::mappers::geometry_msgs::vector3::vector3_to_bus(msg.scale)),
+        color: Some(crate::ros2_bridge::mappers::std_msgs::color_rgba::color_rgba_to_bus(msg.color)),
+        lifetime: Some(crate::ros2_bridge::mappers::builtin_interfaces::duration::duration_to_bus(msg.lifetime)),
+        frame_locked: msg.frame_locked,
+        points: msg.points.into_iter().map(crate::ros2_bridge::mappers::geometry_msgs::point::point_to_bus).collect(),
+        colors: msg.colors.into_iter().map(crate::ros2_bridge::mappers::std_msgs::color_rgba::color_rgba_to_bus).collect(),
+        texture_resource: crate::ros2_bridge::mappers::convert::from_ros_string(msg.texture_resource),
+        texture: Some(crate::ros2_bridge::mappers::sensor_msgs::compressed_image::compressed_image_to_bus(msg.texture)),
+        uv_coordinates: msg.uv_coordinates.into_iter().map(crate::ros2_bridge::mappers::visualization_msgs::uv_coordinate::uv_coordinate_to_bus).collect(),
+        text: crate::ros2_bridge::mappers::convert::from_ros_string(msg.text),
+        mesh_resource: crate::ros2_bridge::mappers::convert::from_ros_string(msg.mesh_resource),
+        mesh_file: Some(crate::ros2_bridge::mappers::visualization_msgs::mesh_file::mesh_file_to_bus(msg.mesh_file)),
+        mesh_use_embedded_materials: msg.mesh_use_embedded_materials,
+    }
 }
 
-pub(crate) fn marker_write(
-    view: &mut rclrs::DynamicMessageViewMut<'_>,
-    bus: &crate::visualization_msgs::msg::v1::Marker,
-) -> Result<()> {
-    if let Some(v) = &bus.header {
-        with_nested_mut(view, "header", |nested| {
-            super::super::std_msgs::header::header_write(nested, v)
-        })?;
+pub(crate) fn marker_to_ros(bus: crate::visualization_msgs::msg::v1::Marker) -> ros_env::visualization_msgs::msg::Marker {
+    ros_env::visualization_msgs::msg::Marker {
+        header: crate::ros2_bridge::mappers::std_msgs::header::header_to_ros(bus.header.unwrap_or_default()),
+        ns: crate::ros2_bridge::mappers::convert::to_ros_string(bus.ns),
+        id: bus.id,
+        type_: bus.r#type,
+        action: bus.action,
+        pose: crate::ros2_bridge::mappers::geometry_msgs::pose::pose_to_ros(bus.pose.unwrap_or_default()),
+        scale: crate::ros2_bridge::mappers::geometry_msgs::vector3::vector3_to_ros(bus.scale.unwrap_or_default()),
+        color: crate::ros2_bridge::mappers::std_msgs::color_rgba::color_rgba_to_ros(bus.color.unwrap_or_default()),
+        lifetime: crate::ros2_bridge::mappers::builtin_interfaces::duration::duration_to_ros(bus.lifetime.unwrap_or_default()),
+        frame_locked: bus.frame_locked,
+        points: bus.points.into_iter().map(crate::ros2_bridge::mappers::geometry_msgs::point::point_to_ros).collect(),
+        colors: bus.colors.into_iter().map(crate::ros2_bridge::mappers::std_msgs::color_rgba::color_rgba_to_ros).collect(),
+        texture_resource: crate::ros2_bridge::mappers::convert::to_ros_string(bus.texture_resource),
+        texture: crate::ros2_bridge::mappers::sensor_msgs::compressed_image::compressed_image_to_ros(bus.texture.unwrap_or_default()),
+        uv_coordinates: bus.uv_coordinates.into_iter().map(crate::ros2_bridge::mappers::visualization_msgs::uv_coordinate::uv_coordinate_to_ros).collect(),
+        text: crate::ros2_bridge::mappers::convert::to_ros_string(bus.text),
+        mesh_resource: crate::ros2_bridge::mappers::convert::to_ros_string(bus.mesh_resource),
+        mesh_file: crate::ros2_bridge::mappers::visualization_msgs::mesh_file::mesh_file_to_ros(bus.mesh_file.unwrap_or_default()),
+        mesh_use_embedded_materials: bus.mesh_use_embedded_materials,
     }
-    write_string(view, "ns", &bus.ns)?;
-    write_i32(view, "id", bus.id)?;
-    write_i32(view, "type", bus.r#type)?;
-    write_i32(view, "action", bus.action)?;
-    if let Some(v) = &bus.pose {
-        with_nested_mut(view, "pose", |nested| {
-            super::super::geometry_msgs::pose::pose_write(nested, v)
-        })?;
-    }
-    if let Some(v) = &bus.scale {
-        with_nested_mut(view, "scale", |nested| {
-            super::super::geometry_msgs::vector3::vector3_write(nested, v)
-        })?;
-    }
-    if let Some(v) = &bus.color {
-        with_nested_mut(view, "color", |nested| {
-            super::super::std_msgs::color_rgba::color_rgba_write(nested, v)
-        })?;
-    }
-    if let Some(v) = &bus.lifetime {
-        with_nested_mut(view, "lifetime", |nested| {
-            super::super::builtin_interfaces::duration::duration_write(nested, v)
-        })?;
-    }
-    write_bool(view, "frame_locked", bus.frame_locked)?;
-    write_message_seq(
-        view,
-        "points",
-        &bus.points,
-        super::super::geometry_msgs::point::point_write,
-    )?;
-    write_message_seq(
-        view,
-        "colors",
-        &bus.colors,
-        super::super::std_msgs::color_rgba::color_rgba_write,
-    )?;
-    write_string(view, "texture_resource", &bus.texture_resource)?;
-    if let Some(v) = &bus.texture {
-        with_nested_mut(view, "texture", |nested| {
-            super::super::sensor_msgs::compressed_image::compressed_image_write(nested, v)
-        })?;
-    }
-    write_message_seq(
-        view,
-        "uv_coordinates",
-        &bus.uv_coordinates,
-        super::uv_coordinate::uv_coordinate_write,
-    )?;
-    write_string(view, "text", &bus.text)?;
-    write_string(view, "mesh_resource", &bus.mesh_resource)?;
-    if let Some(v) = &bus.mesh_file {
-        with_nested_mut(view, "mesh_file", |nested| {
-            super::mesh_file::mesh_file_write(nested, v)
-        })?;
-    }
-    write_bool(
-        view,
-        "mesh_use_embedded_materials",
-        bus.mesh_use_embedded_materials,
-    )?;
-    Ok(())
 }
 
-pub(crate) fn marker_dyn_to_bus(
-    msg: &rclrs::DynamicMessage,
-) -> Result<crate::visualization_msgs::msg::v1::Marker> {
-    marker_from_view(&msg.view())
-}
-
-pub(crate) fn marker_bus_to_dyn(
-    bus: &crate::visualization_msgs::msg::v1::Marker,
-) -> Result<rclrs::DynamicMessage> {
-    let mut msg = new_message("visualization_msgs/msg/Marker")?;
-    marker_write(&mut msg.view_mut(), bus)?;
-    Ok(msg)
-}
-
+#[derive(Clone, Copy, Debug, Default)]
 pub struct VisualizationMsgsMarkerMapper;
-impl TopicMapper for VisualizationMsgsMarkerMapper {
+
+impl TypedTopicMapper for VisualizationMsgsMarkerMapper {
+    type Ros = ros_env::visualization_msgs::msg::Marker;
+    type Bus = crate::visualization_msgs::msg::v1::Marker;
+
     fn type_name(&self) -> &'static str {
         "visualization_msgs/msg/Marker"
     }
 
-    fn ros_to_bus(&self, msg: &DynamicMessage) -> Result<Vec<u8>> {
-        Ok(marker_dyn_to_bus(msg)?.encode_to_vec())
+    fn ros_to_bus(&self, msg: Self::Ros) -> crate::errors::Result<Self::Bus> {
+        Ok(marker_to_bus(msg))
     }
 
-    fn bus_to_ros(&self, payload: &[u8]) -> Result<DynamicMessage> {
-        let bus = <crate::visualization_msgs::msg::v1::Marker as ProstMessage>::decode(payload)
-            .map_err(|e| {
-                BusError::Protocol(format!("decode visualization_msgs/msg/Marker: {e}"))
-            })?;
-        marker_bus_to_dyn(&bus)
+    fn bus_to_ros(&self, msg: Self::Bus) -> crate::errors::Result<Self::Ros> {
+        Ok(marker_to_ros(msg))
     }
 }

@@ -1,64 +1,39 @@
-//! Mapper for `foxglove_msgs/msg/SceneEntityDeletion`.
+//! Typed mapper for `foxglove_msgs/msg/SceneEntityDeletion`.
 
-use prost::Message as ProstMessage;
-use rclrs::DynamicMessage;
+use crate::ros2_bridge::mapper::TypedTopicMapper;
 
-use super::super::common::*;
-use crate::BusError;
-use crate::ros2_bridge::mapper::TopicMapper;
-
-pub(crate) fn scene_entity_deletion_from_view(
-    view: &rclrs::DynamicMessageView<'_>,
-) -> Result<crate::foxglove_msgs::msg::v1::SceneEntityDeletion> {
-    Ok(crate::foxglove_msgs::msg::v1::SceneEntityDeletion {
-        timestamp: read_timestamp(view, "timestamp")?,
-        r#type: read_i32(view, "type")?,
-        id: read_string(view, "id")?,
-    })
-}
-
-pub(crate) fn scene_entity_deletion_write(
-    view: &mut rclrs::DynamicMessageViewMut<'_>,
-    bus: &crate::foxglove_msgs::msg::v1::SceneEntityDeletion,
-) -> Result<()> {
-    if let Some(v) = &bus.timestamp {
-        write_timestamp(view, "timestamp", v)?;
+pub(crate) fn scene_entity_deletion_to_bus(msg: ros_env::foxglove_msgs::msg::SceneEntityDeletion) -> crate::foxglove_msgs::msg::v1::SceneEntityDeletion {
+    crate::foxglove_msgs::msg::v1::SceneEntityDeletion {
+        timestamp: Some(crate::ros2_bridge::mappers::convert::time_to_timestamp(msg.timestamp)),
+        r#type: msg.type_ as i32,
+        id: crate::ros2_bridge::mappers::convert::from_ros_string(msg.id),
     }
-    write_i32(view, "type", bus.r#type)?;
-    write_string(view, "id", &bus.id)?;
-    Ok(())
 }
 
-pub(crate) fn scene_entity_deletion_dyn_to_bus(
-    msg: &rclrs::DynamicMessage,
-) -> Result<crate::foxglove_msgs::msg::v1::SceneEntityDeletion> {
-    scene_entity_deletion_from_view(&msg.view())
+pub(crate) fn scene_entity_deletion_to_ros(bus: crate::foxglove_msgs::msg::v1::SceneEntityDeletion) -> ros_env::foxglove_msgs::msg::SceneEntityDeletion {
+    ros_env::foxglove_msgs::msg::SceneEntityDeletion {
+        timestamp: crate::ros2_bridge::mappers::convert::timestamp_to_time(bus.timestamp.unwrap_or_default()),
+        type_: bus.r#type as i32,
+        id: crate::ros2_bridge::mappers::convert::to_ros_string(bus.id),
+    }
 }
 
-pub(crate) fn scene_entity_deletion_bus_to_dyn(
-    bus: &crate::foxglove_msgs::msg::v1::SceneEntityDeletion,
-) -> Result<rclrs::DynamicMessage> {
-    let mut msg = new_message("foxglove_msgs/msg/SceneEntityDeletion")?;
-    scene_entity_deletion_write(&mut msg.view_mut(), bus)?;
-    Ok(msg)
-}
-
+#[derive(Clone, Copy, Debug, Default)]
 pub struct FoxgloveMsgsSceneEntityDeletionMapper;
-impl TopicMapper for FoxgloveMsgsSceneEntityDeletionMapper {
+
+impl TypedTopicMapper for FoxgloveMsgsSceneEntityDeletionMapper {
+    type Ros = ros_env::foxglove_msgs::msg::SceneEntityDeletion;
+    type Bus = crate::foxglove_msgs::msg::v1::SceneEntityDeletion;
+
     fn type_name(&self) -> &'static str {
         "foxglove_msgs/msg/SceneEntityDeletion"
     }
 
-    fn ros_to_bus(&self, msg: &DynamicMessage) -> Result<Vec<u8>> {
-        Ok(scene_entity_deletion_dyn_to_bus(msg)?.encode_to_vec())
+    fn ros_to_bus(&self, msg: Self::Ros) -> crate::errors::Result<Self::Bus> {
+        Ok(scene_entity_deletion_to_bus(msg))
     }
 
-    fn bus_to_ros(&self, payload: &[u8]) -> Result<DynamicMessage> {
-        let bus =
-            <crate::foxglove_msgs::msg::v1::SceneEntityDeletion as ProstMessage>::decode(payload)
-                .map_err(|e| {
-                BusError::Protocol(format!("decode foxglove_msgs/msg/SceneEntityDeletion: {e}"))
-            })?;
-        scene_entity_deletion_bus_to_dyn(&bus)
+    fn bus_to_ros(&self, msg: Self::Bus) -> crate::errors::Result<Self::Ros> {
+        Ok(scene_entity_deletion_to_ros(msg))
     }
 }

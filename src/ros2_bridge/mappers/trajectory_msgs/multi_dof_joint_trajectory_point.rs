@@ -1,99 +1,41 @@
-//! Mapper for `trajectory_msgs/msg/MultiDOFJointTrajectoryPoint`.
+//! Typed mapper for `trajectory_msgs/msg/MultiDOFJointTrajectoryPoint`.
 
-use prost::Message as ProstMessage;
-use rclrs::DynamicMessage;
+use crate::ros2_bridge::mapper::TypedTopicMapper;
 
-use super::super::common::*;
-use crate::BusError;
-use crate::ros2_bridge::mapper::TopicMapper;
-
-pub(crate) fn multi_dof_joint_trajectory_point_from_view(
-    view: &rclrs::DynamicMessageView<'_>,
-) -> Result<crate::trajectory_msgs::msg::v1::MultiDofJointTrajectoryPoint> {
-    Ok(
-        crate::trajectory_msgs::msg::v1::MultiDofJointTrajectoryPoint {
-            transforms: read_message_seq(
-                view,
-                "transforms",
-                super::super::geometry_msgs::transform::transform_from_view,
-            )?,
-            velocities: read_message_seq(
-                view,
-                "velocities",
-                super::super::geometry_msgs::twist::twist_from_view,
-            )?,
-            accelerations: read_message_seq(
-                view,
-                "accelerations",
-                super::super::geometry_msgs::twist::twist_from_view,
-            )?,
-            time_from_start: nested_view(view, "time_from_start")?
-                .as_ref()
-                .map(super::super::builtin_interfaces::duration::duration_from_view)
-                .transpose()?,
-        },
-    )
-}
-
-pub(crate) fn multi_dof_joint_trajectory_point_write(
-    view: &mut rclrs::DynamicMessageViewMut<'_>,
-    bus: &crate::trajectory_msgs::msg::v1::MultiDofJointTrajectoryPoint,
-) -> Result<()> {
-    write_message_seq(
-        view,
-        "transforms",
-        &bus.transforms,
-        super::super::geometry_msgs::transform::transform_write,
-    )?;
-    write_message_seq(
-        view,
-        "velocities",
-        &bus.velocities,
-        super::super::geometry_msgs::twist::twist_write,
-    )?;
-    write_message_seq(
-        view,
-        "accelerations",
-        &bus.accelerations,
-        super::super::geometry_msgs::twist::twist_write,
-    )?;
-    if let Some(v) = &bus.time_from_start {
-        with_nested_mut(view, "time_from_start", |nested| {
-            super::super::builtin_interfaces::duration::duration_write(nested, v)
-        })?;
+pub(crate) fn multi_dof_joint_trajectory_point_to_bus(msg: ros_env::trajectory_msgs::msg::MultiDOFJointTrajectoryPoint) -> crate::trajectory_msgs::msg::v1::MultiDofJointTrajectoryPoint {
+    crate::trajectory_msgs::msg::v1::MultiDofJointTrajectoryPoint {
+        transforms: msg.transforms.into_iter().map(crate::ros2_bridge::mappers::geometry_msgs::transform::transform_to_bus).collect(),
+        velocities: msg.velocities.into_iter().map(crate::ros2_bridge::mappers::geometry_msgs::twist::twist_to_bus).collect(),
+        accelerations: msg.accelerations.into_iter().map(crate::ros2_bridge::mappers::geometry_msgs::twist::twist_to_bus).collect(),
+        time_from_start: Some(crate::ros2_bridge::mappers::builtin_interfaces::duration::duration_to_bus(msg.time_from_start)),
     }
-    Ok(())
 }
 
-pub(crate) fn multi_dof_joint_trajectory_point_dyn_to_bus(
-    msg: &rclrs::DynamicMessage,
-) -> Result<crate::trajectory_msgs::msg::v1::MultiDofJointTrajectoryPoint> {
-    multi_dof_joint_trajectory_point_from_view(&msg.view())
+pub(crate) fn multi_dof_joint_trajectory_point_to_ros(bus: crate::trajectory_msgs::msg::v1::MultiDofJointTrajectoryPoint) -> ros_env::trajectory_msgs::msg::MultiDOFJointTrajectoryPoint {
+    ros_env::trajectory_msgs::msg::MultiDOFJointTrajectoryPoint {
+        transforms: bus.transforms.into_iter().map(crate::ros2_bridge::mappers::geometry_msgs::transform::transform_to_ros).collect(),
+        velocities: bus.velocities.into_iter().map(crate::ros2_bridge::mappers::geometry_msgs::twist::twist_to_ros).collect(),
+        accelerations: bus.accelerations.into_iter().map(crate::ros2_bridge::mappers::geometry_msgs::twist::twist_to_ros).collect(),
+        time_from_start: crate::ros2_bridge::mappers::builtin_interfaces::duration::duration_to_ros(bus.time_from_start.unwrap_or_default()),
+    }
 }
 
-pub(crate) fn multi_dof_joint_trajectory_point_bus_to_dyn(
-    bus: &crate::trajectory_msgs::msg::v1::MultiDofJointTrajectoryPoint,
-) -> Result<rclrs::DynamicMessage> {
-    let mut msg = new_message("trajectory_msgs/msg/MultiDOFJointTrajectoryPoint")?;
-    multi_dof_joint_trajectory_point_write(&mut msg.view_mut(), bus)?;
-    Ok(msg)
-}
-
+#[derive(Clone, Copy, Debug, Default)]
 pub struct TrajectoryMsgsMultiDofJointTrajectoryPointMapper;
-impl TopicMapper for TrajectoryMsgsMultiDofJointTrajectoryPointMapper {
+
+impl TypedTopicMapper for TrajectoryMsgsMultiDofJointTrajectoryPointMapper {
+    type Ros = ros_env::trajectory_msgs::msg::MultiDOFJointTrajectoryPoint;
+    type Bus = crate::trajectory_msgs::msg::v1::MultiDofJointTrajectoryPoint;
+
     fn type_name(&self) -> &'static str {
         "trajectory_msgs/msg/MultiDOFJointTrajectoryPoint"
     }
 
-    fn ros_to_bus(&self, msg: &DynamicMessage) -> Result<Vec<u8>> {
-        Ok(multi_dof_joint_trajectory_point_dyn_to_bus(msg)?.encode_to_vec())
+    fn ros_to_bus(&self, msg: Self::Ros) -> crate::errors::Result<Self::Bus> {
+        Ok(multi_dof_joint_trajectory_point_to_bus(msg))
     }
 
-    fn bus_to_ros(&self, payload: &[u8]) -> Result<DynamicMessage> {
-        let bus = <crate::trajectory_msgs::msg::v1::MultiDofJointTrajectoryPoint as ProstMessage>::decode(payload)
-            .map_err(|e| {
-                BusError::Protocol(format!("decode trajectory_msgs/msg/MultiDOFJointTrajectoryPoint: {e}"))
-            })?;
-        multi_dof_joint_trajectory_point_bus_to_dyn(&bus)
+    fn bus_to_ros(&self, msg: Self::Bus) -> crate::errors::Result<Self::Ros> {
+        Ok(multi_dof_joint_trajectory_point_to_ros(msg))
     }
 }

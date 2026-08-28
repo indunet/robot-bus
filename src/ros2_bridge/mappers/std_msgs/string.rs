@@ -1,55 +1,55 @@
-//! Mapper for `std_msgs/msg/String`.
+//! Typed mapper for `std_msgs/msg/String`.
 
-use prost::Message as ProstMessage;
-use rclrs::DynamicMessage;
+use crate::ros2_bridge::mapper::TypedTopicMapper;
 
-use super::super::common::*;
-use crate::BusError;
-use crate::ros2_bridge::mapper::TopicMapper;
-
-pub(crate) fn string_from_view(
-    view: &rclrs::DynamicMessageView<'_>,
-) -> Result<crate::std_msgs::msg::v1::String> {
-    Ok(crate::std_msgs::msg::v1::String {
-        data: read_string(view, "data")?,
-    })
+pub(crate) fn string_to_bus(
+    msg: ros_env::std_msgs::msg::String,
+) -> crate::std_msgs::msg::v1::String {
+    crate::std_msgs::msg::v1::String {
+        data: crate::ros2_bridge::mappers::convert::from_ros_string(msg.data),
+    }
 }
 
-pub(crate) fn string_write(
-    view: &mut rclrs::DynamicMessageViewMut<'_>,
-    bus: &crate::std_msgs::msg::v1::String,
-) -> Result<()> {
-    write_string(view, "data", &bus.data)?;
-    Ok(())
+pub(crate) fn string_to_ros(
+    bus: crate::std_msgs::msg::v1::String,
+) -> ros_env::std_msgs::msg::String {
+    ros_env::std_msgs::msg::String {
+        data: crate::ros2_bridge::mappers::convert::to_ros_string(bus.data),
+    }
 }
 
-pub(crate) fn string_dyn_to_bus(
-    msg: &rclrs::DynamicMessage,
-) -> Result<crate::std_msgs::msg::v1::String> {
-    string_from_view(&msg.view())
-}
-
-pub(crate) fn string_bus_to_dyn(
-    bus: &crate::std_msgs::msg::v1::String,
-) -> Result<rclrs::DynamicMessage> {
-    let mut msg = new_message("std_msgs/msg/String")?;
-    string_write(&mut msg.view_mut(), bus)?;
-    Ok(msg)
-}
-
+#[derive(Clone, Copy, Debug, Default)]
 pub struct StdMsgsStringMapper;
-impl TopicMapper for StdMsgsStringMapper {
+
+impl TypedTopicMapper for StdMsgsStringMapper {
+    type Ros = ros_env::std_msgs::msg::String;
+    type Bus = crate::std_msgs::msg::v1::String;
+
     fn type_name(&self) -> &'static str {
         "std_msgs/msg/String"
     }
 
-    fn ros_to_bus(&self, msg: &DynamicMessage) -> Result<Vec<u8>> {
-        Ok(string_dyn_to_bus(msg)?.encode_to_vec())
+    fn ros_to_bus(&self, msg: Self::Ros) -> crate::errors::Result<Self::Bus> {
+        Ok(string_to_bus(msg))
     }
 
-    fn bus_to_ros(&self, payload: &[u8]) -> Result<DynamicMessage> {
-        let bus = <crate::std_msgs::msg::v1::String as ProstMessage>::decode(payload)
-            .map_err(|e| BusError::Protocol(format!("decode std_msgs/msg/String: {e}")))?;
-        string_bus_to_dyn(&bus)
+    fn bus_to_ros(&self, msg: Self::Bus) -> crate::errors::Result<Self::Ros> {
+        Ok(string_to_ros(msg))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn string_roundtrip() {
+        let ros = ros_env::std_msgs::msg::String {
+            data: "hello".into(),
+        };
+        let bus = string_to_bus(ros);
+        assert_eq!(bus.data, "hello");
+        let back = string_to_ros(bus);
+        assert_eq!(back.data.to_string(), "hello");
     }
 }

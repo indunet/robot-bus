@@ -3,7 +3,7 @@
 //! crates.io `ros-env` 0.2 empties `interfaces.rs` under `use_ros_shim`, but rclrs 0.8
 //! library code still constructs `ros_env::*` message fields. This crate patches that.
 
-#![allow(dead_code, missing_docs, non_camel_case_types)]
+#![allow(dead_code, missing_docs, non_camel_case_types, unused_imports)]
 
 #[cfg(feature = "use_ros_shim")]
 mod shim;

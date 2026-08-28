@@ -1,65 +1,43 @@
-//! Mapper for `sensor_msgs/msg/RegionOfInterest`.
+//! Typed mapper for `sensor_msgs/msg/RegionOfInterest`.
 
-use prost::Message as ProstMessage;
-use rclrs::DynamicMessage;
+use crate::ros2_bridge::mapper::TypedTopicMapper;
 
-use super::super::common::*;
-use crate::BusError;
-use crate::ros2_bridge::mapper::TopicMapper;
-
-pub(crate) fn region_of_interest_from_view(
-    view: &rclrs::DynamicMessageView<'_>,
-) -> Result<crate::sensor_msgs::msg::v1::RegionOfInterest> {
-    Ok(crate::sensor_msgs::msg::v1::RegionOfInterest {
-        x_offset: read_u32(view, "x_offset")?,
-        y_offset: read_u32(view, "y_offset")?,
-        height: read_u32(view, "height")?,
-        width: read_u32(view, "width")?,
-        do_rectify: read_bool(view, "do_rectify")?,
-    })
+pub(crate) fn region_of_interest_to_bus(msg: ros_env::sensor_msgs::msg::RegionOfInterest) -> crate::sensor_msgs::msg::v1::RegionOfInterest {
+    crate::sensor_msgs::msg::v1::RegionOfInterest {
+        x_offset: msg.x_offset,
+        y_offset: msg.y_offset,
+        height: msg.height,
+        width: msg.width,
+        do_rectify: msg.do_rectify,
+    }
 }
 
-pub(crate) fn region_of_interest_write(
-    view: &mut rclrs::DynamicMessageViewMut<'_>,
-    bus: &crate::sensor_msgs::msg::v1::RegionOfInterest,
-) -> Result<()> {
-    write_u32(view, "x_offset", bus.x_offset)?;
-    write_u32(view, "y_offset", bus.y_offset)?;
-    write_u32(view, "height", bus.height)?;
-    write_u32(view, "width", bus.width)?;
-    write_bool(view, "do_rectify", bus.do_rectify)?;
-    Ok(())
+pub(crate) fn region_of_interest_to_ros(bus: crate::sensor_msgs::msg::v1::RegionOfInterest) -> ros_env::sensor_msgs::msg::RegionOfInterest {
+    ros_env::sensor_msgs::msg::RegionOfInterest {
+        x_offset: bus.x_offset,
+        y_offset: bus.y_offset,
+        height: bus.height,
+        width: bus.width,
+        do_rectify: bus.do_rectify,
+    }
 }
 
-pub(crate) fn region_of_interest_dyn_to_bus(
-    msg: &rclrs::DynamicMessage,
-) -> Result<crate::sensor_msgs::msg::v1::RegionOfInterest> {
-    region_of_interest_from_view(&msg.view())
-}
-
-pub(crate) fn region_of_interest_bus_to_dyn(
-    bus: &crate::sensor_msgs::msg::v1::RegionOfInterest,
-) -> Result<rclrs::DynamicMessage> {
-    let mut msg = new_message("sensor_msgs/msg/RegionOfInterest")?;
-    region_of_interest_write(&mut msg.view_mut(), bus)?;
-    Ok(msg)
-}
-
+#[derive(Clone, Copy, Debug, Default)]
 pub struct SensorMsgsRegionOfInterestMapper;
-impl TopicMapper for SensorMsgsRegionOfInterestMapper {
+
+impl TypedTopicMapper for SensorMsgsRegionOfInterestMapper {
+    type Ros = ros_env::sensor_msgs::msg::RegionOfInterest;
+    type Bus = crate::sensor_msgs::msg::v1::RegionOfInterest;
+
     fn type_name(&self) -> &'static str {
         "sensor_msgs/msg/RegionOfInterest"
     }
 
-    fn ros_to_bus(&self, msg: &DynamicMessage) -> Result<Vec<u8>> {
-        Ok(region_of_interest_dyn_to_bus(msg)?.encode_to_vec())
+    fn ros_to_bus(&self, msg: Self::Ros) -> crate::errors::Result<Self::Bus> {
+        Ok(region_of_interest_to_bus(msg))
     }
 
-    fn bus_to_ros(&self, payload: &[u8]) -> Result<DynamicMessage> {
-        let bus = <crate::sensor_msgs::msg::v1::RegionOfInterest as ProstMessage>::decode(payload)
-            .map_err(|e| {
-                BusError::Protocol(format!("decode sensor_msgs/msg/RegionOfInterest: {e}"))
-            })?;
-        region_of_interest_bus_to_dyn(&bus)
+    fn bus_to_ros(&self, msg: Self::Bus) -> crate::errors::Result<Self::Ros> {
+        Ok(region_of_interest_to_ros(msg))
     }
 }

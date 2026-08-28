@@ -1,8 +1,9 @@
 //! Topic / service / action mapper traits and topic builtin registry.
 //!
-//! Topics use [`TopicMapper`] (DynamicMessage ↔ protobuf). Services / actions:
-//! implement [`TypedServiceMapper`] / [`TypedActionMapper`] (convert methods only);
-//! the library wires ROS↔bus. Override [`ServiceMapper::attach`] /
+//! Topics use [`TypedTopicMapper`] (ROS IDL object ↔ protobuf object).
+//! Services / actions use [`TypedServiceMapper`] / [`TypedActionMapper`].
+//! The library wires ROS↔bus. Override [`TopicMapper::create_ros2_to_bus_subscription`]
+//! / [`TopicMapper::attach_bus_to_ros`] / [`ServiceMapper::attach`] /
 //! [`ActionMapper::attach`] only for advanced cases.
 //! Route mounting is always via concrete mapper objects (`.mapper(...)`).
 
@@ -11,15 +12,18 @@ use std::collections::HashMap;
 use std::sync::{Arc, LazyLock};
 use std::time::Duration;
 
-use rclrs::{DynamicMessage, IntoPrimitiveOptions, MessageTypeName};
-use rosidl_runtime_rs::{Action as ActionIdl, Service as ServiceIdl};
+use prost::Message as ProstMessage;
+use rclrs::IntoPrimitiveOptions;
+use rosidl_runtime_rs::{Action as ActionIdl, Message as RosMessage, Service as ServiceIdl};
 
 use crate::errors::{BusError, Result as BusResult};
 use crate::runtime::{Node, TopicPublisherRaw};
 
 use super::mappers::BUILTIN_MAPPER_LIST;
 use super::typed_rpc;
-use super::typed_wire::{wire_typed_action, wire_typed_service};
+use super::typed_wire::{
+    attach_typed_bus_to_ros, create_typed_ros2_to_bus_sub, wire_typed_action, wire_typed_service,
+};
 
 type Result<T> = std::result::Result<T, BusError>;
 
@@ -64,29 +68,66 @@ pub(crate) fn ros_topic_options(topic: &str, qos: TopicRouteQos) -> rclrs::Primi
     opts
 }
 
-/// Bidirectional mapper between ROS [`DynamicMessage`] and bus protobuf bytes.
+/// Context passed to [`TopicMapper::attach_bus_to_ros`].
+pub struct TopicWireContext<'a> {
+    pub ros_node: &'a rclrs::Node,
+    pub bus_node: &'a mut Node,
+    pub ros_topic: &'a str,
+    pub bus_topic: &'a str,
+    pub qos: TopicRouteQos,
+    pub ros_entities: &'a mut Vec<Box<dyn Any + Send + Sync>>,
+}
+
+/// Typed topic codec: ROS IDL object ↔ bus protobuf object.
+///
+/// The library wires subscriptions and publishers. Implement this for builtins
+/// and custom topic types.
+pub trait TypedTopicMapper: Clone + Send + Sync + 'static {
+    type Ros: RosMessage + Send + Sync + Default + 'static;
+    type Bus: ProstMessage + Default + Send + 'static;
+
+    fn type_name(&self) -> &str;
+    fn ros_to_bus(&self, msg: Self::Ros) -> BusResult<Self::Bus>;
+    fn bus_to_ros(&self, msg: Self::Bus) -> BusResult<Self::Ros>;
+}
+
+/// Object-safe topic plugin. Prefer [`TypedTopicMapper`]; the blanket impl
+/// wires typed ROS↔bus endpoints.
 pub trait TopicMapper: Send + Sync {
-    /// Full ROS type name, e.g. `sensor_msgs/msg/Image` (for DynamicMessage create).
+    /// Full ROS type name, e.g. `sensor_msgs/msg/Image`.
     fn type_name(&self) -> &str;
 
-    fn ros_type(&self) -> MessageTypeName {
-        MessageTypeName::try_from(self.type_name())
-            .expect("TopicMapper::type_name must be package/msg/Type")
-    }
-
-    fn ros_to_bus(&self, msg: &DynamicMessage) -> Result<Vec<u8>>;
-    fn bus_to_ros(&self, payload: &[u8]) -> Result<DynamicMessage>;
-
-    /// Optional typed ROS→bus subscription. `Ok(None)` uses the DynamicMessage path.
     fn create_ros2_to_bus_subscription(
         &self,
         ros_node: &rclrs::Node,
         bus_pub: TopicPublisherRaw,
         ros_topic: &str,
         qos: TopicRouteQos,
-    ) -> Result<Option<Box<dyn Any + Send + Sync>>> {
-        let _ = (ros_node, bus_pub, ros_topic, qos);
-        Ok(None)
+    ) -> Result<Box<dyn Any + Send + Sync>>;
+
+    fn attach_bus_to_ros(&self, ctx: TopicWireContext<'_>) -> Result<()>;
+}
+
+impl<T> TopicMapper for T
+where
+    T: TypedTopicMapper,
+{
+    fn type_name(&self) -> &str {
+        TypedTopicMapper::type_name(self)
+    }
+
+    fn create_ros2_to_bus_subscription(
+        &self,
+        ros_node: &rclrs::Node,
+        bus_pub: TopicPublisherRaw,
+        ros_topic: &str,
+        qos: TopicRouteQos,
+    ) -> Result<Box<dyn Any + Send + Sync>> {
+        create_typed_ros2_to_bus_sub(self, ros_node, bus_pub, ros_topic, qos)
+    }
+
+    fn attach_bus_to_ros(&self, ctx: TopicWireContext<'_>) -> Result<()> {
+        attach_typed_bus_to_ros(self, ctx)
     }
 }
 
@@ -206,11 +247,20 @@ impl TopicMapper for RefTopicMapper {
     fn type_name(&self) -> &'static str {
         self.0.type_name()
     }
-    fn ros_to_bus(&self, msg: &DynamicMessage) -> Result<Vec<u8>> {
-        self.0.ros_to_bus(msg)
+
+    fn create_ros2_to_bus_subscription(
+        &self,
+        ros_node: &rclrs::Node,
+        bus_pub: TopicPublisherRaw,
+        ros_topic: &str,
+        qos: TopicRouteQos,
+    ) -> Result<Box<dyn Any + Send + Sync>> {
+        self.0
+            .create_ros2_to_bus_subscription(ros_node, bus_pub, ros_topic, qos)
     }
-    fn bus_to_ros(&self, payload: &[u8]) -> Result<DynamicMessage> {
-        self.0.bus_to_ros(payload)
+
+    fn attach_bus_to_ros(&self, ctx: TopicWireContext<'_>) -> Result<()> {
+        self.0.attach_bus_to_ros(ctx)
     }
 }
 

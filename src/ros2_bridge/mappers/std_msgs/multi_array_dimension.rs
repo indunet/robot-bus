@@ -1,61 +1,39 @@
-//! Mapper for `std_msgs/msg/MultiArrayDimension`.
+//! Typed mapper for `std_msgs/msg/MultiArrayDimension`.
 
-use prost::Message as ProstMessage;
-use rclrs::DynamicMessage;
+use crate::ros2_bridge::mapper::TypedTopicMapper;
 
-use super::super::common::*;
-use crate::BusError;
-use crate::ros2_bridge::mapper::TopicMapper;
-
-pub(crate) fn multi_array_dimension_from_view(
-    view: &rclrs::DynamicMessageView<'_>,
-) -> Result<crate::std_msgs::msg::v1::MultiArrayDimension> {
-    Ok(crate::std_msgs::msg::v1::MultiArrayDimension {
-        label: read_string(view, "label")?,
-        size: read_u32(view, "size")?,
-        stride: read_u32(view, "stride")?,
-    })
+pub(crate) fn multi_array_dimension_to_bus(msg: ros_env::std_msgs::msg::MultiArrayDimension) -> crate::std_msgs::msg::v1::MultiArrayDimension {
+    crate::std_msgs::msg::v1::MultiArrayDimension {
+        label: crate::ros2_bridge::mappers::convert::from_ros_string(msg.label),
+        size: msg.size,
+        stride: msg.stride,
+    }
 }
 
-pub(crate) fn multi_array_dimension_write(
-    view: &mut rclrs::DynamicMessageViewMut<'_>,
-    bus: &crate::std_msgs::msg::v1::MultiArrayDimension,
-) -> Result<()> {
-    write_string(view, "label", &bus.label)?;
-    write_u32(view, "size", bus.size)?;
-    write_u32(view, "stride", bus.stride)?;
-    Ok(())
+pub(crate) fn multi_array_dimension_to_ros(bus: crate::std_msgs::msg::v1::MultiArrayDimension) -> ros_env::std_msgs::msg::MultiArrayDimension {
+    ros_env::std_msgs::msg::MultiArrayDimension {
+        label: crate::ros2_bridge::mappers::convert::to_ros_string(bus.label),
+        size: bus.size,
+        stride: bus.stride,
+    }
 }
 
-pub(crate) fn multi_array_dimension_dyn_to_bus(
-    msg: &rclrs::DynamicMessage,
-) -> Result<crate::std_msgs::msg::v1::MultiArrayDimension> {
-    multi_array_dimension_from_view(&msg.view())
-}
-
-pub(crate) fn multi_array_dimension_bus_to_dyn(
-    bus: &crate::std_msgs::msg::v1::MultiArrayDimension,
-) -> Result<rclrs::DynamicMessage> {
-    let mut msg = new_message("std_msgs/msg/MultiArrayDimension")?;
-    multi_array_dimension_write(&mut msg.view_mut(), bus)?;
-    Ok(msg)
-}
-
+#[derive(Clone, Copy, Debug, Default)]
 pub struct StdMsgsMultiArrayDimensionMapper;
-impl TopicMapper for StdMsgsMultiArrayDimensionMapper {
+
+impl TypedTopicMapper for StdMsgsMultiArrayDimensionMapper {
+    type Ros = ros_env::std_msgs::msg::MultiArrayDimension;
+    type Bus = crate::std_msgs::msg::v1::MultiArrayDimension;
+
     fn type_name(&self) -> &'static str {
         "std_msgs/msg/MultiArrayDimension"
     }
 
-    fn ros_to_bus(&self, msg: &DynamicMessage) -> Result<Vec<u8>> {
-        Ok(multi_array_dimension_dyn_to_bus(msg)?.encode_to_vec())
+    fn ros_to_bus(&self, msg: Self::Ros) -> crate::errors::Result<Self::Bus> {
+        Ok(multi_array_dimension_to_bus(msg))
     }
 
-    fn bus_to_ros(&self, payload: &[u8]) -> Result<DynamicMessage> {
-        let bus = <crate::std_msgs::msg::v1::MultiArrayDimension as ProstMessage>::decode(payload)
-            .map_err(|e| {
-                BusError::Protocol(format!("decode std_msgs/msg/MultiArrayDimension: {e}"))
-            })?;
-        multi_array_dimension_bus_to_dyn(&bus)
+    fn bus_to_ros(&self, msg: Self::Bus) -> crate::errors::Result<Self::Ros> {
+        Ok(multi_array_dimension_to_ros(msg))
     }
 }

@@ -1,85 +1,47 @@
-//! Mapper for `sensor_msgs/msg/NavSatFix`.
+//! Typed mapper for `sensor_msgs/msg/NavSatFix`.
 
-use prost::Message as ProstMessage;
-use rclrs::DynamicMessage;
+use crate::ros2_bridge::mapper::TypedTopicMapper;
 
-use super::super::common::*;
-use crate::BusError;
-use crate::ros2_bridge::mapper::TopicMapper;
-
-pub(crate) fn nav_sat_fix_from_view(
-    view: &rclrs::DynamicMessageView<'_>,
-) -> Result<crate::sensor_msgs::msg::v1::NavSatFix> {
-    Ok(crate::sensor_msgs::msg::v1::NavSatFix {
-        header: nested_view(view, "header")?
-            .as_ref()
-            .map(super::super::std_msgs::header::header_from_view)
-            .transpose()?,
-        status: nested_view(view, "status")?
-            .as_ref()
-            .map(super::nav_sat_status::nav_sat_status_from_view)
-            .transpose()?,
-        latitude: read_f64(view, "latitude")?,
-        longitude: read_f64(view, "longitude")?,
-        altitude: read_f64(view, "altitude")?,
-        position_covariance: read_f64_seq(view, "position_covariance")?,
-        position_covariance_type: read_u32(view, "position_covariance_type")?,
-    })
-}
-
-pub(crate) fn nav_sat_fix_write(
-    view: &mut rclrs::DynamicMessageViewMut<'_>,
-    bus: &crate::sensor_msgs::msg::v1::NavSatFix,
-) -> Result<()> {
-    if let Some(v) = &bus.header {
-        with_nested_mut(view, "header", |nested| {
-            super::super::std_msgs::header::header_write(nested, v)
-        })?;
+pub(crate) fn nav_sat_fix_to_bus(msg: ros_env::sensor_msgs::msg::NavSatFix) -> crate::sensor_msgs::msg::v1::NavSatFix {
+    crate::sensor_msgs::msg::v1::NavSatFix {
+        header: Some(crate::ros2_bridge::mappers::std_msgs::header::header_to_bus(msg.header)),
+        status: Some(crate::ros2_bridge::mappers::sensor_msgs::nav_sat_status::nav_sat_status_to_bus(msg.status)),
+        latitude: msg.latitude,
+        longitude: msg.longitude,
+        altitude: msg.altitude,
+        position_covariance: crate::ros2_bridge::mappers::convert::f64_seq(msg.position_covariance),
+        position_covariance_type: msg.position_covariance_type,
     }
-    if let Some(v) = &bus.status {
-        with_nested_mut(view, "status", |nested| {
-            super::nav_sat_status::nav_sat_status_write(nested, v)
-        })?;
+}
+
+pub(crate) fn nav_sat_fix_to_ros(bus: crate::sensor_msgs::msg::v1::NavSatFix) -> ros_env::sensor_msgs::msg::NavSatFix {
+    ros_env::sensor_msgs::msg::NavSatFix {
+        header: crate::ros2_bridge::mappers::std_msgs::header::header_to_ros(bus.header.unwrap_or_default()),
+        status: crate::ros2_bridge::mappers::sensor_msgs::nav_sat_status::nav_sat_status_to_ros(bus.status.unwrap_or_default()),
+        latitude: bus.latitude,
+        longitude: bus.longitude,
+        altitude: bus.altitude,
+        position_covariance: crate::ros2_bridge::mappers::convert::FromF64Seq::from_f64_seq(bus.position_covariance),
+        position_covariance_type: bus.position_covariance_type,
     }
-    write_f64(view, "latitude", bus.latitude)?;
-    write_f64(view, "longitude", bus.longitude)?;
-    write_f64(view, "altitude", bus.altitude)?;
-    write_f64_seq(view, "position_covariance", &bus.position_covariance)?;
-    write_u32(
-        view,
-        "position_covariance_type",
-        bus.position_covariance_type,
-    )?;
-    Ok(())
 }
 
-pub(crate) fn nav_sat_fix_dyn_to_bus(
-    msg: &rclrs::DynamicMessage,
-) -> Result<crate::sensor_msgs::msg::v1::NavSatFix> {
-    nav_sat_fix_from_view(&msg.view())
-}
-
-pub(crate) fn nav_sat_fix_bus_to_dyn(
-    bus: &crate::sensor_msgs::msg::v1::NavSatFix,
-) -> Result<rclrs::DynamicMessage> {
-    let mut msg = new_message("sensor_msgs/msg/NavSatFix")?;
-    nav_sat_fix_write(&mut msg.view_mut(), bus)?;
-    Ok(msg)
-}
-
+#[derive(Clone, Copy, Debug, Default)]
 pub struct SensorMsgsNavSatFixMapper;
-impl TopicMapper for SensorMsgsNavSatFixMapper {
+
+impl TypedTopicMapper for SensorMsgsNavSatFixMapper {
+    type Ros = ros_env::sensor_msgs::msg::NavSatFix;
+    type Bus = crate::sensor_msgs::msg::v1::NavSatFix;
+
     fn type_name(&self) -> &'static str {
         "sensor_msgs/msg/NavSatFix"
     }
 
-    fn ros_to_bus(&self, msg: &DynamicMessage) -> Result<Vec<u8>> {
-        Ok(nav_sat_fix_dyn_to_bus(msg)?.encode_to_vec())
+    fn ros_to_bus(&self, msg: Self::Ros) -> crate::errors::Result<Self::Bus> {
+        Ok(nav_sat_fix_to_bus(msg))
     }
 
-    fn bus_to_ros(&self, payload: &[u8]) -> Result<DynamicMessage> {
-        let bus = <crate::sensor_msgs::msg::v1::NavSatFix as ProstMessage>::decode(payload)
-            .map_err(|e| BusError::Protocol(format!("decode sensor_msgs/msg/NavSatFix: {e}")))?;
-        nav_sat_fix_bus_to_dyn(&bus)
+    fn bus_to_ros(&self, msg: Self::Bus) -> crate::errors::Result<Self::Ros> {
+        Ok(nav_sat_fix_to_ros(msg))
     }
 }

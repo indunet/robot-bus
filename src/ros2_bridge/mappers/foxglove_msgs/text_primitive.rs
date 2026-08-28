@@ -1,77 +1,45 @@
-//! Mapper for `foxglove_msgs/msg/TextPrimitive`.
+//! Typed mapper for `foxglove_msgs/msg/TextPrimitive`.
 
-use prost::Message as ProstMessage;
-use rclrs::DynamicMessage;
+use crate::ros2_bridge::mapper::TypedTopicMapper;
 
-use super::super::common::*;
-use crate::BusError;
-use crate::ros2_bridge::mapper::TopicMapper;
-
-pub(crate) fn text_primitive_from_view(
-    view: &rclrs::DynamicMessageView<'_>,
-) -> Result<crate::foxglove_msgs::msg::v1::TextPrimitive> {
-    Ok(crate::foxglove_msgs::msg::v1::TextPrimitive {
-        pose: nested_view(view, "pose")?
-            .as_ref()
-            .map(super::pose::pose_from_view)
-            .transpose()?,
-        billboard: read_bool(view, "billboard")?,
-        font_size: read_f64(view, "font_size")?,
-        scale_invariant: read_bool(view, "scale_invariant")?,
-        color: nested_view(view, "color")?
-            .as_ref()
-            .map(super::color::color_from_view)
-            .transpose()?,
-        text: read_string(view, "text")?,
-    })
-}
-
-pub(crate) fn text_primitive_write(
-    view: &mut rclrs::DynamicMessageViewMut<'_>,
-    bus: &crate::foxglove_msgs::msg::v1::TextPrimitive,
-) -> Result<()> {
-    if let Some(v) = &bus.pose {
-        with_nested_mut(view, "pose", |nested| super::pose::pose_write(nested, v))?;
+pub(crate) fn text_primitive_to_bus(msg: ros_env::foxglove_msgs::msg::TextPrimitive) -> crate::foxglove_msgs::msg::v1::TextPrimitive {
+    crate::foxglove_msgs::msg::v1::TextPrimitive {
+        pose: Some(crate::ros2_bridge::mappers::foxglove_msgs::pose::pose_to_bus(msg.pose)),
+        billboard: msg.billboard,
+        font_size: msg.font_size,
+        scale_invariant: msg.scale_invariant,
+        color: Some(crate::ros2_bridge::mappers::foxglove_msgs::color::color_to_bus(msg.color)),
+        text: crate::ros2_bridge::mappers::convert::from_ros_string(msg.text),
     }
-    write_bool(view, "billboard", bus.billboard)?;
-    write_f64(view, "font_size", bus.font_size)?;
-    write_bool(view, "scale_invariant", bus.scale_invariant)?;
-    if let Some(v) = &bus.color {
-        with_nested_mut(view, "color", |nested| super::color::color_write(nested, v))?;
+}
+
+pub(crate) fn text_primitive_to_ros(bus: crate::foxglove_msgs::msg::v1::TextPrimitive) -> ros_env::foxglove_msgs::msg::TextPrimitive {
+    ros_env::foxglove_msgs::msg::TextPrimitive {
+        pose: crate::ros2_bridge::mappers::foxglove_msgs::pose::pose_to_ros(bus.pose.unwrap_or_default()),
+        billboard: bus.billboard,
+        font_size: bus.font_size,
+        scale_invariant: bus.scale_invariant,
+        color: crate::ros2_bridge::mappers::foxglove_msgs::color::color_to_ros(bus.color.unwrap_or_default()),
+        text: crate::ros2_bridge::mappers::convert::to_ros_string(bus.text),
     }
-    write_string(view, "text", &bus.text)?;
-    Ok(())
 }
 
-pub(crate) fn text_primitive_dyn_to_bus(
-    msg: &rclrs::DynamicMessage,
-) -> Result<crate::foxglove_msgs::msg::v1::TextPrimitive> {
-    text_primitive_from_view(&msg.view())
-}
-
-pub(crate) fn text_primitive_bus_to_dyn(
-    bus: &crate::foxglove_msgs::msg::v1::TextPrimitive,
-) -> Result<rclrs::DynamicMessage> {
-    let mut msg = new_message("foxglove_msgs/msg/TextPrimitive")?;
-    text_primitive_write(&mut msg.view_mut(), bus)?;
-    Ok(msg)
-}
-
+#[derive(Clone, Copy, Debug, Default)]
 pub struct FoxgloveMsgsTextPrimitiveMapper;
-impl TopicMapper for FoxgloveMsgsTextPrimitiveMapper {
+
+impl TypedTopicMapper for FoxgloveMsgsTextPrimitiveMapper {
+    type Ros = ros_env::foxglove_msgs::msg::TextPrimitive;
+    type Bus = crate::foxglove_msgs::msg::v1::TextPrimitive;
+
     fn type_name(&self) -> &'static str {
         "foxglove_msgs/msg/TextPrimitive"
     }
 
-    fn ros_to_bus(&self, msg: &DynamicMessage) -> Result<Vec<u8>> {
-        Ok(text_primitive_dyn_to_bus(msg)?.encode_to_vec())
+    fn ros_to_bus(&self, msg: Self::Ros) -> crate::errors::Result<Self::Bus> {
+        Ok(text_primitive_to_bus(msg))
     }
 
-    fn bus_to_ros(&self, payload: &[u8]) -> Result<DynamicMessage> {
-        let bus = <crate::foxglove_msgs::msg::v1::TextPrimitive as ProstMessage>::decode(payload)
-            .map_err(|e| {
-            BusError::Protocol(format!("decode foxglove_msgs/msg/TextPrimitive: {e}"))
-        })?;
-        text_primitive_bus_to_dyn(&bus)
+    fn bus_to_ros(&self, msg: Self::Bus) -> crate::errors::Result<Self::Ros> {
+        Ok(text_primitive_to_ros(msg))
     }
 }

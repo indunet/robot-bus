@@ -114,6 +114,36 @@ pub mod builtin_interfaces {
                 pub nanosec: u32,
             }
             impl_rmw!(Time);
+
+            #[derive(Clone, Debug, Default, PartialEq, PartialOrd)]
+            pub struct Duration {
+                pub sec: i32,
+                pub nanosec: u32,
+            }
+            impl_rmw!(Duration);
+        }
+
+        #[derive(Clone, Debug, Default, PartialEq, PartialOrd)]
+        pub struct Duration {
+            pub sec: i32,
+            pub nanosec: u32,
+        }
+
+        impl Message for Duration {
+            type RmwMsg = rmw::Duration;
+            fn into_rmw_message(msg_cow: Cow<'_, Self>) -> Cow<'_, Self::RmwMsg> {
+                let msg = msg_cow.into_owned();
+                Cow::Owned(rmw::Duration {
+                    sec: msg.sec,
+                    nanosec: msg.nanosec,
+                })
+            }
+            fn from_rmw_message(msg: Self::RmwMsg) -> Self {
+                Self {
+                    sec: msg.sec,
+                    nanosec: msg.nanosec,
+                }
+            }
         }
     }
 }
@@ -161,6 +191,19 @@ pub mod action_msgs {
             }
             impl_rmw!(GoalInfo);
         }
+
+        #[derive(Clone, Debug, Default, PartialEq)]
+        pub struct GoalStatus {
+            pub goal_info: GoalInfo,
+            pub status: i8,
+        }
+        impl_rmw!(GoalStatus);
+
+        #[derive(Clone, Debug, Default, PartialEq)]
+        pub struct GoalStatusArray {
+            pub status_list: Vec<GoalStatus>,
+        }
+        impl_rmw!(GoalStatusArray);
     }
 
     pub mod srv {
@@ -622,3 +665,6 @@ pub mod example_interfaces {
         pub struct Fibonacci;
     }
 }
+
+include!("generated_msgs.rs");
+

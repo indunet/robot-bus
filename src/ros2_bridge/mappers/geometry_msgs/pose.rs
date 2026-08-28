@@ -1,71 +1,37 @@
-//! Mapper for `geometry_msgs/msg/Pose`.
+//! Typed mapper for `geometry_msgs/msg/Pose`.
 
-use prost::Message as ProstMessage;
-use rclrs::DynamicMessage;
+use crate::ros2_bridge::mapper::TypedTopicMapper;
 
-use super::super::common::*;
-use crate::BusError;
-use crate::ros2_bridge::mapper::TopicMapper;
-
-pub(crate) fn pose_from_view(
-    view: &rclrs::DynamicMessageView<'_>,
-) -> Result<crate::geometry_msgs::msg::v1::Pose> {
-    Ok(crate::geometry_msgs::msg::v1::Pose {
-        position: nested_view(view, "position")?
-            .as_ref()
-            .map(super::point::point_from_view)
-            .transpose()?,
-        orientation: nested_view(view, "orientation")?
-            .as_ref()
-            .map(super::quaternion::quaternion_from_view)
-            .transpose()?,
-    })
-}
-
-pub(crate) fn pose_write(
-    view: &mut rclrs::DynamicMessageViewMut<'_>,
-    bus: &crate::geometry_msgs::msg::v1::Pose,
-) -> Result<()> {
-    if let Some(v) = &bus.position {
-        with_nested_mut(view, "position", |nested| {
-            super::point::point_write(nested, v)
-        })?;
+pub(crate) fn pose_to_bus(msg: ros_env::geometry_msgs::msg::Pose) -> crate::geometry_msgs::msg::v1::Pose {
+    crate::geometry_msgs::msg::v1::Pose {
+        position: Some(crate::ros2_bridge::mappers::geometry_msgs::point::point_to_bus(msg.position)),
+        orientation: Some(crate::ros2_bridge::mappers::geometry_msgs::quaternion::quaternion_to_bus(msg.orientation)),
     }
-    if let Some(v) = &bus.orientation {
-        with_nested_mut(view, "orientation", |nested| {
-            super::quaternion::quaternion_write(nested, v)
-        })?;
+}
+
+pub(crate) fn pose_to_ros(bus: crate::geometry_msgs::msg::v1::Pose) -> ros_env::geometry_msgs::msg::Pose {
+    ros_env::geometry_msgs::msg::Pose {
+        position: crate::ros2_bridge::mappers::geometry_msgs::point::point_to_ros(bus.position.unwrap_or_default()),
+        orientation: crate::ros2_bridge::mappers::geometry_msgs::quaternion::quaternion_to_ros(bus.orientation.unwrap_or_default()),
     }
-    Ok(())
 }
 
-pub(crate) fn pose_dyn_to_bus(
-    msg: &rclrs::DynamicMessage,
-) -> Result<crate::geometry_msgs::msg::v1::Pose> {
-    pose_from_view(&msg.view())
-}
-
-pub(crate) fn pose_bus_to_dyn(
-    bus: &crate::geometry_msgs::msg::v1::Pose,
-) -> Result<rclrs::DynamicMessage> {
-    let mut msg = new_message("geometry_msgs/msg/Pose")?;
-    pose_write(&mut msg.view_mut(), bus)?;
-    Ok(msg)
-}
-
+#[derive(Clone, Copy, Debug, Default)]
 pub struct GeometryMsgsPoseMapper;
-impl TopicMapper for GeometryMsgsPoseMapper {
+
+impl TypedTopicMapper for GeometryMsgsPoseMapper {
+    type Ros = ros_env::geometry_msgs::msg::Pose;
+    type Bus = crate::geometry_msgs::msg::v1::Pose;
+
     fn type_name(&self) -> &'static str {
         "geometry_msgs/msg/Pose"
     }
 
-    fn ros_to_bus(&self, msg: &DynamicMessage) -> Result<Vec<u8>> {
-        Ok(pose_dyn_to_bus(msg)?.encode_to_vec())
+    fn ros_to_bus(&self, msg: Self::Ros) -> crate::errors::Result<Self::Bus> {
+        Ok(pose_to_bus(msg))
     }
 
-    fn bus_to_ros(&self, payload: &[u8]) -> Result<DynamicMessage> {
-        let bus = <crate::geometry_msgs::msg::v1::Pose as ProstMessage>::decode(payload)
-            .map_err(|e| BusError::Protocol(format!("decode geometry_msgs/msg/Pose: {e}")))?;
-        pose_bus_to_dyn(&bus)
+    fn bus_to_ros(&self, msg: Self::Bus) -> crate::errors::Result<Self::Ros> {
+        Ok(pose_to_ros(msg))
     }
 }

@@ -1,92 +1,49 @@
-//! Mapper for `stereo_msgs/msg/DisparityImage`.
+//! Typed mapper for `stereo_msgs/msg/DisparityImage`.
 
-use prost::Message as ProstMessage;
-use rclrs::DynamicMessage;
+use crate::ros2_bridge::mapper::TypedTopicMapper;
 
-use super::super::common::*;
-use crate::BusError;
-use crate::ros2_bridge::mapper::TopicMapper;
-
-pub(crate) fn disparity_image_from_view(
-    view: &rclrs::DynamicMessageView<'_>,
-) -> Result<crate::stereo_msgs::msg::v1::DisparityImage> {
-    Ok(crate::stereo_msgs::msg::v1::DisparityImage {
-        header: nested_view(view, "header")?
-            .as_ref()
-            .map(super::super::std_msgs::header::header_from_view)
-            .transpose()?,
-        image: nested_view(view, "image")?
-            .as_ref()
-            .map(super::super::sensor_msgs::image::image_from_view)
-            .transpose()?,
-        f: read_f32(view, "f")?,
-        t: read_f32(view, "t")?,
-        valid_window: nested_view(view, "valid_window")?
-            .as_ref()
-            .map(super::super::sensor_msgs::region_of_interest::region_of_interest_from_view)
-            .transpose()?,
-        min_disparity: read_f32(view, "min_disparity")?,
-        max_disparity: read_f32(view, "max_disparity")?,
-        delta_d: read_f32(view, "delta_d")?,
-    })
-}
-
-pub(crate) fn disparity_image_write(
-    view: &mut rclrs::DynamicMessageViewMut<'_>,
-    bus: &crate::stereo_msgs::msg::v1::DisparityImage,
-) -> Result<()> {
-    if let Some(v) = &bus.header {
-        with_nested_mut(view, "header", |nested| {
-            super::super::std_msgs::header::header_write(nested, v)
-        })?;
+pub(crate) fn disparity_image_to_bus(msg: ros_env::stereo_msgs::msg::DisparityImage) -> crate::stereo_msgs::msg::v1::DisparityImage {
+    crate::stereo_msgs::msg::v1::DisparityImage {
+        header: Some(crate::ros2_bridge::mappers::std_msgs::header::header_to_bus(msg.header)),
+        image: Some(crate::ros2_bridge::mappers::sensor_msgs::image::image_to_bus(msg.image)),
+        f: msg.f,
+        t: msg.t,
+        valid_window: Some(crate::ros2_bridge::mappers::sensor_msgs::region_of_interest::region_of_interest_to_bus(msg.valid_window)),
+        min_disparity: msg.min_disparity,
+        max_disparity: msg.max_disparity,
+        delta_d: msg.delta_d,
     }
-    if let Some(v) = &bus.image {
-        with_nested_mut(view, "image", |nested| {
-            super::super::sensor_msgs::image::image_write(nested, v)
-        })?;
+}
+
+pub(crate) fn disparity_image_to_ros(bus: crate::stereo_msgs::msg::v1::DisparityImage) -> ros_env::stereo_msgs::msg::DisparityImage {
+    ros_env::stereo_msgs::msg::DisparityImage {
+        header: crate::ros2_bridge::mappers::std_msgs::header::header_to_ros(bus.header.unwrap_or_default()),
+        image: crate::ros2_bridge::mappers::sensor_msgs::image::image_to_ros(bus.image.unwrap_or_default()),
+        f: bus.f,
+        t: bus.t,
+        valid_window: crate::ros2_bridge::mappers::sensor_msgs::region_of_interest::region_of_interest_to_ros(bus.valid_window.unwrap_or_default()),
+        min_disparity: bus.min_disparity,
+        max_disparity: bus.max_disparity,
+        delta_d: bus.delta_d,
     }
-    write_f32(view, "f", bus.f)?;
-    write_f32(view, "t", bus.t)?;
-    if let Some(v) = &bus.valid_window {
-        with_nested_mut(view, "valid_window", |nested| {
-            super::super::sensor_msgs::region_of_interest::region_of_interest_write(nested, v)
-        })?;
-    }
-    write_f32(view, "min_disparity", bus.min_disparity)?;
-    write_f32(view, "max_disparity", bus.max_disparity)?;
-    write_f32(view, "delta_d", bus.delta_d)?;
-    Ok(())
 }
 
-pub(crate) fn disparity_image_dyn_to_bus(
-    msg: &rclrs::DynamicMessage,
-) -> Result<crate::stereo_msgs::msg::v1::DisparityImage> {
-    disparity_image_from_view(&msg.view())
-}
-
-pub(crate) fn disparity_image_bus_to_dyn(
-    bus: &crate::stereo_msgs::msg::v1::DisparityImage,
-) -> Result<rclrs::DynamicMessage> {
-    let mut msg = new_message("stereo_msgs/msg/DisparityImage")?;
-    disparity_image_write(&mut msg.view_mut(), bus)?;
-    Ok(msg)
-}
-
+#[derive(Clone, Copy, Debug, Default)]
 pub struct StereoMsgsDisparityImageMapper;
-impl TopicMapper for StereoMsgsDisparityImageMapper {
+
+impl TypedTopicMapper for StereoMsgsDisparityImageMapper {
+    type Ros = ros_env::stereo_msgs::msg::DisparityImage;
+    type Bus = crate::stereo_msgs::msg::v1::DisparityImage;
+
     fn type_name(&self) -> &'static str {
         "stereo_msgs/msg/DisparityImage"
     }
 
-    fn ros_to_bus(&self, msg: &DynamicMessage) -> Result<Vec<u8>> {
-        Ok(disparity_image_dyn_to_bus(msg)?.encode_to_vec())
+    fn ros_to_bus(&self, msg: Self::Ros) -> crate::errors::Result<Self::Bus> {
+        Ok(disparity_image_to_bus(msg))
     }
 
-    fn bus_to_ros(&self, payload: &[u8]) -> Result<DynamicMessage> {
-        let bus = <crate::stereo_msgs::msg::v1::DisparityImage as ProstMessage>::decode(payload)
-            .map_err(|e| {
-                BusError::Protocol(format!("decode stereo_msgs/msg/DisparityImage: {e}"))
-            })?;
-        disparity_image_bus_to_dyn(&bus)
+    fn bus_to_ros(&self, msg: Self::Bus) -> crate::errors::Result<Self::Ros> {
+        Ok(disparity_image_to_ros(msg))
     }
 }

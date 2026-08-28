@@ -1,101 +1,51 @@
-//! Mapper for `foxglove_msgs/msg/Odometry`.
+//! Typed mapper for `foxglove_msgs/msg/Odometry`.
 
-use prost::Message as ProstMessage;
-use rclrs::DynamicMessage;
+use crate::ros2_bridge::mapper::TypedTopicMapper;
 
-use super::super::common::*;
-use crate::BusError;
-use crate::ros2_bridge::mapper::TopicMapper;
-
-pub(crate) fn odometry_from_view(
-    view: &rclrs::DynamicMessageView<'_>,
-) -> Result<crate::foxglove_msgs::msg::v1::Odometry> {
-    Ok(crate::foxglove_msgs::msg::v1::Odometry {
-        timestamp: read_timestamp(view, "timestamp")?,
-        frame_id: read_string(view, "frame_id")?,
-        body_frame_id: read_string(view, "body_frame_id")?,
-        pose: nested_view(view, "pose")?
-            .as_ref()
-            .map(super::pose::pose_from_view)
-            .transpose()?,
-        linear_velocity: nested_view(view, "linear_velocity")?
-            .as_ref()
-            .map(super::vector3::vector3_from_view)
-            .transpose()?,
-        angular_velocity: nested_view(view, "angular_velocity")?
-            .as_ref()
-            .map(super::vector3::vector3_from_view)
-            .transpose()?,
-        pose_covariance: read_f64_seq(view, "pose_covariance")?,
-        velocity_covariance: read_f64_seq(view, "velocity_covariance")?,
-        metadata: read_message_seq(
-            view,
-            "metadata",
-            super::key_value_pair::key_value_pair_from_view,
-        )?,
-    })
+pub(crate) fn odometry_to_bus(msg: ros_env::foxglove_msgs::msg::Odometry) -> crate::foxglove_msgs::msg::v1::Odometry {
+    crate::foxglove_msgs::msg::v1::Odometry {
+        timestamp: Some(crate::ros2_bridge::mappers::convert::time_to_timestamp(msg.timestamp)),
+        frame_id: crate::ros2_bridge::mappers::convert::from_ros_string(msg.frame_id),
+        body_frame_id: crate::ros2_bridge::mappers::convert::from_ros_string(msg.body_frame_id),
+        pose: Some(crate::ros2_bridge::mappers::foxglove_msgs::pose::pose_to_bus(msg.pose)),
+        linear_velocity: msg.linear_velocity.map(crate::ros2_bridge::mappers::foxglove_msgs::vector3::vector3_to_bus),
+        angular_velocity: msg.angular_velocity.map(crate::ros2_bridge::mappers::foxglove_msgs::vector3::vector3_to_bus),
+        pose_covariance: crate::ros2_bridge::mappers::convert::f64_seq(msg.pose_covariance),
+        velocity_covariance: crate::ros2_bridge::mappers::convert::f64_seq(msg.velocity_covariance),
+        metadata: msg.metadata.into_iter().map(crate::ros2_bridge::mappers::foxglove_msgs::key_value_pair::key_value_pair_to_bus).collect(),
+    }
 }
 
-pub(crate) fn odometry_write(
-    view: &mut rclrs::DynamicMessageViewMut<'_>,
-    bus: &crate::foxglove_msgs::msg::v1::Odometry,
-) -> Result<()> {
-    if let Some(v) = &bus.timestamp {
-        write_timestamp(view, "timestamp", v)?;
+pub(crate) fn odometry_to_ros(bus: crate::foxglove_msgs::msg::v1::Odometry) -> ros_env::foxglove_msgs::msg::Odometry {
+    ros_env::foxglove_msgs::msg::Odometry {
+        timestamp: crate::ros2_bridge::mappers::convert::timestamp_to_time(bus.timestamp.unwrap_or_default()),
+        frame_id: crate::ros2_bridge::mappers::convert::to_ros_string(bus.frame_id),
+        body_frame_id: crate::ros2_bridge::mappers::convert::to_ros_string(bus.body_frame_id),
+        pose: crate::ros2_bridge::mappers::foxglove_msgs::pose::pose_to_ros(bus.pose.unwrap_or_default()),
+        linear_velocity: bus.linear_velocity.map(crate::ros2_bridge::mappers::foxglove_msgs::vector3::vector3_to_ros),
+        angular_velocity: bus.angular_velocity.map(crate::ros2_bridge::mappers::foxglove_msgs::vector3::vector3_to_ros),
+        pose_covariance: crate::ros2_bridge::mappers::convert::FromF64Seq::from_f64_seq(bus.pose_covariance),
+        velocity_covariance: crate::ros2_bridge::mappers::convert::FromF64Seq::from_f64_seq(bus.velocity_covariance),
+        metadata: bus.metadata.into_iter().map(crate::ros2_bridge::mappers::foxglove_msgs::key_value_pair::key_value_pair_to_ros).collect(),
     }
-    write_string(view, "frame_id", &bus.frame_id)?;
-    write_string(view, "body_frame_id", &bus.body_frame_id)?;
-    if let Some(v) = &bus.pose {
-        with_nested_mut(view, "pose", |nested| super::pose::pose_write(nested, v))?;
-    }
-    if let Some(v) = &bus.linear_velocity {
-        with_nested_mut(view, "linear_velocity", |nested| {
-            super::vector3::vector3_write(nested, v)
-        })?;
-    }
-    if let Some(v) = &bus.angular_velocity {
-        with_nested_mut(view, "angular_velocity", |nested| {
-            super::vector3::vector3_write(nested, v)
-        })?;
-    }
-    write_f64_seq(view, "pose_covariance", &bus.pose_covariance)?;
-    write_f64_seq(view, "velocity_covariance", &bus.velocity_covariance)?;
-    write_message_seq(
-        view,
-        "metadata",
-        &bus.metadata,
-        super::key_value_pair::key_value_pair_write,
-    )?;
-    Ok(())
 }
 
-pub(crate) fn odometry_dyn_to_bus(
-    msg: &rclrs::DynamicMessage,
-) -> Result<crate::foxglove_msgs::msg::v1::Odometry> {
-    odometry_from_view(&msg.view())
-}
-
-pub(crate) fn odometry_bus_to_dyn(
-    bus: &crate::foxglove_msgs::msg::v1::Odometry,
-) -> Result<rclrs::DynamicMessage> {
-    let mut msg = new_message("foxglove_msgs/msg/Odometry")?;
-    odometry_write(&mut msg.view_mut(), bus)?;
-    Ok(msg)
-}
-
+#[derive(Clone, Copy, Debug, Default)]
 pub struct FoxgloveMsgsOdometryMapper;
-impl TopicMapper for FoxgloveMsgsOdometryMapper {
+
+impl TypedTopicMapper for FoxgloveMsgsOdometryMapper {
+    type Ros = ros_env::foxglove_msgs::msg::Odometry;
+    type Bus = crate::foxglove_msgs::msg::v1::Odometry;
+
     fn type_name(&self) -> &'static str {
         "foxglove_msgs/msg/Odometry"
     }
 
-    fn ros_to_bus(&self, msg: &DynamicMessage) -> Result<Vec<u8>> {
-        Ok(odometry_dyn_to_bus(msg)?.encode_to_vec())
+    fn ros_to_bus(&self, msg: Self::Ros) -> crate::errors::Result<Self::Bus> {
+        Ok(odometry_to_bus(msg))
     }
 
-    fn bus_to_ros(&self, payload: &[u8]) -> Result<DynamicMessage> {
-        let bus = <crate::foxglove_msgs::msg::v1::Odometry as ProstMessage>::decode(payload)
-            .map_err(|e| BusError::Protocol(format!("decode foxglove_msgs/msg/Odometry: {e}")))?;
-        odometry_bus_to_dyn(&bus)
+    fn bus_to_ros(&self, msg: Self::Bus) -> crate::errors::Result<Self::Ros> {
+        Ok(odometry_to_ros(msg))
     }
 }

@@ -12,12 +12,93 @@ use std::time::{Duration, Instant};
 use rclrs::{BeginAcceptedGoal, GoalClient};
 use rosidl_runtime_rs::{Action as ActionIdl, Service as ServiceIdl};
 
-use crate::ActionKind;
 use crate::errors::{BusError, Result};
 use crate::ros2_bridge::mapper::{
-    ActionWireContext, Direction, ServiceWireContext, TypedActionMapper, TypedServiceMapper,
+    ros_topic_options, ActionWireContext, Direction, ServiceWireContext, TopicRouteQos,
+    TopicWireContext, TypedActionMapper, TypedServiceMapper, TypedTopicMapper,
 };
-use crate::runtime::{ActionGoalHandler, ServiceHandler};
+use crate::runtime::{ActionGoalHandler, MessageCallback, ServiceHandler, TopicPublisherRaw};
+use crate::ActionKind;
+
+/// Typed ROS→bus subscription: `create_subscription<Ros>` then convert + publish.
+pub fn create_typed_ros2_to_bus_sub<M>(
+    mapper: &M,
+    ros_node: &rclrs::Node,
+    bus_pub: TopicPublisherRaw,
+    ros_topic: &str,
+    qos: TopicRouteQos,
+) -> Result<Box<dyn Any + Send + Sync>>
+where
+    M: TypedTopicMapper,
+{
+    use prost::Message as _;
+
+    let mapper = mapper.clone();
+    let type_name = mapper.type_name().to_string();
+    let opts = ros_topic_options(ros_topic, qos);
+    let type_name_cb = type_name.clone();
+    let sub = ros_node
+        .create_subscription(opts, move |msg: M::Ros| {
+            let payload = match mapper.ros_to_bus(msg) {
+                Ok(bus) => bus.encode_to_vec(),
+                Err(e) => {
+                    log::warn!("ros→bus {type_name_cb} convert: {e}");
+                    return;
+                }
+            };
+            if let Err(e) = bus_pub.publish(&payload) {
+                log::warn!("ros→bus {type_name_cb} publish: {e}");
+            }
+        })
+        .map_err(|e| BusError::Protocol(format!("ros typed subscription {type_name}: {e}")))?;
+    Ok(Box::new(sub))
+}
+
+/// Typed bus→ROS: `create_publisher<Ros>` plus a bus raw subscription.
+pub fn attach_typed_bus_to_ros<M>(mapper: &M, ctx: TopicWireContext<'_>) -> Result<()>
+where
+    M: TypedTopicMapper,
+{
+    let mapper = mapper.clone();
+    let type_name = mapper.type_name().to_string();
+    let opts = ros_topic_options(ctx.ros_topic, ctx.qos);
+    let ros_pub = ctx
+        .ros_node
+        .create_publisher::<M::Ros>(opts)
+        .map_err(|e| BusError::Protocol(format!("ros typed publisher {type_name}: {e}")))?;
+    let ros_pub_cb = ros_pub.clone();
+    ctx.ros_entities.push(Box::new(ros_pub));
+    let cb: MessageCallback = Arc::new(move |_topic, payload| {
+        use prost::Message as _;
+        let bus = match M::Bus::decode(payload) {
+            Ok(b) => b,
+            Err(e) => {
+                log::warn!("bus→ros {type_name} decode: {e}");
+                return;
+            }
+        };
+        match mapper.bus_to_ros(bus) {
+            Ok(ros_msg) => {
+                if let Err(e) = ros_pub_cb.publish(ros_msg) {
+                    log::warn!("bus→ros {type_name} publish: {e}");
+                }
+            }
+            Err(e) => log::warn!("bus→ros {type_name} convert: {e}"),
+        }
+    });
+    if let Some(depth) = ctx.qos.depth {
+        ctx.bus_node.create_subscription_raw_with_qos(
+            ctx.bus_topic,
+            crate::runtime::QosProfile::keep_last(depth),
+            cb,
+            None,
+        )?;
+    } else {
+        ctx.bus_node
+            .create_subscription_raw(ctx.bus_topic, cb, None)?;
+    }
+    Ok(())
+}
 
 fn wait_service_ready(
     client_ready: impl Fn() -> bool,

@@ -1,66 +1,37 @@
-//! Mapper for `foxglove_msgs/msg/JointStates`.
+//! Typed mapper for `foxglove_msgs/msg/JointStates`.
 
-use prost::Message as ProstMessage;
-use rclrs::DynamicMessage;
+use crate::ros2_bridge::mapper::TypedTopicMapper;
 
-use super::super::common::*;
-use crate::BusError;
-use crate::ros2_bridge::mapper::TopicMapper;
-
-pub(crate) fn joint_states_from_view(
-    view: &rclrs::DynamicMessageView<'_>,
-) -> Result<crate::foxglove_msgs::msg::v1::JointStates> {
-    Ok(crate::foxglove_msgs::msg::v1::JointStates {
-        timestamp: read_timestamp(view, "timestamp")?,
-        joints: read_message_seq(view, "joints", super::joint_state::joint_state_from_view)?,
-    })
-}
-
-pub(crate) fn joint_states_write(
-    view: &mut rclrs::DynamicMessageViewMut<'_>,
-    bus: &crate::foxglove_msgs::msg::v1::JointStates,
-) -> Result<()> {
-    if let Some(v) = &bus.timestamp {
-        write_timestamp(view, "timestamp", v)?;
+pub(crate) fn joint_states_to_bus(msg: ros_env::foxglove_msgs::msg::JointStates) -> crate::foxglove_msgs::msg::v1::JointStates {
+    crate::foxglove_msgs::msg::v1::JointStates {
+        timestamp: Some(crate::ros2_bridge::mappers::convert::time_to_timestamp(msg.timestamp)),
+        joints: msg.joints.into_iter().map(crate::ros2_bridge::mappers::foxglove_msgs::joint_state::joint_state_to_bus).collect(),
     }
-    write_message_seq(
-        view,
-        "joints",
-        &bus.joints,
-        super::joint_state::joint_state_write,
-    )?;
-    Ok(())
 }
 
-pub(crate) fn joint_states_dyn_to_bus(
-    msg: &rclrs::DynamicMessage,
-) -> Result<crate::foxglove_msgs::msg::v1::JointStates> {
-    joint_states_from_view(&msg.view())
+pub(crate) fn joint_states_to_ros(bus: crate::foxglove_msgs::msg::v1::JointStates) -> ros_env::foxglove_msgs::msg::JointStates {
+    ros_env::foxglove_msgs::msg::JointStates {
+        timestamp: crate::ros2_bridge::mappers::convert::timestamp_to_time(bus.timestamp.unwrap_or_default()),
+        joints: bus.joints.into_iter().map(crate::ros2_bridge::mappers::foxglove_msgs::joint_state::joint_state_to_ros).collect(),
+    }
 }
 
-pub(crate) fn joint_states_bus_to_dyn(
-    bus: &crate::foxglove_msgs::msg::v1::JointStates,
-) -> Result<rclrs::DynamicMessage> {
-    let mut msg = new_message("foxglove_msgs/msg/JointStates")?;
-    joint_states_write(&mut msg.view_mut(), bus)?;
-    Ok(msg)
-}
-
+#[derive(Clone, Copy, Debug, Default)]
 pub struct FoxgloveMsgsJointStatesMapper;
-impl TopicMapper for FoxgloveMsgsJointStatesMapper {
+
+impl TypedTopicMapper for FoxgloveMsgsJointStatesMapper {
+    type Ros = ros_env::foxglove_msgs::msg::JointStates;
+    type Bus = crate::foxglove_msgs::msg::v1::JointStates;
+
     fn type_name(&self) -> &'static str {
         "foxglove_msgs/msg/JointStates"
     }
 
-    fn ros_to_bus(&self, msg: &DynamicMessage) -> Result<Vec<u8>> {
-        Ok(joint_states_dyn_to_bus(msg)?.encode_to_vec())
+    fn ros_to_bus(&self, msg: Self::Ros) -> crate::errors::Result<Self::Bus> {
+        Ok(joint_states_to_bus(msg))
     }
 
-    fn bus_to_ros(&self, payload: &[u8]) -> Result<DynamicMessage> {
-        let bus = <crate::foxglove_msgs::msg::v1::JointStates as ProstMessage>::decode(payload)
-            .map_err(|e| {
-                BusError::Protocol(format!("decode foxglove_msgs/msg/JointStates: {e}"))
-            })?;
-        joint_states_bus_to_dyn(&bus)
+    fn bus_to_ros(&self, msg: Self::Bus) -> crate::errors::Result<Self::Ros> {
+        Ok(joint_states_to_ros(msg))
     }
 }

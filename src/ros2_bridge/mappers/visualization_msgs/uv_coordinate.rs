@@ -1,60 +1,37 @@
-//! Mapper for `visualization_msgs/msg/UVCoordinate`.
+//! Typed mapper for `visualization_msgs/msg/UVCoordinate`.
 
-use prost::Message as ProstMessage;
-use rclrs::DynamicMessage;
+use crate::ros2_bridge::mapper::TypedTopicMapper;
 
-use super::super::common::*;
-use crate::BusError;
-use crate::ros2_bridge::mapper::TopicMapper;
-
-pub(crate) fn uv_coordinate_from_view(
-    view: &rclrs::DynamicMessageView<'_>,
-) -> Result<crate::visualization_msgs::msg::v1::UvCoordinate> {
-    Ok(crate::visualization_msgs::msg::v1::UvCoordinate {
-        u: read_f32(view, "u")?,
-        v: read_f32(view, "v")?,
-    })
+pub(crate) fn uv_coordinate_to_bus(msg: ros_env::visualization_msgs::msg::UVCoordinate) -> crate::visualization_msgs::msg::v1::UvCoordinate {
+    crate::visualization_msgs::msg::v1::UvCoordinate {
+        u: msg.u,
+        v: msg.v,
+    }
 }
 
-pub(crate) fn uv_coordinate_write(
-    view: &mut rclrs::DynamicMessageViewMut<'_>,
-    bus: &crate::visualization_msgs::msg::v1::UvCoordinate,
-) -> Result<()> {
-    write_f32(view, "u", bus.u)?;
-    write_f32(view, "v", bus.v)?;
-    Ok(())
+pub(crate) fn uv_coordinate_to_ros(bus: crate::visualization_msgs::msg::v1::UvCoordinate) -> ros_env::visualization_msgs::msg::UVCoordinate {
+    ros_env::visualization_msgs::msg::UVCoordinate {
+        u: bus.u,
+        v: bus.v,
+    }
 }
 
-pub(crate) fn uv_coordinate_dyn_to_bus(
-    msg: &rclrs::DynamicMessage,
-) -> Result<crate::visualization_msgs::msg::v1::UvCoordinate> {
-    uv_coordinate_from_view(&msg.view())
-}
-
-pub(crate) fn uv_coordinate_bus_to_dyn(
-    bus: &crate::visualization_msgs::msg::v1::UvCoordinate,
-) -> Result<rclrs::DynamicMessage> {
-    let mut msg = new_message("visualization_msgs/msg/UVCoordinate")?;
-    uv_coordinate_write(&mut msg.view_mut(), bus)?;
-    Ok(msg)
-}
-
+#[derive(Clone, Copy, Debug, Default)]
 pub struct VisualizationMsgsUvCoordinateMapper;
-impl TopicMapper for VisualizationMsgsUvCoordinateMapper {
+
+impl TypedTopicMapper for VisualizationMsgsUvCoordinateMapper {
+    type Ros = ros_env::visualization_msgs::msg::UVCoordinate;
+    type Bus = crate::visualization_msgs::msg::v1::UvCoordinate;
+
     fn type_name(&self) -> &'static str {
         "visualization_msgs/msg/UVCoordinate"
     }
 
-    fn ros_to_bus(&self, msg: &DynamicMessage) -> Result<Vec<u8>> {
-        Ok(uv_coordinate_dyn_to_bus(msg)?.encode_to_vec())
+    fn ros_to_bus(&self, msg: Self::Ros) -> crate::errors::Result<Self::Bus> {
+        Ok(uv_coordinate_to_bus(msg))
     }
 
-    fn bus_to_ros(&self, payload: &[u8]) -> Result<DynamicMessage> {
-        let bus =
-            <crate::visualization_msgs::msg::v1::UvCoordinate as ProstMessage>::decode(payload)
-                .map_err(|e| {
-                    BusError::Protocol(format!("decode visualization_msgs/msg/UVCoordinate: {e}"))
-                })?;
-        uv_coordinate_bus_to_dyn(&bus)
+    fn bus_to_ros(&self, msg: Self::Bus) -> crate::errors::Result<Self::Ros> {
+        Ok(uv_coordinate_to_ros(msg))
     }
 }

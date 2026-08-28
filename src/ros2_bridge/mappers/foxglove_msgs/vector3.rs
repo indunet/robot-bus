@@ -1,59 +1,39 @@
-//! Mapper for `foxglove_msgs/msg/Vector3`.
+//! Typed mapper for `foxglove_msgs/msg/Vector3`.
 
-use prost::Message as ProstMessage;
-use rclrs::DynamicMessage;
+use crate::ros2_bridge::mapper::TypedTopicMapper;
 
-use super::super::common::*;
-use crate::BusError;
-use crate::ros2_bridge::mapper::TopicMapper;
-
-pub(crate) fn vector3_from_view(
-    view: &rclrs::DynamicMessageView<'_>,
-) -> Result<crate::foxglove_msgs::msg::v1::Vector3> {
-    Ok(crate::foxglove_msgs::msg::v1::Vector3 {
-        x: read_f64(view, "x")?,
-        y: read_f64(view, "y")?,
-        z: read_f64(view, "z")?,
-    })
+pub(crate) fn vector3_to_bus(msg: ros_env::foxglove_msgs::msg::Vector3) -> crate::foxglove_msgs::msg::v1::Vector3 {
+    crate::foxglove_msgs::msg::v1::Vector3 {
+        x: msg.x,
+        y: msg.y,
+        z: msg.z,
+    }
 }
 
-pub(crate) fn vector3_write(
-    view: &mut rclrs::DynamicMessageViewMut<'_>,
-    bus: &crate::foxglove_msgs::msg::v1::Vector3,
-) -> Result<()> {
-    write_f64(view, "x", bus.x)?;
-    write_f64(view, "y", bus.y)?;
-    write_f64(view, "z", bus.z)?;
-    Ok(())
+pub(crate) fn vector3_to_ros(bus: crate::foxglove_msgs::msg::v1::Vector3) -> ros_env::foxglove_msgs::msg::Vector3 {
+    ros_env::foxglove_msgs::msg::Vector3 {
+        x: bus.x,
+        y: bus.y,
+        z: bus.z,
+    }
 }
 
-pub(crate) fn vector3_dyn_to_bus(
-    msg: &rclrs::DynamicMessage,
-) -> Result<crate::foxglove_msgs::msg::v1::Vector3> {
-    vector3_from_view(&msg.view())
-}
-
-pub(crate) fn vector3_bus_to_dyn(
-    bus: &crate::foxglove_msgs::msg::v1::Vector3,
-) -> Result<rclrs::DynamicMessage> {
-    let mut msg = new_message("foxglove_msgs/msg/Vector3")?;
-    vector3_write(&mut msg.view_mut(), bus)?;
-    Ok(msg)
-}
-
+#[derive(Clone, Copy, Debug, Default)]
 pub struct FoxgloveMsgsVector3Mapper;
-impl TopicMapper for FoxgloveMsgsVector3Mapper {
+
+impl TypedTopicMapper for FoxgloveMsgsVector3Mapper {
+    type Ros = ros_env::foxglove_msgs::msg::Vector3;
+    type Bus = crate::foxglove_msgs::msg::v1::Vector3;
+
     fn type_name(&self) -> &'static str {
         "foxglove_msgs/msg/Vector3"
     }
 
-    fn ros_to_bus(&self, msg: &DynamicMessage) -> Result<Vec<u8>> {
-        Ok(vector3_dyn_to_bus(msg)?.encode_to_vec())
+    fn ros_to_bus(&self, msg: Self::Ros) -> crate::errors::Result<Self::Bus> {
+        Ok(vector3_to_bus(msg))
     }
 
-    fn bus_to_ros(&self, payload: &[u8]) -> Result<DynamicMessage> {
-        let bus = <crate::foxglove_msgs::msg::v1::Vector3 as ProstMessage>::decode(payload)
-            .map_err(|e| BusError::Protocol(format!("decode foxglove_msgs/msg/Vector3: {e}")))?;
-        vector3_bus_to_dyn(&bus)
+    fn bus_to_ros(&self, msg: Self::Bus) -> crate::errors::Result<Self::Ros> {
+        Ok(vector3_to_ros(msg))
     }
 }

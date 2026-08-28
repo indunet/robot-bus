@@ -1,57 +1,37 @@
-//! Mapper for `sensor_msgs/msg/NavSatStatus`.
+//! Typed mapper for `sensor_msgs/msg/NavSatStatus`.
 
-use prost::Message as ProstMessage;
-use rclrs::DynamicMessage;
+use crate::ros2_bridge::mapper::TypedTopicMapper;
 
-use super::super::common::*;
-use crate::BusError;
-use crate::ros2_bridge::mapper::TopicMapper;
-
-pub(crate) fn nav_sat_status_from_view(
-    view: &rclrs::DynamicMessageView<'_>,
-) -> Result<crate::sensor_msgs::msg::v1::NavSatStatus> {
-    Ok(crate::sensor_msgs::msg::v1::NavSatStatus {
-        status: read_i32(view, "status")?,
-        service: read_u32(view, "service")?,
-    })
+pub(crate) fn nav_sat_status_to_bus(msg: ros_env::sensor_msgs::msg::NavSatStatus) -> crate::sensor_msgs::msg::v1::NavSatStatus {
+    crate::sensor_msgs::msg::v1::NavSatStatus {
+        status: i32::from(msg.status),
+        service: u32::from(msg.service),
+    }
 }
 
-pub(crate) fn nav_sat_status_write(
-    view: &mut rclrs::DynamicMessageViewMut<'_>,
-    bus: &crate::sensor_msgs::msg::v1::NavSatStatus,
-) -> Result<()> {
-    write_i32(view, "status", bus.status)?;
-    write_u32(view, "service", bus.service)?;
-    Ok(())
+pub(crate) fn nav_sat_status_to_ros(bus: crate::sensor_msgs::msg::v1::NavSatStatus) -> ros_env::sensor_msgs::msg::NavSatStatus {
+    ros_env::sensor_msgs::msg::NavSatStatus {
+        status: bus.status as i8,
+        service: bus.service as u16,
+    }
 }
 
-pub(crate) fn nav_sat_status_dyn_to_bus(
-    msg: &rclrs::DynamicMessage,
-) -> Result<crate::sensor_msgs::msg::v1::NavSatStatus> {
-    nav_sat_status_from_view(&msg.view())
-}
-
-pub(crate) fn nav_sat_status_bus_to_dyn(
-    bus: &crate::sensor_msgs::msg::v1::NavSatStatus,
-) -> Result<rclrs::DynamicMessage> {
-    let mut msg = new_message("sensor_msgs/msg/NavSatStatus")?;
-    nav_sat_status_write(&mut msg.view_mut(), bus)?;
-    Ok(msg)
-}
-
+#[derive(Clone, Copy, Debug, Default)]
 pub struct SensorMsgsNavSatStatusMapper;
-impl TopicMapper for SensorMsgsNavSatStatusMapper {
+
+impl TypedTopicMapper for SensorMsgsNavSatStatusMapper {
+    type Ros = ros_env::sensor_msgs::msg::NavSatStatus;
+    type Bus = crate::sensor_msgs::msg::v1::NavSatStatus;
+
     fn type_name(&self) -> &'static str {
         "sensor_msgs/msg/NavSatStatus"
     }
 
-    fn ros_to_bus(&self, msg: &DynamicMessage) -> Result<Vec<u8>> {
-        Ok(nav_sat_status_dyn_to_bus(msg)?.encode_to_vec())
+    fn ros_to_bus(&self, msg: Self::Ros) -> crate::errors::Result<Self::Bus> {
+        Ok(nav_sat_status_to_bus(msg))
     }
 
-    fn bus_to_ros(&self, payload: &[u8]) -> Result<DynamicMessage> {
-        let bus = <crate::sensor_msgs::msg::v1::NavSatStatus as ProstMessage>::decode(payload)
-            .map_err(|e| BusError::Protocol(format!("decode sensor_msgs/msg/NavSatStatus: {e}")))?;
-        nav_sat_status_bus_to_dyn(&bus)
+    fn bus_to_ros(&self, msg: Self::Bus) -> crate::errors::Result<Self::Ros> {
+        Ok(nav_sat_status_to_ros(msg))
     }
 }

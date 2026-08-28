@@ -1,61 +1,39 @@
-//! Mapper for `control_msgs/msg/MultiDOFCommand`.
+//! Typed mapper for `control_msgs/msg/MultiDOFCommand`.
 
-use prost::Message as ProstMessage;
-use rclrs::DynamicMessage;
+use crate::ros2_bridge::mapper::TypedTopicMapper;
 
-use super::super::common::*;
-use crate::BusError;
-use crate::ros2_bridge::mapper::TopicMapper;
-
-pub(crate) fn multi_dof_command_from_view(
-    view: &rclrs::DynamicMessageView<'_>,
-) -> Result<crate::control_msgs::msg::v1::MultiDofCommand> {
-    Ok(crate::control_msgs::msg::v1::MultiDofCommand {
-        dof_names: read_string_seq(view, "dof_names")?,
-        values: read_f64_seq(view, "values")?,
-        values_dot: read_f64_seq(view, "values_dot")?,
-    })
+pub(crate) fn multi_dof_command_to_bus(msg: ros_env::control_msgs::msg::MultiDOFCommand) -> crate::control_msgs::msg::v1::MultiDofCommand {
+    crate::control_msgs::msg::v1::MultiDofCommand {
+        dof_names: crate::ros2_bridge::mappers::convert::string_seq(msg.dof_names),
+        values: crate::ros2_bridge::mappers::convert::f64_seq(msg.values),
+        values_dot: crate::ros2_bridge::mappers::convert::f64_seq(msg.values_dot),
+    }
 }
 
-pub(crate) fn multi_dof_command_write(
-    view: &mut rclrs::DynamicMessageViewMut<'_>,
-    bus: &crate::control_msgs::msg::v1::MultiDofCommand,
-) -> Result<()> {
-    write_string_seq(view, "dof_names", &bus.dof_names)?;
-    write_f64_seq(view, "values", &bus.values)?;
-    write_f64_seq(view, "values_dot", &bus.values_dot)?;
-    Ok(())
+pub(crate) fn multi_dof_command_to_ros(bus: crate::control_msgs::msg::v1::MultiDofCommand) -> ros_env::control_msgs::msg::MultiDOFCommand {
+    ros_env::control_msgs::msg::MultiDOFCommand {
+        dof_names: crate::ros2_bridge::mappers::convert::ros_string_seq(bus.dof_names),
+        values: crate::ros2_bridge::mappers::convert::FromF64Seq::from_f64_seq(bus.values),
+        values_dot: crate::ros2_bridge::mappers::convert::FromF64Seq::from_f64_seq(bus.values_dot),
+    }
 }
 
-pub(crate) fn multi_dof_command_dyn_to_bus(
-    msg: &rclrs::DynamicMessage,
-) -> Result<crate::control_msgs::msg::v1::MultiDofCommand> {
-    multi_dof_command_from_view(&msg.view())
-}
-
-pub(crate) fn multi_dof_command_bus_to_dyn(
-    bus: &crate::control_msgs::msg::v1::MultiDofCommand,
-) -> Result<rclrs::DynamicMessage> {
-    let mut msg = new_message("control_msgs/msg/MultiDOFCommand")?;
-    multi_dof_command_write(&mut msg.view_mut(), bus)?;
-    Ok(msg)
-}
-
+#[derive(Clone, Copy, Debug, Default)]
 pub struct ControlMsgsMultiDofCommandMapper;
-impl TopicMapper for ControlMsgsMultiDofCommandMapper {
+
+impl TypedTopicMapper for ControlMsgsMultiDofCommandMapper {
+    type Ros = ros_env::control_msgs::msg::MultiDOFCommand;
+    type Bus = crate::control_msgs::msg::v1::MultiDofCommand;
+
     fn type_name(&self) -> &'static str {
         "control_msgs/msg/MultiDOFCommand"
     }
 
-    fn ros_to_bus(&self, msg: &DynamicMessage) -> Result<Vec<u8>> {
-        Ok(multi_dof_command_dyn_to_bus(msg)?.encode_to_vec())
+    fn ros_to_bus(&self, msg: Self::Ros) -> crate::errors::Result<Self::Bus> {
+        Ok(multi_dof_command_to_bus(msg))
     }
 
-    fn bus_to_ros(&self, payload: &[u8]) -> Result<DynamicMessage> {
-        let bus = <crate::control_msgs::msg::v1::MultiDofCommand as ProstMessage>::decode(payload)
-            .map_err(|e| {
-                BusError::Protocol(format!("decode control_msgs/msg/MultiDOFCommand: {e}"))
-            })?;
-        multi_dof_command_bus_to_dyn(&bus)
+    fn bus_to_ros(&self, msg: Self::Bus) -> crate::errors::Result<Self::Ros> {
+        Ok(multi_dof_command_to_ros(msg))
     }
 }

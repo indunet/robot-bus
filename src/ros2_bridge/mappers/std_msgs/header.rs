@@ -1,64 +1,37 @@
-//! Mapper for `std_msgs/msg/Header`.
+//! Typed mapper for `std_msgs/msg/Header`.
 
-use prost::Message as ProstMessage;
-use rclrs::DynamicMessage;
+use crate::ros2_bridge::mapper::TypedTopicMapper;
 
-use super::super::common::*;
-use crate::BusError;
-use crate::ros2_bridge::mapper::TopicMapper;
-
-pub(crate) fn header_from_view(
-    view: &rclrs::DynamicMessageView<'_>,
-) -> Result<crate::std_msgs::msg::v1::Header> {
-    Ok(crate::std_msgs::msg::v1::Header {
-        stamp: nested_view(view, "stamp")?
-            .as_ref()
-            .map(super::super::builtin_interfaces::time::time_from_view)
-            .transpose()?,
-        frame_id: read_string(view, "frame_id")?,
-    })
-}
-
-pub(crate) fn header_write(
-    view: &mut rclrs::DynamicMessageViewMut<'_>,
-    bus: &crate::std_msgs::msg::v1::Header,
-) -> Result<()> {
-    if let Some(v) = &bus.stamp {
-        with_nested_mut(view, "stamp", |nested| {
-            super::super::builtin_interfaces::time::time_write(nested, v)
-        })?;
+pub(crate) fn header_to_bus(msg: ros_env::std_msgs::msg::Header) -> crate::std_msgs::msg::v1::Header {
+    crate::std_msgs::msg::v1::Header {
+        stamp: Some(crate::ros2_bridge::mappers::builtin_interfaces::time::time_to_bus(msg.stamp)),
+        frame_id: crate::ros2_bridge::mappers::convert::from_ros_string(msg.frame_id),
     }
-    write_string(view, "frame_id", &bus.frame_id)?;
-    Ok(())
 }
 
-pub(crate) fn header_dyn_to_bus(
-    msg: &rclrs::DynamicMessage,
-) -> Result<crate::std_msgs::msg::v1::Header> {
-    header_from_view(&msg.view())
+pub(crate) fn header_to_ros(bus: crate::std_msgs::msg::v1::Header) -> ros_env::std_msgs::msg::Header {
+    ros_env::std_msgs::msg::Header {
+        stamp: crate::ros2_bridge::mappers::builtin_interfaces::time::time_to_ros(bus.stamp.unwrap_or_default()),
+        frame_id: crate::ros2_bridge::mappers::convert::to_ros_string(bus.frame_id),
+    }
 }
 
-pub(crate) fn header_bus_to_dyn(
-    bus: &crate::std_msgs::msg::v1::Header,
-) -> Result<rclrs::DynamicMessage> {
-    let mut msg = new_message("std_msgs/msg/Header")?;
-    header_write(&mut msg.view_mut(), bus)?;
-    Ok(msg)
-}
-
+#[derive(Clone, Copy, Debug, Default)]
 pub struct StdMsgsHeaderMapper;
-impl TopicMapper for StdMsgsHeaderMapper {
+
+impl TypedTopicMapper for StdMsgsHeaderMapper {
+    type Ros = ros_env::std_msgs::msg::Header;
+    type Bus = crate::std_msgs::msg::v1::Header;
+
     fn type_name(&self) -> &'static str {
         "std_msgs/msg/Header"
     }
 
-    fn ros_to_bus(&self, msg: &DynamicMessage) -> Result<Vec<u8>> {
-        Ok(header_dyn_to_bus(msg)?.encode_to_vec())
+    fn ros_to_bus(&self, msg: Self::Ros) -> crate::errors::Result<Self::Bus> {
+        Ok(header_to_bus(msg))
     }
 
-    fn bus_to_ros(&self, payload: &[u8]) -> Result<DynamicMessage> {
-        let bus = <crate::std_msgs::msg::v1::Header as ProstMessage>::decode(payload)
-            .map_err(|e| BusError::Protocol(format!("decode std_msgs/msg/Header: {e}")))?;
-        header_bus_to_dyn(&bus)
+    fn bus_to_ros(&self, msg: Self::Bus) -> crate::errors::Result<Self::Ros> {
+        Ok(header_to_ros(msg))
     }
 }

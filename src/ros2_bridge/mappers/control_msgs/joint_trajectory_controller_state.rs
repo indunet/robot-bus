@@ -1,155 +1,55 @@
-//! Mapper for `control_msgs/msg/JointTrajectoryControllerState`.
+//! Typed mapper for `control_msgs/msg/JointTrajectoryControllerState`.
 
-use prost::Message as ProstMessage;
-use rclrs::DynamicMessage;
+use crate::ros2_bridge::mapper::TypedTopicMapper;
 
-use super::super::common::*;
-use crate::BusError;
-use crate::ros2_bridge::mapper::TopicMapper;
-
-pub(crate) fn joint_trajectory_controller_state_from_view(
-    view: &rclrs::DynamicMessageView<'_>,
-) -> Result<crate::control_msgs::msg::v1::JointTrajectoryControllerState> {
-    Ok(
-        crate::control_msgs::msg::v1::JointTrajectoryControllerState {
-            header: nested_view(view, "header")?
-                .as_ref()
-                .map(super::super::std_msgs::header::header_from_view)
-                .transpose()?,
-            joint_names: read_string_seq(view, "joint_names")?,
-            reference: nested_view(view, "reference")?
-                .as_ref()
-                .map(super::super::trajectory_msgs::joint_trajectory_point::joint_trajectory_point_from_view)
-                .transpose()?,
-            feedback: nested_view(view, "feedback")?
-                .as_ref()
-                .map(super::super::trajectory_msgs::joint_trajectory_point::joint_trajectory_point_from_view)
-                .transpose()?,
-            error: nested_view(view, "error")?
-                .as_ref()
-                .map(super::super::trajectory_msgs::joint_trajectory_point::joint_trajectory_point_from_view)
-                .transpose()?,
-            output: nested_view(view, "output")?
-                .as_ref()
-                .map(super::super::trajectory_msgs::joint_trajectory_point::joint_trajectory_point_from_view)
-                .transpose()?,
-            multi_dof_joint_names: read_string_seq(view, "multi_dof_joint_names")?,
-            multi_dof_reference: nested_view(view, "multi_dof_reference")?
-                .as_ref()
-                .map(super::super::trajectory_msgs::multi_dof_joint_trajectory_point::multi_dof_joint_trajectory_point_from_view)
-                .transpose()?,
-            multi_dof_feedback: nested_view(view, "multi_dof_feedback")?
-                .as_ref()
-                .map(super::super::trajectory_msgs::multi_dof_joint_trajectory_point::multi_dof_joint_trajectory_point_from_view)
-                .transpose()?,
-            multi_dof_error: nested_view(view, "multi_dof_error")?
-                .as_ref()
-                .map(super::super::trajectory_msgs::multi_dof_joint_trajectory_point::multi_dof_joint_trajectory_point_from_view)
-                .transpose()?,
-            multi_dof_output: nested_view(view, "multi_dof_output")?
-                .as_ref()
-                .map(super::super::trajectory_msgs::multi_dof_joint_trajectory_point::multi_dof_joint_trajectory_point_from_view)
-                .transpose()?,
-        },
-    )
+pub(crate) fn joint_trajectory_controller_state_to_bus(msg: ros_env::control_msgs::msg::JointTrajectoryControllerState) -> crate::control_msgs::msg::v1::JointTrajectoryControllerState {
+    crate::control_msgs::msg::v1::JointTrajectoryControllerState {
+        header: Some(crate::ros2_bridge::mappers::std_msgs::header::header_to_bus(msg.header)),
+        joint_names: crate::ros2_bridge::mappers::convert::string_seq(msg.joint_names),
+        reference: Some(crate::ros2_bridge::mappers::trajectory_msgs::joint_trajectory_point::joint_trajectory_point_to_bus(msg.reference)),
+        feedback: Some(crate::ros2_bridge::mappers::trajectory_msgs::joint_trajectory_point::joint_trajectory_point_to_bus(msg.feedback)),
+        error: Some(crate::ros2_bridge::mappers::trajectory_msgs::joint_trajectory_point::joint_trajectory_point_to_bus(msg.error)),
+        output: Some(crate::ros2_bridge::mappers::trajectory_msgs::joint_trajectory_point::joint_trajectory_point_to_bus(msg.output)),
+        multi_dof_joint_names: crate::ros2_bridge::mappers::convert::string_seq(msg.multi_dof_joint_names),
+        multi_dof_reference: Some(crate::ros2_bridge::mappers::trajectory_msgs::multi_dof_joint_trajectory_point::multi_dof_joint_trajectory_point_to_bus(msg.multi_dof_reference)),
+        multi_dof_feedback: Some(crate::ros2_bridge::mappers::trajectory_msgs::multi_dof_joint_trajectory_point::multi_dof_joint_trajectory_point_to_bus(msg.multi_dof_feedback)),
+        multi_dof_error: Some(crate::ros2_bridge::mappers::trajectory_msgs::multi_dof_joint_trajectory_point::multi_dof_joint_trajectory_point_to_bus(msg.multi_dof_error)),
+        multi_dof_output: Some(crate::ros2_bridge::mappers::trajectory_msgs::multi_dof_joint_trajectory_point::multi_dof_joint_trajectory_point_to_bus(msg.multi_dof_output)),
+    }
 }
 
-pub(crate) fn joint_trajectory_controller_state_write(
-    view: &mut rclrs::DynamicMessageViewMut<'_>,
-    bus: &crate::control_msgs::msg::v1::JointTrajectoryControllerState,
-) -> Result<()> {
-    if let Some(v) = &bus.header {
-        with_nested_mut(view, "header", |nested| {
-            super::super::std_msgs::header::header_write(nested, v)
-        })?;
+pub(crate) fn joint_trajectory_controller_state_to_ros(bus: crate::control_msgs::msg::v1::JointTrajectoryControllerState) -> ros_env::control_msgs::msg::JointTrajectoryControllerState {
+    ros_env::control_msgs::msg::JointTrajectoryControllerState {
+        header: crate::ros2_bridge::mappers::std_msgs::header::header_to_ros(bus.header.unwrap_or_default()),
+        joint_names: crate::ros2_bridge::mappers::convert::ros_string_seq(bus.joint_names),
+        reference: crate::ros2_bridge::mappers::trajectory_msgs::joint_trajectory_point::joint_trajectory_point_to_ros(bus.reference.unwrap_or_default()),
+        feedback: crate::ros2_bridge::mappers::trajectory_msgs::joint_trajectory_point::joint_trajectory_point_to_ros(bus.feedback.unwrap_or_default()),
+        error: crate::ros2_bridge::mappers::trajectory_msgs::joint_trajectory_point::joint_trajectory_point_to_ros(bus.error.unwrap_or_default()),
+        output: crate::ros2_bridge::mappers::trajectory_msgs::joint_trajectory_point::joint_trajectory_point_to_ros(bus.output.unwrap_or_default()),
+        multi_dof_joint_names: crate::ros2_bridge::mappers::convert::ros_string_seq(bus.multi_dof_joint_names),
+        multi_dof_reference: crate::ros2_bridge::mappers::trajectory_msgs::multi_dof_joint_trajectory_point::multi_dof_joint_trajectory_point_to_ros(bus.multi_dof_reference.unwrap_or_default()),
+        multi_dof_feedback: crate::ros2_bridge::mappers::trajectory_msgs::multi_dof_joint_trajectory_point::multi_dof_joint_trajectory_point_to_ros(bus.multi_dof_feedback.unwrap_or_default()),
+        multi_dof_error: crate::ros2_bridge::mappers::trajectory_msgs::multi_dof_joint_trajectory_point::multi_dof_joint_trajectory_point_to_ros(bus.multi_dof_error.unwrap_or_default()),
+        multi_dof_output: crate::ros2_bridge::mappers::trajectory_msgs::multi_dof_joint_trajectory_point::multi_dof_joint_trajectory_point_to_ros(bus.multi_dof_output.unwrap_or_default()),
     }
-    write_string_seq(view, "joint_names", &bus.joint_names)?;
-    if let Some(v) = &bus.reference {
-        with_nested_mut(view, "reference", |nested| {
-            super::super::trajectory_msgs::joint_trajectory_point::joint_trajectory_point_write(
-                nested, v,
-            )
-        })?;
-    }
-    if let Some(v) = &bus.feedback {
-        with_nested_mut(view, "feedback", |nested| {
-            super::super::trajectory_msgs::joint_trajectory_point::joint_trajectory_point_write(
-                nested, v,
-            )
-        })?;
-    }
-    if let Some(v) = &bus.error {
-        with_nested_mut(view, "error", |nested| {
-            super::super::trajectory_msgs::joint_trajectory_point::joint_trajectory_point_write(
-                nested, v,
-            )
-        })?;
-    }
-    if let Some(v) = &bus.output {
-        with_nested_mut(view, "output", |nested| {
-            super::super::trajectory_msgs::joint_trajectory_point::joint_trajectory_point_write(
-                nested, v,
-            )
-        })?;
-    }
-    write_string_seq(view, "multi_dof_joint_names", &bus.multi_dof_joint_names)?;
-    if let Some(v) = &bus.multi_dof_reference {
-        with_nested_mut(view, "multi_dof_reference", |nested| {
-            super::super::trajectory_msgs::multi_dof_joint_trajectory_point::multi_dof_joint_trajectory_point_write(nested, v)
-        })?;
-    }
-    if let Some(v) = &bus.multi_dof_feedback {
-        with_nested_mut(view, "multi_dof_feedback", |nested| {
-            super::super::trajectory_msgs::multi_dof_joint_trajectory_point::multi_dof_joint_trajectory_point_write(nested, v)
-        })?;
-    }
-    if let Some(v) = &bus.multi_dof_error {
-        with_nested_mut(view, "multi_dof_error", |nested| {
-            super::super::trajectory_msgs::multi_dof_joint_trajectory_point::multi_dof_joint_trajectory_point_write(nested, v)
-        })?;
-    }
-    if let Some(v) = &bus.multi_dof_output {
-        with_nested_mut(view, "multi_dof_output", |nested| {
-            super::super::trajectory_msgs::multi_dof_joint_trajectory_point::multi_dof_joint_trajectory_point_write(nested, v)
-        })?;
-    }
-    Ok(())
 }
 
-pub(crate) fn joint_trajectory_controller_state_dyn_to_bus(
-    msg: &rclrs::DynamicMessage,
-) -> Result<crate::control_msgs::msg::v1::JointTrajectoryControllerState> {
-    joint_trajectory_controller_state_from_view(&msg.view())
-}
-
-pub(crate) fn joint_trajectory_controller_state_bus_to_dyn(
-    bus: &crate::control_msgs::msg::v1::JointTrajectoryControllerState,
-) -> Result<rclrs::DynamicMessage> {
-    let mut msg = new_message("control_msgs/msg/JointTrajectoryControllerState")?;
-    joint_trajectory_controller_state_write(&mut msg.view_mut(), bus)?;
-    Ok(msg)
-}
-
+#[derive(Clone, Copy, Debug, Default)]
 pub struct ControlMsgsJointTrajectoryControllerStateMapper;
-impl TopicMapper for ControlMsgsJointTrajectoryControllerStateMapper {
+
+impl TypedTopicMapper for ControlMsgsJointTrajectoryControllerStateMapper {
+    type Ros = ros_env::control_msgs::msg::JointTrajectoryControllerState;
+    type Bus = crate::control_msgs::msg::v1::JointTrajectoryControllerState;
+
     fn type_name(&self) -> &'static str {
         "control_msgs/msg/JointTrajectoryControllerState"
     }
 
-    fn ros_to_bus(&self, msg: &DynamicMessage) -> Result<Vec<u8>> {
-        Ok(joint_trajectory_controller_state_dyn_to_bus(msg)?.encode_to_vec())
+    fn ros_to_bus(&self, msg: Self::Ros) -> crate::errors::Result<Self::Bus> {
+        Ok(joint_trajectory_controller_state_to_bus(msg))
     }
 
-    fn bus_to_ros(&self, payload: &[u8]) -> Result<DynamicMessage> {
-        let bus =
-            <crate::control_msgs::msg::v1::JointTrajectoryControllerState as ProstMessage>::decode(
-                payload,
-            )
-            .map_err(|e| {
-                BusError::Protocol(format!(
-                    "decode control_msgs/msg/JointTrajectoryControllerState: {e}"
-                ))
-            })?;
-        joint_trajectory_controller_state_bus_to_dyn(&bus)
+    fn bus_to_ros(&self, msg: Self::Bus) -> crate::errors::Result<Self::Ros> {
+        Ok(joint_trajectory_controller_state_to_ros(msg))
     }
 }

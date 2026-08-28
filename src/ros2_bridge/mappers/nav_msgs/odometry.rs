@@ -1,86 +1,41 @@
-//! Mapper for `nav_msgs/msg/Odometry`.
+//! Typed mapper for `nav_msgs/msg/Odometry`.
 
-use prost::Message as ProstMessage;
-use rclrs::DynamicMessage;
+use crate::ros2_bridge::mapper::TypedTopicMapper;
 
-use super::super::common::*;
-use crate::BusError;
-use crate::ros2_bridge::mapper::TopicMapper;
-
-pub(crate) fn odometry_from_view(
-    view: &rclrs::DynamicMessageView<'_>,
-) -> Result<crate::nav_msgs::msg::v1::Odometry> {
-    Ok(crate::nav_msgs::msg::v1::Odometry {
-        header: nested_view(view, "header")?
-            .as_ref()
-            .map(super::super::std_msgs::header::header_from_view)
-            .transpose()?,
-        child_frame_id: read_string(view, "child_frame_id")?,
-        pose: nested_view(view, "pose")?
-            .as_ref()
-            .map(super::super::geometry_msgs::pose_with_covariance::pose_with_covariance_from_view)
-            .transpose()?,
-        twist: nested_view(view, "twist")?
-            .as_ref()
-            .map(
-                super::super::geometry_msgs::twist_with_covariance::twist_with_covariance_from_view,
-            )
-            .transpose()?,
-    })
-}
-
-pub(crate) fn odometry_write(
-    view: &mut rclrs::DynamicMessageViewMut<'_>,
-    bus: &crate::nav_msgs::msg::v1::Odometry,
-) -> Result<()> {
-    if let Some(v) = &bus.header {
-        with_nested_mut(view, "header", |nested| {
-            super::super::std_msgs::header::header_write(nested, v)
-        })?;
+pub(crate) fn odometry_to_bus(msg: ros_env::nav_msgs::msg::Odometry) -> crate::nav_msgs::msg::v1::Odometry {
+    crate::nav_msgs::msg::v1::Odometry {
+        header: Some(crate::ros2_bridge::mappers::std_msgs::header::header_to_bus(msg.header)),
+        child_frame_id: crate::ros2_bridge::mappers::convert::from_ros_string(msg.child_frame_id),
+        pose: Some(crate::ros2_bridge::mappers::geometry_msgs::pose_with_covariance::pose_with_covariance_to_bus(msg.pose)),
+        twist: Some(crate::ros2_bridge::mappers::geometry_msgs::twist_with_covariance::twist_with_covariance_to_bus(msg.twist)),
     }
-    write_string(view, "child_frame_id", &bus.child_frame_id)?;
-    if let Some(v) = &bus.pose {
-        with_nested_mut(view, "pose", |nested| {
-            super::super::geometry_msgs::pose_with_covariance::pose_with_covariance_write(nested, v)
-        })?;
+}
+
+pub(crate) fn odometry_to_ros(bus: crate::nav_msgs::msg::v1::Odometry) -> ros_env::nav_msgs::msg::Odometry {
+    ros_env::nav_msgs::msg::Odometry {
+        header: crate::ros2_bridge::mappers::std_msgs::header::header_to_ros(bus.header.unwrap_or_default()),
+        child_frame_id: crate::ros2_bridge::mappers::convert::to_ros_string(bus.child_frame_id),
+        pose: crate::ros2_bridge::mappers::geometry_msgs::pose_with_covariance::pose_with_covariance_to_ros(bus.pose.unwrap_or_default()),
+        twist: crate::ros2_bridge::mappers::geometry_msgs::twist_with_covariance::twist_with_covariance_to_ros(bus.twist.unwrap_or_default()),
     }
-    if let Some(v) = &bus.twist {
-        with_nested_mut(view, "twist", |nested| {
-            super::super::geometry_msgs::twist_with_covariance::twist_with_covariance_write(
-                nested, v,
-            )
-        })?;
-    }
-    Ok(())
 }
 
-pub(crate) fn odometry_dyn_to_bus(
-    msg: &rclrs::DynamicMessage,
-) -> Result<crate::nav_msgs::msg::v1::Odometry> {
-    odometry_from_view(&msg.view())
-}
-
-pub(crate) fn odometry_bus_to_dyn(
-    bus: &crate::nav_msgs::msg::v1::Odometry,
-) -> Result<rclrs::DynamicMessage> {
-    let mut msg = new_message("nav_msgs/msg/Odometry")?;
-    odometry_write(&mut msg.view_mut(), bus)?;
-    Ok(msg)
-}
-
+#[derive(Clone, Copy, Debug, Default)]
 pub struct NavMsgsOdometryMapper;
-impl TopicMapper for NavMsgsOdometryMapper {
+
+impl TypedTopicMapper for NavMsgsOdometryMapper {
+    type Ros = ros_env::nav_msgs::msg::Odometry;
+    type Bus = crate::nav_msgs::msg::v1::Odometry;
+
     fn type_name(&self) -> &'static str {
         "nav_msgs/msg/Odometry"
     }
 
-    fn ros_to_bus(&self, msg: &DynamicMessage) -> Result<Vec<u8>> {
-        Ok(odometry_dyn_to_bus(msg)?.encode_to_vec())
+    fn ros_to_bus(&self, msg: Self::Ros) -> crate::errors::Result<Self::Bus> {
+        Ok(odometry_to_bus(msg))
     }
 
-    fn bus_to_ros(&self, payload: &[u8]) -> Result<DynamicMessage> {
-        let bus = <crate::nav_msgs::msg::v1::Odometry as ProstMessage>::decode(payload)
-            .map_err(|e| BusError::Protocol(format!("decode nav_msgs/msg/Odometry: {e}")))?;
-        odometry_bus_to_dyn(&bus)
+    fn bus_to_ros(&self, msg: Self::Bus) -> crate::errors::Result<Self::Ros> {
+        Ok(odometry_to_ros(msg))
     }
 }

@@ -1,65 +1,41 @@
-//! Mapper for `foxglove_msgs/msg/CompressedVideo`.
+//! Typed mapper for `foxglove_msgs/msg/CompressedVideo`.
 
-use prost::Message as ProstMessage;
-use rclrs::DynamicMessage;
+use crate::ros2_bridge::mapper::TypedTopicMapper;
 
-use super::super::common::*;
-use crate::BusError;
-use crate::ros2_bridge::mapper::TopicMapper;
-
-pub(crate) fn compressed_video_from_view(
-    view: &rclrs::DynamicMessageView<'_>,
-) -> Result<crate::foxglove_msgs::msg::v1::CompressedVideo> {
-    Ok(crate::foxglove_msgs::msg::v1::CompressedVideo {
-        timestamp: read_timestamp(view, "timestamp")?,
-        frame_id: read_string(view, "frame_id")?,
-        data: read_byte_seq(view, "data")?,
-        format: read_string(view, "format")?,
-    })
-}
-
-pub(crate) fn compressed_video_write(
-    view: &mut rclrs::DynamicMessageViewMut<'_>,
-    bus: &crate::foxglove_msgs::msg::v1::CompressedVideo,
-) -> Result<()> {
-    if let Some(v) = &bus.timestamp {
-        write_timestamp(view, "timestamp", v)?;
+pub(crate) fn compressed_video_to_bus(msg: ros_env::foxglove_msgs::msg::CompressedVideo) -> crate::foxglove_msgs::msg::v1::CompressedVideo {
+    crate::foxglove_msgs::msg::v1::CompressedVideo {
+        timestamp: Some(crate::ros2_bridge::mappers::convert::time_to_timestamp(msg.timestamp)),
+        frame_id: crate::ros2_bridge::mappers::convert::from_ros_string(msg.frame_id),
+        data: crate::ros2_bridge::mappers::convert::IntoU8Vec::into_u8_vec(msg.data),
+        format: crate::ros2_bridge::mappers::convert::from_ros_string(msg.format),
     }
-    write_string(view, "frame_id", &bus.frame_id)?;
-    write_byte_seq(view, "data", &bus.data)?;
-    write_string(view, "format", &bus.format)?;
-    Ok(())
 }
 
-pub(crate) fn compressed_video_dyn_to_bus(
-    msg: &rclrs::DynamicMessage,
-) -> Result<crate::foxglove_msgs::msg::v1::CompressedVideo> {
-    compressed_video_from_view(&msg.view())
+pub(crate) fn compressed_video_to_ros(bus: crate::foxglove_msgs::msg::v1::CompressedVideo) -> ros_env::foxglove_msgs::msg::CompressedVideo {
+    ros_env::foxglove_msgs::msg::CompressedVideo {
+        timestamp: crate::ros2_bridge::mappers::convert::timestamp_to_time(bus.timestamp.unwrap_or_default()),
+        frame_id: crate::ros2_bridge::mappers::convert::to_ros_string(bus.frame_id),
+        data: crate::ros2_bridge::mappers::convert::FromByteSeq::from_byte_seq(bus.data),
+        format: crate::ros2_bridge::mappers::convert::to_ros_string(bus.format),
+    }
 }
 
-pub(crate) fn compressed_video_bus_to_dyn(
-    bus: &crate::foxglove_msgs::msg::v1::CompressedVideo,
-) -> Result<rclrs::DynamicMessage> {
-    let mut msg = new_message("foxglove_msgs/msg/CompressedVideo")?;
-    compressed_video_write(&mut msg.view_mut(), bus)?;
-    Ok(msg)
-}
-
+#[derive(Clone, Copy, Debug, Default)]
 pub struct FoxgloveMsgsCompressedVideoMapper;
-impl TopicMapper for FoxgloveMsgsCompressedVideoMapper {
+
+impl TypedTopicMapper for FoxgloveMsgsCompressedVideoMapper {
+    type Ros = ros_env::foxglove_msgs::msg::CompressedVideo;
+    type Bus = crate::foxglove_msgs::msg::v1::CompressedVideo;
+
     fn type_name(&self) -> &'static str {
         "foxglove_msgs/msg/CompressedVideo"
     }
 
-    fn ros_to_bus(&self, msg: &DynamicMessage) -> Result<Vec<u8>> {
-        Ok(compressed_video_dyn_to_bus(msg)?.encode_to_vec())
+    fn ros_to_bus(&self, msg: Self::Ros) -> crate::errors::Result<Self::Bus> {
+        Ok(compressed_video_to_bus(msg))
     }
 
-    fn bus_to_ros(&self, payload: &[u8]) -> Result<DynamicMessage> {
-        let bus = <crate::foxglove_msgs::msg::v1::CompressedVideo as ProstMessage>::decode(payload)
-            .map_err(|e| {
-                BusError::Protocol(format!("decode foxglove_msgs/msg/CompressedVideo: {e}"))
-            })?;
-        compressed_video_bus_to_dyn(&bus)
+    fn bus_to_ros(&self, msg: Self::Bus) -> crate::errors::Result<Self::Ros> {
+        Ok(compressed_video_to_ros(msg))
     }
 }

@@ -1,65 +1,39 @@
-//! Mapper for `control_msgs/msg/JointComponentTolerance`.
+//! Typed mapper for `control_msgs/msg/JointComponentTolerance`.
 
-use prost::Message as ProstMessage;
-use rclrs::DynamicMessage;
+use crate::ros2_bridge::mapper::TypedTopicMapper;
 
-use super::super::common::*;
-use crate::BusError;
-use crate::ros2_bridge::mapper::TopicMapper;
-
-pub(crate) fn joint_component_tolerance_from_view(
-    view: &rclrs::DynamicMessageView<'_>,
-) -> Result<crate::control_msgs::msg::v1::JointComponentTolerance> {
-    Ok(crate::control_msgs::msg::v1::JointComponentTolerance {
-        joint_name: read_string(view, "joint_name")?,
-        component: read_u32(view, "component")?,
-        value: read_f64(view, "value")?,
-    })
+pub(crate) fn joint_component_tolerance_to_bus(msg: ros_env::control_msgs::msg::JointComponentTolerance) -> crate::control_msgs::msg::v1::JointComponentTolerance {
+    crate::control_msgs::msg::v1::JointComponentTolerance {
+        joint_name: crate::ros2_bridge::mappers::convert::from_ros_string(msg.joint_name),
+        component: msg.component,
+        value: msg.value,
+    }
 }
 
-pub(crate) fn joint_component_tolerance_write(
-    view: &mut rclrs::DynamicMessageViewMut<'_>,
-    bus: &crate::control_msgs::msg::v1::JointComponentTolerance,
-) -> Result<()> {
-    write_string(view, "joint_name", &bus.joint_name)?;
-    write_u32(view, "component", bus.component)?;
-    write_f64(view, "value", bus.value)?;
-    Ok(())
+pub(crate) fn joint_component_tolerance_to_ros(bus: crate::control_msgs::msg::v1::JointComponentTolerance) -> ros_env::control_msgs::msg::JointComponentTolerance {
+    ros_env::control_msgs::msg::JointComponentTolerance {
+        joint_name: crate::ros2_bridge::mappers::convert::to_ros_string(bus.joint_name),
+        component: bus.component,
+        value: bus.value,
+    }
 }
 
-pub(crate) fn joint_component_tolerance_dyn_to_bus(
-    msg: &rclrs::DynamicMessage,
-) -> Result<crate::control_msgs::msg::v1::JointComponentTolerance> {
-    joint_component_tolerance_from_view(&msg.view())
-}
-
-pub(crate) fn joint_component_tolerance_bus_to_dyn(
-    bus: &crate::control_msgs::msg::v1::JointComponentTolerance,
-) -> Result<rclrs::DynamicMessage> {
-    let mut msg = new_message("control_msgs/msg/JointComponentTolerance")?;
-    joint_component_tolerance_write(&mut msg.view_mut(), bus)?;
-    Ok(msg)
-}
-
+#[derive(Clone, Copy, Debug, Default)]
 pub struct ControlMsgsJointComponentToleranceMapper;
-impl TopicMapper for ControlMsgsJointComponentToleranceMapper {
+
+impl TypedTopicMapper for ControlMsgsJointComponentToleranceMapper {
+    type Ros = ros_env::control_msgs::msg::JointComponentTolerance;
+    type Bus = crate::control_msgs::msg::v1::JointComponentTolerance;
+
     fn type_name(&self) -> &'static str {
         "control_msgs/msg/JointComponentTolerance"
     }
 
-    fn ros_to_bus(&self, msg: &DynamicMessage) -> Result<Vec<u8>> {
-        Ok(joint_component_tolerance_dyn_to_bus(msg)?.encode_to_vec())
+    fn ros_to_bus(&self, msg: Self::Ros) -> crate::errors::Result<Self::Bus> {
+        Ok(joint_component_tolerance_to_bus(msg))
     }
 
-    fn bus_to_ros(&self, payload: &[u8]) -> Result<DynamicMessage> {
-        let bus = <crate::control_msgs::msg::v1::JointComponentTolerance as ProstMessage>::decode(
-            payload,
-        )
-        .map_err(|e| {
-            BusError::Protocol(format!(
-                "decode control_msgs/msg/JointComponentTolerance: {e}"
-            ))
-        })?;
-        joint_component_tolerance_bus_to_dyn(&bus)
+    fn bus_to_ros(&self, msg: Self::Bus) -> crate::errors::Result<Self::Ros> {
+        Ok(joint_component_tolerance_to_ros(msg))
     }
 }

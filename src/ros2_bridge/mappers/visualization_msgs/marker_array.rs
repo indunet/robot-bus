@@ -1,58 +1,35 @@
-//! Mapper for `visualization_msgs/msg/MarkerArray`.
+//! Typed mapper for `visualization_msgs/msg/MarkerArray`.
 
-use prost::Message as ProstMessage;
-use rclrs::DynamicMessage;
+use crate::ros2_bridge::mapper::TypedTopicMapper;
 
-use super::super::common::*;
-use crate::BusError;
-use crate::ros2_bridge::mapper::TopicMapper;
-
-pub(crate) fn marker_array_from_view(
-    view: &rclrs::DynamicMessageView<'_>,
-) -> Result<crate::visualization_msgs::msg::v1::MarkerArray> {
-    Ok(crate::visualization_msgs::msg::v1::MarkerArray {
-        markers: read_message_seq(view, "markers", super::marker::marker_from_view)?,
-    })
+pub(crate) fn marker_array_to_bus(msg: ros_env::visualization_msgs::msg::MarkerArray) -> crate::visualization_msgs::msg::v1::MarkerArray {
+    crate::visualization_msgs::msg::v1::MarkerArray {
+        markers: msg.markers.into_iter().map(crate::ros2_bridge::mappers::visualization_msgs::marker::marker_to_bus).collect(),
+    }
 }
 
-pub(crate) fn marker_array_write(
-    view: &mut rclrs::DynamicMessageViewMut<'_>,
-    bus: &crate::visualization_msgs::msg::v1::MarkerArray,
-) -> Result<()> {
-    write_message_seq(view, "markers", &bus.markers, super::marker::marker_write)?;
-    Ok(())
+pub(crate) fn marker_array_to_ros(bus: crate::visualization_msgs::msg::v1::MarkerArray) -> ros_env::visualization_msgs::msg::MarkerArray {
+    ros_env::visualization_msgs::msg::MarkerArray {
+        markers: bus.markers.into_iter().map(crate::ros2_bridge::mappers::visualization_msgs::marker::marker_to_ros).collect(),
+    }
 }
 
-pub(crate) fn marker_array_dyn_to_bus(
-    msg: &rclrs::DynamicMessage,
-) -> Result<crate::visualization_msgs::msg::v1::MarkerArray> {
-    marker_array_from_view(&msg.view())
-}
-
-pub(crate) fn marker_array_bus_to_dyn(
-    bus: &crate::visualization_msgs::msg::v1::MarkerArray,
-) -> Result<rclrs::DynamicMessage> {
-    let mut msg = new_message("visualization_msgs/msg/MarkerArray")?;
-    marker_array_write(&mut msg.view_mut(), bus)?;
-    Ok(msg)
-}
-
+#[derive(Clone, Copy, Debug, Default)]
 pub struct VisualizationMsgsMarkerArrayMapper;
-impl TopicMapper for VisualizationMsgsMarkerArrayMapper {
+
+impl TypedTopicMapper for VisualizationMsgsMarkerArrayMapper {
+    type Ros = ros_env::visualization_msgs::msg::MarkerArray;
+    type Bus = crate::visualization_msgs::msg::v1::MarkerArray;
+
     fn type_name(&self) -> &'static str {
         "visualization_msgs/msg/MarkerArray"
     }
 
-    fn ros_to_bus(&self, msg: &DynamicMessage) -> Result<Vec<u8>> {
-        Ok(marker_array_dyn_to_bus(msg)?.encode_to_vec())
+    fn ros_to_bus(&self, msg: Self::Ros) -> crate::errors::Result<Self::Bus> {
+        Ok(marker_array_to_bus(msg))
     }
 
-    fn bus_to_ros(&self, payload: &[u8]) -> Result<DynamicMessage> {
-        let bus =
-            <crate::visualization_msgs::msg::v1::MarkerArray as ProstMessage>::decode(payload)
-                .map_err(|e| {
-                    BusError::Protocol(format!("decode visualization_msgs/msg/MarkerArray: {e}"))
-                })?;
-        marker_array_bus_to_dyn(&bus)
+    fn bus_to_ros(&self, msg: Self::Bus) -> crate::errors::Result<Self::Ros> {
+        Ok(marker_array_to_ros(msg))
     }
 }

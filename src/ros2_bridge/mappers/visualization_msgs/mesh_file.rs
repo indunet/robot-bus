@@ -1,59 +1,37 @@
-//! Mapper for `visualization_msgs/msg/MeshFile`.
+//! Typed mapper for `visualization_msgs/msg/MeshFile`.
 
-use prost::Message as ProstMessage;
-use rclrs::DynamicMessage;
+use crate::ros2_bridge::mapper::TypedTopicMapper;
 
-use super::super::common::*;
-use crate::BusError;
-use crate::ros2_bridge::mapper::TopicMapper;
-
-pub(crate) fn mesh_file_from_view(
-    view: &rclrs::DynamicMessageView<'_>,
-) -> Result<crate::visualization_msgs::msg::v1::MeshFile> {
-    Ok(crate::visualization_msgs::msg::v1::MeshFile {
-        filename: read_string(view, "filename")?,
-        data: read_byte_seq(view, "data")?,
-    })
+pub(crate) fn mesh_file_to_bus(msg: ros_env::visualization_msgs::msg::MeshFile) -> crate::visualization_msgs::msg::v1::MeshFile {
+    crate::visualization_msgs::msg::v1::MeshFile {
+        filename: crate::ros2_bridge::mappers::convert::from_ros_string(msg.filename),
+        data: crate::ros2_bridge::mappers::convert::IntoU8Vec::into_u8_vec(msg.data),
+    }
 }
 
-pub(crate) fn mesh_file_write(
-    view: &mut rclrs::DynamicMessageViewMut<'_>,
-    bus: &crate::visualization_msgs::msg::v1::MeshFile,
-) -> Result<()> {
-    write_string(view, "filename", &bus.filename)?;
-    write_byte_seq(view, "data", &bus.data)?;
-    Ok(())
+pub(crate) fn mesh_file_to_ros(bus: crate::visualization_msgs::msg::v1::MeshFile) -> ros_env::visualization_msgs::msg::MeshFile {
+    ros_env::visualization_msgs::msg::MeshFile {
+        filename: crate::ros2_bridge::mappers::convert::to_ros_string(bus.filename),
+        data: crate::ros2_bridge::mappers::convert::FromByteSeq::from_byte_seq(bus.data),
+    }
 }
 
-pub(crate) fn mesh_file_dyn_to_bus(
-    msg: &rclrs::DynamicMessage,
-) -> Result<crate::visualization_msgs::msg::v1::MeshFile> {
-    mesh_file_from_view(&msg.view())
-}
-
-pub(crate) fn mesh_file_bus_to_dyn(
-    bus: &crate::visualization_msgs::msg::v1::MeshFile,
-) -> Result<rclrs::DynamicMessage> {
-    let mut msg = new_message("visualization_msgs/msg/MeshFile")?;
-    mesh_file_write(&mut msg.view_mut(), bus)?;
-    Ok(msg)
-}
-
+#[derive(Clone, Copy, Debug, Default)]
 pub struct VisualizationMsgsMeshFileMapper;
-impl TopicMapper for VisualizationMsgsMeshFileMapper {
+
+impl TypedTopicMapper for VisualizationMsgsMeshFileMapper {
+    type Ros = ros_env::visualization_msgs::msg::MeshFile;
+    type Bus = crate::visualization_msgs::msg::v1::MeshFile;
+
     fn type_name(&self) -> &'static str {
         "visualization_msgs/msg/MeshFile"
     }
 
-    fn ros_to_bus(&self, msg: &DynamicMessage) -> Result<Vec<u8>> {
-        Ok(mesh_file_dyn_to_bus(msg)?.encode_to_vec())
+    fn ros_to_bus(&self, msg: Self::Ros) -> crate::errors::Result<Self::Bus> {
+        Ok(mesh_file_to_bus(msg))
     }
 
-    fn bus_to_ros(&self, payload: &[u8]) -> Result<DynamicMessage> {
-        let bus = <crate::visualization_msgs::msg::v1::MeshFile as ProstMessage>::decode(payload)
-            .map_err(|e| {
-            BusError::Protocol(format!("decode visualization_msgs/msg/MeshFile: {e}"))
-        })?;
-        mesh_file_bus_to_dyn(&bus)
+    fn bus_to_ros(&self, msg: Self::Bus) -> crate::errors::Result<Self::Ros> {
+        Ok(mesh_file_to_ros(msg))
     }
 }

@@ -1,66 +1,39 @@
-//! Mapper for `sensor_msgs/msg/Temperature`.
+//! Typed mapper for `sensor_msgs/msg/Temperature`.
 
-use prost::Message as ProstMessage;
-use rclrs::DynamicMessage;
+use crate::ros2_bridge::mapper::TypedTopicMapper;
 
-use super::super::common::*;
-use crate::BusError;
-use crate::ros2_bridge::mapper::TopicMapper;
-
-pub(crate) fn temperature_from_view(
-    view: &rclrs::DynamicMessageView<'_>,
-) -> Result<crate::sensor_msgs::msg::v1::Temperature> {
-    Ok(crate::sensor_msgs::msg::v1::Temperature {
-        header: nested_view(view, "header")?
-            .as_ref()
-            .map(super::super::std_msgs::header::header_from_view)
-            .transpose()?,
-        temperature: read_f64(view, "temperature")?,
-        variance: read_f64(view, "variance")?,
-    })
-}
-
-pub(crate) fn temperature_write(
-    view: &mut rclrs::DynamicMessageViewMut<'_>,
-    bus: &crate::sensor_msgs::msg::v1::Temperature,
-) -> Result<()> {
-    if let Some(v) = &bus.header {
-        with_nested_mut(view, "header", |nested| {
-            super::super::std_msgs::header::header_write(nested, v)
-        })?;
+pub(crate) fn temperature_to_bus(msg: ros_env::sensor_msgs::msg::Temperature) -> crate::sensor_msgs::msg::v1::Temperature {
+    crate::sensor_msgs::msg::v1::Temperature {
+        header: Some(crate::ros2_bridge::mappers::std_msgs::header::header_to_bus(msg.header)),
+        temperature: msg.temperature,
+        variance: msg.variance,
     }
-    write_f64(view, "temperature", bus.temperature)?;
-    write_f64(view, "variance", bus.variance)?;
-    Ok(())
 }
 
-pub(crate) fn temperature_dyn_to_bus(
-    msg: &rclrs::DynamicMessage,
-) -> Result<crate::sensor_msgs::msg::v1::Temperature> {
-    temperature_from_view(&msg.view())
+pub(crate) fn temperature_to_ros(bus: crate::sensor_msgs::msg::v1::Temperature) -> ros_env::sensor_msgs::msg::Temperature {
+    ros_env::sensor_msgs::msg::Temperature {
+        header: crate::ros2_bridge::mappers::std_msgs::header::header_to_ros(bus.header.unwrap_or_default()),
+        temperature: bus.temperature,
+        variance: bus.variance,
+    }
 }
 
-pub(crate) fn temperature_bus_to_dyn(
-    bus: &crate::sensor_msgs::msg::v1::Temperature,
-) -> Result<rclrs::DynamicMessage> {
-    let mut msg = new_message("sensor_msgs/msg/Temperature")?;
-    temperature_write(&mut msg.view_mut(), bus)?;
-    Ok(msg)
-}
-
+#[derive(Clone, Copy, Debug, Default)]
 pub struct SensorMsgsTemperatureMapper;
-impl TopicMapper for SensorMsgsTemperatureMapper {
+
+impl TypedTopicMapper for SensorMsgsTemperatureMapper {
+    type Ros = ros_env::sensor_msgs::msg::Temperature;
+    type Bus = crate::sensor_msgs::msg::v1::Temperature;
+
     fn type_name(&self) -> &'static str {
         "sensor_msgs/msg/Temperature"
     }
 
-    fn ros_to_bus(&self, msg: &DynamicMessage) -> Result<Vec<u8>> {
-        Ok(temperature_dyn_to_bus(msg)?.encode_to_vec())
+    fn ros_to_bus(&self, msg: Self::Ros) -> crate::errors::Result<Self::Bus> {
+        Ok(temperature_to_bus(msg))
     }
 
-    fn bus_to_ros(&self, payload: &[u8]) -> Result<DynamicMessage> {
-        let bus = <crate::sensor_msgs::msg::v1::Temperature as ProstMessage>::decode(payload)
-            .map_err(|e| BusError::Protocol(format!("decode sensor_msgs/msg/Temperature: {e}")))?;
-        temperature_bus_to_dyn(&bus)
+    fn bus_to_ros(&self, msg: Self::Bus) -> crate::errors::Result<Self::Ros> {
+        Ok(temperature_to_ros(msg))
     }
 }

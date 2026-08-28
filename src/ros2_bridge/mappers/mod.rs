@@ -1,11 +1,11 @@
 //! Per-type topic mappers, organized as `mappers/<pkg>/<msg>.rs`.
 //!
-//! Shared field accessors live in [`common`]; service/action helpers used by
+//! Typed field converters live in [`convert`]; service/action helpers used by
 //! the bridge builder live in [`service`] / [`action`].
 
 pub mod action;
 pub mod action_bridges;
-pub mod common;
+pub mod convert;
 pub mod service;
 pub mod service_bridges;
 

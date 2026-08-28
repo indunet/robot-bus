@@ -1,93 +1,59 @@
-//! Mapper for `control_msgs/msg/PidState`.
+//! Typed mapper for `control_msgs/msg/PidState`.
 
-use prost::Message as ProstMessage;
-use rclrs::DynamicMessage;
+use crate::ros2_bridge::mapper::TypedTopicMapper;
 
-use super::super::common::*;
-use crate::BusError;
-use crate::ros2_bridge::mapper::TopicMapper;
-
-pub(crate) fn pid_state_from_view(
-    view: &rclrs::DynamicMessageView<'_>,
-) -> Result<crate::control_msgs::msg::v1::PidState> {
-    Ok(crate::control_msgs::msg::v1::PidState {
-        header: nested_view(view, "header")?
-            .as_ref()
-            .map(super::super::std_msgs::header::header_from_view)
-            .transpose()?,
-        timestep: nested_view(view, "timestep")?
-            .as_ref()
-            .map(super::super::builtin_interfaces::duration::duration_from_view)
-            .transpose()?,
-        error: read_f64(view, "error")?,
-        error_dot: read_f64(view, "error_dot")?,
-        p_error: read_f64(view, "p_error")?,
-        i_error: read_f64(view, "i_error")?,
-        d_error: read_f64(view, "d_error")?,
-        p_term: read_f64(view, "p_term")?,
-        i_term: read_f64(view, "i_term")?,
-        d_term: read_f64(view, "d_term")?,
-        i_max: read_f64(view, "i_max")?,
-        i_min: read_f64(view, "i_min")?,
-        output: read_f64(view, "output")?,
-    })
-}
-
-pub(crate) fn pid_state_write(
-    view: &mut rclrs::DynamicMessageViewMut<'_>,
-    bus: &crate::control_msgs::msg::v1::PidState,
-) -> Result<()> {
-    if let Some(v) = &bus.header {
-        with_nested_mut(view, "header", |nested| {
-            super::super::std_msgs::header::header_write(nested, v)
-        })?;
+pub(crate) fn pid_state_to_bus(msg: ros_env::control_msgs::msg::PidState) -> crate::control_msgs::msg::v1::PidState {
+    crate::control_msgs::msg::v1::PidState {
+        header: Some(crate::ros2_bridge::mappers::std_msgs::header::header_to_bus(msg.header)),
+        timestep: Some(crate::ros2_bridge::mappers::builtin_interfaces::duration::duration_to_bus(msg.timestep)),
+        error: msg.error,
+        error_dot: msg.error_dot,
+        p_error: msg.p_error,
+        i_error: msg.i_error,
+        d_error: msg.d_error,
+        p_term: msg.p_term,
+        i_term: msg.i_term,
+        d_term: msg.d_term,
+        i_max: msg.i_max,
+        i_min: msg.i_min,
+        output: msg.output,
     }
-    if let Some(v) = &bus.timestep {
-        with_nested_mut(view, "timestep", |nested| {
-            super::super::builtin_interfaces::duration::duration_write(nested, v)
-        })?;
+}
+
+pub(crate) fn pid_state_to_ros(bus: crate::control_msgs::msg::v1::PidState) -> ros_env::control_msgs::msg::PidState {
+    ros_env::control_msgs::msg::PidState {
+        header: crate::ros2_bridge::mappers::std_msgs::header::header_to_ros(bus.header.unwrap_or_default()),
+        timestep: crate::ros2_bridge::mappers::builtin_interfaces::duration::duration_to_ros(bus.timestep.unwrap_or_default()),
+        error: bus.error,
+        error_dot: bus.error_dot,
+        p_error: bus.p_error,
+        i_error: bus.i_error,
+        d_error: bus.d_error,
+        p_term: bus.p_term,
+        i_term: bus.i_term,
+        d_term: bus.d_term,
+        i_max: bus.i_max,
+        i_min: bus.i_min,
+        output: bus.output,
     }
-    write_f64(view, "error", bus.error)?;
-    write_f64(view, "error_dot", bus.error_dot)?;
-    write_f64(view, "p_error", bus.p_error)?;
-    write_f64(view, "i_error", bus.i_error)?;
-    write_f64(view, "d_error", bus.d_error)?;
-    write_f64(view, "p_term", bus.p_term)?;
-    write_f64(view, "i_term", bus.i_term)?;
-    write_f64(view, "d_term", bus.d_term)?;
-    write_f64(view, "i_max", bus.i_max)?;
-    write_f64(view, "i_min", bus.i_min)?;
-    write_f64(view, "output", bus.output)?;
-    Ok(())
 }
 
-pub(crate) fn pid_state_dyn_to_bus(
-    msg: &rclrs::DynamicMessage,
-) -> Result<crate::control_msgs::msg::v1::PidState> {
-    pid_state_from_view(&msg.view())
-}
-
-pub(crate) fn pid_state_bus_to_dyn(
-    bus: &crate::control_msgs::msg::v1::PidState,
-) -> Result<rclrs::DynamicMessage> {
-    let mut msg = new_message("control_msgs/msg/PidState")?;
-    pid_state_write(&mut msg.view_mut(), bus)?;
-    Ok(msg)
-}
-
+#[derive(Clone, Copy, Debug, Default)]
 pub struct ControlMsgsPidStateMapper;
-impl TopicMapper for ControlMsgsPidStateMapper {
+
+impl TypedTopicMapper for ControlMsgsPidStateMapper {
+    type Ros = ros_env::control_msgs::msg::PidState;
+    type Bus = crate::control_msgs::msg::v1::PidState;
+
     fn type_name(&self) -> &'static str {
         "control_msgs/msg/PidState"
     }
 
-    fn ros_to_bus(&self, msg: &DynamicMessage) -> Result<Vec<u8>> {
-        Ok(pid_state_dyn_to_bus(msg)?.encode_to_vec())
+    fn ros_to_bus(&self, msg: Self::Ros) -> crate::errors::Result<Self::Bus> {
+        Ok(pid_state_to_bus(msg))
     }
 
-    fn bus_to_ros(&self, payload: &[u8]) -> Result<DynamicMessage> {
-        let bus = <crate::control_msgs::msg::v1::PidState as ProstMessage>::decode(payload)
-            .map_err(|e| BusError::Protocol(format!("decode control_msgs/msg/PidState: {e}")))?;
-        pid_state_bus_to_dyn(&bus)
+    fn bus_to_ros(&self, msg: Self::Bus) -> crate::errors::Result<Self::Ros> {
+        Ok(pid_state_to_ros(msg))
     }
 }

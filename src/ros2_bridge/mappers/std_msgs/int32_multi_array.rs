@@ -1,64 +1,37 @@
-//! Mapper for `std_msgs/msg/Int32MultiArray`.
+//! Typed mapper for `std_msgs/msg/Int32MultiArray`.
 
-use prost::Message as ProstMessage;
-use rclrs::DynamicMessage;
+use crate::ros2_bridge::mapper::TypedTopicMapper;
 
-use super::super::common::*;
-use crate::BusError;
-use crate::ros2_bridge::mapper::TopicMapper;
-
-pub(crate) fn int32_multi_array_from_view(
-    view: &rclrs::DynamicMessageView<'_>,
-) -> Result<crate::std_msgs::msg::v1::Int32MultiArray> {
-    Ok(crate::std_msgs::msg::v1::Int32MultiArray {
-        layout: nested_view(view, "layout")?
-            .as_ref()
-            .map(super::multi_array_layout::multi_array_layout_from_view)
-            .transpose()?,
-        data: read_i32_seq(view, "data")?,
-    })
-}
-
-pub(crate) fn int32_multi_array_write(
-    view: &mut rclrs::DynamicMessageViewMut<'_>,
-    bus: &crate::std_msgs::msg::v1::Int32MultiArray,
-) -> Result<()> {
-    if let Some(v) = &bus.layout {
-        with_nested_mut(view, "layout", |nested| {
-            super::multi_array_layout::multi_array_layout_write(nested, v)
-        })?;
+pub(crate) fn int32_multi_array_to_bus(msg: ros_env::std_msgs::msg::Int32MultiArray) -> crate::std_msgs::msg::v1::Int32MultiArray {
+    crate::std_msgs::msg::v1::Int32MultiArray {
+        layout: Some(crate::ros2_bridge::mappers::std_msgs::multi_array_layout::multi_array_layout_to_bus(msg.layout)),
+        data: crate::ros2_bridge::mappers::convert::i32_seq(msg.data),
     }
-    write_i32_seq(view, "data", &bus.data)?;
-    Ok(())
 }
 
-pub(crate) fn int32_multi_array_dyn_to_bus(
-    msg: &rclrs::DynamicMessage,
-) -> Result<crate::std_msgs::msg::v1::Int32MultiArray> {
-    int32_multi_array_from_view(&msg.view())
+pub(crate) fn int32_multi_array_to_ros(bus: crate::std_msgs::msg::v1::Int32MultiArray) -> ros_env::std_msgs::msg::Int32MultiArray {
+    ros_env::std_msgs::msg::Int32MultiArray {
+        layout: crate::ros2_bridge::mappers::std_msgs::multi_array_layout::multi_array_layout_to_ros(bus.layout.unwrap_or_default()),
+        data: bus.data,
+    }
 }
 
-pub(crate) fn int32_multi_array_bus_to_dyn(
-    bus: &crate::std_msgs::msg::v1::Int32MultiArray,
-) -> Result<rclrs::DynamicMessage> {
-    let mut msg = new_message("std_msgs/msg/Int32MultiArray")?;
-    int32_multi_array_write(&mut msg.view_mut(), bus)?;
-    Ok(msg)
-}
-
+#[derive(Clone, Copy, Debug, Default)]
 pub struct StdMsgsInt32MultiArrayMapper;
-impl TopicMapper for StdMsgsInt32MultiArrayMapper {
+
+impl TypedTopicMapper for StdMsgsInt32MultiArrayMapper {
+    type Ros = ros_env::std_msgs::msg::Int32MultiArray;
+    type Bus = crate::std_msgs::msg::v1::Int32MultiArray;
+
     fn type_name(&self) -> &'static str {
         "std_msgs/msg/Int32MultiArray"
     }
 
-    fn ros_to_bus(&self, msg: &DynamicMessage) -> Result<Vec<u8>> {
-        Ok(int32_multi_array_dyn_to_bus(msg)?.encode_to_vec())
+    fn ros_to_bus(&self, msg: Self::Ros) -> crate::errors::Result<Self::Bus> {
+        Ok(int32_multi_array_to_bus(msg))
     }
 
-    fn bus_to_ros(&self, payload: &[u8]) -> Result<DynamicMessage> {
-        let bus = <crate::std_msgs::msg::v1::Int32MultiArray as ProstMessage>::decode(payload)
-            .map_err(|e| BusError::Protocol(format!("decode std_msgs/msg/Int32MultiArray: {e}")))?;
-        int32_multi_array_bus_to_dyn(&bus)
+    fn bus_to_ros(&self, msg: Self::Bus) -> crate::errors::Result<Self::Ros> {
+        Ok(int32_multi_array_to_ros(msg))
     }
 }

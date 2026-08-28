@@ -1,90 +1,45 @@
-//! Mapper for `control_msgs/msg/SteeringControllerStatus`.
+//! Typed mapper for `control_msgs/msg/SteeringControllerStatus`.
 
-use prost::Message as ProstMessage;
-use rclrs::DynamicMessage;
+use crate::ros2_bridge::mapper::TypedTopicMapper;
 
-use super::super::common::*;
-use crate::BusError;
-use crate::ros2_bridge::mapper::TopicMapper;
-
-pub(crate) fn steering_controller_status_from_view(
-    view: &rclrs::DynamicMessageView<'_>,
-) -> Result<crate::control_msgs::msg::v1::SteeringControllerStatus> {
-    Ok(crate::control_msgs::msg::v1::SteeringControllerStatus {
-        header: nested_view(view, "header")?
-            .as_ref()
-            .map(super::super::std_msgs::header::header_from_view)
-            .transpose()?,
-        traction_wheels_position: read_f64_seq(view, "traction_wheels_position")?,
-        traction_wheels_velocity: read_f64_seq(view, "traction_wheels_velocity")?,
-        steer_positions: read_f64_seq(view, "steer_positions")?,
-        linear_velocity_command: read_f64_seq(view, "linear_velocity_command")?,
-        steering_angle_command: read_f64_seq(view, "steering_angle_command")?,
-    })
-}
-
-pub(crate) fn steering_controller_status_write(
-    view: &mut rclrs::DynamicMessageViewMut<'_>,
-    bus: &crate::control_msgs::msg::v1::SteeringControllerStatus,
-) -> Result<()> {
-    if let Some(v) = &bus.header {
-        with_nested_mut(view, "header", |nested| {
-            super::super::std_msgs::header::header_write(nested, v)
-        })?;
+pub(crate) fn steering_controller_status_to_bus(msg: ros_env::control_msgs::msg::SteeringControllerStatus) -> crate::control_msgs::msg::v1::SteeringControllerStatus {
+    crate::control_msgs::msg::v1::SteeringControllerStatus {
+        header: Some(crate::ros2_bridge::mappers::std_msgs::header::header_to_bus(msg.header)),
+        traction_wheels_position: crate::ros2_bridge::mappers::convert::f64_seq(msg.traction_wheels_position),
+        traction_wheels_velocity: crate::ros2_bridge::mappers::convert::f64_seq(msg.traction_wheels_velocity),
+        steer_positions: crate::ros2_bridge::mappers::convert::f64_seq(msg.steer_positions),
+        linear_velocity_command: crate::ros2_bridge::mappers::convert::f64_seq(msg.linear_velocity_command),
+        steering_angle_command: crate::ros2_bridge::mappers::convert::f64_seq(msg.steering_angle_command),
     }
-    write_f64_seq(
-        view,
-        "traction_wheels_position",
-        &bus.traction_wheels_position,
-    )?;
-    write_f64_seq(
-        view,
-        "traction_wheels_velocity",
-        &bus.traction_wheels_velocity,
-    )?;
-    write_f64_seq(view, "steer_positions", &bus.steer_positions)?;
-    write_f64_seq(
-        view,
-        "linear_velocity_command",
-        &bus.linear_velocity_command,
-    )?;
-    write_f64_seq(view, "steering_angle_command", &bus.steering_angle_command)?;
-    Ok(())
 }
 
-pub(crate) fn steering_controller_status_dyn_to_bus(
-    msg: &rclrs::DynamicMessage,
-) -> Result<crate::control_msgs::msg::v1::SteeringControllerStatus> {
-    steering_controller_status_from_view(&msg.view())
+pub(crate) fn steering_controller_status_to_ros(bus: crate::control_msgs::msg::v1::SteeringControllerStatus) -> ros_env::control_msgs::msg::SteeringControllerStatus {
+    ros_env::control_msgs::msg::SteeringControllerStatus {
+        header: crate::ros2_bridge::mappers::std_msgs::header::header_to_ros(bus.header.unwrap_or_default()),
+        traction_wheels_position: crate::ros2_bridge::mappers::convert::FromF64Seq::from_f64_seq(bus.traction_wheels_position),
+        traction_wheels_velocity: crate::ros2_bridge::mappers::convert::FromF64Seq::from_f64_seq(bus.traction_wheels_velocity),
+        steer_positions: crate::ros2_bridge::mappers::convert::FromF64Seq::from_f64_seq(bus.steer_positions),
+        linear_velocity_command: crate::ros2_bridge::mappers::convert::FromF64Seq::from_f64_seq(bus.linear_velocity_command),
+        steering_angle_command: crate::ros2_bridge::mappers::convert::FromF64Seq::from_f64_seq(bus.steering_angle_command),
+    }
 }
 
-pub(crate) fn steering_controller_status_bus_to_dyn(
-    bus: &crate::control_msgs::msg::v1::SteeringControllerStatus,
-) -> Result<rclrs::DynamicMessage> {
-    let mut msg = new_message("control_msgs/msg/SteeringControllerStatus")?;
-    steering_controller_status_write(&mut msg.view_mut(), bus)?;
-    Ok(msg)
-}
-
+#[derive(Clone, Copy, Debug, Default)]
 pub struct ControlMsgsSteeringControllerStatusMapper;
-impl TopicMapper for ControlMsgsSteeringControllerStatusMapper {
+
+impl TypedTopicMapper for ControlMsgsSteeringControllerStatusMapper {
+    type Ros = ros_env::control_msgs::msg::SteeringControllerStatus;
+    type Bus = crate::control_msgs::msg::v1::SteeringControllerStatus;
+
     fn type_name(&self) -> &'static str {
         "control_msgs/msg/SteeringControllerStatus"
     }
 
-    fn ros_to_bus(&self, msg: &DynamicMessage) -> Result<Vec<u8>> {
-        Ok(steering_controller_status_dyn_to_bus(msg)?.encode_to_vec())
+    fn ros_to_bus(&self, msg: Self::Ros) -> crate::errors::Result<Self::Bus> {
+        Ok(steering_controller_status_to_bus(msg))
     }
 
-    fn bus_to_ros(&self, payload: &[u8]) -> Result<DynamicMessage> {
-        let bus = <crate::control_msgs::msg::v1::SteeringControllerStatus as ProstMessage>::decode(
-            payload,
-        )
-        .map_err(|e| {
-            BusError::Protocol(format!(
-                "decode control_msgs/msg/SteeringControllerStatus: {e}"
-            ))
-        })?;
-        steering_controller_status_bus_to_dyn(&bus)
+    fn bus_to_ros(&self, msg: Self::Bus) -> crate::errors::Result<Self::Ros> {
+        Ok(steering_controller_status_to_ros(msg))
     }
 }

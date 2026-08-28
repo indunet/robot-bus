@@ -1,88 +1,47 @@
-//! Mapper for `nav2_msgs/msg/VoxelGrid`.
+//! Typed mapper for `nav2_msgs/msg/VoxelGrid`.
 
-use prost::Message as ProstMessage;
-use rclrs::DynamicMessage;
+use crate::ros2_bridge::mapper::TypedTopicMapper;
 
-use super::super::common::*;
-use crate::BusError;
-use crate::ros2_bridge::mapper::TopicMapper;
-
-pub(crate) fn voxel_grid_from_view(
-    view: &rclrs::DynamicMessageView<'_>,
-) -> Result<crate::nav2_msgs::msg::v1::VoxelGrid> {
-    Ok(crate::nav2_msgs::msg::v1::VoxelGrid {
-        header: nested_view(view, "header")?
-            .as_ref()
-            .map(super::super::std_msgs::header::header_from_view)
-            .transpose()?,
-        data: read_u32_seq(view, "data")?,
-        origin: nested_view(view, "origin")?
-            .as_ref()
-            .map(super::super::geometry_msgs::point32::point32_from_view)
-            .transpose()?,
-        resolutions: nested_view(view, "resolutions")?
-            .as_ref()
-            .map(super::super::geometry_msgs::vector3::vector3_from_view)
-            .transpose()?,
-        size_x: read_u32(view, "size_x")?,
-        size_y: read_u32(view, "size_y")?,
-        size_z: read_u32(view, "size_z")?,
-    })
-}
-
-pub(crate) fn voxel_grid_write(
-    view: &mut rclrs::DynamicMessageViewMut<'_>,
-    bus: &crate::nav2_msgs::msg::v1::VoxelGrid,
-) -> Result<()> {
-    if let Some(v) = &bus.header {
-        with_nested_mut(view, "header", |nested| {
-            super::super::std_msgs::header::header_write(nested, v)
-        })?;
+pub(crate) fn voxel_grid_to_bus(msg: ros_env::nav2_msgs::msg::VoxelGrid) -> crate::nav2_msgs::msg::v1::VoxelGrid {
+    crate::nav2_msgs::msg::v1::VoxelGrid {
+        header: Some(crate::ros2_bridge::mappers::std_msgs::header::header_to_bus(msg.header)),
+        data: crate::ros2_bridge::mappers::convert::u32_seq(msg.data),
+        origin: Some(crate::ros2_bridge::mappers::geometry_msgs::point32::point32_to_bus(msg.origin)),
+        resolutions: Some(crate::ros2_bridge::mappers::geometry_msgs::vector3::vector3_to_bus(msg.resolutions)),
+        size_x: msg.size_x,
+        size_y: msg.size_y,
+        size_z: msg.size_z,
     }
-    write_u32_seq(view, "data", &bus.data)?;
-    if let Some(v) = &bus.origin {
-        with_nested_mut(view, "origin", |nested| {
-            super::super::geometry_msgs::point32::point32_write(nested, v)
-        })?;
+}
+
+pub(crate) fn voxel_grid_to_ros(bus: crate::nav2_msgs::msg::v1::VoxelGrid) -> ros_env::nav2_msgs::msg::VoxelGrid {
+    ros_env::nav2_msgs::msg::VoxelGrid {
+        header: crate::ros2_bridge::mappers::std_msgs::header::header_to_ros(bus.header.unwrap_or_default()),
+        data: crate::ros2_bridge::mappers::convert::FromU32Seq::from_u32_seq(bus.data),
+        origin: crate::ros2_bridge::mappers::geometry_msgs::point32::point32_to_ros(bus.origin.unwrap_or_default()),
+        resolutions: crate::ros2_bridge::mappers::geometry_msgs::vector3::vector3_to_ros(bus.resolutions.unwrap_or_default()),
+        size_x: bus.size_x,
+        size_y: bus.size_y,
+        size_z: bus.size_z,
     }
-    if let Some(v) = &bus.resolutions {
-        with_nested_mut(view, "resolutions", |nested| {
-            super::super::geometry_msgs::vector3::vector3_write(nested, v)
-        })?;
-    }
-    write_u32(view, "size_x", bus.size_x)?;
-    write_u32(view, "size_y", bus.size_y)?;
-    write_u32(view, "size_z", bus.size_z)?;
-    Ok(())
 }
 
-pub(crate) fn voxel_grid_dyn_to_bus(
-    msg: &rclrs::DynamicMessage,
-) -> Result<crate::nav2_msgs::msg::v1::VoxelGrid> {
-    voxel_grid_from_view(&msg.view())
-}
-
-pub(crate) fn voxel_grid_bus_to_dyn(
-    bus: &crate::nav2_msgs::msg::v1::VoxelGrid,
-) -> Result<rclrs::DynamicMessage> {
-    let mut msg = new_message("nav2_msgs/msg/VoxelGrid")?;
-    voxel_grid_write(&mut msg.view_mut(), bus)?;
-    Ok(msg)
-}
-
+#[derive(Clone, Copy, Debug, Default)]
 pub struct Nav2MsgsVoxelGridMapper;
-impl TopicMapper for Nav2MsgsVoxelGridMapper {
+
+impl TypedTopicMapper for Nav2MsgsVoxelGridMapper {
+    type Ros = ros_env::nav2_msgs::msg::VoxelGrid;
+    type Bus = crate::nav2_msgs::msg::v1::VoxelGrid;
+
     fn type_name(&self) -> &'static str {
         "nav2_msgs/msg/VoxelGrid"
     }
 
-    fn ros_to_bus(&self, msg: &DynamicMessage) -> Result<Vec<u8>> {
-        Ok(voxel_grid_dyn_to_bus(msg)?.encode_to_vec())
+    fn ros_to_bus(&self, msg: Self::Ros) -> crate::errors::Result<Self::Bus> {
+        Ok(voxel_grid_to_bus(msg))
     }
 
-    fn bus_to_ros(&self, payload: &[u8]) -> Result<DynamicMessage> {
-        let bus = <crate::nav2_msgs::msg::v1::VoxelGrid as ProstMessage>::decode(payload)
-            .map_err(|e| BusError::Protocol(format!("decode nav2_msgs/msg/VoxelGrid: {e}")))?;
-        voxel_grid_bus_to_dyn(&bus)
+    fn bus_to_ros(&self, msg: Self::Bus) -> crate::errors::Result<Self::Ros> {
+        Ok(voxel_grid_to_ros(msg))
     }
 }

@@ -1,70 +1,43 @@
-//! Mapper for `control_msgs/msg/JointJog`.
+//! Typed mapper for `control_msgs/msg/JointJog`.
 
-use prost::Message as ProstMessage;
-use rclrs::DynamicMessage;
+use crate::ros2_bridge::mapper::TypedTopicMapper;
 
-use super::super::common::*;
-use crate::BusError;
-use crate::ros2_bridge::mapper::TopicMapper;
-
-pub(crate) fn joint_jog_from_view(
-    view: &rclrs::DynamicMessageView<'_>,
-) -> Result<crate::control_msgs::msg::v1::JointJog> {
-    Ok(crate::control_msgs::msg::v1::JointJog {
-        header: nested_view(view, "header")?
-            .as_ref()
-            .map(super::super::std_msgs::header::header_from_view)
-            .transpose()?,
-        joint_names: read_string_seq(view, "joint_names")?,
-        displacements: read_f64_seq(view, "displacements")?,
-        velocities: read_f64_seq(view, "velocities")?,
-        duration: read_f64(view, "duration")?,
-    })
-}
-
-pub(crate) fn joint_jog_write(
-    view: &mut rclrs::DynamicMessageViewMut<'_>,
-    bus: &crate::control_msgs::msg::v1::JointJog,
-) -> Result<()> {
-    if let Some(v) = &bus.header {
-        with_nested_mut(view, "header", |nested| {
-            super::super::std_msgs::header::header_write(nested, v)
-        })?;
+pub(crate) fn joint_jog_to_bus(msg: ros_env::control_msgs::msg::JointJog) -> crate::control_msgs::msg::v1::JointJog {
+    crate::control_msgs::msg::v1::JointJog {
+        header: Some(crate::ros2_bridge::mappers::std_msgs::header::header_to_bus(msg.header)),
+        joint_names: crate::ros2_bridge::mappers::convert::string_seq(msg.joint_names),
+        displacements: crate::ros2_bridge::mappers::convert::f64_seq(msg.displacements),
+        velocities: crate::ros2_bridge::mappers::convert::f64_seq(msg.velocities),
+        duration: msg.duration,
     }
-    write_string_seq(view, "joint_names", &bus.joint_names)?;
-    write_f64_seq(view, "displacements", &bus.displacements)?;
-    write_f64_seq(view, "velocities", &bus.velocities)?;
-    write_f64(view, "duration", bus.duration)?;
-    Ok(())
 }
 
-pub(crate) fn joint_jog_dyn_to_bus(
-    msg: &rclrs::DynamicMessage,
-) -> Result<crate::control_msgs::msg::v1::JointJog> {
-    joint_jog_from_view(&msg.view())
+pub(crate) fn joint_jog_to_ros(bus: crate::control_msgs::msg::v1::JointJog) -> ros_env::control_msgs::msg::JointJog {
+    ros_env::control_msgs::msg::JointJog {
+        header: crate::ros2_bridge::mappers::std_msgs::header::header_to_ros(bus.header.unwrap_or_default()),
+        joint_names: crate::ros2_bridge::mappers::convert::ros_string_seq(bus.joint_names),
+        displacements: crate::ros2_bridge::mappers::convert::FromF64Seq::from_f64_seq(bus.displacements),
+        velocities: crate::ros2_bridge::mappers::convert::FromF64Seq::from_f64_seq(bus.velocities),
+        duration: bus.duration,
+    }
 }
 
-pub(crate) fn joint_jog_bus_to_dyn(
-    bus: &crate::control_msgs::msg::v1::JointJog,
-) -> Result<rclrs::DynamicMessage> {
-    let mut msg = new_message("control_msgs/msg/JointJog")?;
-    joint_jog_write(&mut msg.view_mut(), bus)?;
-    Ok(msg)
-}
-
+#[derive(Clone, Copy, Debug, Default)]
 pub struct ControlMsgsJointJogMapper;
-impl TopicMapper for ControlMsgsJointJogMapper {
+
+impl TypedTopicMapper for ControlMsgsJointJogMapper {
+    type Ros = ros_env::control_msgs::msg::JointJog;
+    type Bus = crate::control_msgs::msg::v1::JointJog;
+
     fn type_name(&self) -> &'static str {
         "control_msgs/msg/JointJog"
     }
 
-    fn ros_to_bus(&self, msg: &DynamicMessage) -> Result<Vec<u8>> {
-        Ok(joint_jog_dyn_to_bus(msg)?.encode_to_vec())
+    fn ros_to_bus(&self, msg: Self::Ros) -> crate::errors::Result<Self::Bus> {
+        Ok(joint_jog_to_bus(msg))
     }
 
-    fn bus_to_ros(&self, payload: &[u8]) -> Result<DynamicMessage> {
-        let bus = <crate::control_msgs::msg::v1::JointJog as ProstMessage>::decode(payload)
-            .map_err(|e| BusError::Protocol(format!("decode control_msgs/msg/JointJog: {e}")))?;
-        joint_jog_bus_to_dyn(&bus)
+    fn bus_to_ros(&self, msg: Self::Bus) -> crate::errors::Result<Self::Ros> {
+        Ok(joint_jog_to_ros(msg))
     }
 }

@@ -1,65 +1,43 @@
-//! Mapper for `visualization_msgs/msg/MenuEntry`.
+//! Typed mapper for `visualization_msgs/msg/MenuEntry`.
 
-use prost::Message as ProstMessage;
-use rclrs::DynamicMessage;
+use crate::ros2_bridge::mapper::TypedTopicMapper;
 
-use super::super::common::*;
-use crate::BusError;
-use crate::ros2_bridge::mapper::TopicMapper;
-
-pub(crate) fn menu_entry_from_view(
-    view: &rclrs::DynamicMessageView<'_>,
-) -> Result<crate::visualization_msgs::msg::v1::MenuEntry> {
-    Ok(crate::visualization_msgs::msg::v1::MenuEntry {
-        id: read_u32(view, "id")?,
-        parent_id: read_u32(view, "parent_id")?,
-        title: read_string(view, "title")?,
-        command: read_string(view, "command")?,
-        command_type: read_u32(view, "command_type")?,
-    })
+pub(crate) fn menu_entry_to_bus(msg: ros_env::visualization_msgs::msg::MenuEntry) -> crate::visualization_msgs::msg::v1::MenuEntry {
+    crate::visualization_msgs::msg::v1::MenuEntry {
+        id: msg.id,
+        parent_id: msg.parent_id,
+        title: crate::ros2_bridge::mappers::convert::from_ros_string(msg.title),
+        command: crate::ros2_bridge::mappers::convert::from_ros_string(msg.command),
+        command_type: msg.command_type,
+    }
 }
 
-pub(crate) fn menu_entry_write(
-    view: &mut rclrs::DynamicMessageViewMut<'_>,
-    bus: &crate::visualization_msgs::msg::v1::MenuEntry,
-) -> Result<()> {
-    write_u32(view, "id", bus.id)?;
-    write_u32(view, "parent_id", bus.parent_id)?;
-    write_string(view, "title", &bus.title)?;
-    write_string(view, "command", &bus.command)?;
-    write_u32(view, "command_type", bus.command_type)?;
-    Ok(())
+pub(crate) fn menu_entry_to_ros(bus: crate::visualization_msgs::msg::v1::MenuEntry) -> ros_env::visualization_msgs::msg::MenuEntry {
+    ros_env::visualization_msgs::msg::MenuEntry {
+        id: bus.id,
+        parent_id: bus.parent_id,
+        title: crate::ros2_bridge::mappers::convert::to_ros_string(bus.title),
+        command: crate::ros2_bridge::mappers::convert::to_ros_string(bus.command),
+        command_type: bus.command_type,
+    }
 }
 
-pub(crate) fn menu_entry_dyn_to_bus(
-    msg: &rclrs::DynamicMessage,
-) -> Result<crate::visualization_msgs::msg::v1::MenuEntry> {
-    menu_entry_from_view(&msg.view())
-}
-
-pub(crate) fn menu_entry_bus_to_dyn(
-    bus: &crate::visualization_msgs::msg::v1::MenuEntry,
-) -> Result<rclrs::DynamicMessage> {
-    let mut msg = new_message("visualization_msgs/msg/MenuEntry")?;
-    menu_entry_write(&mut msg.view_mut(), bus)?;
-    Ok(msg)
-}
-
+#[derive(Clone, Copy, Debug, Default)]
 pub struct VisualizationMsgsMenuEntryMapper;
-impl TopicMapper for VisualizationMsgsMenuEntryMapper {
+
+impl TypedTopicMapper for VisualizationMsgsMenuEntryMapper {
+    type Ros = ros_env::visualization_msgs::msg::MenuEntry;
+    type Bus = crate::visualization_msgs::msg::v1::MenuEntry;
+
     fn type_name(&self) -> &'static str {
         "visualization_msgs/msg/MenuEntry"
     }
 
-    fn ros_to_bus(&self, msg: &DynamicMessage) -> Result<Vec<u8>> {
-        Ok(menu_entry_dyn_to_bus(msg)?.encode_to_vec())
+    fn ros_to_bus(&self, msg: Self::Ros) -> crate::errors::Result<Self::Bus> {
+        Ok(menu_entry_to_bus(msg))
     }
 
-    fn bus_to_ros(&self, payload: &[u8]) -> Result<DynamicMessage> {
-        let bus = <crate::visualization_msgs::msg::v1::MenuEntry as ProstMessage>::decode(payload)
-            .map_err(|e| {
-                BusError::Protocol(format!("decode visualization_msgs/msg/MenuEntry: {e}"))
-            })?;
-        menu_entry_bus_to_dyn(&bus)
+    fn bus_to_ros(&self, msg: Self::Bus) -> crate::errors::Result<Self::Ros> {
+        Ok(menu_entry_to_ros(msg))
     }
 }

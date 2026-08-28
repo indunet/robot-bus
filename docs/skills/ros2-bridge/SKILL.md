@@ -4,7 +4,7 @@ description: >-
   Create and run robot-bus Ros2Bridge (topic / service / action) between ROS 2
   Humble or Jazzy and robot_bus_broker. Use when the user asks to bridge ROS and
   bus, mount routes with mappers, Direction Ros2ToBus or BusToRos2, custom
-  TypedServiceMapper / TypedActionMapper, or connect rclcpp/rclpy/rclrs to bus
+  TypedServiceMapper / TypedActionMapper / TypedTopicMapper, or connect rclcpp/rclpy/rclrs to bus
   without a full package migration.
 ---
 
@@ -182,7 +182,7 @@ protoc --python_out=. --pyi_out=. my_pkg/srv/v1/add_two_ints.proto
 | Language | Pattern |
 |----------|---------|
 | Python | Duck-typed methods + `.mapper(MyFoo())` |
-| Rust | `impl TypedServiceMapper` / `TypedActionMapper` |
+| Rust | `impl TypedTopicMapper` / `TypedServiceMapper` / `TypedActionMapper` |
 | C++ | `TypedServiceMapper<Derived, RosSrv>` CRTP + `shared_ptr` |
 
 ### Python service shape

@@ -1,61 +1,41 @@
-//! Mapper for `sensor_msgs/msg/PointField`.
+//! Typed mapper for `sensor_msgs/msg/PointField`.
 
-use prost::Message as ProstMessage;
-use rclrs::DynamicMessage;
+use crate::ros2_bridge::mapper::TypedTopicMapper;
 
-use super::super::common::*;
-use crate::BusError;
-use crate::ros2_bridge::mapper::TopicMapper;
-
-pub(crate) fn point_field_from_view(
-    view: &rclrs::DynamicMessageView<'_>,
-) -> Result<crate::sensor_msgs::msg::v1::PointField> {
-    Ok(crate::sensor_msgs::msg::v1::PointField {
-        name: read_string(view, "name")?,
-        offset: read_u32(view, "offset")?,
-        datatype: read_u32(view, "datatype")?,
-        count: read_u32(view, "count")?,
-    })
+pub(crate) fn point_field_to_bus(msg: ros_env::sensor_msgs::msg::PointField) -> crate::sensor_msgs::msg::v1::PointField {
+    crate::sensor_msgs::msg::v1::PointField {
+        name: crate::ros2_bridge::mappers::convert::from_ros_string(msg.name),
+        offset: msg.offset,
+        datatype: u32::from(msg.datatype),
+        count: msg.count,
+    }
 }
 
-pub(crate) fn point_field_write(
-    view: &mut rclrs::DynamicMessageViewMut<'_>,
-    bus: &crate::sensor_msgs::msg::v1::PointField,
-) -> Result<()> {
-    write_string(view, "name", &bus.name)?;
-    write_u32(view, "offset", bus.offset)?;
-    write_u32(view, "datatype", bus.datatype)?;
-    write_u32(view, "count", bus.count)?;
-    Ok(())
+pub(crate) fn point_field_to_ros(bus: crate::sensor_msgs::msg::v1::PointField) -> ros_env::sensor_msgs::msg::PointField {
+    ros_env::sensor_msgs::msg::PointField {
+        name: crate::ros2_bridge::mappers::convert::to_ros_string(bus.name),
+        offset: bus.offset,
+        datatype: bus.datatype as u8,
+        count: bus.count,
+    }
 }
 
-pub(crate) fn point_field_dyn_to_bus(
-    msg: &rclrs::DynamicMessage,
-) -> Result<crate::sensor_msgs::msg::v1::PointField> {
-    point_field_from_view(&msg.view())
-}
-
-pub(crate) fn point_field_bus_to_dyn(
-    bus: &crate::sensor_msgs::msg::v1::PointField,
-) -> Result<rclrs::DynamicMessage> {
-    let mut msg = new_message("sensor_msgs/msg/PointField")?;
-    point_field_write(&mut msg.view_mut(), bus)?;
-    Ok(msg)
-}
-
+#[derive(Clone, Copy, Debug, Default)]
 pub struct SensorMsgsPointFieldMapper;
-impl TopicMapper for SensorMsgsPointFieldMapper {
+
+impl TypedTopicMapper for SensorMsgsPointFieldMapper {
+    type Ros = ros_env::sensor_msgs::msg::PointField;
+    type Bus = crate::sensor_msgs::msg::v1::PointField;
+
     fn type_name(&self) -> &'static str {
         "sensor_msgs/msg/PointField"
     }
 
-    fn ros_to_bus(&self, msg: &DynamicMessage) -> Result<Vec<u8>> {
-        Ok(point_field_dyn_to_bus(msg)?.encode_to_vec())
+    fn ros_to_bus(&self, msg: Self::Ros) -> crate::errors::Result<Self::Bus> {
+        Ok(point_field_to_bus(msg))
     }
 
-    fn bus_to_ros(&self, payload: &[u8]) -> Result<DynamicMessage> {
-        let bus = <crate::sensor_msgs::msg::v1::PointField as ProstMessage>::decode(payload)
-            .map_err(|e| BusError::Protocol(format!("decode sensor_msgs/msg/PointField: {e}")))?;
-        point_field_bus_to_dyn(&bus)
+    fn bus_to_ros(&self, msg: Self::Bus) -> crate::errors::Result<Self::Ros> {
+        Ok(point_field_to_ros(msg))
     }
 }

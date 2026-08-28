@@ -1,76 +1,43 @@
-//! Mapper for `trajectory_msgs/msg/JointTrajectoryPoint`.
+//! Typed mapper for `trajectory_msgs/msg/JointTrajectoryPoint`.
 
-use prost::Message as ProstMessage;
-use rclrs::DynamicMessage;
+use crate::ros2_bridge::mapper::TypedTopicMapper;
 
-use super::super::common::*;
-use crate::BusError;
-use crate::ros2_bridge::mapper::TopicMapper;
-
-pub(crate) fn joint_trajectory_point_from_view(
-    view: &rclrs::DynamicMessageView<'_>,
-) -> Result<crate::trajectory_msgs::msg::v1::JointTrajectoryPoint> {
-    Ok(crate::trajectory_msgs::msg::v1::JointTrajectoryPoint {
-        positions: read_f64_seq(view, "positions")?,
-        velocities: read_f64_seq(view, "velocities")?,
-        accelerations: read_f64_seq(view, "accelerations")?,
-        effort: read_f64_seq(view, "effort")?,
-        time_from_start: nested_view(view, "time_from_start")?
-            .as_ref()
-            .map(super::super::builtin_interfaces::duration::duration_from_view)
-            .transpose()?,
-    })
-}
-
-pub(crate) fn joint_trajectory_point_write(
-    view: &mut rclrs::DynamicMessageViewMut<'_>,
-    bus: &crate::trajectory_msgs::msg::v1::JointTrajectoryPoint,
-) -> Result<()> {
-    write_f64_seq(view, "positions", &bus.positions)?;
-    write_f64_seq(view, "velocities", &bus.velocities)?;
-    write_f64_seq(view, "accelerations", &bus.accelerations)?;
-    write_f64_seq(view, "effort", &bus.effort)?;
-    if let Some(v) = &bus.time_from_start {
-        with_nested_mut(view, "time_from_start", |nested| {
-            super::super::builtin_interfaces::duration::duration_write(nested, v)
-        })?;
+pub(crate) fn joint_trajectory_point_to_bus(msg: ros_env::trajectory_msgs::msg::JointTrajectoryPoint) -> crate::trajectory_msgs::msg::v1::JointTrajectoryPoint {
+    crate::trajectory_msgs::msg::v1::JointTrajectoryPoint {
+        positions: crate::ros2_bridge::mappers::convert::f64_seq(msg.positions),
+        velocities: crate::ros2_bridge::mappers::convert::f64_seq(msg.velocities),
+        accelerations: crate::ros2_bridge::mappers::convert::f64_seq(msg.accelerations),
+        effort: crate::ros2_bridge::mappers::convert::f64_seq(msg.effort),
+        time_from_start: Some(crate::ros2_bridge::mappers::builtin_interfaces::duration::duration_to_bus(msg.time_from_start)),
     }
-    Ok(())
 }
 
-pub(crate) fn joint_trajectory_point_dyn_to_bus(
-    msg: &rclrs::DynamicMessage,
-) -> Result<crate::trajectory_msgs::msg::v1::JointTrajectoryPoint> {
-    joint_trajectory_point_from_view(&msg.view())
+pub(crate) fn joint_trajectory_point_to_ros(bus: crate::trajectory_msgs::msg::v1::JointTrajectoryPoint) -> ros_env::trajectory_msgs::msg::JointTrajectoryPoint {
+    ros_env::trajectory_msgs::msg::JointTrajectoryPoint {
+        positions: crate::ros2_bridge::mappers::convert::FromF64Seq::from_f64_seq(bus.positions),
+        velocities: crate::ros2_bridge::mappers::convert::FromF64Seq::from_f64_seq(bus.velocities),
+        accelerations: crate::ros2_bridge::mappers::convert::FromF64Seq::from_f64_seq(bus.accelerations),
+        effort: crate::ros2_bridge::mappers::convert::FromF64Seq::from_f64_seq(bus.effort),
+        time_from_start: crate::ros2_bridge::mappers::builtin_interfaces::duration::duration_to_ros(bus.time_from_start.unwrap_or_default()),
+    }
 }
 
-pub(crate) fn joint_trajectory_point_bus_to_dyn(
-    bus: &crate::trajectory_msgs::msg::v1::JointTrajectoryPoint,
-) -> Result<rclrs::DynamicMessage> {
-    let mut msg = new_message("trajectory_msgs/msg/JointTrajectoryPoint")?;
-    joint_trajectory_point_write(&mut msg.view_mut(), bus)?;
-    Ok(msg)
-}
-
+#[derive(Clone, Copy, Debug, Default)]
 pub struct TrajectoryMsgsJointTrajectoryPointMapper;
-impl TopicMapper for TrajectoryMsgsJointTrajectoryPointMapper {
+
+impl TypedTopicMapper for TrajectoryMsgsJointTrajectoryPointMapper {
+    type Ros = ros_env::trajectory_msgs::msg::JointTrajectoryPoint;
+    type Bus = crate::trajectory_msgs::msg::v1::JointTrajectoryPoint;
+
     fn type_name(&self) -> &'static str {
         "trajectory_msgs/msg/JointTrajectoryPoint"
     }
 
-    fn ros_to_bus(&self, msg: &DynamicMessage) -> Result<Vec<u8>> {
-        Ok(joint_trajectory_point_dyn_to_bus(msg)?.encode_to_vec())
+    fn ros_to_bus(&self, msg: Self::Ros) -> crate::errors::Result<Self::Bus> {
+        Ok(joint_trajectory_point_to_bus(msg))
     }
 
-    fn bus_to_ros(&self, payload: &[u8]) -> Result<DynamicMessage> {
-        let bus = <crate::trajectory_msgs::msg::v1::JointTrajectoryPoint as ProstMessage>::decode(
-            payload,
-        )
-        .map_err(|e| {
-            BusError::Protocol(format!(
-                "decode trajectory_msgs/msg/JointTrajectoryPoint: {e}"
-            ))
-        })?;
-        joint_trajectory_point_bus_to_dyn(&bus)
+    fn bus_to_ros(&self, msg: Self::Bus) -> crate::errors::Result<Self::Ros> {
+        Ok(joint_trajectory_point_to_ros(msg))
     }
 }

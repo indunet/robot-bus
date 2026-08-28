@@ -1,67 +1,45 @@
-//! Mapper for `foxglove_msgs/msg/Log`.
+//! Typed mapper for `foxglove_msgs/msg/Log`.
 
-use prost::Message as ProstMessage;
-use rclrs::DynamicMessage;
+use crate::ros2_bridge::mapper::TypedTopicMapper;
 
-use super::super::common::*;
-use crate::BusError;
-use crate::ros2_bridge::mapper::TopicMapper;
-
-pub(crate) fn log_from_view(
-    view: &rclrs::DynamicMessageView<'_>,
-) -> Result<crate::foxglove_msgs::msg::v1::Log> {
-    Ok(crate::foxglove_msgs::msg::v1::Log {
-        timestamp: read_timestamp(view, "timestamp")?,
-        level: read_i32(view, "level")?,
-        message: read_string(view, "message")?,
-        name: read_string(view, "name")?,
-        file: read_string(view, "file")?,
-        line: read_u32(view, "line")?,
-    })
-}
-
-pub(crate) fn log_write(
-    view: &mut rclrs::DynamicMessageViewMut<'_>,
-    bus: &crate::foxglove_msgs::msg::v1::Log,
-) -> Result<()> {
-    if let Some(v) = &bus.timestamp {
-        write_timestamp(view, "timestamp", v)?;
+pub(crate) fn log_to_bus(msg: ros_env::foxglove_msgs::msg::Log) -> crate::foxglove_msgs::msg::v1::Log {
+    crate::foxglove_msgs::msg::v1::Log {
+        timestamp: Some(crate::ros2_bridge::mappers::convert::time_to_timestamp(msg.timestamp)),
+        level: msg.level as i32,
+        message: crate::ros2_bridge::mappers::convert::from_ros_string(msg.message),
+        name: crate::ros2_bridge::mappers::convert::from_ros_string(msg.name),
+        file: crate::ros2_bridge::mappers::convert::from_ros_string(msg.file),
+        line: msg.line,
     }
-    write_i32(view, "level", bus.level)?;
-    write_string(view, "message", &bus.message)?;
-    write_string(view, "name", &bus.name)?;
-    write_string(view, "file", &bus.file)?;
-    write_u32(view, "line", bus.line)?;
-    Ok(())
 }
 
-pub(crate) fn log_dyn_to_bus(
-    msg: &rclrs::DynamicMessage,
-) -> Result<crate::foxglove_msgs::msg::v1::Log> {
-    log_from_view(&msg.view())
+pub(crate) fn log_to_ros(bus: crate::foxglove_msgs::msg::v1::Log) -> ros_env::foxglove_msgs::msg::Log {
+    ros_env::foxglove_msgs::msg::Log {
+        timestamp: crate::ros2_bridge::mappers::convert::timestamp_to_time(bus.timestamp.unwrap_or_default()),
+        level: bus.level as i32,
+        message: crate::ros2_bridge::mappers::convert::to_ros_string(bus.message),
+        name: crate::ros2_bridge::mappers::convert::to_ros_string(bus.name),
+        file: crate::ros2_bridge::mappers::convert::to_ros_string(bus.file),
+        line: bus.line,
+    }
 }
 
-pub(crate) fn log_bus_to_dyn(
-    bus: &crate::foxglove_msgs::msg::v1::Log,
-) -> Result<rclrs::DynamicMessage> {
-    let mut msg = new_message("foxglove_msgs/msg/Log")?;
-    log_write(&mut msg.view_mut(), bus)?;
-    Ok(msg)
-}
-
+#[derive(Clone, Copy, Debug, Default)]
 pub struct FoxgloveMsgsLogMapper;
-impl TopicMapper for FoxgloveMsgsLogMapper {
+
+impl TypedTopicMapper for FoxgloveMsgsLogMapper {
+    type Ros = ros_env::foxglove_msgs::msg::Log;
+    type Bus = crate::foxglove_msgs::msg::v1::Log;
+
     fn type_name(&self) -> &'static str {
         "foxglove_msgs/msg/Log"
     }
 
-    fn ros_to_bus(&self, msg: &DynamicMessage) -> Result<Vec<u8>> {
-        Ok(log_dyn_to_bus(msg)?.encode_to_vec())
+    fn ros_to_bus(&self, msg: Self::Ros) -> crate::errors::Result<Self::Bus> {
+        Ok(log_to_bus(msg))
     }
 
-    fn bus_to_ros(&self, payload: &[u8]) -> Result<DynamicMessage> {
-        let bus = <crate::foxglove_msgs::msg::v1::Log as ProstMessage>::decode(payload)
-            .map_err(|e| BusError::Protocol(format!("decode foxglove_msgs/msg/Log: {e}")))?;
-        log_bus_to_dyn(&bus)
+    fn bus_to_ros(&self, msg: Self::Bus) -> crate::errors::Result<Self::Ros> {
+        Ok(log_to_ros(msg))
     }
 }

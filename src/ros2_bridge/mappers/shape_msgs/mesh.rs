@@ -1,75 +1,37 @@
-//! Mapper for `shape_msgs/msg/Mesh`.
+//! Typed mapper for `shape_msgs/msg/Mesh`.
 
-use prost::Message as ProstMessage;
-use rclrs::DynamicMessage;
+use crate::ros2_bridge::mapper::TypedTopicMapper;
 
-use super::super::common::*;
-use crate::BusError;
-use crate::ros2_bridge::mapper::TopicMapper;
-
-pub(crate) fn mesh_from_view(
-    view: &rclrs::DynamicMessageView<'_>,
-) -> Result<crate::shape_msgs::msg::v1::Mesh> {
-    Ok(crate::shape_msgs::msg::v1::Mesh {
-        triangles: read_message_seq(
-            view,
-            "triangles",
-            super::mesh_triangle::mesh_triangle_from_view,
-        )?,
-        vertices: read_message_seq(
-            view,
-            "vertices",
-            super::super::geometry_msgs::point::point_from_view,
-        )?,
-    })
+pub(crate) fn mesh_to_bus(msg: ros_env::shape_msgs::msg::Mesh) -> crate::shape_msgs::msg::v1::Mesh {
+    crate::shape_msgs::msg::v1::Mesh {
+        triangles: msg.triangles.into_iter().map(crate::ros2_bridge::mappers::shape_msgs::mesh_triangle::mesh_triangle_to_bus).collect(),
+        vertices: msg.vertices.into_iter().map(crate::ros2_bridge::mappers::geometry_msgs::point::point_to_bus).collect(),
+    }
 }
 
-pub(crate) fn mesh_write(
-    view: &mut rclrs::DynamicMessageViewMut<'_>,
-    bus: &crate::shape_msgs::msg::v1::Mesh,
-) -> Result<()> {
-    write_message_seq(
-        view,
-        "triangles",
-        &bus.triangles,
-        super::mesh_triangle::mesh_triangle_write,
-    )?;
-    write_message_seq(
-        view,
-        "vertices",
-        &bus.vertices,
-        super::super::geometry_msgs::point::point_write,
-    )?;
-    Ok(())
+pub(crate) fn mesh_to_ros(bus: crate::shape_msgs::msg::v1::Mesh) -> ros_env::shape_msgs::msg::Mesh {
+    ros_env::shape_msgs::msg::Mesh {
+        triangles: bus.triangles.into_iter().map(crate::ros2_bridge::mappers::shape_msgs::mesh_triangle::mesh_triangle_to_ros).collect(),
+        vertices: bus.vertices.into_iter().map(crate::ros2_bridge::mappers::geometry_msgs::point::point_to_ros).collect(),
+    }
 }
 
-pub(crate) fn mesh_dyn_to_bus(
-    msg: &rclrs::DynamicMessage,
-) -> Result<crate::shape_msgs::msg::v1::Mesh> {
-    mesh_from_view(&msg.view())
-}
-
-pub(crate) fn mesh_bus_to_dyn(
-    bus: &crate::shape_msgs::msg::v1::Mesh,
-) -> Result<rclrs::DynamicMessage> {
-    let mut msg = new_message("shape_msgs/msg/Mesh")?;
-    mesh_write(&mut msg.view_mut(), bus)?;
-    Ok(msg)
-}
-
+#[derive(Clone, Copy, Debug, Default)]
 pub struct ShapeMsgsMeshMapper;
-impl TopicMapper for ShapeMsgsMeshMapper {
+
+impl TypedTopicMapper for ShapeMsgsMeshMapper {
+    type Ros = ros_env::shape_msgs::msg::Mesh;
+    type Bus = crate::shape_msgs::msg::v1::Mesh;
+
     fn type_name(&self) -> &'static str {
         "shape_msgs/msg/Mesh"
     }
 
-    fn ros_to_bus(&self, msg: &DynamicMessage) -> Result<Vec<u8>> {
-        Ok(mesh_dyn_to_bus(msg)?.encode_to_vec())
+    fn ros_to_bus(&self, msg: Self::Ros) -> crate::errors::Result<Self::Bus> {
+        Ok(mesh_to_bus(msg))
     }
 
-    fn bus_to_ros(&self, payload: &[u8]) -> Result<DynamicMessage> {
-        let bus = <crate::shape_msgs::msg::v1::Mesh as ProstMessage>::decode(payload)
-            .map_err(|e| BusError::Protocol(format!("decode shape_msgs/msg/Mesh: {e}")))?;
-        mesh_bus_to_dyn(&bus)
+    fn bus_to_ros(&self, msg: Self::Bus) -> crate::errors::Result<Self::Ros> {
+        Ok(mesh_to_ros(msg))
     }
 }

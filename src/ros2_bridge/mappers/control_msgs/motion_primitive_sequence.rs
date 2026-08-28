@@ -1,70 +1,35 @@
-//! Mapper for `control_msgs/msg/MotionPrimitiveSequence`.
+//! Typed mapper for `control_msgs/msg/MotionPrimitiveSequence`.
 
-use prost::Message as ProstMessage;
-use rclrs::DynamicMessage;
+use crate::ros2_bridge::mapper::TypedTopicMapper;
 
-use super::super::common::*;
-use crate::BusError;
-use crate::ros2_bridge::mapper::TopicMapper;
-
-pub(crate) fn motion_primitive_sequence_from_view(
-    view: &rclrs::DynamicMessageView<'_>,
-) -> Result<crate::control_msgs::msg::v1::MotionPrimitiveSequence> {
-    Ok(crate::control_msgs::msg::v1::MotionPrimitiveSequence {
-        motions: read_message_seq(
-            view,
-            "motions",
-            super::motion_primitive::motion_primitive_from_view,
-        )?,
-    })
+pub(crate) fn motion_primitive_sequence_to_bus(msg: ros_env::control_msgs::msg::MotionPrimitiveSequence) -> crate::control_msgs::msg::v1::MotionPrimitiveSequence {
+    crate::control_msgs::msg::v1::MotionPrimitiveSequence {
+        motions: msg.motions.into_iter().map(crate::ros2_bridge::mappers::control_msgs::motion_primitive::motion_primitive_to_bus).collect(),
+    }
 }
 
-pub(crate) fn motion_primitive_sequence_write(
-    view: &mut rclrs::DynamicMessageViewMut<'_>,
-    bus: &crate::control_msgs::msg::v1::MotionPrimitiveSequence,
-) -> Result<()> {
-    write_message_seq(
-        view,
-        "motions",
-        &bus.motions,
-        super::motion_primitive::motion_primitive_write,
-    )?;
-    Ok(())
+pub(crate) fn motion_primitive_sequence_to_ros(bus: crate::control_msgs::msg::v1::MotionPrimitiveSequence) -> ros_env::control_msgs::msg::MotionPrimitiveSequence {
+    ros_env::control_msgs::msg::MotionPrimitiveSequence {
+        motions: bus.motions.into_iter().map(crate::ros2_bridge::mappers::control_msgs::motion_primitive::motion_primitive_to_ros).collect(),
+    }
 }
 
-pub(crate) fn motion_primitive_sequence_dyn_to_bus(
-    msg: &rclrs::DynamicMessage,
-) -> Result<crate::control_msgs::msg::v1::MotionPrimitiveSequence> {
-    motion_primitive_sequence_from_view(&msg.view())
-}
-
-pub(crate) fn motion_primitive_sequence_bus_to_dyn(
-    bus: &crate::control_msgs::msg::v1::MotionPrimitiveSequence,
-) -> Result<rclrs::DynamicMessage> {
-    let mut msg = new_message("control_msgs/msg/MotionPrimitiveSequence")?;
-    motion_primitive_sequence_write(&mut msg.view_mut(), bus)?;
-    Ok(msg)
-}
-
+#[derive(Clone, Copy, Debug, Default)]
 pub struct ControlMsgsMotionPrimitiveSequenceMapper;
-impl TopicMapper for ControlMsgsMotionPrimitiveSequenceMapper {
+
+impl TypedTopicMapper for ControlMsgsMotionPrimitiveSequenceMapper {
+    type Ros = ros_env::control_msgs::msg::MotionPrimitiveSequence;
+    type Bus = crate::control_msgs::msg::v1::MotionPrimitiveSequence;
+
     fn type_name(&self) -> &'static str {
         "control_msgs/msg/MotionPrimitiveSequence"
     }
 
-    fn ros_to_bus(&self, msg: &DynamicMessage) -> Result<Vec<u8>> {
-        Ok(motion_primitive_sequence_dyn_to_bus(msg)?.encode_to_vec())
+    fn ros_to_bus(&self, msg: Self::Ros) -> crate::errors::Result<Self::Bus> {
+        Ok(motion_primitive_sequence_to_bus(msg))
     }
 
-    fn bus_to_ros(&self, payload: &[u8]) -> Result<DynamicMessage> {
-        let bus = <crate::control_msgs::msg::v1::MotionPrimitiveSequence as ProstMessage>::decode(
-            payload,
-        )
-        .map_err(|e| {
-            BusError::Protocol(format!(
-                "decode control_msgs/msg/MotionPrimitiveSequence: {e}"
-            ))
-        })?;
-        motion_primitive_sequence_bus_to_dyn(&bus)
+    fn bus_to_ros(&self, msg: Self::Bus) -> crate::errors::Result<Self::Ros> {
+        Ok(motion_primitive_sequence_to_ros(msg))
     }
 }

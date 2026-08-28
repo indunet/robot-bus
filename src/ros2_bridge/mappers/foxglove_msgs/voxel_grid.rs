@@ -1,98 +1,55 @@
-//! Mapper for `foxglove_msgs/msg/VoxelGrid`.
+//! Typed mapper for `foxglove_msgs/msg/VoxelGrid`.
 
-use prost::Message as ProstMessage;
-use rclrs::DynamicMessage;
+use crate::ros2_bridge::mapper::TypedTopicMapper;
 
-use super::super::common::*;
-use crate::BusError;
-use crate::ros2_bridge::mapper::TopicMapper;
-
-pub(crate) fn voxel_grid_from_view(
-    view: &rclrs::DynamicMessageView<'_>,
-) -> Result<crate::foxglove_msgs::msg::v1::VoxelGrid> {
-    Ok(crate::foxglove_msgs::msg::v1::VoxelGrid {
-        timestamp: read_timestamp(view, "timestamp")?,
-        frame_id: read_string(view, "frame_id")?,
-        pose: nested_view(view, "pose")?
-            .as_ref()
-            .map(super::pose::pose_from_view)
-            .transpose()?,
-        row_count: read_u32(view, "row_count")?,
-        column_count: read_u32(view, "column_count")?,
-        cell_size: nested_view(view, "cell_size")?
-            .as_ref()
-            .map(super::vector3::vector3_from_view)
-            .transpose()?,
-        slice_stride: read_u32(view, "slice_stride")?,
-        row_stride: read_u32(view, "row_stride")?,
-        cell_stride: read_u32(view, "cell_stride")?,
-        fields: read_message_seq(
-            view,
-            "fields",
-            super::packed_element_field::packed_element_field_from_view,
-        )?,
-        data: read_byte_seq(view, "data")?,
-    })
-}
-
-pub(crate) fn voxel_grid_write(
-    view: &mut rclrs::DynamicMessageViewMut<'_>,
-    bus: &crate::foxglove_msgs::msg::v1::VoxelGrid,
-) -> Result<()> {
-    if let Some(v) = &bus.timestamp {
-        write_timestamp(view, "timestamp", v)?;
+pub(crate) fn voxel_grid_to_bus(msg: ros_env::foxglove_msgs::msg::VoxelGrid) -> crate::foxglove_msgs::msg::v1::VoxelGrid {
+    crate::foxglove_msgs::msg::v1::VoxelGrid {
+        timestamp: Some(crate::ros2_bridge::mappers::convert::time_to_timestamp(msg.timestamp)),
+        frame_id: crate::ros2_bridge::mappers::convert::from_ros_string(msg.frame_id),
+        pose: Some(crate::ros2_bridge::mappers::foxglove_msgs::pose::pose_to_bus(msg.pose)),
+        row_count: msg.row_count,
+        column_count: msg.column_count,
+        cell_size: Some(crate::ros2_bridge::mappers::foxglove_msgs::vector3::vector3_to_bus(msg.cell_size)),
+        slice_stride: msg.slice_stride,
+        row_stride: msg.row_stride,
+        cell_stride: msg.cell_stride,
+        fields: msg.fields.into_iter().map(crate::ros2_bridge::mappers::foxglove_msgs::packed_element_field::packed_element_field_to_bus).collect(),
+        data: crate::ros2_bridge::mappers::convert::IntoU8Vec::into_u8_vec(msg.data),
     }
-    write_string(view, "frame_id", &bus.frame_id)?;
-    if let Some(v) = &bus.pose {
-        with_nested_mut(view, "pose", |nested| super::pose::pose_write(nested, v))?;
+}
+
+pub(crate) fn voxel_grid_to_ros(bus: crate::foxglove_msgs::msg::v1::VoxelGrid) -> ros_env::foxglove_msgs::msg::VoxelGrid {
+    ros_env::foxglove_msgs::msg::VoxelGrid {
+        timestamp: crate::ros2_bridge::mappers::convert::timestamp_to_time(bus.timestamp.unwrap_or_default()),
+        frame_id: crate::ros2_bridge::mappers::convert::to_ros_string(bus.frame_id),
+        pose: crate::ros2_bridge::mappers::foxglove_msgs::pose::pose_to_ros(bus.pose.unwrap_or_default()),
+        row_count: bus.row_count,
+        column_count: bus.column_count,
+        cell_size: crate::ros2_bridge::mappers::foxglove_msgs::vector3::vector3_to_ros(bus.cell_size.unwrap_or_default()),
+        slice_stride: bus.slice_stride,
+        row_stride: bus.row_stride,
+        cell_stride: bus.cell_stride,
+        fields: bus.fields.into_iter().map(crate::ros2_bridge::mappers::foxglove_msgs::packed_element_field::packed_element_field_to_ros).collect(),
+        data: crate::ros2_bridge::mappers::convert::FromByteSeq::from_byte_seq(bus.data),
     }
-    write_u32(view, "row_count", bus.row_count)?;
-    write_u32(view, "column_count", bus.column_count)?;
-    if let Some(v) = &bus.cell_size {
-        with_nested_mut(view, "cell_size", |nested| {
-            super::vector3::vector3_write(nested, v)
-        })?;
-    }
-    write_u32(view, "slice_stride", bus.slice_stride)?;
-    write_u32(view, "row_stride", bus.row_stride)?;
-    write_u32(view, "cell_stride", bus.cell_stride)?;
-    write_message_seq(
-        view,
-        "fields",
-        &bus.fields,
-        super::packed_element_field::packed_element_field_write,
-    )?;
-    write_byte_seq(view, "data", &bus.data)?;
-    Ok(())
 }
 
-pub(crate) fn voxel_grid_dyn_to_bus(
-    msg: &rclrs::DynamicMessage,
-) -> Result<crate::foxglove_msgs::msg::v1::VoxelGrid> {
-    voxel_grid_from_view(&msg.view())
-}
-
-pub(crate) fn voxel_grid_bus_to_dyn(
-    bus: &crate::foxglove_msgs::msg::v1::VoxelGrid,
-) -> Result<rclrs::DynamicMessage> {
-    let mut msg = new_message("foxglove_msgs/msg/VoxelGrid")?;
-    voxel_grid_write(&mut msg.view_mut(), bus)?;
-    Ok(msg)
-}
-
+#[derive(Clone, Copy, Debug, Default)]
 pub struct FoxgloveMsgsVoxelGridMapper;
-impl TopicMapper for FoxgloveMsgsVoxelGridMapper {
+
+impl TypedTopicMapper for FoxgloveMsgsVoxelGridMapper {
+    type Ros = ros_env::foxglove_msgs::msg::VoxelGrid;
+    type Bus = crate::foxglove_msgs::msg::v1::VoxelGrid;
+
     fn type_name(&self) -> &'static str {
         "foxglove_msgs/msg/VoxelGrid"
     }
 
-    fn ros_to_bus(&self, msg: &DynamicMessage) -> Result<Vec<u8>> {
-        Ok(voxel_grid_dyn_to_bus(msg)?.encode_to_vec())
+    fn ros_to_bus(&self, msg: Self::Ros) -> crate::errors::Result<Self::Bus> {
+        Ok(voxel_grid_to_bus(msg))
     }
 
-    fn bus_to_ros(&self, payload: &[u8]) -> Result<DynamicMessage> {
-        let bus = <crate::foxglove_msgs::msg::v1::VoxelGrid as ProstMessage>::decode(payload)
-            .map_err(|e| BusError::Protocol(format!("decode foxglove_msgs/msg/VoxelGrid: {e}")))?;
-        voxel_grid_bus_to_dyn(&bus)
+    fn bus_to_ros(&self, msg: Self::Bus) -> crate::errors::Result<Self::Ros> {
+        Ok(voxel_grid_to_ros(msg))
     }
 }

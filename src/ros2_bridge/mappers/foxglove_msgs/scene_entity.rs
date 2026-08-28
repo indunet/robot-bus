@@ -1,168 +1,61 @@
-//! Mapper for `foxglove_msgs/msg/SceneEntity`.
+//! Typed mapper for `foxglove_msgs/msg/SceneEntity`.
 
-use prost::Message as ProstMessage;
-use rclrs::DynamicMessage;
+use crate::ros2_bridge::mapper::TypedTopicMapper;
 
-use super::super::common::*;
-use crate::BusError;
-use crate::ros2_bridge::mapper::TopicMapper;
-
-pub(crate) fn scene_entity_from_view(
-    view: &rclrs::DynamicMessageView<'_>,
-) -> Result<crate::foxglove_msgs::msg::v1::SceneEntity> {
-    Ok(crate::foxglove_msgs::msg::v1::SceneEntity {
-        timestamp: read_timestamp(view, "timestamp")?,
-        frame_id: read_string(view, "frame_id")?,
-        id: read_string(view, "id")?,
-        lifetime: read_duration(view, "lifetime")?,
-        frame_locked: read_bool(view, "frame_locked")?,
-        metadata: read_message_seq(
-            view,
-            "metadata",
-            super::key_value_pair::key_value_pair_from_view,
-        )?,
-        arrows: read_message_seq(
-            view,
-            "arrows",
-            super::arrow_primitive::arrow_primitive_from_view,
-        )?,
-        cubes: read_message_seq(
-            view,
-            "cubes",
-            super::cube_primitive::cube_primitive_from_view,
-        )?,
-        spheres: read_message_seq(
-            view,
-            "spheres",
-            super::sphere_primitive::sphere_primitive_from_view,
-        )?,
-        cylinders: read_message_seq(
-            view,
-            "cylinders",
-            super::cylinder_primitive::cylinder_primitive_from_view,
-        )?,
-        lines: read_message_seq(
-            view,
-            "lines",
-            super::line_primitive::line_primitive_from_view,
-        )?,
-        triangles: read_message_seq(
-            view,
-            "triangles",
-            super::triangle_list_primitive::triangle_list_primitive_from_view,
-        )?,
-        texts: read_message_seq(
-            view,
-            "texts",
-            super::text_primitive::text_primitive_from_view,
-        )?,
-        models: read_message_seq(
-            view,
-            "models",
-            super::model_primitive::model_primitive_from_view,
-        )?,
-    })
-}
-
-pub(crate) fn scene_entity_write(
-    view: &mut rclrs::DynamicMessageViewMut<'_>,
-    bus: &crate::foxglove_msgs::msg::v1::SceneEntity,
-) -> Result<()> {
-    if let Some(v) = &bus.timestamp {
-        write_timestamp(view, "timestamp", v)?;
+pub(crate) fn scene_entity_to_bus(msg: ros_env::foxglove_msgs::msg::SceneEntity) -> crate::foxglove_msgs::msg::v1::SceneEntity {
+    crate::foxglove_msgs::msg::v1::SceneEntity {
+        timestamp: Some(crate::ros2_bridge::mappers::convert::time_to_timestamp(msg.timestamp)),
+        frame_id: crate::ros2_bridge::mappers::convert::from_ros_string(msg.frame_id),
+        id: crate::ros2_bridge::mappers::convert::from_ros_string(msg.id),
+        lifetime: Some(crate::ros2_bridge::mappers::convert::duration_to_proto(msg.lifetime)),
+        frame_locked: msg.frame_locked,
+        metadata: msg.metadata.into_iter().map(crate::ros2_bridge::mappers::foxglove_msgs::key_value_pair::key_value_pair_to_bus).collect(),
+        arrows: msg.arrows.into_iter().map(crate::ros2_bridge::mappers::foxglove_msgs::arrow_primitive::arrow_primitive_to_bus).collect(),
+        cubes: msg.cubes.into_iter().map(crate::ros2_bridge::mappers::foxglove_msgs::cube_primitive::cube_primitive_to_bus).collect(),
+        spheres: msg.spheres.into_iter().map(crate::ros2_bridge::mappers::foxglove_msgs::sphere_primitive::sphere_primitive_to_bus).collect(),
+        cylinders: msg.cylinders.into_iter().map(crate::ros2_bridge::mappers::foxglove_msgs::cylinder_primitive::cylinder_primitive_to_bus).collect(),
+        lines: msg.lines.into_iter().map(crate::ros2_bridge::mappers::foxglove_msgs::line_primitive::line_primitive_to_bus).collect(),
+        triangles: msg.triangles.into_iter().map(crate::ros2_bridge::mappers::foxglove_msgs::triangle_list_primitive::triangle_list_primitive_to_bus).collect(),
+        texts: msg.texts.into_iter().map(crate::ros2_bridge::mappers::foxglove_msgs::text_primitive::text_primitive_to_bus).collect(),
+        models: msg.models.into_iter().map(crate::ros2_bridge::mappers::foxglove_msgs::model_primitive::model_primitive_to_bus).collect(),
     }
-    write_string(view, "frame_id", &bus.frame_id)?;
-    write_string(view, "id", &bus.id)?;
-    if let Some(v) = &bus.lifetime {
-        write_duration(view, "lifetime", v)?;
+}
+
+pub(crate) fn scene_entity_to_ros(bus: crate::foxglove_msgs::msg::v1::SceneEntity) -> ros_env::foxglove_msgs::msg::SceneEntity {
+    ros_env::foxglove_msgs::msg::SceneEntity {
+        timestamp: crate::ros2_bridge::mappers::convert::timestamp_to_time(bus.timestamp.unwrap_or_default()),
+        frame_id: crate::ros2_bridge::mappers::convert::to_ros_string(bus.frame_id),
+        id: crate::ros2_bridge::mappers::convert::to_ros_string(bus.id),
+        lifetime: crate::ros2_bridge::mappers::convert::proto_to_duration(bus.lifetime.unwrap_or_default()),
+        frame_locked: bus.frame_locked,
+        metadata: bus.metadata.into_iter().map(crate::ros2_bridge::mappers::foxglove_msgs::key_value_pair::key_value_pair_to_ros).collect(),
+        arrows: bus.arrows.into_iter().map(crate::ros2_bridge::mappers::foxglove_msgs::arrow_primitive::arrow_primitive_to_ros).collect(),
+        cubes: bus.cubes.into_iter().map(crate::ros2_bridge::mappers::foxglove_msgs::cube_primitive::cube_primitive_to_ros).collect(),
+        spheres: bus.spheres.into_iter().map(crate::ros2_bridge::mappers::foxglove_msgs::sphere_primitive::sphere_primitive_to_ros).collect(),
+        cylinders: bus.cylinders.into_iter().map(crate::ros2_bridge::mappers::foxglove_msgs::cylinder_primitive::cylinder_primitive_to_ros).collect(),
+        lines: bus.lines.into_iter().map(crate::ros2_bridge::mappers::foxglove_msgs::line_primitive::line_primitive_to_ros).collect(),
+        triangles: bus.triangles.into_iter().map(crate::ros2_bridge::mappers::foxglove_msgs::triangle_list_primitive::triangle_list_primitive_to_ros).collect(),
+        texts: bus.texts.into_iter().map(crate::ros2_bridge::mappers::foxglove_msgs::text_primitive::text_primitive_to_ros).collect(),
+        models: bus.models.into_iter().map(crate::ros2_bridge::mappers::foxglove_msgs::model_primitive::model_primitive_to_ros).collect(),
     }
-    write_bool(view, "frame_locked", bus.frame_locked)?;
-    write_message_seq(
-        view,
-        "metadata",
-        &bus.metadata,
-        super::key_value_pair::key_value_pair_write,
-    )?;
-    write_message_seq(
-        view,
-        "arrows",
-        &bus.arrows,
-        super::arrow_primitive::arrow_primitive_write,
-    )?;
-    write_message_seq(
-        view,
-        "cubes",
-        &bus.cubes,
-        super::cube_primitive::cube_primitive_write,
-    )?;
-    write_message_seq(
-        view,
-        "spheres",
-        &bus.spheres,
-        super::sphere_primitive::sphere_primitive_write,
-    )?;
-    write_message_seq(
-        view,
-        "cylinders",
-        &bus.cylinders,
-        super::cylinder_primitive::cylinder_primitive_write,
-    )?;
-    write_message_seq(
-        view,
-        "lines",
-        &bus.lines,
-        super::line_primitive::line_primitive_write,
-    )?;
-    write_message_seq(
-        view,
-        "triangles",
-        &bus.triangles,
-        super::triangle_list_primitive::triangle_list_primitive_write,
-    )?;
-    write_message_seq(
-        view,
-        "texts",
-        &bus.texts,
-        super::text_primitive::text_primitive_write,
-    )?;
-    write_message_seq(
-        view,
-        "models",
-        &bus.models,
-        super::model_primitive::model_primitive_write,
-    )?;
-    Ok(())
 }
 
-pub(crate) fn scene_entity_dyn_to_bus(
-    msg: &rclrs::DynamicMessage,
-) -> Result<crate::foxglove_msgs::msg::v1::SceneEntity> {
-    scene_entity_from_view(&msg.view())
-}
-
-pub(crate) fn scene_entity_bus_to_dyn(
-    bus: &crate::foxglove_msgs::msg::v1::SceneEntity,
-) -> Result<rclrs::DynamicMessage> {
-    let mut msg = new_message("foxglove_msgs/msg/SceneEntity")?;
-    scene_entity_write(&mut msg.view_mut(), bus)?;
-    Ok(msg)
-}
-
+#[derive(Clone, Copy, Debug, Default)]
 pub struct FoxgloveMsgsSceneEntityMapper;
-impl TopicMapper for FoxgloveMsgsSceneEntityMapper {
+
+impl TypedTopicMapper for FoxgloveMsgsSceneEntityMapper {
+    type Ros = ros_env::foxglove_msgs::msg::SceneEntity;
+    type Bus = crate::foxglove_msgs::msg::v1::SceneEntity;
+
     fn type_name(&self) -> &'static str {
         "foxglove_msgs/msg/SceneEntity"
     }
 
-    fn ros_to_bus(&self, msg: &DynamicMessage) -> Result<Vec<u8>> {
-        Ok(scene_entity_dyn_to_bus(msg)?.encode_to_vec())
+    fn ros_to_bus(&self, msg: Self::Ros) -> crate::errors::Result<Self::Bus> {
+        Ok(scene_entity_to_bus(msg))
     }
 
-    fn bus_to_ros(&self, payload: &[u8]) -> Result<DynamicMessage> {
-        let bus = <crate::foxglove_msgs::msg::v1::SceneEntity as ProstMessage>::decode(payload)
-            .map_err(|e| {
-                BusError::Protocol(format!("decode foxglove_msgs/msg/SceneEntity: {e}"))
-            })?;
-        scene_entity_bus_to_dyn(&bus)
+    fn bus_to_ros(&self, msg: Self::Bus) -> crate::errors::Result<Self::Ros> {
+        Ok(scene_entity_to_ros(msg))
     }
 }

@@ -1,71 +1,37 @@
-//! Mapper for `geometry_msgs/msg/AccelStamped`.
+//! Typed mapper for `geometry_msgs/msg/AccelStamped`.
 
-use prost::Message as ProstMessage;
-use rclrs::DynamicMessage;
+use crate::ros2_bridge::mapper::TypedTopicMapper;
 
-use super::super::common::*;
-use crate::BusError;
-use crate::ros2_bridge::mapper::TopicMapper;
-
-pub(crate) fn accel_stamped_from_view(
-    view: &rclrs::DynamicMessageView<'_>,
-) -> Result<crate::geometry_msgs::msg::v1::AccelStamped> {
-    Ok(crate::geometry_msgs::msg::v1::AccelStamped {
-        header: nested_view(view, "header")?
-            .as_ref()
-            .map(super::super::std_msgs::header::header_from_view)
-            .transpose()?,
-        accel: nested_view(view, "accel")?
-            .as_ref()
-            .map(super::accel::accel_from_view)
-            .transpose()?,
-    })
-}
-
-pub(crate) fn accel_stamped_write(
-    view: &mut rclrs::DynamicMessageViewMut<'_>,
-    bus: &crate::geometry_msgs::msg::v1::AccelStamped,
-) -> Result<()> {
-    if let Some(v) = &bus.header {
-        with_nested_mut(view, "header", |nested| {
-            super::super::std_msgs::header::header_write(nested, v)
-        })?;
+pub(crate) fn accel_stamped_to_bus(msg: ros_env::geometry_msgs::msg::AccelStamped) -> crate::geometry_msgs::msg::v1::AccelStamped {
+    crate::geometry_msgs::msg::v1::AccelStamped {
+        header: Some(crate::ros2_bridge::mappers::std_msgs::header::header_to_bus(msg.header)),
+        accel: Some(crate::ros2_bridge::mappers::geometry_msgs::accel::accel_to_bus(msg.accel)),
     }
-    if let Some(v) = &bus.accel {
-        with_nested_mut(view, "accel", |nested| super::accel::accel_write(nested, v))?;
+}
+
+pub(crate) fn accel_stamped_to_ros(bus: crate::geometry_msgs::msg::v1::AccelStamped) -> ros_env::geometry_msgs::msg::AccelStamped {
+    ros_env::geometry_msgs::msg::AccelStamped {
+        header: crate::ros2_bridge::mappers::std_msgs::header::header_to_ros(bus.header.unwrap_or_default()),
+        accel: crate::ros2_bridge::mappers::geometry_msgs::accel::accel_to_ros(bus.accel.unwrap_or_default()),
     }
-    Ok(())
 }
 
-pub(crate) fn accel_stamped_dyn_to_bus(
-    msg: &rclrs::DynamicMessage,
-) -> Result<crate::geometry_msgs::msg::v1::AccelStamped> {
-    accel_stamped_from_view(&msg.view())
-}
-
-pub(crate) fn accel_stamped_bus_to_dyn(
-    bus: &crate::geometry_msgs::msg::v1::AccelStamped,
-) -> Result<rclrs::DynamicMessage> {
-    let mut msg = new_message("geometry_msgs/msg/AccelStamped")?;
-    accel_stamped_write(&mut msg.view_mut(), bus)?;
-    Ok(msg)
-}
-
+#[derive(Clone, Copy, Debug, Default)]
 pub struct GeometryMsgsAccelStampedMapper;
-impl TopicMapper for GeometryMsgsAccelStampedMapper {
+
+impl TypedTopicMapper for GeometryMsgsAccelStampedMapper {
+    type Ros = ros_env::geometry_msgs::msg::AccelStamped;
+    type Bus = crate::geometry_msgs::msg::v1::AccelStamped;
+
     fn type_name(&self) -> &'static str {
         "geometry_msgs/msg/AccelStamped"
     }
 
-    fn ros_to_bus(&self, msg: &DynamicMessage) -> Result<Vec<u8>> {
-        Ok(accel_stamped_dyn_to_bus(msg)?.encode_to_vec())
+    fn ros_to_bus(&self, msg: Self::Ros) -> crate::errors::Result<Self::Bus> {
+        Ok(accel_stamped_to_bus(msg))
     }
 
-    fn bus_to_ros(&self, payload: &[u8]) -> Result<DynamicMessage> {
-        let bus = <crate::geometry_msgs::msg::v1::AccelStamped as ProstMessage>::decode(payload)
-            .map_err(|e| {
-                BusError::Protocol(format!("decode geometry_msgs/msg/AccelStamped: {e}"))
-            })?;
-        accel_stamped_bus_to_dyn(&bus)
+    fn bus_to_ros(&self, msg: Self::Bus) -> crate::errors::Result<Self::Ros> {
+        Ok(accel_stamped_to_ros(msg))
     }
 }

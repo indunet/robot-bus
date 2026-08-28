@@ -1,62 +1,39 @@
-//! Mapper for `foxglove_msgs/msg/PackedElementField`.
+//! Typed mapper for `foxglove_msgs/msg/PackedElementField`.
 
-use prost::Message as ProstMessage;
-use rclrs::DynamicMessage;
+use crate::ros2_bridge::mapper::TypedTopicMapper;
 
-use super::super::common::*;
-use crate::BusError;
-use crate::ros2_bridge::mapper::TopicMapper;
-
-pub(crate) fn packed_element_field_from_view(
-    view: &rclrs::DynamicMessageView<'_>,
-) -> Result<crate::foxglove_msgs::msg::v1::PackedElementField> {
-    Ok(crate::foxglove_msgs::msg::v1::PackedElementField {
-        name: read_string(view, "name")?,
-        offset: read_u32(view, "offset")?,
-        r#type: read_i32(view, "type")?,
-    })
+pub(crate) fn packed_element_field_to_bus(msg: ros_env::foxglove_msgs::msg::PackedElementField) -> crate::foxglove_msgs::msg::v1::PackedElementField {
+    crate::foxglove_msgs::msg::v1::PackedElementField {
+        name: crate::ros2_bridge::mappers::convert::from_ros_string(msg.name),
+        offset: msg.offset,
+        r#type: msg.type_ as i32,
+    }
 }
 
-pub(crate) fn packed_element_field_write(
-    view: &mut rclrs::DynamicMessageViewMut<'_>,
-    bus: &crate::foxglove_msgs::msg::v1::PackedElementField,
-) -> Result<()> {
-    write_string(view, "name", &bus.name)?;
-    write_u32(view, "offset", bus.offset)?;
-    write_i32(view, "type", bus.r#type)?;
-    Ok(())
+pub(crate) fn packed_element_field_to_ros(bus: crate::foxglove_msgs::msg::v1::PackedElementField) -> ros_env::foxglove_msgs::msg::PackedElementField {
+    ros_env::foxglove_msgs::msg::PackedElementField {
+        name: crate::ros2_bridge::mappers::convert::to_ros_string(bus.name),
+        offset: bus.offset,
+        type_: bus.r#type as i32,
+    }
 }
 
-pub(crate) fn packed_element_field_dyn_to_bus(
-    msg: &rclrs::DynamicMessage,
-) -> Result<crate::foxglove_msgs::msg::v1::PackedElementField> {
-    packed_element_field_from_view(&msg.view())
-}
-
-pub(crate) fn packed_element_field_bus_to_dyn(
-    bus: &crate::foxglove_msgs::msg::v1::PackedElementField,
-) -> Result<rclrs::DynamicMessage> {
-    let mut msg = new_message("foxglove_msgs/msg/PackedElementField")?;
-    packed_element_field_write(&mut msg.view_mut(), bus)?;
-    Ok(msg)
-}
-
+#[derive(Clone, Copy, Debug, Default)]
 pub struct FoxgloveMsgsPackedElementFieldMapper;
-impl TopicMapper for FoxgloveMsgsPackedElementFieldMapper {
+
+impl TypedTopicMapper for FoxgloveMsgsPackedElementFieldMapper {
+    type Ros = ros_env::foxglove_msgs::msg::PackedElementField;
+    type Bus = crate::foxglove_msgs::msg::v1::PackedElementField;
+
     fn type_name(&self) -> &'static str {
         "foxglove_msgs/msg/PackedElementField"
     }
 
-    fn ros_to_bus(&self, msg: &DynamicMessage) -> Result<Vec<u8>> {
-        Ok(packed_element_field_dyn_to_bus(msg)?.encode_to_vec())
+    fn ros_to_bus(&self, msg: Self::Ros) -> crate::errors::Result<Self::Bus> {
+        Ok(packed_element_field_to_bus(msg))
     }
 
-    fn bus_to_ros(&self, payload: &[u8]) -> Result<DynamicMessage> {
-        let bus =
-            <crate::foxglove_msgs::msg::v1::PackedElementField as ProstMessage>::decode(payload)
-                .map_err(|e| {
-                    BusError::Protocol(format!("decode foxglove_msgs/msg/PackedElementField: {e}"))
-                })?;
-        packed_element_field_bus_to_dyn(&bus)
+    fn bus_to_ros(&self, msg: Self::Bus) -> crate::errors::Result<Self::Ros> {
+        Ok(packed_element_field_to_ros(msg))
     }
 }

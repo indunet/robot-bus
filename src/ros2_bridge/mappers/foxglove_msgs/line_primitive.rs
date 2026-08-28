@@ -1,81 +1,49 @@
-//! Mapper for `foxglove_msgs/msg/LinePrimitive`.
+//! Typed mapper for `foxglove_msgs/msg/LinePrimitive`.
 
-use prost::Message as ProstMessage;
-use rclrs::DynamicMessage;
+use crate::ros2_bridge::mapper::TypedTopicMapper;
 
-use super::super::common::*;
-use crate::BusError;
-use crate::ros2_bridge::mapper::TopicMapper;
-
-pub(crate) fn line_primitive_from_view(
-    view: &rclrs::DynamicMessageView<'_>,
-) -> Result<crate::foxglove_msgs::msg::v1::LinePrimitive> {
-    Ok(crate::foxglove_msgs::msg::v1::LinePrimitive {
-        r#type: read_i32(view, "type")?,
-        pose: nested_view(view, "pose")?
-            .as_ref()
-            .map(super::pose::pose_from_view)
-            .transpose()?,
-        thickness: read_f64(view, "thickness")?,
-        scale_invariant: read_bool(view, "scale_invariant")?,
-        points: read_message_seq(view, "points", super::point3::point3_from_view)?,
-        color: nested_view(view, "color")?
-            .as_ref()
-            .map(super::color::color_from_view)
-            .transpose()?,
-        colors: read_message_seq(view, "colors", super::color::color_from_view)?,
-        indices: read_u32_seq(view, "indices")?,
-    })
-}
-
-pub(crate) fn line_primitive_write(
-    view: &mut rclrs::DynamicMessageViewMut<'_>,
-    bus: &crate::foxglove_msgs::msg::v1::LinePrimitive,
-) -> Result<()> {
-    write_i32(view, "type", bus.r#type)?;
-    if let Some(v) = &bus.pose {
-        with_nested_mut(view, "pose", |nested| super::pose::pose_write(nested, v))?;
+pub(crate) fn line_primitive_to_bus(msg: ros_env::foxglove_msgs::msg::LinePrimitive) -> crate::foxglove_msgs::msg::v1::LinePrimitive {
+    crate::foxglove_msgs::msg::v1::LinePrimitive {
+        r#type: msg.type_ as i32,
+        pose: Some(crate::ros2_bridge::mappers::foxglove_msgs::pose::pose_to_bus(msg.pose)),
+        thickness: msg.thickness,
+        scale_invariant: msg.scale_invariant,
+        points: msg.points.into_iter().map(crate::ros2_bridge::mappers::foxglove_msgs::point3::point3_to_bus).collect(),
+        color: Some(crate::ros2_bridge::mappers::foxglove_msgs::color::color_to_bus(msg.color)),
+        colors: msg.colors.into_iter().map(crate::ros2_bridge::mappers::foxglove_msgs::color::color_to_bus).collect(),
+        indices: crate::ros2_bridge::mappers::convert::u32_seq(msg.indices),
     }
-    write_f64(view, "thickness", bus.thickness)?;
-    write_bool(view, "scale_invariant", bus.scale_invariant)?;
-    write_message_seq(view, "points", &bus.points, super::point3::point3_write)?;
-    if let Some(v) = &bus.color {
-        with_nested_mut(view, "color", |nested| super::color::color_write(nested, v))?;
+}
+
+pub(crate) fn line_primitive_to_ros(bus: crate::foxglove_msgs::msg::v1::LinePrimitive) -> ros_env::foxglove_msgs::msg::LinePrimitive {
+    ros_env::foxglove_msgs::msg::LinePrimitive {
+        type_: bus.r#type as i32,
+        pose: crate::ros2_bridge::mappers::foxglove_msgs::pose::pose_to_ros(bus.pose.unwrap_or_default()),
+        thickness: bus.thickness,
+        scale_invariant: bus.scale_invariant,
+        points: bus.points.into_iter().map(crate::ros2_bridge::mappers::foxglove_msgs::point3::point3_to_ros).collect(),
+        color: crate::ros2_bridge::mappers::foxglove_msgs::color::color_to_ros(bus.color.unwrap_or_default()),
+        colors: bus.colors.into_iter().map(crate::ros2_bridge::mappers::foxglove_msgs::color::color_to_ros).collect(),
+        indices: crate::ros2_bridge::mappers::convert::FromU32Seq::from_u32_seq(bus.indices),
     }
-    write_message_seq(view, "colors", &bus.colors, super::color::color_write)?;
-    write_u32_seq(view, "indices", &bus.indices)?;
-    Ok(())
 }
 
-pub(crate) fn line_primitive_dyn_to_bus(
-    msg: &rclrs::DynamicMessage,
-) -> Result<crate::foxglove_msgs::msg::v1::LinePrimitive> {
-    line_primitive_from_view(&msg.view())
-}
-
-pub(crate) fn line_primitive_bus_to_dyn(
-    bus: &crate::foxglove_msgs::msg::v1::LinePrimitive,
-) -> Result<rclrs::DynamicMessage> {
-    let mut msg = new_message("foxglove_msgs/msg/LinePrimitive")?;
-    line_primitive_write(&mut msg.view_mut(), bus)?;
-    Ok(msg)
-}
-
+#[derive(Clone, Copy, Debug, Default)]
 pub struct FoxgloveMsgsLinePrimitiveMapper;
-impl TopicMapper for FoxgloveMsgsLinePrimitiveMapper {
+
+impl TypedTopicMapper for FoxgloveMsgsLinePrimitiveMapper {
+    type Ros = ros_env::foxglove_msgs::msg::LinePrimitive;
+    type Bus = crate::foxglove_msgs::msg::v1::LinePrimitive;
+
     fn type_name(&self) -> &'static str {
         "foxglove_msgs/msg/LinePrimitive"
     }
 
-    fn ros_to_bus(&self, msg: &DynamicMessage) -> Result<Vec<u8>> {
-        Ok(line_primitive_dyn_to_bus(msg)?.encode_to_vec())
+    fn ros_to_bus(&self, msg: Self::Ros) -> crate::errors::Result<Self::Bus> {
+        Ok(line_primitive_to_bus(msg))
     }
 
-    fn bus_to_ros(&self, payload: &[u8]) -> Result<DynamicMessage> {
-        let bus = <crate::foxglove_msgs::msg::v1::LinePrimitive as ProstMessage>::decode(payload)
-            .map_err(|e| {
-            BusError::Protocol(format!("decode foxglove_msgs/msg/LinePrimitive: {e}"))
-        })?;
-        line_primitive_bus_to_dyn(&bus)
+    fn bus_to_ros(&self, msg: Self::Bus) -> crate::errors::Result<Self::Ros> {
+        Ok(line_primitive_to_ros(msg))
     }
 }

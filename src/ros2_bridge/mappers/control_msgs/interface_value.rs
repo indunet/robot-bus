@@ -1,59 +1,37 @@
-//! Mapper for `control_msgs/msg/InterfaceValue`.
+//! Typed mapper for `control_msgs/msg/InterfaceValue`.
 
-use prost::Message as ProstMessage;
-use rclrs::DynamicMessage;
+use crate::ros2_bridge::mapper::TypedTopicMapper;
 
-use super::super::common::*;
-use crate::BusError;
-use crate::ros2_bridge::mapper::TopicMapper;
-
-pub(crate) fn interface_value_from_view(
-    view: &rclrs::DynamicMessageView<'_>,
-) -> Result<crate::control_msgs::msg::v1::InterfaceValue> {
-    Ok(crate::control_msgs::msg::v1::InterfaceValue {
-        interface_names: read_string_seq(view, "interface_names")?,
-        values: read_f64_seq(view, "values")?,
-    })
+pub(crate) fn interface_value_to_bus(msg: ros_env::control_msgs::msg::InterfaceValue) -> crate::control_msgs::msg::v1::InterfaceValue {
+    crate::control_msgs::msg::v1::InterfaceValue {
+        interface_names: crate::ros2_bridge::mappers::convert::string_seq(msg.interface_names),
+        values: crate::ros2_bridge::mappers::convert::f64_seq(msg.values),
+    }
 }
 
-pub(crate) fn interface_value_write(
-    view: &mut rclrs::DynamicMessageViewMut<'_>,
-    bus: &crate::control_msgs::msg::v1::InterfaceValue,
-) -> Result<()> {
-    write_string_seq(view, "interface_names", &bus.interface_names)?;
-    write_f64_seq(view, "values", &bus.values)?;
-    Ok(())
+pub(crate) fn interface_value_to_ros(bus: crate::control_msgs::msg::v1::InterfaceValue) -> ros_env::control_msgs::msg::InterfaceValue {
+    ros_env::control_msgs::msg::InterfaceValue {
+        interface_names: crate::ros2_bridge::mappers::convert::ros_string_seq(bus.interface_names),
+        values: crate::ros2_bridge::mappers::convert::FromF64Seq::from_f64_seq(bus.values),
+    }
 }
 
-pub(crate) fn interface_value_dyn_to_bus(
-    msg: &rclrs::DynamicMessage,
-) -> Result<crate::control_msgs::msg::v1::InterfaceValue> {
-    interface_value_from_view(&msg.view())
-}
-
-pub(crate) fn interface_value_bus_to_dyn(
-    bus: &crate::control_msgs::msg::v1::InterfaceValue,
-) -> Result<rclrs::DynamicMessage> {
-    let mut msg = new_message("control_msgs/msg/InterfaceValue")?;
-    interface_value_write(&mut msg.view_mut(), bus)?;
-    Ok(msg)
-}
-
+#[derive(Clone, Copy, Debug, Default)]
 pub struct ControlMsgsInterfaceValueMapper;
-impl TopicMapper for ControlMsgsInterfaceValueMapper {
+
+impl TypedTopicMapper for ControlMsgsInterfaceValueMapper {
+    type Ros = ros_env::control_msgs::msg::InterfaceValue;
+    type Bus = crate::control_msgs::msg::v1::InterfaceValue;
+
     fn type_name(&self) -> &'static str {
         "control_msgs/msg/InterfaceValue"
     }
 
-    fn ros_to_bus(&self, msg: &DynamicMessage) -> Result<Vec<u8>> {
-        Ok(interface_value_dyn_to_bus(msg)?.encode_to_vec())
+    fn ros_to_bus(&self, msg: Self::Ros) -> crate::errors::Result<Self::Bus> {
+        Ok(interface_value_to_bus(msg))
     }
 
-    fn bus_to_ros(&self, payload: &[u8]) -> Result<DynamicMessage> {
-        let bus = <crate::control_msgs::msg::v1::InterfaceValue as ProstMessage>::decode(payload)
-            .map_err(|e| {
-            BusError::Protocol(format!("decode control_msgs/msg/InterfaceValue: {e}"))
-        })?;
-        interface_value_bus_to_dyn(&bus)
+    fn bus_to_ros(&self, msg: Self::Bus) -> crate::errors::Result<Self::Ros> {
+        Ok(interface_value_to_ros(msg))
     }
 }

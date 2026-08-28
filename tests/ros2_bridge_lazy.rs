@@ -9,10 +9,9 @@ mod support;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
-use prost::Message as ProstMessage;
 use rclrs::CreateBasicExecutor;
 use robot_bus::lazy_subscribe::CONSOLE_DETECT_TIMEOUT;
-use robot_bus::ros2_bridge::{Ros2Bridge, StdMsgsStringMapper, TopicMapper};
+use robot_bus::ros2_bridge::{Ros2Bridge, StdMsgsStringMapper, TypedTopicMapper};
 use robot_bus::std_msgs::msg::v1::String as BusString;
 use robot_bus::{Node, NodeOptions, RobotBusBroker};
 use support::{ephemeral_robot_bus_config, lock_brokers};
@@ -248,17 +247,16 @@ fn lazy_forwards_after_bus_subscribe() {
         .expect("ros talker");
     let mapper = StdMsgsStringMapper;
     let publisher = node
-        .create_dynamic_publisher(mapper.ros_type(), topic.as_str())
-        .expect("ros dynamic pub");
-    let payload = BusString {
+        .create_publisher::<ros_env::std_msgs::msg::String>(topic.as_str())
+        .expect("ros typed pub");
+    let bus = BusString {
         data: "hello-lazy".into(),
-    }
-    .encode_to_vec();
+    };
 
     let deadline = Instant::now() + Duration::from_secs(5);
     loop {
-        let dyn_msg = mapper.bus_to_ros(&payload).expect("bus_to_ros");
-        let _ = publisher.publish(dyn_msg);
+        let ros_msg = mapper.bus_to_ros(bus.clone()).expect("bus_to_ros");
+        let _ = publisher.publish(ros_msg);
         let _ = exec.spin(rclrs::SpinOptions::spin_once().timeout(Duration::from_millis(20)));
         let _ = bridge.spin_once(Duration::from_millis(20));
         let _ = listener.spin_once(Some(Duration::from_millis(20)));

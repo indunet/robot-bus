@@ -1,65 +1,37 @@
-//! Mapper for `geometry_msgs/msg/TwistWithCovariance`.
+//! Typed mapper for `geometry_msgs/msg/TwistWithCovariance`.
 
-use prost::Message as ProstMessage;
-use rclrs::DynamicMessage;
+use crate::ros2_bridge::mapper::TypedTopicMapper;
 
-use super::super::common::*;
-use crate::BusError;
-use crate::ros2_bridge::mapper::TopicMapper;
-
-pub(crate) fn twist_with_covariance_from_view(
-    view: &rclrs::DynamicMessageView<'_>,
-) -> Result<crate::geometry_msgs::msg::v1::TwistWithCovariance> {
-    Ok(crate::geometry_msgs::msg::v1::TwistWithCovariance {
-        twist: nested_view(view, "twist")?
-            .as_ref()
-            .map(super::twist::twist_from_view)
-            .transpose()?,
-        covariance: read_f64_seq(view, "covariance")?,
-    })
-}
-
-pub(crate) fn twist_with_covariance_write(
-    view: &mut rclrs::DynamicMessageViewMut<'_>,
-    bus: &crate::geometry_msgs::msg::v1::TwistWithCovariance,
-) -> Result<()> {
-    if let Some(v) = &bus.twist {
-        with_nested_mut(view, "twist", |nested| super::twist::twist_write(nested, v))?;
+pub(crate) fn twist_with_covariance_to_bus(msg: ros_env::geometry_msgs::msg::TwistWithCovariance) -> crate::geometry_msgs::msg::v1::TwistWithCovariance {
+    crate::geometry_msgs::msg::v1::TwistWithCovariance {
+        twist: Some(crate::ros2_bridge::mappers::geometry_msgs::twist::twist_to_bus(msg.twist)),
+        covariance: crate::ros2_bridge::mappers::convert::f64_seq(msg.covariance),
     }
-    write_f64_seq(view, "covariance", &bus.covariance)?;
-    Ok(())
 }
 
-pub(crate) fn twist_with_covariance_dyn_to_bus(
-    msg: &rclrs::DynamicMessage,
-) -> Result<crate::geometry_msgs::msg::v1::TwistWithCovariance> {
-    twist_with_covariance_from_view(&msg.view())
+pub(crate) fn twist_with_covariance_to_ros(bus: crate::geometry_msgs::msg::v1::TwistWithCovariance) -> ros_env::geometry_msgs::msg::TwistWithCovariance {
+    ros_env::geometry_msgs::msg::TwistWithCovariance {
+        twist: crate::ros2_bridge::mappers::geometry_msgs::twist::twist_to_ros(bus.twist.unwrap_or_default()),
+        covariance: crate::ros2_bridge::mappers::convert::FromF64Seq::from_f64_seq(bus.covariance),
+    }
 }
 
-pub(crate) fn twist_with_covariance_bus_to_dyn(
-    bus: &crate::geometry_msgs::msg::v1::TwistWithCovariance,
-) -> Result<rclrs::DynamicMessage> {
-    let mut msg = new_message("geometry_msgs/msg/TwistWithCovariance")?;
-    twist_with_covariance_write(&mut msg.view_mut(), bus)?;
-    Ok(msg)
-}
-
+#[derive(Clone, Copy, Debug, Default)]
 pub struct GeometryMsgsTwistWithCovarianceMapper;
-impl TopicMapper for GeometryMsgsTwistWithCovarianceMapper {
+
+impl TypedTopicMapper for GeometryMsgsTwistWithCovarianceMapper {
+    type Ros = ros_env::geometry_msgs::msg::TwistWithCovariance;
+    type Bus = crate::geometry_msgs::msg::v1::TwistWithCovariance;
+
     fn type_name(&self) -> &'static str {
         "geometry_msgs/msg/TwistWithCovariance"
     }
 
-    fn ros_to_bus(&self, msg: &DynamicMessage) -> Result<Vec<u8>> {
-        Ok(twist_with_covariance_dyn_to_bus(msg)?.encode_to_vec())
+    fn ros_to_bus(&self, msg: Self::Ros) -> crate::errors::Result<Self::Bus> {
+        Ok(twist_with_covariance_to_bus(msg))
     }
 
-    fn bus_to_ros(&self, payload: &[u8]) -> Result<DynamicMessage> {
-        let bus =
-            <crate::geometry_msgs::msg::v1::TwistWithCovariance as ProstMessage>::decode(payload)
-                .map_err(|e| {
-                BusError::Protocol(format!("decode geometry_msgs/msg/TwistWithCovariance: {e}"))
-            })?;
-        twist_with_covariance_bus_to_dyn(&bus)
+    fn bus_to_ros(&self, msg: Self::Bus) -> crate::errors::Result<Self::Ros> {
+        Ok(twist_with_covariance_to_ros(msg))
     }
 }

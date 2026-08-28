@@ -1,67 +1,37 @@
-//! Mapper for `nav2_msgs/msg/Route`.
+//! Typed mapper for `nav2_msgs/msg/Route`.
 
-use prost::Message as ProstMessage;
-use rclrs::DynamicMessage;
+use crate::ros2_bridge::mapper::TypedTopicMapper;
 
-use super::super::common::*;
-use crate::BusError;
-use crate::ros2_bridge::mapper::TopicMapper;
-
-pub(crate) fn route_from_view(
-    view: &rclrs::DynamicMessageView<'_>,
-) -> Result<crate::nav2_msgs::msg::v1::Route> {
-    Ok(crate::nav2_msgs::msg::v1::Route {
-        nodes: read_message_seq(view, "nodes", super::route_node::route_node_from_view)?,
-        edges: read_message_seq(view, "edges", super::route_edge::route_edge_from_view)?,
-    })
+pub(crate) fn route_to_bus(msg: ros_env::nav2_msgs::msg::Route) -> crate::nav2_msgs::msg::v1::Route {
+    crate::nav2_msgs::msg::v1::Route {
+        nodes: msg.nodes.into_iter().map(crate::ros2_bridge::mappers::nav2_msgs::route_node::route_node_to_bus).collect(),
+        edges: msg.edges.into_iter().map(crate::ros2_bridge::mappers::nav2_msgs::route_edge::route_edge_to_bus).collect(),
+    }
 }
 
-pub(crate) fn route_write(
-    view: &mut rclrs::DynamicMessageViewMut<'_>,
-    bus: &crate::nav2_msgs::msg::v1::Route,
-) -> Result<()> {
-    write_message_seq(
-        view,
-        "nodes",
-        &bus.nodes,
-        super::route_node::route_node_write,
-    )?;
-    write_message_seq(
-        view,
-        "edges",
-        &bus.edges,
-        super::route_edge::route_edge_write,
-    )?;
-    Ok(())
+pub(crate) fn route_to_ros(bus: crate::nav2_msgs::msg::v1::Route) -> ros_env::nav2_msgs::msg::Route {
+    ros_env::nav2_msgs::msg::Route {
+        nodes: bus.nodes.into_iter().map(crate::ros2_bridge::mappers::nav2_msgs::route_node::route_node_to_ros).collect(),
+        edges: bus.edges.into_iter().map(crate::ros2_bridge::mappers::nav2_msgs::route_edge::route_edge_to_ros).collect(),
+    }
 }
 
-pub(crate) fn route_dyn_to_bus(
-    msg: &rclrs::DynamicMessage,
-) -> Result<crate::nav2_msgs::msg::v1::Route> {
-    route_from_view(&msg.view())
-}
-
-pub(crate) fn route_bus_to_dyn(
-    bus: &crate::nav2_msgs::msg::v1::Route,
-) -> Result<rclrs::DynamicMessage> {
-    let mut msg = new_message("nav2_msgs/msg/Route")?;
-    route_write(&mut msg.view_mut(), bus)?;
-    Ok(msg)
-}
-
+#[derive(Clone, Copy, Debug, Default)]
 pub struct Nav2MsgsRouteMapper;
-impl TopicMapper for Nav2MsgsRouteMapper {
+
+impl TypedTopicMapper for Nav2MsgsRouteMapper {
+    type Ros = ros_env::nav2_msgs::msg::Route;
+    type Bus = crate::nav2_msgs::msg::v1::Route;
+
     fn type_name(&self) -> &'static str {
         "nav2_msgs/msg/Route"
     }
 
-    fn ros_to_bus(&self, msg: &DynamicMessage) -> Result<Vec<u8>> {
-        Ok(route_dyn_to_bus(msg)?.encode_to_vec())
+    fn ros_to_bus(&self, msg: Self::Ros) -> crate::errors::Result<Self::Bus> {
+        Ok(route_to_bus(msg))
     }
 
-    fn bus_to_ros(&self, payload: &[u8]) -> Result<DynamicMessage> {
-        let bus = <crate::nav2_msgs::msg::v1::Route as ProstMessage>::decode(payload)
-            .map_err(|e| BusError::Protocol(format!("decode nav2_msgs/msg/Route: {e}")))?;
-        route_bus_to_dyn(&bus)
+    fn bus_to_ros(&self, msg: Self::Bus) -> crate::errors::Result<Self::Ros> {
+        Ok(route_to_ros(msg))
     }
 }

@@ -1,101 +1,47 @@
-//! Mapper for `foxglove_msgs/msg/TextAnnotation`.
+//! Typed mapper for `foxglove_msgs/msg/TextAnnotation`.
 
-use prost::Message as ProstMessage;
-use rclrs::DynamicMessage;
+use crate::ros2_bridge::mapper::TypedTopicMapper;
 
-use super::super::common::*;
-use crate::BusError;
-use crate::ros2_bridge::mapper::TopicMapper;
-
-pub(crate) fn text_annotation_from_view(
-    view: &rclrs::DynamicMessageView<'_>,
-) -> Result<crate::foxglove_msgs::msg::v1::TextAnnotation> {
-    Ok(crate::foxglove_msgs::msg::v1::TextAnnotation {
-        timestamp: read_timestamp(view, "timestamp")?,
-        position: nested_view(view, "position")?
-            .as_ref()
-            .map(super::point2::point2_from_view)
-            .transpose()?,
-        text: read_string(view, "text")?,
-        font_size: read_f64(view, "font_size")?,
-        text_color: nested_view(view, "text_color")?
-            .as_ref()
-            .map(super::color::color_from_view)
-            .transpose()?,
-        background_color: nested_view(view, "background_color")?
-            .as_ref()
-            .map(super::color::color_from_view)
-            .transpose()?,
-        metadata: read_message_seq(
-            view,
-            "metadata",
-            super::key_value_pair::key_value_pair_from_view,
-        )?,
-    })
+pub(crate) fn text_annotation_to_bus(msg: ros_env::foxglove_msgs::msg::TextAnnotation) -> crate::foxglove_msgs::msg::v1::TextAnnotation {
+    crate::foxglove_msgs::msg::v1::TextAnnotation {
+        timestamp: Some(crate::ros2_bridge::mappers::convert::time_to_timestamp(msg.timestamp)),
+        position: Some(crate::ros2_bridge::mappers::foxglove_msgs::point2::point2_to_bus(msg.position)),
+        text: crate::ros2_bridge::mappers::convert::from_ros_string(msg.text),
+        font_size: msg.font_size,
+        text_color: Some(crate::ros2_bridge::mappers::foxglove_msgs::color::color_to_bus(msg.text_color)),
+        background_color: Some(crate::ros2_bridge::mappers::foxglove_msgs::color::color_to_bus(msg.background_color)),
+        metadata: msg.metadata.into_iter().map(crate::ros2_bridge::mappers::foxglove_msgs::key_value_pair::key_value_pair_to_bus).collect(),
+    }
 }
 
-pub(crate) fn text_annotation_write(
-    view: &mut rclrs::DynamicMessageViewMut<'_>,
-    bus: &crate::foxglove_msgs::msg::v1::TextAnnotation,
-) -> Result<()> {
-    if let Some(v) = &bus.timestamp {
-        write_timestamp(view, "timestamp", v)?;
+pub(crate) fn text_annotation_to_ros(bus: crate::foxglove_msgs::msg::v1::TextAnnotation) -> ros_env::foxglove_msgs::msg::TextAnnotation {
+    ros_env::foxglove_msgs::msg::TextAnnotation {
+        timestamp: crate::ros2_bridge::mappers::convert::timestamp_to_time(bus.timestamp.unwrap_or_default()),
+        position: crate::ros2_bridge::mappers::foxglove_msgs::point2::point2_to_ros(bus.position.unwrap_or_default()),
+        text: crate::ros2_bridge::mappers::convert::to_ros_string(bus.text),
+        font_size: bus.font_size,
+        text_color: crate::ros2_bridge::mappers::foxglove_msgs::color::color_to_ros(bus.text_color.unwrap_or_default()),
+        background_color: crate::ros2_bridge::mappers::foxglove_msgs::color::color_to_ros(bus.background_color.unwrap_or_default()),
+        metadata: bus.metadata.into_iter().map(crate::ros2_bridge::mappers::foxglove_msgs::key_value_pair::key_value_pair_to_ros).collect(),
     }
-    if let Some(v) = &bus.position {
-        with_nested_mut(view, "position", |nested| {
-            super::point2::point2_write(nested, v)
-        })?;
-    }
-    write_string(view, "text", &bus.text)?;
-    write_f64(view, "font_size", bus.font_size)?;
-    if let Some(v) = &bus.text_color {
-        with_nested_mut(view, "text_color", |nested| {
-            super::color::color_write(nested, v)
-        })?;
-    }
-    if let Some(v) = &bus.background_color {
-        with_nested_mut(view, "background_color", |nested| {
-            super::color::color_write(nested, v)
-        })?;
-    }
-    write_message_seq(
-        view,
-        "metadata",
-        &bus.metadata,
-        super::key_value_pair::key_value_pair_write,
-    )?;
-    Ok(())
 }
 
-pub(crate) fn text_annotation_dyn_to_bus(
-    msg: &rclrs::DynamicMessage,
-) -> Result<crate::foxglove_msgs::msg::v1::TextAnnotation> {
-    text_annotation_from_view(&msg.view())
-}
-
-pub(crate) fn text_annotation_bus_to_dyn(
-    bus: &crate::foxglove_msgs::msg::v1::TextAnnotation,
-) -> Result<rclrs::DynamicMessage> {
-    let mut msg = new_message("foxglove_msgs/msg/TextAnnotation")?;
-    text_annotation_write(&mut msg.view_mut(), bus)?;
-    Ok(msg)
-}
-
+#[derive(Clone, Copy, Debug, Default)]
 pub struct FoxgloveMsgsTextAnnotationMapper;
-impl TopicMapper for FoxgloveMsgsTextAnnotationMapper {
+
+impl TypedTopicMapper for FoxgloveMsgsTextAnnotationMapper {
+    type Ros = ros_env::foxglove_msgs::msg::TextAnnotation;
+    type Bus = crate::foxglove_msgs::msg::v1::TextAnnotation;
+
     fn type_name(&self) -> &'static str {
         "foxglove_msgs/msg/TextAnnotation"
     }
 
-    fn ros_to_bus(&self, msg: &DynamicMessage) -> Result<Vec<u8>> {
-        Ok(text_annotation_dyn_to_bus(msg)?.encode_to_vec())
+    fn ros_to_bus(&self, msg: Self::Ros) -> crate::errors::Result<Self::Bus> {
+        Ok(text_annotation_to_bus(msg))
     }
 
-    fn bus_to_ros(&self, payload: &[u8]) -> Result<DynamicMessage> {
-        let bus = <crate::foxglove_msgs::msg::v1::TextAnnotation as ProstMessage>::decode(payload)
-            .map_err(|e| {
-                BusError::Protocol(format!("decode foxglove_msgs/msg/TextAnnotation: {e}"))
-            })?;
-        text_annotation_bus_to_dyn(&bus)
+    fn bus_to_ros(&self, msg: Self::Bus) -> crate::errors::Result<Self::Ros> {
+        Ok(text_annotation_to_ros(msg))
     }
 }

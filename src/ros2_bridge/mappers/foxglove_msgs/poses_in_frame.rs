@@ -1,63 +1,39 @@
-//! Mapper for `foxglove_msgs/msg/PosesInFrame`.
+//! Typed mapper for `foxglove_msgs/msg/PosesInFrame`.
 
-use prost::Message as ProstMessage;
-use rclrs::DynamicMessage;
+use crate::ros2_bridge::mapper::TypedTopicMapper;
 
-use super::super::common::*;
-use crate::BusError;
-use crate::ros2_bridge::mapper::TopicMapper;
-
-pub(crate) fn poses_in_frame_from_view(
-    view: &rclrs::DynamicMessageView<'_>,
-) -> Result<crate::foxglove_msgs::msg::v1::PosesInFrame> {
-    Ok(crate::foxglove_msgs::msg::v1::PosesInFrame {
-        timestamp: read_timestamp(view, "timestamp")?,
-        frame_id: read_string(view, "frame_id")?,
-        poses: read_message_seq(view, "poses", super::pose::pose_from_view)?,
-    })
-}
-
-pub(crate) fn poses_in_frame_write(
-    view: &mut rclrs::DynamicMessageViewMut<'_>,
-    bus: &crate::foxglove_msgs::msg::v1::PosesInFrame,
-) -> Result<()> {
-    if let Some(v) = &bus.timestamp {
-        write_timestamp(view, "timestamp", v)?;
+pub(crate) fn poses_in_frame_to_bus(msg: ros_env::foxglove_msgs::msg::PosesInFrame) -> crate::foxglove_msgs::msg::v1::PosesInFrame {
+    crate::foxglove_msgs::msg::v1::PosesInFrame {
+        timestamp: Some(crate::ros2_bridge::mappers::convert::time_to_timestamp(msg.timestamp)),
+        frame_id: crate::ros2_bridge::mappers::convert::from_ros_string(msg.frame_id),
+        poses: msg.poses.into_iter().map(crate::ros2_bridge::mappers::foxglove_msgs::pose::pose_to_bus).collect(),
     }
-    write_string(view, "frame_id", &bus.frame_id)?;
-    write_message_seq(view, "poses", &bus.poses, super::pose::pose_write)?;
-    Ok(())
 }
 
-pub(crate) fn poses_in_frame_dyn_to_bus(
-    msg: &rclrs::DynamicMessage,
-) -> Result<crate::foxglove_msgs::msg::v1::PosesInFrame> {
-    poses_in_frame_from_view(&msg.view())
+pub(crate) fn poses_in_frame_to_ros(bus: crate::foxglove_msgs::msg::v1::PosesInFrame) -> ros_env::foxglove_msgs::msg::PosesInFrame {
+    ros_env::foxglove_msgs::msg::PosesInFrame {
+        timestamp: crate::ros2_bridge::mappers::convert::timestamp_to_time(bus.timestamp.unwrap_or_default()),
+        frame_id: crate::ros2_bridge::mappers::convert::to_ros_string(bus.frame_id),
+        poses: bus.poses.into_iter().map(crate::ros2_bridge::mappers::foxglove_msgs::pose::pose_to_ros).collect(),
+    }
 }
 
-pub(crate) fn poses_in_frame_bus_to_dyn(
-    bus: &crate::foxglove_msgs::msg::v1::PosesInFrame,
-) -> Result<rclrs::DynamicMessage> {
-    let mut msg = new_message("foxglove_msgs/msg/PosesInFrame")?;
-    poses_in_frame_write(&mut msg.view_mut(), bus)?;
-    Ok(msg)
-}
-
+#[derive(Clone, Copy, Debug, Default)]
 pub struct FoxgloveMsgsPosesInFrameMapper;
-impl TopicMapper for FoxgloveMsgsPosesInFrameMapper {
+
+impl TypedTopicMapper for FoxgloveMsgsPosesInFrameMapper {
+    type Ros = ros_env::foxglove_msgs::msg::PosesInFrame;
+    type Bus = crate::foxglove_msgs::msg::v1::PosesInFrame;
+
     fn type_name(&self) -> &'static str {
         "foxglove_msgs/msg/PosesInFrame"
     }
 
-    fn ros_to_bus(&self, msg: &DynamicMessage) -> Result<Vec<u8>> {
-        Ok(poses_in_frame_dyn_to_bus(msg)?.encode_to_vec())
+    fn ros_to_bus(&self, msg: Self::Ros) -> crate::errors::Result<Self::Bus> {
+        Ok(poses_in_frame_to_bus(msg))
     }
 
-    fn bus_to_ros(&self, payload: &[u8]) -> Result<DynamicMessage> {
-        let bus = <crate::foxglove_msgs::msg::v1::PosesInFrame as ProstMessage>::decode(payload)
-            .map_err(|e| {
-                BusError::Protocol(format!("decode foxglove_msgs/msg/PosesInFrame: {e}"))
-            })?;
-        poses_in_frame_bus_to_dyn(&bus)
+    fn bus_to_ros(&self, msg: Self::Bus) -> crate::errors::Result<Self::Ros> {
+        Ok(poses_in_frame_to_ros(msg))
     }
 }

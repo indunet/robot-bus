@@ -134,10 +134,10 @@ impl rosidl_runtime_rs::Message for Trigger_Response {
 
 #[link(name = "std_srvs__rosidl_typesupport_c")]
 unsafe extern "C" {
-    fn rosidl_typesupport_c__get_service_type_support_handle__std_srvs__srv__SetBool()
-    -> *const std::ffi::c_void;
-    fn rosidl_typesupport_c__get_service_type_support_handle__std_srvs__srv__Trigger()
-    -> *const std::ffi::c_void;
+    fn rosidl_typesupport_c__get_service_type_support_handle__std_srvs__srv__SetBool(
+    ) -> *const std::ffi::c_void;
+    fn rosidl_typesupport_c__get_service_type_support_handle__std_srvs__srv__Trigger(
+    ) -> *const std::ffi::c_void;
 }
 
 /// Corresponds to `std_srvs/srv/SetBool`.
@@ -171,18 +171,18 @@ pub mod rmw {
 
     #[link(name = "std_srvs__rosidl_typesupport_c")]
     unsafe extern "C" {
-        fn rosidl_typesupport_c__get_message_type_support_handle__std_srvs__srv__SetBool_Request()
-        -> *const std::ffi::c_void;
-        fn rosidl_typesupport_c__get_message_type_support_handle__std_srvs__srv__SetBool_Response()
-        -> *const std::ffi::c_void;
-        fn rosidl_typesupport_c__get_message_type_support_handle__std_srvs__srv__Trigger_Request()
-        -> *const std::ffi::c_void;
-        fn rosidl_typesupport_c__get_message_type_support_handle__std_srvs__srv__Trigger_Response()
-        -> *const std::ffi::c_void;
-        fn rosidl_typesupport_c__get_service_type_support_handle__std_srvs__srv__SetBool()
-        -> *const std::ffi::c_void;
-        fn rosidl_typesupport_c__get_service_type_support_handle__std_srvs__srv__Trigger()
-        -> *const std::ffi::c_void;
+        fn rosidl_typesupport_c__get_message_type_support_handle__std_srvs__srv__SetBool_Request(
+        ) -> *const std::ffi::c_void;
+        fn rosidl_typesupport_c__get_message_type_support_handle__std_srvs__srv__SetBool_Response(
+        ) -> *const std::ffi::c_void;
+        fn rosidl_typesupport_c__get_message_type_support_handle__std_srvs__srv__Trigger_Request(
+        ) -> *const std::ffi::c_void;
+        fn rosidl_typesupport_c__get_message_type_support_handle__std_srvs__srv__Trigger_Response(
+        ) -> *const std::ffi::c_void;
+        fn rosidl_typesupport_c__get_service_type_support_handle__std_srvs__srv__SetBool(
+        ) -> *const std::ffi::c_void;
+        fn rosidl_typesupport_c__get_service_type_support_handle__std_srvs__srv__Trigger(
+        ) -> *const std::ffi::c_void;
     }
 
     #[link(name = "std_srvs__rosidl_generator_c")]

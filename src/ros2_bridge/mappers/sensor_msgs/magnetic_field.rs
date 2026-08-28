@@ -1,79 +1,39 @@
-//! Mapper for `sensor_msgs/msg/MagneticField`.
+//! Typed mapper for `sensor_msgs/msg/MagneticField`.
 
-use prost::Message as ProstMessage;
-use rclrs::DynamicMessage;
+use crate::ros2_bridge::mapper::TypedTopicMapper;
 
-use super::super::common::*;
-use crate::BusError;
-use crate::ros2_bridge::mapper::TopicMapper;
-
-pub(crate) fn magnetic_field_from_view(
-    view: &rclrs::DynamicMessageView<'_>,
-) -> Result<crate::sensor_msgs::msg::v1::MagneticField> {
-    Ok(crate::sensor_msgs::msg::v1::MagneticField {
-        header: nested_view(view, "header")?
-            .as_ref()
-            .map(super::super::std_msgs::header::header_from_view)
-            .transpose()?,
-        magnetic_field: nested_view(view, "magnetic_field")?
-            .as_ref()
-            .map(super::super::geometry_msgs::vector3::vector3_from_view)
-            .transpose()?,
-        magnetic_field_covariance: read_f64_seq(view, "magnetic_field_covariance")?,
-    })
-}
-
-pub(crate) fn magnetic_field_write(
-    view: &mut rclrs::DynamicMessageViewMut<'_>,
-    bus: &crate::sensor_msgs::msg::v1::MagneticField,
-) -> Result<()> {
-    if let Some(v) = &bus.header {
-        with_nested_mut(view, "header", |nested| {
-            super::super::std_msgs::header::header_write(nested, v)
-        })?;
+pub(crate) fn magnetic_field_to_bus(msg: ros_env::sensor_msgs::msg::MagneticField) -> crate::sensor_msgs::msg::v1::MagneticField {
+    crate::sensor_msgs::msg::v1::MagneticField {
+        header: Some(crate::ros2_bridge::mappers::std_msgs::header::header_to_bus(msg.header)),
+        magnetic_field: Some(crate::ros2_bridge::mappers::geometry_msgs::vector3::vector3_to_bus(msg.magnetic_field)),
+        magnetic_field_covariance: crate::ros2_bridge::mappers::convert::f64_seq(msg.magnetic_field_covariance),
     }
-    if let Some(v) = &bus.magnetic_field {
-        with_nested_mut(view, "magnetic_field", |nested| {
-            super::super::geometry_msgs::vector3::vector3_write(nested, v)
-        })?;
+}
+
+pub(crate) fn magnetic_field_to_ros(bus: crate::sensor_msgs::msg::v1::MagneticField) -> ros_env::sensor_msgs::msg::MagneticField {
+    ros_env::sensor_msgs::msg::MagneticField {
+        header: crate::ros2_bridge::mappers::std_msgs::header::header_to_ros(bus.header.unwrap_or_default()),
+        magnetic_field: crate::ros2_bridge::mappers::geometry_msgs::vector3::vector3_to_ros(bus.magnetic_field.unwrap_or_default()),
+        magnetic_field_covariance: crate::ros2_bridge::mappers::convert::FromF64Seq::from_f64_seq(bus.magnetic_field_covariance),
     }
-    write_f64_seq(
-        view,
-        "magnetic_field_covariance",
-        &bus.magnetic_field_covariance,
-    )?;
-    Ok(())
 }
 
-pub(crate) fn magnetic_field_dyn_to_bus(
-    msg: &rclrs::DynamicMessage,
-) -> Result<crate::sensor_msgs::msg::v1::MagneticField> {
-    magnetic_field_from_view(&msg.view())
-}
-
-pub(crate) fn magnetic_field_bus_to_dyn(
-    bus: &crate::sensor_msgs::msg::v1::MagneticField,
-) -> Result<rclrs::DynamicMessage> {
-    let mut msg = new_message("sensor_msgs/msg/MagneticField")?;
-    magnetic_field_write(&mut msg.view_mut(), bus)?;
-    Ok(msg)
-}
-
+#[derive(Clone, Copy, Debug, Default)]
 pub struct SensorMsgsMagneticFieldMapper;
-impl TopicMapper for SensorMsgsMagneticFieldMapper {
+
+impl TypedTopicMapper for SensorMsgsMagneticFieldMapper {
+    type Ros = ros_env::sensor_msgs::msg::MagneticField;
+    type Bus = crate::sensor_msgs::msg::v1::MagneticField;
+
     fn type_name(&self) -> &'static str {
         "sensor_msgs/msg/MagneticField"
     }
 
-    fn ros_to_bus(&self, msg: &DynamicMessage) -> Result<Vec<u8>> {
-        Ok(magnetic_field_dyn_to_bus(msg)?.encode_to_vec())
+    fn ros_to_bus(&self, msg: Self::Ros) -> crate::errors::Result<Self::Bus> {
+        Ok(magnetic_field_to_bus(msg))
     }
 
-    fn bus_to_ros(&self, payload: &[u8]) -> Result<DynamicMessage> {
-        let bus = <crate::sensor_msgs::msg::v1::MagneticField as ProstMessage>::decode(payload)
-            .map_err(|e| {
-                BusError::Protocol(format!("decode sensor_msgs/msg/MagneticField: {e}"))
-            })?;
-        magnetic_field_bus_to_dyn(&bus)
+    fn bus_to_ros(&self, msg: Self::Bus) -> crate::errors::Result<Self::Ros> {
+        Ok(magnetic_field_to_ros(msg))
     }
 }

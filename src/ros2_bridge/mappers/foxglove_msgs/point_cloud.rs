@@ -1,81 +1,45 @@
-//! Mapper for `foxglove_msgs/msg/PointCloud`.
+//! Typed mapper for `foxglove_msgs/msg/PointCloud`.
 
-use prost::Message as ProstMessage;
-use rclrs::DynamicMessage;
+use crate::ros2_bridge::mapper::TypedTopicMapper;
 
-use super::super::common::*;
-use crate::BusError;
-use crate::ros2_bridge::mapper::TopicMapper;
-
-pub(crate) fn point_cloud_from_view(
-    view: &rclrs::DynamicMessageView<'_>,
-) -> Result<crate::foxglove_msgs::msg::v1::PointCloud> {
-    Ok(crate::foxglove_msgs::msg::v1::PointCloud {
-        timestamp: read_timestamp(view, "timestamp")?,
-        frame_id: read_string(view, "frame_id")?,
-        pose: nested_view(view, "pose")?
-            .as_ref()
-            .map(super::pose::pose_from_view)
-            .transpose()?,
-        point_stride: read_u32(view, "point_stride")?,
-        fields: read_message_seq(
-            view,
-            "fields",
-            super::packed_element_field::packed_element_field_from_view,
-        )?,
-        data: read_byte_seq(view, "data")?,
-    })
-}
-
-pub(crate) fn point_cloud_write(
-    view: &mut rclrs::DynamicMessageViewMut<'_>,
-    bus: &crate::foxglove_msgs::msg::v1::PointCloud,
-) -> Result<()> {
-    if let Some(v) = &bus.timestamp {
-        write_timestamp(view, "timestamp", v)?;
+pub(crate) fn point_cloud_to_bus(msg: ros_env::foxglove_msgs::msg::PointCloud) -> crate::foxglove_msgs::msg::v1::PointCloud {
+    crate::foxglove_msgs::msg::v1::PointCloud {
+        timestamp: Some(crate::ros2_bridge::mappers::convert::time_to_timestamp(msg.timestamp)),
+        frame_id: crate::ros2_bridge::mappers::convert::from_ros_string(msg.frame_id),
+        pose: Some(crate::ros2_bridge::mappers::foxglove_msgs::pose::pose_to_bus(msg.pose)),
+        point_stride: msg.point_stride,
+        fields: msg.fields.into_iter().map(crate::ros2_bridge::mappers::foxglove_msgs::packed_element_field::packed_element_field_to_bus).collect(),
+        data: crate::ros2_bridge::mappers::convert::IntoU8Vec::into_u8_vec(msg.data),
     }
-    write_string(view, "frame_id", &bus.frame_id)?;
-    if let Some(v) = &bus.pose {
-        with_nested_mut(view, "pose", |nested| super::pose::pose_write(nested, v))?;
+}
+
+pub(crate) fn point_cloud_to_ros(bus: crate::foxglove_msgs::msg::v1::PointCloud) -> ros_env::foxglove_msgs::msg::PointCloud {
+    ros_env::foxglove_msgs::msg::PointCloud {
+        timestamp: crate::ros2_bridge::mappers::convert::timestamp_to_time(bus.timestamp.unwrap_or_default()),
+        frame_id: crate::ros2_bridge::mappers::convert::to_ros_string(bus.frame_id),
+        pose: crate::ros2_bridge::mappers::foxglove_msgs::pose::pose_to_ros(bus.pose.unwrap_or_default()),
+        point_stride: bus.point_stride,
+        fields: bus.fields.into_iter().map(crate::ros2_bridge::mappers::foxglove_msgs::packed_element_field::packed_element_field_to_ros).collect(),
+        data: crate::ros2_bridge::mappers::convert::FromByteSeq::from_byte_seq(bus.data),
     }
-    write_u32(view, "point_stride", bus.point_stride)?;
-    write_message_seq(
-        view,
-        "fields",
-        &bus.fields,
-        super::packed_element_field::packed_element_field_write,
-    )?;
-    write_byte_seq(view, "data", &bus.data)?;
-    Ok(())
 }
 
-pub(crate) fn point_cloud_dyn_to_bus(
-    msg: &rclrs::DynamicMessage,
-) -> Result<crate::foxglove_msgs::msg::v1::PointCloud> {
-    point_cloud_from_view(&msg.view())
-}
-
-pub(crate) fn point_cloud_bus_to_dyn(
-    bus: &crate::foxglove_msgs::msg::v1::PointCloud,
-) -> Result<rclrs::DynamicMessage> {
-    let mut msg = new_message("foxglove_msgs/msg/PointCloud")?;
-    point_cloud_write(&mut msg.view_mut(), bus)?;
-    Ok(msg)
-}
-
+#[derive(Clone, Copy, Debug, Default)]
 pub struct FoxgloveMsgsPointCloudMapper;
-impl TopicMapper for FoxgloveMsgsPointCloudMapper {
+
+impl TypedTopicMapper for FoxgloveMsgsPointCloudMapper {
+    type Ros = ros_env::foxglove_msgs::msg::PointCloud;
+    type Bus = crate::foxglove_msgs::msg::v1::PointCloud;
+
     fn type_name(&self) -> &'static str {
         "foxglove_msgs/msg/PointCloud"
     }
 
-    fn ros_to_bus(&self, msg: &DynamicMessage) -> Result<Vec<u8>> {
-        Ok(point_cloud_dyn_to_bus(msg)?.encode_to_vec())
+    fn ros_to_bus(&self, msg: Self::Ros) -> crate::errors::Result<Self::Bus> {
+        Ok(point_cloud_to_bus(msg))
     }
 
-    fn bus_to_ros(&self, payload: &[u8]) -> Result<DynamicMessage> {
-        let bus = <crate::foxglove_msgs::msg::v1::PointCloud as ProstMessage>::decode(payload)
-            .map_err(|e| BusError::Protocol(format!("decode foxglove_msgs/msg/PointCloud: {e}")))?;
-        point_cloud_bus_to_dyn(&bus)
+    fn bus_to_ros(&self, msg: Self::Bus) -> crate::errors::Result<Self::Ros> {
+        Ok(point_cloud_to_ros(msg))
     }
 }

@@ -1,71 +1,43 @@
-//! Mapper for `diagnostic_msgs/msg/DiagnosticStatus`.
+//! Typed mapper for `diagnostic_msgs/msg/DiagnosticStatus`.
 
-use prost::Message as ProstMessage;
-use rclrs::DynamicMessage;
+use crate::ros2_bridge::mapper::TypedTopicMapper;
 
-use super::super::common::*;
-use crate::BusError;
-use crate::ros2_bridge::mapper::TopicMapper;
-
-pub(crate) fn diagnostic_status_from_view(
-    view: &rclrs::DynamicMessageView<'_>,
-) -> Result<crate::diagnostic_msgs::msg::v1::DiagnosticStatus> {
-    Ok(crate::diagnostic_msgs::msg::v1::DiagnosticStatus {
-        level: read_u32(view, "level")?,
-        name: read_string(view, "name")?,
-        message: read_string(view, "message")?,
-        hardware_id: read_string(view, "hardware_id")?,
-        values: read_message_seq(view, "values", super::key_value::key_value_from_view)?,
-    })
+pub(crate) fn diagnostic_status_to_bus(msg: ros_env::diagnostic_msgs::msg::DiagnosticStatus) -> crate::diagnostic_msgs::msg::v1::DiagnosticStatus {
+    crate::diagnostic_msgs::msg::v1::DiagnosticStatus {
+        level: msg.level,
+        name: crate::ros2_bridge::mappers::convert::from_ros_string(msg.name),
+        message: crate::ros2_bridge::mappers::convert::from_ros_string(msg.message),
+        hardware_id: crate::ros2_bridge::mappers::convert::from_ros_string(msg.hardware_id),
+        values: msg.values.into_iter().map(crate::ros2_bridge::mappers::diagnostic_msgs::key_value::key_value_to_bus).collect(),
+    }
 }
 
-pub(crate) fn diagnostic_status_write(
-    view: &mut rclrs::DynamicMessageViewMut<'_>,
-    bus: &crate::diagnostic_msgs::msg::v1::DiagnosticStatus,
-) -> Result<()> {
-    write_u32(view, "level", bus.level)?;
-    write_string(view, "name", &bus.name)?;
-    write_string(view, "message", &bus.message)?;
-    write_string(view, "hardware_id", &bus.hardware_id)?;
-    write_message_seq(
-        view,
-        "values",
-        &bus.values,
-        super::key_value::key_value_write,
-    )?;
-    Ok(())
+pub(crate) fn diagnostic_status_to_ros(bus: crate::diagnostic_msgs::msg::v1::DiagnosticStatus) -> ros_env::diagnostic_msgs::msg::DiagnosticStatus {
+    ros_env::diagnostic_msgs::msg::DiagnosticStatus {
+        level: bus.level,
+        name: crate::ros2_bridge::mappers::convert::to_ros_string(bus.name),
+        message: crate::ros2_bridge::mappers::convert::to_ros_string(bus.message),
+        hardware_id: crate::ros2_bridge::mappers::convert::to_ros_string(bus.hardware_id),
+        values: bus.values.into_iter().map(crate::ros2_bridge::mappers::diagnostic_msgs::key_value::key_value_to_ros).collect(),
+    }
 }
 
-pub(crate) fn diagnostic_status_dyn_to_bus(
-    msg: &rclrs::DynamicMessage,
-) -> Result<crate::diagnostic_msgs::msg::v1::DiagnosticStatus> {
-    diagnostic_status_from_view(&msg.view())
-}
-
-pub(crate) fn diagnostic_status_bus_to_dyn(
-    bus: &crate::diagnostic_msgs::msg::v1::DiagnosticStatus,
-) -> Result<rclrs::DynamicMessage> {
-    let mut msg = new_message("diagnostic_msgs/msg/DiagnosticStatus")?;
-    diagnostic_status_write(&mut msg.view_mut(), bus)?;
-    Ok(msg)
-}
-
+#[derive(Clone, Copy, Debug, Default)]
 pub struct DiagnosticMsgsDiagnosticStatusMapper;
-impl TopicMapper for DiagnosticMsgsDiagnosticStatusMapper {
+
+impl TypedTopicMapper for DiagnosticMsgsDiagnosticStatusMapper {
+    type Ros = ros_env::diagnostic_msgs::msg::DiagnosticStatus;
+    type Bus = crate::diagnostic_msgs::msg::v1::DiagnosticStatus;
+
     fn type_name(&self) -> &'static str {
         "diagnostic_msgs/msg/DiagnosticStatus"
     }
 
-    fn ros_to_bus(&self, msg: &DynamicMessage) -> Result<Vec<u8>> {
-        Ok(diagnostic_status_dyn_to_bus(msg)?.encode_to_vec())
+    fn ros_to_bus(&self, msg: Self::Ros) -> crate::errors::Result<Self::Bus> {
+        Ok(diagnostic_status_to_bus(msg))
     }
 
-    fn bus_to_ros(&self, payload: &[u8]) -> Result<DynamicMessage> {
-        let bus =
-            <crate::diagnostic_msgs::msg::v1::DiagnosticStatus as ProstMessage>::decode(payload)
-                .map_err(|e| {
-                    BusError::Protocol(format!("decode diagnostic_msgs/msg/DiagnosticStatus: {e}"))
-                })?;
-        diagnostic_status_bus_to_dyn(&bus)
+    fn bus_to_ros(&self, msg: Self::Bus) -> crate::errors::Result<Self::Ros> {
+        Ok(diagnostic_status_to_ros(msg))
     }
 }

@@ -1,78 +1,43 @@
-//! Mapper for `foxglove_msgs/msg/TriangleListPrimitive`.
+//! Typed mapper for `foxglove_msgs/msg/TriangleListPrimitive`.
 
-use prost::Message as ProstMessage;
-use rclrs::DynamicMessage;
+use crate::ros2_bridge::mapper::TypedTopicMapper;
 
-use super::super::common::*;
-use crate::BusError;
-use crate::ros2_bridge::mapper::TopicMapper;
-
-pub(crate) fn triangle_list_primitive_from_view(
-    view: &rclrs::DynamicMessageView<'_>,
-) -> Result<crate::foxglove_msgs::msg::v1::TriangleListPrimitive> {
-    Ok(crate::foxglove_msgs::msg::v1::TriangleListPrimitive {
-        pose: nested_view(view, "pose")?
-            .as_ref()
-            .map(super::pose::pose_from_view)
-            .transpose()?,
-        points: read_message_seq(view, "points", super::point3::point3_from_view)?,
-        color: nested_view(view, "color")?
-            .as_ref()
-            .map(super::color::color_from_view)
-            .transpose()?,
-        colors: read_message_seq(view, "colors", super::color::color_from_view)?,
-        indices: read_u32_seq(view, "indices")?,
-    })
-}
-
-pub(crate) fn triangle_list_primitive_write(
-    view: &mut rclrs::DynamicMessageViewMut<'_>,
-    bus: &crate::foxglove_msgs::msg::v1::TriangleListPrimitive,
-) -> Result<()> {
-    if let Some(v) = &bus.pose {
-        with_nested_mut(view, "pose", |nested| super::pose::pose_write(nested, v))?;
+pub(crate) fn triangle_list_primitive_to_bus(msg: ros_env::foxglove_msgs::msg::TriangleListPrimitive) -> crate::foxglove_msgs::msg::v1::TriangleListPrimitive {
+    crate::foxglove_msgs::msg::v1::TriangleListPrimitive {
+        pose: Some(crate::ros2_bridge::mappers::foxglove_msgs::pose::pose_to_bus(msg.pose)),
+        points: msg.points.into_iter().map(crate::ros2_bridge::mappers::foxglove_msgs::point3::point3_to_bus).collect(),
+        color: Some(crate::ros2_bridge::mappers::foxglove_msgs::color::color_to_bus(msg.color)),
+        colors: msg.colors.into_iter().map(crate::ros2_bridge::mappers::foxglove_msgs::color::color_to_bus).collect(),
+        indices: crate::ros2_bridge::mappers::convert::u32_seq(msg.indices),
     }
-    write_message_seq(view, "points", &bus.points, super::point3::point3_write)?;
-    if let Some(v) = &bus.color {
-        with_nested_mut(view, "color", |nested| super::color::color_write(nested, v))?;
+}
+
+pub(crate) fn triangle_list_primitive_to_ros(bus: crate::foxglove_msgs::msg::v1::TriangleListPrimitive) -> ros_env::foxglove_msgs::msg::TriangleListPrimitive {
+    ros_env::foxglove_msgs::msg::TriangleListPrimitive {
+        pose: crate::ros2_bridge::mappers::foxglove_msgs::pose::pose_to_ros(bus.pose.unwrap_or_default()),
+        points: bus.points.into_iter().map(crate::ros2_bridge::mappers::foxglove_msgs::point3::point3_to_ros).collect(),
+        color: crate::ros2_bridge::mappers::foxglove_msgs::color::color_to_ros(bus.color.unwrap_or_default()),
+        colors: bus.colors.into_iter().map(crate::ros2_bridge::mappers::foxglove_msgs::color::color_to_ros).collect(),
+        indices: crate::ros2_bridge::mappers::convert::FromU32Seq::from_u32_seq(bus.indices),
     }
-    write_message_seq(view, "colors", &bus.colors, super::color::color_write)?;
-    write_u32_seq(view, "indices", &bus.indices)?;
-    Ok(())
 }
 
-pub(crate) fn triangle_list_primitive_dyn_to_bus(
-    msg: &rclrs::DynamicMessage,
-) -> Result<crate::foxglove_msgs::msg::v1::TriangleListPrimitive> {
-    triangle_list_primitive_from_view(&msg.view())
-}
-
-pub(crate) fn triangle_list_primitive_bus_to_dyn(
-    bus: &crate::foxglove_msgs::msg::v1::TriangleListPrimitive,
-) -> Result<rclrs::DynamicMessage> {
-    let mut msg = new_message("foxglove_msgs/msg/TriangleListPrimitive")?;
-    triangle_list_primitive_write(&mut msg.view_mut(), bus)?;
-    Ok(msg)
-}
-
+#[derive(Clone, Copy, Debug, Default)]
 pub struct FoxgloveMsgsTriangleListPrimitiveMapper;
-impl TopicMapper for FoxgloveMsgsTriangleListPrimitiveMapper {
+
+impl TypedTopicMapper for FoxgloveMsgsTriangleListPrimitiveMapper {
+    type Ros = ros_env::foxglove_msgs::msg::TriangleListPrimitive;
+    type Bus = crate::foxglove_msgs::msg::v1::TriangleListPrimitive;
+
     fn type_name(&self) -> &'static str {
         "foxglove_msgs/msg/TriangleListPrimitive"
     }
 
-    fn ros_to_bus(&self, msg: &DynamicMessage) -> Result<Vec<u8>> {
-        Ok(triangle_list_primitive_dyn_to_bus(msg)?.encode_to_vec())
+    fn ros_to_bus(&self, msg: Self::Ros) -> crate::errors::Result<Self::Bus> {
+        Ok(triangle_list_primitive_to_bus(msg))
     }
 
-    fn bus_to_ros(&self, payload: &[u8]) -> Result<DynamicMessage> {
-        let bus =
-            <crate::foxglove_msgs::msg::v1::TriangleListPrimitive as ProstMessage>::decode(payload)
-                .map_err(|e| {
-                    BusError::Protocol(format!(
-                        "decode foxglove_msgs/msg/TriangleListPrimitive: {e}"
-                    ))
-                })?;
-        triangle_list_primitive_bus_to_dyn(&bus)
+    fn bus_to_ros(&self, msg: Self::Bus) -> crate::errors::Result<Self::Ros> {
+        Ok(triangle_list_primitive_to_ros(msg))
     }
 }

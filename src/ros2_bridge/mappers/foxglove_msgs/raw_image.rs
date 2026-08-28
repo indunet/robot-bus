@@ -1,69 +1,47 @@
-//! Mapper for `foxglove_msgs/msg/RawImage`.
+//! Typed mapper for `foxglove_msgs/msg/RawImage`.
 
-use prost::Message as ProstMessage;
-use rclrs::DynamicMessage;
+use crate::ros2_bridge::mapper::TypedTopicMapper;
 
-use super::super::common::*;
-use crate::BusError;
-use crate::ros2_bridge::mapper::TopicMapper;
-
-pub(crate) fn raw_image_from_view(
-    view: &rclrs::DynamicMessageView<'_>,
-) -> Result<crate::foxglove_msgs::msg::v1::RawImage> {
-    Ok(crate::foxglove_msgs::msg::v1::RawImage {
-        timestamp: read_timestamp(view, "timestamp")?,
-        frame_id: read_string(view, "frame_id")?,
-        width: read_u32(view, "width")?,
-        height: read_u32(view, "height")?,
-        encoding: read_string(view, "encoding")?,
-        step: read_u32(view, "step")?,
-        data: read_byte_seq(view, "data")?,
-    })
-}
-
-pub(crate) fn raw_image_write(
-    view: &mut rclrs::DynamicMessageViewMut<'_>,
-    bus: &crate::foxglove_msgs::msg::v1::RawImage,
-) -> Result<()> {
-    if let Some(v) = &bus.timestamp {
-        write_timestamp(view, "timestamp", v)?;
+pub(crate) fn raw_image_to_bus(msg: ros_env::foxglove_msgs::msg::RawImage) -> crate::foxglove_msgs::msg::v1::RawImage {
+    crate::foxglove_msgs::msg::v1::RawImage {
+        timestamp: Some(crate::ros2_bridge::mappers::convert::time_to_timestamp(msg.timestamp)),
+        frame_id: crate::ros2_bridge::mappers::convert::from_ros_string(msg.frame_id),
+        width: msg.width,
+        height: msg.height,
+        encoding: crate::ros2_bridge::mappers::convert::from_ros_string(msg.encoding),
+        step: msg.step,
+        data: crate::ros2_bridge::mappers::convert::IntoU8Vec::into_u8_vec(msg.data),
     }
-    write_string(view, "frame_id", &bus.frame_id)?;
-    write_u32(view, "width", bus.width)?;
-    write_u32(view, "height", bus.height)?;
-    write_string(view, "encoding", &bus.encoding)?;
-    write_u32(view, "step", bus.step)?;
-    write_byte_seq(view, "data", &bus.data)?;
-    Ok(())
 }
 
-pub(crate) fn raw_image_dyn_to_bus(
-    msg: &rclrs::DynamicMessage,
-) -> Result<crate::foxglove_msgs::msg::v1::RawImage> {
-    raw_image_from_view(&msg.view())
+pub(crate) fn raw_image_to_ros(bus: crate::foxglove_msgs::msg::v1::RawImage) -> ros_env::foxglove_msgs::msg::RawImage {
+    ros_env::foxglove_msgs::msg::RawImage {
+        timestamp: crate::ros2_bridge::mappers::convert::timestamp_to_time(bus.timestamp.unwrap_or_default()),
+        frame_id: crate::ros2_bridge::mappers::convert::to_ros_string(bus.frame_id),
+        width: bus.width,
+        height: bus.height,
+        encoding: crate::ros2_bridge::mappers::convert::to_ros_string(bus.encoding),
+        step: bus.step,
+        data: crate::ros2_bridge::mappers::convert::FromByteSeq::from_byte_seq(bus.data),
+    }
 }
 
-pub(crate) fn raw_image_bus_to_dyn(
-    bus: &crate::foxglove_msgs::msg::v1::RawImage,
-) -> Result<rclrs::DynamicMessage> {
-    let mut msg = new_message("foxglove_msgs/msg/RawImage")?;
-    raw_image_write(&mut msg.view_mut(), bus)?;
-    Ok(msg)
-}
-
+#[derive(Clone, Copy, Debug, Default)]
 pub struct FoxgloveMsgsRawImageMapper;
-impl TopicMapper for FoxgloveMsgsRawImageMapper {
+
+impl TypedTopicMapper for FoxgloveMsgsRawImageMapper {
+    type Ros = ros_env::foxglove_msgs::msg::RawImage;
+    type Bus = crate::foxglove_msgs::msg::v1::RawImage;
+
     fn type_name(&self) -> &'static str {
         "foxglove_msgs/msg/RawImage"
     }
 
-    fn ros_to_bus(&self, msg: &DynamicMessage) -> Result<Vec<u8>> {
-        Ok(raw_image_dyn_to_bus(msg)?.encode_to_vec())
+    fn ros_to_bus(&self, msg: Self::Ros) -> crate::errors::Result<Self::Bus> {
+        Ok(raw_image_to_bus(msg))
     }
 
-    fn bus_to_ros(&self, payload: &[u8]) -> Result<DynamicMessage> {
-        let bus = <crate::foxglove_msgs::msg::v1::RawImage as ProstMessage>::decode(payload)
-            .map_err(|e| BusError::Protocol(format!("decode foxglove_msgs/msg/RawImage: {e}")))?;
-        raw_image_bus_to_dyn(&bus)
+    fn bus_to_ros(&self, msg: Self::Bus) -> crate::errors::Result<Self::Ros> {
+        Ok(raw_image_to_ros(msg))
     }
 }

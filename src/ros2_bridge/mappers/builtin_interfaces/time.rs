@@ -1,57 +1,37 @@
-//! Mapper for `builtin_interfaces/msg/Time`.
+//! Typed mapper for `builtin_interfaces/msg/Time`.
 
-use prost::Message as ProstMessage;
-use rclrs::DynamicMessage;
+use crate::ros2_bridge::mapper::TypedTopicMapper;
 
-use super::super::common::*;
-use crate::BusError;
-use crate::ros2_bridge::mapper::TopicMapper;
-
-pub(crate) fn time_from_view(
-    view: &rclrs::DynamicMessageView<'_>,
-) -> Result<crate::builtin_interfaces::msg::v1::Time> {
-    Ok(crate::builtin_interfaces::msg::v1::Time {
-        sec: read_i32(view, "sec")?,
-        nanosec: read_u32(view, "nanosec")?,
-    })
+pub(crate) fn time_to_bus(msg: ros_env::builtin_interfaces::msg::Time) -> crate::builtin_interfaces::msg::v1::Time {
+    crate::builtin_interfaces::msg::v1::Time {
+        sec: msg.sec,
+        nanosec: msg.nanosec,
+    }
 }
 
-pub(crate) fn time_write(
-    view: &mut rclrs::DynamicMessageViewMut<'_>,
-    bus: &crate::builtin_interfaces::msg::v1::Time,
-) -> Result<()> {
-    write_i32(view, "sec", bus.sec)?;
-    write_u32(view, "nanosec", bus.nanosec)?;
-    Ok(())
+pub(crate) fn time_to_ros(bus: crate::builtin_interfaces::msg::v1::Time) -> ros_env::builtin_interfaces::msg::Time {
+    ros_env::builtin_interfaces::msg::Time {
+        sec: bus.sec,
+        nanosec: bus.nanosec,
+    }
 }
 
-pub(crate) fn time_dyn_to_bus(
-    msg: &rclrs::DynamicMessage,
-) -> Result<crate::builtin_interfaces::msg::v1::Time> {
-    time_from_view(&msg.view())
-}
-
-pub(crate) fn time_bus_to_dyn(
-    bus: &crate::builtin_interfaces::msg::v1::Time,
-) -> Result<rclrs::DynamicMessage> {
-    let mut msg = new_message("builtin_interfaces/msg/Time")?;
-    time_write(&mut msg.view_mut(), bus)?;
-    Ok(msg)
-}
-
+#[derive(Clone, Copy, Debug, Default)]
 pub struct BuiltinInterfacesTimeMapper;
-impl TopicMapper for BuiltinInterfacesTimeMapper {
+
+impl TypedTopicMapper for BuiltinInterfacesTimeMapper {
+    type Ros = ros_env::builtin_interfaces::msg::Time;
+    type Bus = crate::builtin_interfaces::msg::v1::Time;
+
     fn type_name(&self) -> &'static str {
         "builtin_interfaces/msg/Time"
     }
 
-    fn ros_to_bus(&self, msg: &DynamicMessage) -> Result<Vec<u8>> {
-        Ok(time_dyn_to_bus(msg)?.encode_to_vec())
+    fn ros_to_bus(&self, msg: Self::Ros) -> crate::errors::Result<Self::Bus> {
+        Ok(time_to_bus(msg))
     }
 
-    fn bus_to_ros(&self, payload: &[u8]) -> Result<DynamicMessage> {
-        let bus = <crate::builtin_interfaces::msg::v1::Time as ProstMessage>::decode(payload)
-            .map_err(|e| BusError::Protocol(format!("decode builtin_interfaces/msg/Time: {e}")))?;
-        time_bus_to_dyn(&bus)
+    fn bus_to_ros(&self, msg: Self::Bus) -> crate::errors::Result<Self::Ros> {
+        Ok(time_to_ros(msg))
     }
 }

@@ -1,64 +1,35 @@
-//! Mapper for `tf2_msgs/msg/TFMessage`.
+//! Typed mapper for `tf2_msgs/msg/TFMessage`.
 
-use prost::Message as ProstMessage;
-use rclrs::DynamicMessage;
+use crate::ros2_bridge::mapper::TypedTopicMapper;
 
-use super::super::common::*;
-use crate::BusError;
-use crate::ros2_bridge::mapper::TopicMapper;
-
-pub(crate) fn tf_message_from_view(
-    view: &rclrs::DynamicMessageView<'_>,
-) -> Result<crate::tf2_msgs::msg::v1::TfMessage> {
-    Ok(crate::tf2_msgs::msg::v1::TfMessage {
-        transforms: read_message_seq(
-            view,
-            "transforms",
-            super::super::geometry_msgs::transform_stamped::transform_stamped_from_view,
-        )?,
-    })
+pub(crate) fn tf_message_to_bus(msg: ros_env::tf2_msgs::msg::TFMessage) -> crate::tf2_msgs::msg::v1::TfMessage {
+    crate::tf2_msgs::msg::v1::TfMessage {
+        transforms: msg.transforms.into_iter().map(crate::ros2_bridge::mappers::geometry_msgs::transform_stamped::transform_stamped_to_bus).collect(),
+    }
 }
 
-pub(crate) fn tf_message_write(
-    view: &mut rclrs::DynamicMessageViewMut<'_>,
-    bus: &crate::tf2_msgs::msg::v1::TfMessage,
-) -> Result<()> {
-    write_message_seq(
-        view,
-        "transforms",
-        &bus.transforms,
-        super::super::geometry_msgs::transform_stamped::transform_stamped_write,
-    )?;
-    Ok(())
+pub(crate) fn tf_message_to_ros(bus: crate::tf2_msgs::msg::v1::TfMessage) -> ros_env::tf2_msgs::msg::TFMessage {
+    ros_env::tf2_msgs::msg::TFMessage {
+        transforms: bus.transforms.into_iter().map(crate::ros2_bridge::mappers::geometry_msgs::transform_stamped::transform_stamped_to_ros).collect(),
+    }
 }
 
-pub(crate) fn tf_message_dyn_to_bus(
-    msg: &rclrs::DynamicMessage,
-) -> Result<crate::tf2_msgs::msg::v1::TfMessage> {
-    tf_message_from_view(&msg.view())
-}
-
-pub(crate) fn tf_message_bus_to_dyn(
-    bus: &crate::tf2_msgs::msg::v1::TfMessage,
-) -> Result<rclrs::DynamicMessage> {
-    let mut msg = new_message("tf2_msgs/msg/TFMessage")?;
-    tf_message_write(&mut msg.view_mut(), bus)?;
-    Ok(msg)
-}
-
+#[derive(Clone, Copy, Debug, Default)]
 pub struct Tf2MsgsTfMessageMapper;
-impl TopicMapper for Tf2MsgsTfMessageMapper {
+
+impl TypedTopicMapper for Tf2MsgsTfMessageMapper {
+    type Ros = ros_env::tf2_msgs::msg::TFMessage;
+    type Bus = crate::tf2_msgs::msg::v1::TfMessage;
+
     fn type_name(&self) -> &'static str {
         "tf2_msgs/msg/TFMessage"
     }
 
-    fn ros_to_bus(&self, msg: &DynamicMessage) -> Result<Vec<u8>> {
-        Ok(tf_message_dyn_to_bus(msg)?.encode_to_vec())
+    fn ros_to_bus(&self, msg: Self::Ros) -> crate::errors::Result<Self::Bus> {
+        Ok(tf_message_to_bus(msg))
     }
 
-    fn bus_to_ros(&self, payload: &[u8]) -> Result<DynamicMessage> {
-        let bus = <crate::tf2_msgs::msg::v1::TfMessage as ProstMessage>::decode(payload)
-            .map_err(|e| BusError::Protocol(format!("decode tf2_msgs/msg/TFMessage: {e}")))?;
-        tf_message_bus_to_dyn(&bus)
+    fn bus_to_ros(&self, msg: Self::Bus) -> crate::errors::Result<Self::Ros> {
+        Ok(tf_message_to_ros(msg))
     }
 }

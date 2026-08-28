@@ -1,73 +1,41 @@
-//! Mapper for `nav2_msgs/msg/BehaviorTreeStatusChange`.
+//! Typed mapper for `nav2_msgs/msg/BehaviorTreeStatusChange`.
 
-use prost::Message as ProstMessage;
-use rclrs::DynamicMessage;
+use crate::ros2_bridge::mapper::TypedTopicMapper;
 
-use super::super::common::*;
-use crate::BusError;
-use crate::ros2_bridge::mapper::TopicMapper;
-
-pub(crate) fn behavior_tree_status_change_from_view(
-    view: &rclrs::DynamicMessageView<'_>,
-) -> Result<crate::nav2_msgs::msg::v1::BehaviorTreeStatusChange> {
-    Ok(crate::nav2_msgs::msg::v1::BehaviorTreeStatusChange {
-        timestamp: nested_view(view, "timestamp")?
-            .as_ref()
-            .map(super::super::builtin_interfaces::time::time_from_view)
-            .transpose()?,
-        node_name: read_string(view, "node_name")?,
-        previous_status: read_string(view, "previous_status")?,
-        current_status: read_string(view, "current_status")?,
-    })
-}
-
-pub(crate) fn behavior_tree_status_change_write(
-    view: &mut rclrs::DynamicMessageViewMut<'_>,
-    bus: &crate::nav2_msgs::msg::v1::BehaviorTreeStatusChange,
-) -> Result<()> {
-    if let Some(v) = &bus.timestamp {
-        with_nested_mut(view, "timestamp", |nested| {
-            super::super::builtin_interfaces::time::time_write(nested, v)
-        })?;
+pub(crate) fn behavior_tree_status_change_to_bus(msg: ros_env::nav2_msgs::msg::BehaviorTreeStatusChange) -> crate::nav2_msgs::msg::v1::BehaviorTreeStatusChange {
+    crate::nav2_msgs::msg::v1::BehaviorTreeStatusChange {
+        timestamp: Some(crate::ros2_bridge::mappers::builtin_interfaces::time::time_to_bus(msg.timestamp)),
+        node_name: crate::ros2_bridge::mappers::convert::from_ros_string(msg.node_name),
+        previous_status: crate::ros2_bridge::mappers::convert::from_ros_string(msg.previous_status),
+        current_status: crate::ros2_bridge::mappers::convert::from_ros_string(msg.current_status),
     }
-    write_string(view, "node_name", &bus.node_name)?;
-    write_string(view, "previous_status", &bus.previous_status)?;
-    write_string(view, "current_status", &bus.current_status)?;
-    Ok(())
 }
 
-pub(crate) fn behavior_tree_status_change_dyn_to_bus(
-    msg: &rclrs::DynamicMessage,
-) -> Result<crate::nav2_msgs::msg::v1::BehaviorTreeStatusChange> {
-    behavior_tree_status_change_from_view(&msg.view())
+pub(crate) fn behavior_tree_status_change_to_ros(bus: crate::nav2_msgs::msg::v1::BehaviorTreeStatusChange) -> ros_env::nav2_msgs::msg::BehaviorTreeStatusChange {
+    ros_env::nav2_msgs::msg::BehaviorTreeStatusChange {
+        timestamp: crate::ros2_bridge::mappers::builtin_interfaces::time::time_to_ros(bus.timestamp.unwrap_or_default()),
+        node_name: crate::ros2_bridge::mappers::convert::to_ros_string(bus.node_name),
+        previous_status: crate::ros2_bridge::mappers::convert::to_ros_string(bus.previous_status),
+        current_status: crate::ros2_bridge::mappers::convert::to_ros_string(bus.current_status),
+    }
 }
 
-pub(crate) fn behavior_tree_status_change_bus_to_dyn(
-    bus: &crate::nav2_msgs::msg::v1::BehaviorTreeStatusChange,
-) -> Result<rclrs::DynamicMessage> {
-    let mut msg = new_message("nav2_msgs/msg/BehaviorTreeStatusChange")?;
-    behavior_tree_status_change_write(&mut msg.view_mut(), bus)?;
-    Ok(msg)
-}
-
+#[derive(Clone, Copy, Debug, Default)]
 pub struct Nav2MsgsBehaviorTreeStatusChangeMapper;
-impl TopicMapper for Nav2MsgsBehaviorTreeStatusChangeMapper {
+
+impl TypedTopicMapper for Nav2MsgsBehaviorTreeStatusChangeMapper {
+    type Ros = ros_env::nav2_msgs::msg::BehaviorTreeStatusChange;
+    type Bus = crate::nav2_msgs::msg::v1::BehaviorTreeStatusChange;
+
     fn type_name(&self) -> &'static str {
         "nav2_msgs/msg/BehaviorTreeStatusChange"
     }
 
-    fn ros_to_bus(&self, msg: &DynamicMessage) -> Result<Vec<u8>> {
-        Ok(behavior_tree_status_change_dyn_to_bus(msg)?.encode_to_vec())
+    fn ros_to_bus(&self, msg: Self::Ros) -> crate::errors::Result<Self::Bus> {
+        Ok(behavior_tree_status_change_to_bus(msg))
     }
 
-    fn bus_to_ros(&self, payload: &[u8]) -> Result<DynamicMessage> {
-        let bus =
-            <crate::nav2_msgs::msg::v1::BehaviorTreeStatusChange as ProstMessage>::decode(payload)
-                .map_err(|e| {
-                    BusError::Protocol(format!(
-                        "decode nav2_msgs/msg/BehaviorTreeStatusChange: {e}"
-                    ))
-                })?;
-        behavior_tree_status_change_bus_to_dyn(&bus)
+    fn bus_to_ros(&self, msg: Self::Bus) -> crate::errors::Result<Self::Ros> {
+        Ok(behavior_tree_status_change_to_ros(msg))
     }
 }
