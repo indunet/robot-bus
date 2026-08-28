@@ -257,22 +257,18 @@ struct LazyTopic {
   rclcpp::SubscriptionBase::SharedPtr sub;
 };
 
-rclcpp::QoS topic_ros_qos(const TopicRouteSpec &route) {
-  if (route.qos.sensor_data) {
-    return rclcpp::SensorDataQoS();
+rclcpp::QoS topic_ros_qos(const TopicQos &qos) {
+  rclcpp::QoS out(qos.depth() < 0 ? 0 : qos.depth());
+  if (qos.is_best_effort()) {
+    out.best_effort();
+  } else {
+    out.reliable();
   }
-  rclcpp::QoS qos(route.qos.depth.value_or(10));
-  if (route.qos.best_effort) {
-    qos.best_effort();
-  }
-  return qos;
+  return out;
 }
 
 TopicPublisher make_bus_publisher(Node &bus_node, const TopicRouteSpec &route) {
-  if (route.qos.depth.has_value() && *route.qos.depth > 0) {
-    return bus_node.create_publisher(route.bus_topic.c_str(), *route.qos.depth);
-  }
-  return bus_node.create_publisher(route.bus_topic.c_str());
+  return bus_node.create_publisher(route.bus_topic.c_str(), route.bus_qos.depth());
 }
 
 template <typename RosMsg>
@@ -304,7 +300,7 @@ void wire_topic_ros_to_bus(rclcpp::Node::SharedPtr ros_node, Node &bus_node,
                            std::unordered_set<std::string> &eager_bus_topics) {
   auto pub = std::make_shared<TopicPublisher>(make_bus_publisher(bus_node, route));
   auto mtx = std::make_shared<std::mutex>();
-  auto qos = topic_ros_qos(route);
+  auto qos = topic_ros_qos(route.ros_qos);
   auto create = [ros_node, ros_topic = route.ros_topic, qos, pub, mtx, convert]() {
     return make_ros2_to_bus_sub<RosMsg>(ros_node, ros_topic, qos, pub, mtx, convert);
   };
@@ -324,37 +320,22 @@ void wire_topic_bus_to_ros(rclcpp::Node::SharedPtr ros_node, Node &bus_node,
                            RosMsg (*convert)(const uint8_t *, size_t),
                            std::vector<rclcpp::PublisherBase::SharedPtr> &pubs,
                            std::vector<std::shared_ptr<void>> &keep_alive) {
-  auto qos = topic_ros_qos(route);
+  auto qos = topic_ros_qos(route.ros_qos);
   auto ros_pub = ros_node->create_publisher<RosMsg>(route.ros_topic, qos);
   auto weak_pub = std::weak_ptr<typename rclcpp::Publisher<RosMsg>>(ros_pub);
-  if (route.qos.depth.has_value() && *route.qos.depth > 0) {
-    keep_alive.push_back(std::make_shared<SubscriptionHandle>(bus_node.create_subscription(
-        route.bus_topic.c_str(),
-        [weak_pub, convert](std::string_view, BytesView payload) {
-          auto pub = weak_pub.lock();
-          if (!pub) {
-            return;
-          }
-          try {
-            pub->publish(convert(payload.data, payload.size));
-          } catch (...) {
-          }
-        },
-        nullptr, *route.qos.depth)));
-  } else {
-    keep_alive.push_back(std::make_shared<SubscriptionHandle>(bus_node.create_subscription(
-        route.bus_topic.c_str(),
-        [weak_pub, convert](std::string_view, BytesView payload) {
-          auto pub = weak_pub.lock();
-          if (!pub) {
-            return;
-          }
-          try {
-            pub->publish(convert(payload.data, payload.size));
-          } catch (...) {
-          }
-        })));
-  }
+  keep_alive.push_back(std::make_shared<SubscriptionHandle>(bus_node.create_subscription(
+      route.bus_topic.c_str(),
+      [weak_pub, convert](std::string_view, BytesView payload) {
+        auto pub = weak_pub.lock();
+        if (!pub) {
+          return;
+        }
+        try {
+          pub->publish(convert(payload.data, payload.size));
+        } catch (...) {
+        }
+      },
+      nullptr, route.bus_qos.depth())));
   pubs.push_back(std::move(ros_pub));
 }
 
@@ -409,7 +390,7 @@ void wire_topic(rclcpp::Node::SharedPtr ros_node, Node &bus_node, const TopicRou
       auto mtx = std::make_shared<std::mutex>();
       auto mapper = route.custom;
       auto ros_topic = route.ros_topic;
-      auto qos = topic_ros_qos(route);
+      auto qos = topic_ros_qos(route.ros_qos);
       bus_pubs.push_back(pub);
       bus_pub_mutexes.push_back(mtx);
       lazy_routes.push_back(LazyTopic{
@@ -425,8 +406,8 @@ void wire_topic(rclcpp::Node::SharedPtr ros_node, Node &bus_node, const TopicRou
                          route.ros_topic,
                          route.bus_topic,
                          route.direction,
-                         topic_ros_qos(route),
-                         route.qos.depth.value_or(0),
+                         topic_ros_qos(route.ros_qos),
+                         route.bus_qos.depth(),
                          keep_alive};
     route.custom->attach(ctx);
     if (route.direction == Direction::Ros2ToBus) {

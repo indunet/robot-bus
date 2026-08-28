@@ -36,14 +36,14 @@ CMake 设置 `CMAKE_CXX_STANDARD 17`。自有应用用更高标准（如 `-DCMAK
 
 ```bash
 # 核心 SDK（无 ROS bridge）
-sudo apt install ./robot-bus_2.0.0_linux_amd64.deb
+sudo apt install ./robot-bus_2.1.0_linux_amd64.deb
 
 # 或 ROS 2 bridge 变体（Humble 示例）— 需已安装 Humble
-sudo apt install ./robot-bus-ros2-humble_2.0.0_linux_amd64.deb
+sudo apt install ./robot-bus-ros2-humble_2.1.0_linux_amd64.deb
 source /opt/ros/humble/setup.bash
 
 # macOS Apple Silicon（仅核心包）
-sudo installer -pkg robot-bus_2.0.0_macos_arm64.pkg -target /
+sudo installer -pkg robot-bus_2.1.0_macos_arm64.pkg -target /
 # 安装于 /usr/local（{bin,lib,include}）
 
 # 或从源码（开发）
@@ -251,9 +251,9 @@ C++ 使用**原生 rclcpp**（`robot_bus_ros2_bridge`，编译宏 `ROBOT_BUS_HAS
 
 auto bridge = robot_bus::Ros2Bridge::New("ros_bridge")
     .bus_tcp("localhost")
-    .route("/chatter", "/chatter")
+    .from_ros("/chatter", robot_bus::TopicQos::keep_last(10).reliable())
+    .to_bus("/chatter", robot_bus::TopicQos::keep_last(8).best_effort())
     .mapper(robot_bus::StdMsgsStringMapper{})
-    .direction(robot_bus::Direction::Ros2ToBus)
     .add()
     .service("/reset", "/reset")
     .mapper(robot_bus::TriggerServiceMapper{})

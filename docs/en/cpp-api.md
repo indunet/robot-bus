@@ -36,14 +36,14 @@ CMake sets `CMAKE_CXX_STANDARD 17`. Building with a newer standard (e.g. `-DCMAK
 
 ```bash
 # Core SDK (no ROS bridge)
-sudo apt install ./robot-bus_2.0.0_linux_amd64.deb
+sudo apt install ./robot-bus_2.1.0_linux_amd64.deb
 
 # Or ROS 2 bridge variant (Humble example) — needs Humble already installed
-sudo apt install ./robot-bus-ros2-humble_2.0.0_linux_amd64.deb
+sudo apt install ./robot-bus-ros2-humble_2.1.0_linux_amd64.deb
 source /opt/ros/humble/setup.bash
 
 # macOS Apple Silicon (core package only)
-sudo installer -pkg robot-bus_2.0.0_macos_arm64.pkg -target /
+sudo installer -pkg robot-bus_2.1.0_macos_arm64.pkg -target /
 # Installs under /usr/local ({bin,lib,include})
 
 # Or from source (dev)
@@ -240,9 +240,9 @@ Supported distros for **prebuilt** packages: **Humble** and **Jazzy** (**Linux D
 
 auto bridge = robot_bus::Ros2Bridge::New("ros_bridge")
     .bus_tcp("localhost")
-    .route("/chatter", "/chatter")
+    .from_ros("/chatter", robot_bus::TopicQos::keep_last(10).reliable())
+    .to_bus("/chatter", robot_bus::TopicQos::keep_last(8).best_effort())
     .mapper(robot_bus::StdMsgsStringMapper{})
-    .direction(robot_bus::Direction::Ros2ToBus)
     .add()
     .service("/reset", "/reset")
     .mapper(robot_bus::TriggerServiceMapper{})

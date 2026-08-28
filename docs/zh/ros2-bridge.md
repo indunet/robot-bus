@@ -50,44 +50,53 @@ cargo run --bin robot_bus_broker    # 或已安装的 robot-bus-broker
 
 ## 统一契约
 
-方向（`Direction`）：`Ros2ToBus`（默认）或 `BusToRos2`，**禁止** `both`。
+Topic 两端各写 **名字 + `TopicQos`**：
+
+```text
+.from_ros(ros名, TopicQos).to_bus(bus名, TopicQos).mapper(...).lazy()?.add()
+.from_bus(bus名, TopicQos).to_ros(ros名, TopicQos).mapper(...).add()
+```
+
+`TopicQos.keep_last(n)` 之后必须 `.reliable()` 或 `.best_effort()`。ROS 端两者都行；bus 端只能 `.best_effort()`（PUB/SUB 没有可靠投递）。
+
+Service / action 仍是 `.service(ros, bus)` / `.action(ros, bus)`，方向用 `Direction`（`Ros2ToBus` 默认或 `BusToRos2`），**禁止** `both`。
 
 - 默认超时：service **5s**，action goal **30s**
 - Topic 路由默认 **eager**：`build()` 立刻建 ROS subscription，ROS 图上能看到这座桥。仅对需要按需开关的 ROS2→bus 路由写 `.lazy()`。
 
 ### `.lazy()`（opt-in ROS2→bus）
 
-默认与 1.3.1 相同：`.route(...).mapper(...).add()` 在 `build()` 时就建 ROS subscription。相机、雷达等大流量 ROS2→bus 才用 `.lazy()`：没人订 bus 时，ROS 图上这座桥不是该 topic 的 subscriber。
+默认 eager：`.from_ros(...).to_bus(...).mapper(...).add()` 在 `build()` 时就建 ROS subscription。相机、雷达等大流量 ROS2→bus 才用 `.lazy()`：没人订 bus 时，ROS 图上这座桥不是该 topic 的 subscriber。
 
 ```rust
-.route("/camera/image", "/camera/image")
-    .mapper(SensorMsgsImageMapper)
-    .sensor_data()
-    .lazy()
-    .add()?
+.from_ros("/camera/image", TopicQos::keep_last(5).best_effort())
+.to_bus("/camera/image", TopicQos::keep_last(5).best_effort())
+.mapper(SensorMsgsImageMapper)
+.lazy()
+.add()?
 ```
 
 ```python
-.route("/camera/image", "/camera/image")
-    .mapper(SensorMsgsImageMapper())
-    .sensor_data()
-    .lazy()
-    .add()
+.from_ros("/camera/image", TopicQos.keep_last(5).best_effort())
+.to_bus("/camera/image", TopicQos.keep_last(5).best_effort())
+.mapper(SensorMsgsImageMapper())
+.lazy()
+.add()
 ```
 
 ```cpp
-.route("/camera/image", "/camera/image")
-    .mapper(robot_bus::SensorMsgsImageMapper{})
-    .sensor_data()
-    .lazy()
-    .add()
+.from_ros("/camera/image", robot_bus::TopicQos::keep_last(5).best_effort())
+.to_bus("/camera/image", robot_bus::TopicQos::keep_last(5).best_effort())
+.mapper(robot_bus::SensorMsgsImageMapper{})
+.lazy()
+.add()
 ```
 
 规则：
 
-- **默认 eager。** 现有示例不用改。
-- **`.lazy()` 无参。** 不要 `.lazy(true)`，不要新的 `Direction`。
-- **只允许 ROS2→bus。** 配在 `BusToRos2` 上时 `.add()` 报错。Service / action builder 没有 `.lazy()`。
+- **默认 eager。** 不写 `.lazy()`。
+- **`.lazy()` 无参。** 不要 `.lazy(true)`。
+- **只在 `from_ros → to_bus` 链上。** `from_bus → to_ros` 没有 `.lazy()`。Service / action builder 没有 `.lazy()`。
 - **无 console 的 broker**（`--no-console`）：`.lazy()` 路由 **降级为 eager**（没有 demand 信号）。
 - 需求只数 `kind == subscriber`。裸 `Subscriber`（不经 `Node`）以及关掉 topology 的 WebSocket **打不开** lazy。崩溃后 topology TTL 约 30s。
 
@@ -95,17 +104,19 @@ broker 在 subscriber register/unregister 时立刻往 `/robot_bus/topic_demand`
 
 C++ 只 override `attach`、把实体塞进 `keep_alive` 的自定义 mapper **不支持** `.lazy()`（`.add()` 报错）。请用 `TypedTopicMapper`。
 
-### Topic 路由 QoS helper（opt-in）
+### TopicQos
 
-默认不变：C++ / Python `QoS(10)` reliable；Rust `topics_default()`。helper **只作用于 topic**（service / action 不动）：
+三语言同一个类型。两端各传一份（depth / reliability 可以不同）：
 
-| helper | ROS | bus |
-|--------|-----|-----|
-| `.qos_depth(n)` | KeepLast(n) | `QosProfile::keep_last(n)` |
-| `.best_effort()` | reliability = best effort | （bus 仍是 best-effort HWM） |
-| `.sensor_data()` | `SensorDataQoS`（best-effort KeepLast 5） | depth 5 |
+| | 写法 |
+|--|--|
+| 可靠 KeepLast 10 | `TopicQos.keep_last(10).reliable()` |
+| 尽力 KeepLast 5 | `TopicQos.keep_last(5).best_effort()` |
 
-相机示例用 `.sensor_data().lazy()`。不要把 Image builtin 默认改成 SensorDataQoS。
+- **ROS**（`from_ros` / `to_ros`）：映射为 KeepLast(depth) + 指定的 reliability。
+- **bus**（`from_bus` / `to_bus`）：只兑现 depth → HWM；必须 `.best_effort()`。
+
+相机要对上 ROS 图上的 best-effort KeepLast(5) 时，两端都写 `keep_last(5).best_effort()`。Service / action 不用 `TopicQos`。
 
 ### 一期内置 mapper
 
@@ -381,15 +392,15 @@ Topic / Action：同一套「先 proto 再 mapper」。`TypedTopicMapper` / `Typ
 
 ```rust
 use robot_bus::ros2_bridge::{
-    Direction, Ros2Bridge, StdMsgsStringMapper, TriggerServiceMapper,
+    Ros2Bridge, StdMsgsStringMapper, TopicQos, TriggerServiceMapper,
 };
 
 fn main() -> robot_bus::Result<()> {
     let mut bridge = Ros2Bridge::new("ros_bridge")
         .bus_tcp("localhost")
-        .route("/chatter", "/chatter")
+        .from_ros("/chatter", TopicQos::keep_last(10).reliable())
+            .to_bus("/chatter", TopicQos::keep_last(8).best_effort())
             .mapper(StdMsgsStringMapper)
-            .direction(Direction::Ros2ToBus)
             .add()?
         .service("/reset", "/reset")
             .mapper(TriggerServiceMapper)
@@ -446,9 +457,9 @@ just python-dev-ros2   # 或 just python-dev；需本机有 rclpy
 ```python
 import robot_bus
 from robot_bus.ros2_bridge import (
-    Direction,
     Ros2Bridge,
     StdMsgsStringMapper,
+    TopicQos,
     TriggerServiceMapper,
 )
 
@@ -457,9 +468,9 @@ assert robot_bus.ros2_available()  # import rclpy 成功
 bridge = (
     Ros2Bridge.new("ros_bridge")
     .bus_tcp("localhost")
-    .route("/chatter", "/chatter")
+    .from_ros("/chatter", TopicQos.keep_last(10).reliable())
+    .to_bus("/chatter", TopicQos.keep_last(8).best_effort())
     .mapper(StdMsgsStringMapper())
-    .direction(Direction.Ros2ToBus)
     .add()
     .service("/reset", "/reset")
     .mapper(TriggerServiceMapper())
@@ -484,9 +495,9 @@ bridge.spin()
 
 auto bridge = robot_bus::Ros2Bridge::New("ros_bridge")
     .bus_tcp("localhost")
-    .route("/chatter", "/chatter")
+    .from_ros("/chatter", robot_bus::TopicQos::keep_last(10).reliable())
+    .to_bus("/chatter", robot_bus::TopicQos::keep_last(8).best_effort())
     .mapper(robot_bus::StdMsgsStringMapper{})
-    .direction(robot_bus::Direction::Ros2ToBus)
     .add()
     .service("/reset", "/reset")
     .mapper(robot_bus::TriggerServiceMapper{})

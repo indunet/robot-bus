@@ -3,9 +3,9 @@ name: ros2-bridge
 description: >-
   Create and run robot-bus Ros2Bridge (topic / service / action) between ROS 2
   Humble or Jazzy and robot_bus_broker. Use when the user asks to bridge ROS and
-  bus, mount routes with mappers, Direction Ros2ToBus or BusToRos2, custom
-  TypedServiceMapper / TypedActionMapper / TypedTopicMapper, or connect rclcpp/rclpy/rclrs to bus
-  without a full package migration.
+  bus, mount from_ros/to_bus with TopicQos, Direction Ros2ToBus or BusToRos2 for
+  service/action, custom TypedServiceMapper / TypedActionMapper / TypedTopicMapper,
+  or connect rclcpp/rclpy/rclrs to bus without a full package migration.
 ---
 
 # Create ROS 2 Bridge (`ros2_bridge`)
@@ -21,21 +21,24 @@ This is **not** full package migration — for that use **ros2-to-robot-bus** /
 
 | Do | Do not |
 |----|--------|
-| Mount routes in **code** with `.mapper(concrete object)` | YAML bridge config |
-| One direction per route: `Ros2ToBus` or `BusToRos2` | `both` |
-| Implement typed field converters for custom srv/action | Type-name string lookup to mount routes |
+| Topic endpoints: name + `TopicQos.keep_last(n).reliable()` / `.best_effort()` | Native `rclpy`/`rclcpp` QoS as the bridge second arg |
+| Bus `TopicQos` must be `.best_effort()` | Silent drop of `.reliable()` on bus |
+| Mount with `.mapper(concrete object)` | Type-name string lookup to mount routes |
+| Service/action: one `Direction` per route (`Ros2ToBus` or `BusToRos2`) | `both` |
 | Native bridge per language (rclrs / rclpy / rclcpp) | Cross-language “string-only” universal bridge |
 
 Official ROS targets: **Humble**, **Jazzy**.
 
 ## Decide direction
 
-| Data ownership | Direction |
-|----------------|-----------|
-| ROS publishes / serves → bus clients consume | `Ros2ToBus` (default) |
-| Bus publishes / serves → ROS subscribers / clients | `BusToRos2` |
+Topics encode direction in the chain (`from_ros → to_bus` vs `from_bus → to_ros`). Service / action still take `Direction`:
 
-Same logical name on both sides is fine (`/chatter`, `/chatter`); names need not match.
+| Data ownership | Topic | Service / action |
+|----------------|-------|------------------|
+| ROS publishes / serves → bus clients consume | `from_ros(...).to_bus(...)` | `Direction::Ros2ToBus` (default) |
+| Bus publishes / serves → ROS subscribers / clients | `from_bus(...).to_ros(...)` | `Direction::BusToRos2` |
+
+Same logical name on both sides is fine (`/chatter`, `/chatter`); names need not match. Each topic endpoint is **name + `TopicQos`**. After `TopicQos.keep_last(n)` call `.reliable()` or `.best_effort()`. ROS accepts either; bus must be `.best_effort()`.
 
 ## Prerequisites
 
@@ -60,16 +63,19 @@ Progress:
 - [ ] 2. Pick language that owns the ROS types
 - [ ] 3. List routes: topic/service/action names + direction each
 - [ ] 4. Prefer built-in mappers; else define bus `.proto` (fields = ROS .srv/.action), `protoc`, then Typed* mapper
-- [ ] 5. Ros2Bridge.new → bus_* → route/service/action → mapper → direction → add → build
+- [ ] 5. Ros2Bridge.new → bus_* → from_ros/to_bus (or from_bus/to_ros) + TopicQos → mapper → add; service/action still `.service(ros, bus).mapper().timeout().add()`
 - [ ] 6. bridge.spin(); verify ros2 topic echo + bus console
 ```
 
 ## Unified builder contract
 
-Direction: `Ros2ToBus` (default) or `BusToRos2`; **no `both`**. Defaults: service
-timeout **5s**, action goal **30s**. Topic routes are **eager** at `build()`;
-`.lazy()` is opt-in ROS2→bus only (camera/lidar). No-console brokers fall back
-to eager. `.lazy()` on `BusToRos2` fails at `.add()`.
+```text
+.from_ros(ros, TopicQos).to_bus(bus, TopicQos).mapper(...).lazy()?.add()
+.from_bus(bus, TopicQos).to_ros(ros, TopicQos).mapper(...).add()
+.service(ros, bus).mapper(...).timeout(...).add()
+```
+
+`TopicQos.keep_last(n)` then **must** `.reliable()` or `.best_effort()`. Service / action `Direction`: `Ros2ToBus` (default) or `BusToRos2`; **no `both`**. Defaults: service timeout **5s**, action goal **30s**. Topic routes are **eager** at `build()`; `.lazy()` is opt-in on `from_ros → to_bus` only (camera/lidar). No-console brokers fall back to eager. `from_bus → to_ros` has no `.lazy()`.
 
 ### Built-in mappers (objects, not strings)
 
@@ -90,7 +96,7 @@ Rust may register more topic mappers for introspection; **mounting still require
 ```python
 import robot_bus
 from robot_bus.ros2_bridge import (
-    Direction, Ros2Bridge, StdMsgsStringMapper, TriggerServiceMapper,
+    Ros2Bridge, StdMsgsStringMapper, TopicQos, TriggerServiceMapper,
 )
 
 assert robot_bus.ros2_available()
@@ -98,9 +104,9 @@ assert robot_bus.ros2_available()
 bridge = (
     Ros2Bridge.new("ros_bridge")
     .bus_tcp("localhost")
-    .route("/chatter", "/chatter")
+    .from_ros("/chatter", TopicQos.keep_last(10).reliable())
+    .to_bus("/chatter", TopicQos.keep_last(8).best_effort())
     .mapper(StdMsgsStringMapper())
-    .direction(Direction.Ros2ToBus)
     .add()
     .service("/reset", "/reset")
     .mapper(TriggerServiceMapper())
@@ -114,15 +120,15 @@ bridge.spin()
 
 ```rust
 use robot_bus::ros2_bridge::{
-    Direction, Ros2Bridge, StdMsgsStringMapper, TriggerServiceMapper,
+    Ros2Bridge, StdMsgsStringMapper, TopicQos, TriggerServiceMapper,
 };
 
 fn main() -> robot_bus::Result<()> {
     let mut bridge = Ros2Bridge::new("ros_bridge")
         .bus_tcp("localhost")
-        .route("/chatter", "/chatter")
+        .from_ros("/chatter", TopicQos::keep_last(10).reliable())
+            .to_bus("/chatter", TopicQos::keep_last(8).best_effort())
             .mapper(StdMsgsStringMapper)
-            .direction(Direction::Ros2ToBus)
             .add()?
         .service("/reset", "/reset")
             .mapper(TriggerServiceMapper)
@@ -141,9 +147,9 @@ fn main() -> robot_bus::Result<()> {
 
 auto bridge = robot_bus::Ros2Bridge::New("ros_bridge")
     .bus_tcp("localhost")
-    .route("/chatter", "/chatter")
+    .from_ros("/chatter", robot_bus::TopicQos::keep_last(10).reliable())
+    .to_bus("/chatter", robot_bus::TopicQos::keep_last(8).best_effort())
     .mapper(robot_bus::StdMsgsStringMapper{})
-    .direction(robot_bus::Direction::Ros2ToBus)
     .add()
     .service("/reset", "/reset")
     .mapper(robot_bus::TriggerServiceMapper{})

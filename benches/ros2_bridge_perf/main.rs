@@ -32,7 +32,7 @@ mod run {
     use prost::Message as ProstMessage;
     use rclrs::{CreateBasicExecutor, IntoPrimitiveOptions, SpinOptions};
     use robot_bus::ros2_bridge::{
-        Direction, Ros2Bridge, SensorMsgsImageMapper, StdMsgsStringMapper,
+        Ros2Bridge, SensorMsgsImageMapper, StdMsgsStringMapper, TopicQos,
     };
     use robot_bus::std_msgs::msg::v1::String as BusString;
     use robot_bus::{Context, Node, NodeOptions, QosProfile, RobotBusBroker, ShutdownHandle};
@@ -214,32 +214,28 @@ mod run {
             RobotBusBroker::start_with_context(&ctx, perf_broker_config()).expect("broker");
         thread::sleep(Duration::from_millis(300));
 
+        let qos_ros = TopicQos::keep_last(MSG_HWM).best_effort();
+        let qos_bus = TopicQos::keep_last(MSG_HWM).best_effort();
         let mut bridge = Ros2Bridge::new("ros2_bridge_perf")
             .bus_tcp("localhost")
-            .route("/perf/r2b/str", "/perf/r2b/str")
+            .from_ros("/perf/r2b/str", qos_ros)
+            .to_bus("/perf/r2b/str", qos_bus)
             .mapper(StdMsgsStringMapper)
-            .qos_depth(MSG_HWM)
-            .best_effort()
             .add()
             .expect("r2b str")
-            .route("/perf/b2r/str", "/perf/b2r/str")
+            .from_bus("/perf/b2r/str", qos_bus)
+            .to_ros("/perf/b2r/str", qos_ros)
             .mapper(StdMsgsStringMapper)
-            .direction(Direction::BusToRos2)
-            .qos_depth(MSG_HWM)
-            .best_effort()
             .add()
             .expect("b2r str")
-            .route("/perf/r2b/img", "/perf/r2b/img")
+            .from_ros("/perf/r2b/img", qos_ros)
+            .to_bus("/perf/r2b/img", qos_bus)
             .mapper(SensorMsgsImageMapper)
-            .qos_depth(MSG_HWM)
-            .best_effort()
             .add()
             .expect("r2b img")
-            .route("/perf/b2r/img", "/perf/b2r/img")
+            .from_bus("/perf/b2r/img", qos_bus)
+            .to_ros("/perf/b2r/img", qos_ros)
             .mapper(SensorMsgsImageMapper)
-            .direction(Direction::BusToRos2)
-            .qos_depth(MSG_HWM)
-            .best_effort()
             .add()
             .expect("b2r img")
             .build()

@@ -21,6 +21,46 @@ class Direction(IntEnum):
     BusToRos2 = 1
 
 
+class TopicQosKeepLast:
+    def __init__(self, depth: int) -> None:
+        self._depth = int(depth)
+
+    def reliable(self) -> "TopicQos":
+        return TopicQos(self._depth, False)
+
+    def best_effort(self) -> "TopicQos":
+        return TopicQos(self._depth, True)
+
+
+class TopicQos:
+    """KeepLast depth plus reliability. Same type on ROS and bus endpoints."""
+
+    def __init__(self, depth: int, best_effort: bool) -> None:
+        self._depth = int(depth)
+        self._best_effort = bool(best_effort)
+
+    @staticmethod
+    def keep_last(depth: int) -> TopicQosKeepLast:
+        return TopicQosKeepLast(depth)
+
+    @property
+    def depth(self) -> int:
+        return self._depth
+
+    @property
+    def is_best_effort(self) -> bool:
+        return self._best_effort
+
+    @property
+    def is_reliable(self) -> bool:
+        return not self._best_effort
+
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, TopicQos):
+            return NotImplemented
+        return self._depth == other._depth and self._best_effort == other._best_effort
+
+
 def should_enable_ros_subscription(
     lazy: bool, console_live: Optional[bool], subscribers: int
 ) -> bool:
@@ -33,32 +73,37 @@ def should_enable_ros_subscription(
     return subscribers > 0
 
 
-def _ros_qos(route: dict[str, Any]) -> Any:
+def _ros_qos(qos: TopicQos) -> Any:
     from rclpy.qos import (
         HistoryPolicy,
         QoSProfile,
         ReliabilityPolicy,
-        qos_profile_sensor_data,
     )
 
-    if route.get("sensor_data"):
-        return qos_profile_sensor_data
-    depth = route.get("qos_depth")
-    best_effort = bool(route.get("best_effort"))
-    if depth is None and not best_effort:
-        return 10
     profile = QoSProfile(
         history=HistoryPolicy.KEEP_LAST,
-        depth=int(depth) if depth is not None else 10,
+        depth=max(int(qos.depth), 0),
     )
-    if best_effort:
-        profile.reliability = ReliabilityPolicy.BEST_EFFORT
+    profile.reliability = (
+        ReliabilityPolicy.BEST_EFFORT if qos.is_best_effort else ReliabilityPolicy.RELIABLE
+    )
     return profile
 
 
-def _bus_qos_depth(route: dict[str, Any]) -> Optional[int]:
-    depth = route.get("qos_depth")
-    return int(depth) if depth is not None else None
+def _require_topic_qos(qos: Any, who: str) -> TopicQos:
+    if not isinstance(qos, TopicQos):
+        raise TypeError(
+            f"{who} requires TopicQos.keep_last(n).reliable() or .best_effort()"
+        )
+    return qos
+
+
+def _require_bus_best_effort(qos: TopicQos) -> None:
+    if qos.is_reliable:
+        raise ValueError(
+            "ros2 bridge: bus TopicQos must be .best_effort() "
+            "(PUB/SUB has no reliable delivery)"
+        )
 
 
 def _topic_supports_lazy(mapper: Any) -> bool:
@@ -179,8 +224,13 @@ class Ros2BridgeBuilder:
         self._bus_factory = factory
         return self
 
-    def route(self, ros_topic: str, bus_topic: str) -> "RouteBuilder":
-        return RouteBuilder(self, ros_topic, bus_topic)
+    def from_ros(self, ros_topic: str, ros_qos: TopicQos) -> "FromRos":
+        return FromRos(self, ros_topic, _require_topic_qos(ros_qos, "from_ros"))
+
+    def from_bus(self, bus_topic: str, bus_qos: TopicQos) -> "FromBus":
+        qos = _require_topic_qos(bus_qos, "from_bus")
+        _require_bus_best_effort(qos)
+        return FromBus(self, bus_topic, qos)
 
     def service(self, ros_service: str, bus_service: str) -> "ServiceRouteBuilder":
         return ServiceRouteBuilder(self, ros_service, bus_service)
@@ -196,52 +246,69 @@ class Ros2BridgeBuilder:
         return Ros2Bridge._from_builder(self)
 
 
-class RouteBuilder:
-    def __init__(self, parent: Ros2BridgeBuilder, ros_topic: str, bus_topic: str) -> None:
+class FromRos:
+    def __init__(self, parent: Ros2BridgeBuilder, ros_topic: str, ros_qos: TopicQos) -> None:
         self._parent = parent
         self._ros_topic = ros_topic
+        self._ros_qos = ros_qos
+
+    def to_bus(self, bus_topic: str, bus_qos: TopicQos) -> "FromRosToBus":
+        qos = _require_topic_qos(bus_qos, "to_bus")
+        _require_bus_best_effort(qos)
+        return FromRosToBus(self._parent, self._ros_topic, self._ros_qos, bus_topic, qos)
+
+
+class FromRosToBus:
+    def __init__(
+        self,
+        parent: Ros2BridgeBuilder,
+        ros_topic: str,
+        ros_qos: TopicQos,
+        bus_topic: str,
+        bus_qos: TopicQos,
+    ) -> None:
+        self._parent = parent
+        self._ros_topic = ros_topic
+        self._ros_qos = ros_qos
         self._bus_topic = bus_topic
-        self._mapper: Any = None
-        self._direction = Direction.Ros2ToBus
-        self._lazy = False
-        self._qos_depth: Optional[int] = None
-        self._best_effort = False
-        self._sensor_data = False
+        self._bus_qos = bus_qos
 
-    def mapper(self, mapper: Any) -> "RouteBuilder":
+    def mapper(self, mapper: Any) -> "Ros2ToBusReady":
+        if mapper is None:
+            raise ValueError("ros2 bridge route: mapper must not be None")
+        return Ros2ToBusReady(
+            self._parent,
+            self._ros_topic,
+            self._ros_qos,
+            self._bus_topic,
+            self._bus_qos,
+            mapper,
+        )
+
+
+class Ros2ToBusReady:
+    def __init__(
+        self,
+        parent: Ros2BridgeBuilder,
+        ros_topic: str,
+        ros_qos: TopicQos,
+        bus_topic: str,
+        bus_qos: TopicQos,
+        mapper: Any,
+    ) -> None:
+        self._parent = parent
+        self._ros_topic = ros_topic
+        self._ros_qos = ros_qos
+        self._bus_topic = bus_topic
+        self._bus_qos = bus_qos
         self._mapper = mapper
-        return self
+        self._lazy = False
 
-    def direction(self, direction: Direction) -> "RouteBuilder":
-        self._direction = direction
-        return self
-
-    def lazy(self) -> "RouteBuilder":
+    def lazy(self) -> "Ros2ToBusReady":
         self._lazy = True
         return self
 
-    def qos_depth(self, n: int) -> "RouteBuilder":
-        self._qos_depth = int(n)
-        return self
-
-    def best_effort(self) -> "RouteBuilder":
-        self._best_effort = True
-        return self
-
-    def sensor_data(self) -> "RouteBuilder":
-        self._sensor_data = True
-        self._qos_depth = 5
-        self._best_effort = True
-        return self
-
     def add(self) -> Ros2BridgeBuilder:
-        if self._mapper is None:
-            raise ValueError(
-                "ros2 bridge route: call .mapper(...) before .add() "
-                "(builtin ZST or your TopicMapper)"
-            )
-        if self._lazy and self._direction != Direction.Ros2ToBus:
-            raise ValueError("ros2 bridge route: .lazy() is only valid for Direction.Ros2ToBus")
         if self._lazy and not _topic_supports_lazy(self._mapper):
             raise ValueError(
                 "ros2 bridge route: .lazy() is not supported for this custom TopicMapper "
@@ -252,11 +319,86 @@ class RouteBuilder:
                 "ros_topic": self._ros_topic,
                 "bus_topic": self._bus_topic,
                 "mapper": self._mapper,
-                "direction": self._direction,
+                "direction": Direction.Ros2ToBus,
                 "lazy": self._lazy,
-                "qos_depth": self._qos_depth,
-                "best_effort": self._best_effort,
-                "sensor_data": self._sensor_data,
+                "ros_qos": self._ros_qos,
+                "bus_qos": self._bus_qos,
+            }
+        )
+        return self._parent
+
+
+class FromBus:
+    def __init__(self, parent: Ros2BridgeBuilder, bus_topic: str, bus_qos: TopicQos) -> None:
+        self._parent = parent
+        self._bus_topic = bus_topic
+        self._bus_qos = bus_qos
+
+    def to_ros(self, ros_topic: str, ros_qos: TopicQos) -> "FromBusToRos":
+        return FromBusToRos(
+            self._parent,
+            ros_topic,
+            _require_topic_qos(ros_qos, "to_ros"),
+            self._bus_topic,
+            self._bus_qos,
+        )
+
+
+class FromBusToRos:
+    def __init__(
+        self,
+        parent: Ros2BridgeBuilder,
+        ros_topic: str,
+        ros_qos: TopicQos,
+        bus_topic: str,
+        bus_qos: TopicQos,
+    ) -> None:
+        self._parent = parent
+        self._ros_topic = ros_topic
+        self._ros_qos = ros_qos
+        self._bus_topic = bus_topic
+        self._bus_qos = bus_qos
+
+    def mapper(self, mapper: Any) -> "BusToRos2Ready":
+        if mapper is None:
+            raise ValueError("ros2 bridge route: mapper must not be None")
+        return BusToRos2Ready(
+            self._parent,
+            self._ros_topic,
+            self._ros_qos,
+            self._bus_topic,
+            self._bus_qos,
+            mapper,
+        )
+
+
+class BusToRos2Ready:
+    def __init__(
+        self,
+        parent: Ros2BridgeBuilder,
+        ros_topic: str,
+        ros_qos: TopicQos,
+        bus_topic: str,
+        bus_qos: TopicQos,
+        mapper: Any,
+    ) -> None:
+        self._parent = parent
+        self._ros_topic = ros_topic
+        self._ros_qos = ros_qos
+        self._bus_topic = bus_topic
+        self._bus_qos = bus_qos
+        self._mapper = mapper
+
+    def add(self) -> Ros2BridgeBuilder:
+        self._parent._routes.append(
+            {
+                "ros_topic": self._ros_topic,
+                "bus_topic": self._bus_topic,
+                "mapper": self._mapper,
+                "direction": Direction.BusToRos2,
+                "lazy": False,
+                "ros_qos": self._ros_qos,
+                "bus_qos": self._bus_qos,
             }
         )
         return self._parent
@@ -508,8 +650,8 @@ class Ros2Bridge:
                 bus_topic,
                 direction,
                 self._keep_alive,
-                qos=_ros_qos(route),
-                bus_qos_depth=_bus_qos_depth(route),
+                qos=_ros_qos(route["ros_qos"]),
+                bus_qos_depth=route["bus_qos"].depth,
             )
             mapper.attach(ctx)
             if direction == Direction.Ros2ToBus:
@@ -517,8 +659,8 @@ class Ros2Bridge:
             return
 
         msg_type = mapper.ros_msg_type()
-        ros_qos = _ros_qos(route)
-        bus_depth = _bus_qos_depth(route)
+        ros_qos = _ros_qos(route["ros_qos"])
+        bus_depth = route["bus_qos"].depth
         if direction == Direction.BusToRos2:
             ros_pub = self._ros_node.create_publisher(msg_type, ros_topic, ros_qos)
 
@@ -528,16 +670,12 @@ class Ros2Bridge:
                 except Exception:
                     pass
 
-            sub_kw: dict[str, Any] = {}
-            if bus_depth is not None:
-                sub_kw["qos_depth"] = bus_depth
+            sub_kw: dict[str, Any] = {"qos_depth": bus_depth}
             self._keep_alive.append(self._bus.create_subscription(bus_topic, on_bus, **sub_kw))
             self._keep_alive.append(ros_pub)
             return
 
-        pub_kw: dict[str, Any] = {}
-        if bus_depth is not None:
-            pub_kw["qos_depth"] = bus_depth
+        pub_kw: dict[str, Any] = {"qos_depth": bus_depth}
         bus_pub = self._bus.create_publisher(bus_topic, **pub_kw)
         lock = threading.Lock()
 

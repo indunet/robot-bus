@@ -11,7 +11,7 @@ use std::time::{Duration, Instant};
 
 use rclrs::CreateBasicExecutor;
 use robot_bus::lazy_subscribe::CONSOLE_DETECT_TIMEOUT;
-use robot_bus::ros2_bridge::{Ros2Bridge, StdMsgsStringMapper, TypedTopicMapper};
+use robot_bus::ros2_bridge::{Ros2Bridge, StdMsgsStringMapper, TopicQos, TypedTopicMapper};
 use robot_bus::std_msgs::msg::v1::String as BusString;
 use robot_bus::{Node, NodeOptions, RobotBusBroker};
 use support::{ephemeral_robot_bus_config, lock_brokers};
@@ -33,6 +33,14 @@ fn console_on_config() -> robot_bus::RobotBusConfig {
     config.console.enabled = true;
     config.console.tank_enabled = false;
     config
+}
+
+fn ros_qos() -> TopicQos {
+    TopicQos::keep_last(10).reliable()
+}
+
+fn bus_qos() -> TopicQos {
+    TopicQos::keep_last(8).best_effort()
 }
 
 fn drain_bridge(bridge: &mut Ros2Bridge, n: usize) {
@@ -61,7 +69,8 @@ fn eager_has_ros_subscription_at_build() {
 
     let bridge = Ros2Bridge::new(format!("eager_bridge_{}", std::process::id()))
         .bus_options(opts)
-        .route(&topic, &topic)
+        .from_ros(&topic, ros_qos())
+        .to_bus(&topic, bus_qos())
         .mapper(StdMsgsStringMapper)
         .add()
         .expect("add")
@@ -85,7 +94,8 @@ fn lazy_waits_for_bus_subscriber_then_tears_down() {
 
     let mut bridge = Ros2Bridge::new(format!("lazy_bridge_{}", std::process::id()))
         .bus_options(opts.clone())
-        .route(&topic, &topic)
+        .from_ros(&topic, ros_qos())
+        .to_bus(&topic, bus_qos())
         .mapper(StdMsgsStringMapper)
         .lazy()
         .add()
@@ -158,11 +168,13 @@ fn lazy_and_eager_routes_independent_at_runtime() {
 
     let mut bridge = Ros2Bridge::new(format!("mix_bridge_{}", std::process::id()))
         .bus_options(opts)
-        .route(&eager, &eager)
+        .from_ros(&eager, ros_qos())
+        .to_bus(&eager, bus_qos())
         .mapper(StdMsgsStringMapper)
         .add()
         .unwrap()
-        .route(&lazy, &lazy)
+        .from_ros(&lazy, ros_qos())
+        .to_bus(&lazy, bus_qos())
         .mapper(StdMsgsStringMapper)
         .lazy()
         .add()
@@ -188,7 +200,8 @@ fn no_console_lazy_falls_back_eager() {
 
     let mut bridge = Ros2Bridge::new(format!("noconsole_bridge_{}", std::process::id()))
         .bus_options(opts)
-        .route(&topic, &topic)
+        .from_ros(&topic, ros_qos())
+        .to_bus(&topic, bus_qos())
         .mapper(StdMsgsStringMapper)
         .lazy()
         .add()
@@ -215,7 +228,8 @@ fn lazy_forwards_after_bus_subscribe() {
 
     let mut bridge = Ros2Bridge::new(format!("fwd_bridge_{}", std::process::id()))
         .bus_options(opts.clone())
-        .route(&topic, &topic)
+        .from_ros(&topic, ros_qos())
+        .to_bus(&topic, bus_qos())
         .mapper(StdMsgsStringMapper)
         .lazy()
         .add()

@@ -10,15 +10,15 @@
 use std::time::Duration;
 
 use robot_bus::ros2_bridge::{
-    Direction, FibonacciActionMapper, Ros2Bridge, StdMsgsStringMapper, TriggerServiceMapper,
+    FibonacciActionMapper, Ros2Bridge, StdMsgsStringMapper, TopicQos, TriggerServiceMapper,
 };
 
 fn main() -> robot_bus::Result<()> {
     let mut bridge = Ros2Bridge::new("examples_ros2_bridge_builtin")
         .bus_tcp("localhost")
-        .route("/examples/chatter", "/examples/chatter")
+        .from_ros("/examples/chatter", TopicQos::keep_last(10).reliable())
+        .to_bus("/examples/chatter", TopicQos::keep_last(8).best_effort())
         .mapper(StdMsgsStringMapper)
-        .direction(Direction::Ros2ToBus)
         .add()?
         .service("/examples/reset", "/examples/reset")
         .mapper(TriggerServiceMapper)

@@ -34,35 +34,70 @@ pub enum Direction {
     BusToRos2,
 }
 
-/// Opt-in ROS + bus topic QoS for a bridge route. Default leaves both stacks unchanged.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub struct TopicRouteQos {
-    /// ROS KeepLast depth and bus HWM when set.
-    pub depth: Option<i32>,
-    /// ROS reliability best-effort when true.
-    pub best_effort: bool,
-    /// Use ROS `SensorDataQoS` (best-effort KeepLast 5) plus bus depth 5.
-    pub sensor_data: bool,
+/// Reliability for [`TopicQos`]. Must be chosen explicitly (no default).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TopicReliability {
+    Reliable,
+    BestEffort,
 }
 
-impl TopicRouteQos {
-    /// rclcpp `SensorDataQoS` history: best-effort KeepLast(5).
-    pub const SENSOR_DATA: Self = Self {
-        depth: Some(5),
-        best_effort: true,
-        sensor_data: true,
-    };
+/// Intermediate after [`TopicQos::keep_last`]; call [`.reliable()`](TopicQosKeepLast::reliable)
+/// or [`.best_effort()`](TopicQosKeepLast::best_effort) to finish.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct TopicQosKeepLast {
+    depth: i32,
 }
 
-pub(crate) fn ros_topic_options(topic: &str, qos: TopicRouteQos) -> rclrs::PrimitiveOptions<'_> {
-    if qos.sensor_data {
-        return topic.sensor_data_qos();
+impl TopicQosKeepLast {
+    pub fn reliable(self) -> TopicQos {
+        TopicQos {
+            depth: self.depth,
+            reliability: TopicReliability::Reliable,
+        }
     }
-    let mut opts = topic.into_primitive_options();
-    if let Some(depth) = qos.depth {
-        opts = opts.keep_last(depth.max(0) as u32);
+
+    pub fn best_effort(self) -> TopicQos {
+        TopicQos {
+            depth: self.depth,
+            reliability: TopicReliability::BestEffort,
+        }
     }
-    if qos.best_effort {
+}
+
+/// Bridge topic QoS: KeepLast depth plus reliability. Same type on ROS and bus endpoints.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct TopicQos {
+    depth: i32,
+    reliability: TopicReliability,
+}
+
+impl TopicQos {
+    pub fn keep_last(depth: i32) -> TopicQosKeepLast {
+        TopicQosKeepLast { depth }
+    }
+
+    pub fn depth(self) -> i32 {
+        self.depth
+    }
+
+    pub fn reliability(self) -> TopicReliability {
+        self.reliability
+    }
+
+    pub fn is_reliable(self) -> bool {
+        matches!(self.reliability, TopicReliability::Reliable)
+    }
+
+    pub fn is_best_effort(self) -> bool {
+        matches!(self.reliability, TopicReliability::BestEffort)
+    }
+}
+
+pub(crate) fn ros_topic_options(topic: &str, qos: TopicQos) -> rclrs::PrimitiveOptions<'_> {
+    let mut opts = topic
+        .into_primitive_options()
+        .keep_last(qos.depth().max(0) as u32);
+    if qos.is_best_effort() {
         opts = opts.best_effort();
     }
     opts
@@ -74,7 +109,8 @@ pub struct TopicWireContext<'a> {
     pub bus_node: &'a mut Node,
     pub ros_topic: &'a str,
     pub bus_topic: &'a str,
-    pub qos: TopicRouteQos,
+    pub ros_qos: TopicQos,
+    pub bus_qos: TopicQos,
     pub ros_entities: &'a mut Vec<Box<dyn Any + Send + Sync>>,
 }
 
@@ -102,7 +138,7 @@ pub trait TopicMapper: Send + Sync {
         ros_node: &rclrs::Node,
         bus_pub: TopicPublisherRaw,
         ros_topic: &str,
-        qos: TopicRouteQos,
+        qos: TopicQos,
     ) -> Result<Box<dyn Any + Send + Sync>>;
 
     fn attach_bus_to_ros(&self, ctx: TopicWireContext<'_>) -> Result<()>;
@@ -121,7 +157,7 @@ where
         ros_node: &rclrs::Node,
         bus_pub: TopicPublisherRaw,
         ros_topic: &str,
-        qos: TopicRouteQos,
+        qos: TopicQos,
     ) -> Result<Box<dyn Any + Send + Sync>> {
         create_typed_ros2_to_bus_sub(self, ros_node, bus_pub, ros_topic, qos)
     }
@@ -253,7 +289,7 @@ impl TopicMapper for RefTopicMapper {
         ros_node: &rclrs::Node,
         bus_pub: TopicPublisherRaw,
         ros_topic: &str,
-        qos: TopicRouteQos,
+        qos: TopicQos,
     ) -> Result<Box<dyn Any + Send + Sync>> {
         self.0
             .create_ros2_to_bus_subscription(ros_node, bus_pub, ros_topic, qos)
@@ -302,6 +338,17 @@ pub fn registered_topic_types() -> Vec<&'static str> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn topic_qos_requires_reliability() {
+        let reliable = TopicQos::keep_last(10).reliable();
+        assert_eq!(reliable.depth(), 10);
+        assert!(reliable.is_reliable());
+        assert!(!reliable.is_best_effort());
+        let be = TopicQos::keep_last(5).best_effort();
+        assert_eq!(be.depth(), 5);
+        assert!(be.is_best_effort());
+    }
 
     #[test]
     fn registry_covers_proto_message_types() {

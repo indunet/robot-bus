@@ -9,10 +9,10 @@ from __future__ import annotations
 
 import robot_bus
 from robot_bus.ros2_bridge import (
-    Direction,
     FibonacciActionMapper,
     Ros2Bridge,
     StdMsgsStringMapper,
+    TopicQos,
     TriggerServiceMapper,
 )
 
@@ -27,9 +27,9 @@ def main() -> None:
     bridge = (
         Ros2Bridge.new("examples_ros2_bridge_builtin")
         .bus_tcp("localhost")
-        .route("/examples/chatter", "/examples/chatter")
+        .from_ros("/examples/chatter", TopicQos.keep_last(10).reliable())
+        .to_bus("/examples/chatter", TopicQos.keep_last(8).best_effort())
         .mapper(StdMsgsStringMapper())
-        .direction(Direction.Ros2ToBus)
         .add()
         .service("/examples/reset", "/examples/reset")
         .mapper(TriggerServiceMapper())

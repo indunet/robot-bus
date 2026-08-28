@@ -14,7 +14,7 @@ use rosidl_runtime_rs::{Action as ActionIdl, Service as ServiceIdl};
 
 use crate::errors::{BusError, Result};
 use crate::ros2_bridge::mapper::{
-    ros_topic_options, ActionWireContext, Direction, ServiceWireContext, TopicRouteQos,
+    ros_topic_options, ActionWireContext, Direction, ServiceWireContext, TopicQos,
     TopicWireContext, TypedActionMapper, TypedServiceMapper, TypedTopicMapper,
 };
 use crate::runtime::{ActionGoalHandler, MessageCallback, ServiceHandler, TopicPublisherRaw};
@@ -26,7 +26,7 @@ pub fn create_typed_ros2_to_bus_sub<M>(
     ros_node: &rclrs::Node,
     bus_pub: TopicPublisherRaw,
     ros_topic: &str,
-    qos: TopicRouteQos,
+    qos: TopicQos,
 ) -> Result<Box<dyn Any + Send + Sync>>
 where
     M: TypedTopicMapper,
@@ -61,7 +61,7 @@ where
 {
     let mapper = mapper.clone();
     let type_name = mapper.type_name().to_string();
-    let opts = ros_topic_options(ctx.ros_topic, ctx.qos);
+    let opts = ros_topic_options(ctx.ros_topic, ctx.ros_qos);
     let ros_pub = ctx
         .ros_node
         .create_publisher::<M::Ros>(opts)
@@ -86,17 +86,12 @@ where
             Err(e) => log::warn!("bus→ros {type_name} convert: {e}"),
         }
     });
-    if let Some(depth) = ctx.qos.depth {
         ctx.bus_node.create_subscription_raw_with_qos(
             ctx.bus_topic,
-            crate::runtime::QosProfile::keep_last(depth),
+            crate::runtime::QosProfile::keep_last(ctx.bus_qos.depth()),
             cb,
             None,
         )?;
-    } else {
-        ctx.bus_node
-            .create_subscription_raw(ctx.bus_topic, cb, None)?;
-    }
     Ok(())
 }
 

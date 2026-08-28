@@ -112,7 +112,7 @@ fn main() -> robot_bus::Result<()> {
 }
 ```
 
-`Cargo.toml`: `robot-bus = "2.0.0"` (match current crate version). Bridge needs `features = ["ros2"]`.
+`Cargo.toml`: `robot-bus = "2.1.0"` (match current crate version). Bridge needs `features = ["ros2"]`.
 
 ### Python sketch
 
@@ -151,7 +151,8 @@ When only interconnect is needed, **do not** rewrite the whole graph. Use `Ros2B
 ```text
 Ros2Bridge.new(name)
   .bus_tcp(...) | .bus_ipc() | .bus_discover(...)
-  .route(ros, bus).mapper(...).direction(Ros2ToBus|BusToRos2).add()
+  .from_ros(ros, TopicQos).to_bus(bus, TopicQos).mapper(...).lazy()?.add()
+  .from_bus(bus, TopicQos).to_ros(ros, TopicQos).mapper(...).add()
   .service(...).mapper(...).timeout(...).add()
   .action(...).mapper(...).timeout(...).add()
   .build()
@@ -160,13 +161,14 @@ Ros2Bridge.new(name)
 
 Rules (from [ros2-bridge.md](../zh/ros2-bridge.md)):
 
-- Direction is one-way per route; **no `both`**
+- Topic endpoints are **name + `TopicQos`**: `keep_last(n).reliable()` or `.best_effort()`. Bus must be `.best_effort()`.
+- Service / action direction is one-way per route; **no `both`**
 - Mount with **concrete mapper objects**, not type-name strings
 - Built-ins: `StdMsgsStringMapper`, `SensorMsgsImageMapper`, `TriggerServiceMapper`, `SetBoolServiceMapper`, `FibonacciActionMapper`
 - Custom service/action: implement typed field converters (`TypedServiceMapper` / duck-typed Python / C++ CRTP)
 - Prerequisites: `source` ROS Humble or Jazzy; broker reachable; language-specific ROS feature/package
 
-Default: `Direction::Ros2ToBus` when ROS is the publisher/server side feeding bus clients.
+Default topic chain is `from_ros → to_bus` when ROS is the publisher feeding bus clients. Service / action default `Direction::Ros2ToBus`.
 
 ## 6. What usually does NOT migrate 1:1
 

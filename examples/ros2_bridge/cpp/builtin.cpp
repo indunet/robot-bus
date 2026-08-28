@@ -17,9 +17,9 @@ int main() {
 
   auto bridge = robot_bus::Ros2Bridge::New("examples_ros2_bridge_builtin")
                     .bus_tcp("localhost")
-                    .route("/examples/chatter", "/examples/chatter")
+                    .from_ros("/examples/chatter", robot_bus::TopicQos::keep_last(10).reliable())
+                    .to_bus("/examples/chatter", robot_bus::TopicQos::keep_last(8).best_effort())
                     .mapper(robot_bus::StdMsgsStringMapper{})
-                    .direction(robot_bus::Direction::Ros2ToBus)
                     .add()
                     .service("/examples/reset", "/examples/reset")
                     .mapper(robot_bus::TriggerServiceMapper{})

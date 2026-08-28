@@ -50,44 +50,53 @@ cargo run --bin robot_bus_broker    # or installed robot-bus-broker
 
 ## Unified contract
 
-Direction (`Direction`): `Ros2ToBus` (default) or `BusToRos2`; **`both` is not allowed**.
+Each topic endpoint is a **name + `TopicQos`**:
+
+```text
+.from_ros(ros_name, TopicQos).to_bus(bus_name, TopicQos).mapper(...).lazy()?.add()
+.from_bus(bus_name, TopicQos).to_ros(ros_name, TopicQos).mapper(...).add()
+```
+
+After `TopicQos.keep_last(n)` you must call `.reliable()` or `.best_effort()`. ROS endpoints accept either; bus endpoints must be `.best_effort()` (PUB/SUB has no reliable delivery).
+
+Service / action still use `.service(ros, bus)` / `.action(ros, bus)` with `Direction` (`Ros2ToBus` default or `BusToRos2`); **`both` is not allowed**.
 
 - Default timeouts: service **5s**, action goal **30s**
 - Topic routes default to **eager** ROS subscriptions (`build()` creates them immediately so the ROS graph shows the bridge). Opt in to on-demand ROS2→bus with `.lazy()` on that route only.
 
 ### `.lazy()` (opt-in ROS2→bus)
 
-Default matches 1.3.1: `.route(...).mapper(...).add()` creates the ROS subscription at `build()`. Use `.lazy()` only on high-bandwidth ROS2→bus topics (camera, lidar) so the ROS graph has no bridge subscriber until a robot-bus subscriber exists.
+Default is eager: `.from_ros(...).to_bus(...).mapper(...).add()` creates the ROS subscription at `build()`. Use `.lazy()` only on high-bandwidth ROS2→bus topics (camera, lidar) so the ROS graph has no bridge subscriber until a robot-bus subscriber exists.
 
 ```rust
-.route("/camera/image", "/camera/image")
-    .mapper(SensorMsgsImageMapper)
-    .sensor_data()
-    .lazy()
-    .add()?
+.from_ros("/camera/image", TopicQos::keep_last(5).best_effort())
+.to_bus("/camera/image", TopicQos::keep_last(5).best_effort())
+.mapper(SensorMsgsImageMapper)
+.lazy()
+.add()?
 ```
 
 ```python
-.route("/camera/image", "/camera/image")
-    .mapper(SensorMsgsImageMapper())
-    .sensor_data()
-    .lazy()
-    .add()
+.from_ros("/camera/image", TopicQos.keep_last(5).best_effort())
+.to_bus("/camera/image", TopicQos.keep_last(5).best_effort())
+.mapper(SensorMsgsImageMapper())
+.lazy()
+.add()
 ```
 
 ```cpp
-.route("/camera/image", "/camera/image")
-    .mapper(robot_bus::SensorMsgsImageMapper{})
-    .sensor_data()
-    .lazy()
-    .add()
+.from_ros("/camera/image", robot_bus::TopicQos::keep_last(5).best_effort())
+.to_bus("/camera/image", robot_bus::TopicQos::keep_last(5).best_effort())
+.mapper(robot_bus::SensorMsgsImageMapper{})
+.lazy()
+.add()
 ```
 
 Rules:
 
-- **Default eager.** Existing examples do not need `.lazy()`.
-- **No-arg.** `.lazy()` only; not `.lazy(true)`, not a new `Direction`.
-- **ROS2→bus only.** `.lazy()` on `BusToRos2` fails at `.add()`. Service / action builders have no `.lazy()`.
+- **Default eager.** Omit `.lazy()`.
+- **No-arg.** `.lazy()` only; not `.lazy(true)`.
+- **Only on `from_ros → to_bus`.** `from_bus → to_ros` has no `.lazy()`. Service / action builders have no `.lazy()`.
 - **No-console broker** (`--no-console`): `.lazy()` routes **fall back to eager** (there is no demand signal).
 - Demand counts `kind == subscriber` on the bus topic. A raw `Subscriber` (no `Node`) and a WebSocket client with topology off do **not** open a lazy route. After a crash, topology TTL is about 30s.
 
@@ -95,17 +104,19 @@ The broker publishes immediate [`TopicDemand`](../../proto/robot_bus_interfaces/
 
 C++ custom mappers that only override `attach` (entities stuffed into `keep_alive`) cannot tear the ROS subscription down; `.lazy().add()` throws. Use `TypedTopicMapper`.
 
-### Topic route QoS helpers (opt-in)
+### TopicQos
 
-Defaults are unchanged: C++ / Python `QoS(10)` reliable; Rust `topics_default()`. Helpers apply to **topics only** (not service / action):
+Same type in all three languages. Pass one copy per endpoint (depth / reliability may differ):
 
-| helper | ROS | bus |
-|--------|-----|-----|
-| `.qos_depth(n)` | KeepLast(n) | `QosProfile::keep_last(n)` |
-| `.best_effort()` | reliability = best effort | (bus HWM is already best-effort) |
-| `.sensor_data()` | `SensorDataQoS` (best-effort KeepLast 5) | depth 5 |
+| | syntax |
+|--|--|
+| reliable KeepLast 10 | `TopicQos.keep_last(10).reliable()` |
+| best-effort KeepLast 5 | `TopicQos.keep_last(5).best_effort()` |
 
-Camera example: `.sensor_data().lazy()`. Image builtins do **not** default to SensorDataQoS.
+- **ROS** (`from_ros` / `to_ros`): KeepLast(depth) + the chosen reliability.
+- **bus** (`from_bus` / `to_bus`): depth → HWM only; must be `.best_effort()`.
+
+To match a ROS graph that uses best-effort KeepLast(5), write `keep_last(5).best_effort()` on both ends. Service / action do not use `TopicQos`.
 
 ### Phase-1 built-in mappers
 
@@ -384,15 +395,15 @@ Topic / Action: same “proto first, then mapper” flow. `TypedTopicMapper` / `
 
 ```rust
 use robot_bus::ros2_bridge::{
-    Direction, Ros2Bridge, StdMsgsStringMapper, TriggerServiceMapper,
+    Ros2Bridge, StdMsgsStringMapper, TopicQos, TriggerServiceMapper,
 };
 
 fn main() -> robot_bus::Result<()> {
     let mut bridge = Ros2Bridge::new("ros_bridge")
         .bus_tcp("localhost")
-        .route("/chatter", "/chatter")
+        .from_ros("/chatter", TopicQos::keep_last(10).reliable())
+            .to_bus("/chatter", TopicQos::keep_last(8).best_effort())
             .mapper(StdMsgsStringMapper)
-            .direction(Direction::Ros2ToBus)
             .add()?
         .service("/reset", "/reset")
             .mapper(TriggerServiceMapper)
@@ -449,9 +460,9 @@ just python-dev-ros2   # or just python-dev; requires local rclpy
 ```python
 import robot_bus
 from robot_bus.ros2_bridge import (
-    Direction,
     Ros2Bridge,
     StdMsgsStringMapper,
+    TopicQos,
     TriggerServiceMapper,
 )
 
@@ -460,9 +471,9 @@ assert robot_bus.ros2_available()  # import rclpy succeeds
 bridge = (
     Ros2Bridge.new("ros_bridge")
     .bus_tcp("localhost")
-    .route("/chatter", "/chatter")
+    .from_ros("/chatter", TopicQos.keep_last(10).reliable())
+    .to_bus("/chatter", TopicQos.keep_last(8).best_effort())
     .mapper(StdMsgsStringMapper())
-    .direction(Direction.Ros2ToBus)
     .add()
     .service("/reset", "/reset")
     .mapper(TriggerServiceMapper())
@@ -487,9 +498,9 @@ bridge.spin()
 
 auto bridge = robot_bus::Ros2Bridge::New("ros_bridge")
     .bus_tcp("localhost")
-    .route("/chatter", "/chatter")
+    .from_ros("/chatter", robot_bus::TopicQos::keep_last(10).reliable())
+    .to_bus("/chatter", robot_bus::TopicQos::keep_last(8).best_effort())
     .mapper(robot_bus::StdMsgsStringMapper{})
-    .direction(robot_bus::Direction::Ros2ToBus)
     .add()
     .service("/reset", "/reset")
     .mapper(robot_bus::TriggerServiceMapper{})

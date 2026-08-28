@@ -41,8 +41,9 @@ class TypedTopicMapper : public TopicMapper {
   void attach(TopicWireContext &ctx) override {
     if (ctx.direction == Direction::Ros2ToBus) {
       auto pub = std::make_shared<TopicPublisher>(
-          ctx.bus_qos_depth > 0 ? ctx.bus_node.create_publisher(ctx.bus_topic.c_str(), ctx.bus_qos_depth)
-                                : ctx.bus_node.create_publisher(ctx.bus_topic.c_str()));
+          ctx.bus_qos_depth > 0
+          ? ctx.bus_node.create_publisher(ctx.bus_topic.c_str(), ctx.bus_qos_depth)
+          : ctx.bus_node.create_publisher(ctx.bus_topic.c_str()));
       auto mtx = std::make_shared<std::mutex>();
       auto sub = create_ros2_to_bus_subscription(ctx.ros_node, ctx.ros_topic, pub, mtx, ctx.qos);
       ctx.retain(std::move(pub));
