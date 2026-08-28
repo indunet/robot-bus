@@ -18,15 +18,9 @@ C++:     rclcpp ──mapper──► robot_bus::Node
 Rust:    rclrs  ──mapper──► robot_bus::Node
 ```
 
-**为什么分语言：** Topic / service / action 都要用编译期具体类型（`create_subscription<T>` / `create_service<T>` 等）。若 C++/Python 只把类型名交给 Rust，`T` 对不上。因此各语言在本侧用具体类型建 ROS 实体，再用本语言 bus `Node` 转发。
+**为什么分语言：** Topic / service / action 都要用编译期具体类型（`create_subscription<T>` / `create_service<T>` 等）。各语言在本侧用具体类型建 ROS 实体，再用本语言 bus `Node` 转发。
 
-| 支持 | 不支持 |
-|------|--------|
-| Topic / Service / Action | YAML 配置桥 |
-| 代码里 `.mapper(具体对象)` | 用类型名字符串 lookup 挂路由 |
-| 用户自定义 mapper（本语言具体类型） | 跨语言「只传字符串」的万能桥 |
-
-官方发行版：**Humble**、**Jazzy**。
+官方发行版：**Humble**、**Jazzy**。挂路由用 `.mapper(具体对象)`；自定义 mapper 写本语言字段转换即可。
 
 ---
 
@@ -54,22 +48,11 @@ cargo run --bin robot_bus_broker    # 或已安装的 robot-bus-broker
 
 ---
 
-## 统一契约（仅代码）
+## 统一契约
 
 方向（`Direction`）：`Ros2ToBus`（默认）或 `BusToRos2`，**禁止** `both`。
 
-```text
-Ros2Bridge.new / New / new(name)
-  .bus_tcp(...) | .bus_ipc() | .bus_discover(...)
-  .route(ros, bus).mapper(...).direction(...).qos_depth(n)|.best_effort()|.sensor_data().lazy().add()
-  .service(ros, bus).mapper(...).timeout(...).direction(...).add()
-  .action(ros, bus).mapper(...).timeout(...).direction(...).add()
-  .build()
-  .spin() | .spin_once(...)
-```
-
 - 默认超时：service **5s**，action goal **30s**
-- **无** `from_yaml`；**无** `add_route(..., "pkg/msg/Type", ...)`
 - Topic 路由默认 **eager**：`build()` 立刻建 ROS subscription，ROS 图上能看到这座桥。仅对需要按需开关的 ROS2→bus 路由写 `.lazy()`。
 
 ### `.lazy()`（opt-in ROS2→bus）
@@ -124,7 +107,7 @@ C++ 只 override `attach`、把实体塞进 `keep_alive` 的自定义 mapper **�
 
 相机示例用 `.sensor_data().lazy()`。不要把 Image builtin 默认改成 SensorDataQoS。
 
-### 一期内置 mapper（对象，不是字符串）
+### 一期内置 mapper
 
 | 种类 | Mapper | ROS 类型 |
 |------|--------|----------|
@@ -134,20 +117,19 @@ C++ 只 override `attach`、把实体塞进 `keep_alive` 的自定义 mapper **�
 | Service | `SetBoolServiceMapper` | `std_srvs/srv/SetBool` |
 | Action | `FibonacciActionMapper` | `example_interfaces/action/Fibonacci` |
 
-Rust 另有完整 topic mapper 注册表（`src/ros2_bridge/mappers/`），挂路由仍须 `.mapper(具体类型)`；`lookup_topic_mapper` / `registered_topic_types` 仅自省，不是挂路由入口。
+Rust 另有完整 topic mapper 注册表（`src/ros2_bridge/mappers/`）。挂路由用 `.mapper(具体类型)`；`lookup_topic_mapper` / `registered_topic_types` 用于自省。
 
 ---
 
-## 用户自定义 mapper：可以
+## 用户自定义 mapper
 
-**可以。** 先写 **bus protobuf**（字段对齐 ROS `.msg` / `.srv` / `.action`），`protoc` 生成本语言 stubs，再只写 **字段 ↔ protobuf 转换**；库负责订阅/发布/service 接线。typed API 接受任意 protobuf 消息类，不必放进 robot-bus 仓库。
+先写 **bus protobuf**（字段对齐 ROS `.msg` / `.srv` / `.action`），`protoc` 生成本语言 stubs，再只写 **字段 ↔ protobuf 转换**；库负责订阅/发布/service 接线。typed API 接受任意 protobuf 消息类，不必放进 robot-bus 仓库。
 
-| | 行不行 |
+| 语言 | 写法 |
 |--|--------|
-| Python：duck-typed convert 方法 + `.mapper(MyFoo())` | **行** |
-| Rust：`impl TypedTopicMapper` / `TypedServiceMapper` / `TypedActionMapper` | **行** |
-| C++：`TypedTopicMapper` / `TypedServiceMapper` CRTP + `.mapper(shared_ptr)` | **行**（需 `ROBOT_BUS_HAS_ROS2`） |
-| 只写 YAML / 类型名字符串 | **不行** |
+| Python | duck-typed convert 方法 + `.mapper(MyFoo())` |
+| Rust | `impl TypedTopicMapper` / `TypedServiceMapper` / `TypedActionMapper` |
+| C++ | `TypedTopicMapper` / `TypedServiceMapper` CRTP + `.mapper(shared_ptr)`（需 `ROBOT_BUS_HAS_ROS2`） |
 
 高级：仍可直接 override `ServiceMapper::attach` / `ActionMapper::attach`（特殊 QoS 等）。
 
@@ -535,12 +517,9 @@ bridge.spin();
 ## 常见问题
 
 1. **未 source ROS** — 三端都会失败。
-2. **YAML 配桥** — 不支持；代码里挂 mapper。
-3. **只传类型名字符串** — 不支持挂路由；传具体 mapper 对象。
-4. **想跨语言万能动态 srv** — 不做；在目标语言写自定义 mapper。
-5. **C++ `ros2_available() == false`** — 未链 `robot_bus_ros2_bridge` / 装的是无桥包。
-6. **Python `ros2_available() == False`** — 未安装或未 source 到 `rclpy`。
-7. **Rust topic 登记了但跑不起来** — 缺对应 ROS typesupport（如 `foxglove_msgs`）。
+2. **C++ `ros2_available() == false`** — 未链 `robot_bus_ros2_bridge` / 装的是无桥包。
+3. **Python `ros2_available() == False`** — 未安装或未 source 到 `rclpy`。
+4. **Rust topic 登记了但跑不起来** — 缺对应 ROS typesupport（如 `foxglove_msgs`）。
 
 ---
 

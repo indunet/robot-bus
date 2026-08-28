@@ -18,15 +18,9 @@ C++:     rclcpp ──mapper──► robot_bus::Node
 Rust:    rclrs  ──mapper──► robot_bus::Node
 ```
 
-**Why per language:** Topic / service / action all need compile-time concrete types (`create_subscription<T>`, `create_service<T>`, etc.). If C++/Python only pass type names to Rust, `T` won't match. Each language therefore creates ROS entities with concrete types on its side, then forwards via its own bus `Node`.
+**Why per language:** Topic / service / action all need compile-time concrete types (`create_subscription<T>`, `create_service<T>`, etc.). Each language creates ROS entities with concrete types on its side, then forwards via its own bus `Node`.
 
-| Supported | Not supported |
-|-----------|---------------|
-| Topic / Service / Action | YAML-configured bridge |
-| `.mapper(concrete object)` in code | Mounting routes via type-name string lookup |
-| User-defined mappers (concrete types per language) | Cross-language "string-only" universal bridge |
-
-Official releases: **Humble**, **Jazzy**.
+Official releases: **Humble**, **Jazzy**. Mount routes with `.mapper(concrete object)`; custom mappers are field converters in that language.
 
 ---
 
@@ -54,22 +48,11 @@ cargo run --bin robot_bus_broker    # or installed robot-bus-broker
 
 ---
 
-## Unified contract (code only)
+## Unified contract
 
 Direction (`Direction`): `Ros2ToBus` (default) or `BusToRos2`; **`both` is not allowed**.
 
-```text
-Ros2Bridge.new / New / new(name)
-  .bus_tcp(...) | .bus_ipc() | .bus_discover(...)
-  .route(ros, bus).mapper(...).direction(...).qos_depth(n)|.best_effort()|.sensor_data().lazy().add()
-  .service(ros, bus).mapper(...).timeout(...).direction(...).add()
-  .action(ros, bus).mapper(...).timeout(...).direction(...).add()
-  .build()
-  .spin() | .spin_once(...)
-```
-
 - Default timeouts: service **5s**, action goal **30s**
-- **No** `from_yaml`; **no** `add_route(..., "pkg/msg/Type", ...)`
 - Topic routes default to **eager** ROS subscriptions (`build()` creates them immediately so the ROS graph shows the bridge). Opt in to on-demand ROS2→bus with `.lazy()` on that route only.
 
 ### `.lazy()` (opt-in ROS2→bus)
@@ -124,7 +107,7 @@ Defaults are unchanged: C++ / Python `QoS(10)` reliable; Rust `topics_default()`
 
 Camera example: `.sensor_data().lazy()`. Image builtins do **not** default to SensorDataQoS.
 
-### Phase-1 built-in mappers (objects, not strings)
+### Phase-1 built-in mappers
 
 | Kind | Mapper | ROS type |
 |------|--------|----------|
@@ -134,20 +117,19 @@ Camera example: `.sensor_data().lazy()`. Image builtins do **not** default to Se
 | Service | `SetBoolServiceMapper` | `std_srvs/srv/SetBool` |
 | Action | `FibonacciActionMapper` | `example_interfaces/action/Fibonacci` |
 
-Rust also has a full topic mapper registry (`src/ros2_bridge/mappers/`); mounting routes still requires `.mapper(concrete type)`; `lookup_topic_mapper` / `registered_topic_types` are for introspection only, not for mounting routes.
+Rust also has a full topic mapper registry (`src/ros2_bridge/mappers/`). Mount routes with `.mapper(concrete type)`; `lookup_topic_mapper` / `registered_topic_types` are for introspection.
 
 ---
 
-## User-defined mappers: yes
+## User-defined mappers
 
-**Yes.** First write a **bus protobuf** (fields aligned with the ROS `.msg` / `.srv` / `.action`), generate language stubs with `protoc`, then only write **field ↔ protobuf conversion**; the library handles subscribe/publish/service wiring. Typed APIs accept any protobuf message class — they do not have to live in this repository.
+First write a **bus protobuf** (fields aligned with the ROS `.msg` / `.srv` / `.action`), generate language stubs with `protoc`, then only write **field ↔ protobuf conversion**; the library handles subscribe/publish/service wiring. Typed APIs accept any protobuf message class — they do not have to live in this repository.
 
-| | Works? |
+| Language | How |
 |--|--------|
-| Python: duck-typed convert methods + `.mapper(MyFoo())` | **Yes** |
-| Rust: `impl TypedTopicMapper` / `TypedServiceMapper` / `TypedActionMapper` | **Yes** |
-| C++: `TypedTopicMapper` / `TypedServiceMapper` CRTP + `.mapper(shared_ptr)` | **Yes** (requires `ROBOT_BUS_HAS_ROS2`) |
-| YAML / type-name strings only | **No** |
+| Python | duck-typed convert methods + `.mapper(MyFoo())` |
+| Rust | `impl TypedTopicMapper` / `TypedServiceMapper` / `TypedActionMapper` |
+| C++ | `TypedTopicMapper` / `TypedServiceMapper` CRTP + `.mapper(shared_ptr)` (requires `ROBOT_BUS_HAS_ROS2`) |
 
 Advanced: you can still override `ServiceMapper::attach` / `ActionMapper::attach` directly (special QoS, etc.).
 
@@ -538,12 +520,9 @@ The main loop must drive both sides (`spin` / `spin_once`); implementation detai
 ## FAQ
 
 1. **ROS not sourced** — all three language bindings fail.
-2. **YAML bridge config** — not supported; mount mappers in code.
-3. **Type-name strings only** — not supported for mounting routes; pass concrete mapper objects.
-4. **Cross-language universal dynamic srv** — not supported; write a custom mapper in the target language.
-5. **C++ `ros2_available() == false`** — not linked with `robot_bus_ros2_bridge` / installed package without bridge.
-6. **Python `ros2_available() == False`** — `rclpy` not installed or ROS not sourced.
-7. **Rust topic registered but fails at runtime** — missing corresponding ROS typesupport (e.g. `foxglove_msgs`).
+2. **C++ `ros2_available() == false`** — not linked with `robot_bus_ros2_bridge` / installed package without bridge.
+3. **Python `ros2_available() == False`** — `rclpy` not installed or ROS not sourced.
+4. **Rust topic registered but fails at runtime** — missing corresponding ROS typesupport (e.g. `foxglove_msgs`).
 
 ---
 

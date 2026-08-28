@@ -66,19 +66,10 @@ Progress:
 
 ## Unified builder contract
 
-```text
-Ros2Bridge.new / New / new(name)
-  .bus_tcp(...) | .bus_ipc() | .bus_discover(...)
-  .route(ros, bus).mapper(...).direction(...).lazy().add()
-  .service(ros, bus).mapper(...).timeout(...).direction(...).add()
-  .action(ros, bus).mapper(...).timeout(...).direction(...).add()
-  .build()
-  .spin() | .spin_once(...)
-```
-
-Defaults: service timeout **5s**, action goal **30s**. Topic routes are **eager**
-at `build()`; `.lazy()` is opt-in ROS2→bus only (camera/lidar). No-console brokers
-fall back to eager. `.lazy()` on `BusToRos2` fails at `.add()`.
+Direction: `Ros2ToBus` (default) or `BusToRos2`; **no `both`**. Defaults: service
+timeout **5s**, action goal **30s**. Topic routes are **eager** at `build()`;
+`.lazy()` is opt-in ROS2→bus only (camera/lidar). No-console brokers fall back
+to eager. `.lazy()` on `BusToRos2` fails at `.add()`.
 
 ### Built-in mappers (objects, not strings)
 

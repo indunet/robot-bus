@@ -8,62 +8,27 @@ use std::sync::Arc;
 use std::thread;
 use std::time::Duration;
 
-use robot_bus::broker::action_bus::ActionBusConfig;
-use robot_bus::broker::message_bus::BusConfig;
-use robot_bus::broker::service_bus::ServiceBusConfig;
-use robot_bus::broker::{
-    ConsoleBrokerConfig, DiscoveryConfig, RobotBusBroker, RobotBusConfig, WsGatewayConfig,
-};
 use robot_bus::message_bus::Publisher;
-use robot_bus::{Node, NodeOptions};
-use support::{MessageProxy, free_port, lock_brokers};
+use robot_bus::{Node, NodeOptions, RobotBusBroker, RobotBusConfig};
+use support::{ephemeral_robot_bus_config, lock_brokers, MessageProxy};
 
-fn test_broker_config(
-    msg_xsub: u16,
-    msg_xpub: u16,
-    svc_fe: u16,
-    svc_be: u16,
-    act_fe: u16,
-    act_be: u16,
-    http: u16,
-) -> RobotBusConfig {
-    RobotBusConfig {
-        message: BusConfig {
-            xsub_bind: format!("tcp://127.0.0.1:{msg_xsub}"),
-            xpub_bind: format!("tcp://127.0.0.1:{msg_xpub}"),
-            bind_all_transports: false,
-            bind_opts: Default::default(),
-            ..BusConfig::default()
-        },
-        service: ServiceBusConfig {
-            frontend_bind: format!("tcp://127.0.0.1:{svc_fe}"),
-            backend_bind: format!("tcp://127.0.0.1:{svc_be}"),
-            bind_all_transports: false,
-            bind_opts: Default::default(),
-            ..ServiceBusConfig::default()
-        },
-        action: ActionBusConfig {
-            frontend_bind: format!("tcp://127.0.0.1:{act_fe}"),
-            backend_bind: format!("tcp://127.0.0.1:{act_be}"),
-            bind_all_transports: false,
-            bind_opts: Default::default(),
-            ..ActionBusConfig::default()
-        },
-        discovery: DiscoveryConfig {
-            enabled: false,
-            ..DiscoveryConfig::default()
-        },
-        ws: WsGatewayConfig {
-            listen: format!("127.0.0.1:{http}").parse().unwrap(),
-            ..WsGatewayConfig::default()
-        },
-        console: ConsoleBrokerConfig {
-            enabled: true,
-            tank_enabled: false,
-            docs_enabled: true,
-            listen: format!("127.0.0.1:{http}").parse().unwrap(),
-            cors_origins: vec![],
-        },
+fn console_on_config() -> RobotBusConfig {
+    let mut config = ephemeral_robot_bus_config();
+    config.console.enabled = true;
+    config.console.tank_enabled = false;
+    config
+}
+
+fn node_options_from_broker(broker: &RobotBusBroker) -> NodeOptions {
+    NodeOptions {
+        message_xsub: Some(broker.message.xsub_bind.clone()),
+        message_xpub: Some(broker.message.xpub_bind.clone()),
+        service_frontend: Some(broker.service.frontend_bind.clone()),
+        service_backend: Some(broker.service.backend_bind.clone()),
+        action_frontend: Some(broker.action.frontend_bind.clone()),
+        action_backend: Some(broker.action.backend_bind.clone()),
+        console_url: Some(broker.api_url()),
+        ..NodeOptions::default()
     }
 }
 
@@ -111,28 +76,17 @@ fn wait_for_message_times_out() {
 #[test]
 fn wait_for_service_ready_via_console_workers() {
     let _lock = lock_brokers();
-    let ports: [u16; 7] = std::array::from_fn(|_| free_port());
-    let broker = RobotBusBroker::start(test_broker_config(
-        ports[0], ports[1], ports[2], ports[3], ports[4], ports[5], ports[6],
-    ))
-    .expect("broker");
-    let console_url = format!("http://127.0.0.1:{}", ports[6]);
-
-    let server_opts = NodeOptions {
-        message_xsub: Some(format!("tcp://127.0.0.1:{}", ports[0])),
-        message_xpub: Some(format!("tcp://127.0.0.1:{}", ports[1])),
-        service_frontend: Some(format!("tcp://127.0.0.1:{}", ports[2])),
-        service_backend: Some(format!("tcp://127.0.0.1:{}", ports[3])),
-        action_frontend: Some(format!("tcp://127.0.0.1:{}", ports[4])),
-        action_backend: Some(format!("tcp://127.0.0.1:{}", ports[5])),
-        console_url: Some(console_url.clone()),
-        ..NodeOptions::default()
-    };
+    let broker = RobotBusBroker::start(console_on_config()).expect("broker");
+    let server_opts = node_options_from_broker(&broker);
     let client_opts = server_opts.clone();
 
     let mut server = Node::with_options("svc-server", server_opts);
     server
-        .create_service_raw("/wait/echo", Arc::new(|body| body.to_vec()), None)
+        .create_service_raw(
+            "/wait/echo",
+            Arc::new(|body| body.to_vec()),
+            None,
+        )
         .expect("create_service");
     server.start().expect("start server");
     thread::sleep(Duration::from_millis(200));
@@ -159,23 +113,8 @@ fn wait_for_service_ready_via_console_workers() {
 #[test]
 fn wait_for_action_server_ready_via_console_workers() {
     let _lock = lock_brokers();
-    let ports: [u16; 7] = std::array::from_fn(|_| free_port());
-    let broker = RobotBusBroker::start(test_broker_config(
-        ports[0], ports[1], ports[2], ports[3], ports[4], ports[5], ports[6],
-    ))
-    .expect("broker");
-    let console_url = format!("http://127.0.0.1:{}", ports[6]);
-
-    let server_opts = NodeOptions {
-        message_xsub: Some(format!("tcp://127.0.0.1:{}", ports[0])),
-        message_xpub: Some(format!("tcp://127.0.0.1:{}", ports[1])),
-        service_frontend: Some(format!("tcp://127.0.0.1:{}", ports[2])),
-        service_backend: Some(format!("tcp://127.0.0.1:{}", ports[3])),
-        action_frontend: Some(format!("tcp://127.0.0.1:{}", ports[4])),
-        action_backend: Some(format!("tcp://127.0.0.1:{}", ports[5])),
-        console_url: Some(console_url),
-        ..NodeOptions::default()
-    };
+    let broker = RobotBusBroker::start(console_on_config()).expect("broker");
+    let server_opts = node_options_from_broker(&broker);
     let client_opts = server_opts.clone();
 
     let mut server = Node::with_options("act-server", server_opts);
