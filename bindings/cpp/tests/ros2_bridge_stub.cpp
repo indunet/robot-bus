@@ -91,6 +91,29 @@ int test_qos_builder() {
   return 0;
 }
 
+int test_service_builder() {
+  try {
+    auto b = robot_bus::Ros2Bridge::New("t")
+                 .service()
+                 .from_ros("/a", ros_qos())
+                 .to_bus("/a")
+                 .mapper(robot_bus::TriggerServiceMapper{})
+                 .timeout(2.0)
+                 .add()
+                 .action()
+                 .from_bus("/b")
+                 .to_ros("/b", ros_qos())
+                 .mapper(robot_bus::FibonacciActionMapper{})
+                 .add();
+    (void)b;
+  } catch (const robot_bus::Error &e) {
+    std::fprintf(stderr, "service/action path threw: %s\n", e.what());
+    return 1;
+  }
+  std::printf("service builder checks ok\n");
+  return 0;
+}
+
 }  // namespace
 
 int main() {
@@ -98,6 +121,9 @@ int main() {
     return rc;
   }
   if (int rc = test_qos_builder()) {
+    return rc;
+  }
+  if (int rc = test_service_builder()) {
     return rc;
   }
 

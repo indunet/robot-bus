@@ -153,8 +153,8 @@ Ros2Bridge.new(name)
   .bus_tcp(...) | .bus_ipc() | .bus_discover(...)
   .from_ros(ros, TopicQos).to_bus(bus, TopicQos).mapper(...).lazy()?.add()
   .from_bus(bus, TopicQos).to_ros(ros, TopicQos).mapper(...).add()
-  .service(...).mapper(...).timeout(...).add()
-  .action(...).mapper(...).timeout(...).add()
+  .service().from_ros(ros, TopicQos).to_bus(bus).mapper(...).timeout(...).add()
+  .action().from_ros(ros, TopicQos).to_bus(bus).mapper(...).timeout(...).add()
   .build()
   .spin()
 ```
@@ -162,13 +162,13 @@ Ros2Bridge.new(name)
 Rules (from [ros2-bridge.md](../zh/ros2-bridge.md)):
 
 - Topic endpoints are **name + `TopicQos`**: `keep_last(n).reliable()` or `.best_effort()`. Bus must be `.best_effort()`.
-- Service / action direction is one-way per route; **no `both`**
+- Service / action: `TopicQos` on the ROS name only (`from_ros` / `to_ros`); bus RPC names have no QoS. **no `both`**.
 - Mount with **concrete mapper objects**, not type-name strings
 - Built-ins: `StdMsgsStringMapper`, `SensorMsgsImageMapper`, `TriggerServiceMapper`, `SetBoolServiceMapper`, `FibonacciActionMapper`
 - Custom service/action: implement typed field converters (`TypedServiceMapper` / duck-typed Python / C++ CRTP)
 - Prerequisites: `source` ROS Humble or Jazzy; broker reachable; language-specific ROS feature/package
 
-Default topic chain is `from_ros → to_bus` when ROS is the publisher feeding bus clients. Service / action default `Direction::Ros2ToBus`.
+Default chain is `from_ros → to_bus` when ROS is the publisher/server feeding bus clients.
 
 ## 6. What usually does NOT migrate 1:1
 

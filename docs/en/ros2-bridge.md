@@ -50,16 +50,18 @@ cargo run --bin robot_bus_broker    # or installed robot-bus-broker
 
 ## Unified contract
 
-Each topic endpoint is a **name + `TopicQos`**:
+Each topic endpoint is a **name + `TopicQos`**. ROS service / action endpoints take the same `TopicQos` (bus RPC names do not):
 
 ```text
 .from_ros(ros_name, TopicQos).to_bus(bus_name, TopicQos).mapper(...).lazy()?.add()
 .from_bus(bus_name, TopicQos).to_ros(ros_name, TopicQos).mapper(...).add()
+.service().from_ros(ros_name, TopicQos).to_bus(bus_name).mapper(...).timeout()?.add()
+.service().from_bus(bus_name).to_ros(ros_name, TopicQos).mapper(...).timeout()?.add()
+.action().from_ros(ros_name, TopicQos).to_bus(bus_name).mapper(...).timeout()?.add()
+.action().from_bus(bus_name).to_ros(ros_name, TopicQos).mapper(...).timeout()?.add()
 ```
 
-After `TopicQos.keep_last(n)` you must call `.reliable()` or `.best_effort()`. ROS endpoints accept either; bus endpoints must be `.best_effort()` (PUB/SUB has no reliable delivery).
-
-Service / action still use `.service(ros, bus)` / `.action(ros, bus)` with `Direction` (`Ros2ToBus` default or `BusToRos2`); **`both` is not allowed**.
+After `TopicQos.keep_last(n)` you must call `.reliable()` or `.best_effort()`. ROS endpoints accept either; bus **topic** endpoints must be `.best_effort()` (PUB/SUB has no reliable delivery). Bus service / action names have no QoS. Direction is the `from_ros → to_bus` / `from_bus → to_ros` chain. **`both` is not allowed**. Typical ROS service QoS (matching `services_default`) is `TopicQos.keep_last(10).reliable()`. Action applies that profile to goal / result / cancel services and the feedback topic; the status topic stays the ROS action-status default.
 
 - Default timeouts: service **5s**, action goal **30s**
 - Topic routes default to **eager** ROS subscriptions (`build()` creates them immediately so the ROS graph shows the bridge). Opt in to on-demand ROS2→bus with `.lazy()` on that route only.
@@ -113,10 +115,11 @@ Same type in all three languages. Pass one copy per endpoint (depth / reliabilit
 | reliable KeepLast 10 | `TopicQos.keep_last(10).reliable()` |
 | best-effort KeepLast 5 | `TopicQos.keep_last(5).best_effort()` |
 
-- **ROS** (`from_ros` / `to_ros`): KeepLast(depth) + the chosen reliability.
-- **bus** (`from_bus` / `to_bus`): depth → HWM only; must be `.best_effort()`.
+- **ROS** (`from_ros` / `to_ros`): KeepLast(depth) + the chosen reliability. Same `TopicQos` on topic, service, and action ROS endpoints.
+- **bus topics** (`from_bus` / `to_bus`): depth → HWM only; must be `.best_effort()`.
+- **bus service / action**: name only; no `TopicQos`.
 
-To match a ROS graph that uses best-effort KeepLast(5), write `keep_last(5).best_effort()` on both ends. Service / action do not use `TopicQos`.
+To match a ROS graph that uses best-effort KeepLast(5), write `keep_last(5).best_effort()` on both topic ends. For services, `keep_last(10).reliable()` matches ROS `services_default`.
 
 ### Phase-1 built-in mappers
 
@@ -245,9 +248,10 @@ class AddTwoIntsServiceMapper:
 bridge = (
     Ros2Bridge.new("bridge")
     .bus_tcp("localhost")
-    .service("/examples/add_two_ints", "/examples/add_two_ints")
+    .service()
+    .from_ros("/examples/add_two_ints", TopicQos.keep_last(10).reliable())
+    .to_bus("/examples/add_two_ints")
     .mapper(AddTwoIntsServiceMapper())
-    .direction(Direction.Ros2ToBus)
     .timeout(5.0)
     .add()
     .build()
@@ -296,7 +300,7 @@ impl TypedServiceMapper for AddTwoIntsServiceMapper {
     }
 }
 
-// .service("/examples/add_two_ints", "/examples/add_two_ints")
+// .service().from_ros("/examples/add_two_ints", TopicQos::keep_last(10).reliable()).to_bus("/examples/add_two_ints")
 //     .mapper(AddTwoIntsServiceMapper)
 //     .add()?
 ```
@@ -381,9 +385,9 @@ struct AddTwoIntsServiceMapper
   }
 };
 
-// .service("/examples/add_two_ints", "/examples/add_two_ints")
+// .service().from_ros("/examples/add_two_ints", robot_bus::TopicQos::keep_last(10).reliable())
+//     .to_bus("/examples/add_two_ints")
 //     .mapper(std::make_shared<AddTwoIntsServiceMapper>())
-//     .direction(robot_bus::Direction::Ros2ToBus)
 //     .add()
 ```
 
@@ -405,7 +409,9 @@ fn main() -> robot_bus::Result<()> {
             .to_bus("/chatter", TopicQos::keep_last(8).best_effort())
             .mapper(StdMsgsStringMapper)
             .add()?
-        .service("/reset", "/reset")
+        .service()
+            .from_ros("/reset", TopicQos::keep_last(10).reliable())
+            .to_bus("/reset")
             .mapper(TriggerServiceMapper)
             .timeout(std::time::Duration::from_secs(3))
             .add()?
@@ -475,7 +481,9 @@ bridge = (
     .to_bus("/chatter", TopicQos.keep_last(8).best_effort())
     .mapper(StdMsgsStringMapper())
     .add()
-    .service("/reset", "/reset")
+    .service()
+    .from_ros("/reset", TopicQos.keep_last(10).reliable())
+    .to_bus("/reset")
     .mapper(TriggerServiceMapper())
     .add()
     .build()
@@ -502,7 +510,9 @@ auto bridge = robot_bus::Ros2Bridge::New("ros_bridge")
     .to_bus("/chatter", robot_bus::TopicQos::keep_last(8).best_effort())
     .mapper(robot_bus::StdMsgsStringMapper{})
     .add()
-    .service("/reset", "/reset")
+    .service()
+    .from_ros("/reset", robot_bus::TopicQos::keep_last(10).reliable())
+    .to_bus("/reset")
     .mapper(robot_bus::TriggerServiceMapper{})
     .add()
     .build();

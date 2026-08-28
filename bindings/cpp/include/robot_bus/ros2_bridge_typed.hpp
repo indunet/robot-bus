@@ -104,13 +104,13 @@ class TypedServiceMapper : public ServiceMapper {
               *response = self->error_response("bus call failed");
             }
           },
-          rmw_qos_profile_services_default, ctx.callback_group);
+          service_rmw_qos(ctx.ros_qos), ctx.callback_group);
       ctx.retain(std::move(bus_client));
       ctx.retain(std::move(mtx));
       ctx.retain(std::move(srv));
     } else {
       auto ros_client = ctx.ros_node->template create_client<RosSrv>(
-          ctx.ros_service, rmw_qos_profile_services_default, ctx.callback_group);
+          ctx.ros_service, service_rmw_qos(ctx.ros_qos), ctx.callback_group);
       ctx.retain(ros_client);
       ctx.retain(std::make_shared<ServiceHandle>(ctx.bus_node.create_service(
           ctx.bus_service.c_str(),
@@ -197,13 +197,13 @@ class TypedActionMapper : public ActionMapper {
 
       auto server = rclcpp_action::create_server<RosAction>(
           ctx.ros_node, ctx.ros_action, handle_goal, handle_cancel, handle_accepted,
-          rcl_action_server_get_default_options(), ctx.callback_group);
+          action_server_qos(ctx.ros_qos), ctx.callback_group);
       ctx.retain(std::move(bus_client));
       ctx.retain(std::move(mtx));
       ctx.retain(std::move(server));
     } else {
       auto ros_client = rclcpp_action::create_client<RosAction>(
-          ctx.ros_node, ctx.ros_action, ctx.callback_group);
+          ctx.ros_node, ctx.ros_action, ctx.callback_group, action_client_qos(ctx.ros_qos));
       auto mtx = std::make_shared<std::mutex>();
       ctx.retain(ros_client);
       ctx.retain(mtx);

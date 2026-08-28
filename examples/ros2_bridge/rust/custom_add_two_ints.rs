@@ -23,7 +23,7 @@ use std::time::Duration;
 
 use prost::Message as ProstMessage;
 use robot_bus::Node;
-use robot_bus::ros2_bridge::{Direction, Ros2Bridge, TypedServiceMapper};
+use robot_bus::ros2_bridge::{Ros2Bridge, TopicQos, TypedServiceMapper};
 use ros_env::example_interfaces::srv as ros_srv;
 
 use my_pkg::{AddTwoIntsRequest, AddTwoIntsResponse};
@@ -78,9 +78,10 @@ fn main() -> robot_bus::Result<()> {
 
     let mut bridge = Ros2Bridge::new("examples_ros2_bridge_custom")
         .bus_tcp("localhost")
-        .service("/examples/add_two_ints", "/examples/add_two_ints")
+        .service()
+        .from_ros("/examples/add_two_ints", TopicQos::keep_last(10).reliable())
+        .to_bus("/examples/add_two_ints")
         .mapper(AddTwoIntsServiceMapper)
-        .direction(Direction::Ros2ToBus)
         .timeout(Duration::from_secs(5))
         .add()?
         .build()?;

@@ -89,9 +89,10 @@ int main() {
   auto bridge =
       robot_bus::Ros2Bridge::New("examples_ros2_bridge_custom")
           .bus_tcp("localhost")
-          .service("/examples/add_two_ints", "/examples/add_two_ints")
+          .service()
+          .from_ros("/examples/add_two_ints", robot_bus::TopicQos::keep_last(10).reliable())
+          .to_bus("/examples/add_two_ints")
           .mapper(std::make_shared<AddTwoIntsServiceMapper>())
-          .direction(robot_bus::Direction::Ros2ToBus)
           .timeout(5.0)
           .add()
           .build();

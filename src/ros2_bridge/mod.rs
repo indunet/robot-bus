@@ -44,9 +44,10 @@ pub mod dynamic_rpc {
 }
 
 pub use builder::{
-    ActionRouteBuilder, BusToRos2Ready, FromBus, FromBusToRos, FromRos, FromRosToBus,
-    IntoActionMapper, IntoServiceMapper, IntoTopicMapper, Ros2Bridge, Ros2BridgeBuilder,
-    Ros2ToBusReady, ServiceRouteBuilder, ACTION_CALL_TIMEOUT, SERVICE_CALL_TIMEOUT,
+    Action, ActionFromBus, ActionFromRos, ActionPair, ActionReady, BusToRos2Ready, FromBus,
+    FromBusToRos, FromRos, FromRosToBus, IntoActionMapper, IntoServiceMapper, IntoTopicMapper,
+    Ros2Bridge, Ros2BridgeBuilder, Ros2ToBusReady, Service, ServiceFromBus, ServiceFromRos,
+    ServicePair, ServiceReady, ACTION_CALL_TIMEOUT, SERVICE_CALL_TIMEOUT,
 };
 pub use mapper::{
     lookup_topic_mapper, lookup_topic_mapper_arc, registered_topic_types, ActionMapper,

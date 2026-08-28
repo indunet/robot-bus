@@ -91,7 +91,9 @@ def test_builder_accepts_concrete_mappers_without_build():
         .to_bus("/chatter", _qos_bus())
         .mapper(StdMsgsStringMapper())
         .add()
-        .service("/reset", "/reset")
+        .service()
+        .from_ros("/reset", _qos_ros())
+        .to_bus("/reset")
         .mapper(TriggerServiceMapper())
         .timeout(2.0)
         .add()
@@ -206,6 +208,64 @@ def test_bus_reliable_rejected():
         )
 
 
+def test_service_from_bus_to_ros():
+    from robot_bus.ros2_bridge import Direction, Ros2Bridge
+
+    class DummyService:
+        def type_name(self) -> str:
+            return "test/srv/Dummy"
+
+    b = (
+        Ros2Bridge.new("t")
+        .service()
+        .from_bus("/a")
+        .to_ros("/a", _qos_ros())
+        .mapper(DummyService())
+        .timeout(1.0)
+        .add()
+    )
+    assert b._services[0]["direction"] == Direction.BusToRos2
+    assert b._services[0]["timeout"] == 1.0
+    assert b._services[0]["ros_qos"] == _qos_ros()
+
+
+def test_action_stores_ros_qos():
+    from robot_bus.ros2_bridge import Direction, Ros2Bridge
+
+    class DummyAction:
+        def type_name(self) -> str:
+            return "test/action/Dummy"
+
+    b = (
+        Ros2Bridge.new("t")
+        .action()
+        .from_ros("/f", _qos_ros())
+        .to_bus("/f")
+        .mapper(DummyAction())
+        .add()
+    )
+    assert b._actions[0]["direction"] == Direction.Ros2ToBus
+    assert b._actions[0]["ros_qos"] == _qos_ros()
+
+
+def test_service_qos_required_on_ros_endpoint():
+    from robot_bus.ros2_bridge import Ros2Bridge, TopicQos
+
+    class DummyService:
+        def type_name(self) -> str:
+            return "test/srv/Dummy"
+
+    with pytest.raises(TypeError, match="TopicQos"):
+        (
+            Ros2Bridge.new("t")
+            .service()
+            .from_ros("/a", TopicQos.keep_last(10))
+            .to_bus("/a")
+            .mapper(DummyService())
+            .add()
+        )
+
+
 def test_ros2_available_checks_rclpy():
     import robot_bus
 
@@ -227,6 +287,9 @@ if __name__ == "__main__":
     test_lazy_and_eager_routes_independent()
     test_qos_stored_per_endpoint()
     test_bus_reliable_rejected()
+    test_service_from_bus_to_ros()
+    test_service_qos_required_on_ros_endpoint()
+    test_action_stores_ros_qos()
     test_ros2_available_checks_rclpy()
     try:
         test_builder_accepts_concrete_mappers_without_build()

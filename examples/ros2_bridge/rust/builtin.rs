@@ -20,11 +20,15 @@ fn main() -> robot_bus::Result<()> {
         .to_bus("/examples/chatter", TopicQos::keep_last(8).best_effort())
         .mapper(StdMsgsStringMapper)
         .add()?
-        .service("/examples/reset", "/examples/reset")
+        .service()
+        .from_ros("/examples/reset", TopicQos::keep_last(10).reliable())
+        .to_bus("/examples/reset")
         .mapper(TriggerServiceMapper)
         .timeout(Duration::from_secs(5))
         .add()?
-        .action("/examples/fibonacci", "/examples/fibonacci")
+        .action()
+        .from_ros("/examples/fibonacci", TopicQos::keep_last(10).reliable())
+        .to_bus("/examples/fibonacci")
         .mapper(FibonacciActionMapper)
         .add()?
         .build()?;

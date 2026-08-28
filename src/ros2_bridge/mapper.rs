@@ -64,7 +64,11 @@ impl TopicQosKeepLast {
     }
 }
 
-/// Bridge topic QoS: KeepLast depth plus reliability. Same type on ROS and bus endpoints.
+/// Bridge QoS: KeepLast depth plus reliability.
+///
+/// Same type on **ROS** endpoints for topics, services, and actions.
+/// Bus only uses it on **topics** (depth → HWM; must be `.best_effort()`).
+/// Service / action bus names have no QoS.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct TopicQos {
     depth: i32,
@@ -99,8 +103,30 @@ pub(crate) fn ros_topic_options(topic: &str, qos: TopicQos) -> rclrs::PrimitiveO
         .keep_last(qos.depth().max(0) as u32);
     if qos.is_best_effort() {
         opts = opts.best_effort();
+    } else {
+        opts = opts.reliable();
     }
     opts
+}
+
+pub(crate) fn ros_service_qos_profile(qos: TopicQos) -> rclrs::QoSProfile {
+    let mut p = rclrs::QoSProfile::services_default().keep_last(qos.depth().max(0) as u32);
+    if qos.is_best_effort() {
+        p = p.best_effort();
+    } else {
+        p = p.reliable();
+    }
+    p
+}
+
+pub(crate) fn ros_action_feedback_qos_profile(qos: TopicQos) -> rclrs::QoSProfile {
+    let mut p = rclrs::QoSProfile::topics_default().keep_last(qos.depth().max(0) as u32);
+    if qos.is_best_effort() {
+        p = p.best_effort();
+    } else {
+        p = p.reliable();
+    }
+    p
 }
 
 /// Context passed to [`TopicMapper::attach_bus_to_ros`].
@@ -175,6 +201,7 @@ pub struct ServiceWireContext<'a> {
     pub bus_service: &'a str,
     pub direction: Direction,
     pub timeout: Duration,
+    pub ros_qos: TopicQos,
     pub ros_entities: &'a mut Vec<Box<dyn Any + Send + Sync>>,
 }
 
@@ -232,6 +259,7 @@ pub struct ActionWireContext<'a> {
     pub bus_action: &'a str,
     pub direction: Direction,
     pub timeout: Duration,
+    pub ros_qos: TopicQos,
     pub ros_entities: &'a mut Vec<Box<dyn Any + Send + Sync>>,
 }
 

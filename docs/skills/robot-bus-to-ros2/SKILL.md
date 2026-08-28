@@ -157,8 +157,8 @@ Ros2Bridge.new(name)
   .bus_tcp(...) | .bus_ipc() | .bus_discover(...)
   .from_bus(bus, TopicQos).to_ros(ros, TopicQos).mapper(...).add()
   .from_ros(ros, TopicQos).to_bus(bus, TopicQos).mapper(...).lazy()?.add()
-  .service(...).mapper(...).add()
-  .action(...).mapper(...).add()
+  .service().from_bus(bus).to_ros(ros, TopicQos).mapper(...).add()
+  .action().from_bus(bus).to_ros(ros, TopicQos).mapper(...).add()
   .build()
   .spin()
 ```
@@ -166,15 +166,15 @@ Ros2Bridge.new(name)
 From [ros2-bridge.md](../zh/ros2-bridge.md):
 
 - Topic endpoints are **name + `TopicQos`** (`keep_last(n).reliable()` or `.best_effort()`; bus must be `.best_effort()`)
-- Service / action: one direction per route; **no `both`**
+- Service / action: same `from_ros → to_bus` / `from_bus → to_ros` chain; `TopicQos` on the ROS name only; **no `both`**
 - Concrete mapper objects required
 - Built-in mappers for String, Image, Trigger, SetBool, Fibonacci; extend with typed converters for custom interfaces
 - Run with ROS sourced + broker up; language: Rust `features = ["ros2"]`, Python `rclpy`, C++ `robot_bus_ros2_*` / `ROBOT_BUS_HAS_ROS2`
 
-Pick the topic chain from data ownership:
+Pick the chain from data ownership:
 
-- Bus publisher → ROS subscribers: `from_bus → to_ros`
-- ROS publisher → bus subscribers: `from_ros → to_bus`
+- Bus publisher / server → ROS: `from_bus → to_ros`
+- ROS publisher / server → bus: `from_ros → to_bus`
 
 ## 6. What usually needs redesign
 

@@ -9,13 +9,14 @@ use std::task::{Context, Poll, RawWaker, RawWakerVTable, Waker};
 use std::thread;
 use std::time::{Duration, Instant};
 
-use rclrs::{BeginAcceptedGoal, GoalClient};
+use rclrs::{BeginAcceptedGoal, GoalClient, IntoActionClientOptions, IntoActionServerOptions};
 use rosidl_runtime_rs::{Action as ActionIdl, Service as ServiceIdl};
 
 use crate::errors::{BusError, Result};
 use crate::ros2_bridge::mapper::{
-    ros_topic_options, ActionWireContext, Direction, ServiceWireContext, TopicQos,
-    TopicWireContext, TypedActionMapper, TypedServiceMapper, TypedTopicMapper,
+    ros_action_feedback_qos_profile, ros_service_qos_profile, ros_topic_options, ActionWireContext,
+    Direction, ServiceWireContext, TopicQos, TopicWireContext, TypedActionMapper,
+    TypedServiceMapper, TypedTopicMapper,
 };
 use crate::runtime::{ActionGoalHandler, MessageCallback, ServiceHandler, TopicPublisherRaw};
 use crate::ActionKind;
@@ -148,7 +149,7 @@ where
             let srv = ctx
                 .ros_node
                 .create_service::<M::Ros, _>(
-                    ctx.ros_service,
+                    ros_topic_options(ctx.ros_service, ctx.ros_qos),
                     move |req: <M::Ros as ServiceIdl>::Request| {
                         let bus_req = match cb_mapper.ros_req_to_bus(&req) {
                             Ok(b) => b,
@@ -180,7 +181,7 @@ where
             let type_name = mapper.type_name().to_string();
             let ros_client = ctx
                 .ros_node
-                .create_client::<M::Ros>(ctx.ros_service)
+                .create_client::<M::Ros>(ros_topic_options(ctx.ros_service, ctx.ros_qos))
                 .map_err(|e| BusError::Protocol(format!("ros create_client {type_name}: {e}")))?;
             ctx.ros_entities.push(Box::new(Arc::clone(&ros_client)));
             let timeout = ctx.timeout;
@@ -279,9 +280,17 @@ where
             ));
             let timeout = ctx.timeout;
             let type_name = mapper.type_name().to_string();
+            let srv_qos = ros_service_qos_profile(ctx.ros_qos);
+            let fb_qos = ros_action_feedback_qos_profile(ctx.ros_qos);
             let srv = ctx
                 .ros_node
-                .create_action_server::<M::Ros, _>(ctx.ros_action, move |requested| {
+                .create_action_server::<M::Ros, _>(
+                    ctx.ros_action
+                        .goal_service_qos(srv_qos)
+                        .result_service_qos(srv_qos)
+                        .cancel_service_qos(srv_qos)
+                        .feedback_topic_qos(fb_qos),
+                    move |requested| {
                     let bus_client = Arc::clone(&bus_client);
                     let mapper = mapper.clone();
                     async move {
@@ -358,9 +367,17 @@ where
         }
         Direction::BusToRos2 => {
             let type_name = mapper.type_name().to_string();
+            let srv_qos = ros_service_qos_profile(ctx.ros_qos);
+            let fb_qos = ros_action_feedback_qos_profile(ctx.ros_qos);
             let ros_client = ctx
                 .ros_node
-                .create_action_client::<M::Ros>(ctx.ros_action)
+                .create_action_client::<M::Ros>(
+                    ctx.ros_action
+                        .goal_service_qos(srv_qos)
+                        .result_service_qos(srv_qos)
+                        .cancel_service_qos(srv_qos)
+                        .feedback_topic_qos(fb_qos),
+                )
                 .map_err(|e| {
                     BusError::Protocol(format!("ros create_action_client {type_name}: {e}"))
                 })?;
