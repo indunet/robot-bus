@@ -16,8 +16,8 @@ usage() {
   cat <<'EOF'
 Usage: benches/ros2_bridge_perf/run.sh [--local]
 
-  (default)  Sync this repo into Docker container `ros2`, overlay + cargo bench, pull reports.
-  --local    Already inside the container (or ROS+overlay sourced); run cargo bench here.
+  (default)  Sync this repo into Docker container `ros2`, cargo bench, pull reports.
+  --local    Already inside the container (ROS sourced); run cargo bench here.
 EOF
 }
 
@@ -68,7 +68,7 @@ echo "==> syncing ${ROOT} -> ${CONTAINER}:${WS_IN_CONTAINER}"
 docker exec "${CONTAINER}" mkdir -p "${WS_IN_CONTAINER}"
 docker cp "${ROOT}/." "${CONTAINER}:${WS_IN_CONTAINER}"
 
-echo "==> overlay + bench inside ${CONTAINER}"
+echo "==> bench inside ${CONTAINER}"
 docker exec \
   -e ROS2_BRIDGE_PERF_IMAGE_WIDTH="${ROS2_BRIDGE_PERF_IMAGE_WIDTH:-}" \
   -e ROS2_BRIDGE_PERF_IMAGE_HEIGHT="${ROS2_BRIDGE_PERF_IMAGE_HEIGHT:-}" \

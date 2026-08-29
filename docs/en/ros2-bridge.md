@@ -37,12 +37,12 @@ source /opt/ros/humble/setup.bash   # or jazzy
 cargo run --bin robot_bus_broker    # or installed robot-bus-broker
 ```
 
-**Rust `feature = "ros2"`** also needs a **ros2_rust** overlay: `AMENT_PREFIX_PATH` must contain `rosidl_generator_rs` output at `share/<pkg>/rust/` for **every package used by the topic mappers** (not just `std_msgs` / `sensor_msgs`). Sourcing Humble alone **does not** compile typed paths. `apt install ros-humble-sensor-msgs` ships C typesupport only, not the rust IDL. See **Rust overlay** below.
+**Rust `feature = "ros2"`** uses crates.io **`rclrs` 0.7**. Typed messages come from published **`ros-env` 0.2**, which re-exports `share/<pkg>/rust/` on `AMENT_PREFIX_PATH` as `ros_env::sensor_msgs::msg::Image`. Current Humble apt packages for `common_interfaces` (including `sensor_msgs`) **already ship rust IDL**, so sourcing `/opt/ros/humble` is enough for Image / String and similar. The full mapper registry also needs packages Humble does not install by default (`nav2_msgs` / `control_msgs` / `apriltag_msgs`); only those need an overlay. See **Rust messages** below.
 
 | Language | Dependencies |
 |----------|--------------|
 | Common | Reachable broker (tcp / ipc / discover) |
-| Rust | `robot-bus = { features = ["ros2"] }` plus the rust message overlay |
+| Rust | `robot-bus = { features = ["ros2"] }` plus a sourced ROS env (typed messages below) |
 | Python | `robot_bus` + system **`rclpy`** (`just python-dev` / `python-dev-ros2`) |
 | C++ | `robot-bus-ros2-humble` or `…-jazzy`, or `just cpp-dev-ros2` (`-DROBOT_BUS_ROS2=ON`, links **rclcpp**) |
 
@@ -426,32 +426,25 @@ fn main() -> robot_bus::Result<()> {
 - Custom service/action: `TypedServiceMapper` / `TypedActionMapper` (see "User-defined" above)
 - Modules: `typed_service` (`wire_typed_*` / `attach_*`)
 
-### Rust overlay (ament rust messages)
+### Rust messages (`ros-env` + ament rust IDL)
 
-crates.io `rclrs` may still be 0.7; this repo **git-pins** the `ros-env` re-export line. Typed messages come from overlay `share/<pkg>/rust/`, **not** from distro apt packages.
+The client is crates.io **`rclrs` 0.7**. Message types come from **`ros-env` 0.2** re-exporting `share/<pkg>/rust/`, not from rclrs itself.
 
-Humble example (`colcon build` in a separate workspace, then `source install/setup.bash`):
+On Humble, `ros-humble-sensor-msgs` and similar packages already include `share/sensor_msgs/rust/` (with `msg::Image`). After `source /opt/ros/humble`, `ros_env` can see those crates. The in-tree topic mapper registry still depends on a few packages **not** in a default apt install (`nav2_msgs`, `control_msgs`, `apriltag_msgs`). For the full registry, put the missing interface packages in an overlay workspace and `colcon build`:
 
 ```bash
 mkdir -p ~/ros2_rust_ws/src && cd ~/ros2_rust_ws
-git clone -b humble https://github.com/ros2/common_interfaces.git src/common_interfaces
-git clone -b humble https://github.com/ros2/example_interfaces.git src/example_interfaces
-git clone -b humble https://github.com/ros2/rcl_interfaces.git src/rcl_interfaces
-git clone -b humble https://github.com/ros2/rosidl_core.git src/rosidl_core
-git clone -b humble https://github.com/ros2/rosidl_defaults.git src/rosidl_defaults
-git clone -b humble https://github.com/ros2/unique_identifier_msgs.git src/unique_identifier_msgs
+# Only add packages whose rust IDL is missing from the distro, e.g.:
+git clone -b humble https://github.com/ros-navigation/nav2_msgs.git src/nav2_msgs
+# likewise control_msgs / apriltag_msgs
 git clone https://github.com/ros2-rust/rosidl_rust.git src/rosidl_rust
-# Topic mappers also need rust IDL for these packages (same overlay workspace):
-#   nav_msgs nav2_msgs geometry_msgs visualization_msgs tf2_msgs
-#   diagnostic_msgs trajectory_msgs shape_msgs stereo_msgs
-#   control_msgs foxglove_msgs apriltag_msgs action_msgs builtin_interfaces
 source /opt/ros/humble/setup.bash
 colcon build
 source install/setup.bash
 # cargo build --features ros2 can then see ros_env::<pkg>::msg
 ```
 
-Without an overlay, use `just check-ros2-shim`. rclrs 0.8 talks to `ros_env::*`; crates.io `ros-env`'s shim is empty, so this repo patches it with **typed field stubs** in [`third_party/ros-env-shim`](../../third_party/ros-env-shim) (generated from proto; not a DynamicMessage fallback). Our `std_srvs` vendor still uses system C typesupport and does not need rust IDL.
+Without an overlay, use `just check-ros2-shim`. crates.io `ros-env` empties its shim; this repo patches it with **typed field stubs** in [`third_party/ros-env-shim`](../../third_party/ros-env-shim) (generated from proto; not a DynamicMessage fallback). Our `std_srvs` vendor still uses system C typesupport and does not need rust IDL.
 
 ---
 

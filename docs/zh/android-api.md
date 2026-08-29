@@ -6,7 +6,7 @@ Maven: `org.indunet:robot-bus-android`
 Package: `org.indunet.robot.bus`  
 **minSdk 24** · **独立 Kotlin SDK**（自有 Node / Broker / JNA + protobuf stubs + jniLibs）
 
-不依赖 `org.indunet:robot-bus`（JVM Java 包）。两套产物各自完整、互不引用。
+不依赖 `org.indunet:robot-bus`（JVM Java包）。两套产物各自完整、互不引用。
 
 ```bash
 # Maven Central (when published)
@@ -15,7 +15,7 @@ Package: `org.indunet.robot.bus`
 # 本地：
 just gen-android    # → bindings/android/generated/
 just android-dev    # NDK .so + assembleRelease
-just test-android   # host 单测（桌面 librobot_bus_c）
+just test-android   # host单测（桌面 librobot_bus_c）
 ```
 
 | 产物 | 坐标 | 说明 |
@@ -24,7 +24,7 @@ just test-android   # host 单测（桌面 librobot_bus_c）
 
 ## 初始化
 
-在 `Application.onCreate`（或首次使用 `Node` / `Broker` 之前）调用一次：
+在 `Application.onCreate`（或首次使用 `Node` / `Broker`之前）调用一次：
 
 ```kotlin
 class App : Application() {
@@ -74,14 +74,14 @@ Broker().use { _ ->
 }
 ```
 
-### HTTP 发现（填地址，不选传输）
+### HTTP发现（填地址，不选传输）
 
-对已知 API 口请求 `GET /api/v1/discover`：
+对已知 API口请求 `GET /api/v1/discover`：
 
 ```kotlin
 val node = Node.discover(
     "talker", "tcp", DiscoverOpts(apiUrl = "http://127.0.0.1:15570"))
-// 可选：brokerId、timeoutSecs；BrokerOptions.noDiscovery / domainId 非 UDP
+// 可选：brokerId、timeoutSecs；BrokerOptions.noDiscovery / domainId非 UDP
 ```
 
 跨 broker（federation）：
@@ -116,8 +116,8 @@ node.loadParametersFromYamlStr("ros__parameters:\n  max_speed: 3.0\n")
 
 | 测试 | 命令 |
 |------|------|
-| `RobotBusAndroid.init`（无 jniLibs 时失败） | `just test-android` |
-| 参数 + typed pub-sub | 同上（host 加载桌面 `librobot_bus_c`） |
+| `RobotBusAndroid.init`（无 jniLibs时失败） | `just test-android` |
+| 参数 + typed pub-sub | 同上（host加载桌面 `librobot_bus_c`） |
 
 ## 本地开发
 
@@ -128,4 +128,4 @@ just android-dev       # 需 NDK 26 + cargo-ndk
 just test-android
 ```
 
-目录：[`bindings/android/`](../../bindings/android/)。JVM Java 绑定见 [`java-api.md`](java-api.md)。
+目录：[`bindings/android/`](../../bindings/android/)。JVM Java绑定见 [`java-api.md`](java-api.md)。

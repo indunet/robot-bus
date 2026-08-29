@@ -1,4 +1,4 @@
-//! Field-complete stubs for rclrs 0.8 `use_ros_shim` (no C typesupport).
+//! Field-complete stubs for `ros-env` `use_ros_shim` (no C typesupport).
 
 use std::borrow::Cow;
 

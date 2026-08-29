@@ -63,16 +63,14 @@ console = [
 ]
 # In-process ROS 2 ↔ robot-bus topic/service/action bridge (requires sourced ROS + linking rcl).
 # Not enabled by default — keep core SDK / maturin builds free of ROS.
-# Typed msgs (sensor_msgs / example_interfaces) need ament rust overlay; crates.io rclrs is still 0.7.
+# Typed msgs come from ros-env 0.2 re-exporting share/<pkg>/rust/ on AMENT_PREFIX_PATH.
 ros2 = ["dep:rclrs", "dep:rosidl_runtime_rs", "dep:ros-env"]
 # Typecheck without a real ROS install (rclrs stub).
 ros2-shim = ["ros2", "rclrs/use_ros_shim", "rosidl_runtime_rs/use_ros_shim", "ros-env/use_ros_shim"]
 
 [dependencies]
 anyhow = "1"
-# `version` is required to publish; cargo strips `git` from the crates.io manifest.
-# This repo still uses the git rev (same 0.7.0 crate version, newer API than crates.io).
-rclrs = { version = "0.7", git = "https://github.com/ros2-rust/ros2_rust.git", rev = "4606ed41a212fb6c65ab01d1e79ddabde4e7cb05", optional = true }
+rclrs = { version = "0.7", optional = true }
 rosidl_runtime_rs = { version = "0.6", optional = true }
 ros-env = { version = "0.2", optional = true }
 axum = { version = "0.8", optional = true, default-features = false, features = ["http1", "tokio", "query", "json", "ws"] }
@@ -210,5 +208,6 @@ required-features = ["ros2"]
 features = ["ws", "console"]
 
 [patch.crates-io]
-# rclrs 0.8 library code uses ros_env::* fields; crates.io ros-env 0.2 shim is empty.
+# crates.io ros-env 0.2 empties interfaces.rs under use_ros_shim; topic mappers
+# still need field-complete stubs for `just check-ros2-shim`.
 ros-env = { path = "third_party/ros-env-shim" }

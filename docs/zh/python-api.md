@@ -1,16 +1,16 @@
 [English](../en/python-api.md) | 中文
 
-# Python API 示例
+# Python API示例
 
 ```bash
 pip install robot-bus
 # 本地：just python-dev
-# ROS 2 桥（rclpy）：source ROS 后 just python-dev-ros2；见 docs/zh/ros2-bridge.md
+# ROS2桥（rclpy）：source ROS后 just python-dev-ros2；见 docs/zh/ros2-bridge.md
 ```
 
-## Broker 启动
+## Broker启动
 
-与 Rust 相同：先起 broker，再跑业务代码。
+与 Rust相同：先起 broker，再跑业务代码。
 
 ```bash
 # 安装包后的 CLI
@@ -31,11 +31,11 @@ with robot_bus.RobotBusBroker.start(
     tcp_only=True,
 ) as broker:
     # broker.message_xsub_bind / message_xpub_bind / api_listen / console_listen
-    # Web console: http://127.0.0.1:15570（no_console=True 可关；no_tank / no_docs 可隐藏侧栏菜单）
+    # Web console: http://127.0.0.1:15570（no_console=True可关；no_tank / no_docs可隐藏侧栏菜单）
     pass
 ```
 
-跨 broker（federation）与 CLI 同款字符串约定：
+跨 broker（federation）与 CLI同款字符串约定：
 
 ```python
 with robot_bus.RobotBusBroker.start(
@@ -49,19 +49,19 @@ with robot_bus.RobotBusBroker.start(
     pass
 ```
 
-### HTTP 发现（填地址，不选传输）
+### HTTP发现（填地址，不选传输）
 
-对已知 API 口请求 `GET /api/v1/discover`。传输仍手动指定（`tcp` / `ipc` / `inproc` / `ws`）；发现只填充位置：
+对已知 API口请求 `GET /api/v1/discover`。传输仍手动指定（`tcp` / `ipc` / `inproc` / `ws`）；发现只填充位置：
 
 ```python
 node = robot_bus.Node.discover(
     "talker", transport="tcp", api_url="http://127.0.0.1:15570")
-# 可选：broker_id=...、timeout=...；UDP 组播发现已移除
+# 可选：broker_id=...、timeout=...；UDP组播发现已移除
 ```
 
-多 broker 时可用 `broker_id=...` 过滤。
+多 broker时可用 `broker_id=...`过滤。
 
-`Node(...)` **不会**等 broker。构造在 broker 未启动时也不抛错；TCP/WS 节点在后台重试 `GET /api/v1/discover`。可查 `node.connection_state`（`created` / `discovering` / `connecting` / `connected` / `reconnecting` / `shutdown`），或显式等待：
+`Node(...)` **不会**等 broker。构造在 broker未启动时也不抛错；TCP/WS节点在后台重试 `GET /api/v1/discover`。可查 `node.connection_state`（`created` / `discovering` / `connecting` / `connected` / `reconnecting` / `shutdown`），或显式等待：
 
 ```python
 node = robot_bus.Node("pilot")
@@ -70,7 +70,7 @@ if not node.wait_for_broker(timeout=5.0):
 node.add_on_connection_event(lambda old, new, reason: print(old, "->", new, reason))
 ```
 
-`spin()` / `start()` 期间 broker 重启会自动重连。`create_*` 会短等 discover，仍未连上则报错。WebSocket 节点使用同一套 `connection_state`；Connected 表示 `/ws` 套接字已连通（不只是 HTTP discover）。
+`spin()` / `start()`期间 broker重启会自动重连。`create_*`会短等 discover，仍未连上则报错。WebSocket节点使用同一套 `connection_state`；Connected表示 `/ws`套接字已连通（不只是 HTTP discover）。
 
 同进程 **inproc** 时必须共享 `Context`：
 
@@ -80,14 +80,14 @@ with robot_bus.RobotBusBroker.start(context=ctx) as broker:
     node = robot_bus.Node.inproc_with_context(ctx, "pilot")
 ```
 
-tcp / ipc / ws 不要求共享 Context。
-默认端口与完整 CLI 选项见 [rust-api.md](rust-api.md)「Broker 启动」。
+tcp / ipc / ws不要求共享 Context。
+默认端口与完整 CLI选项见 [rust-api.md](rust-api.md)「Broker启动」。
 
 ---
 
 ## 本地参数（Node）
 
-本节点参数表（不经总线）。值类型为 Python `bool` / `int` / `float` / `str`；须先 `declare`，`set` 时类型须与声明一致。`get_parameter` / `declare_parameter` 返回 `{"name", "value"}`（对齐 ROS 2 Parameter，取值用 `["value"]`）。`list_parameters()` 返回 `{"names", "prefixes"}`；需要带值列表用 `list_all_parameters()`。支持 YAML 启动加载（扁平或 `ros__parameters` / `"/**"` 通配）。
+本节点参数表（不经总线）。值类型为 Python `bool` / `int` / `float` / `str`；须先 `declare`，`set`时类型须与声明一致。`get_parameter` / `declare_parameter`返回 `{"name", "value"}`（对齐 ROS2 Parameter，取值用 `["value"]`）。`list_parameters()`返回 `{"names", "prefixes"}`；需要带值列表用 `list_all_parameters()`。支持 YAML启动加载（扁平或 `ros__parameters` / `"/**"`通配）。
 
 ```python
 import robot_bus
@@ -114,11 +114,11 @@ node.load_parameters_from_yaml_file("config/pilot.yaml")
 
 ## Message bus（Node + spin）
 
-接近 ROS 2：`Node(...)` → `create_publisher` / `create_subscription` → `node.spin()`。单节点时无需手写 Executor（内部自动挂 `SingleThreadedExecutor`）。
+接近 ROS2：`Node(...)` → `create_publisher` / `create_subscription` → `node.spin()`。单节点时无需手写 Executor（内部自动挂 `SingleThreadedExecutor`）。
 
-仅走 WebSocket RPC 网关时用 `Node.ws` / `Node.ws_at`（或 `transport="ws"`）：可订阅、publish、调 service / action，不能当 server；见下文「WebSocket RPC 模式 Node」。
+仅走 WebSocket RPC网关时用 `Node.ws` / `Node.ws_at`（或 `transport="ws"`）：可订阅、publish、调 service / action，不能当 server；见下文「WebSocket RPC模式 Node」。
 
-Python 主推 **typed**（创建时传入 protobuf 类，自动 `SerializeToString` / `ParseFromString`）；不传类型则仍为 raw bytes。底层与 Rust 一样走 opaque bytes（纯 Python 薄封装，因 PyO3 无法映射 Rust 泛型）。
+Python主推 **typed**（创建时传入 protobuf类，自动 `SerializeToString` / `ParseFromString`）；不传类型则仍为 raw bytes。底层与 Rust一样走 opaque bytes（纯 Python薄封装，因 PyO3无法映射 Rust泛型）。
 
 ```python
 import robot_bus
@@ -160,9 +160,9 @@ def on_raw(topic, payload: bytes):
 node.create_subscription("/robot1/imu", on_raw)
 ```
 
-### WebSocket RPC 模式 Node（客户端）
+### WebSocket RPC模式 Node（客户端）
 
-`Node.ws` / `Node.ws_at`（或 `Node(..., transport="ws", ws_url=...)`）经 broker WebSocket RPC 网关接入，不创建 ZMQ socket。
+`Node.ws` / `Node.ws_at`（或 `Node(..., transport="ws", ws_url=...)`）经 broker WebSocket RPC网关接入，不创建 ZMQ socket。
 
 | 支持 | 不支持 |
 |------|--------|
@@ -193,11 +193,11 @@ action = node.create_action_client("act.navigate")
 goal = action.send_goal(
     b"goal",
     feedback_callback=lambda feedback: print("feedback", len(feedback)),
-)  # GoalHandle 立即返回
+)  # GoalHandle立即返回
 result = goal.result(timeout=10.0)
 # goal.cancel()  # best-effort，不表示服务端已确认
 
-# 订阅回调需要 spin；action result 通过 GoalHandle 独立等待
+# 订阅回调需要 spin；action result通过 GoalHandle独立等待
 # node.spin()
 ```
 
@@ -219,11 +219,11 @@ node.create_service("echo", on_echo, callback_group=group)
 node.create_action_server("navigate", on_goal, callback_group=group)
 ```
 
-默认不传 `callback_group` 时使用节点自带的互斥组。`Reentrant` 需配合 `MultiThreadedExecutor` 才有实际并行。
+默认不传 `callback_group`时使用节点自带的互斥组。`Reentrant`需配合 `MultiThreadedExecutor`才有实际并行。
 
 ### Service / Action（Node）
 
-与 topic / timer 一样挂在 Node 上。可传 protobuf 类型做自动编解码，或省略走 raw bytes。Action client 采用 ROS 2 风格 `GoalHandle`：`send_goal` 立即返回，feedback 到达时实时调用回调，result 由 handle 独立等待。
+与 topic / timer一样挂在 Node上。可传 protobuf类型做自动编解码，或省略走 raw bytes。Action client采用 ROS2风格 `GoalHandle`：`send_goal`立即返回，feedback到达时实时调用回调，result由 handle独立等待。
 
 ```python
 from robot_bus.std_srvs.srv.v1 import SetBoolRequest, SetBoolResponse
@@ -278,15 +278,15 @@ result = goal.result(timeout=10.0)
 
 完整可运行程序：[`examples/service_set_bool/`](../../examples/service_set_bool/)、[`examples/action_fibonacci/`](../../examples/action_fibonacci/)。
 
-Raw action 的 `feedback_callback(body: bytes)`、`ActionGoalHandle.result(timeout=None) -> bytes`；handle 还提供只读 `goal_id` / `action_name` 与 `cancel()`。`ActionClient.send_goal_and_wait(...)` 保留旧的批量消息列表用法。
+Raw action的 `feedback_callback(body: bytes)`、`ActionGoalHandle.result(timeout=None) -> bytes`；handle还提供只读 `goal_id` / `action_name`与 `cancel()`。`ActionClient.send_goal_and_wait(...)`保留旧的批量消息列表用法。
 Raw service：`handler(body: bytes) -> bytes` / `call(bytes)`。
-endpoint 默认本机 broker；也可用 `Node(..., service_frontend=..., service_backend=..., action_backend=..., action_frontend=...)` 覆盖。
+endpoint默认本机 broker；也可用 `Node(..., service_frontend=..., service_backend=..., action_backend=..., action_frontend=...)`覆盖。
 
-取消语义随 transport 不同：gRPC 取消对应 goal 的 server stream；ZMQ 发送显式 `CANCEL` 帧。两者都不承诺服务端确认取消。
+取消语义随 transport不同：gRPC取消对应 goal的 server stream；ZMQ发送显式 `CANCEL`帧。两者都不承诺服务端确认取消。
 
 ### 定时器
 
-与 topic 一样挂在 Node 上；回调由 `spin` / `spin_once` 驱动。
+与 topic一样挂在 Node上；回调由 `spin` / `spin_once`驱动。
 
 ```python
 import robot_bus
@@ -338,9 +338,9 @@ threading.Thread(target=stop_later, daemon=True).start()
 
 ---
 
-## 与 Protobuf 配合
+## 与 Protobuf配合
 
-消息包挂在 `robot_bus.<pkg>.msg.v1`（与 Rust `robot_bus::<pkg>::msg::v1` 对齐）：
+消息包挂在 `robot_bus.<pkg>.msg.v1`（与 Rust `robot_bus::<pkg>::msg::v1`对齐）：
 
 ```python
 from robot_bus.sensor_msgs.msg.v1 import Imu
@@ -355,9 +355,9 @@ imu2.ParseFromString(payload)
 
 ---
 
-## ROS 2 桥（`rclpy`）
+## ROS2桥（`rclpy`）
 
-进程内 ROS ↔ bus 桥在 **`robot_bus.ros2_bridge`**，使用系统 **`rclpy`**（不经 Rust FFI）。完整契约见 [`ros2-bridge.md`](ros2-bridge.md)。
+进程内 ROS ↔ bus桥在 **`robot_bus.ros2_bridge`**，使用系统 **`rclpy`**（不经 Rust FFI）。完整契约见 [`ros2-bridge.md`](ros2-bridge.md)。
 
 ```bash
 source /opt/ros/humble/setup.bash
@@ -395,8 +395,8 @@ bridge.spin()
 - 配置只走代码 `.mapper(具体对象)`；无 YAML、无类型名字符串挂路由
 - 一期内置：`StdMsgsStringMapper`、`SensorMsgsImageMapper`、`TriggerServiceMapper`、`SetBoolServiceMapper`、`FibonacciActionMapper`
 - `ros2_available()`：能否 `import rclpy`
-- **自定义 service/action：可以**——先写对齐 ROS 的 bus `.proto` 并 `protoc`，再写 duck-typed mapper（`ros_srv_type` + `ros_req_to_bus` / `bus_req_to_ros` …），`.mapper(MyFoo())`；示例见 [ros2-bridge.md](ros2-bridge.md#用户自定义-service--action可以)
-- `bus_discover(api_url="", timeout=0.0, broker_id="")` 与 C++/Rust 对齐（空 url / `timeout<=0` 用默认）
+- **自定义 service/action：可以**——先写对齐 ROS的 bus `.proto`并 `protoc`，再写 duck-typed mapper（`ros_srv_type` + `ros_req_to_bus` / `bus_req_to_ros` …），`.mapper(MyFoo())`；示例见 [ros2-bridge.md](ros2-bridge.md#用户自定义-service--action可以)
+- `bus_discover(api_url="", timeout=0.0, broker_id="")`与 C++/Rust对齐（空 url / `timeout<=0`用默认）
 
 ---
 
@@ -410,34 +410,34 @@ print(robot_bus.__version__)
 
 ---
 
-## 当前 Python API 一览
+## 当前 Python API一览
 
 | 符号 | 说明 |
 |------|------|
-| `Node(name, host=..., transport=..., ws_url=..., message_xsub=..., …)` | 建节点；首次 `create_*` / `spin` 时自动挂 `SingleThreadedExecutor` |
-| `Node.tcp` / `Node.ipc` / `Node.inproc` / `Node.inproc_with_context` / `Node.with_context` / `Node.ws` / `Node.ws_at` / `Node.discover` | 传输预设（推荐 `Context` + `with_context`；WebSocket RPC 网关为客户端模式；同进程 inproc 用 `inproc_with_context`；`discover` 只填地址） |
+| `Node(name, host=..., transport=..., ws_url=..., message_xsub=..., …)` | 建节点；首次 `create_*` / `spin`时自动挂 `SingleThreadedExecutor` |
+| `Node.tcp` / `Node.ipc` / `Node.inproc` / `Node.inproc_with_context` / `Node.with_context` / `Node.ws` / `Node.ws_at` / `Node.discover` | 传输预设（推荐 `Context` + `with_context`；WebSocket RPC网关为客户端模式；同进程 inproc用 `inproc_with_context`；`discover`只填地址） |
 | `Node.declare_parameter` / `get_parameter` / `set_parameter` / `has_parameter` / `list_parameters` | 本节点本地参数（`bool` / `int` / `float` / `str`） |
-| `Node.load_parameters_from_yaml_str` / `load_parameters_from_yaml_file` | 从 YAML 加载 / 覆盖参数 |
-| `node.spin()` / `spin_once` / `shutdown` | 驱动回调（ROS 2 式简单路径） |
-| `node.connection_state` / `wait_for_broker(timeout=None)` / `add_on_connection_event` | 与 broker 的会话：构造不阻塞；等待或观察 `connected` / `reconnecting` |
+| `Node.load_parameters_from_yaml_str` / `load_parameters_from_yaml_file` | 从 YAML加载 / 覆盖参数 |
+| `node.spin()` / `spin_once` / `shutdown` | 驱动回调（ROS2式简单路径） |
+| `node.connection_state` / `wait_for_broker(timeout=None)` / `add_on_connection_event` | 与 broker的会话：构造不阻塞；等待或观察 `connected` / `reconnecting` |
 | `node.wait_for_message(topic, timeout=None)` | 等到一条消息或超时（返回 `bytes` / `None`） |
-| `Context()` | 共享 ZMQ context（同进程 inproc 必需） |
+| `Context()` | 共享 ZMQ context（同进程 inproc必需） |
 | `SingleThreadedExecutor(context=None)` | 显式单线程执行器（多节点共享时用） |
-| `MultiThreadedExecutor(num_threads=4, context=None)` | n 条常驻 worker；订阅 / timer / service / action 按 callback group 调度 |
-| `executor.add_node(node)` | 把节点挂到执行器（须在该节点尚未 auto-attach 之前） |
-| `node.create_publisher(topic, msg_type=None, qos_depth=None)` | typed → `TypedTopicPublisher.publish(Message)`；省略类型 → raw；`qos_depth>0` → KeepLast HWM（WS 发布忽略） |
-| `node.create_timer(period, callback)` → `TimerHandle` | 定时器（与 topic 一样挂在 Node） |
+| `MultiThreadedExecutor(num_threads=4, context=None)` | n条常驻 worker；订阅 / timer / service / action按 callback group调度 |
+| `executor.add_node(node)` | 把节点挂到执行器（须在该节点尚未 auto-attach之前） |
+| `node.create_publisher(topic, msg_type=None, qos_depth=None)` | typed → `TypedTopicPublisher.publish(Message)`；省略类型 → raw；`qos_depth>0` → KeepLast HWM（WS发布忽略） |
+| `node.create_timer(period, callback)` → `TimerHandle` | 定时器（与 topic一样挂在 Node） |
 | `CallbackGroupType` / `create_callback_group` | `MutuallyExclusive` / `Reentrant` |
-| `create_subscription(..., msg_type=, callback_group=, qos_depth=)` | typed：`callback(topic, Message)`；省略类型：`callback(topic, bytes)`；WS：`qos_depth` 为网关订阅队列深度 |
+| `create_subscription(..., msg_type=, callback_group=, qos_depth=)` | typed：`callback(topic, Message)`；省略类型：`callback(topic, bytes)`；WS：`qos_depth`为网关订阅队列深度 |
 | `create_service(..., request_type=, response_type=)` | typed：`handler(Request) -> Response`；否则 raw bytes |
 | `create_client(..., request_type=, response_type=)` | typed → `TypedServiceClient`；`service_is_ready` / `wait_for_service`（console workers） |
-| `create_action_server(..., goal_type=, feedback_type=, result_type=)` | typed handler 通过 context 实时发布 feedback，并返回 result；否则 raw bytes |
+| `create_action_server(..., goal_type=, feedback_type=, result_type=)` | typed handler通过 context实时发布 feedback，并返回 result；否则 raw bytes |
 | `create_action_client(..., goal_type=, feedback_type=, result_type=)` | typed → `TypedActionClient`；`wait_for_action_server`；`send_goal` → GoalHandle |
-| `ActionGoalHandle` / `TypedActionGoalHandle` | goal 标识、action 名称、阻塞等待 result 与 best-effort cancel |
+| `ActionGoalHandle` / `TypedActionGoalHandle` | goal标识、action名称、阻塞等待 result与 best-effort cancel |
 | `Publisher(endpoint=None)` | 低层连 XSUB（不经 Node） |
-| `ros2_available()` | 能否 `import rclpy`（Python 原生桥） |
-| `robot_bus.ros2_bridge.Ros2Bridge` / `Direction` / 内置 Mapper | 进程内 ROS 桥（**rclpy**）；见 [ros2-bridge.md](ros2-bridge.md) |
-| `RobotBusBroker.start(...)` / `run_broker(...)` | 进程内启动三个 bus + WebSocket RPC API；同进程 inproc 传 `context`；peers 为 CLI 同款字符串列表 |
-| `ShutdownHandle` / `TimerHandle` | spin 与定时器控制 |
+| `ros2_available()` | 能否 `import rclpy`（Python原生桥） |
+| `robot_bus.ros2_bridge.Ros2Bridge` / `Direction` / 内置 Mapper | 进程内 ROS桥（**rclpy**）；见 [ros2-bridge.md](ros2-bridge.md) |
+| `RobotBusBroker.start(...)` / `run_broker(...)` | 进程内启动三个 bus + WebSocket RPC API；同进程 inproc传 `context`；peers为 CLI同款字符串列表 |
+| `ShutdownHandle` / `TimerHandle` | spin与定时器控制 |
 
-WebSocket RPC 模式 Node 见上一节；底层网关 RPC 也可直接用 Rust tonic 客户端（[rust-api.md](rust-api.md)）。
+WebSocket RPC模式 Node见上一节；底层网关 RPC也可直接用 Rust tonic客户端（[rust-api.md](rust-api.md)）。

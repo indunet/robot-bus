@@ -23,7 +23,7 @@ ros2-shim = ["ros2", "robot-bus/ros2-shim", "rclrs/use_ros_shim"]
 anyhow = "1"
 prost = "0.14"
 robot-bus = { path = "../../..", default-features = false, features = ["ws", "console"] }
-rclrs = { git = "https://github.com/ros2-rust/ros2_rust.git", rev = "4606ed41a212fb6c65ab01d1e79ddabde4e7cb05", optional = true }
+rclrs = { version = "0.7", optional = true }
 uuid = { version = "1", features = ["v4"] }
 
 [patch.crates-io]

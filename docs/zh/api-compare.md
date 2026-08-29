@@ -1,19 +1,19 @@
 [English](../en/api-compare.md) | 中文
 
-# API 对比：ROS 2 Humble（rclrs）↔ robot-bus
+# API对比：ROS2 Humble（rclrs）↔ robot-bus
 
-几个经典场景下，两侧怎么写。左侧是 **ROS 2 Humble + [rclrs](https://github.com/ros2-rust/ros2_rust)**，右侧是 **robot-bus**。
+几个经典场景下，两侧怎么写。左侧是 **ROS2 Humble + [rclrs](https://github.com/ros2-rust/ros2_rust)**，右侧是 **robot-bus**。
 
-| 概念 | ROS 2 Humble（rclrs） | robot-bus |
+| 概念 | ROS2 Humble（rclrs） | robot-bus |
 |------|------------------------|-----------|
 | 运行时 | DDS（需 `ros2` / daemon） | 先起 `robot_bus_broker`（或进程内嵌入） |
-| 入口 | `Context` → `Node` → `rclrs::spin` | **推荐** `Context` → `Node::with_context`；tcp/ipc 仍可用便捷的 `Node::new`（私有 Context） |
-| 消息 | `.msg` / `.srv` / `.action` 生成类型 | crate 内 protobuf（如 `sensor_msgs::msg::v1::Imu`） |
-| QoS | `QOS_PROFILE_DEFAULT` 等 | Topic：`QosProfile::keep_last(depth)` → ZMQ 上为 HWM（各语言可选 `qos_depth` / `qosDepth`）；固定 best-effort。WebSocket 订阅用同一 depth 作为网关到客户端的队列；WS 发布忽略 QoS（共用网关 PUB）。Service / action 暂不接 QoS |
+| 入口 | `Context` → `Node` → `rclrs::spin` | **推荐** `Context` → `Node::with_context`；tcp/ipc仍可用便捷的 `Node::new`（私有 Context） |
+| 消息 | `.msg` / `.srv` / `.action`生成类型 | crate内 protobuf（如 `sensor_msgs::msg::v1::Imu`） |
+| QoS | `QOS_PROFILE_DEFAULT`等 | Topic：`QosProfile::keep_last(depth)` → ZMQ上为 HWM（各语言可选 `qos_depth` / `qosDepth`）；固定 best-effort。WebSocket订阅用同一 depth作为网关到客户端的队列；WS发布忽略 QoS（共用网关 PUB）。Service / action暂不接 QoS |
 | 回调组 | Worker / callback group（较新 API） | `CallbackGroupType::MutuallyExclusive` / `Reentrant` |
-| 参数 | `declare_parameter` / `get_parameter` → Parameter；`set_parameter(Parameter)`；`list_parameters(prefixes, depth)`（可远程 / YAML / CLI） | 同形本地 API（`Parameter` + `as_*` + 批量 get/set）；`list_parameters` → `{names, prefixes}`，便利 API `list_all_parameters`；`undeclare_parameter`；YAML 加载；无远程 / CLI |
-| 就绪等待 | `wait_for_message` / `wait_for_service` / `wait_for_action_server` | 同名辅助：`wait_for_message`；service/action 通过 console `workers > 0` 轮询（best-effort，非 DDS discovery）。另有与 broker 的会话：`connection_state` / `wait_for_broker`（构造不阻塞；TCP/WS 自动重连） |
-| 销毁 | `destroy_subscription` / destroy service·action server | 同形：按 handle id 销毁；`start()` 活跃时与 `cancel_timer` 一样拒绝 |
+| 参数 | `declare_parameter` / `get_parameter` → Parameter；`set_parameter(Parameter)`；`list_parameters(prefixes, depth)`（可远程 / YAML / CLI） | 同形本地 API（`Parameter` + `as_*` + 批量 get/set）；`list_parameters` → `{names, prefixes}`，便利 API `list_all_parameters`；`undeclare_parameter`；YAML加载；无远程 / CLI |
+| 就绪等待 | `wait_for_message` / `wait_for_service` / `wait_for_action_server` | 同名辅助：`wait_for_message`；service/action通过 console `workers > 0`轮询（best-effort，非 DDS discovery）。另有与 broker的会话：`connection_state` / `wait_for_broker`（构造不阻塞；TCP/WS自动重连） |
+| 销毁 | `destroy_subscription` / destroy service·action server | 同形：按 handle id销毁；`start()`活跃时与 `cancel_timer`一样拒绝 |
 | 定时器 | `create_wall_timer` | `create_timer` / 别名 `create_wall_timer` |
 
 ---
@@ -49,7 +49,7 @@ fn main() -> robot_bus::Result<()> {
 
 便捷写法（私有 Context，适合单节点 tcp/ipc）：`Node::new("pilot")`。
 
-同进程 **inproc** 时必须与嵌入式 broker 共享同一 Context：
+同进程 **inproc** 时必须与嵌入式 broker共享同一 Context：
 
 ```rust
 use robot_bus::{Context, Node, RobotBusBroker, RobotBusConfig};
@@ -124,7 +124,7 @@ fn main() -> robot_bus::Result<()> {
 }
 ```
 
-要点：rclrs 创建时要带完整 QoS；robot-bus 的 `QosProfile` **仅对 topic 生效**，且只兑现 KeepLast depth（ZMQ 上 → 发送/接收 HWM；WebSocket 上 → 网关订阅队列）。reliability 固定 best-effort。WS **发布** QoS 忽略（共用网关 PUB）。不传 QoS 的 `create_publisher` / `create_subscription` 仍可用（不改动已有 HWM）。第三个参数是 callback group。topic 名按传入原样使用（建议写全路径）。
+要点：rclrs创建时要带完整 QoS；robot-bus的 `QosProfile` **仅对 topic生效**，且只兑现 KeepLast depth（ZMQ上 → 发送/接收 HWM；WebSocket上 → 网关订阅队列）。reliability固定 best-effort。WS **发布** QoS忽略（共用网关 PUB）。不传 QoS的 `create_publisher` / `create_subscription`仍可用（不改动已有 HWM）。第三个参数是 callback group。topic名按传入原样使用（建议写全路径）。
 
 ---
 
@@ -148,7 +148,7 @@ fn main() -> Result<(), rclrs::RclrsError> {
     )?;
 
     // 客户端：node.create_client::<AddTwoInts>("add_two_ints")?
-    //         .call(req)?  （具体 API 随 rclrs 小版本略有差异）
+    //         .call(req)?  （具体 API随 rclrs小版本略有差异）
 
     rclrs::spin(node)
 }
@@ -187,14 +187,14 @@ fn main() -> robot_bus::Result<()> {
 
 ## 4. Action
 
-rclrs 0.7 provides `create_action_server` / `create_action_client`. robot-bus uses the same ROS 2–style split between an immediately returned GoalHandle, streaming feedback, and a separately awaited result. The optional ROS 2 bridge is implemented natively per language (rclrs / rclpy / rclcpp) for topic, service, and action with concrete mappers (no YAML / no type-string mounting).
+rclrs 0.7 provides `create_action_server` / `create_action_client`. robot-bus uses the same ROS2–style split between an immediately returned GoalHandle, streaming feedback, and a separately awaited result. The optional ROS2 bridge is implemented natively per language (rclrs / rclpy / rclcpp) for topic, service, and action with concrete mappers (no YAML / no type-string mounting).
 
 **rclrs**
 
 ```rust
 // node.create_action_server / create_action_client
-// send_goal 立即返回 goal handle
-// feedback callback 实时接收；result future/handle 独立等待；handle 可请求 cancel
+// send_goal立即返回 goal handle
+// feedback callback实时接收；result future/handle独立等待；handle可请求 cancel
 ```
 
 **robot-bus**
@@ -210,7 +210,7 @@ fn main() -> robot_bus::Result<()> {
     let goal = client.send_goal(
         &FibonacciGoal { order: 5 },
         |feedback| println!("feedback: {:?}", feedback.sequence),
-    )?; // GoalHandle 立即返回
+    )?; // GoalHandle立即返回
 
     // goal.cancel()?; // best-effort，不表示服务端已确认
     let result = goal.result(Some(Duration::from_secs(10)))?;
@@ -219,7 +219,7 @@ fn main() -> robot_bus::Result<()> {
 }
 ```
 
-各传输上 `cancel` 均为 best-effort：浏览器 WebSocket 发显式 `CANCEL` 帧并继续等到 RESULT（真断连仍 cancel）；原生 WebSocket RPC 同样发 CANCEL；ZMQ 发显式 `CANCEL` 帧。均不承诺服务端确认。
+各传输上 `cancel`均为 best-effort：浏览器 WebSocket发显式 `CANCEL`帧并继续等到 RESULT（真断连仍 cancel）；原生 WebSocket RPC同样发 CANCEL；ZMQ发显式 `CANCEL`帧。均不承诺服务端确认。
 
 ---
 
@@ -229,7 +229,7 @@ fn main() -> robot_bus::Result<()> {
 
 ```rust
 use std::time::Duration;
-// 常见写法：另起线程 sleep + publish，或较新 API 的 create_timer
+// 常见写法：另起线程 sleep + publish，或较新 API的 create_timer
 std::thread::spawn(move || {
     loop {
         std::thread::sleep(Duration::from_millis(100));
@@ -262,13 +262,13 @@ node.spin()?;
 | 场景 | rclrs | robot-bus |
 |------|-------|-----------|
 | 建节点 | `Node::new(&context, "name")` | `Node::with_context(&context, "name")`（或便捷 `Node::new("name")`） |
-| 发布 | `create_publisher::<T>(topic, qos)` | `create_publisher_with_qos::<T>(topic, qos)`（或无 QoS 的 `create_publisher`；各语言可选 depth） |
-| 订阅 | `create_subscription(topic, qos, cb)` | `create_subscription_with_qos(topic, qos, cb, group)`（或无 QoS 的 `create_subscription`） |
+| 发布 | `create_publisher::<T>(topic, qos)` | `create_publisher_with_qos::<T>(topic, qos)`（或无 QoS的 `create_publisher`；各语言可选 depth） |
+| 订阅 | `create_subscription(topic, qos, cb)` | `create_subscription_with_qos(topic, qos, cb, group)`（或无 QoS的 `create_subscription`） |
 | 服务端 | `create_service::<S, _>(name, cb)` | `create_service::<S, _>(name, cb, group)` |
 | 客户端 | `create_client::<S>(name)` + `call` | `create_client::<S>(name)` + `call(..., timeout)` + `wait_for_service` |
-| Action 服务端 | `create_action_server` | `create_action_server::<A, _>(..., group)` |
-| Action 客户端 | `create_action_client` + GoalHandle | `create_action_client` + `wait_for_action_server` + `send_goal` → GoalHandle |
+| Action服务端 | `create_action_server` | `create_action_server::<A, _>(..., group)` |
+| Action客户端 | `create_action_client` + GoalHandle | `create_action_client` + `wait_for_action_server` + `send_goal` → GoalHandle |
 | 转起来 | `rclrs::spin(node)` | `node.spin()` / `wait_for_message` |
 | 原始字节 | 动态消息 / 有限支持 | `create_*_raw` |
 
-更完整的 robot-bus 示例见 [rust-api.md](./rust-api.md)。
+更完整的 robot-bus示例见 [rust-api.md](./rust-api.md)。

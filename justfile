@@ -234,7 +234,7 @@ perf: gen-rust
 perf-ros2:
 	./benches/ros2_perf/run.sh
 
-# ROS ↔ bus bridge benches (Docker container `ros2` + rust IDL overlay); writes docs/{zh,en}/ros2-bridge-perf-report.md
+# ROS ↔ bus bridge benches (Docker container `ros2`); writes docs/{zh,en}/ros2-bridge-perf-report.md
 perf-ros2-bridge:
 	./benches/ros2_bridge_perf/run.sh
 

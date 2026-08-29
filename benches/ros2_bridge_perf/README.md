@@ -2,11 +2,11 @@
 
 In-process **ROS 2 ↔ robot-bus** goodput / latency (not CI).
 
-Requires sourced Humble/Jazzy **and** ament rust overlay (`share/std_msgs/rust`, `share/sensor_msgs/rust`, `share/example_interfaces/rust`). See [ros2-bridge.md](../../docs/zh/ros2-bridge.md).
+Requires sourced Humble/Jazzy (`share/std_msgs/rust`, `share/sensor_msgs/rust`, `share/example_interfaces/rust` come from the distro). See [ros2-bridge.md](../../docs/zh/ros2-bridge.md).
 
 ```bash
 just perf-ros2-bridge
-# or inside a sourced overlay:
+# or:
 cargo run --release --bin ros2_bridge_perf --features ros2
 ```
 

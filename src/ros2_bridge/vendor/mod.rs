@@ -2,7 +2,7 @@
 //!
 //! `std_srvs` is vendored here and links system `libstd_srvs__rosidl_*`
 //! (C typesupport, not rust IDL). `example_interfaces` Fibonacci uses
-//! `ros_env` overlay re-exports (see `ros_idl`).
+//! `ros_env` re-exports (see `ros_idl`).
 
 #![allow(non_camel_case_types)]
 

@@ -1,8 +1,8 @@
 # ros-env (workspace patch)
 
 crates.io `ros-env` 0.2 with `use_ros_shim` generates an empty `interfaces.rs`.
-rclrs 0.8 (git) still typechecks against `ros_env::action_msgs` / `builtin_interfaces` /
-`rcl_interfaces` field layouts.
+robot-bus topic mappers still typecheck against `ros_env::sensor_msgs` / `std_msgs`
+field layouts.
 
 This path crate:
 

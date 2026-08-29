@@ -6,7 +6,7 @@
 #[cfg(feature = "ros2-shim")]
 fn main() {
     eprintln!(
-        "ros2_bridge_perf requires --features ros2 with an ament rust overlay \
+        "ros2_bridge_perf requires --features ros2 with a sourced ROS install \
          (not ros2-shim)"
     );
     std::process::exit(2);

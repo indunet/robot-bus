@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
-# Build a Humble/Jazzy overlay with rosidl_generator_rs output for
-# std_msgs / sensor_msgs / example_interfaces (needed by cargo --features ros2).
+# Fallback: if the distro install already has rust IDL for std_msgs /
+# sensor_msgs / example_interfaces, this is a no-op. Otherwise colcon-build
+# those packages with rosidl_generator_rs (older images).
 set -euo pipefail
 
 WS="${ROS2_RUST_WS:-/tmp/ros2_rust_ws}"

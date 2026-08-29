@@ -1,6 +1,6 @@
 [English](../en/ros2-perf-report.md) | 中文
 
-# ROS 2 性能测试报告
+# ROS2性能测试报告
 
 由 `benches/ros2_perf/run.sh`（容器内 `ros2_perf_bench`）生成，方法对齐 [`perf-report.md`](perf-report.md)。
 
@@ -16,21 +16,21 @@
 
 ## 方法
 
-- RMW: `rmw_fastrtps_cpp`；传输由 Fast DDS XML 固定为 **SHM** 或 **UDPv4**。
+- RMW: `rmw_fastrtps_cpp`；传输由 Fast DDS XML固定为 **SHM** 或 **UDPv4**。
 - 单进程多 Node + `MultiThreadedExecutor`（本机回环，非跨机）。
 - Payload：64 字节；QoS `KeepLast(2048)` best_effort。
-- Message **吞吐（主指标）**：按目标速率限速发送约 1s，**二分搜索**丢包率 ≤ 1% 且发送窗口内 pub/sub 均 ≥90% 目标速率的最大可持续速率（max goodput）。
+- Message **吞吐（主指标）**：按目标速率限速发送约 1s，**二分搜索**丢包率 ≤ 1% 且发送窗口内 pub/sub均 ≥90% 目标速率的最大可持续速率（max goodput）。
 - Message **延迟**：另做限速抽样（发一条等收到再发）。
-- Service / action 延迟：每次 call / send_goal 本地计时。
-- 指标机器相关，不作为 CI 门槛。
+- Service / action延迟：每次 call / send_goal本地计时。
+- 指标机器相关，不作为 CI门槛。
 
 ## 横比
 
-message 为 **max goodput**（丢包阈值内的最大可持续订阅速率）；括号为该档实测投递率。
+message为 **max goodput**（丢包阈值内的最大可持续订阅速率）；括号为该档实测投递率。
 
 | 场景 | shm | udp |
 |------|-----|-----|
-| message 发布 | 111807/s | 117330/s |
+| message发布 | 111807/s | 117330/s |
 | message max goodput | 111797/s (100.0% delivered) | 117304/s (100.0% delivered) |
 | service call | 19797/s | 18228/s |
 | action send_goal | 1815/s | 1848/s |

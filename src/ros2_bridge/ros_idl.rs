@@ -1,8 +1,8 @@
 //! Ament-re-exported ROS IDL (`ros-env`) plus shim stubs for `ros2-shim`.
 //!
-//! Real `--features ros2` builds expect overlay crates on `AMENT_PREFIX_PATH`
-//! (`share/<pkg>/rust/`). `just check-ros2-shim` uses the field stubs below so
-//! conversion unit tests still compile without an overlay.
+//! Real `--features ros2` builds expect rust IDL crates on `AMENT_PREFIX_PATH`
+//! (`share/<pkg>/rust/`, often from the distro). `just check-ros2-shim` uses the field stubs below so
+//! conversion unit tests still compile without those packages.
 
 #![allow(non_camel_case_types)]
 

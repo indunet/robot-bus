@@ -10,19 +10,9 @@ English | [中文](README-zh.md)
 [![Maven Central](https://img.shields.io/maven-central/v/org.indunet/robot-bus.svg?label=Maven%20Central)](https://central.sonatype.com/artifact/org.indunet/robot-bus)
 [![License](https://img.shields.io/badge/license-Apache%202.0-4EB1BA.svg)](https://www.apache.org/licenses/LICENSE-2.0.html)
 
-Robot Bus is a lightweight, multi-language messaging **framework** with a ROS 2–style programming model — topics, services, actions, and `Node` + `spin` — built on ZeroMQ. It does not replace ROS 2; it extends the ROS ecosystem to platforms and languages where a full ROS 2 stack is difficult to deploy or heavier than needed (for example Android, Windows, and browser clients).
+Robot Bus is a lightweight, multi-language messaging **framework** with a ROS 2–style programming model — topics, services, actions, and `Node` + `spin` — built on ZeroMQ. It does not replace ROS 2; it extends the ROS 2 ecosystem to environments that are hard to deploy (for example Android, Windows, and browsers), and to other languages such as Java and TypeScript.
 
 SDKs: **Rust**, **Python**, **TypeScript**, **C++**, **Java**, **Android**.
-
-![Robot Bus Web console](docs/images/console-overview.png)
-
-*Web console* — Overview / Topics / Services / Actions / Topology. Start `robot-bus-broker`, then open [http://127.0.0.1:15570](http://127.0.0.1:15570). See [§4 Web console](#4-web-console) and the [Tank demo](#32-tank-demo).
-
-## *Design Philosophy*
-
-- **ROS 2 model, lighter runtime:** Topics, services, actions, and `Node` + `spin` without a ROS distro, `source setup.bash`, or a workspace — one broker process plus an SDK is enough.
-- **APIs that migrate:** Naming and usage stay close to ROS 2 so working code can later become a ROS 2 node, or stay on robot-bus and join an existing graph through the [ROS 2 bridge](#5-ros-2-bridge).
-- **Grounded in deployment reality:** The same programming model on Android, Windows, browsers, and other hosts where a full ROS 2 stack is impractical.
 
 ## *Key Features*
 
@@ -130,8 +120,6 @@ with robot_bus.RobotBusBroker.start() as broker:
 
 ### *3.2 Tank demo*
 
-![Tank sim in the Web console](docs/images/tank-sim.png)
-
 A built-in mini tank sim helps you see topics moving end-to-end without writing code first:
 
 1. Start the broker (`robot-bus-broker`).
@@ -234,9 +222,17 @@ More detail: [`docs/en/python-api.md`](docs/en/python-api.md).
 
 ## *4. Web console*
 
-The broker ships with an embedded monitoring UI (Overview, Topics, Services, Actions, Topology, logs) — see the screenshot at the top of this README. After `robot-bus-broker` (or `RobotBusBroker.start()`), open:
+The broker ships with an embedded monitoring UI (Overview, Topics, Services, Actions, Topology, logs). After `robot-bus-broker` (or `RobotBusBroker.start()`), open:
 
 **http://127.0.0.1:15570**
+
+![Robot Bus Web console](docs/images/console-overview.png)
+
+*Web console* — Overview / Topics / Services / Actions / Topology.
+
+![Tank sim in the Web console](docs/images/tank-sim.png)
+
+*Tank demo* — sidebar **TANK**. Click the panel, then drive with **arrow keys**; or switch to point navigation and **click on the map** to send a goal.
 
 For a hands-on walkthrough, try the [Tank demo](#32-tank-demo) from the sidebar **TANK** entry. Sidebar **DOCS** is shown by default (`--no-docs` to hide). Same port as the API / WebSocket gateway. Disable the UI with `--no-console` if needed. Frontend source: [`console/`](console/); local UI development: [`console/README.md`](console/README.md).
 

@@ -4,7 +4,7 @@ version = "0.2.0"
 edition = "2021"
 authors = ["Sam Privett <sam@privett.dev>"]
 license = "Apache-2.0"
-description = "Patched ros-env: overlay re-export plus field-complete use_ros_shim stubs for rclrs 0.8"
+description = "Patched ros-env: overlay re-export plus field-complete use_ros_shim stubs for topic mappers"
 rust-version = "1.85"
 publish = false
 
