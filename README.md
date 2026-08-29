@@ -25,13 +25,6 @@ SDKs: **Rust**, **Python**, **TypeScript**, **C++**, **Java**, **Android**.
 
 The Node programming model — `Context` / `Node`, topic pub-sub, service, action, and `spin` — is the stable public API.
 
-### *Documentation*
-
-- Language guides: [`docs/en/`](docs/en/) (Python / Rust / TypeScript / C++ / Java / Android)
-- ROS 2 bridge: [`docs/en/ros2-bridge.md`](docs/en/ros2-bridge.md)
-- Migration playbooks: [`docs/skills/`](docs/skills/)
-- Performance: [`docs/en/perf-report.md`](docs/en/perf-report.md)
-
 ### *Install*
 
 * Python (includes the `robot-bus-broker` CLI)
@@ -68,49 +61,23 @@ npm install robot-bus
 implementation("org.indunet:robot-bus-android:2.1.0")
 ```
 
-C++ packages (DEB / MSI) are listed in [§3.6](#36-other-languages).
+* C++ ([GitHub Releases](https://github.com/indunet/robot-bus/releases) DEB / MSI)
 
-
-## *1. Application scenarios*
-
-### *1.1 Lightweight ROS 2–style messaging*
-
-When a full ROS 2 installation is unnecessary, robot-bus provides the same programming model with a smaller footprint — suitable for prototypes, tooling, Windows hosts, and constrained deployments.
-
-### *1.2 Heterogeneous systems with ROS 2*
-
-Run ROS 2 on Ubuntu (or other Linux hosts) as usual, and place part of the compute on Android devices or other hosts where ROS 2 is impractical. Use robot-bus on those hosts with the same topic / service / action model, then interconnect via the ROS 2 bridge.
-
-### *1.3 Prototype on bus, migrate to ROS 2*
-
-Because robot-bus is lightweight and quick to bring up, teams can prototype and validate nodes on bus first, then migrate the validated design to native ROS 2 (or keep the process on bus and bridge only the interfaces that must join the ROS 2 graph).
-
-Migration playbooks for Agent / developers: [`docs/skills/ros2-to-robot-bus`](docs/skills/ros2-to-robot-bus/SKILL.md) and [`docs/skills/robot-bus-to-ros2`](docs/skills/robot-bus-to-ros2/SKILL.md). In Cursor, `@` those files or ask to migrate a package either way.
-
-## *2. Architecture*
-
-```
-  Application (Python / Rust / C++ / Java / Android / …)
-                    │
-                    │  ZMQ (tcp / ipc / inproc) or WebSocket RPC
-                    ▼
-             robot_bus_broker
-                    │
-                    │  optional ros2_bridge (rclrs / rclpy / rclcpp)
-                    ▼
-               ROS 2 graph
+```bash
+sudo apt install ./robot-bus_2.1.0_linux_amd64.deb
 ```
 
-## *3. Quick start*
 
-### *3.1 Install and start the broker*
+## *1. Quick start*
+
+### *1.1 Install and start the broker*
 
 ```bash
 pip install robot-bus
 robot-bus-broker
 ```
 
-Default API / Web console / WebSocket listen: `http://0.0.0.0:15570`. After the broker is up, open the [Web console](#4-web-console) in a browser.
+Default API / Web console / WebSocket listen: `http://0.0.0.0:15570`. After the broker is up, open the [Web console](#2-web-console) in a browser.
 
 Runnable demos (topic, service, action) for Rust / Python / C++: [`examples/`](examples/).
 
@@ -124,7 +91,7 @@ with robot_bus.RobotBusBroker.start() as broker:
     pass
 ```
 
-### *3.2 Tank demo*
+### *1.2 Tank demo*
 
 A built-in mini tank sim helps you see topics moving end-to-end without writing code first:
 
@@ -134,7 +101,7 @@ A built-in mini tank sim helps you see topics moving end-to-end without writing 
 
 Opening the panel starts the in-process tank node. It subscribes to `/robot_bus/tank/cmd_vel` and publishes `/robot_bus/tank/pose`. Multiple browsers share one world (teleop is last-writer-wins). Disable with `--no-tank` if needed. Sidebar **DOCS** is shown by default; hide with `--no-docs`.
 
-### *3.3 Topic (publish / subscribe)*
+### *1.3 Topic (publish / subscribe)*
 
 ```python
 import robot_bus
@@ -152,7 +119,7 @@ imu_pub.publish(Imu(linear_acceleration=Vector3(x=0.0, y=0.0, z=9.8)))
 # node.spin()
 ```
 
-### *3.4 Service*
+### *1.4 Service*
 
 ```python
 import robot_bus
@@ -176,7 +143,7 @@ svc = client.create_client(
 # server.spin()
 ```
 
-### *3.5 Action*
+### *1.5 Action*
 
 ```python
 import robot_bus
@@ -214,7 +181,7 @@ goal = act.send_goal(
 
 More detail: [`docs/en/python-api.md`](docs/en/python-api.md).
 
-### *3.6 Other languages*
+### *1.6 Documentation*
 
 | Language | Package / artifact | Guide |
 |----------|--------------------|-------|
@@ -226,7 +193,7 @@ More detail: [`docs/en/python-api.md`](docs/en/python-api.md).
 | Android | Maven Central `org.indunet:robot-bus-android` | [`docs/en/android-api.md`](docs/en/android-api.md) |
 | ROS 2 bridge | per-language (`rclrs` / `rclpy` / `rclcpp`) | [`docs/en/ros2-bridge.md`](docs/en/ros2-bridge.md) |
 
-## *4. Web console*
+## *2. Web console*
 
 The broker ships with an embedded monitoring UI (Overview, Topics, Services, Actions, Topology, logs). After `robot-bus-broker` (or `RobotBusBroker.start()`), open:
 
@@ -240,9 +207,9 @@ The broker ships with an embedded monitoring UI (Overview, Topics, Services, Act
 
 *Tank demo* — sidebar **TANK**. Click the panel, then drive with **arrow keys**; or switch to point navigation and **click on the map** to send a goal.
 
-For a hands-on walkthrough, try the [Tank demo](#32-tank-demo) from the sidebar **TANK** entry. Sidebar **DOCS** is shown by default (`--no-docs` to hide). Same port as the API / WebSocket gateway. Disable the UI with `--no-console` if needed. Frontend source: [`console/`](console/); local UI development: [`console/README.md`](console/README.md).
+For a hands-on walkthrough, try the [Tank demo](#12-tank-demo) from the sidebar **TANK** entry. Sidebar **DOCS** is shown by default (`--no-docs` to hide). Same port as the API / WebSocket gateway. Disable the UI with `--no-console` if needed. Frontend source: [`console/`](console/); local UI development: [`console/README.md`](console/README.md).
 
-## *5. ROS 2 bridge*
+## *3. ROS 2 bridge*
 
 In-process topic / service / action bridging between robot-bus and ROS 2. Each language uses its native client (`rclrs` / `rclpy` / `rclcpp`). Official support: **Humble** and **Jazzy**. The core SDK stays ROS-free unless the bridge is enabled.
 
@@ -283,7 +250,7 @@ bridge.spin()
 
 Full guide and examples (Rust / Python / C++): [`docs/en/ros2-bridge.md`](docs/en/ros2-bridge.md). For full package migration (not just bridging), see [`docs/skills/`](docs/skills/).
 
-## *6. Protobuf messages*
+## *4. Protobuf messages*
 
 All robot-bus payloads — **topics**, **services**, and **actions** — are defined and serialized with **Protocol Buffers**. The wire format is protobuf bytes (not ROS CDR). Typed APIs bind a protobuf message class at create time and encode/decode automatically; omit the type to work with raw bytes.
 
@@ -312,7 +279,7 @@ Many built-in types are already provided, aligned with common ROS 2 packages. A 
 
 Generated stubs ship inside published packages (PyPI, crates.io, npm, DEB/MSI, Maven) — consumers do not need `protoc`. Message modules live under the `robot_bus` namespace and do not claim top-level ROS package names on the wire. Full list: [`proto/`](proto/).
 
-### *6.1 Custom messages*
+### *4.1 Custom messages*
 
 When the builtins are not enough, define your own protobuf types the same way. Typed APIs accept any protobuf message class (they do not have to live in this repository).
 
@@ -347,7 +314,23 @@ pub.publish(pb.BatteryStatus(voltage=48.0, percentage=0.85))
 
 To contribute a type into this repo’s built-in set: add the file under [`proto/`](proto/) and regenerate with `just gen-python` (or the matching `just gen-*` for other languages).
 
-## *7. Contribution*
+## *5. Application scenarios*
+
+### *5.1 Lightweight ROS 2–style messaging*
+
+When a full ROS 2 installation is unnecessary, robot-bus provides the same programming model with a smaller footprint — suitable for prototypes, tooling, Windows hosts, and constrained deployments.
+
+### *5.2 Heterogeneous systems with ROS 2*
+
+Run ROS 2 on Ubuntu (or other Linux hosts) as usual, and place part of the compute on Android devices or other hosts where ROS 2 is impractical. Use robot-bus on those hosts with the same topic / service / action model, then interconnect via the ROS 2 bridge.
+
+### *5.3 Prototype on bus, migrate to ROS 2*
+
+Because robot-bus is lightweight and quick to bring up, teams can prototype and validate nodes on bus first, then migrate the validated design to native ROS 2 (or keep the process on bus and bridge only the interfaces that must join the ROS 2 graph).
+
+Migration playbooks for Agent / developers: [`docs/skills/ros2-to-robot-bus`](docs/skills/ros2-to-robot-bus/SKILL.md) and [`docs/skills/robot-bus-to-ros2`](docs/skills/robot-bus-to-ros2/SKILL.md). In Cursor, `@` those files or ask to migrate a package either way.
+
+## *6. Contribution*
 
 If you are interested in this project and want to join and undertake part of the work (development/testing/documentation),
 please feel free to contact me via email <deng_ran@aliyun.com>
@@ -355,7 +338,7 @@ please feel free to contact me via email <deng_ran@aliyun.com>
  *Robot Bus* is not built for profit. In restless moments, writing code brings me calm; if this library helps you, that is the motivation for me to keep refining it.
 
 
-## *8. License*
+## *7. License*
 
 Robot Bus is released under the [Apache 2.0 license](LICENSE).
 

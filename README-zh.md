@@ -25,13 +25,6 @@ SDK：**Rust**、**Python**、**TypeScript**、**C++**、**Java**、**Android**�
 
 Node编程模型——`Context` / `Node`、topic pub-sub、service、action以及 `spin`——为稳定的公开 API。
 
-### *文档*
-
-- 各语言指南：[`docs/zh/`](docs/zh/)（Python / Rust / TypeScript / C++ / Java / Android）
-- ROS2桥：[`docs/zh/ros2-bridge.md`](docs/zh/ros2-bridge.md)
-- 迁移手册：[`docs/skills/`](docs/skills/)
-- 性能报告：[`docs/zh/perf-report.md`](docs/zh/perf-report.md)
-
 ### *安装*
 
 * Python（含 `robot-bus-broker`命令行）
@@ -68,49 +61,23 @@ npm install robot-bus
 implementation("org.indunet:robot-bus-android:2.1.0")
 ```
 
-C++安装包（DEB / MSI）见 [§3.6](#36-其他语言)。
+* C++（[GitHub Releases](https://github.com/indunet/robot-bus/releases) DEB / MSI）
 
-
-## *1. 典型应用场景*
-
-### *1.1 轻量级的类 ROS2通信*
-
-当无需完整 ROS2安装时，robot-bus以更小的体积提供相近的编程模型，适用于原型验证、工具链、Windows主机以及资源受限的部署。
-
-### *1.2 与 ROS2组成异构系统*
-
-在 Ubuntu（或其他 Linux主机）上照常运行 ROS2，同时将部分计算部署在 Android等不便安装完整 ROS2的设备上。这些节点使用 robot-bus，保持相同的话题 / 服务 / Action模型，再通过 ROS2桥接入 ROS2图。
-
-### *1.3 在 bus上原型开发，再迁移至 ROS2*
-
-robot-bus轻量、环境简单，适合先完成节点原型与联调验证，再将已验证的设计迁移为原生 ROS2节点；也可继续运行在 bus上，仅桥接需要进入 ROS2图的接口。
-
-迁移手册（给开发者 / Agent用）：[`docs/skills/ros2-to-robot-bus`](docs/skills/ros2-to-robot-bus/SKILL.md) 与 [`docs/skills/robot-bus-to-ros2`](docs/skills/robot-bus-to-ros2/SKILL.md)。在 Cursor里 `@` 这两个文件，或直接说「把某包迁到 robot-bus / ROS2」。
-
-## *2. 架构*
-
-```
-  应用 (Python / Rust / C++ / Java / Android / …)
-                    │
-                    │  ZMQ (tcp / ipc / inproc) 或 WebSocket RPC
-                    ▼
-             robot_bus_broker
-                    │
-                    │  可选 ros2_bridge（rclrs / rclpy / rclcpp）
-                    ▼
-               ROS2图
+```bash
+sudo apt install ./robot-bus_2.1.0_linux_amd64.deb
 ```
 
-## *3. 快速开始*
 
-### *3.1 安装并启动 broker*
+## *1. 快速开始*
+
+### *1.1 安装并启动 broker*
 
 ```bash
 pip install robot-bus
 robot-bus-broker
 ```
 
-默认 API / Web控制台 / WebSocket监听：`http://0.0.0.0:15570`。broker启动后，用浏览器打开 [Web控制台](#4-web控制台) 即可查看。
+默认 API / Web控制台 / WebSocket监听：`http://0.0.0.0:15570`。broker启动后，用浏览器打开 [Web控制台](#2-web控制台) 即可查看。
 
 可运行示例（topic、service、action，Rust / Python / C++）：[`examples/`](examples/)。
 
@@ -124,7 +91,7 @@ with robot_bus.RobotBusBroker.start() as broker:
     pass
 ```
 
-### *3.2 小坦克示例*
+### *1.2 小坦克示例*
 
 内置的小坦克仿真，无需先写代码即可看到 topic端到端跑通：
 
@@ -134,7 +101,7 @@ with robot_bus.RobotBusBroker.start() as broker:
 
 打开面板会拉起进程内 tank节点：订阅 `/robot_bus/tank/cmd_vel`，发布 `/robot_bus/tank/pose`。多浏览器共享同一场景（遥控 last-writer-wins）。不需要时可加 `--no-tank`。侧栏 **文档** 默认显示，可用 `--no-docs`隐藏。
 
-### *3.3 Topic（发布 / 订阅）*
+### *1.3 Topic（发布 / 订阅）*
 
 ```python
 import robot_bus
@@ -152,7 +119,7 @@ imu_pub.publish(Imu(linear_acceleration=Vector3(x=0.0, y=0.0, z=9.8)))
 # node.spin()
 ```
 
-### *3.4 Service*
+### *1.4 Service*
 
 ```python
 import robot_bus
@@ -176,7 +143,7 @@ svc = client.create_client(
 # server.spin()
 ```
 
-### *3.5 Action*
+### *1.5 Action*
 
 ```python
 import robot_bus
@@ -214,7 +181,7 @@ goal = act.send_goal(
 
 更多说明见 [`docs/zh/python-api.md`](docs/zh/python-api.md)。
 
-### *3.6 其他语言*
+### *1.6 文档*
 
 | 语言 | 包 / 产物 | 文档 |
 |------|-----------|------|
@@ -226,7 +193,7 @@ goal = act.send_goal(
 | Android | Maven Central `org.indunet:robot-bus-android` | [`docs/zh/android-api.md`](docs/zh/android-api.md) |
 | ROS2桥 | 分语言（`rclrs` / `rclpy` / `rclcpp`） | [`docs/zh/ros2-bridge.md`](docs/zh/ros2-bridge.md) |
 
-## *4. Web控制台*
+## *2. Web控制台*
 
 Broker内嵌监控界面（Overview、Topics、Services、Actions、Topology、日志）。执行 `robot-bus-broker`（或 `RobotBusBroker.start()`）后，用浏览器打开：
 
@@ -240,9 +207,9 @@ Broker内嵌监控界面（Overview、Topics、Services、Actions、Topology、�
 
 *小坦克示例* — 侧栏 **TANK**。点击面板后，用 **方向键** 遥控；也可切换到点选导航，在地图上 **鼠标点击** 下发目标点。
 
-上手可先试侧栏 **TANK**的 [小坦克示例](#32-小坦克示例)。侧栏 **文档** 默认显示，可用 `--no-docs`隐藏。与 API / WebSocket网关同端口。可用 `--no-console`关闭整个 UI。前端源码在 [`console/`](console/)；本地改 UI见 [`console/README.md`](console/README.md)。
+上手可先试侧栏 **TANK**的 [小坦克示例](#12-小坦克示例)。侧栏 **文档** 默认显示，可用 `--no-docs`隐藏。与 API / WebSocket网关同端口。可用 `--no-console`关闭整个 UI。前端源码在 [`console/`](console/)；本地改 UI见 [`console/README.md`](console/README.md)。
 
-## *5. ROS2桥*
+## *3. ROS2桥*
 
 进程内在 robot-bus与 ROS2之间桥接 topic / service / action。各语言使用原生客户端（`rclrs` / `rclpy` / `rclcpp`）。官方支持：**Humble**、**Jazzy**。未启用桥时，核心 SDK不依赖 ROS。
 
@@ -283,7 +250,7 @@ bridge.spin()
 
 完整说明与示例（Rust / Python / C++）：[`docs/zh/ros2-bridge.md`](docs/zh/ros2-bridge.md)。若要做整包迁移（而不只是桥接），见 [`docs/skills/`](docs/skills/)。
 
-## *6. Protobuf消息*
+## *4. Protobuf消息*
 
 robot-bus的全部载荷——**topic**、**service**、**action**——均以 **Protocol Buffers**定义与序列化。线上是 protobuf字节流（不是 ROS CDR）。typed API在创建时绑定 protobuf消息类型并自动编解码；省略类型则按原始字节收发。
 
@@ -312,7 +279,7 @@ proto/<package>/{msg|srv|action|grpc}/v1/*.proto
 
 生成代码随发布包分发（PyPI、crates.io、npm、DEB/MSI、Maven），使用方无需安装 `protoc`。消息模块处于 `robot_bus`命名空间，并不在线上占用顶层 ROS包名。完整列表见 [`proto/`](proto/)。
 
-### *6.1 自定义消息*
+### *4.1 自定义消息*
 
 内置类型不够时，按同样的 protobuf约定自行定义即可。typed API接受任意 protobuf消息类（不必放进 robot-bus仓库）。
 
@@ -347,14 +314,30 @@ pub.publish(pb.BatteryStatus(voltage=48.0, percentage=0.85))
 
 若希望把类型贡献进本仓库的内置集合：把文件放到 [`proto/`](proto/) 对应目录，再执行 `just gen-python`（或其他 `just gen-*`）重新生成。
 
-## *7. 贡献*
+## *5. 典型应用场景*
+
+### *5.1 轻量级的类 ROS2通信*
+
+当无需完整 ROS2安装时，robot-bus以更小的体积提供相近的编程模型，适用于原型验证、工具链、Windows主机以及资源受限的部署。
+
+### *5.2 与 ROS2组成异构系统*
+
+在 Ubuntu（或其他 Linux主机）上照常运行 ROS2，同时将部分计算部署在 Android等不便安装完整 ROS2的设备上。这些节点使用 robot-bus，保持相同的话题 / 服务 / Action模型，再通过 ROS2桥接入 ROS2图。
+
+### *5.3 在 bus上原型开发，再迁移至 ROS2*
+
+robot-bus轻量、环境简单，适合先完成节点原型与联调验证，再将已验证的设计迁移为原生 ROS2节点；也可继续运行在 bus上，仅桥接需要进入 ROS2图的接口。
+
+迁移手册（给开发者 / Agent用）：[`docs/skills/ros2-to-robot-bus`](docs/skills/ros2-to-robot-bus/SKILL.md) 与 [`docs/skills/robot-bus-to-ros2`](docs/skills/robot-bus-to-ros2/SKILL.md)。在 Cursor里 `@` 这两个文件，或直接说「把某包迁到 robot-bus / ROS2」。
+
+## *6. 贡献*
 
 如果你对本项目感兴趣并希望参与（开发/测试/文档），欢迎通过邮箱联系：<deng_ran@aliyun.com>
 
 开发 *Robot Bus*并非出于盈利，而是在纷繁日常里，写代码能让我回到内心的宁静。若它也对你有所助益，便是我持续打磨的动力。
 
 
-## *8. 许可*
+## *7. 许可*
 
 Robot Bus以 [Apache 2.0许可](LICENSE) 发布。
 

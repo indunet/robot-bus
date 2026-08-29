@@ -4,19 +4,16 @@
 //! `start` uses per-bus [`run_with_shutdown`](super::service_bus::run_with_shutdown) and does
 //! **not** install a process-wide Ctrl+C handler (unlike the blocking `run` helpers).
 
-use anyhow::{Context, Result, anyhow};
+use anyhow::{Context, Result};
 use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::mpsc::{Receiver, RecvTimeoutError};
 use std::thread::{self, JoinHandle};
 use std::time::Duration;
-use zmq::Context as ZmqContext;
 
-use super::action_bus::{self, ActionBusConfig, ActionMetrics};
-use super::message_bus::{self, BusConfig, MessageMetrics};
-use super::service_bus::{self, ServiceBusConfig, ServiceMetrics};
+use super::action_bus::ActionMetrics;
+use super::message_bus::MessageMetrics;
+use super::service_bus::ServiceMetrics;
 use crate::discovery::{
-    DiscoverResponse, DiscoveryConfig, resolve_advertise_host, rewrite_bind_host,
+    DiscoverResponse, resolve_advertise_host, rewrite_bind_host,
 };
 use crate::runtime::Context as BusContext;
 use crate::transports::{
@@ -35,7 +32,17 @@ use crate::tank::{TankEndpoints, TankManager};
 use crate::ws_gateway::{GatewayConfig, serve_on_listener};
 use std::net::SocketAddr;
 
-const STARTUP_SETTLE: Duration = Duration::from_millis(50);
+mod bus_handles;
+mod config;
+
+pub use bus_handles::{ActionBusBroker, MessageBusBroker, ServiceBusBroker};
+pub use config::RobotBusConfig;
+#[cfg(feature = "ws")]
+pub use config::WsGatewayConfig;
+#[cfg(feature = "console")]
+pub use config::ConsoleBrokerConfig;
+
+use bus_handles::{join_broker_thread, STARTUP_SETTLE};
 
 #[cfg(feature = "ws")]
 fn connect_url_for_listen(listen: SocketAddr) -> String {
@@ -65,293 +72,6 @@ fn ws_rpc_url_for_listen(listen: SocketAddr) -> String {
     } else {
         format!("{ws}/ws")
     }
-}
-
-fn join_broker_thread(name: &str, handle: JoinHandle<Result<()>>) -> Result<()> {
-    handle
-        .join()
-        .map_err(|e| anyhow!("{name} thread panicked: {e:?}"))?
-        .with_context(|| format!("{name} exited with error"))
-}
-
-/// Wait for a bus thread to publish its resolved TCP binds (`:0` → real ports).
-///
-/// On disconnect, join the thread so a bind `EADDRINUSE` (or panic) is not
-/// flattened into a generic timeout error.
-fn recv_bound_endpoints(
-    name: &str,
-    bound_rx: Receiver<(String, String)>,
-    handle: JoinHandle<Result<()>>,
-) -> Result<((String, String), JoinHandle<Result<()>>)> {
-    match bound_rx.recv_timeout(Duration::from_secs(5)) {
-        Ok(pair) => Ok((pair, handle)),
-        Err(RecvTimeoutError::Timeout) => Err(anyhow!(
-            "{name} failed to report bound endpoints: timed out after 5s"
-        )),
-        Err(RecvTimeoutError::Disconnected) => {
-            let detail = match handle.join() {
-                Ok(Ok(())) => "thread exited without reporting binds".to_string(),
-                Ok(Err(err)) => format!("{err:#}"),
-                Err(panic) => format!("thread panicked: {panic:?}"),
-            };
-            Err(anyhow!("{name} failed to report bound endpoints: {detail}"))
-        }
-    }
-}
-
-/// Background handle for the message bus (XSUB/XPUB proxy).
-pub struct MessageBusBroker {
-    pub xsub_bind: String,
-    pub xpub_bind: String,
-    /// Per-topic counters updated by the proxy (shared with the console when enabled).
-    pub metrics: Arc<MessageMetrics>,
-    shutdown: Arc<AtomicBool>,
-    handle: Option<JoinHandle<Result<()>>>,
-}
-
-impl MessageBusBroker {
-    /// Bind and run the message bus on a background thread.
-    ///
-    /// Pass `Some(metrics)` only when the console (or another observer) needs
-    /// topic counters — that enables libzmq capture. `None` keeps the forward
-    /// path as a plain `proxy_steerable` with no capture overhead.
-    pub(crate) fn start_with_zmq(
-        zmq: ZmqContext,
-        config: BusConfig,
-        metrics: Option<Arc<MessageMetrics>>,
-    ) -> Result<Self> {
-        // Always keep an Arc for `self.metrics` (console may read zeros if unused).
-        let stored = metrics.clone().unwrap_or_else(MessageMetrics::new);
-        let shutdown = Arc::new(AtomicBool::new(false));
-        let shutdown_flag = shutdown.clone();
-        let (bound_tx, bound_rx) = std::sync::mpsc::sync_channel(1);
-        let handle = thread::spawn(move || {
-            message_bus::run_with_shutdown_ctx_bound(
-                zmq,
-                config,
-                shutdown_flag,
-                metrics,
-                Some(bound_tx),
-            )
-        });
-        let ((xsub_bind, xpub_bind), handle) =
-            recv_bound_endpoints("message bus", bound_rx, handle)?;
-        thread::sleep(STARTUP_SETTLE);
-        Ok(Self {
-            xsub_bind,
-            xpub_bind,
-            metrics: stored,
-            shutdown,
-            handle: Some(handle),
-        })
-    }
-
-    /// Signal shutdown and join the broker thread.
-    pub(crate) fn stop(mut self) -> Result<()> {
-        self.shutdown.store(true, Ordering::Release);
-        if let Some(handle) = self.handle.take() {
-            join_broker_thread("message_bus", handle)?;
-        }
-        Ok(())
-    }
-}
-
-impl Drop for MessageBusBroker {
-    fn drop(&mut self) {
-        self.shutdown.store(true, Ordering::Release);
-        if let Some(handle) = self.handle.take() {
-            let _ = handle.join();
-        }
-    }
-}
-
-/// Background handle for the service bus (dual-ROUTER).
-pub struct ServiceBusBroker {
-    pub frontend_bind: String,
-    pub backend_bind: String,
-    pub metrics: Arc<ServiceMetrics>,
-    shutdown: Arc<AtomicBool>,
-    handle: Option<JoinHandle<Result<()>>>,
-}
-
-impl ServiceBusBroker {
-    /// Bind and run the service bus on a background thread.
-    pub(crate) fn start_with_zmq(
-        zmq: ZmqContext,
-        config: ServiceBusConfig,
-        metrics: Option<Arc<ServiceMetrics>>,
-    ) -> Result<Self> {
-        let stored = metrics.clone().unwrap_or_else(ServiceMetrics::new);
-        let shutdown = Arc::new(AtomicBool::new(false));
-        let shutdown_flag = shutdown.clone();
-        let (bound_tx, bound_rx) = std::sync::mpsc::sync_channel(1);
-        let handle = thread::spawn(move || {
-            service_bus::run_with_shutdown_ctx_bound(
-                zmq,
-                config,
-                shutdown_flag,
-                metrics,
-                Some(bound_tx),
-            )
-        });
-        let ((frontend_bind, backend_bind), handle) =
-            recv_bound_endpoints("service bus", bound_rx, handle)?;
-        thread::sleep(STARTUP_SETTLE);
-        Ok(Self {
-            frontend_bind,
-            backend_bind,
-            metrics: stored,
-            shutdown,
-            handle: Some(handle),
-        })
-    }
-
-    /// Signal shutdown and join the broker thread.
-    pub(crate) fn stop(mut self) -> Result<()> {
-        self.shutdown.store(true, Ordering::Release);
-        if let Some(handle) = self.handle.take() {
-            join_broker_thread("service_bus", handle)?;
-        }
-        Ok(())
-    }
-}
-
-impl Drop for ServiceBusBroker {
-    fn drop(&mut self) {
-        self.shutdown.store(true, Ordering::Release);
-        if let Some(handle) = self.handle.take() {
-            let _ = handle.join();
-        }
-    }
-}
-
-/// Background handle for the action bus (dual-ROUTER).
-pub struct ActionBusBroker {
-    pub frontend_bind: String,
-    pub backend_bind: String,
-    pub metrics: Arc<ActionMetrics>,
-    shutdown: Arc<AtomicBool>,
-    handle: Option<JoinHandle<Result<()>>>,
-}
-
-impl ActionBusBroker {
-    /// Bind and run the action bus on a background thread.
-    pub(crate) fn start_with_zmq(
-        zmq: ZmqContext,
-        config: ActionBusConfig,
-        metrics: Option<Arc<ActionMetrics>>,
-    ) -> Result<Self> {
-        let stored = metrics.clone().unwrap_or_else(ActionMetrics::new);
-        let shutdown = Arc::new(AtomicBool::new(false));
-        let shutdown_flag = shutdown.clone();
-        let (bound_tx, bound_rx) = std::sync::mpsc::sync_channel(1);
-        let handle = thread::spawn(move || {
-            action_bus::run_with_shutdown_ctx_bound(
-                zmq,
-                config,
-                shutdown_flag,
-                metrics,
-                Some(bound_tx),
-            )
-        });
-        let ((frontend_bind, backend_bind), handle) =
-            recv_bound_endpoints("action bus", bound_rx, handle)?;
-        thread::sleep(STARTUP_SETTLE);
-        Ok(Self {
-            frontend_bind,
-            backend_bind,
-            metrics: stored,
-            shutdown,
-            handle: Some(handle),
-        })
-    }
-
-    /// Signal shutdown and join the broker thread.
-    pub(crate) fn stop(mut self) -> Result<()> {
-        self.shutdown.store(true, Ordering::Release);
-        if let Some(handle) = self.handle.take() {
-            join_broker_thread("action_bus", handle)?;
-        }
-        Ok(())
-    }
-}
-
-impl Drop for ActionBusBroker {
-    fn drop(&mut self) {
-        self.shutdown.store(true, Ordering::Release);
-        if let Some(handle) = self.handle.take() {
-            let _ = handle.join();
-        }
-    }
-}
-
-/// WebSocket RPC listen options (feature `ws`, enabled by default).
-#[cfg(feature = "ws")]
-#[derive(Clone, Debug)]
-pub struct WsGatewayConfig {
-    pub listen: SocketAddr,
-    /// When empty, allow any origin (local-dev default).
-    pub cors_origins: Vec<String>,
-}
-
-#[cfg(feature = "ws")]
-impl Default for WsGatewayConfig {
-    fn default() -> Self {
-        Self {
-            listen: "0.0.0.0:15570".parse().expect("default API listen"),
-            cors_origins: Vec::new(),
-        }
-    }
-}
-
-/// Embedded Web console HTTP options (feature `console`, enabled by default).
-///
-/// When the `ws` feature is also enabled, the console UI + REST API are served
-/// on [`WsGatewayConfig::listen`] instead — WebSocket RPC (`/ws`) and the console
-/// share one port. `listen` here only takes effect when `ws` is disabled (or
-/// this crate is built console-only).
-#[cfg(feature = "console")]
-#[derive(Clone, Debug)]
-pub struct ConsoleBrokerConfig {
-    /// When false, the console is not started.
-    pub enabled: bool,
-    /// When false, the in-console tank demo is hidden and cannot be started
-    /// (`--no-tank`). Default true for local / sim use.
-    pub tank_enabled: bool,
-    /// When false, the console docs sidebar entry is hidden (`--no-docs`).
-    /// Default true.
-    pub docs_enabled: bool,
-    /// Listen address used only when the `grpc` feature is disabled.
-    pub listen: SocketAddr,
-    /// Explicit CORS allowlist for cross-origin browser clients.
-    /// Empty (default) disables CORS headers. Never uses `*`.
-    pub cors_origins: Vec<String>,
-}
-
-#[cfg(feature = "console")]
-impl Default for ConsoleBrokerConfig {
-    fn default() -> Self {
-        Self {
-            enabled: true,
-            tank_enabled: true,
-            docs_enabled: true,
-            listen: "0.0.0.0:15570".parse().expect("default console listen"),
-            cors_origins: Vec::new(),
-        }
-    }
-}
-
-/// Configuration for starting all buses (and gRPC / console) in one process.
-#[derive(Clone, Debug, Default)]
-pub struct RobotBusConfig {
-    pub message: BusConfig,
-    pub service: ServiceBusConfig,
-    pub action: ActionBusConfig,
-    pub discovery: DiscoveryConfig,
-    #[cfg(feature = "ws")]
-    pub ws: WsGatewayConfig,
-    #[cfg(feature = "console")]
-    pub console: ConsoleBrokerConfig,
 }
 
 #[cfg(feature = "ws")]
