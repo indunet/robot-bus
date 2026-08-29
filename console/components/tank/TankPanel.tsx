@@ -312,7 +312,7 @@ export default function TankPanel({ compact = false, autoFocus = false }: Props)
 
       node.createSubscription(
         POSE_TOPIC,
-        (_topic, message: Pose2D) => {
+        (message: Pose2D) => {
           current.x = message.x ?? HOME_POSE.x
           current.y = message.y ?? HOME_POSE.y
           current.theta = message.theta ?? 0

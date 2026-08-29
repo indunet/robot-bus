@@ -55,7 +55,7 @@ Broker().use { _ ->
     val imuPub = node.createPublisher("/robot1/imu", Imu::class.java)
     val sub = node.createSubscription(
       "/robot1/imu",
-      { topic, imu -> println("$topic z=${imu.angularVelocity.z}") },
+      { imu -> println("z=${imu.angularVelocity.z}") },
       Imu::class.java,
     )
     // sub.destroy()

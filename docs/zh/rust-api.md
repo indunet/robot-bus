@@ -169,8 +169,8 @@ fn main() -> robot_bus::Result<()> {
     let imu_pub = node.create_publisher::<Imu>("/robot1/imu")?;
     let _sub = node.create_subscription::<Imu, _>(
         "/robot1/imu",
-        |topic, imu| {
-            println!("{topic}: angular_z={:?}", imu.angular_velocity);
+        |imu| {
+            println!("angular_z={:?}", imu.angular_velocity);
         },
         None,
     )?;
@@ -251,7 +251,7 @@ executor.add_node(&mut node)?;
 let reentrant = node.create_callback_group(CallbackGroupType::Reentrant);
 node.create_subscription_raw(
     "/robot1/imu",
-    Arc::new(|_topic, _payload| { /* 可与同组其它回调并行 */ }),
+    Arc::new(|_| { /* 可与同组其它回调并行 */ }),
     Some(&reentrant),
 )?;
 node.create_timer(
@@ -279,7 +279,7 @@ let pub_ = node.create_publisher_with_qos::<robot_bus::sensor_msgs::msg::v1::Imu
 node.create_subscription_with_qos::<robot_bus::sensor_msgs::msg::v1::Imu, _>(
     "/robot1/imu",
     QosProfile::keep_last(10),
-    |_topic, _imu| {},
+    |_imu| {},
     None,
 )?;
 
@@ -389,7 +389,7 @@ fn main() -> anyhow::Result<()> {
     let imu_pub = node.create_publisher_raw("/robot1/imu")?;
     node.create_subscription_raw(
         "/robot1/imu",
-        Arc::new(|topic, payload| println!("{topic}: {} bytes", payload.len())),
+        Arc::new(|payload| println!("{} bytes", payload.len())),
         None,
     )?;
     imu_pub.publish(b"hello")?;
@@ -448,8 +448,8 @@ pub_.publish(b"go")?;
 
 node.create_subscription_raw(
     "/robot1/imu",
-    Arc::new(|topic, payload| {
-        println!("{topic}: {} bytes", payload.len());
+    Arc::new(|payload| {
+        println!("{} bytes", payload.len());
     }),
     None,
 )?;

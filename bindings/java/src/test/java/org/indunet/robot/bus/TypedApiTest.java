@@ -43,7 +43,7 @@ class TypedApiTest {
                 Node node = bus.makeNode("typed-pubsub")) {
             AtomicReference<Imu> got = new AtomicReference<>();
             TypedTopicPublisher<Imu> pub = node.createPublisher("/imu", Imu.class);
-            node.createSubscription("/imu", (topic, msg) -> got.set(msg), Imu.class);
+            node.createSubscription("/imu", (msg) -> got.set(msg), Imu.class);
             node.start();
             Thread.sleep(200);
 

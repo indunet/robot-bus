@@ -45,7 +45,7 @@ pub fn bench_pubsub(ctx: &Context, transport: &str) -> ScenarioResult {
     let rec_cb = Arc::clone(&record_latency);
     if let Err(err) = sub.create_subscription_raw(
         &topic,
-        Arc::new(move |_topic, payload| {
+        Arc::new(move |payload| {
             if rec_cb.load(Ordering::Relaxed) {
                 if let Some(sent) = read_ts(payload) {
                     let now = now_ns();

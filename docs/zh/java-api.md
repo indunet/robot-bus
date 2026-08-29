@@ -80,7 +80,7 @@ try (Broker broker = new Broker();
   TypedTopicPublisher<Imu> imuPub = node.createPublisher("/robot1/imu", Imu.class);
   var sub = node.createSubscription(
       "/robot1/imu",
-      (topic, imu) -> System.out.println(topic + " z=" + imu.getAngularVelocity().getZ()),
+      (imu) -> System.out.println("z=" + imu.getAngularVelocity().getZ()),
       Imu.class);
   // sub.destroy();  // 或 AutoCloseable
 
@@ -105,7 +105,7 @@ Raw bytes（兼容旧用法）：
 var pub = node.createPublisher("/robot1/imu");
 pub.publish(imu.toByteArray());
 
-node.createSubscription("/robot1/imu", (topic, payload) -> {
+node.createSubscription("/robot1/imu", (payload) -> {
   Imu msg = Imu.parseFrom(payload);
 });
 ```

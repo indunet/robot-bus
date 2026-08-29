@@ -106,7 +106,7 @@ const node = new Node("pilot");
 const pub = node.createPublisher("/robot1/imu", Imu);
 const sub = node.createSubscription(
   "/robot1/imu",
-  (_topic, imu) => {
+  (imu) => {
     console.log(imu);
   },
   Imu,
@@ -151,8 +151,8 @@ import { Node } from "robot-bus";
 const node = Node.ws("browser-client"); // default http://127.0.0.1:15570 → ws://127.0.0.1:15570/ws
 const pub = node.createPublisher("/robot1/cmd");
 await pub.publish(new TextEncoder().encode("go"));
-node.createSubscription("/robot1/imu", (topic, payload) => {
-  console.log(topic, payload);
+node.createSubscription("/robot1/imu", (payload) => {
+  console.log(payload);
 }, 10); // optional KeepLast depth → gateway subscribe queue
 node.start(); // or node.spin()
 ```

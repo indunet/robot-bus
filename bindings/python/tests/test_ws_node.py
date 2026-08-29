@@ -98,11 +98,11 @@ def test_ws_node_subscribe_and_service() -> None:
         server.start()
         time.sleep(0.2)
 
-        got: list[tuple[str, bytes]] = []
+        got: list[bytes] = []
         client = robot_bus.Node.ws_at("ws_client", ws_url)
 
-        def on_msg(topic: str, payload: bytes) -> None:
-            got.append((topic, bytes(payload)))
+        def on_msg(payload: bytes) -> None:
+            got.append(bytes(payload))
 
         client.create_subscription("py.ws.topic", on_msg)
         time.sleep(0.3)
@@ -113,8 +113,7 @@ def test_ws_node_subscribe_and_service() -> None:
             client.spin_once(0.05)
 
         assert got, "subscription callback did not fire"
-        assert got[0][0] == "py.ws.topic"
-        assert got[0][1] == b"hello-py-ws"
+        assert got[0] == b"hello-py-ws"
 
         svc = client.create_client("svc.py_ws_echo")
         reply = svc.call(b"ping", timeout=3.0)

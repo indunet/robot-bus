@@ -10,13 +10,13 @@ fn main() -> robot_bus::Result<()> {
     let mut node = Node::new("examples_imu_listener");
     let _sub = node.create_subscription::<Imu, _>(
         "/examples/imu",
-        |topic, imu| {
+        |imu| {
             let z = imu
                 .linear_acceleration
                 .as_ref()
                 .map(|v: &Vector3| v.z)
                 .unwrap_or(0.0);
-            println!("{topic}: linear_acceleration.z={z}");
+            println!("linear_acceleration.z={z}");
         },
         None,
     )?;

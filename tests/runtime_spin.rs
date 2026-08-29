@@ -24,8 +24,7 @@ fn subscribe_callback_via_spin_once() {
 
     let hits = Arc::new(AtomicUsize::new(0));
     let hits_cb = hits.clone();
-    let callback: MessageCallback = Arc::new(move |topic, payload| {
-        assert_eq!(topic, "demo.topic");
+    let callback: MessageCallback = Arc::new(move |payload| {
         assert_eq!(payload, b"hello");
         hits_cb.fetch_add(1, Ordering::SeqCst);
     });
@@ -64,7 +63,7 @@ fn spin_stops_on_shutdown() {
     executor
         .subscribe(
             "unused",
-            Arc::new(|_topic, _payload| {}),
+            Arc::new(|_| {}),
             CallbackGroup::mutually_exclusive(),
         )
         .expect("subscribe");
@@ -95,7 +94,7 @@ fn spin_some_processes_pending_then_returns() {
     executor
         .subscribe(
             "demo.topic",
-            Arc::new(move |_topic, _payload| {
+            Arc::new(move |_| {
                 hits_cb.fetch_add(1, Ordering::SeqCst);
             }),
             CallbackGroup::mutually_exclusive(),
@@ -214,7 +213,7 @@ fn node_topic_qos_keep_last_maps_to_hwm() {
     node.create_subscription_raw_with_qos(
         "/qos/demo",
         QosProfile::keep_last(32),
-        Arc::new(|_topic, _payload| {}),
+        Arc::new(|_| {}),
         None,
     )
     .expect("subscription with qos");
@@ -244,8 +243,7 @@ fn node_subscription_uses_topic_as_given() {
 
     let hits = Arc::new(AtomicUsize::new(0));
     let hits_cb = hits.clone();
-    let callback: MessageCallback = Arc::new(move |topic, payload| {
-        assert_eq!(topic, "/robot1/imu");
+    let callback: MessageCallback = Arc::new(move |payload| {
         assert_eq!(payload, b"hello");
         hits_cb.fetch_add(1, Ordering::SeqCst);
     });
@@ -282,8 +280,7 @@ fn node_publish_uses_topic_as_given() {
     sub_node
         .create_subscription_raw(
             "/robot1/cmd_vel",
-            Arc::new(move |topic, payload| {
-                assert_eq!(topic, "/robot1/cmd_vel");
+            Arc::new(move |payload| {
                 assert_eq!(payload, b"go");
                 hits_cb.fetch_add(1, Ordering::SeqCst);
             }),
@@ -352,8 +349,7 @@ fn node_subscription_typed_imu() {
     let (executor, mut node) = node_with_proxy("imu_node", &proxy);
     node.create_subscription::<Imu, _>(
         "/robot1/imu",
-        move |topic, imu| {
-            assert_eq!(topic, "/robot1/imu");
+        move |imu| {
             // Only count the intentionally valid sample (bad frames are skipped or default).
             if imu.linear_acceleration.as_ref().map(|v| v.z) == Some(9.8) {
                 hits_cb.fetch_add(1, Ordering::SeqCst);
@@ -421,8 +417,7 @@ fn node_spin_without_explicit_executor() {
     // No add_node — Node lazily owns a SingleThreadedExecutor.
     node.create_subscription_raw(
         "/auto/topic",
-        Arc::new(move |topic, payload| {
-            assert_eq!(topic, "/auto/topic");
+        Arc::new(move |payload| {
             assert_eq!(payload, b"ping");
             hits_cb.fetch_add(1, Ordering::SeqCst);
         }),

@@ -118,7 +118,7 @@ fn tank_session_starts_physics_and_stops_after_release() {
     viewer
         .create_subscription::<Pose2D, _>(
             POSE_TOPIC,
-            move |_t, _pose| {
+            move |_| {
                 flag.store(true, Ordering::Relaxed);
             },
             None,

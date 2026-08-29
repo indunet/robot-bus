@@ -35,7 +35,7 @@ pub struct DiscoverNodeOptions {
 
 
 type ConnTsfn = ThreadsafeFunction<(String, String, String), ErrorStrategy::Fatal>;
-type MsgTsfn = ThreadsafeFunction<(String, Vec<u8>), ErrorStrategy::Fatal>;
+type MsgTsfn = ThreadsafeFunction<Vec<u8>, ErrorStrategy::Fatal>;
 type VoidTsfn = ThreadsafeFunction<(), ErrorStrategy::Fatal>;
 type ServiceTsfn = ThreadsafeFunction<Vec<u8>, ErrorStrategy::CalleeHandled>;
 type ActionTsfn = ThreadsafeFunction<Vec<u8>, ErrorStrategy::CalleeHandled>;
@@ -379,7 +379,7 @@ impl Node {
         Ok(TopicPublisher { inner })
     }
 
-    /// Register a subscription callback `(topic: string, payload: Buffer) => void`.
+    /// Register a subscription callback `(payload: Buffer) => void`.
     #[napi]
     pub fn create_subscription(
         &mut self,
@@ -390,18 +390,12 @@ impl Node {
     ) -> Result<SubscriptionHandle> {
         use robot_bus::runtime::QosProfile;
         let tsfn: MsgTsfn = callback.create_threadsafe_function(0, |ctx| {
-            let (topic, payload) = ctx.value;
-            Ok(vec![
-                ctx.env.create_string_from_std(topic)?.into_unknown(),
-                ctx.env.create_buffer_with_data(payload)?.into_unknown(),
-            ])
+            let payload = ctx.value;
+            Ok(vec![ctx.env.create_buffer_with_data(payload)?.into_unknown()])
         })?;
         let tsfn = Arc::new(tsfn);
-        let cb: robot_bus::runtime::MessageCallback = Arc::new(move |topic, payload| {
-            let _ = tsfn.call(
-                (topic.to_string(), payload.to_vec()),
-                ThreadsafeFunctionCallMode::NonBlocking,
-            );
+        let cb: robot_bus::runtime::MessageCallback = Arc::new(move |payload| {
+            let _ = tsfn.call(payload.to_vec(), ThreadsafeFunctionCallMode::NonBlocking);
         });
         let group = callback_group.map(|g| &g.inner);
         let handle = match qos_depth.filter(|d| *d > 0) {

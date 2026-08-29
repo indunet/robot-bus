@@ -51,7 +51,7 @@ class TypedApiTest {
                 val pub = node.createPublisher("/imu", Imu::class.java)
                 node.createSubscription(
                     "/imu",
-                    { _, msg -> got.set(msg) },
+                    { msg -> got.set(msg) },
                     Imu::class.java,
                 )
                 node.start()

@@ -93,7 +93,7 @@ Reverse of [api-compare.md](../zh/api-compare.md).
 | Node | `Node::new("name")` | `Node::new(&context, "name")` / `Node("name")` + ROS context/init |
 | Spin | `node.spin()` | `rclcpp::spin` / `rclpy.spin` / `rclrs::spin` |
 | Publisher | `create_publisher[_with_qos]` | `create_publisher<T>(topic, qos)` |
-| Subscription | cb `(topic, msg)` + optional group | cb `msg` (+ qos); groups via executor APIs |
+| Subscription | cb `msg` + optional group | cb `msg` (+ qos); groups via executor APIs |
 | Service client | `call(req, Some(timeout))` | `call` / async patterns per client lib |
 | Action | `send_goal` → GoalHandle → `result` / `cancel` | Same conceptual split; use rcl* action APIs |
 | Timer | `create_timer` | `create_wall_timer` / equivalent |

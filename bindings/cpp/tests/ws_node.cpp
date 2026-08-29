@@ -77,10 +77,8 @@ int main() {
 
     auto sub_node = bus.make_node("cpp_grpc_zmq_sub");
     std::atomic<bool> got{false};
-    std::string got_topic;
     std::vector<uint8_t> got_payload;
-    auto sub = sub_node.create_subscription("cpp.ws.pub", [&](std::string_view topic, robot_bus::BytesView payload) {
-      got_topic = std::string(topic);
+    auto sub = sub_node.create_subscription("cpp.ws.pub", [&](robot_bus::BytesView payload) {
       got_payload.assign(payload.data, payload.data + payload.size);
       got = true;
     });
@@ -93,7 +91,6 @@ int main() {
     pub.publish(hello);
 
     ROBOT_BUS_CHECK(wait_until([&] { return got.load(); }));
-    ROBOT_BUS_CHECK(got_topic == "cpp.ws.pub");
     ROBOT_BUS_CHECK(std::string(got_payload.begin(), got_payload.end()) == hello);
 
     sub_node.shutdown();
@@ -124,10 +121,8 @@ int main() {
 
     auto client = robot_bus::Node::ws_at("grpc_client", ws_url.c_str());
     std::atomic<bool> got{false};
-    std::string got_topic;
     std::vector<uint8_t> got_payload;
-    auto sub = client.create_subscription("cpp.ws.topic", [&](std::string_view topic, robot_bus::BytesView payload) {
-      got_topic = std::string(topic);
+    auto sub = client.create_subscription("cpp.ws.topic", [&](robot_bus::BytesView payload) {
       got_payload.assign(payload.data, payload.data + payload.size);
       got = true;
     });
@@ -139,7 +134,6 @@ int main() {
       client.spin_once(0.05);
       return got.load();
     }));
-    ROBOT_BUS_CHECK(got_topic == "cpp.ws.topic");
     ROBOT_BUS_CHECK(std::string(got_payload.begin(), got_payload.end()) == hello);
 
     auto svc = client.create_client("svc.cpp_grpc_echo");

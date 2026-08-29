@@ -328,20 +328,20 @@ export class Node {
 
   createSubscription(
     topic: string,
-    callback: (topic: string, payload: Buffer | object) => void,
+    callback: (payload: Buffer | object) => void,
     callbackGroup?: import("./native-types.js").JsCallbackGroup,
     qosDepth?: number,
   ): import("./native-types.js").SubscriptionHandle;
   createSubscription<T extends object>(
     topic: string,
-    callback: (topic: string, msg: T) => void,
+    callback: (msg: T) => void,
     msgType: MessageType<T>,
     callbackGroup?: import("./native-types.js").JsCallbackGroup,
     qosDepth?: number,
   ): import("./native-types.js").SubscriptionHandle;
   createSubscription(
     topic: string,
-    callback: (topic: string, payload: Buffer | object) => void,
+    callback: (payload: Buffer | object) => void,
     msgTypeOrGroup?:
       | MessageType<object>
       | import("./native-types.js").JsCallbackGroup,
@@ -356,10 +356,10 @@ export class Node {
         typeof maybeGroupOrDepth === "number" ? maybeGroupOrDepth : maybeDepth;
       return this.inner.createSubscription(
         topic,
-        (t, payload) => {
+        (payload) => {
           const decoded = decode(msgType, payload);
           if (decoded) {
-            callback(t, decoded);
+            callback(decoded);
           }
         },
         group,
@@ -373,7 +373,7 @@ export class Node {
       typeof maybeGroupOrDepth === "number" ? maybeGroupOrDepth : maybeDepth;
     return this.inner.createSubscription(
       topic,
-      callback as (topic: string, payload: Buffer) => void,
+      callback as (payload: Buffer) => void,
       group,
       depth,
     );

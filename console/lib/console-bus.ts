@@ -159,27 +159,27 @@ export function startConsoleBus(handlers: ConsoleBusHandlers): () => void {
   // Pub/Sub counts and fill TYPE for `/robot_bus/*` system topics.
   const node = RobotBusNode.wsAt('console_ui', url)
 
-  node.createSubscription(consoleTopics.STATUS, (_t, msg) => {
+  node.createSubscription(consoleTopics.STATUS, (msg) => {
     handlers.onStatus(mapStatus(msg))
   }, BrokerStatusMsg)
 
-  node.createSubscription(consoleTopics.TOPICS, (_t, msg) => {
+  node.createSubscription(consoleTopics.TOPICS, (msg) => {
     handlers.onTopics(mapTopics(msg))
   }, TopicStatsList)
 
-  node.createSubscription(consoleTopics.SERVICES, (_t, msg) => {
+  node.createSubscription(consoleTopics.SERVICES, (msg) => {
     handlers.onServices(mapServices(msg))
   }, ServiceStatsList)
 
-  node.createSubscription(consoleTopics.ACTIONS, (_t, msg) => {
+  node.createSubscription(consoleTopics.ACTIONS, (msg) => {
     handlers.onActions(mapActions(msg))
   }, ActionStatsList)
 
-  node.createSubscription(consoleTopics.TOPOLOGY, (_t, msg) => {
+  node.createSubscription(consoleTopics.TOPOLOGY, (msg) => {
     handlers.onTopology(mapTopology(msg))
   }, TopologySnapshot)
 
-  node.createSubscription(consoleTopics.EVENTS, (_t, msg) => {
+  node.createSubscription(consoleTopics.EVENTS, (msg) => {
     handlers.onEvent(mapEvent(msg))
   }, ConsoleEvent)
 

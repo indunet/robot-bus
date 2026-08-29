@@ -15,8 +15,7 @@ int main() {
 
   std::atomic<bool> got{false};
   double got_z = 0.0;
-  auto sub = node.create_subscription("/imu", [&](std::string_view topic, robot_bus::BytesView payload) {
-    ROBOT_BUS_CHECK(topic == "/imu");
+  auto sub = node.create_subscription("/imu", [&](robot_bus::BytesView payload) {
     sensor_msgs::msg::v1::Imu imu;
     ROBOT_BUS_CHECK(imu.ParseFromArray(payload.data, static_cast<int>(payload.size)));
     got_z = imu.angular_velocity().z();

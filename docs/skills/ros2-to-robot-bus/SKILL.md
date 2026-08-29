@@ -83,7 +83,7 @@ Canonical side-by-side examples: [api-compare.md](../zh/api-compare.md).
 | Node | `Node::new(&ctx, "name")` / `Node("name")` | `Node::new("name")` / `Node("name")` |
 | Spin | `rclcpp::spin` / `rclpy.spin` / `rclrs::spin` | `node.spin()` (auto SingleThreadedExecutor) |
 | Publisher | `create_publisher<T>(topic, qos)` | `create_publisher` / `create_publisher_with_qos` |
-| Subscription | `(topic, qos, cb)` | `(topic, qos?, cb, callback_group?)` — bus cb often gets `(topic, msg)` |
+| Subscription | `(topic, qos, cb)` | `(topic, qos?, cb, callback_group?)` — bus cb is `msg` only (ROS 2 style) |
 | Service | `create_service` / `create_client` | same names; client `call` takes timeout |
 | Action | `ActionServer` / `ActionClient` | `create_action_server` / `create_action_client` + GoalHandle |
 | Timer | `create_wall_timer` | `create_timer(period, cb, group?)` |
@@ -103,7 +103,7 @@ fn main() -> robot_bus::Result<()> {
     node.create_subscription_with_qos::<Imu, _>(
         "/robot1/imu",
         QosProfile::keep_last(10),
-        |_topic, imu| { let _ = imu; },
+        |imu| { let _ = imu; },
         None,
     )?;
     pub_.publish(&Imu::default())?;
@@ -122,7 +122,7 @@ from robot_bus.sensor_msgs.msg.v1 import Imu
 
 node = robot_bus.Node("talker")
 pub = node.create_publisher("/robot1/imu", Imu)
-node.create_subscription("/robot1/imu", Imu, lambda topic, msg: None)
+node.create_subscription("/robot1/imu", lambda msg: None, msg_type=Imu)
 pub.publish(Imu())
 node.spin()
 ```

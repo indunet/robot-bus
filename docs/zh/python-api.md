@@ -125,8 +125,8 @@ import robot_bus
 from robot_bus.sensor_msgs.msg.v1 import Imu
 from robot_bus.geometry_msgs.msg.v1 import Vector3
 
-def on_imu(topic, imu: Imu):
-    print(topic, imu.angular_velocity)
+def on_imu(imu: Imu):
+    print(imu.angular_velocity)
 
 node = robot_bus.Node("pilot")
 # 可选：Node(..., host=..., transport=..., message_xsub=..., message_xpub=...)
@@ -153,7 +153,7 @@ Raw bytes（与旧用法兼容）：
 imu_pub = node.create_publisher("/robot1/imu")  # → TopicPublisher
 imu_pub.publish(imu.SerializeToString())
 
-def on_raw(topic, payload: bytes):
+def on_raw(payload: bytes):
     imu = Imu()
     imu.ParseFromString(payload)
 
@@ -181,8 +181,8 @@ node = robot_bus.Node.ws("web-client")
 pub = node.create_publisher("/robot1/cmd")
 pub.publish(b"go")
 
-def on_imu(topic, payload: bytes):
-    print(topic, len(payload))
+def on_imu(payload: bytes):
+    print(len(payload))
 
 node.create_subscription("/robot1/imu", on_imu)
 
@@ -308,7 +308,7 @@ node.cancel_timer(handle)
 import robot_bus
 
 node = robot_bus.Node("poller")
-node.create_subscription("/robot1/imu", lambda t, p: print(t))
+node.create_subscription("/robot1/imu", lambda p: print(len(p)))
 
 while True:
     node.spin_once(timeout=0.1)  # 秒
@@ -430,7 +430,7 @@ print(robot_bus.__version__)
 | `node.create_publisher(topic, msg_type=None, qos_depth=None)` | typed → `TypedTopicPublisher.publish(Message)`；省略类型 → raw；`qos_depth>0` → KeepLast HWM（WS发布忽略） |
 | `node.create_timer(period, callback)` → `TimerHandle` | 定时器（与 topic一样挂在 Node） |
 | `CallbackGroupType` / `create_callback_group` | `MutuallyExclusive` / `Reentrant` |
-| `create_subscription(..., msg_type=, callback_group=, qos_depth=)` | typed：`callback(topic, Message)`；省略类型：`callback(topic, bytes)`；WS：`qos_depth`为网关订阅队列深度 |
+| `create_subscription(..., msg_type=, callback_group=, qos_depth=)` | typed：`callback(Message)`；省略类型：`callback(bytes)`；WS：`qos_depth`为网关订阅队列深度 |
 | `create_service(..., request_type=, response_type=, qos_depth=)` | typed：`handler(Request) -> Response`；否则 raw bytes；`qos_depth>0` → KeepLast DEALER HWM |
 | `create_client(..., request_type=, response_type=, qos_depth=)` | typed → `TypedServiceClient`；`service_is_ready` / `wait_for_service`（console workers）；`qos_depth>0` → KeepLast DEALER HWM |
 | `create_action_server(..., goal_type=, feedback_type=, result_type=, qos_depth=)` | typed handler通过 context实时发布 feedback，并返回 result；否则 raw bytes；`qos_depth>0` → KeepLast DEALER HWM |

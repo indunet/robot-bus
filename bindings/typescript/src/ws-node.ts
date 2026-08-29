@@ -259,7 +259,7 @@ export class TypedWsActionClient<
   }
 }
 
-type SubCallback = (topic: string, payload: Uint8Array) => void;
+type SubCallback = (payload: Uint8Array) => void;
 
 /** Raw (bytes) publisher over MessageGateway.Publish. */
 export class WsTopicPublisher {
@@ -429,13 +429,13 @@ export class WsNode {
   createSubscription(topic: string, callback: SubCallback, qosDepth?: number): void;
   createSubscription<T extends object>(
     topic: string,
-    callback: (topic: string, msg: T) => void,
+    callback: (msg: T) => void,
     msgType: MessageType<T>,
     qosDepth?: number,
   ): void;
   createSubscription<T extends object>(
     topic: string,
-    callback: SubCallback | ((topic: string, msg: T) => void),
+    callback: SubCallback | ((msg: T) => void),
     msgTypeOrDepth?: MessageType<T> | number,
     maybeDepth?: number,
   ): void {
@@ -446,10 +446,10 @@ export class WsNode {
     const qosDepth =
       typeof msgTypeOrDepth === "number" ? msgTypeOrDepth : maybeDepth;
     const wrapped: SubCallback = msgType
-      ? (t, payload) => {
+      ? (payload) => {
           const decoded = decode(msgType, payload);
           if (decoded) {
-            (callback as (topic: string, msg: T) => void)(t, decoded);
+            (callback as (msg: T) => void)(decoded);
           }
         }
       : (callback as SubCallback);
@@ -713,7 +713,7 @@ export class WsNode {
               settled = true;
               resolve(null);
             }, timeoutSeconds * 1000);
-      this.createSubscription(topic, (_t, payload) => {
+      this.createSubscription(topic, (payload) => {
         if (settled) return;
         settled = true;
         if (timer) clearTimeout(timer);
@@ -829,7 +829,7 @@ export class WsNode {
               }
               for (const cb of cbs) {
                 try {
-                  cb(msg.topic, msg.payload);
+                  cb(msg.payload);
                 } catch (err) {
                   console.error("robot-bus subscription callback error", err);
                 }

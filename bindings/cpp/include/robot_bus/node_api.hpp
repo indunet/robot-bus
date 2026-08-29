@@ -6,7 +6,7 @@ namespace robot_bus {
 
 class Node {
  public:
-  using MsgCallback = std::function<void(std::string_view topic, BytesView payload)>;
+  using MsgCallback = std::function<void(BytesView payload)>;
   using TimerCallback = std::function<void()>;
   using ServiceHandler = std::function<std::vector<uint8_t>(BytesView body)>;
   using ActionHandler =
@@ -126,9 +126,9 @@ class Node {
         n_, static_cast<RobotBusSubscriptionHandle *>(check_ptr(
                 robot_bus_node_create_subscription_with_qos(
                     n_, topic,
-                    [](const char *t, const uint8_t *data, size_t len, void *user) {
+                    [](const uint8_t *data, size_t len, void *user) {
                       auto *fn = static_cast<MsgCallback *>(user);
-                      (*fn)(t ? std::string_view(t) : std::string_view(), BytesView(data, len));
+                      (*fn)(BytesView(data, len));
                     },
                     held, group ? group->raw() : nullptr, qos_depth),
                 "create_subscription")));

@@ -364,7 +364,7 @@ fn typed_subscription_restores_metadata_after_broker_restart() {
     let mut node = tcp_node_on_broker("type_restore_sub", &broker, &console_url);
     node.create_subscription::<Imu, _>(
         "/restore/sub",
-        move |_topic, _imu| {
+        move |_| {
             hits_cb.fetch_add(1, Ordering::SeqCst);
         },
         None,

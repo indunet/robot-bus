@@ -18,8 +18,7 @@ int main() {
   std::atomic<bool> got{false};
   double got_z = 0.0;
   auto sub = create_subscription<Imu>(
-      node, "/imu", [&](std::string_view topic, const Imu &msg) {
-        ROBOT_BUS_CHECK(topic == "/imu");
+      node, "/imu", [&](const Imu &msg) {
         got_z = msg.angular_velocity().z();
         got = true;
       });

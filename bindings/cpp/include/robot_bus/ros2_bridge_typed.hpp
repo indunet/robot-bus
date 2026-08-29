@@ -55,7 +55,7 @@ class TypedTopicMapper : public TopicMapper {
       auto weak_pub = std::weak_ptr<rclcpp::Publisher<RosMsg>>(ros_pub);
       ctx.retain(std::make_shared<SubscriptionHandle>(ctx.bus_node.create_subscription(
           ctx.bus_topic.c_str(),
-          [self, weak_pub](std::string_view, BytesView payload) {
+          [self, weak_pub](BytesView payload) {
             auto pub = weak_pub.lock();
             if (!pub) {
               return;

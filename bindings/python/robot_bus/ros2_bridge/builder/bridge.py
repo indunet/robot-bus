@@ -135,7 +135,7 @@ class Ros2Bridge:
             pass
 
     def _subscribe_demand(self) -> None:
-        def on_demand(_topic: str, payload: bytes) -> None:
+        def on_demand(payload: bytes) -> None:
             try:
                 from robot_bus.robot_bus_interfaces.msg.v1 import TopicDemand
             except ImportError:
@@ -145,7 +145,7 @@ class Ros2Bridge:
             self._console_live = True
             self._subscriber_counts[msg.topic] = int(msg.subscribers)
 
-        def on_topics(_topic: str, payload: bytes) -> None:
+        def on_topics(payload: bytes) -> None:
             try:
                 from robot_bus.robot_bus_interfaces.msg.v1 import TopicStatsList
             except ImportError:
@@ -207,7 +207,7 @@ class Ros2Bridge:
         if direction == Direction.BusToRos2:
             ros_pub = self._ros_node.create_publisher(msg_type, ros_topic, ros_qos)
 
-            def on_bus(_topic: str, payload: bytes, m=mapper, pub=ros_pub) -> None:
+            def on_bus(payload: bytes, m=mapper, pub=ros_pub) -> None:
                 try:
                     pub.publish(m.bus_to_ros(payload))
                 except Exception:

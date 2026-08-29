@@ -36,7 +36,7 @@ just java-install
 import org.indunet.robot.bus.sensor_msgs.msg.v1.Imu;
 
 TypedTopicPublisher<Imu> pub = node.createPublisher("/imu", Imu.class);
-node.createSubscription("/imu", (topic, imu) -> { /* … */ }, Imu.class);
+node.createSubscription("/imu", (imu) -> { /* … */ }, Imu.class);
 ```
 
 Omit the `Class` argument to stay on raw `byte[]`.

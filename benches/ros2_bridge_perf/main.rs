@@ -322,7 +322,7 @@ mod run {
         if let Err(err) = bus.create_subscription_raw_with_qos(
             topic,
             QosProfile::keep_last(MSG_HWM),
-            Arc::new(move |_t, payload| {
+            Arc::new(move |payload| {
                 if rec.load(Ordering::Relaxed) {
                     if let Ok(msg) = BusString::decode(payload) {
                         if let Some(sent) = parse_ts(&msg.data) {
@@ -421,7 +421,7 @@ mod run {
         if let Err(err) = bus.create_subscription_raw_with_qos(
             topic,
             QosProfile::keep_last(MSG_HWM),
-            Arc::new(move |_t, payload| {
+            Arc::new(move |payload| {
                 if rec.load(Ordering::Relaxed) {
                     if let Ok(msg) = robot_bus::sensor_msgs::msg::v1::Image::decode(payload) {
                         if let Some(sent) = image_ts(&msg.data) {

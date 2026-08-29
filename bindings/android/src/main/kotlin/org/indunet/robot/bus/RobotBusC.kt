@@ -159,7 +159,7 @@ internal interface RobotBusC : Library {
     fun robot_bus_broker_api_listen(b: Pointer?): Pointer?
     fun robot_bus_broker_console_listen(b: Pointer?): Pointer?
     fun interface MsgCb : Callback {
-        fun invoke(topic: String?, data: Pointer?, len: Long, user: Pointer?)
+        fun invoke(data: Pointer?, len: Long, user: Pointer?)
     }
 
     fun interface TimerCb : Callback {

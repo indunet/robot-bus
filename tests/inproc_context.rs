@@ -50,7 +50,7 @@ fn inproc_pubsub_with_shared_context() {
     .expect("set_stream_hwm");
     sub.create_subscription_raw(
         "/inproc/demo",
-        Arc::new(move |_topic, payload| {
+        Arc::new(move |payload| {
             assert_eq!(payload, b"hello-inproc");
             hits_cb.fetch_add(1, Ordering::SeqCst);
         }),

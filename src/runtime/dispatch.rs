@@ -65,14 +65,13 @@ pub fn dispatch_sub_message(
         return;
     }
     let payload_bytes = std::mem::take(&mut frames[1]);
-    let topic: Arc<str> = String::from_utf8_lossy(&frames[0]).into_owned().into();
+    let topic = String::from_utf8_lossy(&frames[0]);
     let payload: Arc<[u8]> = payload_bytes.into();
     for_each_matching_callback(&topic, topic_callbacks, |entry| {
         let callback = Arc::clone(&entry.callback);
         let group = entry.group.clone();
-        let topic = Arc::clone(&topic);
         let payload = Arc::clone(&payload);
-        group.run(worker_pool, move || callback(&topic, &payload));
+        group.run(worker_pool, move || callback(&payload));
     });
 }
 

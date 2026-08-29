@@ -1,6 +1,6 @@
 //! Node entity creation (pub/sub/timer/service/action) C ABI.
 
-use std::ffi::{CStr, CString};
+use std::ffi::CStr;
 use std::os::raw::{c_char, c_int, c_void};
 use std::ptr;
 use std::sync::Arc;
@@ -116,11 +116,9 @@ pub extern "C" fn robot_bus_node_create_subscription_with_qos(
     };
     // user pointer is assumed to outlive the subscription (caller responsibility).
     let user = user as usize;
-    let cb: robot_bus::runtime::MessageCallback = Arc::new(move |topic, payload| {
-        let c_topic = CString::new(topic.replace('\0', "")).unwrap_or_default();
+    let cb: robot_bus::runtime::MessageCallback = Arc::new(move |payload| {
         unsafe {
             cb_fn(
-                c_topic.as_ptr(),
                 payload.as_ptr(),
                 payload.len(),
                 user as *mut c_void,

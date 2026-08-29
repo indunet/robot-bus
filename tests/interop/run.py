@@ -248,7 +248,7 @@ def scenario_rust_pub_python_sub(robot_bus, broker) -> None:
 
     got: list[Imu] = []
     node = robot_bus.Node("py_sub", **_node_kwargs(broker))
-    node.create_subscription(TOPIC, lambda _t, imu: got.append(imu), msg_type=Imu)
+    node.create_subscription(TOPIC, lambda imu: got.append(imu), msg_type=Imu)
     node.start()
     time.sleep(0.3)
     proc = _spawn_rust("pub", _peer_env(broker))
@@ -293,7 +293,7 @@ def scenario_ts_pub_python_sub(robot_bus, broker) -> None:
 
     got: list[Imu] = []
     node = robot_bus.Node("py_sub_ts", **_node_kwargs(broker))
-    node.create_subscription(TOPIC, lambda _t, imu: got.append(imu), msg_type=Imu)
+    node.create_subscription(TOPIC, lambda imu: got.append(imu), msg_type=Imu)
     node.start()
     time.sleep(0.3)
     proc = _spawn_ts_pub(_peer_env(broker))

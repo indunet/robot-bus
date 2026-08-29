@@ -161,7 +161,7 @@ robot_bus::Broker broker;
 robot_bus::Node node("pilot");
 auto pub = robot_bus::create_publisher<sensor_msgs::msg::v1::Imu>(node, "/imu");
 auto sub = robot_bus::create_subscription<sensor_msgs::msg::v1::Imu>(
-    node, "/imu", [](std::string_view, const sensor_msgs::msg::v1::Imu &imu) {
+    node, "/imu", [](const sensor_msgs::msg::v1::Imu &imu) {
       // …
     });
 

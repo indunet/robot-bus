@@ -73,7 +73,7 @@ fn subscriber_register_unregister_emits_topic_demand() {
 
     let seen: Arc<Mutex<Vec<TopicDemand>>> = Arc::new(Mutex::new(Vec::new()));
     let seen_cb = Arc::clone(&seen);
-    let cb: MessageCallback = Arc::new(move |_t, payload| {
+    let cb: MessageCallback = Arc::new(move |payload| {
         if let Ok(msg) = TopicDemand::decode(payload) {
             seen_cb.lock().expect("lock").push(msg);
         }
@@ -87,13 +87,13 @@ fn subscriber_register_unregister_emits_topic_demand() {
 
     let mut listener = Node::with_options("demand-sub", opts.clone());
     let sub = listener
-        .create_subscription_raw("/lazy/cam", Arc::new(|_, _| {}), None)
+        .create_subscription_raw("/lazy/cam", Arc::new(|_| {}), None)
         .expect("subscribe");
     wait_demand(&mut watcher, &seen, "/lazy/cam", 1, Duration::from_secs(3));
 
     let mut listener2 = Node::with_options("demand-sub-2", opts.clone());
     let sub2 = listener2
-        .create_subscription_raw("/lazy/cam", Arc::new(|_, _| {}), None)
+        .create_subscription_raw("/lazy/cam", Arc::new(|_| {}), None)
         .expect("subscribe 2");
     wait_demand(&mut watcher, &seen, "/lazy/cam", 2, Duration::from_secs(3));
 
@@ -114,7 +114,7 @@ fn publisher_does_not_count_as_demand() {
 
     let seen: Arc<Mutex<Vec<TopicDemand>>> = Arc::new(Mutex::new(Vec::new()));
     let seen_cb = Arc::clone(&seen);
-    let cb: MessageCallback = Arc::new(move |_t, payload| {
+    let cb: MessageCallback = Arc::new(move |payload| {
         if let Ok(msg) = TopicDemand::decode(payload) {
             seen_cb.lock().expect("lock").push(msg);
         }
@@ -160,7 +160,7 @@ fn topics_snapshot_subscriber_count_matches_demand() {
     let _h1 = watcher
         .create_subscription_raw(
             console_topics::TOPIC_DEMAND,
-            Arc::new(move |_t, payload| {
+            Arc::new(move |payload| {
                 if let Ok(msg) = TopicDemand::decode(payload) {
                     demand_cb.lock().expect("lock").push(msg);
                 }
@@ -171,7 +171,7 @@ fn topics_snapshot_subscriber_count_matches_demand() {
     let _h2 = watcher
         .create_subscription_raw(
             console_topics::TOPICS,
-            Arc::new(move |_t, payload| {
+            Arc::new(move |payload| {
                 if let Ok(msg) = TopicStatsList::decode(payload) {
                     *snap_cb.lock().expect("lock") = Some(msg);
                 }
@@ -182,7 +182,7 @@ fn topics_snapshot_subscriber_count_matches_demand() {
 
     let mut listener = Node::with_options("demand-snap-sub", opts);
     let _sub = listener
-        .create_subscription_raw("/lazy/snap", Arc::new(|_, _| {}), None)
+        .create_subscription_raw("/lazy/snap", Arc::new(|_| {}), None)
         .expect("sub");
     wait_demand(
         &mut watcher,

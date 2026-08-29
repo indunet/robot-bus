@@ -112,7 +112,7 @@ fn main() -> robot_bus::Result<()> {
     node.create_subscription_with_qos::<Imu, _>(
         "/robot1/imu",
         QosProfile::keep_last(10),
-        |_topic, imu| {
+        |imu| {
             println!("angular_z={:?}", imu.angular_velocity);
         },
         None, // callback group，None = 默认互斥组

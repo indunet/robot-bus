@@ -93,11 +93,11 @@ enum class CallbackGroupType(val code: Int) {
     MutuallyExclusive(0),
     Reentrant(1),
 }
-fun interface MsgCallback { fun onMessage(topic:String,payload:ByteArray) }
+fun interface MsgCallback { fun onMessage(payload:ByteArray) }
 fun interface TimerCallback { fun onTimer() }
 fun interface ServiceHandler { fun handle(body:ByteArray):ByteArray }
 fun interface ActionHandler { fun handle(body:ByteArray):List<ActionPhase> }
-fun interface TypedMsgCallback<T:MessageLite> { fun onMessage(topic:String,message:T) }
+fun interface TypedMsgCallback<T:MessageLite> { fun onMessage(message:T) }
 fun interface TypedServiceHandler<Req:MessageLite,Resp:MessageLite> { fun handle(request:Req):Resp }
 fun interface TypedActionHandler<Goal:MessageLite> { fun handle(goal:Goal):List<TypedActionPhase> }
 class TypedActionPhase(@JvmField val phase:String="",@JvmField val body:MessageLite) { fun getPhase()=phase; fun getBody()=body }

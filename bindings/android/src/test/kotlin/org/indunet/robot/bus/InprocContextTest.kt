@@ -19,7 +19,7 @@ class InprocContextTest {
                         val hits = AtomicInteger()
                         sub.createSubscription(
                             "/inproc/demo",
-                            { _, payload ->
+                            { payload ->
                                 assertEquals(
                                     "hello-inproc",
                                     String(payload, StandardCharsets.UTF_8),

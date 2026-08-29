@@ -23,7 +23,7 @@ class InprocContextTest {
             AtomicInteger hits = new AtomicInteger();
             sub.createSubscription(
                     "/inproc/demo",
-                    (topic, payload) -> {
+                    (payload) -> {
                         assertEquals("hello-inproc", new String(payload, StandardCharsets.UTF_8));
                         hits.incrementAndGet();
                     });

@@ -149,8 +149,7 @@ typedef struct RobotBusParameter {
   RobotBusParameterValue value;
 } RobotBusParameter;
 
-typedef void (*RobotBusMsgCallback)(const char *topic, const uint8_t *data, size_t len,
-                                    void *user);
+typedef void (*RobotBusMsgCallback)(const uint8_t *data, size_t len, void *user);
 typedef void (*RobotBusTimerCallback)(void *user);
 typedef int (*RobotBusServiceHandler)(const uint8_t *data, size_t len, uint8_t **out_data,
                                       size_t *out_len, void *user);

@@ -108,8 +108,8 @@ import robot_bus
 from robot_bus.sensor_msgs.msg.v1 import Imu
 from robot_bus.geometry_msgs.msg.v1 import Vector3
 
-def on_imu(topic, imu: Imu):
-    print(topic, imu.linear_acceleration)
+def on_imu(imu: Imu):
+    print(imu.linear_acceleration)
 
 node = robot_bus.Node("pilot")
 
@@ -308,7 +308,7 @@ from my_robot.msg.v1 import battery_status_pb2 as pb
 
 node = robot_bus.Node("bms")
 pub = node.create_publisher("/battery", pb.BatteryStatus)
-node.create_subscription("/battery", lambda t, msg: print(msg.voltage), msg_type=pb.BatteryStatus)
+node.create_subscription("/battery", lambda msg: print(msg.voltage), msg_type=pb.BatteryStatus)
 pub.publish(pb.BatteryStatus(voltage=48.0, percentage=0.85))
 ```
 

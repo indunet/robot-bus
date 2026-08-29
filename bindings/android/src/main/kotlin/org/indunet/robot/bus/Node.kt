@@ -79,10 +79,10 @@ class Node : AutoCloseable {
         qosDepth: Int = 0,
     ): SubscriptionHandle {
         val cb =
-            RobotBusC.MsgCb { t, data, len, _ ->
+            RobotBusC.MsgCb { data, len, _ ->
                 val bytes =
                     if (data != null && len > 0) data.getByteArray(0, len.toInt()) else ByteArray(0)
-                callback.onMessage(t ?: "", bytes)
+                callback.onMessage(bytes)
             }
         msgCallbacks.add(cb)
         return SubscriptionHandle(
@@ -115,9 +115,9 @@ class Node : AutoCloseable {
         val typed = msgType as Class<T>
         return createSubscription(
             topic,
-            { t, payload ->
+            { payload ->
                 val msg = ProtoCodec.tryParse(typed, payload) ?: return@createSubscription
-                callback.onMessage(t, msg)
+                callback.onMessage(msg)
             },
             group,
             qosDepth,

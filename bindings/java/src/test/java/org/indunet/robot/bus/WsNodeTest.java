@@ -90,12 +90,10 @@ class WsNodeTest {
             server.start();
             Thread.sleep(200);
 
-            AtomicReference<String> gotTopic = new AtomicReference<>();
             AtomicReference<byte[]> gotPayload = new AtomicReference<>();
             client.createSubscription(
                     "java.ws.topic",
-                    (topic, payload) -> {
-                        gotTopic.set(topic);
+                    (payload) -> {
                         gotPayload.set(payload);
                     });
             Thread.sleep(300);
@@ -108,7 +106,6 @@ class WsNodeTest {
                                 return gotPayload.get() != null;
                             },
                             5000));
-            assertEquals("java.ws.topic", gotTopic.get());
             assertEquals(
                     "hello-java-grpc", new String(gotPayload.get(), StandardCharsets.UTF_8));
 

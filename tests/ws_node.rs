@@ -25,13 +25,13 @@ fn ws_node_subscribe_receives_published_payload() {
     let (_guard, broker) = start_bus();
     let url = ws_url(&broker);
 
-    let got = Arc::new(Mutex::new(None::<(String, Vec<u8>)>));
+    let got = Arc::new(Mutex::new(None::<Vec<u8>>));
     let got_cb = Arc::clone(&got);
     let mut node = Node::ws_at("ws-sub", &url);
     node.create_subscription_raw(
         "ws.node.topic",
-        Arc::new(move |topic, payload| {
-            *got_cb.lock().unwrap() = Some((topic.to_string(), payload.to_vec()));
+        Arc::new(move |payload| {
+            *got_cb.lock().unwrap() = Some(payload.to_vec());
         }),
         None,
     )
@@ -50,8 +50,7 @@ fn ws_node_subscribe_receives_published_payload() {
             .expect("spin_once");
     }
 
-    let (topic, payload) = got.lock().unwrap().clone().expect("callback fired");
-    assert_eq!(topic, "ws.node.topic");
+    let payload = got.lock().unwrap().clone().expect("callback fired");
     assert_eq!(payload, b"hello-ws-node");
     broker.stop().expect("stop");
 }
@@ -67,7 +66,7 @@ fn ws_node_subscribe_with_qos_receives_published_payload() {
     node.create_subscription_raw_with_qos(
         "ws.node.qos",
         QosProfile::keep_last(4),
-        Arc::new(move |_topic, payload| {
+        Arc::new(move |payload| {
             *got_cb.lock().unwrap() = Some(payload.to_vec());
         }),
         None,
@@ -225,7 +224,7 @@ fn ws_node_resubscribes_after_broker_restart() {
     let mut node = Node::ws_at("ws-re", &url);
     node.create_subscription_raw(
         "ws.reconnect.topic",
-        Arc::new(move |_topic, payload| {
+        Arc::new(move |payload| {
             *got_cb.lock().unwrap() = Some(payload.to_vec());
         }),
         None,

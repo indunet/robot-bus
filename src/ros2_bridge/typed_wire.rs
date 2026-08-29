@@ -69,7 +69,7 @@ where
         .map_err(|e| BusError::Protocol(format!("ros typed publisher {type_name}: {e}")))?;
     let ros_pub_cb = ros_pub.clone();
     ctx.ros_entities.push(Box::new(ros_pub));
-    let cb: MessageCallback = Arc::new(move |_topic, payload| {
+    let cb: MessageCallback = Arc::new(move |payload| {
         use prost::Message as _;
         let bus = match M::Bus::decode(payload) {
             Ok(b) => b,

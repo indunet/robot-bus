@@ -581,9 +581,8 @@ pub extern "C" fn robot_bus_action_goal_handle_cancel(h: *mut RobotBusActionGoal
 
 // --- Callbacks --------------------------------------------------------------
 
-pub type RobotBusMsgCallback = Option<
-    unsafe extern "C" fn(topic: *const c_char, data: *const u8, len: usize, user: *mut c_void),
->;
+pub type RobotBusMsgCallback =
+    Option<unsafe extern "C" fn(data: *const u8, len: usize, user: *mut c_void)>;
 pub type RobotBusTimerCallback = Option<unsafe extern "C" fn(user: *mut c_void)>;
 pub type RobotBusServiceHandler = Option<
     unsafe extern "C" fn(

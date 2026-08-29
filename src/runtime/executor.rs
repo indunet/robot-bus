@@ -340,11 +340,12 @@ impl Executor {
     ) -> Result<SubscriptionHandle>
     where
         M: Message + Default + 'static,
-        F: Fn(&str, M) + Send + Sync + 'static,
+        F: Fn(M) + Send + Sync + 'static,
     {
-        let cb: MessageCallback = Arc::new(move |topic, payload| match M::decode(payload) {
-            Ok(msg) => callback(topic, msg),
-            Err(err) => log::warn!("typed subscribe decode failed on {topic}: {err}"),
+        let topic_name = topic.to_string();
+        let cb: MessageCallback = Arc::new(move |payload| match M::decode(payload) {
+            Ok(msg) => callback(msg),
+            Err(err) => log::warn!("typed subscribe decode failed on {topic_name}: {err}"),
         });
         self.subscribe(topic, cb, group)
     }

@@ -532,7 +532,7 @@ impl Node {
     ) -> Result<Option<Vec<u8>>> {
         let slot: Arc<Mutex<Option<Vec<u8>>>> = Arc::new(Mutex::new(None));
         let slot_cb = Arc::clone(&slot);
-        let cb: MessageCallback = Arc::new(move |_topic, payload| {
+        let cb: MessageCallback = Arc::new(move |payload| {
             if let Ok(mut guard) = slot_cb.lock() {
                 if guard.is_none() {
                     *guard = Some(payload.to_vec());
@@ -842,7 +842,7 @@ ros__parameters:
     #[test]
     fn subscription_auto_attaches_single_threaded_executor() {
         let mut node = unit_node("pilot");
-        node.create_subscription_raw("/imu", Arc::new(|_, _| {}), None)
+        node.create_subscription_raw("/imu", Arc::new(|_| {}), None)
             .unwrap();
         assert!(node.executor_handle().is_some());
         assert!(node.owned_executor.is_some());
@@ -860,7 +860,7 @@ ros__parameters:
     #[test]
     fn cannot_add_node_after_auto_attach() {
         let mut node = unit_node("pilot");
-        node.create_subscription_raw("/imu", Arc::new(|_, _| {}), None)
+        node.create_subscription_raw("/imu", Arc::new(|_| {}), None)
             .unwrap();
         let executor = SingleThreadedExecutor::new();
         let err = executor.add_node(&mut node).unwrap_err();

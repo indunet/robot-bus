@@ -141,16 +141,16 @@ def test_install_typed_node_api_publisher_and_subscription() -> None:
     typed.publish(BoolValue(value=False))
     assert typed._inner.last == BoolValue(value=False).SerializeToString()
 
-    got: list[tuple[str, bool]] = []
+    got: list[bool] = []
     node.create_subscription(
         "/imu",
-        lambda topic, msg: got.append((topic, msg.value)),
+        lambda msg: got.append(msg.value),
         msg_type=BoolValue,
         qos_depth=5,
     )
     assert node.last_sub_qos == 5
-    node._sub_cb("/imu", BoolValue(value=True).SerializeToString())
-    assert got == [("/imu", True)]
+    node._sub_cb(BoolValue(value=True).SerializeToString())
+    assert got == [True]
 
 
 def test_install_typed_node_api_service() -> None:

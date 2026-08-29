@@ -10,7 +10,7 @@ use crate::runtime::callback_group::CallbackGroup;
 use crate::runtime::queues::ActionMessageCallback;
 use crate::zmq_helpers::{HighWaterMark, apply_action_options_with, apply_rpc_options_with};
 
-pub type MessageCallback = Arc<dyn Fn(&str, &[u8]) + Send + Sync>;
+pub type MessageCallback = Arc<dyn Fn(&[u8]) + Send + Sync>;
 pub type ServiceHandler = Arc<dyn Fn(&[u8]) -> Vec<u8> + Send + Sync>;
 pub type ActionGoalHandler = Arc<dyn Fn(&[u8]) -> Vec<(String, Vec<u8>)> + Send + Sync>;
 

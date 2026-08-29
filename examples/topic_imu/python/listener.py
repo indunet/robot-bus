@@ -10,9 +10,9 @@ import robot_bus
 from robot_bus.sensor_msgs.msg.v1 import Imu
 
 
-def on_imu(topic: str, imu: Imu) -> None:
+def on_imu(imu: Imu) -> None:
     z = imu.linear_acceleration.z if imu.linear_acceleration else 0.0
-    print(f"{topic}: linear_acceleration.z={z}")
+    print(f"linear_acceleration.z={z}")
 
 
 def main() -> None:

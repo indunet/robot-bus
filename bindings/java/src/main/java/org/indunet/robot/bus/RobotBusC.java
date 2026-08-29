@@ -331,7 +331,7 @@ interface RobotBusC extends Library {
     Pointer robot_bus_broker_console_listen(Pointer b);
 
     interface MsgCb extends Callback {
-        void invoke(String topic, Pointer data, long len, Pointer user);
+        void invoke(Pointer data, long len, Pointer user);
     }
 
     interface TimerCb extends Callback {

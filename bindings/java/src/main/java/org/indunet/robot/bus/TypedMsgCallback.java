@@ -5,5 +5,5 @@ import com.google.protobuf.MessageLite;
 /** Callback for typed subscription messages. */
 @FunctionalInterface
 public interface TypedMsgCallback<T extends MessageLite> {
-    void onMessage(String topic, T message);
+    void onMessage(T message);
 }

@@ -176,10 +176,10 @@ public final class Node implements AutoCloseable {
     public SubscriptionHandle createSubscription(
             String topic, MsgCallback callback, CallbackGroup group, int qosDepth) {
         RobotBusC.MsgCb cb =
-                (t, data, len, user) -> {
+                (data, len, user) -> {
                     byte[] bytes =
                             (data != null && len > 0) ? data.getByteArray(0, (int) len) : new byte[0];
-                    callback.onMessage(t != null ? t : "", bytes);
+                    callback.onMessage(bytes);
                 };
         msgCallbacks.add(cb);
         return new SubscriptionHandle(
@@ -212,12 +212,12 @@ public final class Node implements AutoCloseable {
         Class<T> typed = (Class<T>) msgType;
         return createSubscription(
                 topic,
-                (t, payload) -> {
+                (payload) -> {
                     T msg = ProtoCodec.tryParse(typed, payload);
                     if (msg == null) {
                         return;
                     }
-                    callback.onMessage(t, msg);
+                    callback.onMessage(msg);
                 },
                 group,
                 qosDepth);

@@ -37,7 +37,7 @@ public final class InteropPeer {
     private static void runSub(NodeOptions opts) throws Exception {
         AtomicReference<Imu> got = new AtomicReference<>();
         try (Node node = new Node("interop_java_sub", opts)) {
-            node.createSubscription(TOPIC, (topic, msg) -> got.set(msg), Imu.class);
+            node.createSubscription(TOPIC, (msg) -> got.set(msg), Imu.class);
             node.start();
             System.out.println("READY");
             long deadline = System.currentTimeMillis() + 8000;

@@ -477,14 +477,12 @@ impl WsRuntime {
     }
 
     fn dispatch_topic(&self, topic: &str, payload: &[u8]) -> Result<()> {
-        let topic: Arc<str> = topic.into();
         let payload: Arc<[u8]> = payload.to_vec().into();
         let state = self.lock_state()?;
-        for_each_matching_callback(&topic, &state.topic_callbacks, |entry| {
+        for_each_matching_callback(topic, &state.topic_callbacks, |entry| {
             let callback = Arc::clone(&entry.callback);
-            let topic = Arc::clone(&topic);
             let payload = Arc::clone(&payload);
-            entry.group.run(None, move || callback(&topic, &payload));
+            entry.group.run(None, move || callback(&payload));
         });
         Ok(())
     }

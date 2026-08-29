@@ -361,11 +361,11 @@ def install_typed_node_api(Node: Any) -> None:
             return _raw_sub(callback)
         cls = _require_message_type(msg_type, what="msg_type")
 
-        def _wrapped(topic_name: str, payload: bytes) -> None:
+        def _wrapped(payload: bytes) -> None:
             msg = _decode(cls, payload)
             if msg is None:
                 return
-            callback(topic_name, msg)
+            callback(msg)
 
         return _raw_sub(_wrapped)
 

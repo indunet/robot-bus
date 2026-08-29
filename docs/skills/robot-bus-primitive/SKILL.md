@@ -59,7 +59,7 @@ Progress:
 | Node | `Node::new("name")` / `Node.with_context` / `Node("name")` |
 | Spin | `node.spin()` (auto SingleThreadedExecutor) |
 | Publish | `create_publisher` / `create_publisher_with_qos` |
-| Subscribe | `create_subscription` / `_with_qos` — cb often `(topic, msg)` |
+| Subscribe | `create_subscription` / `_with_qos` — cb is `msg` only |
 | Service server | `create_service` / `create_service_with_qos` |
 | Service client | `create_client` / `create_client_with_qos` → `call(req, timeout)` |
 | Action server | `create_action_server` / `create_action_server_with_qos` |
@@ -87,7 +87,7 @@ fn main() -> robot_bus::Result<()> {
     node.create_subscription_with_qos::<Imu, _>(
         "/robot1/imu",
         QosProfile::keep_last(10),
-        |_topic, imu| { let _ = imu; },
+        |imu| { let _ = imu; },
         None, // default mutually exclusive group
     )?;
     pub_.publish(&Imu::default())?;
@@ -106,7 +106,7 @@ from robot_bus.sensor_msgs.msg.v1 import Imu
 
 node = robot_bus.Node("talker")
 pub = node.create_publisher("/robot1/imu", Imu)
-node.create_subscription("/robot1/imu", lambda topic, msg: None, msg_type=Imu)
+node.create_subscription("/robot1/imu", lambda msg: None, msg_type=Imu)
 pub.publish(Imu())
 # node.spin()
 ```

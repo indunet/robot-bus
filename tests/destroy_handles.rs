@@ -31,7 +31,7 @@ fn destroy_subscription_stops_callbacks() {
 
     let hits = Arc::new(AtomicUsize::new(0));
     let hits_cb = Arc::clone(&hits);
-    let cb: MessageCallback = Arc::new(move |_, _| {
+    let cb: MessageCallback = Arc::new(move |_| {
         hits_cb.fetch_add(1, Ordering::SeqCst);
     });
 
@@ -82,7 +82,7 @@ fn destroy_one_of_two_subscriptions_on_same_topic() {
     let ha = node
         .create_subscription_raw(
             "/multi",
-            Arc::new(move |_, _| {
+            Arc::new(move |_| {
                 a_cb.fetch_add(1, Ordering::SeqCst);
             }),
             None,
@@ -91,7 +91,7 @@ fn destroy_one_of_two_subscriptions_on_same_topic() {
     let _hb = node
         .create_subscription_raw(
             "/multi",
-            Arc::new(move |_, _| {
+            Arc::new(move |_| {
                 b_cb.fetch_add(1, Ordering::SeqCst);
             }),
             None,

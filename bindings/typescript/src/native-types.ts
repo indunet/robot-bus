@@ -139,7 +139,7 @@ export declare class Node {
   createPublisher(topic: string, qosDepth?: number): TopicPublisher;
   createSubscription(
     topic: string,
-    callback: (topic: string, payload: Buffer) => void,
+    callback: (payload: Buffer) => void,
     callbackGroup?: JsCallbackGroup,
     qosDepth?: number,
   ): SubscriptionHandle;

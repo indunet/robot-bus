@@ -161,7 +161,7 @@ robot_bus::Broker broker;
 robot_bus::Node node("pilot");
 auto pub = robot_bus::create_publisher<sensor_msgs::msg::v1::Imu>(node, "/imu");
 auto sub = robot_bus::create_subscription<sensor_msgs::msg::v1::Imu>(
-    node, "/imu", [](std::string_view, const sensor_msgs::msg::v1::Imu &imu) {
+    node, "/imu", [](const sensor_msgs::msg::v1::Imu &imu) {
       // …
     });
 
@@ -181,7 +181,7 @@ Raw bytes（手动 Serialize/Parse）仍可用：
 
 ```cpp
 auto pub = node.create_publisher("/imu");
-auto sub = node.create_subscription("/imu", [](std::string_view topic, robot_bus::BytesView payload) {
+auto sub = node.create_subscription("/imu", [](robot_bus::BytesView payload) {
   sensor_msgs::msg::v1::Imu imu;
   imu.ParseFromArray(payload.data, static_cast<int>(payload.size));
 });

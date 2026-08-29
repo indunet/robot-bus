@@ -51,7 +51,7 @@ describe("inproc shared Context", () => {
 
       const hits: Buffer[] = [];
       const sub = native.Node.inprocWithContext(ctx, "inproc-sub");
-      sub.createSubscription("/inproc/demo", (topic, payload) => {
+      sub.createSubscription("/inproc/demo", (payload) => {
         hits.push(Buffer.from(payload as Buffer));
       });
       sub.start();

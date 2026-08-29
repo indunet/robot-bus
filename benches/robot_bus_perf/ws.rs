@@ -179,7 +179,7 @@ pub fn bench_ws_subscribe(broker: &RobotBusBroker, url: &str) -> ScenarioResult 
             let latencies = Arc::clone(&latencies);
             let count = Arc::clone(&count);
             let record_latency = Arc::clone(&record_latency);
-            move |_t, payload| {
+            move |payload| {
                 if record_latency.load(Ordering::Relaxed) {
                     if let Some(sent) = read_ts(payload) {
                         let now = now_ns();

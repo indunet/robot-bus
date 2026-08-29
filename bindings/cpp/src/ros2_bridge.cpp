@@ -325,7 +325,7 @@ void wire_topic_bus_to_ros(rclcpp::Node::SharedPtr ros_node, Node &bus_node,
   auto weak_pub = std::weak_ptr<typename rclcpp::Publisher<RosMsg>>(ros_pub);
   keep_alive.push_back(std::make_shared<SubscriptionHandle>(bus_node.create_subscription(
       route.bus_topic.c_str(),
-      [weak_pub, convert](std::string_view, BytesView payload) {
+      [weak_pub, convert](BytesView payload) {
         auto pub = weak_pub.lock();
         if (!pub) {
           return;
@@ -862,7 +862,7 @@ struct Ros2Bridge::Impl {
   void subscribe_demand() {
     auto *self = this;
     keep_alive.push_back(std::make_shared<SubscriptionHandle>(bus_node.create_subscription(
-        kTopicDemand, [self](std::string_view, BytesView payload) {
+        kTopicDemand, [self](BytesView payload) {
           robot_bus_interfaces::msg::v1::TopicDemand msg;
           if (!msg.ParseFromArray(payload.data, static_cast<int>(payload.size))) {
             return;
@@ -871,7 +871,7 @@ struct Ros2Bridge::Impl {
           self->subscriber_counts[msg.topic()] = msg.subscribers();
         })));
     keep_alive.push_back(std::make_shared<SubscriptionHandle>(bus_node.create_subscription(
-        kTopicsSnapshot, [self](std::string_view, BytesView payload) {
+        kTopicsSnapshot, [self](BytesView payload) {
           robot_bus_interfaces::msg::v1::TopicStatsList list;
           if (!list.ParseFromArray(payload.data, static_cast<int>(payload.size))) {
             return;

@@ -331,7 +331,7 @@ impl PyNode {
         Ok(PyTopicPublisher { inner })
     }
 
-    /// Register a subscription callback `callback(topic: str, payload: bytes)`.
+    /// Register a subscription callback `callback(payload: bytes)`.
     #[pyo3(signature = (topic, callback, callback_group=None, qos_depth=None))]
     fn create_subscription(
         slf: &Bound<'_, Self>,
@@ -342,10 +342,10 @@ impl PyNode {
     ) -> PyResult<PySubscriptionHandle> {
         let handle = {
             let mut this = slf.borrow_mut();
-            let cb: crate::runtime::MessageCallback = Arc::new(move |topic, payload| {
+            let cb: crate::runtime::MessageCallback = Arc::new(move |payload| {
                 Python::with_gil(|py| {
                     let payload = PyBytes::new(py, payload);
-                    if let Err(err) = callback.call1(py, (topic, payload)) {
+                    if let Err(err) = callback.call1(py, (payload,)) {
                         err.print(py);
                     }
                 });

@@ -119,7 +119,7 @@ fn lazy_waits_for_bus_subscriber_then_tears_down() {
     let sub = listener
         .create_subscription_raw(
             &topic,
-            Arc::new(move |_t, payload| {
+            Arc::new(move |payload| {
                 received_cb.lock().expect("lock").push(payload.to_vec());
             }),
             None,
@@ -132,7 +132,7 @@ fn lazy_waits_for_bus_subscriber_then_tears_down() {
 
     let mut listener2 = Node::with_options("lazy_listener_2", opts);
     let sub2 = listener2
-        .create_subscription_raw(&topic, Arc::new(|_, _| {}), None)
+        .create_subscription_raw(&topic, Arc::new(|_| {}), None)
         .expect("bus sub 2");
     drain_bridge(&mut bridge, 15);
     let _ = listener.spin_once(Some(Duration::from_millis(20)));
@@ -243,7 +243,7 @@ fn lazy_forwards_after_bus_subscribe() {
     let _sub = listener
         .create_subscription::<BusString, _>(
             &topic,
-            move |_t, msg: BusString| {
+            move |msg: BusString| {
                 *got_cb.lock().expect("lock") = Some(msg);
             },
             None,

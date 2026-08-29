@@ -231,14 +231,15 @@ impl Node {
     ) -> Result<SubscriptionHandle>
     where
         M: Message + Name + Default + 'static,
-        F: Fn(&str, M) + Send + Sync + 'static,
+        F: Fn(M) + Send + Sync + 'static,
     {
         let group = callback_group
             .cloned()
             .unwrap_or_else(|| self.default_callback_group.clone());
-        let cb: MessageCallback = Arc::new(move |topic, payload| match M::decode(payload) {
-            Ok(msg) => callback(topic, msg),
-            Err(err) => log::warn!("typed subscription decode failed: {err}"),
+        let topic_name = topic.to_string();
+        let cb: MessageCallback = Arc::new(move |payload| match M::decode(payload) {
+            Ok(msg) => callback(msg),
+            Err(err) => log::warn!("typed subscription decode failed on {topic_name}: {err}"),
         });
         let handle = self.create_subscription_raw(topic, cb, Some(&group))?;
         self.remember_topic_type(topic, &M::full_name());
@@ -259,14 +260,15 @@ impl Node {
     ) -> Result<SubscriptionHandle>
     where
         M: Message + Name + Default + 'static,
-        F: Fn(&str, M) + Send + Sync + 'static,
+        F: Fn(M) + Send + Sync + 'static,
     {
         let group = callback_group
             .cloned()
             .unwrap_or_else(|| self.default_callback_group.clone());
-        let cb: MessageCallback = Arc::new(move |topic, payload| match M::decode(payload) {
-            Ok(msg) => callback(topic, msg),
-            Err(err) => log::warn!("typed subscription decode failed: {err}"),
+        let topic_name = topic.to_string();
+        let cb: MessageCallback = Arc::new(move |payload| match M::decode(payload) {
+            Ok(msg) => callback(msg),
+            Err(err) => log::warn!("typed subscription decode failed on {topic_name}: {err}"),
         });
         let handle = self.create_subscription_raw_with_qos(topic, qos, cb, Some(&group))?;
         self.remember_topic_type(topic, &M::full_name());

@@ -78,16 +78,16 @@ template <typename Msg>
 
 template <typename Msg>
 [[nodiscard]] SubscriptionHandle create_subscription(
-    Node &node, const char *topic, std::function<void(std::string_view, const Msg &)> callback,
+    Node &node, const char *topic, std::function<void(const Msg &)> callback,
     const CallbackGroup *group = nullptr, int32_t qos_depth = 0) {
   return node.create_subscription(
       topic,
-      [cb = std::move(callback)](std::string_view t, BytesView payload) {
+      [cb = std::move(callback)](BytesView payload) {
         Msg msg;
         if (!detail::try_parse_message_lite(payload, &msg)) {
           return;
         }
-        cb(t, msg);
+        cb(msg);
       },
       group, qos_depth);
 }

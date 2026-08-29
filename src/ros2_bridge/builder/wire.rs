@@ -44,7 +44,7 @@ pub(super) fn subscribe_demand(
 ) -> Result<Vec<SubscriptionHandle>> {
     let tx_demand = demand_tx.clone();
     let demand_cb: MessageCallback =
-        Arc::new(move |_topic, payload| match TopicDemand::decode(payload) {
+        Arc::new(move |payload| match TopicDemand::decode(payload) {
             Ok(msg) => {
                 let _ = tx_demand.send(DemandEvent::Count {
                     topic: msg.topic,
@@ -56,7 +56,7 @@ pub(super) fn subscribe_demand(
     let h1 = bus_node.create_subscription_raw(console_topics::TOPIC_DEMAND, demand_cb, None)?;
 
     let tx_topics = demand_tx;
-    let topics_cb: MessageCallback = Arc::new(move |_topic, payload| match TopicStatsList::decode(
+    let topics_cb: MessageCallback = Arc::new(move |payload| match TopicStatsList::decode(
         payload,
     ) {
         Ok(list) => {

@@ -194,7 +194,7 @@ fn run_loop(endpoints: TankEndpoints, stop: Arc<AtomicBool>, ready: Arc<AtomicBo
         let state = Arc::clone(&state);
         node.create_subscription::<Twist, _>(
             CMD_VEL_TOPIC,
-            move |_topic, twist| {
+            move |twist| {
                 let mut s = state.lock().expect("tank state");
                 if s.navigating {
                     return;

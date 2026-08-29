@@ -36,7 +36,7 @@ def test_inproc_pubsub_with_shared_context() -> None:
         assert sub.wait_for_broker(1.0)
         assert sub.connection_state == "connected"
 
-        def on_msg(_topic: str, payload: bytes) -> None:
+        def on_msg(payload: bytes) -> None:
             hits.append(bytes(payload))
 
         sub.create_subscription("/inproc/demo", on_msg)
