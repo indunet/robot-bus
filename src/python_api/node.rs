@@ -406,12 +406,13 @@ impl PyNode {
     /// Register a service server.
     ///
     /// `handler(body: bytes) -> bytes`
-    #[pyo3(signature = (service_name, handler, callback_group=None))]
+    #[pyo3(signature = (service_name, handler, callback_group=None, qos_depth=None))]
     fn create_service(
         slf: &Bound<'_, Self>,
         service_name: &str,
         handler: Py<PyAny>,
         callback_group: Option<&PyCallbackGroup>,
+        qos_depth: Option<i32>,
     ) -> PyResult<PyServiceHandle> {
         let handle = {
             let mut this = slf.borrow_mut();
@@ -434,33 +435,48 @@ impl PyNode {
                 })
             });
             let group = callback_group.map(|g| &g.inner);
-            this.inner
-                .create_service_raw(service_name, cb, group)
-                .map_err(bus_err)?
+            match qos_depth.filter(|d| *d > 0) {
+                Some(depth) => this.inner.create_service_raw_with_qos(
+                    service_name,
+                    QosProfile::keep_last(depth),
+                    cb,
+                    group,
+                ),
+                None => this.inner.create_service_raw(service_name, cb, group),
+            }
+            .map_err(bus_err)?
         };
         Ok(PyServiceHandle::new(slf.clone().unbind(), handle))
     }
 
     /// Create a service client bound to `service_name` (ROS 2 `create_client`).
-    fn create_client(&mut self, service_name: &str) -> PyResult<PyNodeServiceClient> {
-        Ok(PyNodeServiceClient {
-            inner: self
+    #[pyo3(signature = (service_name, qos_depth=None))]
+    fn create_client(
+        &mut self,
+        service_name: &str,
+        qos_depth: Option<i32>,
+    ) -> PyResult<PyNodeServiceClient> {
+        let inner = match qos_depth.filter(|d| *d > 0) {
+            Some(depth) => self
                 .inner
-                .create_client_raw(service_name)
-                .map_err(bus_err)?,
-        })
+                .create_client_raw_with_qos(service_name, QosProfile::keep_last(depth)),
+            None => self.inner.create_client_raw(service_name),
+        }
+        .map_err(bus_err)?;
+        Ok(PyNodeServiceClient { inner })
     }
 
     /// Register an action server (ROS 2–style `create_action_server`).
     ///
     /// `handler(payload: bytes) -> list[tuple[str, bytes]]`
     /// where each tuple is `(phase, body)` and `phase` is typically `"FEEDBACK"` / `"RESULT"`.
-    #[pyo3(signature = (action_name, handler, callback_group=None))]
+    #[pyo3(signature = (action_name, handler, callback_group=None, qos_depth=None))]
     fn create_action_server(
         slf: &Bound<'_, Self>,
         action_name: &str,
         handler: Py<PyAny>,
         callback_group: Option<&PyCallbackGroup>,
+        qos_depth: Option<i32>,
     ) -> PyResult<PyActionServerHandle> {
         let handle = {
             let mut this = slf.borrow_mut();
@@ -483,21 +499,35 @@ impl PyNode {
                 })
             });
             let group = callback_group.map(|g| &g.inner);
-            this.inner
-                .create_action_server_raw(action_name, cb, group)
-                .map_err(bus_err)?
+            match qos_depth.filter(|d| *d > 0) {
+                Some(depth) => this.inner.create_action_server_raw_with_qos(
+                    action_name,
+                    QosProfile::keep_last(depth),
+                    cb,
+                    group,
+                ),
+                None => this.inner.create_action_server_raw(action_name, cb, group),
+            }
+            .map_err(bus_err)?
         };
         Ok(PyActionServerHandle::new(slf.clone().unbind(), handle))
     }
 
     /// Create an action client bound to `action_name` (ROS 2 `create_action_client`).
-    fn create_action_client(&mut self, action_name: &str) -> PyResult<PyNodeActionClient> {
-        Ok(PyNodeActionClient {
-            inner: self
+    #[pyo3(signature = (action_name, qos_depth=None))]
+    fn create_action_client(
+        &mut self,
+        action_name: &str,
+        qos_depth: Option<i32>,
+    ) -> PyResult<PyNodeActionClient> {
+        let inner = match qos_depth.filter(|d| *d > 0) {
+            Some(depth) => self
                 .inner
-                .create_action_client_raw(action_name)
-                .map_err(bus_err)?,
-        })
+                .create_action_client_raw_with_qos(action_name, QosProfile::keep_last(depth)),
+            None => self.inner.create_action_client_raw(action_name),
+        }
+        .map_err(bus_err)?;
+        Ok(PyNodeActionClient { inner })
     }
 
     fn connect_action_client(&mut self) -> PyResult<()> {

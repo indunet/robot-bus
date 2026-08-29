@@ -27,7 +27,7 @@ from __future__ import annotations
 import robot_bus
 from example_interfaces.srv import AddTwoInts as RosAddTwoInts
 from my_pkg.srv.v1 import add_two_ints_pb2 as pb
-from robot_bus.ros2_bridge import Direction, Ros2Bridge
+from robot_bus.ros2_bridge import Ros2Bridge, TopicQos
 
 
 class AddTwoIntsServiceMapper:
@@ -85,9 +85,10 @@ def main() -> None:
     bridge = (
         Ros2Bridge.new("examples_ros2_bridge_custom")
         .bus_tcp("localhost")
-        .service("/examples/add_two_ints", "/examples/add_two_ints")
+        .service()
+        .from_ros("/examples/add_two_ints", TopicQos.keep_last(10).reliable())
+        .to_bus("/examples/add_two_ints", TopicQos.keep_last(8).best_effort())
         .mapper(AddTwoIntsServiceMapper())
-        .direction(Direction.Ros2ToBus)
         .timeout(5.0)
         .add()
         .build()

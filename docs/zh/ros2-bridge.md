@@ -18,15 +18,9 @@ C++:     rclcpp ──mapper──► robot_bus::Node
 Rust:    rclrs  ──mapper──► robot_bus::Node
 ```
 
-**为什么分语言：** Topic / service / action都要用编译期具体类型（`create_subscription<T>` / `create_service<T>`等）。若 C++/Python只把类型名交给 Rust，`T`对不上。因此各语言在本侧用具体类型建 ROS实体，再用本语言 bus `Node`转发。
+**为什么分语言：** Topic / service / action都要用编译期具体类型（`create_subscription<T>` / `create_service<T>`等）。各语言在本侧用具体类型建 ROS实体，再用本语言 bus `Node`转发。
 
-| 支持 | 不支持 |
-|------|--------|
-| Topic / Service / Action | YAML配置桥 |
-| 代码里 `.mapper(具体对象)` | 用类型名字符串 lookup挂路由 |
-| 用户自定义 mapper（本语言具体类型） | 跨语言「只传字符串」的万能桥 |
-
-官方发行版：**Humble**、**Jazzy**。
+官方发行版：**Humble**、**Jazzy**。挂路由用 `.mapper(具体对象)`；自定义 mapper写本语言字段转换即可。
 
 ---
 
@@ -37,12 +31,12 @@ source /opt/ros/humble/setup.bash   # 或 jazzy
 cargo run --bin robot_bus_broker    # 或已安装的 robot-bus-broker
 ```
 
-**Rust `feature = "ros2"`** 用 crates.io **`rclrs` 0.7**。typed消息走已发布的 **`ros-env` 0.2**：它扫 `AMENT_PREFIX_PATH`上的 `share/<pkg>/rust/`，再导出成 `ros_env::sensor_msgs::msg::Image`。当前 Humble apt里 `common_interfaces`（含 `sensor_msgs`）**已经带 rust IDL**，只 `source /opt/ros/humble`就能编 Image / String这类。完整 mapper注册表还要 `nav2_msgs` / `control_msgs` / `apriltag_msgs`等 distro里没有的包，缺的才需要 overlay，见下文「Rust消息」。
+**Rust `feature = "ros2"`** 还要一层 **ros2_rust** overlay：`AMENT_PREFIX_PATH`里必须有 `rosidl_generator_rs`生成的 `share/<pkg>/rust/`，覆盖 **mappers里全部包**（不只是 `std_msgs` / `sensor_msgs`）。只 `source /opt/ros/humble` **编不出** typed路径。`apt install ros-humble-sensor-msgs`只提供 C typesupport，不含 rust IDL。overlay搭法见下文「Rust overlay」。
 
 | 语言 | 依赖 |
 |------|------|
 | 通用 | 可达的 broker（tcp / ipc / discover） |
-| Rust | `robot-bus = { features = ["ros2"] }` + 已 source的 ROS（typed消息见下文） |
+| Rust | `robot-bus = { features = ["ros2"] }` + 上述 rust消息 overlay |
 | Python | `robot_bus` + 系统 **`rclpy`**（`just python-dev` / `python-dev-ros2`） |
 | C++ | `robot-bus-ros2-humble`或 `…-jazzy`，或 `just cpp-dev-ros2`（`-DROBOT_BUS_ROS2=ON`，链 **rclcpp**） |
 
@@ -54,189 +48,79 @@ cargo run --bin robot_bus_broker    # 或已安装的 robot-bus-broker
 
 ---
 
-## 最小例子：把一条 ROS topic接到 bus上
+## 统一契约
 
-**Mapper** 是字段对照表（ROS对象 ↔ protobuf），不是传输。`.mapper(StdMsgsStringMapper())`只告诉桥「这条路由用哪张表」。库负责建 ROS订阅/发布、protobuf编解码、往 bus收发。
-
-方向、QoS都写在**每一条 `.route()`上**，不是写在 `Ros2Bridge.new(...)`上。方向只有两个：`Ros2ToBus`（默认：ROS出、bus进）或 `BusToRos2`（bus出、ROS进），**没有** `both`。要双向就挂两条路由。
-
-默认方向（ROS → bus）实际走的是：
+Topic / service / action两端各写 **名字 + `TopicQos`**：
 
 ```text
-ROS侧有人 publish std_msgs/String
-        │
-        ▼
-   /examples/chatter     ← .route的第一个参数（ROS名）
-        │
-        ▼  桥在 ROS图上是这个 topic的 subscriber
-StdMsgsStringMapper把 ROS String转成 protobuf
-        │
-        ▼  桥在 bus上是 publisher
-   /examples/chatter     ← .route的第二个参数（bus名，可以和 ROS名不同）
-        │
-        ▼
-broker转给 bus上订了这个名字的进程
+.from_ros(ros名, TopicQos).to_bus(bus名, TopicQos).mapper(...).lazy()?.add()
+.from_bus(bus名, TopicQos).to_ros(ros名, TopicQos).mapper(...).add()
+.service().from_ros(ros名, TopicQos).to_bus(bus名, TopicQos).mapper(...).timeout()?.add()
+.service().from_bus(bus名, TopicQos).to_ros(ros名, TopicQos).mapper(...).timeout()?.add()
+.action().from_ros(ros名, TopicQos).to_bus(bus名, TopicQos).mapper(...).timeout()?.add()
+.action().from_bus(bus名, TopicQos).to_ros(ros名, TopicQos).mapper(...).timeout()?.add()
 ```
 
-下面这条链和仓库示例 [`examples/ros2_bridge/python/builtin.py`](../../examples/ros2_bridge/python/builtin.py) 同一套名字。括号里是**一行表达式**，从左往右读。
+`TopicQos.keep_last(n)`之后必须 `.reliable()`或 `.best_effort()`。ROS端两者都行；**bus** 端（topic / service / action）只能 `.best_effort()`（没有 DDS reliability）。方向写在 `from_ros → to_bus` / `from_bus → to_ros`链上，**禁止** `both`。对上 ROS `services_default`时写 `TopicQos.keep_last(10).reliable()`。Bus RPC常用 `TopicQos.keep_last(8).best_effort()`（depth → DEALER HWM）。Action把 ROS这份 profile用在 goal / result / cancel三个 service以及 feedback topic；status topic保持 ROS action-status默认。
+
+- 默认超时：service **5s**，action goal **30s**
+- Topic路由默认 **eager**：`build()`立刻建 ROS subscription，ROS图上能看到这座桥。仅对需要按需开关的 ROS2→bus路由写 `.lazy()`。
+
+### `.lazy()`（opt-in ROS2→bus）
+
+默认 eager：`.from_ros(...).to_bus(...).mapper(...).add()`在 `build()`时就建 ROS subscription。相机、雷达等大流量 ROS2→bus才用 `.lazy()`：没人订 bus时，ROS图上这座桥不是该 topic的 subscriber。
+
+```rust
+.from_ros("/camera/image", TopicQos::keep_last(5).best_effort())
+.to_bus("/camera/image", TopicQos::keep_last(5).best_effort())
+.mapper(SensorMsgsImageMapper)
+.lazy()
+.add()?
+```
 
 ```python
-import robot_bus
-from robot_bus.ros2_bridge import (
-    Direction,
-    Ros2Bridge,
-    StdMsgsStringMapper,
-    TriggerServiceMapper,
-)
-
-assert robot_bus.ros2_available()
-
-bridge = (
-    Ros2Bridge.new("ros_bridge")        # 进程内：ROS节点名 = bus节点名
-    .bus_tcp("localhost")               # 连本机 broker；也可 .bus_ipc() / .bus_discover(...)
-    .route("/examples/chatter", "/examples/chatter")  # (ROS名, bus名)
-    .mapper(StdMsgsStringMapper())      # 必须是对象，不能写 "std_msgs/msg/String"
-    .direction(Direction.Ros2ToBus)     # 可省略，默认就是 ROS→bus
-    .add()                              # 提交这一条 topic；后面可以再 .route / .service
-    .service("/examples/reset", "/examples/reset")
-    .mapper(TriggerServiceMapper())
-    .timeout(3.0)                       # 秒；默认 5s
-    .add()
-    .build()
-)
-bridge.spin()                           # 同时推进 ROS executor和 bus
-```
-
-Rust / C++同一条链，语法见文末；可运行文件在 [`examples/ros2_bridge/`](../../examples/ros2_bridge/)。**没有** `from_yaml`，**没有** `add_route(..., "std_msgs/msg/String", ...)`。
-
-### 怎么跑、怎么确认通了
-
-四个终端都先 `source /opt/ros/humble/setup.bash`（或 jazzy）。
-
-**终端 1 — broker**
-
-```bash
-robot-bus-broker    # 或 cargo run --bin robot_bus_broker
-```
-
-**终端 2 — 桥**（用仓库示例，topic是 `/examples/chatter`）
-
-```bash
-python3 examples/ros2_bridge/python/builtin.py
-```
-
-`ros2 topic info /examples/chatter`应能看到这座桥是 subscriber。
-
-**终端 3 — ROS侧发**
-
-```bash
-ros2 topic pub /examples/chatter std_msgs/msg/String "{data: hello}"
-```
-
-**终端 4 — bus侧收**（应打印 `hello`）
-
-```python
-import robot_bus
-from robot_bus.std_msgs.msg.v1 import String
-
-node = robot_bus.Node("peek")
-node.create_subscription(
-    "/examples/chatter",
-    lambda topic, msg: print(msg.data),
-    msg_type=String,
-)
-node.spin()
-```
-
-反方向（bus → ROS）：同一条 `.route`加上 `.direction(Direction.BusToRos2)`。那时桥在 ROS上是 publisher、在 bus上是 subscriber；用 bus的 `create_publisher`发，用 `ros2 topic echo /examples/chatter`收。
-
----
-
-## 在同一条 `.route()`上改 QoS
-
-QoS **跟 `.mapper()`写在同一条路由上**，不写在 `Ros2Bridge.new(...)`上。Service / action没有这些 helper（仍用 ROS默认 service QoS）。
-
-不写 helper时：ROS用各语言默认（Python/C++ `QoS(10)` reliable，Rust `topics_default()`）；bus用节点默认 HWM。
-
-在最小例子那条 `/examples/chatter`上加一行即可：
-
-```python
-.route("/examples/chatter", "/examples/chatter")
-.mapper(StdMsgsStringMapper())
-.qos_depth(20)      # ROS KeepLast(20) 并且 bus HWM=20（同一个 n，不能两边分开）
+.from_ros("/camera/image", TopicQos.keep_last(5).best_effort())
+.to_bus("/camera/image", TopicQos.keep_last(5).best_effort())
+.mapper(SensorMsgsImageMapper())
+.lazy()
 .add()
 ```
 
-多条路由时，每条自己写 QoS / 方向 / lazy：
-
-```python
-from robot_bus.ros2_bridge import (
-    Direction,
-    Ros2Bridge,
-    SensorMsgsImageMapper,
-    StdMsgsStringMapper,
-)
-
-bridge = (
-    Ros2Bridge.new("ros_bridge")
-    .bus_tcp("localhost")
-    .route("/chatter", "/chatter")
-    .mapper(StdMsgsStringMapper())
-    .qos_depth(20)
-    .add()
-    .route("/camera/image", "/camera/image")
-    .mapper(SensorMsgsImageMapper())
-    .sensor_data()                      # ROS SensorDataQoS + bus depth 5
-    .lazy()                             # 可选：bus上没人订时，ROS图上看不到这座桥
-    .add()
-    .route("/from_bus", "/from_bus")
-    .mapper(StdMsgsStringMapper())
-    .direction(Direction.BusToRos2)     # 这条是 bus→ROS
-    .qos_depth(10)
-    .best_effort()                      # 只改 ROS reliability；bus本来就是 best-effort
-    .add()
-    .build()
-)
+```cpp
+.from_ros("/camera/image", robot_bus::TopicQos::keep_last(5).best_effort())
+.to_bus("/camera/image", robot_bus::TopicQos::keep_last(5).best_effort())
+.mapper(robot_bus::SensorMsgsImageMapper{})
+.lazy()
+.add()
 ```
 
-Rust / C++方法名相同（Rust的 `.add()?`带问号）。完整程序见文末和 `examples/ros2_bridge/`。
+规则：
 
-| helper | ROS | bus |
-|--------|-----|-----|
-| `.qos_depth(n)` | KeepLast(n) | `QosProfile::keep_last(n)`（HWM） |
-| `.best_effort()` | reliability = best effort | 不变（bus没有 DDS reliability） |
-| `.sensor_data()` | `SensorDataQoS`（best-effort KeepLast 5） | depth 5 |
-
-现在**不能**「ROS depth=10、bus HWM=50」各写一套，也没有 durability / deadline等完整 ROS QoS。相机用 `.sensor_data().lazy()`；不要把 Image内置 mapper的默认改成 SensorDataQoS。
-
-### `.lazy()`（仅 ROS2→bus）
-
-默认 **eager**：`.add()`之后 `build()`立刻建 ROS subscription，`ros2 topic info`能看到这座桥。大流量（相机、雷达）才 `.lazy()`：bus上没人订时，桥不出现在该 ROS topic的 subscriber列表里。
-
+- **默认 eager。** 不写 `.lazy()`。
 - **`.lazy()`无参。** 不要 `.lazy(true)`。
-- **只允许 `Ros2ToBus`。** 配在 `BusToRos2`上 `.add()`会报错。Service / action没有 `.lazy()`。
-- **无 console的 broker**（`--no-console`）：lazy **降级为 eager**（没有 demand信号）。
-- 需求只数 `kind == subscriber`。裸 `Subscriber`（不经 `Node`）以及关掉 topology的 WebSocket **打不开** lazy。
+- **只在 `from_ros → to_bus`链上。** `from_bus → to_ros`没有 `.lazy()`。Service / action builder没有 `.lazy()`。
+- **无 console的 broker**（`--no-console`）：`.lazy()`路由 **降级为 eager**（没有 demand信号）。
+- 需求只数 `kind == subscriber`。裸 `Subscriber`（不经 `Node`）以及关掉 topology的 WebSocket **打不开** lazy。崩溃后 topology TTL约 30s。
 
-broker在 subscriber注册/注销时往 `/robot_bus/topic_demand`发 [`TopicDemand`](../../proto/robot_bus_interfaces/msg/v1/console_status.proto)；桥启动时再读 `/robot_bus/topics`，避免订阅者先于桥启动时 lazy一直关着。
+broker在 subscriber register/unregister时立刻往 `/robot_bus/topic_demand`发 [`TopicDemand`](../../proto/robot_bus_interfaces/msg/v1/console_status.proto)。桥启动时再读 `/robot_bus/topics`，避免订阅者先于桥启动时 lazy路由一直关着。
 
-C++只 override `attach`、把实体塞进 `keep_alive`的自定义 mapper **不支持** `.lazy()`。请用 `TypedTopicMapper`。
+C++只 override `attach`、把实体塞进 `keep_alive`的自定义 mapper **不支持** `.lazy()`（`.add()`报错）。请用 `TypedTopicMapper`。
 
-链式 API一览（每条 `.route` / `.service` / `.action`以 `.add()`结尾）：
+### TopicQos
 
-```text
-Ros2Bridge.new(name)
-  .bus_tcp(...) | .bus_ipc() | .bus_discover(...)
-  .route(ros, bus).mapper(...).direction(...).qos_depth(n)|.best_effort()|.sensor_data().lazy().add()
-  .service(ros, bus).mapper(...).timeout(...).direction(...).add()
-  .action(ros, bus).mapper(...).timeout(...).direction(...).add()
-  .build()
-  .spin()
-```
+三语言同一个类型。两端各传一份（depth / reliability可以不同）：
 
-默认超时：service **5s**，action goal **30s**。
+| | 写法 |
+|--|--|
+| 可靠 KeepLast 10 | `TopicQos.keep_last(10).reliable()` |
+| 尽力 KeepLast 5 | `TopicQos.keep_last(5).best_effort()` |
 
-### 一期内置 mapper（对象，不是字符串）
+- **ROS**（`from_ros` / `to_ros`）：映射为 KeepLast(depth) + 指定的 reliability。Topic / service / action的 ROS端都用同一份 `TopicQos`。
+- **bus**（`from_bus` / `to_bus`）：只兑现 depth → HWM（topic为 PUB/SUB，service / action为 DEALER）；必须 `.best_effort()`。
+
+相机要对上 ROS图上的 best-effort KeepLast(5) 时，topic两端都写 `keep_last(5).best_effort()`。Service对上 `services_default`写 `keep_last(10).reliable()`。
+
+### 一期内置 mapper
 
 | 种类 | Mapper | ROS类型 |
 |------|--------|----------|
@@ -246,20 +130,19 @@ Ros2Bridge.new(name)
 | Service | `SetBoolServiceMapper` | `std_srvs/srv/SetBool` |
 | Action | `FibonacciActionMapper` | `example_interfaces/action/Fibonacci` |
 
-Rust另有完整 topic mapper注册表（`src/ros2_bridge/mappers/`），挂路由仍须 `.mapper(具体类型)`；`lookup_topic_mapper` / `registered_topic_types`仅自省，不是挂路由入口。
+Rust另有完整 topic mapper注册表（`src/ros2_bridge/mappers/`）。挂路由用 `.mapper(具体类型)`；`lookup_topic_mapper` / `registered_topic_types`用于自省。
 
 ---
 
-## 用户自定义 mapper：可以
+## 用户自定义 mapper
 
-**可以。** 先写 **bus protobuf**（字段对齐 ROS `.msg` / `.srv` / `.action`），`protoc`生成本语言 stubs，再只写 **字段 ↔ protobuf转换**；库负责订阅/发布/service接线。typed API接受任意 protobuf消息类，不必放进 robot-bus仓库。
+先写 **bus protobuf**（字段对齐 ROS `.msg` / `.srv` / `.action`），`protoc`生成本语言 stubs，再只写 **字段 ↔ protobuf转换**；库负责订阅/发布/service接线。typed API接受任意 protobuf消息类，不必放进 robot-bus仓库。
 
-| | 行不行 |
+| 语言 | 写法 |
 |--|--------|
-| Python：duck-typed convert方法 + `.mapper(MyFoo())` | **行** |
-| Rust：`impl TypedTopicMapper` / `TypedServiceMapper` / `TypedActionMapper` | **行** |
-| C++：`TypedTopicMapper` / `TypedServiceMapper` CRTP + `.mapper(shared_ptr)` | **行**（需 `ROBOT_BUS_HAS_ROS2`） |
-| 只写 YAML / 类型名字符串 | **不行** |
+| Python | duck-typed convert方法 + `.mapper(MyFoo())` |
+| Rust | `impl TypedTopicMapper` / `TypedServiceMapper` / `TypedActionMapper` |
+| C++ | `TypedTopicMapper` / `TypedServiceMapper` CRTP + `.mapper(shared_ptr)`（需 `ROBOT_BUS_HAS_ROS2`） |
 
 高级：仍可直接 override `ServiceMapper::attach` / `ActionMapper::attach`（特殊 QoS等）。
 
@@ -361,9 +244,10 @@ class AddTwoIntsServiceMapper:
 bridge = (
     Ros2Bridge.new("bridge")
     .bus_tcp("localhost")
-    .service("/examples/add_two_ints", "/examples/add_two_ints")
+    .service()
+    .from_ros("/examples/add_two_ints", TopicQos.keep_last(10).reliable())
+    .to_bus("/examples/add_two_ints", TopicQos.keep_last(8).best_effort())
     .mapper(AddTwoIntsServiceMapper())
-    .direction(Direction.Ros2ToBus)
     .timeout(5.0)
     .add()
     .build()
@@ -412,7 +296,7 @@ impl TypedServiceMapper for AddTwoIntsServiceMapper {
     }
 }
 
-// .service("/examples/add_two_ints", "/examples/add_two_ints")
+// .service().from_ros("/examples/add_two_ints", TopicQos::keep_last(10).reliable()).to_bus("/examples/add_two_ints", TopicQos::keep_last(8).best_effort())
 //     .mapper(AddTwoIntsServiceMapper)
 //     .add()?
 ```
@@ -497,9 +381,8 @@ struct AddTwoIntsServiceMapper
   }
 };
 
-// .service("/examples/add_two_ints", "/examples/add_two_ints")
+// .service().from_ros("/examples/add_two_ints", TopicQos::keep_last(10).reliable()).to_bus("/examples/add_two_ints", TopicQos::keep_last(8).best_effort())
 //     .mapper(std::make_shared<AddTwoIntsServiceMapper>())
-//     .direction(robot_bus::Direction::Ros2ToBus)
 //     .add()
 ```
 
@@ -509,24 +392,24 @@ Topic / Action：同一套「先 proto再 mapper」。`TypedTopicMapper` / `Type
 
 ## Rust（`rclrs`）
 
-与上文「最小例子」同一条链。QoS / lazy写在 `.route()`上。完整可运行：[`examples/ros2_bridge/rust/builtin.rs`](../../examples/ros2_bridge/rust/builtin.rs)。
-
 ```rust
 use robot_bus::ros2_bridge::{
-    Direction, Ros2Bridge, StdMsgsStringMapper, TriggerServiceMapper,
+    Ros2Bridge, StdMsgsStringMapper, TopicQos, TriggerServiceMapper,
 };
 
 fn main() -> robot_bus::Result<()> {
     let mut bridge = Ros2Bridge::new("ros_bridge")
         .bus_tcp("localhost")
-        .route("/examples/chatter", "/examples/chatter")
-        .mapper(StdMsgsStringMapper)
-        .direction(Direction::Ros2ToBus)
-        .add()?
-        .service("/examples/reset", "/examples/reset")
-        .mapper(TriggerServiceMapper)
-        .timeout(std::time::Duration::from_secs(3))
-        .add()?
+        .from_ros("/chatter", TopicQos::keep_last(10).reliable())
+            .to_bus("/chatter", TopicQos::keep_last(8).best_effort())
+            .mapper(StdMsgsStringMapper)
+            .add()?
+        .service()
+            .from_ros("/reset", TopicQos::keep_last(10).reliable())
+            .to_bus("/reset", TopicQos::keep_last(8).best_effort())
+            .mapper(TriggerServiceMapper)
+            .timeout(std::time::Duration::from_secs(3))
+            .add()?
         .build()?;
     bridge.spin()?;
     Ok(())
@@ -537,25 +420,32 @@ fn main() -> robot_bus::Result<()> {
 - 自定义 service/action：`TypedServiceMapper` / `TypedActionMapper`（见上文「用户自定义」）
 - 模块：`typed_service`（`wire_typed_*` / `attach_*`）
 
-### Rust消息（`ros-env` + ament rust IDL）
+### Rust overlay（ament rust消息）
 
-客户端是 crates.io **`rclrs` 0.7**。消息类型来自 **`ros-env` 0.2** 对 `share/<pkg>/rust/`的再导出，不是 rclrs自带的。
+crates.io上 `rclrs`仍可能是 0.7；本仓库 **git pin** 到带 `ros-env`再导出的主线。typed消息来自 overlay的 `share/<pkg>/rust/`，**不是** distro apt包自带的。
 
-Humble上 `ros-humble-sensor-msgs`等包已经带 `share/sensor_msgs/rust/`（含 `msg::Image`）。`source /opt/ros/humble`之后，`ros_env`能看到这些 crate。仓库里整份 topic mapper注册表还依赖若干 **apt默认没有** 的包（`nav2_msgs`、`control_msgs`、`apriltag_msgs`）；要用完整注册表，把缺的接口包放进 overlay workspace再 `colcon build`：
+Humble示例（在独立 workspace里 `colcon build`后 `source install/setup.bash`）：
 
 ```bash
 mkdir -p ~/ros2_rust_ws/src && cd ~/ros2_rust_ws
-# 只补 distro没有 rust IDL的包，例如：
-git clone -b humble https://github.com/ros-navigation/nav2_msgs.git src/nav2_msgs
-# control_msgs / apriltag_msgs同理
+git clone -b humble https://github.com/ros2/common_interfaces.git src/common_interfaces
+git clone -b humble https://github.com/ros2/example_interfaces.git src/example_interfaces
+git clone -b humble https://github.com/ros2/rcl_interfaces.git src/rcl_interfaces
+git clone -b humble https://github.com/ros2/rosidl_core.git src/rosidl_core
+git clone -b humble https://github.com/ros2/rosidl_defaults.git src/rosidl_defaults
+git clone -b humble https://github.com/ros2/unique_identifier_msgs.git src/unique_identifier_msgs
 git clone https://github.com/ros2-rust/rosidl_rust.git src/rosidl_rust
+# Topic mappers also need rust IDL for these packages (same overlay workspace):
+#   nav_msgs nav2_msgs geometry_msgs visualization_msgs tf2_msgs
+#   diagnostic_msgs trajectory_msgs shape_msgs stereo_msgs
+#   control_msgs foxglove_msgs apriltag_msgs action_msgs builtin_interfaces
 source /opt/ros/humble/setup.bash
 colcon build
 source install/setup.bash
 # 之后 cargo build --features ros2才能看到 ros_env::<pkg>::msg
 ```
 
-无 overlay时可用 `just check-ros2-shim`。crates.io的 `ros-env`在 `use_ros_shim`下是空的，本仓库用 [`third_party/ros-env-shim`](../../third_party/ros-env-shim) 通过 `[patch.crates-io]`提供 **typed字段桩**（按 proto生成，不是 DynamicMessage退路）。我们自己的 `std_srvs` vendor仍走系统 C typesupport，不依赖 rust IDL。
+无 overlay时可用 `just check-ros2-shim`。`rclrs` 0.8 走 `ros_env::*`，crates.io的 `ros-env` shim是空的，本仓库用 [`third_party/ros-env-shim`](../../third_party/ros-env-shim) 通过 `[patch.crates-io]`提供 **typed字段桩**（按 proto生成，不是 DynamicMessage退路）。我们自己的 `std_srvs` vendor仍走系统 C typesupport，不依赖 rust IDL。
 
 ---
 
@@ -571,9 +461,9 @@ just python-dev-ros2   # 或 just python-dev；需本机有 rclpy
 ```python
 import robot_bus
 from robot_bus.ros2_bridge import (
-    Direction,
     Ros2Bridge,
     StdMsgsStringMapper,
+    TopicQos,
     TriggerServiceMapper,
 )
 
@@ -582,11 +472,13 @@ assert robot_bus.ros2_available()  # import rclpy成功
 bridge = (
     Ros2Bridge.new("ros_bridge")
     .bus_tcp("localhost")
-    .route("/examples/chatter", "/examples/chatter")
+    .from_ros("/chatter", TopicQos.keep_last(10).reliable())
+    .to_bus("/chatter", TopicQos.keep_last(8).best_effort())
     .mapper(StdMsgsStringMapper())
-    .direction(Direction.Ros2ToBus)
     .add()
-    .service("/examples/reset", "/examples/reset")
+    .service()
+    .from_ros("/reset", TopicQos.keep_last(10).reliable())
+    .to_bus("/reset", TopicQos.keep_last(8).best_effort())
     .mapper(TriggerServiceMapper())
     .add()
     .build()
@@ -609,11 +501,13 @@ bridge.spin()
 
 auto bridge = robot_bus::Ros2Bridge::New("ros_bridge")
     .bus_tcp("localhost")
-    .route("/examples/chatter", "/examples/chatter")
+    .from_ros("/chatter", robot_bus::TopicQos::keep_last(10).reliable())
+    .to_bus("/chatter", robot_bus::TopicQos::keep_last(8).best_effort())
     .mapper(robot_bus::StdMsgsStringMapper{})
-    .direction(robot_bus::Direction::Ros2ToBus)
     .add()
-    .service("/examples/reset", "/examples/reset")
+    .service()
+    .from_ros("/reset", robot_bus::TopicQos::keep_last(10).reliable())
+    .to_bus("/reset", robot_bus::TopicQos::keep_last(8).best_effort())
     .mapper(robot_bus::TriggerServiceMapper{})
     .add()
     .build();
@@ -642,12 +536,9 @@ bridge.spin();
 ## 常见问题
 
 1. **未 source ROS** — 三端都会失败。
-2. **YAML配桥** — 不支持；代码里挂 mapper。
-3. **只传类型名字符串** — 不支持挂路由；传具体 mapper对象。
-4. **想跨语言万能动态 srv** — 不做；在目标语言写自定义 mapper。
-5. **C++ `ros2_available() == false`** — 未链 `robot_bus_ros2_bridge` / 装的是无桥包。
-6. **Python `ros2_available() == False`** — 未安装或未 source到 `rclpy`。
-7. **Rust topic登记了但跑不起来** — 缺对应 ROS typesupport（如 `foxglove_msgs`）。
+2. **C++ `ros2_available() == false`** — 未链 `robot_bus_ros2_bridge` / 装的是无桥包。
+3. **Python `ros2_available() == False`** — 未安装或未 source到 `rclpy`。
+4. **Rust topic登记了但跑不起来** — 缺对应 ROS typesupport（如 `foxglove_msgs`）。
 
 ---
 

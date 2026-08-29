@@ -367,9 +367,9 @@ just python-dev-ros2   # 安装 robot_bus；需本机有 rclpy
 ```python
 import robot_bus
 from robot_bus.ros2_bridge import (
-    Direction,
     Ros2Bridge,
     StdMsgsStringMapper,
+    TopicQos,
     TriggerServiceMapper,
 )
 
@@ -378,11 +378,13 @@ assert robot_bus.ros2_available()
 bridge = (
     Ros2Bridge.new("ros_bridge")
     .bus_tcp("localhost")
-    .route("/chatter", "/chatter")
+    .from_ros("/chatter", TopicQos.keep_last(10).reliable())
+    .to_bus("/chatter", TopicQos.keep_last(8).best_effort())
     .mapper(StdMsgsStringMapper())
-    .direction(Direction.Ros2ToBus)
     .add()
-    .service("/reset", "/reset")
+    .service()
+    .from_ros("/reset", TopicQos.keep_last(10).reliable())
+    .to_bus("/reset", TopicQos.keep_last(8).best_effort())
     .mapper(TriggerServiceMapper())
     .add()
     .build()
@@ -429,10 +431,10 @@ print(robot_bus.__version__)
 | `node.create_timer(period, callback)` → `TimerHandle` | 定时器（与 topic一样挂在 Node） |
 | `CallbackGroupType` / `create_callback_group` | `MutuallyExclusive` / `Reentrant` |
 | `create_subscription(..., msg_type=, callback_group=, qos_depth=)` | typed：`callback(topic, Message)`；省略类型：`callback(topic, bytes)`；WS：`qos_depth`为网关订阅队列深度 |
-| `create_service(..., request_type=, response_type=)` | typed：`handler(Request) -> Response`；否则 raw bytes |
-| `create_client(..., request_type=, response_type=)` | typed → `TypedServiceClient`；`service_is_ready` / `wait_for_service`（console workers） |
-| `create_action_server(..., goal_type=, feedback_type=, result_type=)` | typed handler通过 context实时发布 feedback，并返回 result；否则 raw bytes |
-| `create_action_client(..., goal_type=, feedback_type=, result_type=)` | typed → `TypedActionClient`；`wait_for_action_server`；`send_goal` → GoalHandle |
+| `create_service(..., request_type=, response_type=, qos_depth=)` | typed：`handler(Request) -> Response`；否则 raw bytes；`qos_depth>0` → KeepLast DEALER HWM |
+| `create_client(..., request_type=, response_type=, qos_depth=)` | typed → `TypedServiceClient`；`service_is_ready` / `wait_for_service`（console workers）；`qos_depth>0` → KeepLast DEALER HWM |
+| `create_action_server(..., goal_type=, feedback_type=, result_type=, qos_depth=)` | typed handler通过 context实时发布 feedback，并返回 result；否则 raw bytes；`qos_depth>0` → KeepLast DEALER HWM |
+| `create_action_client(..., goal_type=, feedback_type=, result_type=, qos_depth=)` | typed → `TypedActionClient`；`wait_for_action_server`；`send_goal` → GoalHandle；`qos_depth>0` → KeepLast DEALER HWM |
 | `ActionGoalHandle` / `TypedActionGoalHandle` | goal标识、action名称、阻塞等待 result与 best-effort cancel |
 | `Publisher(endpoint=None)` | 低层连 XSUB（不经 Node） |
 | `ros2_available()` | 能否 `import rclpy`（Python原生桥） |

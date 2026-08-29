@@ -36,14 +36,14 @@ CMake设置 `CMAKE_CXX_STANDARD 17`。自有应用用更高标准（如 `-DCMAKE
 
 ```bash
 # 核心 SDK（无 ROS bridge）
-sudo apt install ./robot-bus_2.0.0_linux_amd64.deb
+sudo apt install ./robot-bus_2.1.0_linux_amd64.deb
 
 # 或 ROS2 bridge变体（Humble示例）— 需已安装 Humble
-sudo apt install ./robot-bus-ros2-humble_2.0.0_linux_amd64.deb
+sudo apt install ./robot-bus-ros2-humble_2.1.0_linux_amd64.deb
 source /opt/ros/humble/setup.bash
 
 # macOS Apple Silicon（仅核心包）
-sudo installer -pkg robot-bus_2.0.0_macos_arm64.pkg -target /
+sudo installer -pkg robot-bus_2.1.0_macos_arm64.pkg -target /
 # 安装于 /usr/local（{bin,lib,include}）
 
 # 或从源码（开发）
@@ -174,7 +174,7 @@ pub.publish(imu);
 
 完整可运行程序：[`examples/topic_imu/`](../../examples/topic_imu/)、[`examples/service_set_bool/`](../../examples/service_set_bool/)、[`examples/action_fibonacci/`](../../examples/action_fibonacci/)。
 
-可选 QoS：`create_publisher(node, topic, qos_depth)` / `create_subscription(..., group, qos_depth)`（`depth > 0` → KeepLast）。  
+可选 QoS：`qos_depth > 0` → KeepLast（topic为 PUB/SUB HWM；service / action为 DEALER HWM）。`create_publisher(topic, qos_depth)` / `create_subscription(..., group, qos_depth)` / `create_service(..., group, qos_depth)` / `create_client(name, qos_depth)` / `create_action_server(..., group, qos_depth)` / `create_action_client(name, qos_depth)`。  
 `create_wall_timer` = `create_timer`别名。`wait_for_message` / service·action client的 `wait_for_*`见 Node API。
 
 Raw bytes（手动 Serialize/Parse）仍可用：
@@ -251,11 +251,13 @@ C++使用**原生 rclcpp**（`robot_bus_ros2_bridge`，编译宏 `ROBOT_BUS_HAS_
 
 auto bridge = robot_bus::Ros2Bridge::New("ros_bridge")
     .bus_tcp("localhost")
-    .route("/chatter", "/chatter")
+    .from_ros("/chatter", robot_bus::TopicQos::keep_last(10).reliable())
+    .to_bus("/chatter", robot_bus::TopicQos::keep_last(8).best_effort())
     .mapper(robot_bus::StdMsgsStringMapper{})
-    .direction(robot_bus::Direction::Ros2ToBus)
     .add()
-    .service("/reset", "/reset")
+    .service()
+    .from_ros("/reset", robot_bus::TopicQos::keep_last(10).reliable())
+    .to_bus("/reset", robot_bus::TopicQos::keep_last(8).best_effort())
     .mapper(robot_bus::TriggerServiceMapper{})
     .add()
     .build();

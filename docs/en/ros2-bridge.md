@@ -18,15 +18,9 @@ C++:     rclcpp ──mapper──► robot_bus::Node
 Rust:    rclrs  ──mapper──► robot_bus::Node
 ```
 
-**Why per language:** Topic / service / action all need compile-time concrete types (`create_subscription<T>`, `create_service<T>`, etc.). If C++/Python only pass type names to Rust, `T` won't match. Each language therefore creates ROS entities with concrete types on its side, then forwards via its own bus `Node`.
+**Why per language:** Topic / service / action all need compile-time concrete types (`create_subscription<T>`, `create_service<T>`, etc.). Each language creates ROS entities with concrete types on its side, then forwards via its own bus `Node`.
 
-| Supported | Not supported |
-|-----------|---------------|
-| Topic / Service / Action | YAML-configured bridge |
-| `.mapper(concrete object)` in code | Mounting routes via type-name string lookup |
-| User-defined mappers (concrete types per language) | Cross-language "string-only" universal bridge |
-
-Official releases: **Humble**, **Jazzy**.
+Official releases: **Humble**, **Jazzy**. Mount routes with `.mapper(concrete object)`; custom mappers are field converters in that language.
 
 ---
 
@@ -54,57 +48,57 @@ cargo run --bin robot_bus_broker    # or installed robot-bus-broker
 
 ---
 
-## Unified contract (code only)
+## Unified contract
 
-Direction (`Direction`): `Ros2ToBus` (default) or `BusToRos2`; **`both` is not allowed**.
+Each topic, service, and action endpoint is a **name + `TopicQos`**:
 
 ```text
-Ros2Bridge.new / New / new(name)
-  .bus_tcp(...) | .bus_ipc() | .bus_discover(...)
-  .route(ros, bus).mapper(...).direction(...).qos_depth(n)|.best_effort()|.sensor_data().lazy().add()
-  .service(ros, bus).mapper(...).timeout(...).direction(...).add()
-  .action(ros, bus).mapper(...).timeout(...).direction(...).add()
-  .build()
-  .spin() | .spin_once(...)
+.from_ros(ros_name, TopicQos).to_bus(bus_name, TopicQos).mapper(...).lazy()?.add()
+.from_bus(bus_name, TopicQos).to_ros(ros_name, TopicQos).mapper(...).add()
+.service().from_ros(ros_name, TopicQos).to_bus(bus_name, TopicQos).mapper(...).timeout()?.add()
+.service().from_bus(bus_name, TopicQos).to_ros(ros_name, TopicQos).mapper(...).timeout()?.add()
+.action().from_ros(ros_name, TopicQos).to_bus(bus_name, TopicQos).mapper(...).timeout()?.add()
+.action().from_bus(bus_name, TopicQos).to_ros(ros_name, TopicQos).mapper(...).timeout()?.add()
 ```
 
+After `TopicQos.keep_last(n)` you must call `.reliable()` or `.best_effort()`. ROS endpoints accept either; **bus** endpoints (topic, service, action) must be `.best_effort()` (no DDS reliability). Direction is the `from_ros → to_bus` / `from_bus → to_ros` chain. **`both` is not allowed**. Typical ROS service QoS (matching `services_default`) is `TopicQos.keep_last(10).reliable()`. Typical bus RPC QoS is `TopicQos.keep_last(8).best_effort()` (depth → DEALER HWM). Action applies the ROS profile to goal / result / cancel services and the feedback topic; the status topic stays the ROS action-status default.
+
 - Default timeouts: service **5s**, action goal **30s**
-- **No** `from_yaml`; **no** `add_route(..., "pkg/msg/Type", ...)`
 - Topic routes default to **eager** ROS subscriptions (`build()` creates them immediately so the ROS graph shows the bridge). Opt in to on-demand ROS2→bus with `.lazy()` on that route only.
 
 ### `.lazy()` (opt-in ROS2→bus)
 
-Default matches 1.3.1: `.route(...).mapper(...).add()` creates the ROS subscription at `build()`. Use `.lazy()` only on high-bandwidth ROS2→bus topics (camera, lidar) so the ROS graph has no bridge subscriber until a robot-bus subscriber exists.
+Default is eager: `.from_ros(...).to_bus(...).mapper(...).add()` creates the ROS subscription at `build()`. Use `.lazy()` only on high-bandwidth ROS2→bus topics (camera, lidar) so the ROS graph has no bridge subscriber until a robot-bus subscriber exists.
 
 ```rust
-.route("/camera/image", "/camera/image")
-    .mapper(SensorMsgsImageMapper)
-    .sensor_data()
-    .lazy()
-    .add()?
+.from_ros("/camera/image", TopicQos::keep_last(5).best_effort())
+.to_bus("/camera/image", TopicQos::keep_last(5).best_effort())
+.mapper(SensorMsgsImageMapper)
+.lazy()
+.add()?
 ```
 
 ```python
-.route("/camera/image", "/camera/image")
-    .mapper(SensorMsgsImageMapper())
-    .sensor_data()
-    .lazy()
-    .add()
+.from_ros("/camera/image", TopicQos.keep_last(5).best_effort())
+.to_bus("/camera/image", TopicQos.keep_last(5).best_effort())
+.mapper(SensorMsgsImageMapper())
+.lazy()
+.add()
 ```
 
 ```cpp
-.route("/camera/image", "/camera/image")
-    .mapper(robot_bus::SensorMsgsImageMapper{})
-    .sensor_data()
-    .lazy()
-    .add()
+.from_ros("/camera/image", robot_bus::TopicQos::keep_last(5).best_effort())
+.to_bus("/camera/image", robot_bus::TopicQos::keep_last(5).best_effort())
+.mapper(robot_bus::SensorMsgsImageMapper{})
+.lazy()
+.add()
 ```
 
 Rules:
 
-- **Default eager.** Existing examples do not need `.lazy()`.
-- **No-arg.** `.lazy()` only; not `.lazy(true)`, not a new `Direction`.
-- **ROS2→bus only.** `.lazy()` on `BusToRos2` fails at `.add()`. Service / action builders have no `.lazy()`.
+- **Default eager.** Omit `.lazy()`.
+- **No-arg.** `.lazy()` only; not `.lazy(true)`.
+- **Only on `from_ros → to_bus`.** `from_bus → to_ros` has no `.lazy()`. Service / action builders have no `.lazy()`.
 - **No-console broker** (`--no-console`): `.lazy()` routes **fall back to eager** (there is no demand signal).
 - Demand counts `kind == subscriber` on the bus topic. A raw `Subscriber` (no `Node`) and a WebSocket client with topology off do **not** open a lazy route. After a crash, topology TTL is about 30s.
 
@@ -112,19 +106,21 @@ The broker publishes immediate [`TopicDemand`](../../proto/robot_bus_interfaces/
 
 C++ custom mappers that only override `attach` (entities stuffed into `keep_alive`) cannot tear the ROS subscription down; `.lazy().add()` throws. Use `TypedTopicMapper`.
 
-### Topic route QoS helpers (opt-in)
+### TopicQos
 
-Defaults are unchanged: C++ / Python `QoS(10)` reliable; Rust `topics_default()`. Helpers apply to **topics only** (not service / action):
+Same type in all three languages. Pass one copy per endpoint (depth / reliability may differ):
 
-| helper | ROS | bus |
-|--------|-----|-----|
-| `.qos_depth(n)` | KeepLast(n) | `QosProfile::keep_last(n)` |
-| `.best_effort()` | reliability = best effort | (bus HWM is already best-effort) |
-| `.sensor_data()` | `SensorDataQoS` (best-effort KeepLast 5) | depth 5 |
+| | syntax |
+|--|--|
+| reliable KeepLast 10 | `TopicQos.keep_last(10).reliable()` |
+| best-effort KeepLast 5 | `TopicQos.keep_last(5).best_effort()` |
 
-Camera example: `.sensor_data().lazy()`. Image builtins do **not** default to SensorDataQoS.
+- **ROS** (`from_ros` / `to_ros`): KeepLast(depth) + the chosen reliability. Same `TopicQos` on topic, service, and action ROS endpoints.
+- **bus** (`from_bus` / `to_bus`): depth → HWM only (topic PUB/SUB, service/action DEALER); must be `.best_effort()`.
 
-### Phase-1 built-in mappers (objects, not strings)
+To match a ROS graph that uses best-effort KeepLast(5), write `keep_last(5).best_effort()` on both topic ends. For services, `keep_last(10).reliable()` matches ROS `services_default`.
+
+### Phase-1 built-in mappers
 
 | Kind | Mapper | ROS type |
 |------|--------|----------|
@@ -134,20 +130,19 @@ Camera example: `.sensor_data().lazy()`. Image builtins do **not** default to Se
 | Service | `SetBoolServiceMapper` | `std_srvs/srv/SetBool` |
 | Action | `FibonacciActionMapper` | `example_interfaces/action/Fibonacci` |
 
-Rust also has a full topic mapper registry (`src/ros2_bridge/mappers/`); mounting routes still requires `.mapper(concrete type)`; `lookup_topic_mapper` / `registered_topic_types` are for introspection only, not for mounting routes.
+Rust also has a full topic mapper registry (`src/ros2_bridge/mappers/`). Mount routes with `.mapper(concrete type)`; `lookup_topic_mapper` / `registered_topic_types` are for introspection.
 
 ---
 
-## User-defined mappers: yes
+## User-defined mappers
 
-**Yes.** First write a **bus protobuf** (fields aligned with the ROS `.msg` / `.srv` / `.action`), generate language stubs with `protoc`, then only write **field ↔ protobuf conversion**; the library handles subscribe/publish/service wiring. Typed APIs accept any protobuf message class — they do not have to live in this repository.
+First write a **bus protobuf** (fields aligned with the ROS `.msg` / `.srv` / `.action`), generate language stubs with `protoc`, then only write **field ↔ protobuf conversion**; the library handles subscribe/publish/service wiring. Typed APIs accept any protobuf message class — they do not have to live in this repository.
 
-| | Works? |
+| Language | How |
 |--|--------|
-| Python: duck-typed convert methods + `.mapper(MyFoo())` | **Yes** |
-| Rust: `impl TypedTopicMapper` / `TypedServiceMapper` / `TypedActionMapper` | **Yes** |
-| C++: `TypedTopicMapper` / `TypedServiceMapper` CRTP + `.mapper(shared_ptr)` | **Yes** (requires `ROBOT_BUS_HAS_ROS2`) |
-| YAML / type-name strings only | **No** |
+| Python | duck-typed convert methods + `.mapper(MyFoo())` |
+| Rust | `impl TypedTopicMapper` / `TypedServiceMapper` / `TypedActionMapper` |
+| C++ | `TypedTopicMapper` / `TypedServiceMapper` CRTP + `.mapper(shared_ptr)` (requires `ROBOT_BUS_HAS_ROS2`) |
 
 Advanced: you can still override `ServiceMapper::attach` / `ActionMapper::attach` directly (special QoS, etc.).
 
@@ -252,9 +247,10 @@ class AddTwoIntsServiceMapper:
 bridge = (
     Ros2Bridge.new("bridge")
     .bus_tcp("localhost")
-    .service("/examples/add_two_ints", "/examples/add_two_ints")
+    .service()
+    .from_ros("/examples/add_two_ints", TopicQos.keep_last(10).reliable())
+    .to_bus("/examples/add_two_ints", TopicQos.keep_last(8).best_effort())
     .mapper(AddTwoIntsServiceMapper())
-    .direction(Direction.Ros2ToBus)
     .timeout(5.0)
     .add()
     .build()
@@ -303,7 +299,7 @@ impl TypedServiceMapper for AddTwoIntsServiceMapper {
     }
 }
 
-// .service("/examples/add_two_ints", "/examples/add_two_ints")
+// .service().from_ros("/examples/add_two_ints", TopicQos::keep_last(10).reliable()).to_bus("/examples/add_two_ints", TopicQos::keep_last(8).best_effort())
 //     .mapper(AddTwoIntsServiceMapper)
 //     .add()?
 ```
@@ -388,9 +384,9 @@ struct AddTwoIntsServiceMapper
   }
 };
 
-// .service("/examples/add_two_ints", "/examples/add_two_ints")
+// .service().from_ros("/examples/add_two_ints", robot_bus::TopicQos::keep_last(10).reliable())
+//     .to_bus("/examples/add_two_ints", robot_bus::TopicQos::keep_last(8).best_effort())
 //     .mapper(std::make_shared<AddTwoIntsServiceMapper>())
-//     .direction(robot_bus::Direction::Ros2ToBus)
 //     .add()
 ```
 
@@ -402,17 +398,19 @@ Topic / Action: same “proto first, then mapper” flow. `TypedTopicMapper` / `
 
 ```rust
 use robot_bus::ros2_bridge::{
-    Direction, Ros2Bridge, StdMsgsStringMapper, TriggerServiceMapper,
+    Ros2Bridge, StdMsgsStringMapper, TopicQos, TriggerServiceMapper,
 };
 
 fn main() -> robot_bus::Result<()> {
     let mut bridge = Ros2Bridge::new("ros_bridge")
         .bus_tcp("localhost")
-        .route("/chatter", "/chatter")
+        .from_ros("/chatter", TopicQos::keep_last(10).reliable())
+            .to_bus("/chatter", TopicQos::keep_last(8).best_effort())
             .mapper(StdMsgsStringMapper)
-            .direction(Direction::Ros2ToBus)
             .add()?
-        .service("/reset", "/reset")
+        .service()
+            .from_ros("/reset", TopicQos::keep_last(10).reliable())
+            .to_bus("/reset", TopicQos::keep_last(8).best_effort())
             .mapper(TriggerServiceMapper)
             .timeout(std::time::Duration::from_secs(3))
             .add()?
@@ -460,9 +458,9 @@ just python-dev-ros2   # or just python-dev; requires local rclpy
 ```python
 import robot_bus
 from robot_bus.ros2_bridge import (
-    Direction,
     Ros2Bridge,
     StdMsgsStringMapper,
+    TopicQos,
     TriggerServiceMapper,
 )
 
@@ -471,11 +469,13 @@ assert robot_bus.ros2_available()  # import rclpy succeeds
 bridge = (
     Ros2Bridge.new("ros_bridge")
     .bus_tcp("localhost")
-    .route("/chatter", "/chatter")
+    .from_ros("/chatter", TopicQos.keep_last(10).reliable())
+    .to_bus("/chatter", TopicQos.keep_last(8).best_effort())
     .mapper(StdMsgsStringMapper())
-    .direction(Direction.Ros2ToBus)
     .add()
-    .service("/reset", "/reset")
+    .service()
+    .from_ros("/reset", TopicQos.keep_last(10).reliable())
+    .to_bus("/reset", TopicQos.keep_last(8).best_effort())
     .mapper(TriggerServiceMapper())
     .add()
     .build()
@@ -498,11 +498,13 @@ bridge.spin()
 
 auto bridge = robot_bus::Ros2Bridge::New("ros_bridge")
     .bus_tcp("localhost")
-    .route("/chatter", "/chatter")
+    .from_ros("/chatter", robot_bus::TopicQos::keep_last(10).reliable())
+    .to_bus("/chatter", robot_bus::TopicQos::keep_last(8).best_effort())
     .mapper(robot_bus::StdMsgsStringMapper{})
-    .direction(robot_bus::Direction::Ros2ToBus)
     .add()
-    .service("/reset", "/reset")
+    .service()
+    .from_ros("/reset", robot_bus::TopicQos::keep_last(10).reliable())
+    .to_bus("/reset", robot_bus::TopicQos::keep_last(8).best_effort())
     .mapper(robot_bus::TriggerServiceMapper{})
     .add()
     .build();
@@ -531,12 +533,9 @@ The main loop must drive both sides (`spin` / `spin_once`); implementation detai
 ## FAQ
 
 1. **ROS not sourced** — all three language bindings fail.
-2. **YAML bridge config** — not supported; mount mappers in code.
-3. **Type-name strings only** — not supported for mounting routes; pass concrete mapper objects.
-4. **Cross-language universal dynamic srv** — not supported; write a custom mapper in the target language.
-5. **C++ `ros2_available() == false`** — not linked with `robot_bus_ros2_bridge` / installed package without bridge.
-6. **Python `ros2_available() == False`** — `rclpy` not installed or ROS not sourced.
-7. **Rust topic registered but fails at runtime** — missing corresponding ROS typesupport (e.g. `foxglove_msgs`).
+2. **C++ `ros2_available() == false`** — not linked with `robot_bus_ros2_bridge` / installed package without bridge.
+3. **Python `ros2_available() == False`** — `rclpy` not installed or ROS not sourced.
+4. **Rust topic registered but fails at runtime** — missing corresponding ROS typesupport (e.g. `foxglove_msgs`).
 
 ---
 

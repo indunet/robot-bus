@@ -112,7 +112,7 @@ const sub = node.createSubscription(
   Imu,
 );
 // node.destroySubscription(sub)
-// createWallTimer = createTimer；可选 qosDepth
+// createWallTimer = createTimer；可选 qosDepth（topic / service / action）
 // waitForMessage / client.waitForService / waitForActionServer
 // listParameters() → { names, prefixes }；listAllParameters()
 

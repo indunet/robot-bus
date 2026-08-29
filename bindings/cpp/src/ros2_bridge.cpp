@@ -257,22 +257,18 @@ struct LazyTopic {
   rclcpp::SubscriptionBase::SharedPtr sub;
 };
 
-rclcpp::QoS topic_ros_qos(const TopicRouteSpec &route) {
-  if (route.qos.sensor_data) {
-    return rclcpp::SensorDataQoS();
+rclcpp::QoS topic_ros_qos(const TopicQos &qos) {
+  rclcpp::QoS out(qos.depth() < 0 ? 0 : qos.depth());
+  if (qos.is_best_effort()) {
+    out.best_effort();
+  } else {
+    out.reliable();
   }
-  rclcpp::QoS qos(route.qos.depth.value_or(10));
-  if (route.qos.best_effort) {
-    qos.best_effort();
-  }
-  return qos;
+  return out;
 }
 
 TopicPublisher make_bus_publisher(Node &bus_node, const TopicRouteSpec &route) {
-  if (route.qos.depth.has_value() && *route.qos.depth > 0) {
-    return bus_node.create_publisher(route.bus_topic.c_str(), *route.qos.depth);
-  }
-  return bus_node.create_publisher(route.bus_topic.c_str());
+  return bus_node.create_publisher(route.bus_topic.c_str(), route.bus_qos.depth());
 }
 
 template <typename RosMsg>
@@ -304,7 +300,7 @@ void wire_topic_ros_to_bus(rclcpp::Node::SharedPtr ros_node, Node &bus_node,
                            std::unordered_set<std::string> &eager_bus_topics) {
   auto pub = std::make_shared<TopicPublisher>(make_bus_publisher(bus_node, route));
   auto mtx = std::make_shared<std::mutex>();
-  auto qos = topic_ros_qos(route);
+  auto qos = topic_ros_qos(route.ros_qos);
   auto create = [ros_node, ros_topic = route.ros_topic, qos, pub, mtx, convert]() {
     return make_ros2_to_bus_sub<RosMsg>(ros_node, ros_topic, qos, pub, mtx, convert);
   };
@@ -324,37 +320,22 @@ void wire_topic_bus_to_ros(rclcpp::Node::SharedPtr ros_node, Node &bus_node,
                            RosMsg (*convert)(const uint8_t *, size_t),
                            std::vector<rclcpp::PublisherBase::SharedPtr> &pubs,
                            std::vector<std::shared_ptr<void>> &keep_alive) {
-  auto qos = topic_ros_qos(route);
+  auto qos = topic_ros_qos(route.ros_qos);
   auto ros_pub = ros_node->create_publisher<RosMsg>(route.ros_topic, qos);
   auto weak_pub = std::weak_ptr<typename rclcpp::Publisher<RosMsg>>(ros_pub);
-  if (route.qos.depth.has_value() && *route.qos.depth > 0) {
-    keep_alive.push_back(std::make_shared<SubscriptionHandle>(bus_node.create_subscription(
-        route.bus_topic.c_str(),
-        [weak_pub, convert](std::string_view, BytesView payload) {
-          auto pub = weak_pub.lock();
-          if (!pub) {
-            return;
-          }
-          try {
-            pub->publish(convert(payload.data, payload.size));
-          } catch (...) {
-          }
-        },
-        nullptr, *route.qos.depth)));
-  } else {
-    keep_alive.push_back(std::make_shared<SubscriptionHandle>(bus_node.create_subscription(
-        route.bus_topic.c_str(),
-        [weak_pub, convert](std::string_view, BytesView payload) {
-          auto pub = weak_pub.lock();
-          if (!pub) {
-            return;
-          }
-          try {
-            pub->publish(convert(payload.data, payload.size));
-          } catch (...) {
-          }
-        })));
-  }
+  keep_alive.push_back(std::make_shared<SubscriptionHandle>(bus_node.create_subscription(
+      route.bus_topic.c_str(),
+      [weak_pub, convert](std::string_view, BytesView payload) {
+        auto pub = weak_pub.lock();
+        if (!pub) {
+          return;
+        }
+        try {
+          pub->publish(convert(payload.data, payload.size));
+        } catch (...) {
+        }
+      },
+      nullptr, route.bus_qos.depth())));
   pubs.push_back(std::move(ros_pub));
 }
 
@@ -409,7 +390,7 @@ void wire_topic(rclcpp::Node::SharedPtr ros_node, Node &bus_node, const TopicRou
       auto mtx = std::make_shared<std::mutex>();
       auto mapper = route.custom;
       auto ros_topic = route.ros_topic;
-      auto qos = topic_ros_qos(route);
+      auto qos = topic_ros_qos(route.ros_qos);
       bus_pubs.push_back(pub);
       bus_pub_mutexes.push_back(mtx);
       lazy_routes.push_back(LazyTopic{
@@ -425,8 +406,8 @@ void wire_topic(rclcpp::Node::SharedPtr ros_node, Node &bus_node, const TopicRou
                          route.ros_topic,
                          route.bus_topic,
                          route.direction,
-                         topic_ros_qos(route),
-                         route.qos.depth.value_or(0),
+                         topic_ros_qos(route.ros_qos),
+                         route.bus_qos.depth(),
                          keep_alive};
     route.custom->attach(ctx);
     if (route.direction == Direction::Ros2ToBus) {
@@ -447,7 +428,8 @@ void wire_trigger(rclcpp::Node::SharedPtr ros_node, Node &bus_node, const Servic
   const double timeout = route.timeout_secs;
   if (route.direction == Direction::Ros2ToBus) {
     auto bus_client =
-        std::make_shared<ServiceClient>(bus_node.create_client(route.bus_service.c_str()));
+        std::make_shared<ServiceClient>(bus_node.create_client(route.bus_service.c_str(),
+                                                              route.bus_qos.depth()));
     auto mtx = std::make_shared<std::mutex>();
     auto srv = ros_node->create_service<std_srvs::srv::Trigger>(
         route.ros_service,
@@ -469,12 +451,12 @@ void wire_trigger(rclcpp::Node::SharedPtr ros_node, Node &bus_node, const Servic
             response->message = "bus call failed";
           }
         },
-        rmw_qos_profile_services_default, group);
+        service_rmw_qos(route.ros_qos), group);
     bus_clients.push_back(std::move(bus_client));
     ros_srvs.push_back(std::move(srv));
   } else {
     auto ros_client = ros_node->create_client<std_srvs::srv::Trigger>(
-        route.ros_service, rmw_qos_profile_services_default, group);
+        route.ros_service, service_rmw_qos(route.ros_qos), group);
     ros_clients.push_back(ros_client);
     keep_alive.push_back(std::make_shared<ServiceHandle>(bus_node.create_service(
         route.bus_service.c_str(),
@@ -496,7 +478,8 @@ void wire_trigger(rclcpp::Node::SharedPtr ros_node, Node &bus_node, const Servic
             return trigger_resp_ros_to_bus(err);
           }
           return trigger_resp_ros_to_bus(*future.get());
-        })));
+        },
+        nullptr, route.bus_qos.depth()));
   }
 }
 
@@ -509,7 +492,8 @@ void wire_set_bool(rclcpp::Node::SharedPtr ros_node, Node &bus_node, const Servi
   const double timeout = route.timeout_secs;
   if (route.direction == Direction::Ros2ToBus) {
     auto bus_client =
-        std::make_shared<ServiceClient>(bus_node.create_client(route.bus_service.c_str()));
+        std::make_shared<ServiceClient>(bus_node.create_client(route.bus_service.c_str(),
+                                                              route.bus_qos.depth()));
     auto mtx = std::make_shared<std::mutex>();
     auto srv = ros_node->create_service<std_srvs::srv::SetBool>(
         route.ros_service,
@@ -531,12 +515,12 @@ void wire_set_bool(rclcpp::Node::SharedPtr ros_node, Node &bus_node, const Servi
             response->message = "bus call failed";
           }
         },
-        rmw_qos_profile_services_default, group);
+        service_rmw_qos(route.ros_qos), group);
     bus_clients.push_back(std::move(bus_client));
     ros_srvs.push_back(std::move(srv));
   } else {
     auto ros_client = ros_node->create_client<std_srvs::srv::SetBool>(
-        route.ros_service, rmw_qos_profile_services_default, group);
+        route.ros_service, service_rmw_qos(route.ros_qos), group);
     ros_clients.push_back(ros_client);
     keep_alive.push_back(std::make_shared<ServiceHandle>(bus_node.create_service(
         route.bus_service.c_str(),
@@ -557,7 +541,8 @@ void wire_set_bool(rclcpp::Node::SharedPtr ros_node, Node &bus_node, const Servi
             return set_bool_resp_ros_to_bus(err);
           }
           return set_bool_resp_ros_to_bus(*future.get());
-        })));
+        },
+        nullptr, route.bus_qos.depth()));
   }
 }
 
@@ -587,8 +572,9 @@ void wire_service(rclcpp::Node::SharedPtr ros_node, Node &bus_node, const Servic
                   std::vector<std::shared_ptr<void>> &keep_alive) {
   if (route.is_custom()) {
     keep_alive.push_back(std::shared_ptr<void>(route.custom));
-    ServiceWireContext ctx{ros_node,       bus_node,      route.ros_service, route.bus_service,
-                           route.direction, route.timeout_secs, group,         keep_alive};
+    ServiceWireContext ctx{ros_node,        bus_node,           route.ros_service, route.bus_service,
+                           route.direction, route.timeout_secs, route.ros_qos,     route.bus_qos,
+                           group,           keep_alive};
     route.custom->attach(ctx);
     return;
   }
@@ -605,7 +591,8 @@ void wire_fibonacci_ros_to_bus(
     std::vector<std::shared_ptr<rclcpp_action::ServerBase>> &ros_actions,
     std::vector<std::shared_ptr<ActionClient>> &bus_action_clients) {
   auto bus_client =
-      std::make_shared<ActionClient>(bus_node.create_action_client(route.bus_action.c_str()));
+      std::make_shared<ActionClient>(
+          bus_node.create_action_client(route.bus_action.c_str(), route.bus_qos.depth()));
   auto mtx = std::make_shared<std::mutex>();
   const double timeout = route.timeout_secs;
 
@@ -655,7 +642,7 @@ void wire_fibonacci_ros_to_bus(
 
   auto server = rclcpp_action::create_server<Fibonacci>(
       ros_node, route.ros_action, handle_goal, handle_cancel, handle_accepted,
-      rcl_action_server_get_default_options(), group);
+      action_server_qos(route.ros_qos), group);
   bus_action_clients.push_back(std::move(bus_client));
   ros_actions.push_back(std::move(server));
 }
@@ -665,7 +652,8 @@ void wire_fibonacci_bus_to_ros(
     rclcpp::CallbackGroup::SharedPtr group,
     std::vector<std::shared_ptr<rclcpp_action::ClientBase>> &ros_action_clients,
     std::vector<std::shared_ptr<void>> &keep_alive) {
-  auto ros_client = rclcpp_action::create_client<Fibonacci>(ros_node, route.ros_action, group);
+  auto ros_client = rclcpp_action::create_client<Fibonacci>(
+      ros_node, route.ros_action, group, action_client_qos(route.ros_qos));
   auto mtx = std::make_shared<std::mutex>();
   const double timeout = route.timeout_secs;
   ros_action_clients.push_back(ros_client);
@@ -740,7 +728,8 @@ void wire_fibonacci_bus_to_ros(
           return fibonacci_empty_result_phases();
         }
         return phases;
-      })));
+      },
+      nullptr, route.bus_qos.depth()));
 }
 
 void wire_action_builtin(
@@ -771,8 +760,9 @@ void wire_action(rclcpp::Node::SharedPtr ros_node, Node &bus_node, const ActionR
                  std::vector<std::shared_ptr<void>> &keep_alive) {
   if (route.is_custom()) {
     keep_alive.push_back(std::shared_ptr<void>(route.custom));
-    ActionWireContext ctx{ros_node,        bus_node,       route.ros_action, route.bus_action,
-                          route.direction, route.timeout_secs, group,        keep_alive};
+    ActionWireContext ctx{ros_node,        bus_node,           route.ros_action,  route.bus_action,
+                          route.direction, route.timeout_secs, route.ros_qos,     route.bus_qos,
+                          group,           keep_alive};
     route.custom->attach(ctx);
     return;
   }

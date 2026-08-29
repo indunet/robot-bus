@@ -35,7 +35,7 @@ class App : Application() {
   }
 }
 
-// implementation("org.indunet:robot-bus-android:2.0.0")
+// implementation("org.indunet:robot-bus-android:2.1.0")
 ```
 
 ## Layout

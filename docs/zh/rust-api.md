@@ -5,9 +5,9 @@
 `Cargo.toml`：
 
 ```toml
-robot-bus = "2.0.0"
+robot-bus = "2.1.0"
 # 本地：robot-bus = { path = "../robot-bus" }
-# 默认已启用 WebSocket RPC网关（`ws` feature）；若需关闭：robot-bus = { version = "2.0.0", default-features = false }
+# 默认已启用 WebSocket RPC网关（`ws` feature）；若需关闭：robot-bus = { version = "2.1.0", default-features = false }
 ```
 
 ## Broker启动
@@ -262,11 +262,11 @@ node.create_timer(
 ```
 
 
-### 高水位（HWM）与 Topic QoS
+### 高水位（HWM）与 QoS
 
-Topic可用 `QosProfile::keep_last(depth)`（ZMQ节点上 → HWM）。**仅对 topic生效**；reliability固定 best-effort。Service / action暂不接 QoS。
+`QosProfile::keep_last(depth)`映射为 ZMQ HWM。Topic用 PUB/SUB HWM；service / action用 DEALER HWM（`snd` / `rcv`都等于 depth）。reliability固定 best-effort（RPC也没有 DDS reliability）。不传 QoS则用节点默认（topic 8/8，service 4/4，action 8/8）。
 
-**WebSocket** Node上 KeepLast **只兑现订阅侧**：作为网关到客户端的队列深度（满则丢；不传则用网关默认 64）。发布侧 QoS忽略（所有 WS发布者共用网关的一个 PUB）。
+**WebSocket** Node上 KeepLast **只兑现订阅侧**：作为网关到客户端的队列深度（满则丢；不传则用网关默认 64）。发布侧 QoS忽略（所有 WS发布者共用网关的一个 PUB）。WS的 service / action客户端没有 ZMQ socket，HWM被忽略。
 
 ```rust
 use robot_bus::{Node, QosProfile, Publisher, HighWaterMark};
@@ -282,6 +282,12 @@ node.create_subscription_with_qos::<robot_bus::sensor_msgs::msg::v1::Imu, _>(
     |_topic, _imu| {},
     None,
 )?;
+
+// Service / action：同样 KeepLast → DEALER HWM
+// node.create_service_with_qos::<SetBool, _>("/reset", QosProfile::keep_last(16), handler, None)?;
+// let client = node.create_client_with_qos::<SetBool>("/reset", QosProfile::keep_last(16))?;
+// node.create_action_server_with_qos::<Fibonacci, _>("/fib", QosProfile::keep_last(16), handler, None)?;
+// let act = node.create_action_client_with_qos::<Fibonacci>("/fib", QosProfile::keep_last(16))?;
 
 // 底层仍可直接设 HWM：
 let raw = Publisher::with_hwm(None, HighWaterMark::new(10, 10))?;
@@ -328,7 +334,7 @@ fn main() -> robot_bus::Result<()> {
 }
 ```
 
-Raw bytes：`create_service_raw` / `create_client_raw`。endpoint取自 `NodeOptions`（`service_frontend` / `service_backend`）。
+Raw bytes：`create_service_raw` / `create_client_raw`。KeepLast：`create_service_with_qos` / `create_client_with_qos`（以及 `*_raw_with_qos`）。endpoint取自 `NodeOptions`（`service_frontend` / `service_backend`）。
 
 ---
 
@@ -359,7 +365,7 @@ fn main() -> robot_bus::Result<()> {
 
 完整可运行程序：[`examples/service_set_bool/`](../../examples/service_set_bool/)、[`examples/action_fibonacci/`](../../examples/action_fibonacci/)。
 
-Raw bytes：`create_action_server_raw` / `create_action_client_raw`。ZMQ的 `cancel()`发送显式 `CANCEL`帧；gRPC的 `cancel()`取消对应的 server stream，两者都不提供“服务端已确认取消”的保证。
+Raw bytes：`create_action_server_raw` / `create_action_client_raw`。KeepLast：`create_action_server_with_qos` / `create_action_client_with_qos`（以及 `*_raw_with_qos`）。ZMQ的 `cancel()`发送显式 `CANCEL`帧；gRPC的 `cancel()`取消对应的 server stream，两者都不提供“服务端已确认取消”的保证。
 
 ---
 

@@ -9,7 +9,7 @@ How to write the same classic scenarios on each side. Left is **ROS 2 Humble + [
 | Runtime | DDS (requires `ros2` / daemon) | Start `robot_bus_broker` first (or embed in-process) |
 | Entry | `Context` → `Node` → `rclrs::spin` | **Preferred** `Context` → `Node::with_context`; tcp/ipc may still use convenience `Node::new` (private Context) |
 | Messages | `.msg` / `.srv` / `.action` generated types | Protobuf in crate (e.g. `sensor_msgs::msg::v1::Imu`) |
-| QoS | `QOS_PROFILE_DEFAULT`, etc. | Topic: `QosProfile::keep_last(depth)` → HWM on ZMQ (optional `qos_depth` / `qosDepth` in all bindings); fixed best-effort. WebSocket subscribe uses the same depth as the gateway→client queue; WS publish ignores QoS (shared gateway PUB). Service / action do not take QoS yet |
+| QoS | `QOS_PROFILE_DEFAULT`, etc. | `QosProfile::keep_last(depth)` → HWM on ZMQ (optional `qos_depth` / `qosDepth` in all bindings); fixed best-effort. Topics: PUB/SUB HWM. Service / action: DEALER HWM. WebSocket subscribe uses the same depth as the gateway→client queue; WS publish ignores QoS (shared gateway PUB). WS service / action ignore HWM (no ZMQ socket) |
 | Callback groups | Worker / callback group (newer API) | `CallbackGroupType::MutuallyExclusive` / `Reentrant` |
 | Parameters | `declare_parameter` / `get_parameter` → Parameter; `set_parameter(Parameter)`; `list_parameters(prefixes, depth)` (remote / YAML / CLI) | Same local shape (`Parameter` + `as_*` + batch get/set); `list_parameters` → `{names, prefixes}`, convenience `list_all_parameters`; `undeclare_parameter`; YAML load; no remote / CLI |
 | Ready waits | `wait_for_message` / `wait_for_service` / `wait_for_action_server` | Same helpers: `wait_for_message`; service/action poll console `workers > 0` (best-effort, not DDS discovery). Plus broker link: `connection_state` / `wait_for_broker` (construct does not block; TCP/WS auto-reconnect) |
@@ -124,7 +124,7 @@ fn main() -> robot_bus::Result<()> {
 }
 ```
 
-Key points: rclrs requires full QoS at creation; robot-bus `QosProfile` applies to **topics only**, and only KeepLast depth is honored (→ send/receive HWM on ZMQ; → gateway subscribe queue on WebSocket). Reliability is fixed best-effort. WS **publish** QoS is ignored (shared gateway PUB). Plain `create_publisher` / `create_subscription` still work (leave existing HWM alone). The last argument is the callback group. robot-bus uses topic names as given (prefer fully qualified paths).
+Key points: rclrs requires full QoS at creation; robot-bus `QosProfile` only honors KeepLast depth (topic → PUB/SUB HWM; service / action → DEALER HWM; WebSocket subscribe → gateway queue). Reliability is fixed best-effort. WS **publish** QoS is ignored (shared gateway PUB). Plain `create_publisher` / `create_subscription` / `create_service` / `create_client` / `create_action_*` still work (leave existing HWM alone). The last argument on servers is the callback group. robot-bus uses topic names as given (prefer fully qualified paths).
 
 ---
 
@@ -264,10 +264,10 @@ node.spin()?;
 | Create node | `Node::new(&context, "name")` | `Node::with_context(&context, "name")` (or convenience `Node::new("name")`) |
 | Publish | `create_publisher::<T>(topic, qos)` | `create_publisher_with_qos::<T>(topic, qos)` (or plain `create_publisher`; bindings expose optional depth) |
 | Subscribe | `create_subscription(topic, qos, cb)` | `create_subscription_with_qos(topic, qos, cb, group)` (or plain `create_subscription`) |
-| Service server | `create_service::<S, _>(name, cb)` | `create_service::<S, _>(name, cb, group)` |
-| Service client | `create_client::<S>(name)` + `call` | `create_client::<S>(name)` + `call(..., timeout)` + `wait_for_service` |
-| Action server | `create_action_server` | `create_action_server::<A, _>(..., group)` |
-| Action client | `create_action_client` + GoalHandle | `create_action_client` + `wait_for_action_server` + `send_goal` → GoalHandle |
+| Service server | `create_service::<S, _>(name, cb)` | `create_service::<S, _>(name, cb, group)` / `create_service_with_qos` |
+| Service client | `create_client::<S>(name)` + `call` | `create_client::<S>(name)` / `create_client_with_qos` + `call(..., timeout)` + `wait_for_service` |
+| Action server | `create_action_server` | `create_action_server::<A, _>(..., group)` / `create_action_server_with_qos` |
+| Action client | `create_action_client` + GoalHandle | `create_action_client` / `create_action_client_with_qos` + `wait_for_action_server` + `send_goal` → GoalHandle |
 | Spin | `rclrs::spin(node)` | `node.spin()` / `wait_for_message` |
 | Raw bytes | Dynamic messages / limited support | `create_*_raw` |
 

@@ -1,7 +1,9 @@
 'use client'
 
+import { useMemo, useState } from 'react'
 import { type ServiceInfo, type ActionInfo, fmtNum, fmtRate } from '@/lib/mock-data'
 import { PanelHeader } from './BrokerOverview'
+import NameFilter, { nameMatches } from './NameFilter'
 import { Cpu, GitBranch } from 'lucide-react'
 import { fmtAgeLocalized, useI18n } from '@/lib/i18n'
 
@@ -45,7 +47,15 @@ function ServicesPanel({
   maxBodyHeight?: string
 }) {
   const { t } = useI18n()
-  const sorted = [...services].sort((a, b) => b.callsPerSec - a.callsPerSec || b.calls - a.calls)
+  const [query, setQuery] = useState('')
+  const sorted = useMemo(
+    () =>
+      [...services]
+        .filter((s) => nameMatches(query, s.name))
+        .sort((a, b) => b.callsPerSec - a.callsPerSec || b.calls - a.calls),
+    [services, query],
+  )
+  const filtering = query.trim().length > 0
   const grid = 'grid-cols-[1fr_72px_64px_64px_48px_64px_72px]'
 
   return (
@@ -53,8 +63,13 @@ function ServicesPanel({
       <PanelHeader
         icon={<Cpu size={14} />}
         title={t('servicesTitle')}
-        sub={t('servicesKnown', { n: services.length })}
+        sub={
+          filtering
+            ? t('nameFilterHits', { n: sorted.length, total: services.length })
+            : t('servicesKnown', { n: services.length })
+        }
         subClassName="text-bus-amber"
+        trailing={<NameFilter value={query} onChange={setQuery} />}
       />
       <ColHeader
         cols={[t('colService'), t('colCallsS'), t('colCalls'), t('colWorkers'), t('colErr'), t('colP99'), t('colLast')]}
@@ -62,7 +77,7 @@ function ServicesPanel({
       />
       <div className="overflow-y-auto bus-scroll" style={maxBodyHeight ? { maxHeight: maxBodyHeight } : undefined}>
         {sorted.length === 0 ? (
-          <EmptyRow text={t('servicesEmpty')} />
+          <EmptyRow text={filtering ? t('nameFilterEmpty') : t('servicesEmpty')} />
         ) : (
           sorted.map((s) => (
             <div
@@ -100,7 +115,15 @@ function ActionsPanel({
   maxBodyHeight?: string
 }) {
   const { t } = useI18n()
-  const sorted = [...actions].sort((a, b) => b.runsPerSec - a.runsPerSec || b.runs - a.runs)
+  const [query, setQuery] = useState('')
+  const sorted = useMemo(
+    () =>
+      [...actions]
+        .filter((a) => nameMatches(query, a.name))
+        .sort((a, b) => b.runsPerSec - a.runsPerSec || b.runs - a.runs),
+    [actions, query],
+  )
+  const filtering = query.trim().length > 0
   const grid = 'grid-cols-[1fr_72px_56px_64px_48px_64px_72px]'
 
   return (
@@ -108,8 +131,13 @@ function ActionsPanel({
       <PanelHeader
         icon={<GitBranch size={14} />}
         title={t('actionsTitle')}
-        sub={t('actionsKnown', { n: actions.length })}
+        sub={
+          filtering
+            ? t('nameFilterHits', { n: sorted.length, total: actions.length })
+            : t('actionsKnown', { n: actions.length })
+        }
         subClassName="text-bus-green"
+        trailing={<NameFilter value={query} onChange={setQuery} />}
       />
       <ColHeader
         cols={[t('colAction'), t('colRunsS'), t('colRuns'), t('colActive'), t('colErr'), t('colAvgDur'), t('colLast')]}
@@ -117,7 +145,7 @@ function ActionsPanel({
       />
       <div className="overflow-y-auto bus-scroll" style={maxBodyHeight ? { maxHeight: maxBodyHeight } : undefined}>
         {sorted.length === 0 ? (
-          <EmptyRow text={t('actionsEmpty')} />
+          <EmptyRow text={filtering ? t('nameFilterEmpty') : t('actionsEmpty')} />
         ) : (
           sorted.map((a) => (
             <div

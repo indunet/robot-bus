@@ -165,6 +165,7 @@ class Node : AutoCloseable {
         serviceName: String,
         handler: ServiceHandler,
         group: CallbackGroup? = null,
+        qosDepth: Int = 0,
     ): ServiceHandle {
         val cb =
             RobotBusC.ServiceCb { data, len, outData, outLen, _ ->
@@ -189,12 +190,13 @@ class Node : AutoCloseable {
         return ServiceHandle(
             ptr,
             Errors.checkPtr(
-                RobotBusC.Holder.INSTANCE.robot_bus_node_create_service(
+                RobotBusC.Holder.INSTANCE.robot_bus_node_create_service_with_qos(
                     ptr,
                     serviceName,
                     cb,
                     null,
                     group?.raw(),
+                    qosDepth,
                 ),
                 "create_service",
             ),
@@ -232,10 +234,15 @@ class Node : AutoCloseable {
         )
     }
 
-    fun createClient(serviceName: String): ServiceClient =
+    @JvmOverloads
+    fun createClient(serviceName: String, qosDepth: Int = 0): ServiceClient =
         ServiceClient(
             Errors.checkPtr(
-                RobotBusC.Holder.INSTANCE.robot_bus_node_create_client(ptr, serviceName),
+                RobotBusC.Holder.INSTANCE.robot_bus_node_create_client_with_qos(
+                    ptr,
+                    serviceName,
+                    qosDepth,
+                ),
                 "create_client",
             ),
         )
@@ -260,6 +267,7 @@ class Node : AutoCloseable {
         actionName: String,
         handler: ActionHandler,
         group: CallbackGroup? = null,
+        qosDepth: Int = 0,
     ): ActionServerHandle {
         val cb =
             RobotBusC.ActionCb { data, len, outPhases, outCount, _ ->
@@ -304,12 +312,13 @@ class Node : AutoCloseable {
         return ActionServerHandle(
             ptr,
             Errors.checkPtr(
-                RobotBusC.Holder.INSTANCE.robot_bus_node_create_action_server(
+                RobotBusC.Holder.INSTANCE.robot_bus_node_create_action_server_with_qos(
                     ptr,
                     actionName,
                     cb,
                     null,
                     group?.raw(),
+                    qosDepth,
                 ),
                 "create_action_server",
             ),
@@ -364,10 +373,15 @@ class Node : AutoCloseable {
         )
     }
 
-    fun createActionClient(actionName: String): ActionClient =
+    @JvmOverloads
+    fun createActionClient(actionName: String, qosDepth: Int = 0): ActionClient =
         ActionClient(
             Errors.checkPtr(
-                RobotBusC.Holder.INSTANCE.robot_bus_node_create_action_client(ptr, actionName),
+                RobotBusC.Holder.INSTANCE.robot_bus_node_create_action_client_with_qos(
+                    ptr,
+                    actionName,
+                    qosDepth,
+                ),
                 "create_action_client",
             ),
         )

@@ -700,11 +700,16 @@ class Node {
   /// Keep the returned handle; dropping it destroys the service.
   [[nodiscard]] ServiceHandle create_service(const char *service_name, ServiceHandler handler,
                                              const CallbackGroup *group = nullptr) {
+    return create_service(service_name, std::move(handler), group, 0);
+  }
+
+  [[nodiscard]] ServiceHandle create_service(const char *service_name, ServiceHandler handler,
+                                             const CallbackGroup *group, int32_t qos_depth) {
     svc_cbs_.push_back(std::make_unique<ServiceHandler>(std::move(handler)));
     ServiceHandler *held = svc_cbs_.back().get();
     return ServiceHandle(
         n_, static_cast<RobotBusServiceHandle *>(check_ptr(
-                robot_bus_node_create_service(
+                robot_bus_node_create_service_with_qos(
                     n_, service_name,
                     [](const uint8_t *data, size_t len, uint8_t **out_data, size_t *out_len,
                        void *user) -> int {
@@ -720,24 +725,33 @@ class Node {
                         return -1;
                       }
                     },
-                    held, group ? group->raw() : nullptr),
+                    held, group ? group->raw() : nullptr, qos_depth),
                 "create_service")));
   }
 
-  ServiceClient create_client(const char *service_name) {
-    return ServiceClient(static_cast<RobotBusServiceClient *>(
-        check_ptr(robot_bus_node_create_client(n_, service_name), "create_client")));
+  ServiceClient create_client(const char *service_name) { return create_client(service_name, 0); }
+
+  ServiceClient create_client(const char *service_name, int32_t qos_depth) {
+    return ServiceClient(static_cast<RobotBusServiceClient *>(check_ptr(
+        robot_bus_node_create_client_with_qos(n_, service_name, qos_depth), "create_client")));
   }
 
   /// Keep the returned handle; dropping it destroys the action server.
   [[nodiscard]] ActionServerHandle create_action_server(const char *action_name,
                                                         ActionHandler handler,
                                                         const CallbackGroup *group = nullptr) {
+    return create_action_server(action_name, std::move(handler), group, 0);
+  }
+
+  [[nodiscard]] ActionServerHandle create_action_server(const char *action_name,
+                                                        ActionHandler handler,
+                                                        const CallbackGroup *group,
+                                                        int32_t qos_depth) {
     action_cbs_.push_back(std::make_unique<ActionHandler>(std::move(handler)));
     ActionHandler *held = action_cbs_.back().get();
     return ActionServerHandle(
         n_, static_cast<RobotBusActionServerHandle *>(check_ptr(
-                robot_bus_node_create_action_server(
+                robot_bus_node_create_action_server_with_qos(
                     n_, action_name,
                     [](const uint8_t *data, size_t len, RobotBusActionPhase **out_phases,
                        size_t *out_count, void *user) -> int {
@@ -768,13 +782,18 @@ class Node {
                         return -1;
                       }
                     },
-                    held, group ? group->raw() : nullptr),
+                    held, group ? group->raw() : nullptr, qos_depth),
                 "create_action_server")));
   }
 
   ActionClient create_action_client(const char *action_name) {
+    return create_action_client(action_name, 0);
+  }
+
+  ActionClient create_action_client(const char *action_name, int32_t qos_depth) {
     return ActionClient(static_cast<RobotBusActionClient *>(check_ptr(
-        robot_bus_node_create_action_client(n_, action_name), "create_action_client")));
+        robot_bus_node_create_action_client_with_qos(n_, action_name, qos_depth),
+        "create_action_client")));
   }
 
   void connect_action_client() {

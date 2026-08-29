@@ -87,11 +87,15 @@ internal interface RobotBusC : Library {
     fun robot_bus_node_create_timer(n: Pointer?, periodSecs: Double, callback: TimerCb, user: Pointer?, group: Pointer?): Pointer?
     fun robot_bus_node_cancel_timer(n: Pointer?, handle: Pointer?): Int
     fun robot_bus_node_create_service(n: Pointer?, name: String?, handler: ServiceCb, user: Pointer?, group: Pointer?): Pointer?
+    fun robot_bus_node_create_service_with_qos(n: Pointer?, name: String?, handler: ServiceCb, user: Pointer?, group: Pointer?, depth: Int): Pointer?
     fun robot_bus_node_destroy_service(n: Pointer?, handle: Pointer?): Int
     fun robot_bus_node_create_client(n: Pointer?, name: String?): Pointer?
+    fun robot_bus_node_create_client_with_qos(n: Pointer?, name: String?, depth: Int): Pointer?
     fun robot_bus_node_create_action_server(n: Pointer?, name: String?, handler: ActionCb, user: Pointer?, group: Pointer?): Pointer?
+    fun robot_bus_node_create_action_server_with_qos(n: Pointer?, name: String?, handler: ActionCb, user: Pointer?, group: Pointer?, depth: Int): Pointer?
     fun robot_bus_node_destroy_action_server(n: Pointer?, handle: Pointer?): Int
     fun robot_bus_node_create_action_client(n: Pointer?, name: String?): Pointer?
+    fun robot_bus_node_create_action_client_with_qos(n: Pointer?, name: String?, depth: Int): Pointer?
     fun robot_bus_node_connect_action_client(n: Pointer?): Int
     fun robot_bus_node_shutdown_handle(n: Pointer?): Pointer?
     fun robot_bus_node_shutdown(n: Pointer?): Int

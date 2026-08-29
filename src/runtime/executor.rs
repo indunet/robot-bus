@@ -459,6 +459,7 @@ impl Executor {
         callback_group: CallbackGroup,
         backend_endpoint: Option<&str>,
         identity: Option<&str>,
+        hwm: Option<HighWaterMark>,
     ) -> Result<u64> {
         self.ensure_open()?;
         if self.started {
@@ -472,6 +473,7 @@ impl Executor {
         };
         let id = self.next_service_id;
         self.next_service_id += 1;
+        let hwm = hwm.unwrap_or(self.rpc_hwm);
         let reg = ServiceRegistration::create(
             id,
             self.context.zmq(),
@@ -481,7 +483,7 @@ impl Executor {
             &endpoint,
             identity,
             self.heartbeat_interval_ms,
-            self.rpc_hwm,
+            hwm,
         )?;
         log::info!(
             "service worker {:?} registered for {service_name} on {endpoint}",
@@ -526,6 +528,7 @@ impl Executor {
         callback_group: CallbackGroup,
         backend_endpoint: Option<&str>,
         identity: Option<&str>,
+        hwm: Option<HighWaterMark>,
     ) -> Result<u64> {
         self.ensure_open()?;
         if self.started {
@@ -539,6 +542,7 @@ impl Executor {
         };
         let id = self.next_action_id;
         self.next_action_id += 1;
+        let hwm = hwm.unwrap_or(self.action_hwm);
         let reg = ActionRegistration::create(
             id,
             self.context.zmq(),
@@ -548,7 +552,7 @@ impl Executor {
             &endpoint,
             identity,
             self.heartbeat_interval_ms,
-            self.action_hwm,
+            hwm,
         )?;
         log::info!(
             "action worker {:?} registered for {action_name} on {endpoint}",

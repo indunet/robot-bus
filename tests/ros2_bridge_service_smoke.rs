@@ -11,7 +11,7 @@ use std::time::{Duration, Instant};
 
 use rclrs::CreateBasicExecutor;
 use robot_bus::ros2_bridge::vendor::std_srvs::srv as ros_srv;
-use robot_bus::ros2_bridge::{Direction, Ros2Bridge, TriggerServiceMapper};
+use robot_bus::ros2_bridge::{Ros2Bridge, TopicQos, TriggerServiceMapper};
 use robot_bus::std_srvs::srv::v1::{Trigger, TriggerRequest, TriggerResponse};
 use robot_bus::{Node, NodeOptions, RobotBusBroker};
 use support::{ephemeral_robot_bus_config, lock_brokers};
@@ -51,10 +51,11 @@ fn trigger_ros2_to_bus_roundtrip() {
 
     let mut bridge = Ros2Bridge::new(format!("trigger_bridge_{}", std::process::id()))
         .bus_options(opts)
-        .service(&ros_svc, &bus_svc)
+        .service()
+        .from_ros(&ros_svc, TopicQos::keep_last(10).reliable())
+        .to_bus(&bus_svc, TopicQos::keep_last(8).best_effort())
         .mapper(TriggerServiceMapper)
         .timeout(Duration::from_secs(3))
-        .direction(Direction::Ros2ToBus)
         .add()
         .expect("add service")
         .build()
@@ -143,10 +144,11 @@ fn trigger_bus_to_ros2_roundtrip() {
 
     let mut bridge = Ros2Bridge::new(format!("trigger_b2r_bridge_{}", std::process::id()))
         .bus_options(opts.clone())
-        .service(&ros_svc, &bus_svc)
+        .service()
+        .from_bus(&bus_svc, TopicQos::keep_last(8).best_effort())
+        .to_ros(&ros_svc, TopicQos::keep_last(10).reliable())
         .mapper(TriggerServiceMapper)
         .timeout(Duration::from_secs(5))
-        .direction(Direction::BusToRos2)
         .add()
         .expect("add service")
         .build()

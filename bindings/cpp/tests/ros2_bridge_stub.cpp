@@ -12,6 +12,9 @@
 
 namespace {
 
+robot_bus::TopicQos ros_qos() { return robot_bus::TopicQos::keep_last(10).reliable(); }
+robot_bus::TopicQos bus_qos() { return robot_bus::TopicQos::keep_last(8).best_effort(); }
+
 struct AttachOnlyMapper : robot_bus::TopicMapper {
   const char *type_name() const override { return "test/msg/Dummy"; }
 };
@@ -23,7 +26,8 @@ bool throws_containing(const char *what, const std::string &haystack) {
 int test_lazy_builder() {
   try {
     auto b = robot_bus::Ros2Bridge::New("t")
-                 .route("/a", "/a")
+                 .from_ros("/a", ros_qos())
+                 .to_bus("/a", bus_qos())
                  .mapper(robot_bus::StdMsgsStringMapper{})
                  .lazy()
                  .add();
@@ -35,24 +39,8 @@ int test_lazy_builder() {
 
   try {
     auto b = robot_bus::Ros2Bridge::New("t")
-                 .route("/a", "/a")
-                 .mapper(robot_bus::StdMsgsStringMapper{})
-                 .direction(robot_bus::Direction::BusToRos2)
-                 .lazy()
-                 .add();
-    (void)b;
-    std::fprintf(stderr, "expected .lazy() + BusToRos2 to throw\n");
-    return 1;
-  } catch (const robot_bus::Error &e) {
-    if (!throws_containing("lazy", e.what()) || !throws_containing("Ros2ToBus", e.what())) {
-      std::fprintf(stderr, "wrong BusToRos2 lazy error: %s\n", e.what());
-      return 1;
-    }
-  }
-
-  try {
-    auto b = robot_bus::Ros2Bridge::New("t")
-                 .route("/a", "/a")
+                 .from_ros("/a", ros_qos())
+                 .to_bus("/a", bus_qos())
                  .mapper(std::make_shared<AttachOnlyMapper>())
                  .lazy()
                  .add();
@@ -73,30 +61,56 @@ int test_lazy_builder() {
 int test_qos_builder() {
   try {
     auto b = robot_bus::Ros2Bridge::New("t")
-                 .route("/a", "/a")
+                 .from_ros("/a", robot_bus::TopicQos::keep_last(20).best_effort())
+                 .to_bus("/a", robot_bus::TopicQos::keep_last(4).best_effort())
                  .mapper(robot_bus::StdMsgsStringMapper{})
-                 .qos_depth(20)
-                 .best_effort()
                  .add();
     (void)b;
   } catch (const robot_bus::Error &e) {
-    std::fprintf(stderr, "qos_depth path threw: %s\n", e.what());
+    std::fprintf(stderr, "qos path threw: %s\n", e.what());
     return 1;
   }
 
   try {
     auto b = robot_bus::Ros2Bridge::New("t")
-                 .route("/cam", "/cam")
-                 .mapper(robot_bus::SensorMsgsImageMapper{})
-                 .sensor_data()
+                 .from_ros("/a", ros_qos())
+                 .to_bus("/a", robot_bus::TopicQos::keep_last(8).reliable())
+                 .mapper(robot_bus::StdMsgsStringMapper{})
                  .add();
     (void)b;
-  } catch (const robot_bus::Error &e) {
-    std::fprintf(stderr, "sensor_data path threw: %s\n", e.what());
+    std::fprintf(stderr, "expected bus reliable TopicQos to throw\n");
     return 1;
+  } catch (const robot_bus::Error &e) {
+    if (!throws_containing("best_effort", e.what())) {
+      std::fprintf(stderr, "wrong bus reliable error: %s\n", e.what());
+      return 1;
+    }
   }
 
   std::printf("qos builder checks ok\n");
+  return 0;
+}
+
+int test_service_builder() {
+  try {
+    auto b = robot_bus::Ros2Bridge::New("t")
+                 .service()
+                 .from_ros("/a", ros_qos())
+                 .to_bus("/a", bus_qos())
+                 .mapper(robot_bus::TriggerServiceMapper{})
+                 .timeout(2.0)
+                 .add()
+                 .action()
+                 .from_bus("/b", bus_qos())
+                 .to_ros("/b", ros_qos())
+                 .mapper(robot_bus::FibonacciActionMapper{})
+                 .add();
+    (void)b;
+  } catch (const robot_bus::Error &e) {
+    std::fprintf(stderr, "service/action path threw: %s\n", e.what());
+    return 1;
+  }
+  std::printf("service builder checks ok\n");
   return 0;
 }
 
@@ -109,6 +123,9 @@ int main() {
   if (int rc = test_qos_builder()) {
     return rc;
   }
+  if (int rc = test_service_builder()) {
+    return rc;
+  }
 
   if (robot_bus::ros2_available()) {
 #ifdef ROBOT_BUS_HAS_ROS2
@@ -117,7 +134,8 @@ int main() {
       robot_bus::Broker broker(opts);
       auto bridge = robot_bus::Ros2Bridge::New("cpp_ros2_smoke")
                         .bus_ipc()
-                        .route("/rb_cpp_smoke_chatter", "/rb_cpp_smoke_chatter")
+                        .from_ros("/rb_cpp_smoke_chatter", ros_qos())
+                        .to_bus("/rb_cpp_smoke_chatter", bus_qos())
                         .mapper(robot_bus::StdMsgsStringMapper{})
                         .add()
                         .build();

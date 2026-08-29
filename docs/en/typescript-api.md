@@ -112,7 +112,7 @@ const sub = node.createSubscription(
   Imu,
 );
 // node.destroySubscription(sub)
-// createWallTimer; optional qosDepth; waitForMessage / waitForService
+// createWallTimer; optional qosDepth on topics / services / actions; waitForMessage / waitForService
 // listParameters() → { names, prefixes }; listAllParameters()
 
 pub.publish(

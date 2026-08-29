@@ -125,14 +125,15 @@ class TypedServiceClient {
 };
 
 template <typename Req, typename Resp>
-TypedServiceClient<Req, Resp> create_client(Node &node, const char *service_name) {
-  return TypedServiceClient<Req, Resp>(node.create_client(service_name));
+TypedServiceClient<Req, Resp> create_client(Node &node, const char *service_name,
+                                            int32_t qos_depth = 0) {
+  return TypedServiceClient<Req, Resp>(node.create_client(service_name, qos_depth));
 }
 
 template <typename Req, typename Resp>
 [[nodiscard]] ServiceHandle create_service(Node &node, const char *service_name,
                              std::function<Resp(const Req &)> handler,
-                             const CallbackGroup *group = nullptr) {
+                             const CallbackGroup *group = nullptr, int32_t qos_depth = 0) {
   return node.create_service(
       service_name,
       [handler = std::move(handler)](BytesView body) {
@@ -142,7 +143,7 @@ template <typename Req, typename Resp>
         }
         return detail::encode_message_lite(handler(req));
       },
-      group);
+      group, qos_depth);
 }
 
 template <typename Goal, typename Feedback, typename Result>
@@ -199,8 +200,10 @@ class TypedActionClient {
 
 template <typename Goal, typename Feedback, typename Result>
 TypedActionClient<Goal, Feedback, Result> create_action_client(Node &node,
-                                                               const char *action_name) {
-  return TypedActionClient<Goal, Feedback, Result>(node.create_action_client(action_name));
+                                                               const char *action_name,
+                                                               int32_t qos_depth = 0) {
+  return TypedActionClient<Goal, Feedback, Result>(
+      node.create_action_client(action_name, qos_depth));
 }
 
 /// Typed action server. Handler returns `(phase, body)` pairs; use `encode_pb(feedback|result)`.
@@ -208,7 +211,7 @@ template <typename Goal>
 [[nodiscard]] ActionServerHandle create_action_server(
     Node &node, const char *action_name,
     std::function<std::vector<std::pair<std::string, std::vector<uint8_t>>>(const Goal &)> handler,
-    const CallbackGroup *group = nullptr) {
+    const CallbackGroup *group = nullptr, int32_t qos_depth = 0) {
   return node.create_action_server(
       action_name,
       [handler = std::move(handler)](BytesView body) {
@@ -218,7 +221,7 @@ template <typename Goal>
         }
         return handler(goal);
       },
-      group);
+      group, qos_depth);
 }
 
 }  // namespace robot_bus

@@ -303,19 +303,34 @@ ROBOT_BUS_API int robot_bus_node_cancel_timer(RobotBusNode *n, const RobotBusTim
 ROBOT_BUS_API RobotBusServiceHandle *robot_bus_node_create_service(
     RobotBusNode *n, const char *service_name, RobotBusServiceHandler handler, void *user,
     const RobotBusCallbackGroup *group);
+/** depth <= 0 keeps default RPC HWM; depth > 0 maps to KeepLast depth. */
+ROBOT_BUS_API RobotBusServiceHandle *robot_bus_node_create_service_with_qos(
+    RobotBusNode *n, const char *service_name, RobotBusServiceHandler handler, void *user,
+    const RobotBusCallbackGroup *group, int32_t depth);
 ROBOT_BUS_API int robot_bus_node_destroy_service(RobotBusNode *n, RobotBusServiceHandle *handle);
 ROBOT_BUS_API char *robot_bus_service_handle_name(const RobotBusServiceHandle *h);
 ROBOT_BUS_API RobotBusServiceClient *robot_bus_node_create_client(RobotBusNode *n,
                                                                   const char *service_name);
+/** depth <= 0 keeps default RPC HWM; depth > 0 maps to KeepLast depth. */
+ROBOT_BUS_API RobotBusServiceClient *robot_bus_node_create_client_with_qos(RobotBusNode *n,
+                                                                          const char *service_name,
+                                                                          int32_t depth);
 /** Returns opaque handle (NULL on error). */
 ROBOT_BUS_API RobotBusActionServerHandle *robot_bus_node_create_action_server(
     RobotBusNode *n, const char *action_name, RobotBusActionHandler handler, void *user,
     const RobotBusCallbackGroup *group);
+/** depth <= 0 keeps default action HWM; depth > 0 maps to KeepLast depth. */
+ROBOT_BUS_API RobotBusActionServerHandle *robot_bus_node_create_action_server_with_qos(
+    RobotBusNode *n, const char *action_name, RobotBusActionHandler handler, void *user,
+    const RobotBusCallbackGroup *group, int32_t depth);
 ROBOT_BUS_API int robot_bus_node_destroy_action_server(RobotBusNode *n,
                                                        RobotBusActionServerHandle *handle);
 ROBOT_BUS_API char *robot_bus_action_server_handle_name(const RobotBusActionServerHandle *h);
 ROBOT_BUS_API RobotBusActionClient *robot_bus_node_create_action_client(RobotBusNode *n,
                                                                         const char *action_name);
+/** depth <= 0 keeps default action HWM; depth > 0 maps to KeepLast depth. */
+ROBOT_BUS_API RobotBusActionClient *robot_bus_node_create_action_client_with_qos(
+    RobotBusNode *n, const char *action_name, int32_t depth);
 ROBOT_BUS_API int robot_bus_node_connect_action_client(RobotBusNode *n);
 ROBOT_BUS_API RobotBusShutdownHandle *robot_bus_node_shutdown_handle(RobotBusNode *n);
 ROBOT_BUS_API int robot_bus_node_shutdown(RobotBusNode *n);

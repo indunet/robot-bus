@@ -51,7 +51,7 @@ From the robot-bus project collect:
 - Topic / service / action **names** and protobuf type full names (`sensor_msgs.msg.v1.Imu`)
 - Custom `.proto` under the app or only built-in bus types
 - Local parameters / YAML (`ros__parameters`) — note lack of remote param server on bus
-- QoS: only KeepLast depth on topics; reliability is best-effort — when moving to ROS, pick explicit QoS (often `SensorDataQoS` / reliable as appropriate)
+- QoS: KeepLast depth on topics, services, and actions; reliability is best-effort — when moving to ROS, pick explicit QoS (often `SensorDataQoS` / reliable as appropriate)
 - Any existing `ros2_bridge` usage (already half-migrated)
 
 Target ROS client library usually matches the bus language:
@@ -97,7 +97,7 @@ Reverse of [api-compare.md](../zh/api-compare.md).
 | Service client | `call(req, Some(timeout))` | `call` / async patterns per client lib |
 | Action | `send_goal` → GoalHandle → `result` / `cancel` | Same conceptual split; use rcl* action APIs |
 | Timer | `create_timer` | `create_wall_timer` / equivalent |
-| QoS | KeepLast depth only, best-effort | Full DDS profiles — **choose deliberately** |
+| QoS | KeepLast depth only (topic PUB/SUB HWM, service/action DEALER HWM), best-effort | Full DDS profiles — **choose deliberately** |
 | Params | local declare/get/set + YAML | declare/get/set + remote/CLI/launch overrides |
 
 ### Rust (rclrs) sketch
@@ -155,24 +155,26 @@ Use when Android/TS/Java clients remain on bus while Ubuntu nodes are ROS:
 ```text
 Ros2Bridge.new(name)
   .bus_tcp(...) | .bus_ipc() | .bus_discover(...)
-  .route(ros, bus).mapper(...).direction(BusToRos2|Ros2ToBus).add()
-  .service(...).mapper(...).add()
-  .action(...).mapper(...).add()
+  .from_bus(bus, TopicQos).to_ros(ros, TopicQos).mapper(...).add()
+  .from_ros(ros, TopicQos).to_bus(bus, TopicQos).mapper(...).lazy()?.add()
+  .service().from_bus(bus).to_ros(ros, TopicQos).mapper(...).add()
+  .action().from_bus(bus).to_ros(ros, TopicQos).mapper(...).add()
   .build()
   .spin()
 ```
 
 From [ros2-bridge.md](../zh/ros2-bridge.md):
 
-- Per-route direction only; **no `both`**
+- Topic endpoints are **name + `TopicQos`** (`keep_last(n).reliable()` or `.best_effort()`; bus must be `.best_effort()`)
+- Service / action: same `from_ros → to_bus` / `from_bus → to_ros` chain; `TopicQos` on the ROS name only; **no `both`**
 - Concrete mapper objects required
 - Built-in mappers for String, Image, Trigger, SetBool, Fibonacci; extend with typed converters for custom interfaces
 - Run with ROS sourced + broker up; language: Rust `features = ["ros2"]`, Python `rclpy`, C++ `robot_bus_ros2_*` / `ROBOT_BUS_HAS_ROS2`
 
-Pick direction from data ownership:
+Pick the chain from data ownership:
 
-- Bus publisher → ROS subscribers: `BusToRos2`
-- ROS publisher → bus subscribers: `Ros2ToBus`
+- Bus publisher / server → ROS: `from_bus → to_ros`
+- ROS publisher / server → bus: `from_ros → to_bus`
 
 ## 6. What usually needs redesign
 

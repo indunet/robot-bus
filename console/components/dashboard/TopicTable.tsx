@@ -1,7 +1,9 @@
 'use client'
 
+import { useMemo, useState } from 'react'
 import { type TopicInfo, fmtBytes, fmtNum, fmtRate, topicIsIdle } from '@/lib/mock-data'
 import { PanelHeader } from './BrokerOverview'
+import NameFilter, { nameMatches } from './NameFilter'
 import TruncateTip from './TruncateTip'
 import { LineChart, Line, ResponsiveContainer } from 'recharts'
 import { Radio } from 'lucide-react'
@@ -17,7 +19,15 @@ const COLS = 'grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)_104px_96px_80px_64px_64px
 
 export default function TopicTable({ topics, maxBodyHeight }: Props) {
   const { t, labelCase } = useI18n()
-  const sorted = [...topics].sort((a, b) => b.msgPerSec - a.msgPerSec)
+  const [query, setQuery] = useState('')
+  const sorted = useMemo(
+    () =>
+      [...topics]
+        .filter((topic) => nameMatches(query, topic.name, topic.typeName))
+        .sort((a, b) => b.msgPerSec - a.msgPerSec),
+    [topics, query],
+  )
+  const filtering = query.trim().length > 0
   const headers = [
     t('colTopic'),
     t('colType'),
@@ -34,8 +44,13 @@ export default function TopicTable({ topics, maxBodyHeight }: Props) {
       <PanelHeader
         icon={<Radio size={14} />}
         title={t('topicsTitle')}
-        sub={t('topicsActive', { n: topics.length })}
+        sub={
+          filtering
+            ? t('nameFilterHits', { n: sorted.length, total: topics.length })
+            : t('topicsActive', { n: topics.length })
+        }
         subClassName="text-bus-cyan"
+        trailing={<NameFilter value={query} onChange={setQuery} />}
       />
 
       <div className="overflow-x-auto bus-scroll flex-1 min-h-0">
@@ -57,7 +72,7 @@ export default function TopicTable({ topics, maxBodyHeight }: Props) {
           >
             {sorted.length === 0 ? (
               <div className="flex items-center justify-center h-14 text-bus-muted font-mono text-xs">
-                —
+                {filtering ? t('nameFilterEmpty') : '—'}
               </div>
             ) : (
               sorted.map((topic) => (

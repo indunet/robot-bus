@@ -194,16 +194,26 @@ interface RobotBusC extends Library {
     Pointer robot_bus_node_create_service(
             Pointer n, String serviceName, ServiceCb handler, Pointer user, Pointer group);
 
+    Pointer robot_bus_node_create_service_with_qos(
+            Pointer n, String serviceName, ServiceCb handler, Pointer user, Pointer group, int depth);
+
     int robot_bus_node_destroy_service(Pointer n, Pointer handle);
 
     Pointer robot_bus_node_create_client(Pointer n, String serviceName);
 
+    Pointer robot_bus_node_create_client_with_qos(Pointer n, String serviceName, int depth);
+
     Pointer robot_bus_node_create_action_server(
             Pointer n, String actionName, ActionCb handler, Pointer user, Pointer group);
+
+    Pointer robot_bus_node_create_action_server_with_qos(
+            Pointer n, String actionName, ActionCb handler, Pointer user, Pointer group, int depth);
 
     int robot_bus_node_destroy_action_server(Pointer n, Pointer handle);
 
     Pointer robot_bus_node_create_action_client(Pointer n, String actionName);
+
+    Pointer robot_bus_node_create_action_client_with_qos(Pointer n, String actionName, int depth);
 
     int robot_bus_node_connect_action_client(Pointer n);
 

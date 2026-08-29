@@ -43,7 +43,7 @@ pip install robot-bus
 * Rust
 
 ```toml
-robot-bus = "2.0.0"
+robot-bus = "2.1.0"
 ```
 
 * npm
@@ -58,11 +58,17 @@ npm install robot-bus
 <dependency>
     <groupId>org.indunet</groupId>
     <artifactId>robot-bus</artifactId>
-    <version>2.0.0</version>
+    <version>2.1.0</version>
 </dependency>
 ```
 
-C++安装包（DEB / MSI）与 Android（`org.indunet:robot-bus-android`）见 [§3.6](#36-其他语言)。
+* Gradle（Android）
+
+```kotlin
+implementation("org.indunet:robot-bus-android:2.1.0")
+```
+
+C++安装包（DEB / MSI）见 [§3.6](#36-其他语言)。
 
 
 ## *1. 典型应用场景*
@@ -250,9 +256,9 @@ robot-bus-broker                    # 另一个终端
 ```python
 import robot_bus
 from robot_bus.ros2_bridge import (
-    Direction,
     Ros2Bridge,
     StdMsgsStringMapper,
+    TopicQos,
     TriggerServiceMapper,
 )
 
@@ -261,11 +267,13 @@ assert robot_bus.ros2_available()
 bridge = (
     Ros2Bridge.new("ros_bridge")
     .bus_tcp("localhost")
-    .route("/chatter", "/chatter")
+    .from_ros("/chatter", TopicQos.keep_last(10).reliable())
+    .to_bus("/chatter", TopicQos.keep_last(8).best_effort())
     .mapper(StdMsgsStringMapper())
-    .direction(Direction.Ros2ToBus)
     .add()
-    .service("/reset", "/reset")
+    .service()
+    .from_ros("/reset", TopicQos.keep_last(10).reliable())
+    .to_bus("/reset", TopicQos.keep_last(8).best_effort())
     .mapper(TriggerServiceMapper())
     .add()
     .build()

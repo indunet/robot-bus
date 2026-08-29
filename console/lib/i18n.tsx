@@ -136,6 +136,12 @@ const en = {
   actRateSub: 'Last {n}m runs/s',
   actRateSeries: 'RUNS/S',
 
+  nameFilterPlaceholder: 'Filter by name',
+  nameFilterAria: 'Filter by name',
+  nameFilterClear: 'Clear filter',
+  nameFilterEmpty: 'No matches',
+  nameFilterHits: '{n}/{total}',
+
   topicsTitle: 'TOPICS',
   topicsActive: '{n} active',
   colTopic: 'TOPIC',
@@ -339,6 +345,12 @@ const zh: Record<MessageKey, string> = {
   actRateTitle: '动作运行',
   actRateSub: '近 {n} 分钟 运行/秒',
   actRateSeries: '运行/秒',
+
+  nameFilterPlaceholder: '按名称过滤',
+  nameFilterAria: '按名称过滤',
+  nameFilterClear: '清除过滤',
+  nameFilterEmpty: '无匹配',
+  nameFilterHits: '{n}/{total}',
 
   topicsTitle: '话题',
   topicsActive: '{n} 活跃',

@@ -44,14 +44,16 @@ pub mod dynamic_rpc {
 }
 
 pub use builder::{
-    ActionRouteBuilder, IntoActionMapper, IntoServiceMapper, IntoTopicMapper, Ros2Bridge,
-    Ros2BridgeBuilder, RouteBuilder, ServiceRouteBuilder, ACTION_CALL_TIMEOUT,
-    SERVICE_CALL_TIMEOUT,
+    Action, ActionFromBus, ActionFromRos, ActionPair, ActionReady, BusToRos2Ready, FromBus,
+    FromBusToRos, FromRos, FromRosToBus, IntoActionMapper, IntoServiceMapper, IntoTopicMapper,
+    Ros2Bridge, Ros2BridgeBuilder, Ros2ToBusReady, Service, ServiceFromBus, ServiceFromRos,
+    ServicePair, ServiceReady, ACTION_CALL_TIMEOUT, SERVICE_CALL_TIMEOUT,
 };
 pub use mapper::{
     lookup_topic_mapper, lookup_topic_mapper_arc, registered_topic_types, ActionMapper,
-    ActionWireContext, Direction, ServiceMapper, ServiceWireContext, TopicMapper, TopicRouteQos,
-    TopicWireContext, TypedActionMapper, TypedServiceMapper, TypedTopicMapper,
+    ActionWireContext, Direction, ServiceMapper, ServiceWireContext, TopicMapper, TopicQos,
+    TopicQosKeepLast, TopicReliability, TopicWireContext, TypedActionMapper, TypedServiceMapper,
+    TypedTopicMapper,
 };
 pub use mappers::action_bridges::FibonacciActionMapper;
 pub use mappers::service_bridges::{SetBoolServiceMapper, TriggerServiceMapper};

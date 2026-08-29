@@ -33,15 +33,50 @@ except ImportError:  # pragma: no cover - CI uses pytest
                 raise SystemExit(0) from err
 
 
-def test_builder_requires_mapper():
-    from robot_bus.ros2_bridge import Ros2Bridge
+def _qos_ros():
+    from robot_bus.ros2_bridge import TopicQos
 
-    with pytest.raises(ValueError, match="mapper"):
-        Ros2Bridge.new("t").route("/a", "/a").add()
+    return TopicQos.keep_last(10).reliable()
+
+
+def _qos_bus():
+    from robot_bus.ros2_bridge import TopicQos
+
+    return TopicQos.keep_last(8).best_effort()
+
+
+class Dummy:
+    def type_name(self) -> str:
+        return "test/msg/Dummy"
+
+    def ros_msg_type(self):
+        return object
+
+    def ros_to_bus(self, _msg) -> bytes:
+        return b""
+
+    def bus_to_ros(self, _payload: bytes):
+        return None
+
+
+def test_topic_qos_requires_reliability():
+    from robot_bus.ros2_bridge import TopicQos
+
+    q = TopicQos.keep_last(10).reliable()
+    assert q.depth == 10
+    assert q.is_reliable is True
+    be = TopicQos.keep_last(5).best_effort()
+    assert be.is_best_effort is True
+
+
+def test_incomplete_topic_qos_rejected():
+    from robot_bus.ros2_bridge import Ros2Bridge, TopicQos
+
+    with pytest.raises(TypeError, match="TopicQos"):
+        Ros2Bridge.new("t").from_ros("/a", TopicQos.keep_last(10))
 
 
 def test_builder_accepts_concrete_mappers_without_build():
-    # Importing mappers pulls ROS message packages; skip if unsourced.
     pytest.importorskip("std_msgs")
     pytest.importorskip("std_srvs")
     from robot_bus.ros2_bridge import (
@@ -52,10 +87,13 @@ def test_builder_accepts_concrete_mappers_without_build():
 
     b = (
         Ros2Bridge.new("t")
-        .route("/chatter", "/chatter")
+        .from_ros("/chatter", _qos_ros())
+        .to_bus("/chatter", _qos_bus())
         .mapper(StdMsgsStringMapper())
         .add()
-        .service("/reset", "/reset")
+        .service()
+        .from_ros("/reset", _qos_ros())
+        .to_bus("/reset", _qos_bus())
         .mapper(TriggerServiceMapper())
         .timeout(2.0)
         .add()
@@ -67,20 +105,13 @@ def test_builder_accepts_concrete_mappers_without_build():
 def test_lazy_defaults_off():
     from robot_bus.ros2_bridge import Direction, Ros2Bridge
 
-    class Dummy:
-        def type_name(self) -> str:
-            return "test/msg/Dummy"
-
-        def ros_msg_type(self):
-            return object
-
-        def ros_to_bus(self, _msg) -> bytes:
-            return b""
-
-        def bus_to_ros(self, _payload: bytes):
-            return None
-
-    b = Ros2Bridge.new("t").route("/a", "/a").mapper(Dummy()).add()
+    b = (
+        Ros2Bridge.new("t")
+        .from_ros("/a", _qos_ros())
+        .to_bus("/a", _qos_bus())
+        .mapper(Dummy())
+        .add()
+    )
     assert b._routes[0]["lazy"] is False
     assert b._routes[0]["direction"] == Direction.Ros2ToBus
 
@@ -88,49 +119,30 @@ def test_lazy_defaults_off():
 def test_lazy_opt_in_ros2_to_bus():
     from robot_bus.ros2_bridge import Direction, Ros2Bridge
 
-    class Dummy:
-        def type_name(self) -> str:
-            return "test/msg/Dummy"
-
-        def ros_msg_type(self):
-            return object
-
-        def ros_to_bus(self, _msg) -> bytes:
-            return b""
-
-        def bus_to_ros(self, _payload: bytes):
-            return None
-
-    b = Ros2Bridge.new("t").route("/cam", "/cam").mapper(Dummy()).lazy().add()
+    b = (
+        Ros2Bridge.new("t")
+        .from_ros("/cam", _qos_ros())
+        .to_bus("/cam", _qos_bus())
+        .mapper(Dummy())
+        .lazy()
+        .add()
+    )
     assert b._routes[0]["lazy"] is True
     assert b._routes[0]["direction"] == Direction.Ros2ToBus
 
 
-def test_lazy_rejects_bus_to_ros2():
+def test_from_bus_to_ros():
     from robot_bus.ros2_bridge import Direction, Ros2Bridge
 
-    class Dummy:
-        def type_name(self) -> str:
-            return "test/msg/Dummy"
-
-        def ros_msg_type(self):
-            return object
-
-        def ros_to_bus(self, _msg) -> bytes:
-            return b""
-
-        def bus_to_ros(self, _payload: bytes):
-            return None
-
-    with pytest.raises(ValueError, match="lazy"):
-        (
-            Ros2Bridge.new("t")
-            .route("/a", "/a")
-            .mapper(Dummy())
-            .direction(Direction.BusToRos2)
-            .lazy()
-            .add()
-        )
+    b = (
+        Ros2Bridge.new("t")
+        .from_bus("/a", _qos_bus())
+        .to_ros("/a", _qos_ros())
+        .mapper(Dummy())
+        .add()
+    )
+    assert b._routes[0]["direction"] == Direction.BusToRos2
+    assert b._routes[0]["lazy"] is False
 
 
 def test_lazy_rejects_attach_only_mapper():
@@ -144,31 +156,27 @@ def test_lazy_rejects_attach_only_mapper():
             raise AssertionError("should not attach during add()")
 
     with pytest.raises(ValueError, match="lazy"):
-        Ros2Bridge.new("t").route("/a", "/a").mapper(AttachOnly()).lazy().add()
+        (
+            Ros2Bridge.new("t")
+            .from_ros("/a", _qos_ros())
+            .to_bus("/a", _qos_bus())
+            .mapper(AttachOnly())
+            .lazy()
+            .add()
+        )
 
 
 def test_lazy_and_eager_routes_independent():
     from robot_bus.ros2_bridge import Ros2Bridge
 
-    class Dummy:
-        def type_name(self) -> str:
-            return "test/msg/Dummy"
-
-        def ros_msg_type(self):
-            return object
-
-        def ros_to_bus(self, _msg) -> bytes:
-            return b""
-
-        def bus_to_ros(self, _payload: bytes):
-            return None
-
     b = (
         Ros2Bridge.new("t")
-        .route("/a", "/a")
+        .from_ros("/a", _qos_ros())
+        .to_bus("/a", _qos_bus())
         .mapper(Dummy())
         .add()
-        .route("/b", "/b")
+        .from_ros("/b", _qos_ros())
+        .to_bus("/b", _qos_bus())
         .mapper(Dummy())
         .lazy()
         .add()
@@ -177,77 +185,115 @@ def test_lazy_and_eager_routes_independent():
     assert b._routes[1]["lazy"] is True
 
 
-def test_qos_defaults_off():
-    from robot_bus.ros2_bridge import Ros2Bridge
+def test_qos_stored_per_endpoint():
+    from robot_bus.ros2_bridge import Ros2Bridge, TopicQos
 
-    class Dummy:
+    ros = TopicQos.keep_last(20).best_effort()
+    bus = TopicQos.keep_last(4).best_effort()
+    b = Ros2Bridge.new("t").from_ros("/a", ros).to_bus("/a", bus).mapper(Dummy()).add()
+    assert b._routes[0]["ros_qos"] == ros
+    assert b._routes[0]["bus_qos"] == bus
+
+
+def test_bus_reliable_rejected():
+    from robot_bus.ros2_bridge import Ros2Bridge, TopicQos
+
+    with pytest.raises(ValueError, match="best_effort"):
+        (
+            Ros2Bridge.new("t")
+            .from_ros("/a", _qos_ros())
+            .to_bus("/a", TopicQos.keep_last(8).reliable())
+            .mapper(Dummy())
+            .add()
+        )
+
+
+def test_service_from_bus_to_ros():
+    from robot_bus.ros2_bridge import Direction, Ros2Bridge
+
+    class DummyService:
         def type_name(self) -> str:
-            return "test/msg/Dummy"
-
-        def ros_msg_type(self):
-            return object
-
-        def ros_to_bus(self, _msg) -> bytes:
-            return b""
-
-        def bus_to_ros(self, _payload: bytes):
-            return None
-
-    b = Ros2Bridge.new("t").route("/a", "/a").mapper(Dummy()).add()
-    assert b._routes[0]["qos_depth"] is None
-    assert b._routes[0]["best_effort"] is False
-    assert b._routes[0]["sensor_data"] is False
-
-
-def test_qos_depth_and_best_effort():
-    from robot_bus.ros2_bridge import Ros2Bridge
-
-    class Dummy:
-        def type_name(self) -> str:
-            return "test/msg/Dummy"
-
-        def ros_msg_type(self):
-            return object
-
-        def ros_to_bus(self, _msg) -> bytes:
-            return b""
-
-        def bus_to_ros(self, _payload: bytes):
-            return None
+            return "test/srv/Dummy"
 
     b = (
         Ros2Bridge.new("t")
-        .route("/a", "/a")
-        .mapper(Dummy())
-        .qos_depth(20)
-        .best_effort()
+        .service()
+        .from_bus("/a", _qos_bus())
+        .to_ros("/a", _qos_ros())
+        .mapper(DummyService())
+        .timeout(1.0)
         .add()
     )
-    assert b._routes[0]["qos_depth"] == 20
-    assert b._routes[0]["best_effort"] is True
-    assert b._routes[0]["sensor_data"] is False
+    assert b._services[0]["direction"] == Direction.BusToRos2
+    assert b._services[0]["timeout"] == 1.0
+    assert b._services[0]["ros_qos"] == _qos_ros()
+    assert b._services[0]["bus_qos"] == _qos_bus()
 
 
-def test_qos_sensor_data():
-    from robot_bus.ros2_bridge import Ros2Bridge
+def test_action_stores_ros_qos():
+    from robot_bus.ros2_bridge import Direction, Ros2Bridge
 
-    class Dummy:
+    class DummyAction:
         def type_name(self) -> str:
-            return "test/msg/Dummy"
+            return "test/action/Dummy"
 
-        def ros_msg_type(self):
-            return object
+    b = (
+        Ros2Bridge.new("t")
+        .action()
+        .from_ros("/f", _qos_ros())
+        .to_bus("/f", _qos_bus())
+        .mapper(DummyAction())
+        .add()
+    )
+    assert b._actions[0]["direction"] == Direction.Ros2ToBus
+    assert b._actions[0]["ros_qos"] == _qos_ros()
+    assert b._actions[0]["bus_qos"] == _qos_bus()
 
-        def ros_to_bus(self, _msg) -> bytes:
-            return b""
 
-        def bus_to_ros(self, _payload: bytes):
-            return None
+def test_service_qos_required_on_ros_endpoint():
+    from robot_bus.ros2_bridge import Ros2Bridge, TopicQos
 
-    b = Ros2Bridge.new("t").route("/cam", "/cam").mapper(Dummy()).sensor_data().add()
-    assert b._routes[0]["qos_depth"] == 5
-    assert b._routes[0]["best_effort"] is True
-    assert b._routes[0]["sensor_data"] is True
+    class DummyService:
+        def type_name(self) -> str:
+            return "test/srv/Dummy"
+
+    with pytest.raises(TypeError, match="TopicQos"):
+        (
+            Ros2Bridge.new("t")
+            .service()
+            .from_ros("/a", TopicQos.keep_last(10))
+            .to_bus("/a", _qos_bus())
+            .mapper(DummyService())
+            .add()
+        )
+
+
+def test_service_qos_required_on_bus_endpoint():
+    from robot_bus.ros2_bridge import Ros2Bridge, TopicQos
+
+    class DummyService:
+        def type_name(self) -> str:
+            return "test/srv/Dummy"
+
+    with pytest.raises(TypeError, match="TopicQos"):
+        (
+            Ros2Bridge.new("t")
+            .service()
+            .from_ros("/a", _qos_ros())
+            .to_bus("/a", TopicQos.keep_last(8))
+            .mapper(DummyService())
+            .add()
+        )
+
+    with pytest.raises(ValueError, match="best_effort"):
+        (
+            Ros2Bridge.new("t")
+            .service()
+            .from_ros("/a", _qos_ros())
+            .to_bus("/a", TopicQos.keep_last(8).reliable())
+            .mapper(DummyService())
+            .add()
+        )
 
 
 def test_ros2_available_checks_rclpy():
@@ -262,15 +308,19 @@ def test_ros2_available_checks_rclpy():
 
 
 if __name__ == "__main__":
-    test_builder_requires_mapper()
+    test_topic_qos_requires_reliability()
+    test_incomplete_topic_qos_rejected()
     test_lazy_defaults_off()
     test_lazy_opt_in_ros2_to_bus()
-    test_lazy_rejects_bus_to_ros2()
+    test_from_bus_to_ros()
     test_lazy_rejects_attach_only_mapper()
     test_lazy_and_eager_routes_independent()
-    test_qos_defaults_off()
-    test_qos_depth_and_best_effort()
-    test_qos_sensor_data()
+    test_qos_stored_per_endpoint()
+    test_bus_reliable_rejected()
+    test_service_from_bus_to_ros()
+    test_service_qos_required_on_ros_endpoint()
+    test_service_qos_required_on_bus_endpoint()
+    test_action_stores_ros_qos()
     test_ros2_available_checks_rclpy()
     try:
         test_builder_accepts_concrete_mappers_without_build()

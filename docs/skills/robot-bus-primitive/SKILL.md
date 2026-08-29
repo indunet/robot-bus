@@ -60,12 +60,12 @@ Progress:
 | Spin | `node.spin()` (auto SingleThreadedExecutor) |
 | Publish | `create_publisher` / `create_publisher_with_qos` |
 | Subscribe | `create_subscription` / `_with_qos` — cb often `(topic, msg)` |
-| Service server | `create_service` |
-| Service client | `create_client` → `call(req, timeout)` |
-| Action server | `create_action_server` |
-| Action client | `create_action_client` → `send_goal` → GoalHandle (`result` / `cancel`) |
+| Service server | `create_service` / `create_service_with_qos` |
+| Service client | `create_client` / `create_client_with_qos` → `call(req, timeout)` |
+| Action server | `create_action_server` / `create_action_server_with_qos` |
+| Action client | `create_action_client` / `create_action_client_with_qos` → `send_goal` → GoalHandle (`result` / `cancel`) |
 | Timer | `create_timer(period, cb, group?)` |
-| QoS | Topic only: `QosProfile::keep_last(depth)` → ZMQ HWM; WS subscribe → gateway queue; WS publish ignored; reliability **best-effort** |
+| QoS | `QosProfile::keep_last(depth)` → ZMQ HWM (topic PUB/SUB; service / action DEALER); WS subscribe → gateway queue; WS publish ignored; reliability **best-effort** |
 | Groups | `MutuallyExclusive` (default) / `Reentrant` (+ MultiThreadedExecutor) |
 
 Topic / service / action **names are used as given** — prefer absolute paths like `/robot1/imu`.
@@ -264,6 +264,6 @@ handle = node.create_timer(0.1, lambda: print("tick"))  # seconds
 1. Node source with the requested create_* APIs
 2. Broker run instructions (CLI or inproc)
 3. Typed imports matching existing SDK packages
-4. Notes on QoS limits (topic KeepLast only) and cancel semantics if actions are used
+4. Notes on QoS limits (KeepLast depth only: topic PUB/SUB HWM, service/action DEALER HWM) and cancel semantics if actions are used
 
 Read language docs for C++/Java/TS/Android rather than inventing alternate APIs here.
