@@ -479,7 +479,7 @@ void wire_trigger(rclcpp::Node::SharedPtr ros_node, Node &bus_node, const Servic
           }
           return trigger_resp_ros_to_bus(*future.get());
         },
-        nullptr, route.bus_qos.depth()));
+        nullptr, route.bus_qos.depth())));
   }
 }
 
@@ -542,7 +542,7 @@ void wire_set_bool(rclcpp::Node::SharedPtr ros_node, Node &bus_node, const Servi
           }
           return set_bool_resp_ros_to_bus(*future.get());
         },
-        nullptr, route.bus_qos.depth()));
+        nullptr, route.bus_qos.depth())));
   }
 }
 
@@ -729,7 +729,7 @@ void wire_fibonacci_bus_to_ros(
         }
         return phases;
       },
-      nullptr, route.bus_qos.depth()));
+      nullptr, route.bus_qos.depth())));
 }
 
 void wire_action_builtin(

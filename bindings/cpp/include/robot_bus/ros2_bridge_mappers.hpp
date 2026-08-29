@@ -68,8 +68,8 @@ struct FibonacciActionMapper : ActionMapper {
   const char *type_name() const override { return "example_interfaces/action/Fibonacci"; }
 };
 
+}  // namespace robot_bus
+
 #ifdef ROBOT_BUS_HAS_ROS2
 #include <robot_bus/ros2_bridge_typed.hpp>
 #endif
-
-}  // namespace robot_bus

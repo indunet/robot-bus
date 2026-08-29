@@ -129,7 +129,7 @@ class TypedServiceMapper : public ServiceMapper {
             }
             return self->ros_resp_to_bus(*future.get());
           },
-          nullptr, ctx.bus_qos.depth()));
+          nullptr, ctx.bus_qos.depth())));
     }
   }
 
@@ -274,7 +274,7 @@ class TypedActionMapper : public ActionMapper {
             }
             return phases;
           },
-          nullptr, ctx.bus_qos.depth()));
+          nullptr, ctx.bus_qos.depth())));
     }
   }
 };
