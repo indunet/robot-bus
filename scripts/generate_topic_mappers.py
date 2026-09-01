@@ -2,8 +2,14 @@
 """Generate typed ROS↔protobuf topic mappers and ros-env-shim message stubs.
 
 Reads proto/*/msg/v1/*.proto plus existing mapper type_name() strings, then
-rewrites src/ros2_bridge/mappers/<pkg>/<msg>.rs (except gold samples) and
-third_party/ros-env-shim/src/generated_msgs.rs.
+rewrites:
+
+- Rust: src/ros2_bridge/mappers/<pkg>/<msg>.rs (except gold samples)
+- Python: bindings/python/robot_bus/ros2_bridge/mappers/<pkg>/<msg>.py
+- C++: bindings/cpp/include/robot_bus/ros2_bridge/mappers/<pkg>/<msg>.hpp
+- Shim: third_party/ros-env-shim/src/generated_msgs.rs
+
+Service/action builtins (Trigger / SetBool / Fibonacci) stay hand-written.
 """
 
 from __future__ import annotations
@@ -103,6 +109,7 @@ class Msg:
     ros_type: str
     package: str
     name: str
+    proto_stem: str = ""
     fields: list[Field] = field(default_factory=list)
 
 
@@ -205,6 +212,7 @@ def parse_proto_file(path: Path, enum_names: set[str]) -> list[Msg]:
                         ros_type=f"{package}/msg/{name}",
                         package=package,
                         name=name,
+                        proto_stem=path.stem,
                         fields=parse_fields(body, package, enum_names),
                     )
                 )
@@ -466,20 +474,22 @@ def emit_mapper(
     to_ros_body = "\n".join(to_ros_fields)
     fn_msg = "msg" if msg.fields else "_msg"
     fn_bus = "bus" if msg.fields else "_bus"
+    if msg.fields:
+        to_bus_init = f"{bus_ty} {{\n{to_bus_body}\n    }}"
+        to_ros_init = f"{ros_ty} {{\n{to_ros_body}\n    }}"
+    else:
+        to_bus_init = f"{bus_ty} {{}}"
+        to_ros_init = f"{ros_ty} {{}}"
     return f'''//! Typed mapper for `{msg.ros_type}`.
 
 use crate::ros2_bridge::mapper::TypedTopicMapper;
 
 pub(crate) fn {fn}_to_bus({fn_msg}: {ros_ty}) -> {bus_ty} {{
-    {bus_ty} {{
-{to_bus_body}
-    }}
+    {to_bus_init}
 }}
 
 pub(crate) fn {fn}_to_ros({fn_bus}: {bus_ty}) -> {ros_ty} {{
-    {ros_ty} {{
-{to_ros_body}
-    }}
+    {to_ros_init}
 }}
 
 #[derive(Clone, Copy, Debug, Default)]
@@ -587,6 +597,547 @@ def emit_shim(msgs: list[Msg]) -> str:
     return "\n".join(chunks)
 
 
+PY_MAPPERS = ROOT / "bindings" / "python" / "robot_bus" / "ros2_bridge" / "mappers"
+CPP_MAPPERS = ROOT / "bindings" / "cpp" / "include" / "robot_bus" / "ros2_bridge" / "mappers"
+CPP_CONVERT = CPP_MAPPERS / "convert.hpp"
+
+PY_GOLD_FILES = {
+    PY_MAPPERS / "string.py",
+    PY_MAPPERS / "image.py",
+}
+PY_GOLD_TYPES = {
+    "std_msgs/msg/String",
+    "sensor_msgs/msg/Image",
+}
+CPP_GOLD_TYPES = set(PY_GOLD_TYPES)
+
+OPTIONAL_CPP_PACKAGES = {
+    "nav2_msgs": "ROBOT_BUS_HAS_NAV2_MSGS",
+    "control_msgs": "ROBOT_BUS_HAS_CONTROL_MSGS",
+    "apriltag_msgs": "ROBOT_BUS_HAS_APRILTAG_MSGS",
+    "foxglove_msgs": "ROBOT_BUS_HAS_FOXGLOVE_MSGS",
+}
+
+KEEP_PY_MANUAL = (
+    "FibonacciActionMapper",
+    "SensorMsgsImageMapper",
+    "SetBoolServiceMapper",
+    "StdMsgsStringMapper",
+    "TriggerServiceMapper",
+)
+
+
+def py_mod_path(ros_type: str) -> tuple[str, str]:
+    pkg, _, name = ros_type.partition("/msg/")
+    return pkg, snake(name)
+
+
+def nested_py_import(ros_type: str) -> tuple[str, str]:
+    pkg, stem = py_mod_path(ros_type)
+    return f"robot_bus.ros2_bridge.mappers.{pkg}.{stem}", stem
+
+
+def py_ros_to_bus_value(msg: Msg, f: Field) -> str:
+    ros = f"msg.{f.name}"
+    key = (msg.ros_type, f.name)
+    if key in WRAPPER_CAST:
+        return f"int({ros})"
+    if key in OCTET_BOOL:
+        return f"bool({ros})"
+    if f.is_timestamp:
+        return f"_convert.time_to_timestamp({ros})"
+    if f.is_duration:
+        return f"_convert.duration_to_proto({ros})"
+    if f.is_enum:
+        return f"int({ros})"
+    if f.is_bytes and key in INT8_BYTES:
+        return f"_convert.i8_seq_to_bytes({ros})"
+    if f.is_bytes:
+        return f"bytes({ros})"
+    if f.is_string and f.repeated:
+        return f"[str(x) for x in {ros}]"
+    if f.is_string:
+        return f"str({ros})"
+    if f.nested_ros_type:
+        _, stem = nested_py_import(f.nested_ros_type)
+        fn = f"{stem}_to_bus"
+        if f.repeated:
+            return f"[{fn}(x) for x in {ros}]"
+        return f"{fn}({ros})"
+    if f.repeated:
+        return f"list({ros})"
+    return ros
+
+
+def py_bus_to_ros_value(msg: Msg, f: Field, bus_expr: str) -> str:
+    key = (msg.ros_type, f.name)
+    if key in WRAPPER_CAST:
+        return f"int({bus_expr})"
+    if key in OCTET_BOOL:
+        return f"int(bool({bus_expr}))"
+    if f.is_timestamp:
+        return f"_convert.timestamp_to_time({bus_expr})"
+    if f.is_duration:
+        return f"_convert.proto_to_duration({bus_expr})"
+    if f.is_enum:
+        return f"int({bus_expr})"
+    if f.is_bytes and key in INT8_BYTES:
+        return f"_convert.bytes_to_i8_seq({bus_expr})"
+    if f.is_bytes:
+        return f"bytes({bus_expr})"
+    if f.is_string and f.repeated:
+        return f"[str(x) for x in {bus_expr}]"
+    if f.is_string:
+        return f"str({bus_expr})"
+    if f.nested_ros_type:
+        _, stem = nested_py_import(f.nested_ros_type)
+        fn = f"{stem}_to_ros"
+        if f.repeated:
+            return f"[{fn}(x) for x in {bus_expr}]"
+        return f"{fn}({bus_expr})"
+    if f.repeated:
+        return f"list({bus_expr})"
+    return bus_expr
+
+
+def emit_python(struct: str, msg: Msg, existing: dict[str, tuple[Path, str]]) -> str:
+    pkg, stem = py_mod_path(msg.ros_type)
+    nested_imports = []
+    seen = set()
+    for f in msg.fields:
+        if f.nested_ros_type and f.nested_ros_type in existing:
+            mod, nstem = nested_py_import(f.nested_ros_type)
+            if nstem not in seen:
+                seen.add(nstem)
+                nested_imports.append(
+                    f"from {mod} import {nstem}_to_bus, {nstem}_to_ros"
+                )
+    nested_block = "\n".join(nested_imports)
+    to_bus_lines = []
+    to_ros_lines = []
+    for f in msg.fields:
+        val = py_ros_to_bus_value(msg, f)
+        if f.nested_ros_type and not f.repeated:
+            to_bus_lines.append(f"    bus.{f.name}.CopyFrom({val})")
+        elif f.nested_ros_type and f.repeated:
+            to_bus_lines.append(f"    bus.{f.name}.extend({val})")
+        elif f.repeated and not f.is_bytes:
+            to_bus_lines.append(f"    bus.{f.name}.extend({val})")
+        else:
+            to_bus_lines.append(f"    bus.{f.name} = {val}")
+        b = f"bus.{f.name}"
+        to_ros_lines.append(f"    out.{f.name} = {py_bus_to_ros_value(msg, f, b)}")
+    to_bus_body = "\n".join(to_bus_lines) if to_bus_lines else "    pass"
+    to_ros_body = "\n".join(to_ros_lines) if to_ros_lines else "    pass"
+    return f'''"""Generated mapper for `{msg.ros_type}`."""
+
+from __future__ import annotations
+
+from robot_bus.ros2_bridge.mappers import _convert
+{nested_block}
+
+def {stem}_to_bus(msg):
+    from robot_bus.{pkg}.msg.v1 import {msg.name} as BusMsg
+
+    bus = BusMsg()
+{to_bus_body}
+    return bus
+
+
+def {stem}_to_ros(bus):
+    from {pkg}.msg import {msg.name} as RosMsg
+
+    out = RosMsg()
+{to_ros_body}
+    return out
+
+
+class {struct}:
+    def type_name(self) -> str:
+        return "{msg.ros_type}"
+
+    def ros_msg_type(self):
+        from {pkg}.msg import {msg.name} as RosMsg
+
+        return RosMsg
+
+    def ros_to_bus(self, msg) -> bytes:
+        return {stem}_to_bus(msg).SerializeToString()
+
+    def bus_to_ros(self, payload: bytes):
+        from robot_bus.{pkg}.msg.v1 import {msg.name} as BusMsg
+
+        bus = BusMsg()
+        bus.ParseFromString(payload)
+        return {stem}_to_ros(bus)
+'''
+
+
+def cpp_pkg_guard(package: str) -> str | None:
+    return OPTIONAL_CPP_PACKAGES.get(package)
+
+
+def cpp_ros_include(msg: Msg) -> str:
+    _, stem = py_mod_path(msg.ros_type)
+    return f"<{msg.package}/msg/{stem}.hpp>"
+
+
+def cpp_bus_type(msg: Msg) -> str:
+    # C++ protobuf namespaces follow proto `package` (e.g. geometry_msgs.msg.v1),
+    # not the include prefix `robot_bus/`.
+    return f"::{msg.package}::msg::v1::{msg.name}"
+
+
+def cpp_ros_type(msg: Msg) -> str:
+    return f"::{msg.package}::msg::{msg.name}"
+
+
+def cpp_nested_fn(ros_type: str, existing: dict[str, tuple[Path, str]], kind: str) -> str:
+    path, _ = existing[ros_type]
+    stem = path.stem
+    ns = ros_type.split("/")[0]
+    return f"::robot_bus::ros2_bridge_mappers::{ns}::{stem}_{kind}"
+
+
+def cpp_to_bus_stmt(msg: Msg, f: Field, existing: dict[str, tuple[Path, str]]) -> str:
+    ros = f"msg.{f.name}"
+    key = (msg.ros_type, f.name)
+    setter = f.name
+    if key in WRAPPER_CAST:
+        return f"  bus.set_{setter}(static_cast<int32_t>({ros}));"
+    if key in OCTET_BOOL:
+        return f"  bus.set_{setter}({ros} != 0);"
+    if f.is_timestamp:
+        return f"  *bus.mutable_{setter}() = ::robot_bus::ros2_bridge_mappers::time_to_timestamp({ros});"
+    if f.is_duration:
+        return f"  *bus.mutable_{setter}() = ::robot_bus::ros2_bridge_mappers::duration_to_proto({ros});"
+    if f.is_enum:
+        return f"  bus.set_{setter}(static_cast<int32_t>({ros}));"
+    if f.is_bytes and key in INT8_BYTES:
+        return (
+            f"  {{\n    auto tmp = ::robot_bus::ros2_bridge_mappers::i8_seq_to_bytes({ros});\n"
+            f"    bus.set_{setter}(tmp.data(), tmp.size());\n  }}"
+        )
+    if f.is_bytes:
+        return (
+            f"  bus.set_{setter}(reinterpret_cast<const char *>({ros}.data()), {ros}.size());"
+        )
+    if f.is_string and f.repeated:
+        return (
+            f"  for (const auto &x : {ros}) {{\n    bus.add_{setter}(x.c_str());\n  }}"
+        )
+    if f.is_string:
+        return f"  bus.set_{setter}({ros}.c_str());"
+    if f.nested_ros_type:
+        fn = cpp_nested_fn(f.nested_ros_type, existing, "to_bus")
+        if f.repeated:
+            return (
+                f"  for (const auto &x : {ros}) {{\n    *bus.add_{setter}() = {fn}(x);\n  }}"
+            )
+        return f"  *bus.mutable_{setter}() = {fn}({ros});"
+    if f.repeated:
+        return f"  for (auto x : {ros}) {{\n    bus.add_{setter}(x);\n  }}"
+    if f.proto_type == "bool":
+        return f"  bus.set_{setter}({ros});"
+    return f"  bus.set_{setter}({ros});"
+
+
+def cpp_to_ros_stmt(msg: Msg, f: Field, existing: dict[str, tuple[Path, str]]) -> str:
+    bus = f"bus.{f.name}()"
+    key = (msg.ros_type, f.name)
+    if key in WRAPPER_CAST:
+        cpp_ty = {"i8": "int8_t", "i16": "int16_t", "u8": "uint8_t", "u16": "uint16_t"}.get(
+            WRAPPER_CAST[key][0], "int32_t"
+        )
+        return f"  out.{f.name} = static_cast<{cpp_ty}>({bus});"
+    if key in OCTET_BOOL:
+        return f"  out.{f.name} = {bus} ? 1 : 0;"
+    if f.is_timestamp:
+        return f"  out.{f.name} = ::robot_bus::ros2_bridge_mappers::timestamp_to_time({bus});"
+    if f.is_duration:
+        return f"  out.{f.name} = ::robot_bus::ros2_bridge_mappers::proto_to_duration({bus});"
+    if f.is_enum:
+        return f"  out.{f.name} = {bus};"
+    if f.is_bytes and key in INT8_BYTES:
+        return f"  out.{f.name} = ::robot_bus::ros2_bridge_mappers::bytes_to_i8_seq({bus});"
+    if f.is_bytes:
+        return (
+            f"  out.{f.name}.assign({bus}.begin(), {bus}.end());"
+        )
+    if f.is_string and f.repeated:
+        return (
+            f"  out.{f.name}.clear();\n"
+            f"  for (const auto &x : {bus}) {{\n    out.{f.name}.push_back(x);\n  }}"
+        )
+    if f.is_string:
+        return f"  out.{f.name} = {bus};"
+    if f.nested_ros_type:
+        fn = cpp_nested_fn(f.nested_ros_type, existing, "to_ros")
+        if f.repeated:
+            return (
+                f"  out.{f.name}.clear();\n"
+                f"  for (const auto &x : {bus}) {{\n    out.{f.name}.push_back({fn}(x));\n  }}"
+            )
+        return f"  out.{f.name} = {fn}({bus});"
+    if f.repeated:
+        return (
+            f"  out.{f.name}.assign({bus}.begin(), {bus}.end());"
+        )
+    return f"  out.{f.name} = {bus};"
+
+
+def emit_cpp_convert_hpp() -> str:
+    return '''#pragma once
+
+#include <cstdint>
+#include <string>
+#include <vector>
+
+#ifdef ROBOT_BUS_HAS_ROS2
+#include <builtin_interfaces/msg/duration.hpp>
+#include <builtin_interfaces/msg/time.hpp>
+#include <google/protobuf/duration.pb.h>
+#include <google/protobuf/timestamp.pb.h>
+#endif
+
+namespace robot_bus {
+namespace ros2_bridge_mappers {
+
+inline std::string i8_seq_to_bytes(const std::vector<int8_t> &data) {
+  std::string out;
+  out.resize(data.size());
+  for (size_t i = 0; i < data.size(); ++i) {
+    out[i] = static_cast<char>(static_cast<uint8_t>(data[i]));
+  }
+  return out;
+}
+
+inline std::vector<int8_t> bytes_to_i8_seq(const std::string &data) {
+  std::vector<int8_t> out;
+  out.reserve(data.size());
+  for (unsigned char c : data) {
+    out.push_back(static_cast<int8_t>(c));
+  }
+  return out;
+}
+
+#ifdef ROBOT_BUS_HAS_ROS2
+inline google::protobuf::Timestamp time_to_timestamp(const builtin_interfaces::msg::Time &t) {
+  google::protobuf::Timestamp out;
+  out.set_seconds(t.sec);
+  out.set_nanos(static_cast<int32_t>(t.nanosec));
+  return out;
+}
+
+inline builtin_interfaces::msg::Time timestamp_to_time(const google::protobuf::Timestamp &t) {
+  builtin_interfaces::msg::Time out;
+  out.sec = static_cast<int32_t>(t.seconds());
+  out.nanosec = static_cast<uint32_t>(t.nanos());
+  return out;
+}
+
+inline google::protobuf::Duration duration_to_proto(const builtin_interfaces::msg::Duration &d) {
+  google::protobuf::Duration out;
+  out.set_seconds(d.sec);
+  out.set_nanos(d.nanosec);
+  return out;
+}
+
+inline builtin_interfaces::msg::Duration proto_to_duration(const google::protobuf::Duration &d) {
+  builtin_interfaces::msg::Duration out;
+  out.sec = static_cast<int32_t>(d.seconds());
+  out.nanosec = d.nanos();
+  return out;
+}
+#endif
+
+}  // namespace ros2_bridge_mappers
+}  // namespace robot_bus
+'''
+
+
+def emit_cpp(struct: str, msg: Msg, existing: dict[str, tuple[Path, str]]) -> str:
+    pkg, stem = py_mod_path(msg.ros_type)
+    guard = cpp_pkg_guard(pkg)
+    nested_includes = []
+    seen = set()
+    for f in msg.fields:
+        if f.nested_ros_type and f.nested_ros_type in existing:
+            npkg, nstem = py_mod_path(f.nested_ros_type)
+            key = (npkg, nstem)
+            if key not in seen:
+                seen.add(key)
+                nested_includes.append(
+                    f'#include <robot_bus/ros2_bridge/mappers/{npkg}/{nstem}.hpp>'
+                )
+    nested_inc = "\n".join(nested_includes)
+    to_bus_stmts = "\n".join(cpp_to_bus_stmt(msg, f, existing) for f in msg.fields)
+    to_ros_stmts = "\n".join(cpp_to_ros_stmt(msg, f, existing) for f in msg.fields)
+    bus_ty = cpp_bus_type(msg)
+    ros_ty = cpp_ros_type(msg)
+    ros_inc = cpp_ros_include(msg)
+    has_ros = "defined(ROBOT_BUS_HAS_ROS2)"
+    if guard:
+        has_ros = f"defined(ROBOT_BUS_HAS_ROS2) && defined({guard})"
+    body = f'''#pragma once
+
+#include <robot_bus/ros2_bridge_mappers.hpp>
+#include <robot_bus/ros2_bridge/mappers/convert.hpp>
+#include <robot_bus/{pkg}/msg/v1/{msg.proto_stem}.pb.h>
+{nested_inc}
+
+#if {has_ros}
+#include {ros_inc}
+#include <robot_bus/ros2_bridge_typed.hpp>
+#endif
+
+namespace robot_bus {{
+namespace ros2_bridge_mappers {{
+namespace {pkg} {{
+
+#if {has_ros}
+inline {bus_ty} {stem}_to_bus(const {ros_ty} &msg) {{
+  {bus_ty} bus;
+{to_bus_stmts}
+  return bus;
+}}
+
+inline {ros_ty} {stem}_to_ros(const {bus_ty} &bus) {{
+  {ros_ty} out;
+{to_ros_stmts}
+  return out;
+}}
+#endif
+
+}}  // namespace {pkg}
+}}  // namespace ros2_bridge_mappers
+'''
+    if msg.ros_type in CPP_GOLD_TYPES:
+        return body + "}  // namespace robot_bus\n"
+    body += f'''
+#if {has_ros}
+class {struct}
+    : public TypedTopicMapper<{struct}, {ros_ty}> {{
+ public:
+  const char *type_name() const override {{ return "{msg.ros_type}"; }}
+
+  std::vector<uint8_t> ros_to_bus(const {ros_ty} &msg) const {{
+    auto bus = ros2_bridge_mappers::{pkg}::{stem}_to_bus(msg);
+    std::string bytes;
+    bus.SerializeToString(&bytes);
+    return std::vector<uint8_t>(bytes.begin(), bytes.end());
+  }}
+
+  {ros_ty} bus_to_ros(BytesView payload) const {{
+    {bus_ty} bus;
+    bus.ParseFromArray(payload.data, static_cast<int>(payload.size));
+    return ros2_bridge_mappers::{pkg}::{stem}_to_ros(bus);
+  }}
+}};
+#else
+struct {struct} : TopicMapper {{
+  const char *type_name() const override {{ return "{msg.ros_type}"; }}
+}};
+#endif
+
+}}  // namespace robot_bus
+'''
+    return body
+
+
+def write_python_init(generated: list[tuple[str, str, str]]) -> None:
+    """generated: (pkg, stem, struct) plus keep manual exports."""
+    lines = [
+        '"""Built-in and duck-typed ROS 2 ↔ robot-bus mappers."""',
+        "",
+        "from robot_bus.ros2_bridge.mappers.fibonacci import FibonacciActionMapper",
+        "from robot_bus.ros2_bridge.mappers.image import SensorMsgsImageMapper",
+        "from robot_bus.ros2_bridge.mappers.set_bool import SetBoolServiceMapper",
+        "from robot_bus.ros2_bridge.mappers.string import StdMsgsStringMapper",
+        "from robot_bus.ros2_bridge.mappers.trigger import TriggerServiceMapper",
+        "",
+    ]
+    all_names = list(KEEP_PY_MANUAL)
+    by_pkg: dict[str, list[tuple[str, str]]] = defaultdict(list)
+    for pkg, stem, struct in generated:
+        by_pkg[pkg].append((stem, struct))
+        lines.append(
+            f"from robot_bus.ros2_bridge.mappers.{pkg}.{stem} import {struct}"
+        )
+        all_names.append(struct)
+    lines.append("")
+    lines.append("__all__ = [")
+    for name in all_names:
+        lines.append(f'    "{name}",')
+    lines.append("]")
+    lines.append("")
+    PY_MAPPERS.joinpath("__init__.py").write_text("\n".join(lines))
+    for pkg, items in by_pkg.items():
+        pkg_init = ["from __future__ import annotations", ""]
+        exports = []
+        for stem, struct in items:
+            pkg_init.append(f"from .{stem} import {struct}")
+            exports.append(struct)
+        pkg_init.append("")
+        pkg_init.append("__all__ = [")
+        for name in exports:
+            pkg_init.append(f'    "{name}",')
+        pkg_init.append("]")
+        pkg_init.append("")
+        (PY_MAPPERS / pkg / "__init__.py").write_text("\n".join(pkg_init))
+
+
+def emit_python_convert() -> str:
+    return '''"""Shared field conversions for generated topic mappers."""
+
+from __future__ import annotations
+
+
+def i8_seq_to_bytes(data) -> bytes:
+    return bytes((int(v) & 0xFF) for v in data)
+
+
+def bytes_to_i8_seq(data: bytes):
+    return [int.from_bytes(bytes([b]), "little", signed=True) for b in data]
+
+
+def time_to_timestamp(t):
+    from google.protobuf.timestamp_pb2 import Timestamp
+
+    out = Timestamp()
+    out.seconds = int(t.sec)
+    out.nanos = int(t.nanosec)
+    return out
+
+
+def timestamp_to_time(ts):
+    from builtin_interfaces.msg import Time
+
+    out = Time()
+    out.sec = int(ts.seconds)
+    out.nanosec = int(ts.nanos)
+    return out
+
+
+def duration_to_proto(d):
+    from google.protobuf.duration_pb2 import Duration
+
+    out = Duration()
+    out.seconds = int(d.sec)
+    out.nanos = int(d.nanosec)
+    return out
+
+
+def proto_to_duration(d):
+    from builtin_interfaces.msg import Duration
+
+    out = Duration()
+    out.sec = int(d.seconds)
+    out.nanosec = int(d.nanos)
+    return out
+'''
+
+
 def main() -> None:
     enum_names = collect_enum_names()
     prost_names = load_prost_names()
@@ -616,7 +1167,34 @@ def main() -> None:
 
     shim_msgs = [all_msgs[ros] for _, _, ros in mappers if ros in all_msgs]
     SHIM_OUT.write_text(emit_shim(shim_msgs))
-    print(f"wrote {written} mappers (skipped {skipped} gold), {SHIM_OUT}")
+
+    PY_MAPPERS.mkdir(parents=True, exist_ok=True)
+    (PY_MAPPERS / "_convert.py").write_text(emit_python_convert())
+    CPP_MAPPERS.mkdir(parents=True, exist_ok=True)
+    CPP_CONVERT.write_text(emit_cpp_convert_hpp())
+
+    py_generated: list[tuple[str, str, str]] = []
+    py_written = 0
+    cpp_written = 0
+    for path, struct, ros_type in mappers:
+        msg = all_msgs[ros_type]
+        pkg, stem = py_mod_path(ros_type)
+        dest = PY_MAPPERS / pkg / f"{stem}.py"
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        dest.write_text(emit_python(struct, msg, existing_by_type))
+        if ros_type not in PY_GOLD_TYPES:
+            py_generated.append((pkg, stem, struct))
+        py_written += 1
+        dest = CPP_MAPPERS / pkg / f"{stem}.hpp"
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        dest.write_text(emit_cpp(struct, msg, existing_by_type))
+        cpp_written += 1
+
+    write_python_init(py_generated)
+    print(
+        f"wrote {written} rust mappers (skipped {skipped} gold), "
+        f"{py_written} python, {cpp_written} cpp, {SHIM_OUT}"
+    )
 
 
 if __name__ == "__main__":

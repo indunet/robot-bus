@@ -85,8 +85,23 @@ if(ROBOT_BUS_ROS2)
   find_package(rclcpp_action REQUIRED)
   find_package(std_msgs REQUIRED)
   find_package(sensor_msgs REQUIRED)
+  find_package(geometry_msgs REQUIRED)
+  find_package(nav_msgs REQUIRED)
   find_package(std_srvs REQUIRED)
   find_package(example_interfaces REQUIRED)
+  find_package(builtin_interfaces REQUIRED)
+  find_package(action_msgs REQUIRED)
+  find_package(diagnostic_msgs REQUIRED)
+  find_package(shape_msgs REQUIRED)
+  find_package(stereo_msgs REQUIRED)
+  find_package(tf2_msgs REQUIRED)
+  find_package(trajectory_msgs REQUIRED)
+  find_package(unique_identifier_msgs REQUIRED)
+  find_package(visualization_msgs REQUIRED)
+  find_package(nav2_msgs QUIET)
+  find_package(control_msgs QUIET)
+  find_package(apriltag_msgs QUIET)
+  find_package(foxglove_msgs QUIET)
   message(STATUS "robot_bus: native ROS 2 bridge enabled (source ROS 2 before build)")
 
   add_library(robot_bus_ros2_bridge SHARED src/ros2_bridge.cpp)
@@ -105,20 +120,42 @@ if(ROBOT_BUS_ROS2)
       rclcpp_action::rclcpp_action
       ${std_msgs_TARGETS}
       ${sensor_msgs_TARGETS}
+      ${geometry_msgs_TARGETS}
+      ${nav_msgs_TARGETS}
       ${std_srvs_TARGETS}
-      ${example_interfaces_TARGETS})
+      ${example_interfaces_TARGETS}
+      ${builtin_interfaces_TARGETS}
+      ${action_msgs_TARGETS}
+      ${diagnostic_msgs_TARGETS}
+      ${shape_msgs_TARGETS}
+      ${stereo_msgs_TARGETS}
+      ${tf2_msgs_TARGETS}
+      ${trajectory_msgs_TARGETS}
+      ${unique_identifier_msgs_TARGETS}
+      ${visualization_msgs_TARGETS})
   # ament packages export modern targets via *_TARGETS; fall back to older names.
-  if(TARGET std_msgs::std_msgs)
-    target_link_libraries(robot_bus_ros2_bridge PUBLIC std_msgs::std_msgs)
+  foreach(_pkg std_msgs sensor_msgs geometry_msgs nav_msgs std_srvs example_interfaces
+               builtin_interfaces action_msgs diagnostic_msgs shape_msgs stereo_msgs
+               tf2_msgs trajectory_msgs unique_identifier_msgs visualization_msgs)
+    if(TARGET ${_pkg}::${_pkg})
+      target_link_libraries(robot_bus_ros2_bridge PUBLIC ${_pkg}::${_pkg})
+    endif()
+  endforeach()
+  if(nav2_msgs_FOUND)
+    target_compile_definitions(robot_bus_ros2_bridge PUBLIC ROBOT_BUS_HAS_NAV2_MSGS)
+    target_link_libraries(robot_bus_ros2_bridge PUBLIC ${nav2_msgs_TARGETS})
   endif()
-  if(TARGET sensor_msgs::sensor_msgs)
-    target_link_libraries(robot_bus_ros2_bridge PUBLIC sensor_msgs::sensor_msgs)
+  if(control_msgs_FOUND)
+    target_compile_definitions(robot_bus_ros2_bridge PUBLIC ROBOT_BUS_HAS_CONTROL_MSGS)
+    target_link_libraries(robot_bus_ros2_bridge PUBLIC ${control_msgs_TARGETS})
   endif()
-  if(TARGET std_srvs::std_srvs)
-    target_link_libraries(robot_bus_ros2_bridge PUBLIC std_srvs::std_srvs)
+  if(apriltag_msgs_FOUND)
+    target_compile_definitions(robot_bus_ros2_bridge PUBLIC ROBOT_BUS_HAS_APRILTAG_MSGS)
+    target_link_libraries(robot_bus_ros2_bridge PUBLIC ${apriltag_msgs_TARGETS})
   endif()
-  if(TARGET example_interfaces::example_interfaces)
-    target_link_libraries(robot_bus_ros2_bridge PUBLIC example_interfaces::example_interfaces)
+  if(foxglove_msgs_FOUND)
+    target_compile_definitions(robot_bus_ros2_bridge PUBLIC ROBOT_BUS_HAS_FOXGLOVE_MSGS)
+    target_link_libraries(robot_bus_ros2_bridge PUBLIC ${foxglove_msgs_TARGETS})
   endif()
   add_dependencies(robot_bus_ros2_bridge robot_bus_ffi_build)
   set_target_properties(robot_bus_ros2_bridge PROPERTIES

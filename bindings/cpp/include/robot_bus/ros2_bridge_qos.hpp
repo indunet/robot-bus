@@ -58,21 +58,31 @@ class TopicQosKeepLast {
   int32_t depth_;
 };
 
-/// KeepLast depth plus reliability. Same type on **ROS** and **bus** endpoints
-/// for topics, services, and actions. ROS honors depth + reliability. Bus uses
-/// depth as ZMQ HWM and must be `.best_effort()` (no DDS reliability).
+/// KeepLast depth plus reliability and optional ROS durability. Same type on
+/// **ROS** and **bus** endpoints for topics, services, and actions. ROS honors
+/// depth + reliability + durability. Bus uses depth as ZMQ HWM and must be
+/// `.best_effort()` (no DDS reliability); durability is ignored on bus.
 class TopicQos {
  public:
   static TopicQosKeepLast keep_last(int32_t depth) { return TopicQosKeepLast(depth); }
   int32_t depth() const { return depth_; }
   bool is_best_effort() const { return best_effort_; }
   bool is_reliable() const { return !best_effort_; }
+  bool is_transient_local() const { return transient_local_; }
+  bool is_volatile() const { return !transient_local_; }
+
+  /// ROS `TRANSIENT_LOCAL` (latch). Needed for `/tf_static` and other latched topics.
+  TopicQos transient_local() const { return TopicQos(depth_, best_effort_, true); }
+  /// ROS `VOLATILE` (default). `volatile` is a C++ keyword, so this matches rclcpp.
+  TopicQos durability_volatile() const { return TopicQos(depth_, best_effort_, false); }
 
  private:
   friend class TopicQosKeepLast;
-  TopicQos(int32_t depth, bool best_effort) : depth_(depth), best_effort_(best_effort) {}
+  TopicQos(int32_t depth, bool best_effort, bool transient_local = false)
+      : depth_(depth), best_effort_(best_effort), transient_local_(transient_local) {}
   int32_t depth_;
   bool best_effort_;
+  bool transient_local_;
 };
 
 inline TopicQos TopicQosKeepLast::reliable() const { return TopicQos(depth_, false); }
@@ -93,6 +103,8 @@ inline rmw_qos_profile_t apply_keep_last_reliability(rmw_qos_profile_t base,
   base.depth = static_cast<size_t>(qos.depth() < 0 ? 0 : qos.depth());
   base.reliability = qos.is_best_effort() ? RMW_QOS_POLICY_RELIABILITY_BEST_EFFORT
                                           : RMW_QOS_POLICY_RELIABILITY_RELIABLE;
+  base.durability = qos.is_transient_local() ? RMW_QOS_POLICY_DURABILITY_TRANSIENT_LOCAL
+                                             : RMW_QOS_POLICY_DURABILITY_VOLATILE;
   return base;
 }
 

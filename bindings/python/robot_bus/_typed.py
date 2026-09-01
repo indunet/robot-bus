@@ -436,6 +436,7 @@ def install_typed_node_api(Node: Any) -> None:
         handler: Callable[..., Any],
         callback_group: Any = None,
         qos_depth: Any = None,
+        streaming: bool = False,
         *,
         goal_type: Any = None,
         feedback_type: Any = None,
@@ -449,12 +450,13 @@ def install_typed_node_api(Node: Any) -> None:
         )
 
         def _raw_act(cb: Callable[..., Any]):
-            if qos_depth is None:
-                return _raw_create_action_server(
-                    self, action_name, cb, callback_group
-                )
+            kwargs: dict = {}
+            if qos_depth is not None:
+                kwargs["qos_depth"] = qos_depth
+            if streaming:
+                kwargs["streaming"] = True
             return _raw_create_action_server(
-                self, action_name, cb, callback_group, qos_depth=qos_depth
+                self, action_name, cb, callback_group, **kwargs
             )
 
         if types is None:

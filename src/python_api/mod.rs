@@ -11,7 +11,7 @@ use pyo3::prelude::*;
 
 use broker::{PyRobotBusBroker, run_broker};
 use clients::{PyActionGoalHandle, PyNodeActionClient, PyNodeServiceClient};
-use node::PyNode;
+use node::{PyActionGoalContext, PyNode};
 use pub_sub::{PyPublisher, PySubscriber, PyTopicPublisher};
 use runtime::{
     PyActionServerHandle, PyCallbackGroup, PyCallbackGroupType, PyContext, PyMultiThreadedExecutor,
@@ -30,6 +30,7 @@ fn _native(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PySingleThreadedExecutor>()?;
     m.add_class::<PyMultiThreadedExecutor>()?;
     m.add_class::<PyNode>()?;
+    m.add_class::<PyActionGoalContext>()?;
     m.add_class::<PyTopicPublisher>()?;
     m.add_class::<PyNodeServiceClient>()?;
     m.add_class::<PyNodeActionClient>()?;

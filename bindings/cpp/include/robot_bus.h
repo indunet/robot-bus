@@ -30,6 +30,7 @@ typedef struct RobotBusTopicPublisher RobotBusTopicPublisher;
 typedef struct RobotBusServiceClient RobotBusServiceClient;
 typedef struct RobotBusActionClient RobotBusActionClient;
 typedef struct RobotBusActionGoalHandle RobotBusActionGoalHandle;
+typedef struct RobotBusActionGoalContext RobotBusActionGoalContext;
 typedef struct RobotBusNode RobotBusNode;
 typedef struct RobotBusSingleThreadedExecutor RobotBusSingleThreadedExecutor;
 typedef struct RobotBusMultiThreadedExecutor RobotBusMultiThreadedExecutor;
@@ -156,6 +157,9 @@ typedef int (*RobotBusServiceHandler)(const uint8_t *data, size_t len, uint8_t *
 typedef int (*RobotBusActionHandler)(const uint8_t *data, size_t len,
                                      RobotBusActionPhase **out_phases, size_t *out_count,
                                      void *user);
+typedef int (*RobotBusActionLiveHandler)(const uint8_t *data, size_t len,
+                                         RobotBusActionGoalContext *ctx, uint8_t **out_result,
+                                         size_t *out_len, void *user);
 /**
  * Called synchronously on the goal's receive thread for each FEEDBACK event.
  * The message and its fields are borrowed and valid only for the duration of the callback.
@@ -322,6 +326,17 @@ ROBOT_BUS_API RobotBusActionServerHandle *robot_bus_node_create_action_server(
 ROBOT_BUS_API RobotBusActionServerHandle *robot_bus_node_create_action_server_with_qos(
     RobotBusNode *n, const char *action_name, RobotBusActionHandler handler, void *user,
     const RobotBusCallbackGroup *group, int32_t depth);
+ROBOT_BUS_API RobotBusActionServerHandle *robot_bus_node_create_action_server_live(
+    RobotBusNode *n, const char *action_name, RobotBusActionLiveHandler handler, void *user,
+    const RobotBusCallbackGroup *group);
+ROBOT_BUS_API RobotBusActionServerHandle *robot_bus_node_create_action_server_live_with_qos(
+    RobotBusNode *n, const char *action_name, RobotBusActionLiveHandler handler, void *user,
+    const RobotBusCallbackGroup *group, int32_t depth);
+ROBOT_BUS_API int robot_bus_action_goal_context_cancel_requested(
+    const RobotBusActionGoalContext *ctx);
+ROBOT_BUS_API void robot_bus_action_goal_context_publish_feedback(
+    const RobotBusActionGoalContext *ctx, const uint8_t *data, size_t len);
+ROBOT_BUS_API char *robot_bus_action_goal_context_goal_id(const RobotBusActionGoalContext *ctx);
 ROBOT_BUS_API int robot_bus_node_destroy_action_server(RobotBusNode *n,
                                                        RobotBusActionServerHandle *handle);
 ROBOT_BUS_API char *robot_bus_action_server_handle_name(const RobotBusActionServerHandle *h);

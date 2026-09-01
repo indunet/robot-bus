@@ -2,6 +2,10 @@
 
 #include <robot_bus/ros2_bridge_mappers.hpp>
 
+#include <memory>
+#include <type_traits>
+#include <utility>
+
 namespace robot_bus {
 
 class Ros2Bridge;
@@ -125,6 +129,8 @@ class Ros2BridgeFromRosToBus {
   Ros2BridgeRos2ToBusReady mapper(StdMsgsStringMapper) &&;
   Ros2BridgeRos2ToBusReady mapper(SensorMsgsImageMapper) &&;
   Ros2BridgeRos2ToBusReady mapper(std::shared_ptr<TopicMapper> mapper) &&;
+  template <typename M, typename = std::enable_if_t<std::is_base_of<TopicMapper, M>::value>>
+  Ros2BridgeRos2ToBusReady mapper(M mapper) &&;
 
  private:
   std::shared_ptr<detail::BuilderState> state_;
@@ -209,6 +215,8 @@ class Ros2BridgeFromBusToRos {
   Ros2BridgeBusToRosReady mapper(StdMsgsStringMapper) &&;
   Ros2BridgeBusToRosReady mapper(SensorMsgsImageMapper) &&;
   Ros2BridgeBusToRosReady mapper(std::shared_ptr<TopicMapper> mapper) &&;
+  template <typename M, typename = std::enable_if_t<std::is_base_of<TopicMapper, M>::value>>
+  Ros2BridgeBusToRosReady mapper(M mapper) &&;
 
  private:
   std::shared_ptr<detail::BuilderState> state_;
@@ -247,6 +255,18 @@ class Ros2BridgeBusToRosReady {
   detail::TopicBuiltin builtin_ = detail::TopicBuiltin::StdMsgsString;
   std::shared_ptr<TopicMapper> custom_;
 };
+
+template <typename M, typename>
+inline Ros2BridgeRos2ToBusReady Ros2BridgeFromRosToBus::mapper(M mapper) && {
+  return std::move(*this).mapper(
+      std::shared_ptr<TopicMapper>(std::make_shared<M>(std::move(mapper))));
+}
+
+template <typename M, typename>
+inline Ros2BridgeBusToRosReady Ros2BridgeFromBusToRos::mapper(M mapper) && {
+  return std::move(*this).mapper(
+      std::shared_ptr<TopicMapper>(std::make_shared<M>(std::move(mapper))));
+}
 
 /// After `.service()`: only `from_ros` / `from_bus`.
 class Ros2BridgeService {

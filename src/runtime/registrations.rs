@@ -1,6 +1,8 @@
 //! Registration types for sockets managed by [`super::Executor`].
 
-use std::sync::Arc;
+use std::collections::HashMap;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use uuid::Uuid;
@@ -13,6 +15,58 @@ use crate::zmq_helpers::{HighWaterMark, apply_action_options_with, apply_rpc_opt
 pub type MessageCallback = Arc<dyn Fn(&[u8]) + Send + Sync>;
 pub type ServiceHandler = Arc<dyn Fn(&[u8]) -> Vec<u8> + Send + Sync>;
 pub type ActionGoalHandler = Arc<dyn Fn(&[u8]) -> Vec<(String, Vec<u8>)> + Send + Sync>;
+/// Live action handler: may call [`ActionGoalContext::publish_feedback`] before returning
+/// the RESULT body. Poll [`ActionGoalContext::cancel_requested`] to honor CANCEL.
+pub type ActionGoalLiveHandler = Arc<dyn Fn(&[u8], &ActionGoalContext) -> Vec<u8> + Send + Sync>;
+
+/// Per-goal context for a live action server handler.
+#[derive(Clone)]
+pub struct ActionGoalContext {
+    goal_id: String,
+    cancel: Arc<AtomicBool>,
+    on_feedback: Arc<dyn Fn(&[u8]) + Send + Sync>,
+}
+
+impl ActionGoalContext {
+    pub fn new(
+        goal_id: impl Into<String>,
+        cancel: Arc<AtomicBool>,
+        on_feedback: Arc<dyn Fn(&[u8]) + Send + Sync>,
+    ) -> Self {
+        Self {
+            goal_id: goal_id.into(),
+            cancel,
+            on_feedback,
+        }
+    }
+
+    pub fn goal_id(&self) -> &str {
+        &self.goal_id
+    }
+
+    pub fn cancel_requested(&self) -> bool {
+        self.cancel.load(Ordering::SeqCst)
+    }
+
+    pub fn publish_feedback(&self, body: &[u8]) {
+        (self.on_feedback)(body);
+    }
+}
+
+/// Wrap a batch handler so FEEDBACK/RESULT are emitted after it returns.
+pub fn wrap_batch_action_handler(handler: ActionGoalHandler) -> ActionGoalLiveHandler {
+    Arc::new(move |body, ctx| {
+        let mut result = Vec::new();
+        for (phase, chunk) in handler(body) {
+            if phase.eq_ignore_ascii_case("FEEDBACK") {
+                ctx.publish_feedback(&chunk);
+            } else if phase.eq_ignore_ascii_case("RESULT") {
+                result = chunk;
+            }
+        }
+        result
+    })
+}
 
 pub enum RegistrationKind {
     Sub,
@@ -101,7 +155,8 @@ pub struct ActionRegistration {
     pub id: u64,
     pub socket: Socket,
     pub action_name: String,
-    pub handler: ActionGoalHandler,
+    pub handler: ActionGoalLiveHandler,
+    pub inflight: Arc<Mutex<HashMap<String, Arc<AtomicBool>>>>,
     pub callback_group: CallbackGroup,
     pub identity: Vec<u8>,
     pub heartbeat_interval: Duration,
@@ -114,6 +169,30 @@ impl ActionRegistration {
         context: &Context,
         action_name: &str,
         handler: ActionGoalHandler,
+        callback_group: CallbackGroup,
+        endpoint: &str,
+        identity: Option<&str>,
+        heartbeat_interval_ms: u64,
+        hwm: HighWaterMark,
+    ) -> crate::errors::Result<Self> {
+        Self::create_live(
+            id,
+            context,
+            action_name,
+            wrap_batch_action_handler(handler),
+            callback_group,
+            endpoint,
+            identity,
+            heartbeat_interval_ms,
+            hwm,
+        )
+    }
+
+    pub fn create_live(
+        id: u64,
+        context: &Context,
+        action_name: &str,
+        handler: ActionGoalLiveHandler,
         callback_group: CallbackGroup,
         endpoint: &str,
         identity: Option<&str>,
@@ -133,6 +212,7 @@ impl ActionRegistration {
             socket,
             action_name: action_name.to_string(),
             handler,
+            inflight: Arc::new(Mutex::new(HashMap::new())),
             callback_group,
             identity,
             heartbeat_interval: Duration::from_millis(heartbeat_interval_ms),

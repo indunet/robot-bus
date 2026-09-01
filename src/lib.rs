@@ -69,13 +69,14 @@ pub use errors::{BusError, Result, parse_error_body};
 pub use lazy_subscribe::{CONSOLE_DETECT_TIMEOUT, should_enable_ros_subscription};
 pub use message_bus::{Publisher, Subscriber};
 pub use runtime::{
-    ActionGoalHandler, CallbackGroup, CallbackGroupType, ConnectionState, Context, Executor,
-    ExecutorHandle, GoalHandle, ListParametersResult, MessageCallback, MultiThreadedExecutor, Node,
-    NodeActionClient, NodeActionClientRaw, NodeActionServer, NodeOptions, NodeService,
-    NodeServiceClient, NodeServiceClientRaw, PARAMETER_DEPTH_RECURSIVE, Parameter, ParameterValue,
-    QOS_PROFILE_DEFAULT, QosProfile, RawActionFeedbackCallback, RawGoalHandle, ServiceHandler,
-    ShutdownHandle, SingleThreadedExecutor, SubscriptionHandle, TimerCallback, TimerHandle,
-    TopicPublisher, TopicPublisherRaw,
+    ActionGoalContext, ActionGoalHandler, ActionGoalLiveHandler, CallbackGroup, CallbackGroupType,
+    ConnectionState, Context, Executor, ExecutorHandle, GoalHandle, ListParametersResult,
+    MessageCallback, MultiThreadedExecutor, Node, NodeActionClient, NodeActionClientRaw,
+    NodeActionServer, NodeOptions, NodeService, NodeServiceClient, NodeServiceClientRaw,
+    PARAMETER_DEPTH_RECURSIVE, Parameter, ParameterValue, QOS_PROFILE_DEFAULT, QosProfile,
+    RawActionFeedbackCallback, RawGoalHandle, ServiceHandler, ShutdownHandle,
+    SingleThreadedExecutor, SubscriptionHandle, TimerCallback, TimerHandle, TopicPublisher,
+    TopicPublisherRaw,
 };
 pub use service_bus::{ServiceClient, ServiceWorker};
 pub use transports::{

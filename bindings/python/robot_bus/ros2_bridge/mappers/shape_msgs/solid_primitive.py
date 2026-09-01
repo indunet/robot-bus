@@ -1,0 +1,45 @@
+"""Generated mapper for `shape_msgs/msg/SolidPrimitive`."""
+
+from __future__ import annotations
+
+from robot_bus.ros2_bridge.mappers import _convert
+from robot_bus.ros2_bridge.mappers.geometry_msgs.polygon import polygon_to_bus, polygon_to_ros
+
+def solid_primitive_to_bus(msg):
+    from robot_bus.shape_msgs.msg.v1 import SolidPrimitive as BusMsg
+
+    bus = BusMsg()
+    bus.type = msg.type
+    bus.dimensions.extend(list(msg.dimensions))
+    bus.polygon.CopyFrom(polygon_to_bus(msg.polygon))
+    return bus
+
+
+def solid_primitive_to_ros(bus):
+    from shape_msgs.msg import SolidPrimitive as RosMsg
+
+    out = RosMsg()
+    out.type = bus.type
+    out.dimensions = list(bus.dimensions)
+    out.polygon = polygon_to_ros(bus.polygon)
+    return out
+
+
+class ShapeMsgsSolidPrimitiveMapper:
+    def type_name(self) -> str:
+        return "shape_msgs/msg/SolidPrimitive"
+
+    def ros_msg_type(self):
+        from shape_msgs.msg import SolidPrimitive as RosMsg
+
+        return RosMsg
+
+    def ros_to_bus(self, msg) -> bytes:
+        return solid_primitive_to_bus(msg).SerializeToString()
+
+    def bus_to_ros(self, payload: bytes):
+        from robot_bus.shape_msgs.msg.v1 import SolidPrimitive as BusMsg
+
+        bus = BusMsg()
+        bus.ParseFromString(payload)
+        return solid_primitive_to_ros(bus)

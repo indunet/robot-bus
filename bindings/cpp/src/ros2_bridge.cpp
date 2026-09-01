@@ -207,8 +207,8 @@ std::vector<uint8_t> fibonacci_result_ros_to_bus(
   return serialize_pb(bus);
 }
 
-std::vector<std::pair<std::string, std::vector<uint8_t>>> fibonacci_empty_result_phases() {
-  return {{"RESULT", serialize_pb(example_interfaces::action::v1::FibonacciResult{})}};
+std::vector<uint8_t> fibonacci_empty_result() {
+  return serialize_pb(example_interfaces::action::v1::FibonacciResult{});
 }
 
 Node make_bus_node(const BuilderState &state) {
@@ -263,6 +263,11 @@ rclcpp::QoS topic_ros_qos(const TopicQos &qos) {
     out.best_effort();
   } else {
     out.reliable();
+  }
+  if (qos.is_transient_local()) {
+    out.transient_local();
+  } else {
+    out.durability_volatile();
   }
   return out;
 }
@@ -594,22 +599,33 @@ void wire_fibonacci_ros_to_bus(
       std::make_shared<ActionClient>(
           bus_node.create_action_client(route.bus_action.c_str(), route.bus_qos.depth()));
   auto mtx = std::make_shared<std::mutex>();
+  auto live = std::make_shared<std::mutex>();
+  auto bus_goals = std::make_shared<
+      std::unordered_map<const void *, std::shared_ptr<ActionGoalHandle>>>();
   const double timeout = route.timeout_secs;
 
   auto handle_goal = [](const rclcpp_action::GoalUUID &,
                         std::shared_ptr<const Fibonacci::Goal>) {
     return rclcpp_action::GoalResponse::ACCEPT_AND_EXECUTE;
   };
-  auto handle_cancel = [](const std::shared_ptr<GoalHandleFibonacci>) {
+  auto handle_cancel = [live, bus_goals](const std::shared_ptr<GoalHandleFibonacci> gh) {
+    std::lock_guard<std::mutex> lock(*live);
+    auto it = bus_goals->find(gh.get());
+    if (it != bus_goals->end() && it->second) {
+      try {
+        it->second->cancel();
+      } catch (...) {
+      }
+    }
     return rclcpp_action::CancelResponse::ACCEPT;
   };
-  auto handle_accepted = [bus_client, mtx, timeout](
+  auto handle_accepted = [bus_client, mtx, timeout, live, bus_goals](
                              const std::shared_ptr<GoalHandleFibonacci> goal_handle) {
-    std::thread([bus_client, mtx, timeout, goal_handle]() {
+    std::thread([bus_client, mtx, timeout, live, bus_goals, goal_handle]() {
       const auto goal = goal_handle->get_goal();
       try {
         auto goal_bytes = fibonacci_goal_ros_to_bus(*goal);
-        ActionGoalHandle handle = [&]() {
+        auto handle = std::make_shared<ActionGoalHandle>([&]() {
           std::lock_guard<std::mutex> lock(*mtx);
           return bus_client->send_goal(
               goal_bytes,
@@ -625,18 +641,36 @@ void wire_fibonacci_ros_to_bus(
                 }
               },
               nullptr, timeout);
-        }();
-        auto result_msg = handle.wait_result(timeout);
-        if (result_msg.kind != "RESULT") {
-          goal_handle->abort(std::make_shared<Fibonacci::Result>());
-          return;
+        }());
+        {
+          std::lock_guard<std::mutex> lock(*live);
+          (*bus_goals)[goal_handle.get()] = handle;
         }
-        auto result =
-            std::make_shared<Fibonacci::Result>(fibonacci_result_bus_to_ros(result_msg.body));
-        goal_handle->succeed(result);
+        auto result_msg = handle->wait_result(timeout);
+        if (result_msg.kind != "RESULT") {
+          if (goal_handle->is_canceling()) {
+            goal_handle->canceled(std::make_shared<Fibonacci::Result>());
+          } else {
+            goal_handle->abort(std::make_shared<Fibonacci::Result>());
+          }
+        } else {
+          auto result =
+              std::make_shared<Fibonacci::Result>(fibonacci_result_bus_to_ros(result_msg.body));
+          if (goal_handle->is_canceling()) {
+            goal_handle->canceled(result);
+          } else {
+            goal_handle->succeed(result);
+          }
+        }
       } catch (...) {
-        goal_handle->abort(std::make_shared<Fibonacci::Result>());
+        if (goal_handle->is_canceling()) {
+          goal_handle->canceled(std::make_shared<Fibonacci::Result>());
+        } else {
+          goal_handle->abort(std::make_shared<Fibonacci::Result>());
+        }
       }
+      std::lock_guard<std::mutex> lock(*live);
+      bus_goals->erase(goal_handle.get());
     }).detach();
   };
 
@@ -658,33 +692,27 @@ void wire_fibonacci_bus_to_ros(
   const double timeout = route.timeout_secs;
   ros_action_clients.push_back(ros_client);
 
-  keep_alive.push_back(std::make_shared<ActionServerHandle>(bus_node.create_action_server(
+  keep_alive.push_back(std::make_shared<ActionServerHandle>(bus_node.create_action_server_live(
       route.bus_action.c_str(),
-      [ros_client, mtx, timeout](BytesView body)
-          -> std::vector<std::pair<std::string, std::vector<uint8_t>>> {
+      [ros_client, mtx, timeout](BytesView body, const ActionGoalContext &actx)
+          -> std::vector<uint8_t> {
         Fibonacci::Goal goal;
         try {
           goal = fibonacci_goal_bus_to_ros(body);
         } catch (...) {
-          return fibonacci_empty_result_phases();
+          return fibonacci_empty_result();
         }
 
         if (!ros_client->wait_for_action_server(std::chrono::duration<double>(timeout))) {
-          return fibonacci_empty_result_phases();
+          return fibonacci_empty_result();
         }
-
-        auto feedbacks = std::make_shared<std::vector<std::vector<uint8_t>>>();
-        auto feedback_mtx = std::make_shared<std::mutex>();
 
         typename rclcpp_action::Client<Fibonacci>::SendGoalOptions opts;
         opts.feedback_callback =
-            [feedbacks, feedback_mtx](
-                rclcpp_action::ClientGoalHandle<Fibonacci>::SharedPtr,
-                const std::shared_ptr<const Fibonacci::Feedback> feedback) {
+            [actx](rclcpp_action::ClientGoalHandle<Fibonacci>::SharedPtr,
+                   const std::shared_ptr<const Fibonacci::Feedback> feedback) {
               try {
-                auto bytes = fibonacci_feedback_ros_to_bus(*feedback);
-                std::lock_guard<std::mutex> lock(*feedback_mtx);
-                feedbacks->push_back(std::move(bytes));
+                actx.publish_feedback(fibonacci_feedback_ros_to_bus(*feedback));
               } catch (...) {
               }
             };
@@ -696,38 +724,37 @@ void wire_fibonacci_bus_to_ros(
         }
         if (goal_future.wait_for(std::chrono::duration<double>(timeout)) !=
             std::future_status::ready) {
-          return fibonacci_empty_result_phases();
+          return fibonacci_empty_result();
         }
         auto goal_handle = goal_future.get();
         if (!goal_handle) {
-          return fibonacci_empty_result_phases();
+          return fibonacci_empty_result();
         }
 
         auto result_future = ros_client->async_get_result(goal_handle);
-        if (result_future.wait_for(std::chrono::duration<double>(timeout)) !=
-            std::future_status::ready) {
-          return fibonacci_empty_result_phases();
-        }
-
-        std::vector<std::pair<std::string, std::vector<uint8_t>>> phases;
-        {
-          std::lock_guard<std::mutex> lock(*feedback_mtx);
-          for (auto &fb : *feedbacks) {
-            phases.emplace_back("FEEDBACK", std::move(fb));
+        const auto deadline =
+            std::chrono::steady_clock::now() + std::chrono::duration<double>(timeout);
+        bool cancel_sent = false;
+        while (result_future.wait_for(std::chrono::milliseconds(20)) !=
+               std::future_status::ready) {
+          if (actx.cancel_requested() && !cancel_sent) {
+            ros_client->async_cancel_goal(goal_handle);
+            cancel_sent = true;
+          }
+          if (std::chrono::steady_clock::now() >= deadline) {
+            return fibonacci_empty_result();
           }
         }
+
         try {
           auto wrapped = result_future.get();
           if (wrapped.result) {
-            phases.emplace_back("RESULT", fibonacci_result_ros_to_bus(*wrapped.result));
-          } else {
-            phases.emplace_back("RESULT",
-                                serialize_pb(example_interfaces::action::v1::FibonacciResult{}));
+            return fibonacci_result_ros_to_bus(*wrapped.result);
           }
+          return fibonacci_empty_result();
         } catch (...) {
-          return fibonacci_empty_result_phases();
+          return fibonacci_empty_result();
         }
-        return phases;
       },
       nullptr, route.bus_qos.depth())));
 }

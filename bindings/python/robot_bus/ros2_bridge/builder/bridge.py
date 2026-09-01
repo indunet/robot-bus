@@ -358,9 +358,29 @@ class Ros2Bridge:
                 route["bus_action"], qos_depth=route["bus_qos"].depth
             )
             lock = threading.Lock()
+            live_goals: dict[int, Any] = {}
+            live_lock = threading.Lock()
 
-            def execute_cb(goal_handle, m=mapper, client=bus_client, mtx=lock):
+            def cancel_cb(goal_handle, goals=live_goals, mtx=live_lock):
+                with mtx:
+                    handle = goals.get(id(goal_handle))
+                if handle is not None:
+                    try:
+                        handle.cancel()
+                    except Exception:
+                        pass
+                return CancelResponse.ACCEPT
+
+            def execute_cb(
+                goal_handle,
+                m=mapper,
+                client=bus_client,
+                mtx=lock,
+                goals=live_goals,
+                goals_mtx=live_lock,
+            ):
                 goal = goal_handle.request
+                handle = None
                 try:
                     goal_bytes = m.ros_goal_to_bus(goal)
 
@@ -375,13 +395,24 @@ class Ros2Bridge:
                         handle = client.send_goal(
                             goal_bytes, timeout=timeout, feedback_callback=on_fb
                         )
+                    with goals_mtx:
+                        goals[id(goal_handle)] = handle
                     result_bytes = handle.result(timeout=timeout)
                     result = m.bus_result_to_ros(result_bytes)
-                    goal_handle.succeed()
+                    if goal_handle.is_cancel_requested:
+                        goal_handle.canceled()
+                    else:
+                        goal_handle.succeed()
                     return result
                 except Exception:
-                    goal_handle.abort()
+                    if goal_handle.is_cancel_requested:
+                        goal_handle.canceled()
+                    else:
+                        goal_handle.abort()
                     return act_type.Result()
+                finally:
+                    with goals_mtx:
+                        goals.pop(id(goal_handle), None)
 
             server = ActionServer(
                 self._ros_node,
@@ -389,7 +420,7 @@ class Ros2Bridge:
                 route["ros_action"],
                 execute_callback=execute_cb,
                 goal_callback=lambda _g: GoalResponse.ACCEPT,
-                cancel_callback=lambda _g: CancelResponse.ACCEPT,
+                cancel_callback=cancel_cb,
                 callback_group=self._callback_group,
                 goal_service_qos_profile=srv_qos,
                 result_service_qos_profile=srv_qos,
@@ -410,18 +441,14 @@ class Ros2Bridge:
             feedback_sub_qos_profile=fb_qos,
         )
 
-        def on_bus(payload: bytes, m=mapper, client=ros_client) -> list:
+        def on_bus(payload: bytes, ctx, m=mapper, client=ros_client) -> bytes:
             goal = m.bus_goal_to_ros(payload)
             if not client.wait_for_server(timeout_sec=timeout):
-                return [("RESULT", m.ros_result_to_bus(act_type.Result()))]
-            feedbacks: list[bytes] = []
-            fb_lock = threading.Lock()
+                return m.ros_result_to_bus(act_type.Result())
 
             def on_fb(fb_msg, mm=m) -> None:
                 try:
-                    raw = mm.ros_feedback_to_bus(fb_msg.feedback)
-                    with fb_lock:
-                        feedbacks.append(raw)
+                    ctx.publish_feedback(mm.ros_feedback_to_bus(fb_msg.feedback))
                 except Exception:
                     pass
 
@@ -429,25 +456,39 @@ class Ros2Bridge:
             try:
                 goal_handle = send_future.result(timeout=timeout)
             except Exception:
-                return [("RESULT", m.ros_result_to_bus(act_type.Result()))]
+                return m.ros_result_to_bus(act_type.Result())
             if goal_handle is None:
-                return [("RESULT", m.ros_result_to_bus(act_type.Result()))]
+                return m.ros_result_to_bus(act_type.Result())
             result_future = goal_handle.get_result_async()
+            deadline = time.monotonic() + timeout
+            cancel_sent = False
+            while not result_future.done():
+                if ctx.cancel_requested() and not cancel_sent:
+                    try:
+                        goal_handle.cancel_goal_async()
+                    except Exception:
+                        pass
+                    cancel_sent = True
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
+                    break
+                try:
+                    result_future.result(timeout=min(0.05, remaining))
+                except Exception:
+                    pass
             try:
-                wrapped = result_future.result(timeout=timeout)
+                wrapped = result_future.result(timeout=max(0.0, deadline - time.monotonic()))
             except Exception:
-                return [("RESULT", m.ros_result_to_bus(act_type.Result()))]
-            phases: list[tuple[str, bytes]] = []
-            with fb_lock:
-                for fb in feedbacks:
-                    phases.append(("FEEDBACK", fb))
+                return m.ros_result_to_bus(act_type.Result())
             result = wrapped.result if wrapped is not None else act_type.Result()
-            phases.append(("RESULT", m.ros_result_to_bus(result)))
-            return phases
+            return m.ros_result_to_bus(result)
 
         self._keep_alive.append(
             self._bus.create_action_server(
-                route["bus_action"], on_bus, qos_depth=route["bus_qos"].depth
+                route["bus_action"],
+                on_bus,
+                qos_depth=route["bus_qos"].depth,
+                streaming=True,
             )
         )
         self._keep_alive.append(ros_client)

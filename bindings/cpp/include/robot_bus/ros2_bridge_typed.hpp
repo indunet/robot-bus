@@ -10,6 +10,7 @@
 #include <mutex>
 #include <string>
 #include <thread>
+#include <unordered_map>
 #include <utility>
 #include <vector>
 
@@ -155,19 +156,31 @@ class TypedActionMapper : public ActionMapper {
           ctx.bus_node.create_action_client(ctx.bus_action.c_str(), ctx.bus_qos.depth()));
       auto mtx = std::make_shared<std::mutex>();
 
+      auto live = std::make_shared<std::mutex>();
+      auto bus_goals = std::make_shared<
+          std::unordered_map<const void *, std::shared_ptr<ActionGoalHandle>>>();
+
       auto handle_goal = [](const rclcpp_action::GoalUUID &, std::shared_ptr<const Goal>) {
         return rclcpp_action::GoalResponse::ACCEPT_AND_EXECUTE;
       };
-      auto handle_cancel = [](const std::shared_ptr<GoalHandle>) {
+      auto handle_cancel = [live, bus_goals](const std::shared_ptr<GoalHandle> gh) {
+        std::lock_guard<std::mutex> lock(*live);
+        auto it = bus_goals->find(gh.get());
+        if (it != bus_goals->end() && it->second) {
+          try {
+            it->second->cancel();
+          } catch (...) {
+          }
+        }
         return rclcpp_action::CancelResponse::ACCEPT;
       };
-      auto handle_accepted = [self, bus_client, mtx, timeout](
+      auto handle_accepted = [self, bus_client, mtx, timeout, live, bus_goals](
                                  const std::shared_ptr<GoalHandle> goal_handle) {
-        std::thread([self, bus_client, mtx, timeout, goal_handle]() {
+        std::thread([self, bus_client, mtx, timeout, live, bus_goals, goal_handle]() {
           const auto goal = goal_handle->get_goal();
           try {
             auto goal_bytes = self->ros_goal_to_bus(*goal);
-            ActionGoalHandle handle = [&]() {
+            auto handle = std::make_shared<ActionGoalHandle>([&]() {
               std::lock_guard<std::mutex> lock(*mtx);
               return bus_client->send_goal(
                   goal_bytes,
@@ -183,17 +196,35 @@ class TypedActionMapper : public ActionMapper {
                     }
                   },
                   nullptr, timeout);
-            }();
-            auto result_msg = handle.wait_result(timeout);
-            if (result_msg.kind != "RESULT") {
-              goal_handle->abort(std::make_shared<Result>());
-              return;
+            }());
+            {
+              std::lock_guard<std::mutex> lock(*live);
+              (*bus_goals)[goal_handle.get()] = handle;
             }
-            auto result = std::make_shared<Result>(self->bus_result_to_ros(result_msg.body));
-            goal_handle->succeed(result);
+            auto result_msg = handle->wait_result(timeout);
+            if (result_msg.kind != "RESULT") {
+              if (goal_handle->is_canceling()) {
+                goal_handle->canceled(std::make_shared<Result>());
+              } else {
+                goal_handle->abort(std::make_shared<Result>());
+              }
+            } else {
+              auto result = std::make_shared<Result>(self->bus_result_to_ros(result_msg.body));
+              if (goal_handle->is_canceling()) {
+                goal_handle->canceled(result);
+              } else {
+                goal_handle->succeed(result);
+              }
+            }
           } catch (...) {
-            goal_handle->abort(std::make_shared<Result>());
+            if (goal_handle->is_canceling()) {
+              goal_handle->canceled(std::make_shared<Result>());
+            } else {
+              goal_handle->abort(std::make_shared<Result>());
+            }
           }
+          std::lock_guard<std::mutex> lock(*live);
+          bus_goals->erase(goal_handle.get());
         }).detach();
       };
 
@@ -209,30 +240,25 @@ class TypedActionMapper : public ActionMapper {
       auto mtx = std::make_shared<std::mutex>();
       ctx.retain(ros_client);
       ctx.retain(mtx);
-      ctx.retain(std::make_shared<ActionServerHandle>(ctx.bus_node.create_action_server(
+      ctx.retain(std::make_shared<ActionServerHandle>(ctx.bus_node.create_action_server_live(
           ctx.bus_action.c_str(),
-          [self, ros_client, mtx, timeout](BytesView body)
-              -> std::vector<std::pair<std::string, std::vector<uint8_t>>> {
+          [self, ros_client, mtx, timeout](BytesView body, const ActionGoalContext &actx)
+              -> std::vector<uint8_t> {
             Goal goal;
             try {
               goal = self->bus_goal_to_ros(body);
             } catch (...) {
-              return {{"RESULT", self->ros_result_to_bus(Result{})}};
+              return self->ros_result_to_bus(Result{});
             }
             if (!ros_client->wait_for_action_server(std::chrono::duration<double>(timeout))) {
-              return {{"RESULT", self->ros_result_to_bus(Result{})}};
+              return self->ros_result_to_bus(Result{});
             }
-            auto feedbacks = std::make_shared<std::vector<std::vector<uint8_t>>>();
-            auto feedback_mtx = std::make_shared<std::mutex>();
             typename rclcpp_action::Client<RosAction>::SendGoalOptions opts;
             opts.feedback_callback =
-                [self, feedbacks, feedback_mtx](
-                    typename rclcpp_action::ClientGoalHandle<RosAction>::SharedPtr,
-                    const std::shared_ptr<const Feedback> feedback) {
+                [self, actx](typename rclcpp_action::ClientGoalHandle<RosAction>::SharedPtr,
+                             const std::shared_ptr<const Feedback> feedback) {
                   try {
-                    auto bytes = self->ros_feedback_to_bus(*feedback);
-                    std::lock_guard<std::mutex> lock(*feedback_mtx);
-                    feedbacks->push_back(std::move(bytes));
+                    actx.publish_feedback(self->ros_feedback_to_bus(*feedback));
                   } catch (...) {
                   }
                 };
@@ -244,35 +270,35 @@ class TypedActionMapper : public ActionMapper {
             }
             if (goal_future.wait_for(std::chrono::duration<double>(timeout)) !=
                 std::future_status::ready) {
-              return {{"RESULT", self->ros_result_to_bus(Result{})}};
+              return self->ros_result_to_bus(Result{});
             }
             auto goal_handle = goal_future.get();
             if (!goal_handle) {
-              return {{"RESULT", self->ros_result_to_bus(Result{})}};
+              return self->ros_result_to_bus(Result{});
             }
             auto result_future = ros_client->async_get_result(goal_handle);
-            if (result_future.wait_for(std::chrono::duration<double>(timeout)) !=
-                std::future_status::ready) {
-              return {{"RESULT", self->ros_result_to_bus(Result{})}};
-            }
-            std::vector<std::pair<std::string, std::vector<uint8_t>>> phases;
-            {
-              std::lock_guard<std::mutex> lock(*feedback_mtx);
-              for (auto &fb : *feedbacks) {
-                phases.emplace_back("FEEDBACK", std::move(fb));
+            const auto deadline =
+                std::chrono::steady_clock::now() + std::chrono::duration<double>(timeout);
+            bool cancel_sent = false;
+            while (result_future.wait_for(std::chrono::milliseconds(20)) !=
+                   std::future_status::ready) {
+              if (actx.cancel_requested() && !cancel_sent) {
+                ros_client->async_cancel_goal(goal_handle);
+                cancel_sent = true;
+              }
+              if (std::chrono::steady_clock::now() >= deadline) {
+                return self->ros_result_to_bus(Result{});
               }
             }
             try {
               auto wrapped = result_future.get();
               if (wrapped.result) {
-                phases.emplace_back("RESULT", self->ros_result_to_bus(*wrapped.result));
-              } else {
-                phases.emplace_back("RESULT", self->ros_result_to_bus(Result{}));
+                return self->ros_result_to_bus(*wrapped.result);
               }
+              return self->ros_result_to_bus(Result{});
             } catch (...) {
-              return {{"RESULT", self->ros_result_to_bus(Result{})}};
+              return self->ros_result_to_bus(Result{});
             }
-            return phases;
           },
           nullptr, ctx.bus_qos.depth())));
     }

@@ -31,16 +31,20 @@ class TopicQosKeepLast:
 
 
 class TopicQos:
-    """KeepLast depth plus reliability.
+    """KeepLast depth plus reliability and optional ROS durability.
 
     Same type on ROS and bus endpoints for topics, services, and actions.
-    ROS honors depth + reliability. Bus uses depth as ZMQ HWM and must be
-    ``.best_effort()`` (no DDS reliability).
+    ROS honors depth + reliability + durability. Bus uses depth as ZMQ HWM
+    and must be ``.best_effort()`` (no DDS reliability); durability is ignored
+    on bus.
     """
 
-    def __init__(self, depth: int, best_effort: bool) -> None:
+    def __init__(
+        self, depth: int, best_effort: bool, transient_local: bool = False
+    ) -> None:
         self._depth = int(depth)
         self._best_effort = bool(best_effort)
+        self._transient_local = bool(transient_local)
 
     @staticmethod
     def keep_last(depth: int) -> TopicQosKeepLast:
@@ -58,10 +62,30 @@ class TopicQos:
     def is_reliable(self) -> bool:
         return not self._best_effort
 
+    @property
+    def is_transient_local(self) -> bool:
+        return self._transient_local
+
+    @property
+    def is_volatile(self) -> bool:
+        return not self._transient_local
+
+    def transient_local(self) -> "TopicQos":
+        """ROS ``TRANSIENT_LOCAL`` (latch), e.g. ``/tf_static``."""
+        return TopicQos(self._depth, self._best_effort, True)
+
+    def volatile(self) -> "TopicQos":
+        """ROS ``VOLATILE`` (default). New subscribers only see later samples."""
+        return TopicQos(self._depth, self._best_effort, False)
+
     def __eq__(self, other: object) -> bool:
         if not isinstance(other, TopicQos):
             return NotImplemented
-        return self._depth == other._depth and self._best_effort == other._best_effort
+        return (
+            self._depth == other._depth
+            and self._best_effort == other._best_effort
+            and self._transient_local == other._transient_local
+        )
 
 
 def should_enable_ros_subscription(
@@ -78,6 +102,7 @@ def should_enable_ros_subscription(
 
 def _ros_qos(qos: TopicQos) -> Any:
     from rclpy.qos import (
+        DurabilityPolicy,
         HistoryPolicy,
         QoSProfile,
         ReliabilityPolicy,
@@ -90,11 +115,17 @@ def _ros_qos(qos: TopicQos) -> Any:
     profile.reliability = (
         ReliabilityPolicy.BEST_EFFORT if qos.is_best_effort else ReliabilityPolicy.RELIABLE
     )
+    profile.durability = (
+        DurabilityPolicy.TRANSIENT_LOCAL
+        if qos.is_transient_local
+        else DurabilityPolicy.VOLATILE
+    )
     return profile
 
 
 def _ros_service_qos(qos: TopicQos) -> Any:
     from rclpy.qos import (
+        DurabilityPolicy,
         HistoryPolicy,
         QoSProfile,
         ReliabilityPolicy,
@@ -108,7 +139,11 @@ def _ros_service_qos(qos: TopicQos) -> Any:
         reliability=(
             ReliabilityPolicy.BEST_EFFORT if qos.is_best_effort else ReliabilityPolicy.RELIABLE
         ),
-        durability=base.durability,
+        durability=(
+            DurabilityPolicy.TRANSIENT_LOCAL
+            if qos.is_transient_local
+            else DurabilityPolicy.VOLATILE
+        ),
         lifespan=base.lifespan,
         deadline=base.deadline,
         liveliness=base.liveliness,

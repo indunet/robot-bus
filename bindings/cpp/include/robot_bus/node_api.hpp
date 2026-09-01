@@ -4,6 +4,33 @@
 
 namespace robot_bus {
 
+/// Per-goal context for a streaming action server handler.
+class ActionGoalContext {
+ public:
+  explicit ActionGoalContext(RobotBusActionGoalContext *raw) : raw_(raw) {}
+
+  bool cancel_requested() const {
+    return raw_ && robot_bus_action_goal_context_cancel_requested(raw_) != 0;
+  }
+
+  void publish_feedback(BytesView body) const {
+    if (raw_) {
+      robot_bus_action_goal_context_publish_feedback(raw_, body.data, body.size);
+    }
+  }
+
+  std::string goal_id() const {
+    if (!raw_) {
+      return {};
+    }
+    OwnedString s(robot_bus_action_goal_context_goal_id(raw_));
+    return s.str();
+  }
+
+ private:
+  RobotBusActionGoalContext *raw_ = nullptr;
+};
+
 class Node {
  public:
   using MsgCallback = std::function<void(BytesView payload)>;
@@ -11,6 +38,8 @@ class Node {
   using ServiceHandler = std::function<std::vector<uint8_t>(BytesView body)>;
   using ActionHandler =
       std::function<std::vector<std::pair<std::string, std::vector<uint8_t>>>(BytesView body)>;
+  using ActionLiveHandler =
+      std::function<std::vector<uint8_t>(BytesView body, const ActionGoalContext &ctx)>;
 
   explicit Node(std::string name) {
     n_ = static_cast<RobotBusNode *>(
@@ -81,7 +110,8 @@ class Node {
         msg_cbs_(std::move(o.msg_cbs_)),
         timer_cbs_(std::move(o.timer_cbs_)),
         svc_cbs_(std::move(o.svc_cbs_)),
-        action_cbs_(std::move(o.action_cbs_)) {
+        action_cbs_(std::move(o.action_cbs_)),
+        action_live_cbs_(std::move(o.action_live_cbs_)) {
     o.n_ = nullptr;
   }
 
@@ -258,6 +288,46 @@ class Node {
                     },
                     held, group ? group->raw() : nullptr, qos_depth),
                 "create_action_server")));
+  }
+
+  /// Streaming action server: handler may publish FEEDBACK and poll CANCEL.
+  [[nodiscard]] ActionServerHandle create_action_server_live(
+      const char *action_name, ActionLiveHandler handler,
+      const CallbackGroup *group = nullptr) {
+    return create_action_server_live(action_name, std::move(handler), group, 0);
+  }
+
+  [[nodiscard]] ActionServerHandle create_action_server_live(const char *action_name,
+                                                             ActionLiveHandler handler,
+                                                             const CallbackGroup *group,
+                                                             int32_t qos_depth) {
+    action_live_cbs_.push_back(std::make_unique<ActionLiveHandler>(std::move(handler)));
+    ActionLiveHandler *held = action_live_cbs_.back().get();
+    return ActionServerHandle(
+        n_, static_cast<RobotBusActionServerHandle *>(check_ptr(
+                robot_bus_node_create_action_server_live_with_qos(
+                    n_, action_name,
+                    [](const uint8_t *data, size_t len, RobotBusActionGoalContext *ctx,
+                       uint8_t **out_result, size_t *out_len, void *user) -> int {
+                      try {
+                        auto *fn = static_cast<ActionLiveHandler *>(user);
+                        ActionGoalContext wrapped(ctx);
+                        auto result = (*fn)(BytesView(data, len), wrapped);
+                        *out_len = result.size();
+                        if (result.empty()) {
+                          *out_result = nullptr;
+                          return 0;
+                        }
+                        *out_result = alloc_reply_bytes(result);
+                        return 0;
+                      } catch (...) {
+                        *out_result = nullptr;
+                        *out_len = 0;
+                        return -1;
+                      }
+                    },
+                    held, group ? group->raw() : nullptr, qos_depth),
+                "create_action_server_live")));
   }
 
   ActionClient create_action_client(const char *action_name) {
@@ -446,6 +516,7 @@ class Node {
   std::vector<std::unique_ptr<TimerCallback>> timer_cbs_;
   std::vector<std::unique_ptr<ServiceHandler>> svc_cbs_;
   std::vector<std::unique_ptr<ActionHandler>> action_cbs_;
+  std::vector<std::unique_ptr<ActionLiveHandler>> action_live_cbs_;
 };
 
 class Broker {

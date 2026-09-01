@@ -1,0 +1,44 @@
+"""Generated mapper for `apriltag_msgs/msg/AprilTagDetectionArray`."""
+
+from __future__ import annotations
+
+from robot_bus.ros2_bridge.mappers import _convert
+from robot_bus.ros2_bridge.mappers.std_msgs.header import header_to_bus, header_to_ros
+from robot_bus.ros2_bridge.mappers.apriltag_msgs.april_tag_detection import april_tag_detection_to_bus, april_tag_detection_to_ros
+
+def april_tag_detection_array_to_bus(msg):
+    from robot_bus.apriltag_msgs.msg.v1 import AprilTagDetectionArray as BusMsg
+
+    bus = BusMsg()
+    bus.header.CopyFrom(header_to_bus(msg.header))
+    bus.detections.extend([april_tag_detection_to_bus(x) for x in msg.detections])
+    return bus
+
+
+def april_tag_detection_array_to_ros(bus):
+    from apriltag_msgs.msg import AprilTagDetectionArray as RosMsg
+
+    out = RosMsg()
+    out.header = header_to_ros(bus.header)
+    out.detections = [april_tag_detection_to_ros(x) for x in bus.detections]
+    return out
+
+
+class ApriltagMsgsAprilTagDetectionArrayMapper:
+    def type_name(self) -> str:
+        return "apriltag_msgs/msg/AprilTagDetectionArray"
+
+    def ros_msg_type(self):
+        from apriltag_msgs.msg import AprilTagDetectionArray as RosMsg
+
+        return RosMsg
+
+    def ros_to_bus(self, msg) -> bytes:
+        return april_tag_detection_array_to_bus(msg).SerializeToString()
+
+    def bus_to_ros(self, payload: bytes):
+        from robot_bus.apriltag_msgs.msg.v1 import AprilTagDetectionArray as BusMsg
+
+        bus = BusMsg()
+        bus.ParseFromString(payload)
+        return april_tag_detection_array_to_ros(bus)

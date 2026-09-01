@@ -51,9 +51,9 @@ pub use builder::{
 };
 pub use mapper::{
     lookup_topic_mapper, lookup_topic_mapper_arc, registered_topic_types, ActionMapper,
-    ActionWireContext, Direction, ServiceMapper, ServiceWireContext, TopicMapper, TopicQos,
-    TopicQosKeepLast, TopicReliability, TopicWireContext, TypedActionMapper, TypedServiceMapper,
-    TypedTopicMapper,
+    ActionWireContext, Direction, ServiceMapper, ServiceWireContext, TopicDurability, TopicMapper,
+    TopicQos, TopicQosKeepLast, TopicReliability, TopicWireContext, TypedActionMapper,
+    TypedServiceMapper, TypedTopicMapper,
 };
 pub use mappers::action_bridges::FibonacciActionMapper;
 pub use mappers::service_bridges::{SetBoolServiceMapper, TriggerServiceMapper};

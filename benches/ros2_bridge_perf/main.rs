@@ -25,6 +25,7 @@ mod support;
 mod run {
     use super::support;
     use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+    use std::sync::mpsc;
     use std::sync::{Arc, Mutex};
     use std::thread;
     use std::time::{Duration, Instant};
@@ -32,9 +33,13 @@ mod run {
     use prost::Message as ProstMessage;
     use rclrs::{CreateBasicExecutor, IntoPrimitiveOptions, SpinOptions};
     use robot_bus::ros2_bridge::{
-        Ros2Bridge, SensorMsgsImageMapper, StdMsgsStringMapper, TopicQos,
+        FibonacciActionMapper, Ros2Bridge, SensorMsgsImageMapper, StdMsgsStringMapper,
+        TopicQos, TriggerServiceMapper,
     };
     use robot_bus::std_msgs::msg::v1::String as BusString;
+    use robot_bus::std_srvs::srv::v1::{TriggerRequest, TriggerResponse};
+    use robot_bus::example_interfaces::action::v1::{FibonacciGoal, FibonacciResult};
+    use robot_bus::ros2_bridge::vendor::std_srvs::srv as ros_std_srvs;
     use robot_bus::{Context, Node, NodeOptions, QosProfile, RobotBusBroker, ShutdownHandle};
     use ros_env::sensor_msgs::msg::Image as RosImage;
     use ros_env::std_msgs::msg::String as RosString;
@@ -207,6 +212,8 @@ mod run {
             .to_ascii_lowercase();
         let run_string = only.is_empty() || only == "string" || only == "str";
         let run_image = only.is_empty() || only == "image" || only == "img";
+        let run_trigger = only.is_empty() || only == "trigger" || only == "svc";
+        let run_fibonacci = only.is_empty() || only == "fibonacci" || only == "fib";
 
         println!("starting RobotBusBroker…");
         let ctx = Context::new();
@@ -238,6 +245,30 @@ mod run {
             .mapper(SensorMsgsImageMapper)
             .add()
             .expect("b2r img")
+            .service()
+            .from_ros("/perf/r2b/trigger", qos_ros)
+            .to_bus("/perf/r2b/trigger", qos_bus)
+            .mapper(TriggerServiceMapper)
+            .add()
+            .expect("r2b trigger")
+            .service()
+            .from_bus("/perf/b2r/trigger", qos_bus)
+            .to_ros("/perf/b2r/trigger", qos_ros)
+            .mapper(TriggerServiceMapper)
+            .add()
+            .expect("b2r trigger")
+            .action()
+            .from_ros("/perf/r2b/fib", qos_ros)
+            .to_bus("/perf/r2b/fib", qos_bus)
+            .mapper(FibonacciActionMapper)
+            .add()
+            .expect("r2b fib")
+            .action()
+            .from_bus("/perf/b2r/fib", qos_bus)
+            .to_ros("/perf/b2r/fib", qos_ros)
+            .mapper(FibonacciActionMapper)
+            .add()
+            .expect("b2r fib")
             .build()
             .expect("bridge build");
 
@@ -271,6 +302,14 @@ mod run {
         if run_image {
             results.push(bench_ros_to_bus_image(&ros_node, &ctx));
             results.push(bench_bus_to_ros_image(&ros_node, &ctx));
+        }
+        if run_trigger {
+            results.push(bench_ros_to_bus_trigger(&ros_node, &ctx));
+            results.push(bench_bus_to_ros_trigger(&ros_node, &ctx));
+        }
+        if run_fibonacci {
+            results.push(bench_ros_to_bus_fibonacci(&ros_node, &ctx));
+            results.push(bench_bus_to_ros_fibonacci(&ros_node, &ctx));
         }
 
         ros_commands.halt_spinning();
@@ -510,6 +549,276 @@ mod run {
         })
     }
 
+    fn rpc_qos() -> QosProfile {
+        QosProfile::keep_last(MSG_HWM)
+    }
+
+    struct NoopWake;
+    impl std::task::Wake for NoopWake {
+        fn wake(self: Arc<Self>) {}
+    }
+
+    fn bench_ros_to_bus_trigger(ros_node: &rclrs::Node, bus_ctx: &Context) -> ScenarioResult {
+        let scenario = "trigger ROS→bus";
+        let name = "/perf/r2b/trigger";
+        let count = Arc::new(AtomicUsize::new(0));
+        let latencies = Arc::new(Mutex::new(Vec::<u64>::new()));
+        let record = Arc::new(AtomicBool::new(true));
+
+        let mut bus = Node::with_context_options(bus_ctx, "perf_bus_svc_r2b", NodeOptions::tcp());
+        if let Err(err) = bus.create_service_raw_with_qos(
+            name,
+            rpc_qos(),
+            Arc::new(|_| {
+                TriggerResponse {
+                    success: true,
+                    message: String::new(),
+                }
+                .encode_to_vec()
+            }),
+            None,
+        ) {
+            return ScenarioResult::skipped("inproc", scenario, format!("bus svc: {err}"));
+        }
+        let (_spin, shutdown) = spin_bus(bus);
+
+        let ros_client = match ros_node.create_client::<ros_std_srvs::Trigger>(
+            name.keep_last(MSG_HWM as u32).best_effort(),
+        ) {
+            Ok(c) => c,
+            Err(err) => {
+                shutdown.shutdown();
+                return ScenarioResult::skipped("inproc", scenario, format!("ros client: {err}"));
+            }
+        };
+        let deadline = Instant::now() + Duration::from_secs(5);
+        while Instant::now() < deadline {
+            if ros_client.service_is_ready().unwrap_or(false) {
+                break;
+            }
+            thread::sleep(Duration::from_millis(20));
+        }
+
+        let cnt = Arc::clone(&count);
+        let lat = Arc::clone(&latencies);
+        let rec = Arc::clone(&record);
+        run_pub_trial(scenario, count, latencies, record, shutdown, move |_ts| {
+            let t0 = now_ns();
+            let (tx, rx) = mpsc::sync_channel(1);
+            let _ = ros_client.call_then(ros_std_srvs::Trigger_Request::default(), move |resp| {
+                let _ = tx.send(resp.success);
+            });
+            match rx.recv_timeout(Duration::from_secs(2)) {
+                Ok(_) => {
+                    if rec.load(Ordering::Relaxed) {
+                        let now = now_ns();
+                        if now >= t0 {
+                            lat.lock().unwrap().push(now - t0);
+                        }
+                    }
+                    cnt.fetch_add(1, Ordering::Relaxed);
+                    Ok(())
+                }
+                Err(_) => Err("trigger ROS→bus timed out".into()),
+            }
+        })
+    }
+
+    fn bench_bus_to_ros_trigger(ros_node: &rclrs::Node, bus_ctx: &Context) -> ScenarioResult {
+        let scenario = "trigger bus→ROS";
+        let name = "/perf/b2r/trigger";
+        let count = Arc::new(AtomicUsize::new(0));
+        let latencies = Arc::new(Mutex::new(Vec::<u64>::new()));
+        let record = Arc::new(AtomicBool::new(true));
+
+        let _ros_svc = match ros_node.create_service::<ros_std_srvs::Trigger, _>(
+            name.keep_last(MSG_HWM as u32).best_effort(),
+            |_req: ros_std_srvs::Trigger_Request| ros_std_srvs::Trigger_Response {
+                success: true,
+                message: String::new(),
+            },
+        ) {
+            Ok(s) => s,
+            Err(err) => {
+                return ScenarioResult::skipped("inproc", scenario, format!("ros svc: {err}"));
+            }
+        };
+
+        let mut bus = Node::with_context_options(bus_ctx, "perf_bus_cli_b2r", NodeOptions::tcp());
+        let client = match bus.create_client_raw_with_qos(name, rpc_qos()) {
+            Ok(c) => c,
+            Err(err) => {
+                return ScenarioResult::skipped("inproc", scenario, format!("bus client: {err}"));
+            }
+        };
+        let (_spin, shutdown) = spin_bus(bus);
+        thread::sleep(Duration::from_millis(200));
+
+        let cnt = Arc::clone(&count);
+        let lat = Arc::clone(&latencies);
+        let rec = Arc::clone(&record);
+        let req = TriggerRequest {}.encode_to_vec();
+        run_pub_trial(scenario, count, latencies, record, shutdown, move |_ts| {
+            let t0 = now_ns();
+            client
+                .call(&req, Some(Duration::from_secs(2)))
+                .map(|_| {
+                    if rec.load(Ordering::Relaxed) {
+                        let now = now_ns();
+                        if now >= t0 {
+                            lat.lock().unwrap().push(now - t0);
+                        }
+                    }
+                    cnt.fetch_add(1, Ordering::Relaxed);
+                })
+                .map_err(|e| e.to_string())
+        })
+    }
+
+    fn bench_ros_to_bus_fibonacci(ros_node: &rclrs::Node, bus_ctx: &Context) -> ScenarioResult {
+        let scenario = "fibonacci ROS→bus";
+        let name = "/perf/r2b/fib";
+        let count = Arc::new(AtomicUsize::new(0));
+        let latencies = Arc::new(Mutex::new(Vec::<u64>::new()));
+        let record = Arc::new(AtomicBool::new(true));
+
+        let mut bus = Node::with_context_options(bus_ctx, "perf_bus_act_r2b", NodeOptions::tcp());
+        if let Err(err) = bus.create_action_server_raw_with_qos(
+            name,
+            rpc_qos(),
+            Arc::new(|_body| {
+                vec![(
+                    "RESULT".into(),
+                    FibonacciResult {
+                        sequence: vec![0, 1, 1],
+                    }
+                    .encode_to_vec(),
+                )]
+            }),
+            None,
+        ) {
+            return ScenarioResult::skipped("inproc", scenario, format!("bus action: {err}"));
+        }
+        let (_spin, shutdown) = spin_bus(bus);
+
+        let ros_client = match ros_node.create_action_client::<ros_env::example_interfaces::action::Fibonacci>(
+            name,
+        ) {
+            Ok(c) => c,
+            Err(err) => {
+                shutdown.shutdown();
+                return ScenarioResult::skipped("inproc", scenario, format!("ros action client: {err}"));
+            }
+        };
+
+        let cnt = Arc::clone(&count);
+        let lat = Arc::clone(&latencies);
+        let rec = Arc::clone(&record);
+        run_pub_trial(scenario, count, latencies, record, shutdown, move |_ts| {
+            let t0 = now_ns();
+            let goal = ros_env::example_interfaces::action::Fibonacci_Goal { order: 3 };
+            let requested = ros_client
+                .try_request_goal(goal)
+                .map_err(|e| format!("request_goal: {e}"))?;
+            let deadline = Instant::now() + Duration::from_secs(3);
+            let mut fut = requested;
+            let waker = std::task::Waker::from(std::sync::Arc::new(NoopWake));
+            let mut cx = std::task::Context::from_waker(&waker);
+            let goal_client = loop {
+                match std::pin::Pin::new(&mut fut).poll(&mut cx) {
+                    std::task::Poll::Ready(v) => break v,
+                    std::task::Poll::Pending => {
+                        if Instant::now() >= deadline {
+                            return Err("fibonacci ROS→bus accept timed out".into());
+                        }
+                        thread::sleep(Duration::from_millis(5));
+                    }
+                }
+            };
+            let Some(gc) = goal_client else {
+                return Err("fibonacci ROS→bus rejected".into());
+            };
+            let mut result_fut = gc.result;
+            loop {
+                match std::pin::Pin::new(&mut result_fut).poll(&mut cx) {
+                    std::task::Poll::Ready(_) => break,
+                    std::task::Poll::Pending => {
+                        if Instant::now() >= deadline {
+                            return Err("fibonacci ROS→bus result timed out".into());
+                        }
+                        thread::sleep(Duration::from_millis(5));
+                    }
+                }
+            }
+            if rec.load(Ordering::Relaxed) {
+                let now = now_ns();
+                if now >= t0 {
+                    lat.lock().unwrap().push(now - t0);
+                }
+            }
+            cnt.fetch_add(1, Ordering::Relaxed);
+            Ok(())
+        })
+    }
+
+    fn bench_bus_to_ros_fibonacci(ros_node: &rclrs::Node, bus_ctx: &Context) -> ScenarioResult {
+        let scenario = "fibonacci bus→ROS";
+        let name = "/perf/b2r/fib";
+        let count = Arc::new(AtomicUsize::new(0));
+        let latencies = Arc::new(Mutex::new(Vec::<u64>::new()));
+        let record = Arc::new(AtomicBool::new(true));
+
+        let _ros_server = match ros_node.create_action_server::<
+            ros_env::example_interfaces::action::Fibonacci,
+            _,
+        >(name, |requested| async move {
+            let accepted = requested.accept();
+            let executing = match accepted.begin() {
+                rclrs::BeginAcceptedGoal::Execute(e) => e,
+                rclrs::BeginAcceptedGoal::Cancel(c) => {
+                    return c.cancelled_with(Default::default());
+                }
+            };
+            executing.succeeded_with(ros_env::example_interfaces::action::Fibonacci_Result {
+                sequence: vec![0, 1, 1],
+            })
+        }) {
+            Ok(s) => s,
+            Err(err) => {
+                return ScenarioResult::skipped("inproc", scenario, format!("ros action server: {err}"));
+            }
+        };
+
+        let mut bus = Node::with_context_options(bus_ctx, "perf_bus_act_cli", NodeOptions::tcp());
+        let client = match bus.create_action_client_raw_with_qos(name, rpc_qos()) {
+            Ok(c) => c,
+            Err(err) => {
+                return ScenarioResult::skipped("inproc", scenario, format!("bus action client: {err}"));
+            }
+        };
+        let (_spin, shutdown) = spin_bus(bus);
+        thread::sleep(Duration::from_millis(300));
+        let goal = FibonacciGoal { order: 3 }.encode_to_vec();
+        let cnt = Arc::clone(&count);
+        let lat = Arc::clone(&latencies);
+        let rec = Arc::clone(&record);
+        run_pub_trial(scenario, count, latencies, record, shutdown, move |_ts| {
+            let t0 = now_ns();
+            client
+                .send_goal_and_wait(&goal, None, Some(Duration::from_secs(3)))
+                .map(|_| {
+                    if rec.load(Ordering::Relaxed) {
+                        let now = now_ns();
+                        if now >= t0 {
+                            lat.lock().unwrap().push(now - t0);
+                        }
+                    }
+                    cnt.fetch_add(1, Ordering::Relaxed);
+                })
+                .map_err(|e| e.to_string())
+        })
+    }
+
     fn run_pub_trial(
         scenario: &str,
         count: Arc<AtomicUsize>,
@@ -631,12 +940,14 @@ mod run {
         if zh {
             md.push_str("\n## 方法\n\n");
             md.push_str("- 进程内 broker + `Ros2Bridge`；ROS 与 bus 各一条 peer。\n");
+            md.push_str("- 场景：64B `std_msgs/String`；Image 默认 640×480 rgb8；Trigger / Fibonacci 双向（KeepLast 与 topic 档一致）。\n");
             md.push_str("- 吞吐：限速发送约 1s，二分搜索丢包 ≤ 1% 的最大可持续速率。\n");
             md.push_str("- 延迟：另做限速抽样（发一条等收到再发）。\n\n");
             md.push_str("## 结果\n\n");
         } else {
             md.push_str("\n## Method\n\n");
             md.push_str("- In-process broker + `Ros2Bridge`; one ROS peer and one bus peer.\n");
+            md.push_str("- Scenarios: 64B `std_msgs/String`; Image 640×480 rgb8 default; Trigger / Fibonacci both directions (KeepLast matches topic benches).\n");
             md.push_str("- Goodput: paced ~1s trials, binary search max rate with loss ≤ 1%.\n");
             md.push_str("- Latency: separate paced samples (send one, wait, repeat).\n\n");
             md.push_str("## Results\n\n");

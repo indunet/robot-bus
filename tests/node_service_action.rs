@@ -2,9 +2,10 @@
 
 mod support;
 
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::thread;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use robot_bus::action_bus::ActionKind;
 use robot_bus::example_interfaces::action::v1::{
@@ -169,6 +170,151 @@ fn node_action_client_goal_raw() {
         });
 
         executor.spin().expect("spin");
+    }
+
+    broker.stop().expect("stop broker");
+}
+
+#[test]
+fn node_action_live_feedback_arrives_before_result() {
+    let _guard = lock_brokers();
+    let broker = RobotBusBroker::start(ephemeral_robot_bus_config()).expect("broker");
+    let options = node_options_from_broker(&broker);
+
+    {
+        let mut server = Node::with_options("act_server", options.clone());
+        let mut client_node = Node::with_options("act_client", options);
+        let executor = SingleThreadedExecutor::new();
+        executor.add_node(&mut server).expect("add server");
+
+        server
+            .create_action_server_raw_live(
+                "stream",
+                Arc::new(|_body, ctx| {
+                    ctx.publish_feedback(b"fb0");
+                    thread::sleep(Duration::from_millis(300));
+                    ctx.publish_feedback(b"fb1");
+                    thread::sleep(Duration::from_millis(300));
+                    ctx.publish_feedback(b"fb2");
+                    b"done".to_vec()
+                }),
+                None,
+            )
+            .expect("create_action_server_raw_live");
+
+        let client = client_node
+            .create_action_client_raw("stream")
+            .expect("create_action_client_raw");
+        let handle = executor.shutdown_handle().expect("shutdown handle");
+
+        thread::spawn(move || {
+            thread::sleep(Duration::from_millis(150));
+            let first_fb = Arc::new(std::sync::Mutex::new(None::<Instant>));
+            let stamp_fb = Arc::clone(&first_fb);
+            let goal = client
+                .send_goal(
+                    b"go",
+                    None,
+                    Some(Duration::from_secs(10)),
+                    Some(Arc::new(move |message: &robot_bus::ActionMessage| {
+                        if message.kind == ActionKind::Feedback {
+                            let mut slot = stamp_fb.lock().expect("fb stamp");
+                            if slot.is_none() {
+                                *slot = Some(Instant::now());
+                            }
+                        }
+                    })),
+                )
+                .expect("send_goal");
+            let result = goal.wait_result().expect("wait_result");
+            let t_res = Instant::now();
+            assert_eq!(result.body, b"done");
+            let t_fb = first_fb.lock().expect("fb").expect("feedback arrived");
+            assert!(
+                t_res.saturating_duration_since(t_fb) >= Duration::from_millis(200),
+                "feedback must reach the client before RESULT is flushed (live, not batched)"
+            );
+            handle.shutdown();
+        });
+
+        executor.spin().expect("spin");
+    }
+
+    broker.stop().expect("stop broker");
+}
+
+#[test]
+fn node_action_cancel_interrupts_inflight_goal() {
+    let _guard = lock_brokers();
+    let broker = RobotBusBroker::start(ephemeral_robot_bus_config()).expect("broker");
+    let options = node_options_from_broker(&broker);
+
+    {
+        let mut server = Node::with_options("act_server", options.clone());
+        let mut client_node = Node::with_options("act_client", options);
+        let executor = SingleThreadedExecutor::new();
+        executor.add_node(&mut server).expect("add server");
+
+        let took_cancel = Arc::new(AtomicBool::new(false));
+        let took_cancel_h = Arc::clone(&took_cancel);
+        server
+            .create_action_server_raw_live(
+                "cancellable",
+                Arc::new(move |_body, ctx| {
+                    ctx.publish_feedback(b"started");
+                    for _ in 0..200 {
+                        if ctx.cancel_requested() {
+                            took_cancel_h.store(true, Ordering::SeqCst);
+                            return b"cancelled".to_vec();
+                        }
+                        thread::sleep(Duration::from_millis(20));
+                    }
+                    b"completed".to_vec()
+                }),
+                None,
+            )
+            .expect("create_action_server_raw_live");
+
+        let client = client_node
+            .create_action_client_raw("cancellable")
+            .expect("create_action_client_raw");
+        let handle = executor.shutdown_handle().expect("shutdown handle");
+
+        thread::spawn(move || {
+            thread::sleep(Duration::from_millis(150));
+            let got_fb = Arc::new(AtomicBool::new(false));
+            let flag = Arc::clone(&got_fb);
+            let goal = client
+                .send_goal(
+                    b"go",
+                    None,
+                    Some(Duration::from_secs(10)),
+                    Some(Arc::new(move |message: &robot_bus::ActionMessage| {
+                        if message.kind == ActionKind::Feedback {
+                            flag.store(true, Ordering::SeqCst);
+                        }
+                    })),
+                )
+                .expect("send_goal");
+            let wait_fb = Instant::now();
+            while !got_fb.load(Ordering::SeqCst) && wait_fb.elapsed() < Duration::from_secs(5) {
+                thread::sleep(Duration::from_millis(20));
+            }
+            assert!(
+                got_fb.load(Ordering::SeqCst),
+                "expected live FEEDBACK before cancel"
+            );
+            goal.cancel().expect("cancel");
+            let result = goal.wait_result().expect("wait_result");
+            assert_eq!(result.body, b"cancelled");
+            handle.shutdown();
+        });
+
+        executor.spin().expect("spin");
+        assert!(
+            took_cancel.load(Ordering::SeqCst),
+            "handler must observe cancel_requested"
+        );
     }
 
     broker.stop().expect("stop broker");

@@ -9,7 +9,9 @@ use crate::message_bus::Publisher as BusPublisher;
 use crate::runtime::callback_group::CallbackGroup;
 use crate::runtime::qos::QosProfile;
 use crate::runtime::queues::ActionMessageCallback;
-use crate::runtime::registrations::{ActionGoalHandler, MessageCallback, ServiceHandler};
+use crate::runtime::registrations::{
+    ActionGoalHandler, ActionGoalLiveHandler, MessageCallback, ServiceHandler,
+};
 use crate::runtime::timers::{SubscriptionHandle, TimerCallback, TimerHandle};
 use crate::runtime::topology_register::TopologyEndpointGuard;
 use crate::service_bus::ServiceClient as BusServiceClient;
@@ -672,6 +674,71 @@ impl Node {
         callback_group: Option<&CallbackGroup>,
         hwm: Option<HighWaterMark>,
     ) -> Result<NodeActionServer> {
+        self.finish_action_server(
+            action_name,
+            callback_group,
+            hwm,
+            |exec, group, endpoint, hwm| {
+                exec.register_action(action_name, handler, group, Some(endpoint), None, hwm)
+            },
+        )
+    }
+
+    /// Register a live action server: handler may publish FEEDBACK and poll CANCEL.
+    pub fn create_action_server_raw_live(
+        &mut self,
+        action_name: &str,
+        handler: ActionGoalLiveHandler,
+        callback_group: Option<&CallbackGroup>,
+    ) -> Result<NodeActionServer> {
+        self.create_action_server_raw_live_with_qos_inner(action_name, handler, callback_group, None)
+    }
+
+    /// Live action server with KeepLast depth → DEALER HWM.
+    pub fn create_action_server_raw_live_with_qos(
+        &mut self,
+        action_name: &str,
+        qos: QosProfile,
+        handler: ActionGoalLiveHandler,
+        callback_group: Option<&CallbackGroup>,
+    ) -> Result<NodeActionServer> {
+        self.create_action_server_raw_live_with_qos_inner(
+            action_name,
+            handler,
+            callback_group,
+            Some(qos.to_hwm()),
+        )
+    }
+
+    fn create_action_server_raw_live_with_qos_inner(
+        &mut self,
+        action_name: &str,
+        handler: ActionGoalLiveHandler,
+        callback_group: Option<&CallbackGroup>,
+        hwm: Option<HighWaterMark>,
+    ) -> Result<NodeActionServer> {
+        self.finish_action_server(
+            action_name,
+            callback_group,
+            hwm,
+            |exec, group, endpoint, hwm| {
+                exec.register_action_live(action_name, handler, group, Some(endpoint), None, hwm)
+            },
+        )
+    }
+
+    fn finish_action_server(
+        &mut self,
+        action_name: &str,
+        callback_group: Option<&CallbackGroup>,
+        hwm: Option<HighWaterMark>,
+        register: impl FnOnce(
+            &mut crate::runtime::Executor,
+            CallbackGroup,
+            &str,
+            Option<HighWaterMark>,
+        ) -> Result<u64>,
+    ) -> Result<NodeActionServer> {
         if self.options.is_ws() {
             return Err(ws_mode_unsupported("create_action_server"));
         }
@@ -680,14 +747,7 @@ impl Node {
         let group = callback_group
             .cloned()
             .unwrap_or_else(|| self.default_callback_group.clone());
-        let id = self.lock_executor()?.register_action(
-            action_name,
-            handler,
-            group,
-            Some(&endpoint),
-            None,
-            hwm,
-        )?;
+        let id = register(&mut *self.lock_executor()?, group, &endpoint, hwm)?;
         let topology = self.start_topology_guard("action_server", action_name);
         self.topology_actions.insert(id, topology);
         Ok(NodeActionServer {

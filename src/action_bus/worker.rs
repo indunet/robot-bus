@@ -182,13 +182,14 @@ impl ActionWorker {
             return Ok(true);
         }
         let kind_str = String::from_utf8_lossy(kind);
-        if kind_str == "CANCEL" || kind_str == "GOAL" {
-            let payload = if kind_str == "GOAL" {
-                body.as_slice()
-            } else {
-                kind.as_slice()
-            };
-            let replies = (self.handler)(payload);
+        if kind_str == "CANCEL" {
+            // Sequential serve_once cannot interrupt an in-flight GOAL on this
+            // socket. Node dispatch (ActionRegistration) handles CANCEL via
+            // ActionGoalContext. Do not treat CANCEL as a new goal payload.
+            return Ok(true);
+        }
+        if kind_str == "GOAL" {
+            let replies = (self.handler)(body);
             for (phase, chunk) in replies {
                 let _ = self.reply(client_id, goal_id, phase.as_bytes(), &chunk);
             }

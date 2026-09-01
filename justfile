@@ -33,7 +33,7 @@ gen-android:
 gen-rust:
 	python3 scripts/generate_rust_msgs.py
 
-# Typed ROS↔protobuf topic mappers + ros-env-shim stubs
+# Typed ROS↔protobuf topic mappers (Rust + Python + C++) + ros-env-shim stubs
 gen-topic-mappers:
 	python3 scripts/generate_topic_mappers.py
 

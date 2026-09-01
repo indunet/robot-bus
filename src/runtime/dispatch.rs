@@ -1,15 +1,17 @@
 //! Frame parsing and inline callback dispatch for [`super::Executor`].
 
 use std::collections::HashMap;
-use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::Sender;
+use std::sync::Arc;
+use std::thread;
 
 use crate::action_bus::{ActionKind, ActionMessage};
 use crate::runtime::callback_group::SubscriptionCallback;
 use crate::runtime::queues::{ActionReply, OutboundCommand, ReplyMessage, ServiceReply};
 use crate::runtime::registrations::{
-    ActionClientRegistration, ActionRegistration, Registration, RegistrationKind,
-    ServiceRegistration, SubRegistration,
+    ActionClientRegistration, ActionGoalContext, ActionRegistration, Registration,
+    RegistrationKind, ServiceRegistration, SubRegistration,
 };
 use crate::runtime::topic_callbacks::for_each_matching_callback;
 use crate::runtime::worker_pool::WorkerPool;
@@ -140,30 +142,73 @@ pub fn dispatch_action_message(
         return;
     }
     let kind_str = String::from_utf8_lossy(&kind);
-    if kind_str != "CANCEL" && kind_str != "GOAL" {
+    let goal_id_str = String::from_utf8_lossy(&goal_id).into_owned();
+    if kind_str == "CANCEL" {
+        if let Ok(map) = reg.inflight.lock() {
+            if let Some(flag) = map.get(&goal_id_str) {
+                flag.store(true, Ordering::SeqCst);
+            }
+        }
+        return;
+    }
+    if kind_str != "GOAL" {
         log::warn!("ignored action kind {kind_str:?}");
         return;
     }
-    let payload: Vec<u8> = if kind_str == "GOAL" { body } else { kind };
+
+    let cancel = Arc::new(AtomicBool::new(false));
+    if let Ok(mut map) = reg.inflight.lock() {
+        map.insert(goal_id_str.clone(), Arc::clone(&cancel));
+    }
 
     let handler = Arc::clone(&reg.handler);
+    let inflight = Arc::clone(&reg.inflight);
     let action_name = reg.action_name.clone();
     let reply_tx = reply_tx.clone();
     let group = reg.callback_group.clone();
-    group.run(worker_pool, move || {
-        let replies = handler(&payload);
-        for (phase, chunk) in replies {
-            let _ = reply_tx.send(ReplyMessage::Action {
-                action_name: action_name.clone(),
+
+    let client_id_fb = client_id.clone();
+    let goal_id_fb = goal_id.clone();
+    let action_name_fb = action_name.clone();
+    let reply_tx_fb = reply_tx.clone();
+    let ctx = ActionGoalContext::new(
+        goal_id_str.clone(),
+        cancel,
+        Arc::new(move |chunk: &[u8]| {
+            let _ = reply_tx_fb.send(ReplyMessage::Action {
+                action_name: action_name_fb.clone(),
                 reply: ActionReply {
-                    client_id: client_id.clone(),
-                    goal_id: goal_id.clone(),
-                    kind: phase.into_bytes(),
-                    body: chunk,
+                    client_id: client_id_fb.clone(),
+                    goal_id: goal_id_fb.clone(),
+                    kind: b"FEEDBACK".to_vec(),
+                    body: chunk.to_vec(),
                 },
             });
+        }),
+    );
+
+    let job = move || {
+        let result = handler(&body, &ctx);
+        let _ = reply_tx.send(ReplyMessage::Action {
+            action_name,
+            reply: ActionReply {
+                client_id,
+                goal_id,
+                kind: b"RESULT".to_vec(),
+                body: result,
+            },
+        });
+        if let Ok(mut map) = inflight.lock() {
+            map.remove(&goal_id_str);
         }
-    });
+    };
+
+    // Live FEEDBACK/CANCEL need the poll thread free. Offload even without a pool.
+    if worker_pool.is_some() {
+        group.run(worker_pool, job);
+    } else {
+        thread::spawn(job);
+    }
 }
 
 pub fn dispatch_action_client_message(reg: &mut ActionClientRegistration) {

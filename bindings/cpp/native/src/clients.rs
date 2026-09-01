@@ -9,7 +9,7 @@ use std::time::Duration;
 
 use robot_bus::action_bus::ActionKind;
 use robot_bus::runtime::{
-    CallbackGroup, CallbackGroupType, NodeActionClientRaw as RustNodeActionClient,
+    ActionGoalContext, CallbackGroup, CallbackGroupType, NodeActionClientRaw as RustNodeActionClient,
     NodeActionServer as RustNodeActionServer, NodeService as RustNodeService,
     NodeServiceClientRaw as RustNodeServiceClient, RawActionFeedbackCallback,
     RawGoalHandle as RustActionGoalHandle, ShutdownHandle as RustShutdownHandle,
@@ -602,6 +602,20 @@ pub type RobotBusActionHandler = Option<
         user: *mut c_void,
     ) -> c_int,
 >;
+pub type RobotBusActionLiveHandler = Option<
+    unsafe extern "C" fn(
+        data: *const u8,
+        len: usize,
+        ctx: *mut RobotBusActionGoalContext,
+        out_result: *mut *mut u8,
+        out_len: *mut usize,
+        user: *mut c_void,
+    ) -> c_int,
+>;
+
+pub(crate) struct RobotBusActionGoalContext {
+    pub(crate) inner: ActionGoalContext,
+}
 
 #[repr(C)]
 pub(crate) struct RobotBusActionPhase {
@@ -643,4 +657,41 @@ pub extern "C" fn robot_bus_action_phases_free(phases: *mut RobotBusActionPhase,
         }
         drop(Vec::from_raw_parts(phases, count, count));
     }
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn robot_bus_action_goal_context_cancel_requested(
+    ctx: *const RobotBusActionGoalContext,
+) -> c_int {
+    if ctx.is_null() {
+        return 0;
+    }
+    i32::from(unsafe { &*ctx }.inner.cancel_requested())
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn robot_bus_action_goal_context_publish_feedback(
+    ctx: *const RobotBusActionGoalContext,
+    data: *const u8,
+    len: usize,
+) {
+    if ctx.is_null() {
+        return;
+    }
+    let body = if data.is_null() || len == 0 {
+        &[][..]
+    } else {
+        unsafe { slice::from_raw_parts(data, len) }
+    };
+    unsafe { &*ctx }.inner.publish_feedback(body);
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn robot_bus_action_goal_context_goal_id(
+    ctx: *const RobotBusActionGoalContext,
+) -> *mut c_char {
+    if ctx.is_null() {
+        return ptr::null_mut();
+    }
+    dup_string(unsafe { &*ctx }.inner.goal_id())
 }

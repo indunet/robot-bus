@@ -165,7 +165,7 @@ Ros2Bridge.new(name)
 
 From [ros2-bridge.md](../zh/ros2-bridge.md):
 
-- Topic endpoints are **name + `TopicQos`** (`keep_last(n).reliable()` or `.best_effort()`; bus must be `.best_effort()`)
+- Topic endpoints are **name + `TopicQos`** (`keep_last(n).reliable()` or `.best_effort()`; ROS may add `.transient_local()`; bus must be `.best_effort()`)
 - Service / action: same `from_ros → to_bus` / `from_bus → to_ros` chain; `TopicQos` on the ROS name only; **no `both`**
 - Concrete mapper objects required
 - Built-in mappers for String, Image, Trigger, SetBool, Fibonacci; extend with typed converters for custom interfaces

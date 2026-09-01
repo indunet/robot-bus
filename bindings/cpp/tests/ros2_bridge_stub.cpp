@@ -2,6 +2,7 @@
 // Builder `.lazy()` checks run with or without ROS.
 // With ROBOT_BUS_HAS_ROS2, also build()+spin_once against an in-process broker.
 #include <robot_bus/ros2_bridge.hpp>
+#include <robot_bus/ros2_bridge/mappers/geometry_msgs/pose_stamped.hpp>
 
 #include "harness.hpp"
 
@@ -21,6 +22,22 @@ struct AttachOnlyMapper : robot_bus::TopicMapper {
 
 bool throws_containing(const char *what, const std::string &haystack) {
   return haystack.find(what) != std::string::npos;
+}
+
+int test_generated_topic_mapper() {
+  try {
+    auto b = robot_bus::Ros2Bridge::New("t")
+                 .from_ros("/pose", ros_qos())
+                 .to_bus("/pose", bus_qos())
+                 .mapper(robot_bus::GeometryMsgsPoseStampedMapper{})
+                 .add();
+    (void)b;
+  } catch (const robot_bus::Error &e) {
+    std::fprintf(stderr, "generated mapper path threw: %s\n", e.what());
+    return 1;
+  }
+  std::printf("generated topic mapper add() ok\n");
+  return 0;
 }
 
 int test_lazy_builder() {
@@ -80,11 +97,24 @@ int test_qos_builder() {
     (void)b;
     std::fprintf(stderr, "expected bus reliable TopicQos to throw\n");
     return 1;
-  } catch (const robot_bus::Error &e) {
+    } catch (const robot_bus::Error &e) {
     if (!throws_containing("best_effort", e.what())) {
       std::fprintf(stderr, "wrong bus reliable error: %s\n", e.what());
       return 1;
     }
+  }
+
+  try {
+    auto b = robot_bus::Ros2Bridge::New("t")
+                 .from_ros("/tf_static",
+                           robot_bus::TopicQos::keep_last(1).reliable().transient_local())
+                 .to_bus("/tf_static", robot_bus::TopicQos::keep_last(1).best_effort())
+                 .mapper(robot_bus::StdMsgsStringMapper{})
+                 .add();
+    (void)b;
+  } catch (const robot_bus::Error &e) {
+    std::fprintf(stderr, "transient_local path threw: %s\n", e.what());
+    return 1;
   }
 
   std::printf("qos builder checks ok\n");
@@ -118,6 +148,9 @@ int test_service_builder() {
 
 int main() {
   if (int rc = test_lazy_builder()) {
+    return rc;
+  }
+  if (int rc = test_generated_topic_mapper()) {
     return rc;
   }
   if (int rc = test_qos_builder()) {

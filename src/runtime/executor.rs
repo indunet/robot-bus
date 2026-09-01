@@ -35,8 +35,8 @@ use crate::runtime::dispatch::{
 };
 use crate::runtime::queues::{ActionMessageCallback, OutboundCommand, ReplyMessage};
 use crate::runtime::registrations::{
-    ActionClientRegistration, ActionGoalHandler, ActionRegistration, MessageCallback, Registration,
-    ServiceHandler, ServiceRegistration, SubRegistration,
+    ActionClientRegistration, ActionGoalHandler, ActionGoalLiveHandler, ActionRegistration,
+    MessageCallback, Registration, ServiceHandler, ServiceRegistration, SubRegistration,
 };
 use crate::runtime::timers::{
     effective_poll_timeout_ms, tick_timers, SubscriptionHandle, Timer, TimerCallback, TimerHandle,
@@ -557,6 +557,49 @@ impl Executor {
         )?;
         log::info!(
             "action worker {:?} registered for {action_name} on {endpoint}",
+            String::from_utf8_lossy(&reg.identity)
+        );
+        self.action_registrations.push(reg);
+        self.sync_worker_registrations();
+        Ok(id)
+    }
+
+    /// Register a live action worker that can publish FEEDBACK before returning RESULT.
+    pub fn register_action_live(
+        &mut self,
+        action_name: &str,
+        handler: ActionGoalLiveHandler,
+        callback_group: CallbackGroup,
+        backend_endpoint: Option<&str>,
+        identity: Option<&str>,
+        hwm: Option<HighWaterMark>,
+    ) -> Result<u64> {
+        self.ensure_open()?;
+        if self.started {
+            return Err(BusError::Protocol(
+                "register_action_live() cannot run while start() is active".into(),
+            ));
+        }
+        let endpoint = match backend_endpoint {
+            Some(ep) => ep.to_string(),
+            None => action_backend_endpoint("localhost", "tcp").map_err(BusError::Protocol)?,
+        };
+        let id = self.next_action_id;
+        self.next_action_id += 1;
+        let hwm = hwm.unwrap_or(self.action_hwm);
+        let reg = ActionRegistration::create_live(
+            id,
+            self.context.zmq(),
+            action_name,
+            handler,
+            callback_group,
+            &endpoint,
+            identity,
+            self.heartbeat_interval_ms,
+            hwm,
+        )?;
+        log::info!(
+            "action worker {:?} registered (live) for {action_name} on {endpoint}",
             String::from_utf8_lossy(&reg.identity)
         );
         self.action_registrations.push(reg);

@@ -157,6 +157,16 @@ fn qos_stored_per_endpoint() {
         .expect("add");
     assert_eq!(b.routes[0].ros_qos, ros);
     assert_eq!(b.routes[0].bus_qos, bus);
+
+    let latched = TopicQos::keep_last(1).reliable().transient_local();
+    let b2 = Ros2Bridge::new("t")
+        .from_ros("/tf_static", latched)
+        .to_bus("/tf_static", bus)
+        .mapper(DummyTopicMapper)
+        .add()
+        .expect("add");
+    assert_eq!(b2.routes[0].ros_qos, latched);
+    assert!(b2.routes[0].ros_qos.is_transient_local());
 }
 
 #[test]

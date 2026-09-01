@@ -21,7 +21,7 @@ This is **not** full package migration — for that use **ros2-to-robot-bus** /
 
 | Do | Do not |
 |----|--------|
-| Every endpoint: name + `TopicQos.keep_last(n).reliable()` / `.best_effort()` | Native `rclpy`/`rclcpp` QoS as the bridge second arg |
+| Every endpoint: name + `TopicQos.keep_last(n).reliable()` / `.best_effort()`; ROS may add `.transient_local()` | Native `rclpy`/`rclcpp` QoS as the bridge second arg |
 | ROS service/action: same `TopicQos` on `from_ros` / `to_ros` | Silent default ROS service QoS |
 | Bus `TopicQos` on topics, services, and actions; must be `.best_effort()` | Silent drop of `.reliable()` on bus |
 | Mount with `.mapper(concrete object)` | Type-name string lookup to mount routes |
@@ -39,7 +39,7 @@ Direction is the chain (`from_ros → to_bus` vs `from_bus → to_ros`) for topi
 | ROS publishes / serves → bus clients consume | `from_ros(...).to_bus(...)` |
 | Bus publishes / serves → ROS subscribers / clients | `from_bus(...).to_ros(...)` |
 
-Start services with `.service()` and actions with `.action()`. Pass `TopicQos` on every name (`from_ros` / `to_ros` / `from_bus` / `to_bus`). Same logical name on both sides is fine (`/chatter`, `/chatter`); names need not match. After `TopicQos.keep_last(n)` call `.reliable()` or `.best_effort()`. ROS accepts either; bus endpoints must be `.best_effort()`. Typical ROS service QoS: `TopicQos.keep_last(10).reliable()`. Typical bus RPC QoS: `TopicQos.keep_last(8).best_effort()`.
+Start services with `.service()` and actions with `.action()`. Pass `TopicQos` on every name (`from_ros` / `to_ros` / `from_bus` / `to_bus`). Same logical name on both sides is fine (`/chatter`, `/chatter`); names need not match. After `TopicQos.keep_last(n)` call `.reliable()` or `.best_effort()`. ROS accepts either; bus endpoints must be `.best_effort()`. ROS durability defaults to volatile; chain `.transient_local()` on ROS endpoints for latched topics (`/tf_static`). Typical ROS service QoS: `TopicQos.keep_last(10).reliable()`. Typical bus RPC QoS: `TopicQos.keep_last(8).best_effort()`.
 
 ## Prerequisites
 
@@ -77,19 +77,24 @@ Progress:
 .action().from_ros(ros, TopicQos).to_bus(bus, TopicQos).mapper(...).timeout(...).add()
 ```
 
-`TopicQos.keep_last(n)` then **must** `.reliable()` or `.best_effort()`. Bus endpoints (topic, service, action) must be `.best_effort()`. Direction is the chain. **No `both`**. Action applies the ROS profile to goal/result/cancel + feedback; status stays ROS default. Bus RPC depth → DEALER HWM. Defaults: service timeout **5s**, action goal **30s**. Topic routes are **eager** at `build()`; `.lazy()` is opt-in on `from_ros → to_bus` topics only (camera/lidar). No-console brokers fall back to eager. `from_bus → to_ros` and service/action have no `.lazy()`.
+`TopicQos.keep_last(n)` then **must** `.reliable()` or `.best_effort()`. Bus endpoints (topic, service, action) must be `.best_effort()`. ROS endpoints may chain `.transient_local()` (default volatile). Direction is the chain. **No `both`**. Action applies the ROS profile to goal/result/cancel + feedback; status stays ROS default. Bus RPC depth → DEALER HWM. Defaults: service timeout **5s**, action goal **30s**. Topic routes are **eager** at `build()`; `.lazy()` is opt-in on `from_ros → to_bus` topics only (camera/lidar). No-console brokers fall back to eager. `from_bus → to_ros` and service/action have no `.lazy()`.
 
 ### Built-in mappers (objects, not strings)
 
+**Topics** share one catalog across Rust / Python / C++ (`proto/*/msg/v1`, ~214 types). After proto changes, re-run `just gen-topic-mappers`. Mount with `.mapper(GeometryMsgsPoseStampedMapper())` (Python) / `.mapper(GeometryMsgsPoseStampedMapper{})` (C++; same attach path as custom mappers; C++ `TopicBuiltin` stays String/Image only).
+
+**Service / action** remain hand-written phase-1 builtins (no generated srv/action catalog):
+
 | Kind | Mapper | ROS type |
 |------|--------|----------|
-| Topic | `StdMsgsStringMapper` | `std_msgs/msg/String` |
-| Topic | `SensorMsgsImageMapper` | `sensor_msgs/msg/Image` |
+| Topic (example) | `StdMsgsStringMapper` | `std_msgs/msg/String` |
+| Topic (example) | `SensorMsgsImageMapper` | `sensor_msgs/msg/Image` |
+| Topic (example) | `GeometryMsgsPoseStampedMapper` | `geometry_msgs/msg/PoseStamped` |
 | Service | `TriggerServiceMapper` | `std_srvs/srv/Trigger` |
 | Service | `SetBoolServiceMapper` | `std_srvs/srv/SetBool` |
 | Action | `FibonacciActionMapper` | `example_interfaces/action/Fibonacci` |
 
-Rust may register more topic mappers for introspection; **mounting still requires** `.mapper(concrete type)`.
+Rust: `lookup_topic_mapper` / `registered_topic_types`. C++ Humble-default-missing packages (`nav2_msgs` / `control_msgs` / `apriltag_msgs` / `foxglove_msgs`) use `find_package(... QUIET)` — ROS conversion compiles only when the package is found. **Mounting still requires** `.mapper(concrete object)`, not a type-name string.
 
 ## Minimal examples
 

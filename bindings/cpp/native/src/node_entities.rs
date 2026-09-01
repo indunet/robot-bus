@@ -7,11 +7,13 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use robot_bus::runtime::{
-    ActionGoalHandler, CallbackGroupType, QosProfile, ServiceHandler, TimerCallback,
+    ActionGoalHandler, ActionGoalLiveHandler, CallbackGroupType, QosProfile, ServiceHandler,
+    TimerCallback,
 };
 
 use crate::clients::{
-    RobotBusActionClient, RobotBusActionHandler, RobotBusActionPhase, RobotBusActionServerHandle,
+    RobotBusActionClient, RobotBusActionGoalContext, RobotBusActionHandler,
+    RobotBusActionLiveHandler, RobotBusActionPhase, RobotBusActionServerHandle,
     RobotBusCallbackGroup, RobotBusMsgCallback, RobotBusServiceClient, RobotBusServiceHandle,
     RobotBusServiceHandler, RobotBusSubscriptionHandle, RobotBusTimerCallback, RobotBusTimerHandle,
     RobotBusTopicPublisher,
@@ -450,6 +452,91 @@ pub extern "C" fn robot_bus_node_create_action_server_with_qos(
         unsafe { &mut *n }
             .inner
             .create_action_server_raw(action_name, cb, group)
+    } {
+        Ok(inner) => {
+            clear_error();
+            Box::into_raw(Box::new(RobotBusActionServerHandle { inner }))
+        }
+        Err(e) => {
+            set_error(e.to_string());
+            ptr::null_mut()
+        }
+    }
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn robot_bus_node_create_action_server_live(
+    n: *mut RobotBusNode,
+    action_name: *const c_char,
+    handler: RobotBusActionLiveHandler,
+    user: *mut c_void,
+    group: *const RobotBusCallbackGroup,
+) -> *mut RobotBusActionServerHandle {
+    robot_bus_node_create_action_server_live_with_qos(n, action_name, handler, user, group, 0)
+}
+
+/** `depth <= 0` keeps the node action HWM; `depth > 0` maps to KeepLast. */
+#[unsafe(no_mangle)]
+pub extern "C" fn robot_bus_node_create_action_server_live_with_qos(
+    n: *mut RobotBusNode,
+    action_name: *const c_char,
+    handler: RobotBusActionLiveHandler,
+    user: *mut c_void,
+    group: *const RobotBusCallbackGroup,
+    depth: i32,
+) -> *mut RobotBusActionServerHandle {
+    if n.is_null() {
+        set_error("null node");
+        return ptr::null_mut();
+    }
+    let Some(handler_fn) = handler else {
+        set_error("null handler");
+        return ptr::null_mut();
+    };
+    let action_name = match cstr_req(action_name) {
+        Ok(s) => s,
+        Err(_) => return ptr::null_mut(),
+    };
+    let user = user as usize;
+    let cb: ActionGoalLiveHandler = Arc::new(move |payload, ctx| {
+        let mut wrapped = RobotBusActionGoalContext {
+            inner: ctx.clone(),
+        };
+        let mut out_data: *mut u8 = ptr::null_mut();
+        let mut out_len: usize = 0;
+        let rc = unsafe {
+            handler_fn(
+                payload.as_ptr(),
+                payload.len(),
+                &mut wrapped,
+                &mut out_data,
+                &mut out_len,
+                user as *mut c_void,
+            )
+        };
+        if rc != 0 || out_data.is_null() {
+            return Vec::new();
+        }
+        unsafe { Vec::from_raw_parts(out_data, out_len, out_len) }
+    });
+    let group = if group.is_null() {
+        None
+    } else {
+        Some(&unsafe { &*group }.inner)
+    };
+    match if depth > 0 {
+        unsafe { &mut *n }
+            .inner
+            .create_action_server_raw_live_with_qos(
+                action_name,
+                QosProfile::keep_last(depth),
+                cb,
+                group,
+            )
+    } else {
+        unsafe { &mut *n }
+            .inner
+            .create_action_server_raw_live(action_name, cb, group)
     } {
         Ok(inner) => {
             clear_error();

@@ -7,7 +7,8 @@ use pyo3::prelude::*;
 use pyo3::types::{PyBytes, PyType};
 
 use crate::runtime::{
-    ActionGoalHandler, Node as RustNode, NodeOptions as RustNodeOptions, QosProfile,
+    ActionGoalContext, ActionGoalHandler, Node as RustNode, NodeOptions as RustNodeOptions,
+    QosProfile,
 };
 
 use super::clients::{PyNodeActionClient, PyNodeServiceClient};
@@ -19,6 +20,29 @@ use super::runtime::{
 use super::util::{
     bus_err, parameter_to_py, parameter_value_from_py, py_discover_options, py_node_options,
 };
+
+#[pyclass(name = "ActionGoalContext")]
+pub(crate) struct PyActionGoalContext {
+    inner: ActionGoalContext,
+}
+
+#[pymethods]
+impl PyActionGoalContext {
+    /// Bus goal id for this execution.
+    fn goal_id(&self) -> String {
+        self.inner.goal_id().to_string()
+    }
+
+    /// True after a CANCEL frame arrived for this goal.
+    fn cancel_requested(&self) -> bool {
+        self.inner.cancel_requested()
+    }
+
+    /// Publish a FEEDBACK body immediately (before the handler returns RESULT).
+    fn publish_feedback(&self, body: &[u8]) {
+        self.inner.publish_feedback(body);
+    }
+}
 
 #[pyclass(name = "Node", unsendable)]
 pub(crate) struct PyNode {
@@ -468,45 +492,91 @@ impl PyNode {
 
     /// Register an action server (ROS 2–style `create_action_server`).
     ///
-    /// `handler(payload: bytes) -> list[tuple[str, bytes]]`
+    /// Batch (`streaming=False`, default): `handler(payload: bytes) -> list[tuple[str, bytes]]`
     /// where each tuple is `(phase, body)` and `phase` is typically `"FEEDBACK"` / `"RESULT"`.
-    #[pyo3(signature = (action_name, handler, callback_group=None, qos_depth=None))]
+    ///
+    /// Streaming (`streaming=True`): `handler(payload: bytes, ctx: ActionGoalContext) -> bytes`
+    /// (RESULT body). Call `ctx.publish_feedback` during the goal; poll `ctx.cancel_requested`.
+    #[pyo3(signature = (action_name, handler, callback_group=None, qos_depth=None, streaming=false))]
     fn create_action_server(
         slf: &Bound<'_, Self>,
         action_name: &str,
         handler: Py<PyAny>,
         callback_group: Option<&PyCallbackGroup>,
         qos_depth: Option<i32>,
+        streaming: bool,
     ) -> PyResult<PyActionServerHandle> {
+        use crate::runtime::ActionGoalLiveHandler;
         let handle = {
             let mut this = slf.borrow_mut();
-            let cb: ActionGoalHandler = Arc::new(move |payload| {
-                Python::with_gil(|py| {
-                    let args = (PyBytes::new(py, payload),);
-                    match handler.call1(py, args) {
-                        Ok(obj) => match obj.extract::<Vec<(String, Vec<u8>)>>(py) {
-                            Ok(replies) => replies,
+            let group = callback_group.map(|g| &g.inner);
+            if streaming {
+                let cb: ActionGoalLiveHandler = Arc::new(move |payload, ctx| {
+                    Python::with_gil(|py| {
+                        let py_ctx = match Py::new(
+                            py,
+                            PyActionGoalContext {
+                                inner: ctx.clone(),
+                            },
+                        ) {
+                            Ok(obj) => obj,
+                            Err(err) => {
+                                err.print(py);
+                                return Vec::new();
+                            }
+                        };
+                        let args = (PyBytes::new(py, payload), py_ctx);
+                        match handler.call1(py, args) {
+                            Ok(obj) => obj.extract::<Vec<u8>>(py).unwrap_or_else(|err| {
+                                err.print(py);
+                                Vec::new()
+                            }),
                             Err(err) => {
                                 err.print(py);
                                 Vec::new()
                             }
-                        },
-                        Err(err) => {
-                            err.print(py);
-                            Vec::new()
                         }
-                    }
-                })
-            });
-            let group = callback_group.map(|g| &g.inner);
-            match qos_depth.filter(|d| *d > 0) {
-                Some(depth) => this.inner.create_action_server_raw_with_qos(
-                    action_name,
-                    QosProfile::keep_last(depth),
-                    cb,
-                    group,
-                ),
-                None => this.inner.create_action_server_raw(action_name, cb, group),
+                    })
+                });
+                match qos_depth.filter(|d| *d > 0) {
+                    Some(depth) => this.inner.create_action_server_raw_live_with_qos(
+                        action_name,
+                        QosProfile::keep_last(depth),
+                        cb,
+                        group,
+                    ),
+                    None => this
+                        .inner
+                        .create_action_server_raw_live(action_name, cb, group),
+                }
+            } else {
+                let cb: ActionGoalHandler = Arc::new(move |payload| {
+                    Python::with_gil(|py| {
+                        let args = (PyBytes::new(py, payload),);
+                        match handler.call1(py, args) {
+                            Ok(obj) => match obj.extract::<Vec<(String, Vec<u8>)>>(py) {
+                                Ok(replies) => replies,
+                                Err(err) => {
+                                    err.print(py);
+                                    Vec::new()
+                                }
+                            },
+                            Err(err) => {
+                                err.print(py);
+                                Vec::new()
+                            }
+                        }
+                    })
+                });
+                match qos_depth.filter(|d| *d > 0) {
+                    Some(depth) => this.inner.create_action_server_raw_with_qos(
+                        action_name,
+                        QosProfile::keep_last(depth),
+                        cb,
+                        group,
+                    ),
+                    None => this.inner.create_action_server_raw(action_name, cb, group),
+                }
             }
             .map_err(bus_err)?
         };

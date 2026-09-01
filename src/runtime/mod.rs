@@ -39,6 +39,8 @@ pub use parameters::{ListParametersResult, PARAMETER_DEPTH_RECURSIVE, Parameter,
 pub(crate) use qos::ws_subscribe_queue_capacity;
 pub use qos::{QOS_PROFILE_DEFAULT, QosProfile};
 pub use queues::ActionMessageCallback;
-pub use registrations::{ActionGoalHandler, MessageCallback, ServiceHandler};
+pub use registrations::{
+    ActionGoalContext, ActionGoalHandler, ActionGoalLiveHandler, MessageCallback, ServiceHandler,
+};
 pub use session::ConnectionState;
 pub use timers::{SubscriptionHandle, TimerCallback, TimerHandle};

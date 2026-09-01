@@ -41,6 +41,15 @@ pub enum TopicReliability {
     BestEffort,
 }
 
+/// Durability for [`TopicQos`]. Defaults to [`Volatile`](TopicDurability::Volatile);
+/// call [`.transient_local()`](TopicQos::transient_local) for latched ROS topics
+/// (`/tf_static`, maps, …).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TopicDurability {
+    Volatile,
+    TransientLocal,
+}
+
 /// Intermediate after [`TopicQos::keep_last`]; call [`.reliable()`](TopicQosKeepLast::reliable)
 /// or [`.best_effort()`](TopicQosKeepLast::best_effort) to finish.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -53,6 +62,7 @@ impl TopicQosKeepLast {
         TopicQos {
             depth: self.depth,
             reliability: TopicReliability::Reliable,
+            durability: TopicDurability::Volatile,
         }
     }
 
@@ -60,19 +70,22 @@ impl TopicQosKeepLast {
         TopicQos {
             depth: self.depth,
             reliability: TopicReliability::BestEffort,
+            durability: TopicDurability::Volatile,
         }
     }
 }
 
-/// Bridge QoS: KeepLast depth plus reliability.
+/// Bridge QoS: KeepLast depth plus reliability and optional ROS durability.
 ///
 /// Same type on **ROS** and **bus** endpoints for topics, services, and actions.
-/// ROS honors depth + reliability. Bus uses depth as ZMQ HWM (PUB/SUB or DEALER)
-/// and must be [`.best_effort()`](TopicQosKeepLast::best_effort) (no DDS reliability).
+/// ROS honors depth + reliability + durability. Bus uses depth as ZMQ HWM
+/// (PUB/SUB or DEALER) and must be [`.best_effort()`](TopicQosKeepLast::best_effort)
+/// (no DDS reliability); durability is ignored on bus.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct TopicQos {
     depth: i32,
     reliability: TopicReliability,
+    durability: TopicDurability,
 }
 
 impl TopicQos {
@@ -88,12 +101,41 @@ impl TopicQos {
         self.reliability
     }
 
+    pub fn durability(self) -> TopicDurability {
+        self.durability
+    }
+
     pub fn is_reliable(self) -> bool {
         matches!(self.reliability, TopicReliability::Reliable)
     }
 
     pub fn is_best_effort(self) -> bool {
         matches!(self.reliability, TopicReliability::BestEffort)
+    }
+
+    pub fn is_transient_local(self) -> bool {
+        matches!(self.durability, TopicDurability::TransientLocal)
+    }
+
+    pub fn is_volatile(self) -> bool {
+        matches!(self.durability, TopicDurability::Volatile)
+    }
+
+    /// ROS `TRANSIENT_LOCAL` (latch). Needed to receive already-published samples
+    /// from latched publishers, and to match subscribers that request it.
+    pub fn transient_local(self) -> Self {
+        Self {
+            durability: TopicDurability::TransientLocal,
+            ..self
+        }
+    }
+
+    /// ROS `VOLATILE` (default). New subscribers only see subsequent samples.
+    pub fn volatile(self) -> Self {
+        Self {
+            durability: TopicDurability::Volatile,
+            ..self
+        }
     }
 }
 
@@ -106,6 +148,11 @@ pub(crate) fn ros_topic_options(topic: &str, qos: TopicQos) -> rclrs::PrimitiveO
     } else {
         opts = opts.reliable();
     }
+    if qos.is_transient_local() {
+        opts = opts.transient_local();
+    } else {
+        opts = opts.volatile();
+    }
     opts
 }
 
@@ -116,6 +163,11 @@ pub(crate) fn ros_service_qos_profile(qos: TopicQos) -> rclrs::QoSProfile {
     } else {
         p = p.reliable();
     }
+    if qos.is_transient_local() {
+        p = p.transient_local();
+    } else {
+        p = p.volatile();
+    }
     p
 }
 
@@ -125,6 +177,11 @@ pub(crate) fn ros_action_feedback_qos_profile(qos: TopicQos) -> rclrs::QoSProfil
         p = p.best_effort();
     } else {
         p = p.reliable();
+    }
+    if qos.is_transient_local() {
+        p = p.transient_local();
+    } else {
+        p = p.volatile();
     }
     p
 }
@@ -378,6 +435,10 @@ mod tests {
         let be = TopicQos::keep_last(5).best_effort();
         assert_eq!(be.depth(), 5);
         assert!(be.is_best_effort());
+        let latched = TopicQos::keep_last(1).reliable().transient_local();
+        assert!(latched.is_transient_local());
+        assert!(!latched.is_volatile());
+        assert!(!TopicQos::keep_last(10).reliable().is_transient_local());
     }
 
     #[test]

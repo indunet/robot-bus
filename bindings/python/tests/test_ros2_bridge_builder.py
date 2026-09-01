@@ -65,8 +65,15 @@ def test_topic_qos_requires_reliability():
     q = TopicQos.keep_last(10).reliable()
     assert q.depth == 10
     assert q.is_reliable is True
+    assert q.is_volatile is True
+    assert q.is_transient_local is False
     be = TopicQos.keep_last(5).best_effort()
     assert be.is_best_effort is True
+    latched = TopicQos.keep_last(1).reliable().transient_local()
+    assert latched.is_transient_local is True
+    assert latched.is_volatile is False
+    assert latched.is_reliable is True
+    assert latched.depth == 1
 
 
 def test_incomplete_topic_qos_rejected():
@@ -193,6 +200,28 @@ def test_qos_stored_per_endpoint():
     b = Ros2Bridge.new("t").from_ros("/a", ros).to_bus("/a", bus).mapper(Dummy()).add()
     assert b._routes[0]["ros_qos"] == ros
     assert b._routes[0]["bus_qos"] == bus
+
+    latched = TopicQos.keep_last(1).reliable().transient_local()
+    b2 = (
+        Ros2Bridge.new("t")
+        .from_ros("/tf_static", latched)
+        .to_bus("/tf_static", bus)
+        .mapper(Dummy())
+        .add()
+    )
+    assert b2._routes[0]["ros_qos"] == latched
+    assert b2._routes[0]["ros_qos"].is_transient_local is True
+
+    latched = TopicQos.keep_last(1).reliable().transient_local()
+    b2 = (
+        Ros2Bridge.new("t")
+        .from_ros("/tf_static", latched)
+        .to_bus("/tf_static", bus)
+        .mapper(Dummy())
+        .add()
+    )
+    assert b2._routes[0]["ros_qos"] == latched
+    assert b2._routes[0]["ros_qos"].is_transient_local is True
 
 
 def test_bus_reliable_rejected():
