@@ -29,10 +29,6 @@ impl TypedTopicMapper for FoxgloveMsgsTriangleListPrimitiveMapper {
     type Ros = ros_env::foxglove_msgs::msg::TriangleListPrimitive;
     type Bus = crate::foxglove_msgs::msg::v1::TriangleListPrimitive;
 
-    fn type_name(&self) -> &'static str {
-        "foxglove_msgs/msg/TriangleListPrimitive"
-    }
-
     fn ros_to_bus(&self, msg: Self::Ros) -> crate::errors::Result<Self::Bus> {
         Ok(triangle_list_primitive_to_bus(msg))
     }

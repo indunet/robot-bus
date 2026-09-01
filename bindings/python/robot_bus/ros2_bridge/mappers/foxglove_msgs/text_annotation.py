@@ -36,9 +36,6 @@ def text_annotation_to_ros(bus):
 
 
 class FoxgloveMsgsTextAnnotationMapper:
-    def type_name(self) -> str:
-        return "foxglove_msgs/msg/TextAnnotation"
-
     def ros_msg_type(self):
         from foxglove_msgs.msg import TextAnnotation as RosMsg
 

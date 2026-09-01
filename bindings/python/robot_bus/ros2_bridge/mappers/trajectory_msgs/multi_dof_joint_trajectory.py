@@ -27,9 +27,6 @@ def multi_dof_joint_trajectory_to_ros(bus):
 
 
 class TrajectoryMsgsMultiDofJointTrajectoryMapper:
-    def type_name(self) -> str:
-        return "trajectory_msgs/msg/MultiDOFJointTrajectory"
-
     def ros_msg_type(self):
         from trajectory_msgs.msg import MultiDOFJointTrajectory as RosMsg
 

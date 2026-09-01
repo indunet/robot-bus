@@ -50,8 +50,6 @@ inline ::sensor_msgs::msg::NavSatFix nav_sat_fix_to_ros(const ::sensor_msgs::msg
 class SensorMsgsNavSatFixMapper
     : public TypedTopicMapper<SensorMsgsNavSatFixMapper, ::sensor_msgs::msg::NavSatFix> {
  public:
-  const char *type_name() const override { return "sensor_msgs/msg/NavSatFix"; }
-
   std::vector<uint8_t> ros_to_bus(const ::sensor_msgs::msg::NavSatFix &msg) const {
     auto bus = ros2_bridge_mappers::sensor_msgs::nav_sat_fix_to_bus(msg);
     std::string bytes;
@@ -66,9 +64,7 @@ class SensorMsgsNavSatFixMapper
   }
 };
 #else
-struct SensorMsgsNavSatFixMapper : TopicMapper {
-  const char *type_name() const override { return "sensor_msgs/msg/NavSatFix"; }
-};
+struct SensorMsgsNavSatFixMapper : TopicMapper {};
 #endif
 
 }  // namespace robot_bus

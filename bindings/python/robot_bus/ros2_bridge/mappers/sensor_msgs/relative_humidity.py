@@ -26,9 +26,6 @@ def relative_humidity_to_ros(bus):
 
 
 class SensorMsgsRelativeHumidityMapper:
-    def type_name(self) -> str:
-        return "sensor_msgs/msg/RelativeHumidity"
-
     def ros_msg_type(self):
         from sensor_msgs.msg import RelativeHumidity as RosMsg
 

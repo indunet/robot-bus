@@ -24,9 +24,6 @@ def gripper_command_to_ros(bus):
 
 
 class ControlMsgsGripperCommandMapper:
-    def type_name(self) -> str:
-        return "control_msgs/msg/GripperCommand"
-
     def ros_msg_type(self):
         from control_msgs.msg import GripperCommand as RosMsg
 

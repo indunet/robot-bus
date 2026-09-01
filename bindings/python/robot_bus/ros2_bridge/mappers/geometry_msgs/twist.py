@@ -24,9 +24,6 @@ def twist_to_ros(bus):
 
 
 class GeometryMsgsTwistMapper:
-    def type_name(self) -> str:
-        return "geometry_msgs/msg/Twist"
-
     def ros_msg_type(self):
         from geometry_msgs.msg import Twist as RosMsg
 

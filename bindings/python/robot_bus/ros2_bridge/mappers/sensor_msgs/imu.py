@@ -36,9 +36,6 @@ def imu_to_ros(bus):
 
 
 class SensorMsgsImuMapper:
-    def type_name(self) -> str:
-        return "sensor_msgs/msg/Imu"
-
     def ros_msg_type(self):
         from sensor_msgs.msg import Imu as RosMsg
 

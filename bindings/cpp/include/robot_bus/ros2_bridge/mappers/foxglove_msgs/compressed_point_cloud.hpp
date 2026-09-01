@@ -43,8 +43,6 @@ inline ::foxglove_msgs::msg::CompressedPointCloud compressed_point_cloud_to_ros(
 class FoxgloveMsgsCompressedPointCloudMapper
     : public TypedTopicMapper<FoxgloveMsgsCompressedPointCloudMapper, ::foxglove_msgs::msg::CompressedPointCloud> {
  public:
-  const char *type_name() const override { return "foxglove_msgs/msg/CompressedPointCloud"; }
-
   std::vector<uint8_t> ros_to_bus(const ::foxglove_msgs::msg::CompressedPointCloud &msg) const {
     auto bus = ros2_bridge_mappers::foxglove_msgs::compressed_point_cloud_to_bus(msg);
     std::string bytes;
@@ -59,9 +57,7 @@ class FoxgloveMsgsCompressedPointCloudMapper
   }
 };
 #else
-struct FoxgloveMsgsCompressedPointCloudMapper : TopicMapper {
-  const char *type_name() const override { return "foxglove_msgs/msg/CompressedPointCloud"; }
-};
+struct FoxgloveMsgsCompressedPointCloudMapper : TopicMapper {};
 #endif
 
 }  // namespace robot_bus

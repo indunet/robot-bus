@@ -23,10 +23,6 @@ impl TypedTopicMapper for DiagnosticMsgsKeyValueMapper {
     type Ros = ros_env::diagnostic_msgs::msg::KeyValue;
     type Bus = crate::diagnostic_msgs::msg::v1::KeyValue;
 
-    fn type_name(&self) -> &'static str {
-        "diagnostic_msgs/msg/KeyValue"
-    }
-
     fn ros_to_bus(&self, msg: Self::Ros) -> crate::errors::Result<Self::Bus> {
         Ok(key_value_to_bus(msg))
     }

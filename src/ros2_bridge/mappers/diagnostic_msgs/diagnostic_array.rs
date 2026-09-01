@@ -23,10 +23,6 @@ impl TypedTopicMapper for DiagnosticMsgsDiagnosticArrayMapper {
     type Ros = ros_env::diagnostic_msgs::msg::DiagnosticArray;
     type Bus = crate::diagnostic_msgs::msg::v1::DiagnosticArray;
 
-    fn type_name(&self) -> &'static str {
-        "diagnostic_msgs/msg/DiagnosticArray"
-    }
-
     fn ros_to_bus(&self, msg: Self::Ros) -> crate::errors::Result<Self::Bus> {
         Ok(diagnostic_array_to_bus(msg))
     }

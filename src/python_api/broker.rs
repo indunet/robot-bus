@@ -10,7 +10,7 @@ use pyo3::prelude::*;
 
 use crate::broker::{
     RobotBusBroker as RustRobotBusBroker, RobotBusConfig, apply_federation_opts,
-    binding_broker_cli_args, parse_robot_bus_config, robot_bus_broker_help,
+    parse_robot_bus_config, robot_bus_broker_help, strip_runtime_argv,
 };
 use crate::shutdown;
 
@@ -370,10 +370,12 @@ pub(crate) fn print_broker_help() {
 
 /// Blocking CLI entry: start broker and wait for Ctrl+C (or Unix SIGTERM).
 ///
-/// Used by the `robot-bus-broker` console script after `pip install robot-bus`.
+/// Used by `python -m robot_bus.broker` after `pip install robot-bus`. Reads Python
+/// `sys.argv` (not process argv) so `-m robot_bus.broker` flags parse correctly.
 #[pyfunction]
 pub(crate) fn run_broker(py: Python<'_>) -> PyResult<()> {
-    let args = binding_broker_cli_args();
+    let argv: Vec<String> = py.import("sys")?.getattr("argv")?.extract()?;
+    let args = strip_runtime_argv(argv.into_iter().skip(1).collect());
     let config = match parse_robot_bus_config(&args).map_err(anyhow_err)? {
         None => {
             print_broker_help();
@@ -385,7 +387,7 @@ pub(crate) fn run_broker(py: Python<'_>) -> PyResult<()> {
     let flag = Arc::new(AtomicBool::new(false));
     shutdown::install(flag.clone());
 
-    println!("robot-bus-broker starting message + service + action buses + WebSocket + console…");
+    println!("python -m robot_bus.broker starting message + service + action buses + WebSocket + console…");
     let broker = RustRobotBusBroker::start(config).map_err(anyhow_err)?;
     let mut broker = PyRobotBusBroker {
         inner: Some(broker),
@@ -407,6 +409,6 @@ pub(crate) fn run_broker(py: Python<'_>) -> PyResult<()> {
     }
 
     broker.stop()?;
-    println!("robot-bus-broker stopped");
+    println!("python -m robot_bus.broker stopped");
     Ok(())
 }

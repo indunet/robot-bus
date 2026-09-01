@@ -22,9 +22,6 @@ def float64_to_ros(bus):
 
 
 class StdMsgsFloat64Mapper:
-    def type_name(self) -> str:
-        return "std_msgs/msg/Float64"
-
     def ros_msg_type(self):
         from std_msgs.msg import Float64 as RosMsg
 

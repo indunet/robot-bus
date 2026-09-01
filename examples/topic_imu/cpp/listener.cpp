@@ -1,4 +1,4 @@
-// Subscribe to /examples/imu (typed Imu). Requires a running robot-bus-broker.
+// Subscribe to /examples/imu (typed Imu). Requires a running broker (`python -m robot_bus.broker` / `robot_bus_broker`).
 #include <robot_bus/node.hpp>
 #include <robot_bus/typed.hpp>
 #include <robot_bus/sensor_msgs/msg/v1/imu.pb.h>

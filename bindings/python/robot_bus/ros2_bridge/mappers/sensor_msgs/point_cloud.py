@@ -28,9 +28,6 @@ def point_cloud_to_ros(bus):
 
 
 class SensorMsgsPointCloudMapper:
-    def type_name(self) -> str:
-        return "sensor_msgs/msg/PointCloud"
-
     def ros_msg_type(self):
         from sensor_msgs.msg import PointCloud as RosMsg
 

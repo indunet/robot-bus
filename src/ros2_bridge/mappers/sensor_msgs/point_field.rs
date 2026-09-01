@@ -27,10 +27,6 @@ impl TypedTopicMapper for SensorMsgsPointFieldMapper {
     type Ros = ros_env::sensor_msgs::msg::PointField;
     type Bus = crate::sensor_msgs::msg::v1::PointField;
 
-    fn type_name(&self) -> &'static str {
-        "sensor_msgs/msg/PointField"
-    }
-
     fn ros_to_bus(&self, msg: Self::Ros) -> crate::errors::Result<Self::Bus> {
         Ok(point_field_to_bus(msg))
     }

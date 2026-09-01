@@ -6,7 +6,7 @@ import re
 from pathlib import Path
 
 MAPPERS = Path(__file__).resolve().parents[1] / "robot_bus" / "ros2_bridge" / "mappers"
-TYPE_NAME_RE = re.compile(r'return "([^"]+/msg/[^"]+)"')
+TYPE_NAME_RE = re.compile(r"`([a-z0-9_]+/msg/[A-Za-z0-9_]+)`")
 
 
 def _type_names() -> set[str]:
@@ -26,7 +26,7 @@ def test_generated_topic_mapper_catalog():
     assert "sensor_msgs/msg/Image" in names
 
 
-def test_pose_stamped_mapper_type_name():
+def test_pose_stamped_mapper_exists():
     from robot_bus.ros2_bridge.mappers import GeometryMsgsPoseStampedMapper
 
-    assert GeometryMsgsPoseStampedMapper().type_name() == "geometry_msgs/msg/PoseStamped"
+    assert GeometryMsgsPoseStampedMapper() is not None

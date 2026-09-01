@@ -38,8 +38,6 @@ inline ::control_msgs::msg::SingleDOFStateStamped single_dof_state_stamped_to_ro
 class ControlMsgsSingleDofStateStampedMapper
     : public TypedTopicMapper<ControlMsgsSingleDofStateStampedMapper, ::control_msgs::msg::SingleDOFStateStamped> {
  public:
-  const char *type_name() const override { return "control_msgs/msg/SingleDOFStateStamped"; }
-
   std::vector<uint8_t> ros_to_bus(const ::control_msgs::msg::SingleDOFStateStamped &msg) const {
     auto bus = ros2_bridge_mappers::control_msgs::single_dof_state_stamped_to_bus(msg);
     std::string bytes;
@@ -54,9 +52,7 @@ class ControlMsgsSingleDofStateStampedMapper
   }
 };
 #else
-struct ControlMsgsSingleDofStateStampedMapper : TopicMapper {
-  const char *type_name() const override { return "control_msgs/msg/SingleDOFStateStamped"; }
-};
+struct ControlMsgsSingleDofStateStampedMapper : TopicMapper {};
 #endif
 
 }  // namespace robot_bus

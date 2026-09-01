@@ -23,10 +23,6 @@ impl TypedTopicMapper for StdMsgsUInt32MultiArrayMapper {
     type Ros = ros_env::std_msgs::msg::UInt32MultiArray;
     type Bus = crate::std_msgs::msg::v1::UInt32MultiArray;
 
-    fn type_name(&self) -> &'static str {
-        "std_msgs/msg/UInt32MultiArray"
-    }
-
     fn ros_to_bus(&self, msg: Self::Ros) -> crate::errors::Result<Self::Bus> {
         Ok(uint32_multi_array_to_bus(msg))
     }

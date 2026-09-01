@@ -55,8 +55,6 @@ inline ::control_msgs::msg::SteeringControllerStatus steering_controller_status_
 class ControlMsgsSteeringControllerStatusMapper
     : public TypedTopicMapper<ControlMsgsSteeringControllerStatusMapper, ::control_msgs::msg::SteeringControllerStatus> {
  public:
-  const char *type_name() const override { return "control_msgs/msg/SteeringControllerStatus"; }
-
   std::vector<uint8_t> ros_to_bus(const ::control_msgs::msg::SteeringControllerStatus &msg) const {
     auto bus = ros2_bridge_mappers::control_msgs::steering_controller_status_to_bus(msg);
     std::string bytes;
@@ -71,9 +69,7 @@ class ControlMsgsSteeringControllerStatusMapper
   }
 };
 #else
-struct ControlMsgsSteeringControllerStatusMapper : TopicMapper {
-  const char *type_name() const override { return "control_msgs/msg/SteeringControllerStatus"; }
-};
+struct ControlMsgsSteeringControllerStatusMapper : TopicMapper {};
 #endif
 
 }  // namespace robot_bus

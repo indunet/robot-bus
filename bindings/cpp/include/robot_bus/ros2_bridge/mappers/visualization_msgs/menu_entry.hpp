@@ -43,8 +43,6 @@ inline ::visualization_msgs::msg::MenuEntry menu_entry_to_ros(const ::visualizat
 class VisualizationMsgsMenuEntryMapper
     : public TypedTopicMapper<VisualizationMsgsMenuEntryMapper, ::visualization_msgs::msg::MenuEntry> {
  public:
-  const char *type_name() const override { return "visualization_msgs/msg/MenuEntry"; }
-
   std::vector<uint8_t> ros_to_bus(const ::visualization_msgs::msg::MenuEntry &msg) const {
     auto bus = ros2_bridge_mappers::visualization_msgs::menu_entry_to_bus(msg);
     std::string bytes;
@@ -59,9 +57,7 @@ class VisualizationMsgsMenuEntryMapper
   }
 };
 #else
-struct VisualizationMsgsMenuEntryMapper : TopicMapper {
-  const char *type_name() const override { return "visualization_msgs/msg/MenuEntry"; }
-};
+struct VisualizationMsgsMenuEntryMapper : TopicMapper {};
 #endif
 
 }  // namespace robot_bus

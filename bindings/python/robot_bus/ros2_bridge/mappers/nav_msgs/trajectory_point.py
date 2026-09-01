@@ -34,9 +34,6 @@ def trajectory_point_to_ros(bus):
 
 
 class NavMsgsTrajectoryPointMapper:
-    def type_name(self) -> str:
-        return "nav_msgs/msg/TrajectoryPoint"
-
     def ros_msg_type(self):
         from nav_msgs.msg import TrajectoryPoint as RosMsg
 

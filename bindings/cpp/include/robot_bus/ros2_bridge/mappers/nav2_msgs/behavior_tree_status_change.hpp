@@ -41,8 +41,6 @@ inline ::nav2_msgs::msg::BehaviorTreeStatusChange behavior_tree_status_change_to
 class Nav2MsgsBehaviorTreeStatusChangeMapper
     : public TypedTopicMapper<Nav2MsgsBehaviorTreeStatusChangeMapper, ::nav2_msgs::msg::BehaviorTreeStatusChange> {
  public:
-  const char *type_name() const override { return "nav2_msgs/msg/BehaviorTreeStatusChange"; }
-
   std::vector<uint8_t> ros_to_bus(const ::nav2_msgs::msg::BehaviorTreeStatusChange &msg) const {
     auto bus = ros2_bridge_mappers::nav2_msgs::behavior_tree_status_change_to_bus(msg);
     std::string bytes;
@@ -57,9 +55,7 @@ class Nav2MsgsBehaviorTreeStatusChangeMapper
   }
 };
 #else
-struct Nav2MsgsBehaviorTreeStatusChangeMapper : TopicMapper {
-  const char *type_name() const override { return "nav2_msgs/msg/BehaviorTreeStatusChange"; }
-};
+struct Nav2MsgsBehaviorTreeStatusChangeMapper : TopicMapper {};
 #endif
 
 }  // namespace robot_bus

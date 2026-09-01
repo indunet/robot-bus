@@ -39,8 +39,6 @@ inline ::foxglove_msgs::msg::CompressedAudio compressed_audio_to_ros(const ::fox
 class FoxgloveMsgsCompressedAudioMapper
     : public TypedTopicMapper<FoxgloveMsgsCompressedAudioMapper, ::foxglove_msgs::msg::CompressedAudio> {
  public:
-  const char *type_name() const override { return "foxglove_msgs/msg/CompressedAudio"; }
-
   std::vector<uint8_t> ros_to_bus(const ::foxglove_msgs::msg::CompressedAudio &msg) const {
     auto bus = ros2_bridge_mappers::foxglove_msgs::compressed_audio_to_bus(msg);
     std::string bytes;
@@ -55,9 +53,7 @@ class FoxgloveMsgsCompressedAudioMapper
   }
 };
 #else
-struct FoxgloveMsgsCompressedAudioMapper : TopicMapper {
-  const char *type_name() const override { return "foxglove_msgs/msg/CompressedAudio"; }
-};
+struct FoxgloveMsgsCompressedAudioMapper : TopicMapper {};
 #endif
 
 }  // namespace robot_bus

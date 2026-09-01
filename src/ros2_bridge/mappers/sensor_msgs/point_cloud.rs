@@ -25,10 +25,6 @@ impl TypedTopicMapper for SensorMsgsPointCloudMapper {
     type Ros = ros_env::sensor_msgs::msg::PointCloud;
     type Bus = crate::sensor_msgs::msg::v1::PointCloud;
 
-    fn type_name(&self) -> &'static str {
-        "sensor_msgs/msg/PointCloud"
-    }
-
     fn ros_to_bus(&self, msg: Self::Ros) -> crate::errors::Result<Self::Bus> {
         Ok(point_cloud_to_bus(msg))
     }

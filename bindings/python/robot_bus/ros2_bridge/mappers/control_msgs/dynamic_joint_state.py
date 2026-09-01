@@ -27,9 +27,6 @@ def dynamic_joint_state_to_ros(bus):
 
 
 class ControlMsgsDynamicJointStateMapper:
-    def type_name(self) -> str:
-        return "control_msgs/msg/DynamicJointState"
-
     def ros_msg_type(self):
         from control_msgs.msg import DynamicJointState as RosMsg
 

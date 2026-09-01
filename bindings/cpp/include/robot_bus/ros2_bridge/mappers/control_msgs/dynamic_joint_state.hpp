@@ -50,8 +50,6 @@ inline ::control_msgs::msg::DynamicJointState dynamic_joint_state_to_ros(const :
 class ControlMsgsDynamicJointStateMapper
     : public TypedTopicMapper<ControlMsgsDynamicJointStateMapper, ::control_msgs::msg::DynamicJointState> {
  public:
-  const char *type_name() const override { return "control_msgs/msg/DynamicJointState"; }
-
   std::vector<uint8_t> ros_to_bus(const ::control_msgs::msg::DynamicJointState &msg) const {
     auto bus = ros2_bridge_mappers::control_msgs::dynamic_joint_state_to_bus(msg);
     std::string bytes;
@@ -66,9 +64,7 @@ class ControlMsgsDynamicJointStateMapper
   }
 };
 #else
-struct ControlMsgsDynamicJointStateMapper : TopicMapper {
-  const char *type_name() const override { return "control_msgs/msg/DynamicJointState"; }
-};
+struct ControlMsgsDynamicJointStateMapper : TopicMapper {};
 #endif
 
 }  // namespace robot_bus

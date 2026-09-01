@@ -43,8 +43,6 @@ inline ::control_msgs::msg::MultiDOFStateStamped multi_dof_state_stamped_to_ros(
 class ControlMsgsMultiDofStateStampedMapper
     : public TypedTopicMapper<ControlMsgsMultiDofStateStampedMapper, ::control_msgs::msg::MultiDOFStateStamped> {
  public:
-  const char *type_name() const override { return "control_msgs/msg/MultiDOFStateStamped"; }
-
   std::vector<uint8_t> ros_to_bus(const ::control_msgs::msg::MultiDOFStateStamped &msg) const {
     auto bus = ros2_bridge_mappers::control_msgs::multi_dof_state_stamped_to_bus(msg);
     std::string bytes;
@@ -59,9 +57,7 @@ class ControlMsgsMultiDofStateStampedMapper
   }
 };
 #else
-struct ControlMsgsMultiDofStateStampedMapper : TopicMapper {
-  const char *type_name() const override { return "control_msgs/msg/MultiDOFStateStamped"; }
-};
+struct ControlMsgsMultiDofStateStampedMapper : TopicMapper {};
 #endif
 
 }  // namespace robot_bus

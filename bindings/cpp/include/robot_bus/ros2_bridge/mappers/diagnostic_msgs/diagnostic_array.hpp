@@ -43,8 +43,6 @@ inline ::diagnostic_msgs::msg::DiagnosticArray diagnostic_array_to_ros(const ::d
 class DiagnosticMsgsDiagnosticArrayMapper
     : public TypedTopicMapper<DiagnosticMsgsDiagnosticArrayMapper, ::diagnostic_msgs::msg::DiagnosticArray> {
  public:
-  const char *type_name() const override { return "diagnostic_msgs/msg/DiagnosticArray"; }
-
   std::vector<uint8_t> ros_to_bus(const ::diagnostic_msgs::msg::DiagnosticArray &msg) const {
     auto bus = ros2_bridge_mappers::diagnostic_msgs::diagnostic_array_to_bus(msg);
     std::string bytes;
@@ -59,9 +57,7 @@ class DiagnosticMsgsDiagnosticArrayMapper
   }
 };
 #else
-struct DiagnosticMsgsDiagnosticArrayMapper : TopicMapper {
-  const char *type_name() const override { return "diagnostic_msgs/msg/DiagnosticArray"; }
-};
+struct DiagnosticMsgsDiagnosticArrayMapper : TopicMapper {};
 #endif
 
 }  // namespace robot_bus

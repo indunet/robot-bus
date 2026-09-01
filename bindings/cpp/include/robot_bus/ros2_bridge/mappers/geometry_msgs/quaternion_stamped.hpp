@@ -38,8 +38,6 @@ inline ::geometry_msgs::msg::QuaternionStamped quaternion_stamped_to_ros(const :
 class GeometryMsgsQuaternionStampedMapper
     : public TypedTopicMapper<GeometryMsgsQuaternionStampedMapper, ::geometry_msgs::msg::QuaternionStamped> {
  public:
-  const char *type_name() const override { return "geometry_msgs/msg/QuaternionStamped"; }
-
   std::vector<uint8_t> ros_to_bus(const ::geometry_msgs::msg::QuaternionStamped &msg) const {
     auto bus = ros2_bridge_mappers::geometry_msgs::quaternion_stamped_to_bus(msg);
     std::string bytes;
@@ -54,9 +52,7 @@ class GeometryMsgsQuaternionStampedMapper
   }
 };
 #else
-struct GeometryMsgsQuaternionStampedMapper : TopicMapper {
-  const char *type_name() const override { return "geometry_msgs/msg/QuaternionStamped"; }
-};
+struct GeometryMsgsQuaternionStampedMapper : TopicMapper {};
 #endif
 
 }  // namespace robot_bus

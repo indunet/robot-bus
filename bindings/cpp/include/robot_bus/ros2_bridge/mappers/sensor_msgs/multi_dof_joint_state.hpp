@@ -66,8 +66,6 @@ inline ::sensor_msgs::msg::MultiDOFJointState multi_dof_joint_state_to_ros(const
 class SensorMsgsMultiDofJointStateMapper
     : public TypedTopicMapper<SensorMsgsMultiDofJointStateMapper, ::sensor_msgs::msg::MultiDOFJointState> {
  public:
-  const char *type_name() const override { return "sensor_msgs/msg/MultiDOFJointState"; }
-
   std::vector<uint8_t> ros_to_bus(const ::sensor_msgs::msg::MultiDOFJointState &msg) const {
     auto bus = ros2_bridge_mappers::sensor_msgs::multi_dof_joint_state_to_bus(msg);
     std::string bytes;
@@ -82,9 +80,7 @@ class SensorMsgsMultiDofJointStateMapper
   }
 };
 #else
-struct SensorMsgsMultiDofJointStateMapper : TopicMapper {
-  const char *type_name() const override { return "sensor_msgs/msg/MultiDOFJointState"; }
-};
+struct SensorMsgsMultiDofJointStateMapper : TopicMapper {};
 #endif
 
 }  // namespace robot_bus

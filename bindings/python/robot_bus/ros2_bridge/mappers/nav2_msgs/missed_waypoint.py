@@ -26,9 +26,6 @@ def missed_waypoint_to_ros(bus):
 
 
 class Nav2MsgsMissedWaypointMapper:
-    def type_name(self) -> str:
-        return "nav2_msgs/msg/MissedWaypoint"
-
     def ros_msg_type(self):
         from nav2_msgs.msg import MissedWaypoint as RosMsg
 

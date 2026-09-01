@@ -22,9 +22,6 @@ def u_int8_to_ros(bus):
 
 
 class StdMsgsUInt8Mapper:
-    def type_name(self) -> str:
-        return "std_msgs/msg/UInt8"
-
     def ros_msg_type(self):
         from std_msgs.msg import UInt8 as RosMsg
 

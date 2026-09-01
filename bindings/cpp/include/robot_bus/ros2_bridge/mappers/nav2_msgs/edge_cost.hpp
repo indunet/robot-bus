@@ -37,8 +37,6 @@ inline ::nav2_msgs::msg::EdgeCost edge_cost_to_ros(const ::nav2_msgs::msg::v1::E
 class Nav2MsgsEdgeCostMapper
     : public TypedTopicMapper<Nav2MsgsEdgeCostMapper, ::nav2_msgs::msg::EdgeCost> {
  public:
-  const char *type_name() const override { return "nav2_msgs/msg/EdgeCost"; }
-
   std::vector<uint8_t> ros_to_bus(const ::nav2_msgs::msg::EdgeCost &msg) const {
     auto bus = ros2_bridge_mappers::nav2_msgs::edge_cost_to_bus(msg);
     std::string bytes;
@@ -53,9 +51,7 @@ class Nav2MsgsEdgeCostMapper
   }
 };
 #else
-struct Nav2MsgsEdgeCostMapper : TopicMapper {
-  const char *type_name() const override { return "nav2_msgs/msg/EdgeCost"; }
-};
+struct Nav2MsgsEdgeCostMapper : TopicMapper {};
 #endif
 
 }  // namespace robot_bus

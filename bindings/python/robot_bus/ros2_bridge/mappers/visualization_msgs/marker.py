@@ -66,9 +66,6 @@ def marker_to_ros(bus):
 
 
 class VisualizationMsgsMarkerMapper:
-    def type_name(self) -> str:
-        return "visualization_msgs/msg/Marker"
-
     def ros_msg_type(self):
         from visualization_msgs.msg import Marker as RosMsg
 

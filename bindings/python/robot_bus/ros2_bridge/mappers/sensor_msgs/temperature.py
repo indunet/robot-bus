@@ -26,9 +26,6 @@ def temperature_to_ros(bus):
 
 
 class SensorMsgsTemperatureMapper:
-    def type_name(self) -> str:
-        return "sensor_msgs/msg/Temperature"
-
     def ros_msg_type(self):
         from sensor_msgs.msg import Temperature as RosMsg
 

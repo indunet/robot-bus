@@ -45,10 +45,6 @@ impl TypedTopicMapper for ControlMsgsPidStateMapper {
     type Ros = ros_env::control_msgs::msg::PidState;
     type Bus = crate::control_msgs::msg::v1::PidState;
 
-    fn type_name(&self) -> &'static str {
-        "control_msgs/msg/PidState"
-    }
-
     fn ros_to_bus(&self, msg: Self::Ros) -> crate::errors::Result<Self::Bus> {
         Ok(pid_state_to_bus(msg))
     }

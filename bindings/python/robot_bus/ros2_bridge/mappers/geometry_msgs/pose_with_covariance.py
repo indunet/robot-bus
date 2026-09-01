@@ -24,9 +24,6 @@ def pose_with_covariance_to_ros(bus):
 
 
 class GeometryMsgsPoseWithCovarianceMapper:
-    def type_name(self) -> str:
-        return "geometry_msgs/msg/PoseWithCovariance"
-
     def ros_msg_type(self):
         from geometry_msgs.msg import PoseWithCovariance as RosMsg
 

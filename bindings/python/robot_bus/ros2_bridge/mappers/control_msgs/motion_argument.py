@@ -24,9 +24,6 @@ def motion_argument_to_ros(bus):
 
 
 class ControlMsgsMotionArgumentMapper:
-    def type_name(self) -> str:
-        return "control_msgs/msg/MotionArgument"
-
     def ros_msg_type(self):
         from control_msgs.msg import MotionArgument as RosMsg
 

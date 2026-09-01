@@ -22,9 +22,6 @@ def laser_echo_to_ros(bus):
 
 
 class SensorMsgsLaserEchoMapper:
-    def type_name(self) -> str:
-        return "sensor_msgs/msg/LaserEcho"
-
     def ros_msg_type(self):
         from sensor_msgs.msg import LaserEcho as RosMsg
 

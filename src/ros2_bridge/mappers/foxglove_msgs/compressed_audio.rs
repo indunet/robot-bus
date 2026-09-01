@@ -25,10 +25,6 @@ impl TypedTopicMapper for FoxgloveMsgsCompressedAudioMapper {
     type Ros = ros_env::foxglove_msgs::msg::CompressedAudio;
     type Bus = crate::foxglove_msgs::msg::v1::CompressedAudio;
 
-    fn type_name(&self) -> &'static str {
-        "foxglove_msgs/msg/CompressedAudio"
-    }
-
     fn ros_to_bus(&self, msg: Self::Ros) -> crate::errors::Result<Self::Bus> {
         Ok(compressed_audio_to_bus(msg))
     }

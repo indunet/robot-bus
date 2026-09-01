@@ -39,8 +39,6 @@ inline ::geometry_msgs::msg::Point point_to_ros(const ::geometry_msgs::msg::v1::
 class GeometryMsgsPointMapper
     : public TypedTopicMapper<GeometryMsgsPointMapper, ::geometry_msgs::msg::Point> {
  public:
-  const char *type_name() const override { return "geometry_msgs/msg/Point"; }
-
   std::vector<uint8_t> ros_to_bus(const ::geometry_msgs::msg::Point &msg) const {
     auto bus = ros2_bridge_mappers::geometry_msgs::point_to_bus(msg);
     std::string bytes;
@@ -55,9 +53,7 @@ class GeometryMsgsPointMapper
   }
 };
 #else
-struct GeometryMsgsPointMapper : TopicMapper {
-  const char *type_name() const override { return "geometry_msgs/msg/Point"; }
-};
+struct GeometryMsgsPointMapper : TopicMapper {};
 #endif
 
 }  // namespace robot_bus

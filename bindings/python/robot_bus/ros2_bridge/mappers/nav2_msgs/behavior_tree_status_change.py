@@ -28,9 +28,6 @@ def behavior_tree_status_change_to_ros(bus):
 
 
 class Nav2MsgsBehaviorTreeStatusChangeMapper:
-    def type_name(self) -> str:
-        return "nav2_msgs/msg/BehaviorTreeStatusChange"
-
     def ros_msg_type(self):
         from nav2_msgs.msg import BehaviorTreeStatusChange as RosMsg
 

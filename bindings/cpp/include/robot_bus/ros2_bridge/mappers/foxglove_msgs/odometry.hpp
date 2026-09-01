@@ -62,8 +62,6 @@ inline ::foxglove_msgs::msg::Odometry odometry_to_ros(const ::foxglove_msgs::msg
 class FoxgloveMsgsOdometryMapper
     : public TypedTopicMapper<FoxgloveMsgsOdometryMapper, ::foxglove_msgs::msg::Odometry> {
  public:
-  const char *type_name() const override { return "foxglove_msgs/msg/Odometry"; }
-
   std::vector<uint8_t> ros_to_bus(const ::foxglove_msgs::msg::Odometry &msg) const {
     auto bus = ros2_bridge_mappers::foxglove_msgs::odometry_to_bus(msg);
     std::string bytes;
@@ -78,9 +76,7 @@ class FoxgloveMsgsOdometryMapper
   }
 };
 #else
-struct FoxgloveMsgsOdometryMapper : TopicMapper {
-  const char *type_name() const override { return "foxglove_msgs/msg/Odometry"; }
-};
+struct FoxgloveMsgsOdometryMapper : TopicMapper {};
 #endif
 
 }  // namespace robot_bus

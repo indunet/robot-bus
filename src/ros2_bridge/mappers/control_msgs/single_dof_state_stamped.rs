@@ -23,10 +23,6 @@ impl TypedTopicMapper for ControlMsgsSingleDofStateStampedMapper {
     type Ros = ros_env::control_msgs::msg::SingleDOFStateStamped;
     type Bus = crate::control_msgs::msg::v1::SingleDofStateStamped;
 
-    fn type_name(&self) -> &'static str {
-        "control_msgs/msg/SingleDOFStateStamped"
-    }
-
     fn ros_to_bus(&self, msg: Self::Ros) -> crate::errors::Result<Self::Bus> {
         Ok(single_dof_state_stamped_to_bus(msg))
     }

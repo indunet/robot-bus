@@ -39,8 +39,6 @@ inline ::nav2_msgs::msg::RouteEdge route_edge_to_ros(const ::nav2_msgs::msg::v1:
 class Nav2MsgsRouteEdgeMapper
     : public TypedTopicMapper<Nav2MsgsRouteEdgeMapper, ::nav2_msgs::msg::RouteEdge> {
  public:
-  const char *type_name() const override { return "nav2_msgs/msg/RouteEdge"; }
-
   std::vector<uint8_t> ros_to_bus(const ::nav2_msgs::msg::RouteEdge &msg) const {
     auto bus = ros2_bridge_mappers::nav2_msgs::route_edge_to_bus(msg);
     std::string bytes;
@@ -55,9 +53,7 @@ class Nav2MsgsRouteEdgeMapper
   }
 };
 #else
-struct Nav2MsgsRouteEdgeMapper : TopicMapper {
-  const char *type_name() const override { return "nav2_msgs/msg/RouteEdge"; }
-};
+struct Nav2MsgsRouteEdgeMapper : TopicMapper {};
 #endif
 
 }  // namespace robot_bus

@@ -37,8 +37,6 @@ inline ::geometry_msgs::msg::Wrench wrench_to_ros(const ::geometry_msgs::msg::v1
 class GeometryMsgsWrenchMapper
     : public TypedTopicMapper<GeometryMsgsWrenchMapper, ::geometry_msgs::msg::Wrench> {
  public:
-  const char *type_name() const override { return "geometry_msgs/msg/Wrench"; }
-
   std::vector<uint8_t> ros_to_bus(const ::geometry_msgs::msg::Wrench &msg) const {
     auto bus = ros2_bridge_mappers::geometry_msgs::wrench_to_bus(msg);
     std::string bytes;
@@ -53,9 +51,7 @@ class GeometryMsgsWrenchMapper
   }
 };
 #else
-struct GeometryMsgsWrenchMapper : TopicMapper {
-  const char *type_name() const override { return "geometry_msgs/msg/Wrench"; }
-};
+struct GeometryMsgsWrenchMapper : TopicMapper {};
 #endif
 
 }  // namespace robot_bus

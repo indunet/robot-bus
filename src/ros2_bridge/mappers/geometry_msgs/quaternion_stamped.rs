@@ -23,10 +23,6 @@ impl TypedTopicMapper for GeometryMsgsQuaternionStampedMapper {
     type Ros = ros_env::geometry_msgs::msg::QuaternionStamped;
     type Bus = crate::geometry_msgs::msg::v1::QuaternionStamped;
 
-    fn type_name(&self) -> &'static str {
-        "geometry_msgs/msg/QuaternionStamped"
-    }
-
     fn ros_to_bus(&self, msg: Self::Ros) -> crate::errors::Result<Self::Bus> {
         Ok(quaternion_stamped_to_bus(msg))
     }

@@ -26,9 +26,6 @@ def pose2_d_to_ros(bus):
 
 
 class GeometryMsgsPose2DMapper:
-    def type_name(self) -> str:
-        return "geometry_msgs/msg/Pose2D"
-
     def ros_msg_type(self):
         from geometry_msgs.msg import Pose2D as RosMsg
 

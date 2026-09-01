@@ -1,6 +1,6 @@
 {
   "name": "robot-bus",
-  "version": "2.1.0",
+  "version": "2.2.0",
   "description": "robot-bus TypeScript SDK: Node (napi-rs / ZMQ) + browser (WebSocket RPC client)",
   "license": "Apache-2.0",
   "author": "deng_ran <deng_ran@aliyun.com>",
@@ -14,6 +14,9 @@
     "url": "https://github.com/indunet/robot-bus/issues"
   },
   "type": "module",
+  "bin": {
+    "robot-bus": "./dist/cli.js"
+  },
   "main": "./dist/index.node.js",
   "module": "./dist/index.node.js",
   "types": "./dist/index.node.d.ts",
@@ -45,6 +48,7 @@
     "build:native:debug": "napi build --platform --manifest-path native/Cargo.toml --output-dir .",
     "build:ts": "tsup",
     "build": "npm run build:native && npm run build:ts",
+    "broker": "node dist/cli.js",
     "gen": "python3 ../../scripts/generate_typescript_msgs.py",
     "test": "node --import tsx --test --test-force-exit tests/*.test.ts",
     "prepublishOnly": "npm run build:ts"

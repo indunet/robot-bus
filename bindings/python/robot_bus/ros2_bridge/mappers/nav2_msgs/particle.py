@@ -24,9 +24,6 @@ def particle_to_ros(bus):
 
 
 class Nav2MsgsParticleMapper:
-    def type_name(self) -> str:
-        return "nav2_msgs/msg/Particle"
-
     def ros_msg_type(self):
         from nav2_msgs.msg import Particle as RosMsg
 

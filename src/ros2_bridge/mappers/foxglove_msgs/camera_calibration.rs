@@ -37,10 +37,6 @@ impl TypedTopicMapper for FoxgloveMsgsCameraCalibrationMapper {
     type Ros = ros_env::foxglove_msgs::msg::CameraCalibration;
     type Bus = crate::foxglove_msgs::msg::v1::CameraCalibration;
 
-    fn type_name(&self) -> &'static str {
-        "foxglove_msgs/msg/CameraCalibration"
-    }
-
     fn ros_to_bus(&self, msg: Self::Ros) -> crate::errors::Result<Self::Bus> {
         Ok(camera_calibration_to_bus(msg))
     }

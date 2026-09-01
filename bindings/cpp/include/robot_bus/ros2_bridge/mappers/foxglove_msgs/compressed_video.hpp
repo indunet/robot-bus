@@ -41,8 +41,6 @@ inline ::foxglove_msgs::msg::CompressedVideo compressed_video_to_ros(const ::fox
 class FoxgloveMsgsCompressedVideoMapper
     : public TypedTopicMapper<FoxgloveMsgsCompressedVideoMapper, ::foxglove_msgs::msg::CompressedVideo> {
  public:
-  const char *type_name() const override { return "foxglove_msgs/msg/CompressedVideo"; }
-
   std::vector<uint8_t> ros_to_bus(const ::foxglove_msgs::msg::CompressedVideo &msg) const {
     auto bus = ros2_bridge_mappers::foxglove_msgs::compressed_video_to_bus(msg);
     std::string bytes;
@@ -57,9 +55,7 @@ class FoxgloveMsgsCompressedVideoMapper
   }
 };
 #else
-struct FoxgloveMsgsCompressedVideoMapper : TopicMapper {
-  const char *type_name() const override { return "foxglove_msgs/msg/CompressedVideo"; }
-};
+struct FoxgloveMsgsCompressedVideoMapper : TopicMapper {};
 #endif
 
 }  // namespace robot_bus

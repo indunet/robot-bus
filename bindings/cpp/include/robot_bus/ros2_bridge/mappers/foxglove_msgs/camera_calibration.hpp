@@ -59,8 +59,6 @@ inline ::foxglove_msgs::msg::CameraCalibration camera_calibration_to_ros(const :
 class FoxgloveMsgsCameraCalibrationMapper
     : public TypedTopicMapper<FoxgloveMsgsCameraCalibrationMapper, ::foxglove_msgs::msg::CameraCalibration> {
  public:
-  const char *type_name() const override { return "foxglove_msgs/msg/CameraCalibration"; }
-
   std::vector<uint8_t> ros_to_bus(const ::foxglove_msgs::msg::CameraCalibration &msg) const {
     auto bus = ros2_bridge_mappers::foxglove_msgs::camera_calibration_to_bus(msg);
     std::string bytes;
@@ -75,9 +73,7 @@ class FoxgloveMsgsCameraCalibrationMapper
   }
 };
 #else
-struct FoxgloveMsgsCameraCalibrationMapper : TopicMapper {
-  const char *type_name() const override { return "foxglove_msgs/msg/CameraCalibration"; }
-};
+struct FoxgloveMsgsCameraCalibrationMapper : TopicMapper {};
 #endif
 
 }  // namespace robot_bus

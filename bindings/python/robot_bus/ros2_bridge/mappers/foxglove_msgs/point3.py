@@ -26,9 +26,6 @@ def point3_to_ros(bus):
 
 
 class FoxgloveMsgsPoint3Mapper:
-    def type_name(self) -> str:
-        return "foxglove_msgs/msg/Point3"
-
     def ros_msg_type(self):
         from foxglove_msgs.msg import Point3 as RosMsg
 

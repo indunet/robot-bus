@@ -25,9 +25,6 @@ def point_stamped_to_ros(bus):
 
 
 class GeometryMsgsPointStampedMapper:
-    def type_name(self) -> str:
-        return "geometry_msgs/msg/PointStamped"
-
     def ros_msg_type(self):
         from geometry_msgs.msg import PointStamped as RosMsg
 

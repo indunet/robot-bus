@@ -54,8 +54,6 @@ inline ::sensor_msgs::msg::JointState joint_state_to_ros(const ::sensor_msgs::ms
 class SensorMsgsJointStateMapper
     : public TypedTopicMapper<SensorMsgsJointStateMapper, ::sensor_msgs::msg::JointState> {
  public:
-  const char *type_name() const override { return "sensor_msgs/msg/JointState"; }
-
   std::vector<uint8_t> ros_to_bus(const ::sensor_msgs::msg::JointState &msg) const {
     auto bus = ros2_bridge_mappers::sensor_msgs::joint_state_to_bus(msg);
     std::string bytes;
@@ -70,9 +68,7 @@ class SensorMsgsJointStateMapper
   }
 };
 #else
-struct SensorMsgsJointStateMapper : TopicMapper {
-  const char *type_name() const override { return "sensor_msgs/msg/JointState"; }
-};
+struct SensorMsgsJointStateMapper : TopicMapper {};
 #endif
 
 }  // namespace robot_bus

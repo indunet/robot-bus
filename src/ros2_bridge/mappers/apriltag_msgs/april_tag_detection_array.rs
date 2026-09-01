@@ -23,10 +23,6 @@ impl TypedTopicMapper for ApriltagMsgsAprilTagDetectionArrayMapper {
     type Ros = ros_env::apriltag_msgs::msg::AprilTagDetectionArray;
     type Bus = crate::apriltag_msgs::msg::v1::AprilTagDetectionArray;
 
-    fn type_name(&self) -> &'static str {
-        "apriltag_msgs/msg/AprilTagDetectionArray"
-    }
-
     fn ros_to_bus(&self, msg: Self::Ros) -> crate::errors::Result<Self::Bus> {
         Ok(april_tag_detection_array_to_bus(msg))
     }

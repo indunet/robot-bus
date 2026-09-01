@@ -23,10 +23,6 @@ impl TypedTopicMapper for GeometryMsgsAccelStampedMapper {
     type Ros = ros_env::geometry_msgs::msg::AccelStamped;
     type Bus = crate::geometry_msgs::msg::v1::AccelStamped;
 
-    fn type_name(&self) -> &'static str {
-        "geometry_msgs/msg/AccelStamped"
-    }
-
     fn ros_to_bus(&self, msg: Self::Ros) -> crate::errors::Result<Self::Bus> {
         Ok(accel_stamped_to_bus(msg))
     }

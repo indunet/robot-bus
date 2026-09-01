@@ -35,8 +35,6 @@ inline ::std_msgs::msg::UInt32 u_int32_to_ros(const ::std_msgs::msg::v1::UInt32 
 class StdMsgsUInt32Mapper
     : public TypedTopicMapper<StdMsgsUInt32Mapper, ::std_msgs::msg::UInt32> {
  public:
-  const char *type_name() const override { return "std_msgs/msg/UInt32"; }
-
   std::vector<uint8_t> ros_to_bus(const ::std_msgs::msg::UInt32 &msg) const {
     auto bus = ros2_bridge_mappers::std_msgs::u_int32_to_bus(msg);
     std::string bytes;
@@ -51,9 +49,7 @@ class StdMsgsUInt32Mapper
   }
 };
 #else
-struct StdMsgsUInt32Mapper : TopicMapper {
-  const char *type_name() const override { return "std_msgs/msg/UInt32"; }
-};
+struct StdMsgsUInt32Mapper : TopicMapper {};
 #endif
 
 }  // namespace robot_bus

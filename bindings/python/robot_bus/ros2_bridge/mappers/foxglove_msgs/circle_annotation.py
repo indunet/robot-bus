@@ -36,9 +36,6 @@ def circle_annotation_to_ros(bus):
 
 
 class FoxgloveMsgsCircleAnnotationMapper:
-    def type_name(self) -> str:
-        return "foxglove_msgs/msg/CircleAnnotation"
-
     def ros_msg_type(self):
         from foxglove_msgs.msg import CircleAnnotation as RosMsg
 

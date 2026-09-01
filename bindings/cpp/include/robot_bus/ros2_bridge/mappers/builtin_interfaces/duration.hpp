@@ -37,8 +37,6 @@ inline ::builtin_interfaces::msg::Duration duration_to_ros(const ::builtin_inter
 class BuiltinInterfacesDurationMapper
     : public TypedTopicMapper<BuiltinInterfacesDurationMapper, ::builtin_interfaces::msg::Duration> {
  public:
-  const char *type_name() const override { return "builtin_interfaces/msg/Duration"; }
-
   std::vector<uint8_t> ros_to_bus(const ::builtin_interfaces::msg::Duration &msg) const {
     auto bus = ros2_bridge_mappers::builtin_interfaces::duration_to_bus(msg);
     std::string bytes;
@@ -53,9 +51,7 @@ class BuiltinInterfacesDurationMapper
   }
 };
 #else
-struct BuiltinInterfacesDurationMapper : TopicMapper {
-  const char *type_name() const override { return "builtin_interfaces/msg/Duration"; }
-};
+struct BuiltinInterfacesDurationMapper : TopicMapper {};
 #endif
 
 }  // namespace robot_bus

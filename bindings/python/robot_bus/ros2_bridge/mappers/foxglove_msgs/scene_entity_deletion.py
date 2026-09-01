@@ -26,9 +26,6 @@ def scene_entity_deletion_to_ros(bus):
 
 
 class FoxgloveMsgsSceneEntityDeletionMapper:
-    def type_name(self) -> str:
-        return "foxglove_msgs/msg/SceneEntityDeletion"
-
     def ros_msg_type(self):
         from foxglove_msgs.msg import SceneEntityDeletion as RosMsg
 

@@ -31,9 +31,6 @@ def frame_transform_to_ros(bus):
 
 
 class FoxgloveMsgsFrameTransformMapper:
-    def type_name(self) -> str:
-        return "foxglove_msgs/msg/FrameTransform"
-
     def ros_msg_type(self):
         from foxglove_msgs.msg import FrameTransform as RosMsg
 

@@ -55,8 +55,6 @@ inline ::visualization_msgs::msg::InteractiveMarkerControl interactive_marker_co
 class VisualizationMsgsInteractiveMarkerControlMapper
     : public TypedTopicMapper<VisualizationMsgsInteractiveMarkerControlMapper, ::visualization_msgs::msg::InteractiveMarkerControl> {
  public:
-  const char *type_name() const override { return "visualization_msgs/msg/InteractiveMarkerControl"; }
-
   std::vector<uint8_t> ros_to_bus(const ::visualization_msgs::msg::InteractiveMarkerControl &msg) const {
     auto bus = ros2_bridge_mappers::visualization_msgs::interactive_marker_control_to_bus(msg);
     std::string bytes;
@@ -71,9 +69,7 @@ class VisualizationMsgsInteractiveMarkerControlMapper
   }
 };
 #else
-struct VisualizationMsgsInteractiveMarkerControlMapper : TopicMapper {
-  const char *type_name() const override { return "visualization_msgs/msg/InteractiveMarkerControl"; }
-};
+struct VisualizationMsgsInteractiveMarkerControlMapper : TopicMapper {};
 #endif
 
 }  // namespace robot_bus

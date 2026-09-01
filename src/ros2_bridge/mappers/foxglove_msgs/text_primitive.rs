@@ -31,10 +31,6 @@ impl TypedTopicMapper for FoxgloveMsgsTextPrimitiveMapper {
     type Ros = ros_env::foxglove_msgs::msg::TextPrimitive;
     type Bus = crate::foxglove_msgs::msg::v1::TextPrimitive;
 
-    fn type_name(&self) -> &'static str {
-        "foxglove_msgs/msg/TextPrimitive"
-    }
-
     fn ros_to_bus(&self, msg: Self::Ros) -> crate::errors::Result<Self::Bus> {
         Ok(text_primitive_to_bus(msg))
     }

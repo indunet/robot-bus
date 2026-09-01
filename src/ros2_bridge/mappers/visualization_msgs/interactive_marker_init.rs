@@ -25,10 +25,6 @@ impl TypedTopicMapper for VisualizationMsgsInteractiveMarkerInitMapper {
     type Ros = ros_env::visualization_msgs::msg::InteractiveMarkerInit;
     type Bus = crate::visualization_msgs::msg::v1::InteractiveMarkerInit;
 
-    fn type_name(&self) -> &'static str {
-        "visualization_msgs/msg/InteractiveMarkerInit"
-    }
-
     fn ros_to_bus(&self, msg: Self::Ros) -> crate::errors::Result<Self::Bus> {
         Ok(interactive_marker_init_to_bus(msg))
     }

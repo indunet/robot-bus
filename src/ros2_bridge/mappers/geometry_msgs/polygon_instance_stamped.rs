@@ -23,10 +23,6 @@ impl TypedTopicMapper for GeometryMsgsPolygonInstanceStampedMapper {
     type Ros = ros_env::geometry_msgs::msg::PolygonInstanceStamped;
     type Bus = crate::geometry_msgs::msg::v1::PolygonInstanceStamped;
 
-    fn type_name(&self) -> &'static str {
-        "geometry_msgs/msg/PolygonInstanceStamped"
-    }
-
     fn ros_to_bus(&self, msg: Self::Ros) -> crate::errors::Result<Self::Bus> {
         Ok(polygon_instance_stamped_to_bus(msg))
     }

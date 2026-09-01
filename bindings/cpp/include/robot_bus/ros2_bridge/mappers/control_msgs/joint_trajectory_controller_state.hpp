@@ -67,8 +67,6 @@ inline ::control_msgs::msg::JointTrajectoryControllerState joint_trajectory_cont
 class ControlMsgsJointTrajectoryControllerStateMapper
     : public TypedTopicMapper<ControlMsgsJointTrajectoryControllerStateMapper, ::control_msgs::msg::JointTrajectoryControllerState> {
  public:
-  const char *type_name() const override { return "control_msgs/msg/JointTrajectoryControllerState"; }
-
   std::vector<uint8_t> ros_to_bus(const ::control_msgs::msg::JointTrajectoryControllerState &msg) const {
     auto bus = ros2_bridge_mappers::control_msgs::joint_trajectory_controller_state_to_bus(msg);
     std::string bytes;
@@ -83,9 +81,7 @@ class ControlMsgsJointTrajectoryControllerStateMapper
   }
 };
 #else
-struct ControlMsgsJointTrajectoryControllerStateMapper : TopicMapper {
-  const char *type_name() const override { return "control_msgs/msg/JointTrajectoryControllerState"; }
-};
+struct ControlMsgsJointTrajectoryControllerStateMapper : TopicMapper {};
 #endif
 
 }  // namespace robot_bus

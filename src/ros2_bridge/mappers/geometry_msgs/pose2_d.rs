@@ -25,10 +25,6 @@ impl TypedTopicMapper for GeometryMsgsPose2DMapper {
     type Ros = ros_env::geometry_msgs::msg::Pose2D;
     type Bus = crate::geometry_msgs::msg::v1::Pose2D;
 
-    fn type_name(&self) -> &'static str {
-        "geometry_msgs/msg/Pose2D"
-    }
-
     fn ros_to_bus(&self, msg: Self::Ros) -> crate::errors::Result<Self::Bus> {
         Ok(pose2_d_to_bus(msg))
     }

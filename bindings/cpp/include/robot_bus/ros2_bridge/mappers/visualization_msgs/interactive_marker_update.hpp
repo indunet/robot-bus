@@ -61,8 +61,6 @@ inline ::visualization_msgs::msg::InteractiveMarkerUpdate interactive_marker_upd
 class VisualizationMsgsInteractiveMarkerUpdateMapper
     : public TypedTopicMapper<VisualizationMsgsInteractiveMarkerUpdateMapper, ::visualization_msgs::msg::InteractiveMarkerUpdate> {
  public:
-  const char *type_name() const override { return "visualization_msgs/msg/InteractiveMarkerUpdate"; }
-
   std::vector<uint8_t> ros_to_bus(const ::visualization_msgs::msg::InteractiveMarkerUpdate &msg) const {
     auto bus = ros2_bridge_mappers::visualization_msgs::interactive_marker_update_to_bus(msg);
     std::string bytes;
@@ -77,9 +75,7 @@ class VisualizationMsgsInteractiveMarkerUpdateMapper
   }
 };
 #else
-struct VisualizationMsgsInteractiveMarkerUpdateMapper : TopicMapper {
-  const char *type_name() const override { return "visualization_msgs/msg/InteractiveMarkerUpdate"; }
-};
+struct VisualizationMsgsInteractiveMarkerUpdateMapper : TopicMapper {};
 #endif
 
 }  // namespace robot_bus

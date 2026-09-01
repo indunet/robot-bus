@@ -27,10 +27,6 @@ impl TypedTopicMapper for Nav2MsgsBehaviorTreeStatusChangeMapper {
     type Ros = ros_env::nav2_msgs::msg::BehaviorTreeStatusChange;
     type Bus = crate::nav2_msgs::msg::v1::BehaviorTreeStatusChange;
 
-    fn type_name(&self) -> &'static str {
-        "nav2_msgs/msg/BehaviorTreeStatusChange"
-    }
-
     fn ros_to_bus(&self, msg: Self::Ros) -> crate::errors::Result<Self::Bus> {
         Ok(behavior_tree_status_change_to_bus(msg))
     }

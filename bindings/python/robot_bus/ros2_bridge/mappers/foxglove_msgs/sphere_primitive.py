@@ -28,9 +28,6 @@ def sphere_primitive_to_ros(bus):
 
 
 class FoxgloveMsgsSpherePrimitiveMapper:
-    def type_name(self) -> str:
-        return "foxglove_msgs/msg/SpherePrimitive"
-
     def ros_msg_type(self):
         from foxglove_msgs.msg import SpherePrimitive as RosMsg
 

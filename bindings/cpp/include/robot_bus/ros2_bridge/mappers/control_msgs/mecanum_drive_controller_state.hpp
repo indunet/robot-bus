@@ -46,8 +46,6 @@ inline ::control_msgs::msg::MecanumDriveControllerState mecanum_drive_controller
 class ControlMsgsMecanumDriveControllerStateMapper
     : public TypedTopicMapper<ControlMsgsMecanumDriveControllerStateMapper, ::control_msgs::msg::MecanumDriveControllerState> {
  public:
-  const char *type_name() const override { return "control_msgs/msg/MecanumDriveControllerState"; }
-
   std::vector<uint8_t> ros_to_bus(const ::control_msgs::msg::MecanumDriveControllerState &msg) const {
     auto bus = ros2_bridge_mappers::control_msgs::mecanum_drive_controller_state_to_bus(msg);
     std::string bytes;
@@ -62,9 +60,7 @@ class ControlMsgsMecanumDriveControllerStateMapper
   }
 };
 #else
-struct ControlMsgsMecanumDriveControllerStateMapper : TopicMapper {
-  const char *type_name() const override { return "control_msgs/msg/MecanumDriveControllerState"; }
-};
+struct ControlMsgsMecanumDriveControllerStateMapper : TopicMapper {};
 #endif
 
 }  // namespace robot_bus

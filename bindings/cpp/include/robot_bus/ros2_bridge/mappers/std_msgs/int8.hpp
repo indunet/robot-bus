@@ -35,8 +35,6 @@ inline ::std_msgs::msg::Int8 int8_to_ros(const ::std_msgs::msg::v1::Int8 &bus) {
 class StdMsgsInt8Mapper
     : public TypedTopicMapper<StdMsgsInt8Mapper, ::std_msgs::msg::Int8> {
  public:
-  const char *type_name() const override { return "std_msgs/msg/Int8"; }
-
   std::vector<uint8_t> ros_to_bus(const ::std_msgs::msg::Int8 &msg) const {
     auto bus = ros2_bridge_mappers::std_msgs::int8_to_bus(msg);
     std::string bytes;
@@ -51,9 +49,7 @@ class StdMsgsInt8Mapper
   }
 };
 #else
-struct StdMsgsInt8Mapper : TopicMapper {
-  const char *type_name() const override { return "std_msgs/msg/Int8"; }
-};
+struct StdMsgsInt8Mapper : TopicMapper {};
 #endif
 
 }  // namespace robot_bus

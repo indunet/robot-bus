@@ -37,8 +37,6 @@ inline ::std_msgs::msg::Header header_to_ros(const ::std_msgs::msg::v1::Header &
 class StdMsgsHeaderMapper
     : public TypedTopicMapper<StdMsgsHeaderMapper, ::std_msgs::msg::Header> {
  public:
-  const char *type_name() const override { return "std_msgs/msg/Header"; }
-
   std::vector<uint8_t> ros_to_bus(const ::std_msgs::msg::Header &msg) const {
     auto bus = ros2_bridge_mappers::std_msgs::header_to_bus(msg);
     std::string bytes;
@@ -53,9 +51,7 @@ class StdMsgsHeaderMapper
   }
 };
 #else
-struct StdMsgsHeaderMapper : TopicMapper {
-  const char *type_name() const override { return "std_msgs/msg/Header"; }
-};
+struct StdMsgsHeaderMapper : TopicMapper {};
 #endif
 
 }  // namespace robot_bus

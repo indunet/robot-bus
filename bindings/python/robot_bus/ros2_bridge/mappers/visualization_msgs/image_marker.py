@@ -49,9 +49,6 @@ def image_marker_to_ros(bus):
 
 
 class VisualizationMsgsImageMarkerMapper:
-    def type_name(self) -> str:
-        return "visualization_msgs/msg/ImageMarker"
-
     def ros_msg_type(self):
         from visualization_msgs.msg import ImageMarker as RosMsg
 

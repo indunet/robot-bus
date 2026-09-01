@@ -25,9 +25,6 @@ def goal_info_to_ros(bus):
 
 
 class ActionMsgsGoalInfoMapper:
-    def type_name(self) -> str:
-        return "action_msgs/msg/GoalInfo"
-
     def ros_msg_type(self):
         from action_msgs.msg import GoalInfo as RosMsg
 

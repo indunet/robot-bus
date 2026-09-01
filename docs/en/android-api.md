@@ -10,7 +10,7 @@ Does not depend on `org.indunet:robot-bus` (JVM Java package). Both artifacts ar
 
 ```bash
 # Maven Central (when published)
-# implementation("org.indunet:robot-bus-android:2.1.0")
+# implementation("org.indunet:robot-bus-android:2.2.0")
 
 # Local:
 just gen-android    # → bindings/android/generated/
@@ -38,11 +38,13 @@ class App : Application() {
 ```kotlin
 // build.gradle.kts
 dependencies {
-  implementation("org.indunet:robot-bus-android:2.1.0")
+  implementation("org.indunet:robot-bus-android:2.2.0")
 }
 ```
 
 ## Message bus (Kotlin)
+
+There is no standalone CLI on Android; **starting the broker in-process** (`Broker()`) is the recommended usage:
 
 ```kotlin
 import org.indunet.robot.bus.Broker

@@ -43,8 +43,6 @@ inline ::sensor_msgs::msg::RegionOfInterest region_of_interest_to_ros(const ::se
 class SensorMsgsRegionOfInterestMapper
     : public TypedTopicMapper<SensorMsgsRegionOfInterestMapper, ::sensor_msgs::msg::RegionOfInterest> {
  public:
-  const char *type_name() const override { return "sensor_msgs/msg/RegionOfInterest"; }
-
   std::vector<uint8_t> ros_to_bus(const ::sensor_msgs::msg::RegionOfInterest &msg) const {
     auto bus = ros2_bridge_mappers::sensor_msgs::region_of_interest_to_bus(msg);
     std::string bytes;
@@ -59,9 +57,7 @@ class SensorMsgsRegionOfInterestMapper
   }
 };
 #else
-struct SensorMsgsRegionOfInterestMapper : TopicMapper {
-  const char *type_name() const override { return "sensor_msgs/msg/RegionOfInterest"; }
-};
+struct SensorMsgsRegionOfInterestMapper : TopicMapper {};
 #endif
 
 }  // namespace robot_bus

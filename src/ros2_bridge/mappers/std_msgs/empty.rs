@@ -17,10 +17,6 @@ impl TypedTopicMapper for StdMsgsEmptyMapper {
     type Ros = ros_env::std_msgs::msg::Empty;
     type Bus = crate::std_msgs::msg::v1::Empty;
 
-    fn type_name(&self) -> &'static str {
-        "std_msgs/msg/Empty"
-    }
-
     fn ros_to_bus(&self, msg: Self::Ros) -> crate::errors::Result<Self::Bus> {
         Ok(empty_to_bus(msg))
     }

@@ -27,9 +27,6 @@ def joint_trajectory_to_ros(bus):
 
 
 class TrajectoryMsgsJointTrajectoryMapper:
-    def type_name(self) -> str:
-        return "trajectory_msgs/msg/JointTrajectory"
-
     def ros_msg_type(self):
         from trajectory_msgs.msg import JointTrajectory as RosMsg
 

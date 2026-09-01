@@ -51,8 +51,6 @@ inline ::foxglove_msgs::msg::LaserScan laser_scan_to_ros(const ::foxglove_msgs::
 class FoxgloveMsgsLaserScanMapper
     : public TypedTopicMapper<FoxgloveMsgsLaserScanMapper, ::foxglove_msgs::msg::LaserScan> {
  public:
-  const char *type_name() const override { return "foxglove_msgs/msg/LaserScan"; }
-
   std::vector<uint8_t> ros_to_bus(const ::foxglove_msgs::msg::LaserScan &msg) const {
     auto bus = ros2_bridge_mappers::foxglove_msgs::laser_scan_to_bus(msg);
     std::string bytes;
@@ -67,9 +65,7 @@ class FoxgloveMsgsLaserScanMapper
   }
 };
 #else
-struct FoxgloveMsgsLaserScanMapper : TopicMapper {
-  const char *type_name() const override { return "foxglove_msgs/msg/LaserScan"; }
-};
+struct FoxgloveMsgsLaserScanMapper : TopicMapper {};
 #endif
 
 }  // namespace robot_bus

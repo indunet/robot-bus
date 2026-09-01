@@ -26,9 +26,6 @@ def compressed_image_to_ros(bus):
 
 
 class SensorMsgsCompressedImageMapper:
-    def type_name(self) -> str:
-        return "sensor_msgs/msg/CompressedImage"
-
     def ros_msg_type(self):
         from sensor_msgs.msg import CompressedImage as RosMsg
 

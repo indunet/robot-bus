@@ -36,9 +36,6 @@ def voxel_grid_to_ros(bus):
 
 
 class Nav2MsgsVoxelGridMapper:
-    def type_name(self) -> str:
-        return "nav2_msgs/msg/VoxelGrid"
-
     def ros_msg_type(self):
         from nav2_msgs.msg import VoxelGrid as RosMsg
 

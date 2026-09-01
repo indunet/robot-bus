@@ -43,8 +43,6 @@ inline ::nav_msgs::msg::Goals goals_to_ros(const ::nav_msgs::msg::v1::Goals &bus
 class NavMsgsGoalsMapper
     : public TypedTopicMapper<NavMsgsGoalsMapper, ::nav_msgs::msg::Goals> {
  public:
-  const char *type_name() const override { return "nav_msgs/msg/Goals"; }
-
   std::vector<uint8_t> ros_to_bus(const ::nav_msgs::msg::Goals &msg) const {
     auto bus = ros2_bridge_mappers::nav_msgs::goals_to_bus(msg);
     std::string bytes;
@@ -59,9 +57,7 @@ class NavMsgsGoalsMapper
   }
 };
 #else
-struct NavMsgsGoalsMapper : TopicMapper {
-  const char *type_name() const override { return "nav_msgs/msg/Goals"; }
-};
+struct NavMsgsGoalsMapper : TopicMapper {};
 #endif
 
 }  // namespace robot_bus

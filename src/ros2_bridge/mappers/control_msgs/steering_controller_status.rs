@@ -31,10 +31,6 @@ impl TypedTopicMapper for ControlMsgsSteeringControllerStatusMapper {
     type Ros = ros_env::control_msgs::msg::SteeringControllerStatus;
     type Bus = crate::control_msgs::msg::v1::SteeringControllerStatus;
 
-    fn type_name(&self) -> &'static str {
-        "control_msgs/msg/SteeringControllerStatus"
-    }
-
     fn ros_to_bus(&self, msg: Self::Ros) -> crate::errors::Result<Self::Bus> {
         Ok(steering_controller_status_to_bus(msg))
     }

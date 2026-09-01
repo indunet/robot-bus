@@ -40,9 +40,6 @@ def odometry_to_ros(bus):
 
 
 class FoxgloveMsgsOdometryMapper:
-    def type_name(self) -> str:
-        return "foxglove_msgs/msg/Odometry"
-
     def ros_msg_type(self):
         from foxglove_msgs.msg import Odometry as RosMsg
 

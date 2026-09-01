@@ -44,9 +44,6 @@ def joint_controller_state_to_ros(bus):
 
 
 class ControlMsgsJointControllerStateMapper:
-    def type_name(self) -> str:
-        return "control_msgs/msg/JointControllerState"
-
     def ros_msg_type(self):
         from control_msgs.msg import JointControllerState as RosMsg
 

@@ -26,9 +26,6 @@ def joint_component_tolerance_to_ros(bus):
 
 
 class ControlMsgsJointComponentToleranceMapper:
-    def type_name(self) -> str:
-        return "control_msgs/msg/JointComponentTolerance"
-
     def ros_msg_type(self):
         from control_msgs.msg import JointComponentTolerance as RosMsg
 

@@ -20,7 +20,8 @@
 
 ```bash
 source /opt/ros/humble/setup.bash   # 或 jazzy
-cargo run --bin robot_bus_broker    # 或已安装的 robot-bus-broker
+# 应用代码更鼓励进程内 RobotBusBroker.start()；下面 CLI 适合单独起 broker 再跑桥
+cargo run --bin robot_bus_broker    # 或 python -m robot_bus.broker
 ```
 
 | 语言 | 依赖 |
@@ -83,6 +84,41 @@ bridge.spin();
 
 反向（bus → ROS）把链改成 `.from_bus("/chatter", …).to_ros("/chatter", …)`，其余一样。两边名字可以相同，也可以不同。
 
+一条桥里连续挂多条话题：每条各自 `.from_ros` / `.to_bus`（或反过来）→ `.mapper(...)` → `.add()`，再开下一条。第二条话题**不用** `.service()` / `.action()`（那是切种类）。方向可以混。
+
+```python
+.from_ros("/chatter", TopicQos.keep_last(10).reliable())
+.to_bus("/chatter", TopicQos.keep_last(8).best_effort())
+.mapper(StdMsgsStringMapper())
+.add()
+.from_ros("/pose", TopicQos.keep_last(10).reliable())
+.to_bus("/pose", TopicQos.keep_last(8).best_effort())
+.mapper(GeometryMsgsPoseStampedMapper())
+.add()
+```
+
+```rust
+.from_ros("/chatter", TopicQos::keep_last(10).reliable())
+.to_bus("/chatter", TopicQos::keep_last(8).best_effort())
+.mapper(StdMsgsStringMapper)
+.add()?
+.from_ros("/pose", TopicQos::keep_last(10).reliable())
+.to_bus("/pose", TopicQos::keep_last(8).best_effort())
+.mapper(GeometryMsgsPoseStampedMapper)
+.add()?
+```
+
+```cpp
+.from_ros("/chatter", robot_bus::TopicQos::keep_last(10).reliable())
+.to_bus("/chatter", robot_bus::TopicQos::keep_last(8).best_effort())
+.mapper(robot_bus::StdMsgsStringMapper{})
+.add()
+.from_ros("/pose", robot_bus::TopicQos::keep_last(10).reliable())
+.to_bus("/pose", robot_bus::TopicQos::keep_last(8).best_effort())
+.mapper(robot_bus::GeometryMsgsPoseStampedMapper{})
+.add()
+```
+
 相机要对上 ROS 图上的 best-effort KeepLast(5) 时，两端都写 `keep_last(5).best_effort()`。
 
 `/tf_static` 这类 latch 话题，ROS 端要加 `.transient_local()`，否则默认 volatile 订不到已经发过的样本：
@@ -131,9 +167,6 @@ from std_msgs.msg import String as RosString
 from robot_bus.std_msgs.msg.v1 import String as BusString
 
 class MyStringMapper:
-    def type_name(self) -> str:
-        return "std_msgs/msg/String"
-
     def ros_msg_type(self):
         return RosString
 
@@ -160,10 +193,6 @@ impl TypedTopicMapper for MyStringMapper {
     type Ros = ros_env::std_msgs::msg::String;
     type Bus = robot_bus::std_msgs::msg::v1::String;
 
-    fn type_name(&self) -> &str {
-        "std_msgs/msg/String"
-    }
-
     fn ros_to_bus(&self, msg: Self::Ros) -> robot_bus::Result<Self::Bus> {
         Ok(Self::Bus { data: msg.data.to_string() })
     }
@@ -174,7 +203,7 @@ impl TypedTopicMapper for MyStringMapper {
 }
 ```
 
-**C++**（`TypedTopicMapper` CRTP）：继承 `robot_bus::TypedTopicMapper<MyMapper, ros_msgs::msg::MyMsg>`，实现 `type_name` / `ros_to_bus` / `bus_to_ros`，见 [`ros2_bridge_typed.hpp`](../../bindings/cpp/include/robot_bus/ros2_bridge_typed.hpp)。
+**C++**（`TypedTopicMapper` CRTP）：继承 `robot_bus::TypedTopicMapper<MyMapper, ros_msgs::msg::MyMsg>`，实现 `ros_to_bus` / `bus_to_ros`，见 [`ros2_bridge_typed.hpp`](../../bindings/cpp/include/robot_bus/ros2_bridge_typed.hpp)。
 
 ---
 

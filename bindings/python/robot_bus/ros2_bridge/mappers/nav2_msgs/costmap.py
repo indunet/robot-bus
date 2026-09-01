@@ -27,9 +27,6 @@ def costmap_to_ros(bus):
 
 
 class Nav2MsgsCostmapMapper:
-    def type_name(self) -> str:
-        return "nav2_msgs/msg/Costmap"
-
     def ros_msg_type(self):
         from nav2_msgs.msg import Costmap as RosMsg
 

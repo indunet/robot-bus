@@ -25,10 +25,6 @@ impl TypedTopicMapper for TrajectoryMsgsMultiDofJointTrajectoryMapper {
     type Ros = ros_env::trajectory_msgs::msg::MultiDOFJointTrajectory;
     type Bus = crate::trajectory_msgs::msg::v1::MultiDofJointTrajectory;
 
-    fn type_name(&self) -> &'static str {
-        "trajectory_msgs/msg/MultiDOFJointTrajectory"
-    }
-
     fn ros_to_bus(&self, msg: Self::Ros) -> crate::errors::Result<Self::Bus> {
         Ok(multi_dof_joint_trajectory_to_bus(msg))
     }

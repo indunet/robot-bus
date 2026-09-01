@@ -37,8 +37,6 @@ inline ::nav2_msgs::msg::CollisionMonitorState collision_monitor_state_to_ros(co
 class Nav2MsgsCollisionMonitorStateMapper
     : public TypedTopicMapper<Nav2MsgsCollisionMonitorStateMapper, ::nav2_msgs::msg::CollisionMonitorState> {
  public:
-  const char *type_name() const override { return "nav2_msgs/msg/CollisionMonitorState"; }
-
   std::vector<uint8_t> ros_to_bus(const ::nav2_msgs::msg::CollisionMonitorState &msg) const {
     auto bus = ros2_bridge_mappers::nav2_msgs::collision_monitor_state_to_bus(msg);
     std::string bytes;
@@ -53,9 +51,7 @@ class Nav2MsgsCollisionMonitorStateMapper
   }
 };
 #else
-struct Nav2MsgsCollisionMonitorStateMapper : TopicMapper {
-  const char *type_name() const override { return "nav2_msgs/msg/CollisionMonitorState"; }
-};
+struct Nav2MsgsCollisionMonitorStateMapper : TopicMapper {};
 #endif
 
 }  // namespace robot_bus

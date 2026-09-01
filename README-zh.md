@@ -3,7 +3,6 @@
 # *Robot Bus*
 
 [![CI](https://github.com/indunet/robot-bus/actions/workflows/ci.yml/badge.svg)](https://github.com/indunet/robot-bus/actions/workflows/ci.yml)
-[![Code Quality](https://img.shields.io/github/actions/workflow/status/indunet/robot-bus/dynamic%2Fgithub-code-scanning%2Fcodeql?label=Code%20Quality)](https://github.com/indunet/robot-bus/security/code-scanning)
 [![crates.io](https://img.shields.io/crates/v/robot-bus.svg?color=f74c00)](https://crates.io/crates/robot-bus)
 [![PyPI](https://img.shields.io/pypi/v/robot-bus.svg?color=3775a9)](https://pypi.org/project/robot-bus/)
 [![npm](https://img.shields.io/npm/v/robot-bus.svg?color=cb3837)](https://www.npmjs.com/package/robot-bus)
@@ -17,7 +16,7 @@ SDK：**Rust**、**Python**、**TypeScript**、**C++**、**Java**、**Android**�
 ## *核心功能*
 
 - **类 ROS2原语：** Topic发布/订阅、service、action（`send_goal` → GoalHandle → `result` / `cancel`）、定时器与参数。
-- **一个 broker，多种语言：** Rust、Python、TypeScript、C++、Java、Android SDK接入同一条总线。
+- **一个 broker，多种语言：** Rust、Python、TypeScript、C++、Java、Android SDK接入同一条总线。**更鼓励在程序里启动 broker**（`RobotBusBroker.start()`）；CLI 用于演示或独立进程。
 - **内嵌 Web控制台：** Overview、Topics、Services、Actions、Topology，以及内置小坦克示例 —— 无需额外前端进程。
 - **可选 ROS2桥：** 进程内用 `rclrs` / `rclpy` / `rclcpp`桥接 topic / service / action（Humble / Jazzy）。未启用桥时，核心 SDK不依赖 ROS。
 - **Protobuf契约：** 全部载荷使用 Protocol Buffers（不是 ROS CDR），目录与常见 ROS2包名对齐，见 [`proto/`](proto/)。
@@ -27,7 +26,7 @@ Node编程模型——`Context` / `Node`、topic pub-sub、service、action以�
 
 ### *安装*
 
-* Python（含 `robot-bus-broker`命令行）
+* Python
 
 ```bash
 pip install robot-bus
@@ -36,7 +35,7 @@ pip install robot-bus
 * Rust
 
 ```toml
-robot-bus = "2.1.0"
+robot-bus = "2.2.0"
 ```
 
 * npm
@@ -51,20 +50,20 @@ npm install robot-bus
 <dependency>
     <groupId>org.indunet</groupId>
     <artifactId>robot-bus</artifactId>
-    <version>2.1.0</version>
+    <version>2.2.0</version>
 </dependency>
 ```
 
 * Gradle（Android）
 
 ```kotlin
-implementation("org.indunet:robot-bus-android:2.1.0")
+implementation("org.indunet:robot-bus-android:2.2.0")
 ```
 
 * C++（[GitHub Releases](https://github.com/indunet/robot-bus/releases) DEB / MSI）
 
 ```bash
-sudo apt install ./robot-bus_2.1.0_linux_amd64.deb
+sudo apt install ./robot-bus_2.2.0_linux_amd64.deb
 ```
 
 
@@ -72,16 +71,7 @@ sudo apt install ./robot-bus_2.1.0_linux_amd64.deb
 
 ### *1.1 安装并启动 broker*
 
-```bash
-pip install robot-bus
-robot-bus-broker
-```
-
-默认 API / Web控制台 / WebSocket监听：`http://0.0.0.0:15570`。broker启动后，用浏览器打开 [Web控制台](#2-web控制台) 即可查看。
-
-可运行示例（topic、service、action，Rust / Python / C++）：[`examples/`](examples/)。
-
-也可在进程内启动 broker：
+**更鼓励在程序里启动 broker**（`RobotBusBroker.start()` / 各语言等价 API），让 broker 与业务同进程、生命周期一起管理。CLI 适合演示、多进程联调，或需要单独拉起一个常驻 broker 的场合。
 
 ```python
 import robot_bus
@@ -91,11 +81,24 @@ with robot_bus.RobotBusBroker.start() as broker:
     pass
 ```
 
+Rust / C++ / TypeScript / Java / Android 同样提供进程内 API，见各语言文档。
+
+默认 API / Web控制台 / WebSocket监听：`http://0.0.0.0:15570`。broker启动后，用浏览器打开 [Web控制台](#2-web控制台) 即可查看。
+
+可运行示例（topic、service、action，Rust / Python / C++）：[`examples/`](examples/)。这些示例是多进程的，可用下面命令单独起 broker：
+
+```bash
+python -m robot_bus.broker
+# npx robot-bus          # npm install robot-bus 之后
+# cargo run --bin robot_bus_broker
+# robot_bus_broker   # C++ DEB / MSI / PKG
+```
+
 ### *1.2 小坦克示例*
 
 内置的小坦克仿真，无需先写代码即可看到 topic端到端跑通：
 
-1. 启动 broker（`robot-bus-broker`）。
+1. 启动 broker（`python -m robot_bus.broker`）。
 2. 打开 **http://127.0.0.1:15570**，在侧栏点击 **TANK**（或访问 `/tank/`）。
 3. 点击面板后，用 **方向键** 遥控；也可切换到点选导航，在地图上 **鼠标点击** 下发目标点。
 
@@ -195,7 +198,7 @@ goal = act.send_goal(
 
 ## *2. Web控制台*
 
-Broker内嵌监控界面（Overview、Topics、Services、Actions、Topology、日志）。执行 `robot-bus-broker`（或 `RobotBusBroker.start()`）后，用浏览器打开：
+Broker内嵌监控界面（Overview、Topics、Services、Actions、Topology、日志）。在程序里 `RobotBusBroker.start()`（或独立进程 `python -m robot_bus.broker` / `cargo run --bin robot_bus_broker`）后，用浏览器打开：
 
 **http://127.0.0.1:15570**
 
@@ -213,11 +216,11 @@ Broker内嵌监控界面（Overview、Topics、Services、Actions、Topology、�
 
 进程内在 robot-bus与 ROS2之间桥接 topic / service / action。各语言使用原生客户端（`rclrs` / `rclpy` / `rclcpp`）。官方支持：**Humble**、**Jazzy**。未启用桥时，核心 SDK不依赖 ROS。
 
-需要已 source的 ROS2发行版与 `rclpy`，以及正在运行的 broker：
+需要已 source的 ROS2发行版与 `rclpy`，以及正在运行的 broker（应用代码更鼓励进程内 `RobotBusBroker.start()`；下面 CLI 适合单独起 broker）：
 
 ```bash
 source /opt/ros/humble/setup.bash   # 或 jazzy
-robot-bus-broker                    # 另一个终端
+python -m robot_bus.broker                 # 另一个终端
 ```
 
 ```python

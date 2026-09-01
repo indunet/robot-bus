@@ -21,10 +21,6 @@ impl TypedTopicMapper for StdMsgsBoolMapper {
     type Ros = ros_env::std_msgs::msg::Bool;
     type Bus = crate::std_msgs::msg::v1::Bool;
 
-    fn type_name(&self) -> &'static str {
-        "std_msgs/msg/Bool"
-    }
-
     fn ros_to_bus(&self, msg: Self::Ros) -> crate::errors::Result<Self::Bus> {
         Ok(bool_to_bus(msg))
     }

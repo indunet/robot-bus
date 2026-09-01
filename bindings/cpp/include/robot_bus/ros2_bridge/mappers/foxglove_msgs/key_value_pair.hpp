@@ -37,8 +37,6 @@ inline ::foxglove_msgs::msg::KeyValuePair key_value_pair_to_ros(const ::foxglove
 class FoxgloveMsgsKeyValuePairMapper
     : public TypedTopicMapper<FoxgloveMsgsKeyValuePairMapper, ::foxglove_msgs::msg::KeyValuePair> {
  public:
-  const char *type_name() const override { return "foxglove_msgs/msg/KeyValuePair"; }
-
   std::vector<uint8_t> ros_to_bus(const ::foxglove_msgs::msg::KeyValuePair &msg) const {
     auto bus = ros2_bridge_mappers::foxglove_msgs::key_value_pair_to_bus(msg);
     std::string bytes;
@@ -53,9 +51,7 @@ class FoxgloveMsgsKeyValuePairMapper
   }
 };
 #else
-struct FoxgloveMsgsKeyValuePairMapper : TopicMapper {
-  const char *type_name() const override { return "foxglove_msgs/msg/KeyValuePair"; }
-};
+struct FoxgloveMsgsKeyValuePairMapper : TopicMapper {};
 #endif
 
 }  // namespace robot_bus

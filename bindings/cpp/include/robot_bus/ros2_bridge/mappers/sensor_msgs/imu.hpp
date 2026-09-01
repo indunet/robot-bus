@@ -55,8 +55,6 @@ inline ::sensor_msgs::msg::Imu imu_to_ros(const ::sensor_msgs::msg::v1::Imu &bus
 class SensorMsgsImuMapper
     : public TypedTopicMapper<SensorMsgsImuMapper, ::sensor_msgs::msg::Imu> {
  public:
-  const char *type_name() const override { return "sensor_msgs/msg/Imu"; }
-
   std::vector<uint8_t> ros_to_bus(const ::sensor_msgs::msg::Imu &msg) const {
     auto bus = ros2_bridge_mappers::sensor_msgs::imu_to_bus(msg);
     std::string bytes;
@@ -71,9 +69,7 @@ class SensorMsgsImuMapper
   }
 };
 #else
-struct SensorMsgsImuMapper : TopicMapper {
-  const char *type_name() const override { return "sensor_msgs/msg/Imu"; }
-};
+struct SensorMsgsImuMapper : TopicMapper {};
 #endif
 
 }  // namespace robot_bus

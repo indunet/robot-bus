@@ -1,13 +1,19 @@
 # robot-bus examples
 
-Runnable demos for the core patterns and the ROS 2 bridge. Start a broker first,
-then run a listener/server and a talker/client (or the bridge) in separate
-terminals.
+Runnable demos for the core patterns and the ROS 2 bridge. These examples are
+multi-process, so start a **standalone** broker first, then run a
+listener/server and a talker/client (or the bridge) in separate terminals.
+
+Application code should prefer embedding the broker in-process
+(`RobotBusBroker.start()` / language equivalents) rather than depending on
+this CLI.
 
 ```bash
 # Terminal 1
-robot-bus-broker
+python -m robot_bus.broker
+# or: npx robot-bus
 # or: cargo run --bin robot_bus_broker
+# C++ package: robot_bus_broker
 ```
 
 Shared names:

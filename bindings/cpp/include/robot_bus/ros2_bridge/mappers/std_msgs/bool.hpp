@@ -35,8 +35,6 @@ inline ::std_msgs::msg::Bool bool_to_ros(const ::std_msgs::msg::v1::Bool &bus) {
 class StdMsgsBoolMapper
     : public TypedTopicMapper<StdMsgsBoolMapper, ::std_msgs::msg::Bool> {
  public:
-  const char *type_name() const override { return "std_msgs/msg/Bool"; }
-
   std::vector<uint8_t> ros_to_bus(const ::std_msgs::msg::Bool &msg) const {
     auto bus = ros2_bridge_mappers::std_msgs::bool_to_bus(msg);
     std::string bytes;
@@ -51,9 +49,7 @@ class StdMsgsBoolMapper
   }
 };
 #else
-struct StdMsgsBoolMapper : TopicMapper {
-  const char *type_name() const override { return "std_msgs/msg/Bool"; }
-};
+struct StdMsgsBoolMapper : TopicMapper {};
 #endif
 
 }  // namespace robot_bus

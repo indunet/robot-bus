@@ -24,9 +24,6 @@ def multi_array_layout_to_ros(bus):
 
 
 class StdMsgsMultiArrayLayoutMapper:
-    def type_name(self) -> str:
-        return "std_msgs/msg/MultiArrayLayout"
-
     def ros_msg_type(self):
         from std_msgs.msg import MultiArrayLayout as RosMsg
 

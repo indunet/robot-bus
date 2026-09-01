@@ -43,8 +43,6 @@ inline ::nav2_msgs::msg::ParticleCloud particle_cloud_to_ros(const ::nav2_msgs::
 class Nav2MsgsParticleCloudMapper
     : public TypedTopicMapper<Nav2MsgsParticleCloudMapper, ::nav2_msgs::msg::ParticleCloud> {
  public:
-  const char *type_name() const override { return "nav2_msgs/msg/ParticleCloud"; }
-
   std::vector<uint8_t> ros_to_bus(const ::nav2_msgs::msg::ParticleCloud &msg) const {
     auto bus = ros2_bridge_mappers::nav2_msgs::particle_cloud_to_bus(msg);
     std::string bytes;
@@ -59,9 +57,7 @@ class Nav2MsgsParticleCloudMapper
   }
 };
 #else
-struct Nav2MsgsParticleCloudMapper : TopicMapper {
-  const char *type_name() const override { return "nav2_msgs/msg/ParticleCloud"; }
-};
+struct Nav2MsgsParticleCloudMapper : TopicMapper {};
 #endif
 
 }  // namespace robot_bus

@@ -21,10 +21,6 @@ impl TypedTopicMapper for FoxgloveMsgsGeoJsonMapper {
     type Ros = ros_env::foxglove_msgs::msg::GeoJSON;
     type Bus = crate::foxglove_msgs::msg::v1::GeoJson;
 
-    fn type_name(&self) -> &'static str {
-        "foxglove_msgs/msg/GeoJSON"
-    }
-
     fn ros_to_bus(&self, msg: Self::Ros) -> crate::errors::Result<Self::Bus> {
         Ok(geo_json_to_bus(msg))
     }

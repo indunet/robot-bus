@@ -44,8 +44,6 @@ inline ::nav_msgs::msg::MapMetaData map_meta_data_to_ros(const ::nav_msgs::msg::
 class NavMsgsMapMetaDataMapper
     : public TypedTopicMapper<NavMsgsMapMetaDataMapper, ::nav_msgs::msg::MapMetaData> {
  public:
-  const char *type_name() const override { return "nav_msgs/msg/MapMetaData"; }
-
   std::vector<uint8_t> ros_to_bus(const ::nav_msgs::msg::MapMetaData &msg) const {
     auto bus = ros2_bridge_mappers::nav_msgs::map_meta_data_to_bus(msg);
     std::string bytes;
@@ -60,9 +58,7 @@ class NavMsgsMapMetaDataMapper
   }
 };
 #else
-struct NavMsgsMapMetaDataMapper : TopicMapper {
-  const char *type_name() const override { return "nav_msgs/msg/MapMetaData"; }
-};
+struct NavMsgsMapMetaDataMapper : TopicMapper {};
 #endif
 
 }  // namespace robot_bus

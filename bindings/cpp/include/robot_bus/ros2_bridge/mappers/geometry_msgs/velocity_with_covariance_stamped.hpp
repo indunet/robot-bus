@@ -42,8 +42,6 @@ inline ::geometry_msgs::msg::VelocityWithCovarianceStamped velocity_with_covaria
 class GeometryMsgsVelocityWithCovarianceStampedMapper
     : public TypedTopicMapper<GeometryMsgsVelocityWithCovarianceStampedMapper, ::geometry_msgs::msg::VelocityWithCovarianceStamped> {
  public:
-  const char *type_name() const override { return "geometry_msgs/msg/VelocityWithCovarianceStamped"; }
-
   std::vector<uint8_t> ros_to_bus(const ::geometry_msgs::msg::VelocityWithCovarianceStamped &msg) const {
     auto bus = ros2_bridge_mappers::geometry_msgs::velocity_with_covariance_stamped_to_bus(msg);
     std::string bytes;
@@ -58,9 +56,7 @@ class GeometryMsgsVelocityWithCovarianceStampedMapper
   }
 };
 #else
-struct GeometryMsgsVelocityWithCovarianceStampedMapper : TopicMapper {
-  const char *type_name() const override { return "geometry_msgs/msg/VelocityWithCovarianceStamped"; }
-};
+struct GeometryMsgsVelocityWithCovarianceStampedMapper : TopicMapper {};
 #endif
 
 }  // namespace robot_bus

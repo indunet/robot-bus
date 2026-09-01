@@ -25,9 +25,6 @@ def scene_update_to_ros(bus):
 
 
 class FoxgloveMsgsSceneUpdateMapper:
-    def type_name(self) -> str:
-        return "foxglove_msgs/msg/SceneUpdate"
-
     def ros_msg_type(self):
         from foxglove_msgs.msg import SceneUpdate as RosMsg
 

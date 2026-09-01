@@ -37,8 +37,6 @@ inline ::shape_msgs::msg::MeshTriangle mesh_triangle_to_ros(const ::shape_msgs::
 class ShapeMsgsMeshTriangleMapper
     : public TypedTopicMapper<ShapeMsgsMeshTriangleMapper, ::shape_msgs::msg::MeshTriangle> {
  public:
-  const char *type_name() const override { return "shape_msgs/msg/MeshTriangle"; }
-
   std::vector<uint8_t> ros_to_bus(const ::shape_msgs::msg::MeshTriangle &msg) const {
     auto bus = ros2_bridge_mappers::shape_msgs::mesh_triangle_to_bus(msg);
     std::string bytes;
@@ -53,9 +51,7 @@ class ShapeMsgsMeshTriangleMapper
   }
 };
 #else
-struct ShapeMsgsMeshTriangleMapper : TopicMapper {
-  const char *type_name() const override { return "shape_msgs/msg/MeshTriangle"; }
-};
+struct ShapeMsgsMeshTriangleMapper : TopicMapper {};
 #endif
 
 }  // namespace robot_bus

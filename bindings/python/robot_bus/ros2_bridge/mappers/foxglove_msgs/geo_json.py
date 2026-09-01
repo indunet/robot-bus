@@ -22,9 +22,6 @@ def geo_json_to_ros(bus):
 
 
 class FoxgloveMsgsGeoJsonMapper:
-    def type_name(self) -> str:
-        return "foxglove_msgs/msg/GeoJSON"
-
     def ros_msg_type(self):
         from foxglove_msgs.msg import GeoJSON as RosMsg
 

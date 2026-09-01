@@ -35,10 +35,6 @@ impl TypedTopicMapper for StereoMsgsDisparityImageMapper {
     type Ros = ros_env::stereo_msgs::msg::DisparityImage;
     type Bus = crate::stereo_msgs::msg::v1::DisparityImage;
 
-    fn type_name(&self) -> &'static str {
-        "stereo_msgs/msg/DisparityImage"
-    }
-
     fn ros_to_bus(&self, msg: Self::Ros) -> crate::errors::Result<Self::Bus> {
         Ok(disparity_image_to_bus(msg))
     }

@@ -801,13 +801,13 @@ void wire_action(rclcpp::Node::SharedPtr ros_node, Node &bus_node, const ActionR
 
 void TopicMapper::attach(TopicWireContext &ctx) {
   (void)ctx;
-  throw Error(std::string("custom TopicMapper must override attach(); type=") + type_name());
+  throw Error("custom TopicMapper must override attach()");
 }
 
 rclcpp::SubscriptionBase::SharedPtr TopicMapper::create_ros2_to_bus_subscription(
     rclcpp::Node::SharedPtr, const std::string &, std::shared_ptr<TopicPublisher>,
     std::shared_ptr<std::mutex>, const rclcpp::QoS &) {
-  throw Error(std::string("custom TopicMapper does not support .lazy(); type=") + type_name());
+  throw Error("custom TopicMapper does not support .lazy()");
 }
 
 void ServiceMapper::attach(ServiceWireContext &ctx) {

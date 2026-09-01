@@ -46,9 +46,6 @@ def _qos_bus():
 
 
 class Dummy:
-    def type_name(self) -> str:
-        return "test/msg/Dummy"
-
     def ros_msg_type(self):
         return object
 
@@ -156,9 +153,6 @@ def test_lazy_rejects_attach_only_mapper():
     from robot_bus.ros2_bridge import Ros2Bridge
 
     class AttachOnly:
-        def type_name(self) -> str:
-            return "test/msg/Dummy"
-
         def attach(self, ctx) -> None:
             raise AssertionError("should not attach during add()")
 

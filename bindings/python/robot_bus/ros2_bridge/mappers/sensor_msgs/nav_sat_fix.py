@@ -35,9 +35,6 @@ def nav_sat_fix_to_ros(bus):
 
 
 class SensorMsgsNavSatFixMapper:
-    def type_name(self) -> str:
-        return "sensor_msgs/msg/NavSatFix"
-
     def ros_msg_type(self):
         from sensor_msgs.msg import NavSatFix as RosMsg
 

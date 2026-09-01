@@ -26,9 +26,6 @@ def vector3_to_ros(bus):
 
 
 class GeometryMsgsVector3Mapper:
-    def type_name(self) -> str:
-        return "geometry_msgs/msg/Vector3"
-
     def ros_msg_type(self):
         from geometry_msgs.msg import Vector3 as RosMsg
 

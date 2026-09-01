@@ -39,10 +39,6 @@ impl TypedTopicMapper for ControlMsgsAdmittanceControllerStateMapper {
     type Ros = ros_env::control_msgs::msg::AdmittanceControllerState;
     type Bus = crate::control_msgs::msg::v1::AdmittanceControllerState;
 
-    fn type_name(&self) -> &'static str {
-        "control_msgs/msg/AdmittanceControllerState"
-    }
-
     fn ros_to_bus(&self, msg: Self::Ros) -> crate::errors::Result<Self::Bus> {
         Ok(admittance_controller_state_to_bus(msg))
     }

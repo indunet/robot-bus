@@ -33,9 +33,6 @@ def image_annotations_to_ros(bus):
 
 
 class FoxgloveMsgsImageAnnotationsMapper:
-    def type_name(self) -> str:
-        return "foxglove_msgs/msg/ImageAnnotations"
-
     def ros_msg_type(self):
         from foxglove_msgs.msg import ImageAnnotations as RosMsg
 

@@ -26,9 +26,6 @@ def poses_in_frame_to_ros(bus):
 
 
 class FoxgloveMsgsPosesInFrameMapper:
-    def type_name(self) -> str:
-        return "foxglove_msgs/msg/PosesInFrame"
-
     def ros_msg_type(self):
         from foxglove_msgs.msg import PosesInFrame as RosMsg
 

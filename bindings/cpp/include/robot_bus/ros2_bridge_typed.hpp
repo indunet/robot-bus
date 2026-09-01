@@ -16,7 +16,7 @@
 
 namespace robot_bus {
 
-/// Topic: Derived provides `ros_to_bus` / `bus_to_ros` (and inherits `type_name`).
+/// Topic: Derived provides `ros_to_bus` / `bus_to_ros`.
 template <typename Derived, typename RosMsg>
 class TypedTopicMapper : public TopicMapper {
  public:

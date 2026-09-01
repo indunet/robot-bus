@@ -41,10 +41,6 @@ impl TypedTopicMapper for ControlMsgsJointTrajectoryControllerStateMapper {
     type Ros = ros_env::control_msgs::msg::JointTrajectoryControllerState;
     type Bus = crate::control_msgs::msg::v1::JointTrajectoryControllerState;
 
-    fn type_name(&self) -> &'static str {
-        "control_msgs/msg/JointTrajectoryControllerState"
-    }
-
     fn ros_to_bus(&self, msg: Self::Ros) -> crate::errors::Result<Self::Bus> {
         Ok(joint_trajectory_controller_state_to_bus(msg))
     }

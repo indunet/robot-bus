@@ -43,8 +43,6 @@ inline ::nav_msgs::msg::Odometry odometry_to_ros(const ::nav_msgs::msg::v1::Odom
 class NavMsgsOdometryMapper
     : public TypedTopicMapper<NavMsgsOdometryMapper, ::nav_msgs::msg::Odometry> {
  public:
-  const char *type_name() const override { return "nav_msgs/msg/Odometry"; }
-
   std::vector<uint8_t> ros_to_bus(const ::nav_msgs::msg::Odometry &msg) const {
     auto bus = ros2_bridge_mappers::nav_msgs::odometry_to_bus(msg);
     std::string bytes;
@@ -59,9 +57,7 @@ class NavMsgsOdometryMapper
   }
 };
 #else
-struct NavMsgsOdometryMapper : TopicMapper {
-  const char *type_name() const override { return "nav_msgs/msg/Odometry"; }
-};
+struct NavMsgsOdometryMapper : TopicMapper {};
 #endif
 
 }  // namespace robot_bus

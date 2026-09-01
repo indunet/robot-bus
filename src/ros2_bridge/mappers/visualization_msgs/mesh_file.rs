@@ -23,10 +23,6 @@ impl TypedTopicMapper for VisualizationMsgsMeshFileMapper {
     type Ros = ros_env::visualization_msgs::msg::MeshFile;
     type Bus = crate::visualization_msgs::msg::v1::MeshFile;
 
-    fn type_name(&self) -> &'static str {
-        "visualization_msgs/msg/MeshFile"
-    }
-
     fn ros_to_bus(&self, msg: Self::Ros) -> crate::errors::Result<Self::Bus> {
         Ok(mesh_file_to_bus(msg))
     }

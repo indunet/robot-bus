@@ -37,8 +37,6 @@ inline ::control_msgs::msg::GripperCommand gripper_command_to_ros(const ::contro
 class ControlMsgsGripperCommandMapper
     : public TypedTopicMapper<ControlMsgsGripperCommandMapper, ::control_msgs::msg::GripperCommand> {
  public:
-  const char *type_name() const override { return "control_msgs/msg/GripperCommand"; }
-
   std::vector<uint8_t> ros_to_bus(const ::control_msgs::msg::GripperCommand &msg) const {
     auto bus = ros2_bridge_mappers::control_msgs::gripper_command_to_bus(msg);
     std::string bytes;
@@ -53,9 +51,7 @@ class ControlMsgsGripperCommandMapper
   }
 };
 #else
-struct ControlMsgsGripperCommandMapper : TopicMapper {
-  const char *type_name() const override { return "control_msgs/msg/GripperCommand"; }
-};
+struct ControlMsgsGripperCommandMapper : TopicMapper {};
 #endif
 
 }  // namespace robot_bus

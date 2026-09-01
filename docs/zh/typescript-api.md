@@ -19,12 +19,7 @@ npm install robot-bus
 
 ## Broker
 
-与 Rust / Python相同：先起 broker，再跑业务代码。
-
-```bash
-# Rust / Python CLI
-robot-bus-broker --api-listen 0.0.0.0:15570 --tcp-only
-```
+**更鼓励在程序里启动 broker**，再跑业务代码。CLI 适合演示、多进程联调，或单独拉起常驻 broker。
 
 Node进程内：
 
@@ -38,6 +33,16 @@ const broker = RobotBusBroker.start({
 // …业务…
 broker.stop();
 ```
+
+需要独立进程时再用 CLI（`npm install robot-bus` 之后）：
+
+```bash
+npx robot-bus
+npx robot-bus --help
+npx robot-bus --api-listen 0.0.0.0:15570 --tcp-only
+```
+
+也可以在自己的 `package.json` 里加 `"broker": "robot-bus"`，然后 `npm run broker`。flags 与 `python -m robot_bus.broker` / `robot_bus_broker` 相同。
 
 ### HTTP discovery（仅 Node.js原生）
 

@@ -17,9 +17,6 @@ fn bus_qos() -> TopicQos {
 
 struct DummyTopicMapper;
 impl TopicMapper for DummyTopicMapper {
-    fn type_name(&self) -> &'static str {
-        "test_msgs/msg/Dummy"
-    }
     fn create_ros2_to_bus_subscription(
         &self,
         _ros_node: &rclrs::Node,

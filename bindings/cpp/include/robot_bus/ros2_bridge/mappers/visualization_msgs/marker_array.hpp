@@ -40,8 +40,6 @@ inline ::visualization_msgs::msg::MarkerArray marker_array_to_ros(const ::visual
 class VisualizationMsgsMarkerArrayMapper
     : public TypedTopicMapper<VisualizationMsgsMarkerArrayMapper, ::visualization_msgs::msg::MarkerArray> {
  public:
-  const char *type_name() const override { return "visualization_msgs/msg/MarkerArray"; }
-
   std::vector<uint8_t> ros_to_bus(const ::visualization_msgs::msg::MarkerArray &msg) const {
     auto bus = ros2_bridge_mappers::visualization_msgs::marker_array_to_bus(msg);
     std::string bytes;
@@ -56,9 +54,7 @@ class VisualizationMsgsMarkerArrayMapper
   }
 };
 #else
-struct VisualizationMsgsMarkerArrayMapper : TopicMapper {
-  const char *type_name() const override { return "visualization_msgs/msg/MarkerArray"; }
-};
+struct VisualizationMsgsMarkerArrayMapper : TopicMapper {};
 #endif
 
 }  // namespace robot_bus

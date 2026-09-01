@@ -28,9 +28,6 @@ def quaternion_to_ros(bus):
 
 
 class FoxgloveMsgsQuaternionMapper:
-    def type_name(self) -> str:
-        return "foxglove_msgs/msg/Quaternion"
-
     def ros_msg_type(self):
         from foxglove_msgs.msg import Quaternion as RosMsg
 

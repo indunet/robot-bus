@@ -22,9 +22,6 @@ def int32_to_ros(bus):
 
 
 class StdMsgsInt32Mapper:
-    def type_name(self) -> str:
-        return "std_msgs/msg/Int32"
-
     def ros_msg_type(self):
         from std_msgs.msg import Int32 as RosMsg
 

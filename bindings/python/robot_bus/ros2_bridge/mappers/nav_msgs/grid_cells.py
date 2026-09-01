@@ -29,9 +29,6 @@ def grid_cells_to_ros(bus):
 
 
 class NavMsgsGridCellsMapper:
-    def type_name(self) -> str:
-        return "nav_msgs/msg/GridCells"
-
     def ros_msg_type(self):
         from nav_msgs.msg import GridCells as RosMsg
 

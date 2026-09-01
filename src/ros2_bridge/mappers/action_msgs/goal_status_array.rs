@@ -21,10 +21,6 @@ impl TypedTopicMapper for ActionMsgsGoalStatusArrayMapper {
     type Ros = ros_env::action_msgs::msg::GoalStatusArray;
     type Bus = crate::action_msgs::msg::v1::GoalStatusArray;
 
-    fn type_name(&self) -> &'static str {
-        "action_msgs/msg/GoalStatusArray"
-    }
-
     fn ros_to_bus(&self, msg: Self::Ros) -> crate::errors::Result<Self::Bus> {
         Ok(goal_status_array_to_bus(msg))
     }

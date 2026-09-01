@@ -38,8 +38,6 @@ inline ::geometry_msgs::msg::TwistStamped twist_stamped_to_ros(const ::geometry_
 class GeometryMsgsTwistStampedMapper
     : public TypedTopicMapper<GeometryMsgsTwistStampedMapper, ::geometry_msgs::msg::TwistStamped> {
  public:
-  const char *type_name() const override { return "geometry_msgs/msg/TwistStamped"; }
-
   std::vector<uint8_t> ros_to_bus(const ::geometry_msgs::msg::TwistStamped &msg) const {
     auto bus = ros2_bridge_mappers::geometry_msgs::twist_stamped_to_bus(msg);
     std::string bytes;
@@ -54,9 +52,7 @@ class GeometryMsgsTwistStampedMapper
   }
 };
 #else
-struct GeometryMsgsTwistStampedMapper : TopicMapper {
-  const char *type_name() const override { return "geometry_msgs/msg/TwistStamped"; }
-};
+struct GeometryMsgsTwistStampedMapper : TopicMapper {};
 #endif
 
 }  // namespace robot_bus

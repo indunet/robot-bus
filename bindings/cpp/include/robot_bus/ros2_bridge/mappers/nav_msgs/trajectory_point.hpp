@@ -47,8 +47,6 @@ inline ::nav_msgs::msg::TrajectoryPoint trajectory_point_to_ros(const ::nav_msgs
 class NavMsgsTrajectoryPointMapper
     : public TypedTopicMapper<NavMsgsTrajectoryPointMapper, ::nav_msgs::msg::TrajectoryPoint> {
  public:
-  const char *type_name() const override { return "nav_msgs/msg/TrajectoryPoint"; }
-
   std::vector<uint8_t> ros_to_bus(const ::nav_msgs::msg::TrajectoryPoint &msg) const {
     auto bus = ros2_bridge_mappers::nav_msgs::trajectory_point_to_bus(msg);
     std::string bytes;
@@ -63,9 +61,7 @@ class NavMsgsTrajectoryPointMapper
   }
 };
 #else
-struct NavMsgsTrajectoryPointMapper : TopicMapper {
-  const char *type_name() const override { return "nav_msgs/msg/TrajectoryPoint"; }
-};
+struct NavMsgsTrajectoryPointMapper : TopicMapper {};
 #endif
 
 }  // namespace robot_bus

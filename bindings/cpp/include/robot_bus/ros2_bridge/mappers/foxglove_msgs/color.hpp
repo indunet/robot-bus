@@ -41,8 +41,6 @@ inline ::foxglove_msgs::msg::Color color_to_ros(const ::foxglove_msgs::msg::v1::
 class FoxgloveMsgsColorMapper
     : public TypedTopicMapper<FoxgloveMsgsColorMapper, ::foxglove_msgs::msg::Color> {
  public:
-  const char *type_name() const override { return "foxglove_msgs/msg/Color"; }
-
   std::vector<uint8_t> ros_to_bus(const ::foxglove_msgs::msg::Color &msg) const {
     auto bus = ros2_bridge_mappers::foxglove_msgs::color_to_bus(msg);
     std::string bytes;
@@ -57,9 +55,7 @@ class FoxgloveMsgsColorMapper
   }
 };
 #else
-struct FoxgloveMsgsColorMapper : TopicMapper {
-  const char *type_name() const override { return "foxglove_msgs/msg/Color"; }
-};
+struct FoxgloveMsgsColorMapper : TopicMapper {};
 #endif
 
 }  // namespace robot_bus

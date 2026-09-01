@@ -39,8 +39,6 @@ inline ::sensor_msgs::msg::CompressedImage compressed_image_to_ros(const ::senso
 class SensorMsgsCompressedImageMapper
     : public TypedTopicMapper<SensorMsgsCompressedImageMapper, ::sensor_msgs::msg::CompressedImage> {
  public:
-  const char *type_name() const override { return "sensor_msgs/msg/CompressedImage"; }
-
   std::vector<uint8_t> ros_to_bus(const ::sensor_msgs::msg::CompressedImage &msg) const {
     auto bus = ros2_bridge_mappers::sensor_msgs::compressed_image_to_bus(msg);
     std::string bytes;
@@ -55,9 +53,7 @@ class SensorMsgsCompressedImageMapper
   }
 };
 #else
-struct SensorMsgsCompressedImageMapper : TopicMapper {
-  const char *type_name() const override { return "sensor_msgs/msg/CompressedImage"; }
-};
+struct SensorMsgsCompressedImageMapper : TopicMapper {};
 #endif
 
 }  // namespace robot_bus

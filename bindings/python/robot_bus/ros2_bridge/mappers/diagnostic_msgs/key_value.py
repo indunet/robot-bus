@@ -24,9 +24,6 @@ def key_value_to_ros(bus):
 
 
 class DiagnosticMsgsKeyValueMapper:
-    def type_name(self) -> str:
-        return "diagnostic_msgs/msg/KeyValue"
-
     def ros_msg_type(self):
         from diagnostic_msgs.msg import KeyValue as RosMsg
 

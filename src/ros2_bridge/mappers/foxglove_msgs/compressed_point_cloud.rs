@@ -29,10 +29,6 @@ impl TypedTopicMapper for FoxgloveMsgsCompressedPointCloudMapper {
     type Ros = ros_env::foxglove_msgs::msg::CompressedPointCloud;
     type Bus = crate::foxglove_msgs::msg::v1::CompressedPointCloud;
 
-    fn type_name(&self) -> &'static str {
-        "foxglove_msgs/msg/CompressedPointCloud"
-    }
-
     fn ros_to_bus(&self, msg: Self::Ros) -> crate::errors::Result<Self::Bus> {
         Ok(compressed_point_cloud_to_bus(msg))
     }

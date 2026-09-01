@@ -44,8 +44,6 @@ inline ::control_msgs::msg::InterfaceValue interface_value_to_ros(const ::contro
 class ControlMsgsInterfaceValueMapper
     : public TypedTopicMapper<ControlMsgsInterfaceValueMapper, ::control_msgs::msg::InterfaceValue> {
  public:
-  const char *type_name() const override { return "control_msgs/msg/InterfaceValue"; }
-
   std::vector<uint8_t> ros_to_bus(const ::control_msgs::msg::InterfaceValue &msg) const {
     auto bus = ros2_bridge_mappers::control_msgs::interface_value_to_bus(msg);
     std::string bytes;
@@ -60,9 +58,7 @@ class ControlMsgsInterfaceValueMapper
   }
 };
 #else
-struct ControlMsgsInterfaceValueMapper : TopicMapper {
-  const char *type_name() const override { return "control_msgs/msg/InterfaceValue"; }
-};
+struct ControlMsgsInterfaceValueMapper : TopicMapper {};
 #endif
 
 }  // namespace robot_bus

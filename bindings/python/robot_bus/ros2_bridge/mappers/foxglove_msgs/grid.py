@@ -40,9 +40,6 @@ def grid_to_ros(bus):
 
 
 class FoxgloveMsgsGridMapper:
-    def type_name(self) -> str:
-        return "foxglove_msgs/msg/Grid"
-
     def ros_msg_type(self):
         from foxglove_msgs.msg import Grid as RosMsg
 

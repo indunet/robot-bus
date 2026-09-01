@@ -64,8 +64,6 @@ inline ::sensor_msgs::msg::CameraInfo camera_info_to_ros(const ::sensor_msgs::ms
 class SensorMsgsCameraInfoMapper
     : public TypedTopicMapper<SensorMsgsCameraInfoMapper, ::sensor_msgs::msg::CameraInfo> {
  public:
-  const char *type_name() const override { return "sensor_msgs/msg/CameraInfo"; }
-
   std::vector<uint8_t> ros_to_bus(const ::sensor_msgs::msg::CameraInfo &msg) const {
     auto bus = ros2_bridge_mappers::sensor_msgs::camera_info_to_bus(msg);
     std::string bytes;
@@ -80,9 +78,7 @@ class SensorMsgsCameraInfoMapper
   }
 };
 #else
-struct SensorMsgsCameraInfoMapper : TopicMapper {
-  const char *type_name() const override { return "sensor_msgs/msg/CameraInfo"; }
-};
+struct SensorMsgsCameraInfoMapper : TopicMapper {};
 #endif
 
 }  // namespace robot_bus

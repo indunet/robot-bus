@@ -49,8 +49,6 @@ inline ::control_msgs::msg::SingleDOFState single_dof_state_to_ros(const ::contr
 class ControlMsgsSingleDofStateMapper
     : public TypedTopicMapper<ControlMsgsSingleDofStateMapper, ::control_msgs::msg::SingleDOFState> {
  public:
-  const char *type_name() const override { return "control_msgs/msg/SingleDOFState"; }
-
   std::vector<uint8_t> ros_to_bus(const ::control_msgs::msg::SingleDOFState &msg) const {
     auto bus = ros2_bridge_mappers::control_msgs::single_dof_state_to_bus(msg);
     std::string bytes;
@@ -65,9 +63,7 @@ class ControlMsgsSingleDofStateMapper
   }
 };
 #else
-struct ControlMsgsSingleDofStateMapper : TopicMapper {
-  const char *type_name() const override { return "control_msgs/msg/SingleDOFState"; }
-};
+struct ControlMsgsSingleDofStateMapper : TopicMapper {};
 #endif
 
 }  // namespace robot_bus

@@ -29,10 +29,6 @@ impl TypedTopicMapper for VisualizationMsgsMenuEntryMapper {
     type Ros = ros_env::visualization_msgs::msg::MenuEntry;
     type Bus = crate::visualization_msgs::msg::v1::MenuEntry;
 
-    fn type_name(&self) -> &'static str {
-        "visualization_msgs/msg/MenuEntry"
-    }
-
     fn ros_to_bus(&self, msg: Self::Ros) -> crate::errors::Result<Self::Bus> {
         Ok(menu_entry_to_bus(msg))
     }

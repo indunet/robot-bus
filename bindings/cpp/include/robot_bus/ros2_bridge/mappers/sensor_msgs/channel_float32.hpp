@@ -39,8 +39,6 @@ inline ::sensor_msgs::msg::ChannelFloat32 channel_float32_to_ros(const ::sensor_
 class SensorMsgsChannelFloat32Mapper
     : public TypedTopicMapper<SensorMsgsChannelFloat32Mapper, ::sensor_msgs::msg::ChannelFloat32> {
  public:
-  const char *type_name() const override { return "sensor_msgs/msg/ChannelFloat32"; }
-
   std::vector<uint8_t> ros_to_bus(const ::sensor_msgs::msg::ChannelFloat32 &msg) const {
     auto bus = ros2_bridge_mappers::sensor_msgs::channel_float32_to_bus(msg);
     std::string bytes;
@@ -55,9 +53,7 @@ class SensorMsgsChannelFloat32Mapper
   }
 };
 #else
-struct SensorMsgsChannelFloat32Mapper : TopicMapper {
-  const char *type_name() const override { return "sensor_msgs/msg/ChannelFloat32"; }
-};
+struct SensorMsgsChannelFloat32Mapper : TopicMapper {};
 #endif
 
 }  // namespace robot_bus

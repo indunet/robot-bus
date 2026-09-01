@@ -205,7 +205,6 @@ pub trait TypedTopicMapper: Clone + Send + Sync + 'static {
     type Ros: RosMessage + Send + Sync + Default + 'static;
     type Bus: ProstMessage + Default + Send + 'static;
 
-    fn type_name(&self) -> &str;
     fn ros_to_bus(&self, msg: Self::Ros) -> BusResult<Self::Bus>;
     fn bus_to_ros(&self, msg: Self::Bus) -> BusResult<Self::Ros>;
 }
@@ -213,9 +212,6 @@ pub trait TypedTopicMapper: Clone + Send + Sync + 'static {
 /// Object-safe topic plugin. Prefer [`TypedTopicMapper`]; the blanket impl
 /// wires typed ROS↔bus endpoints.
 pub trait TopicMapper: Send + Sync {
-    /// Full ROS type name, e.g. `sensor_msgs/msg/Image`.
-    fn type_name(&self) -> &str;
-
     fn create_ros2_to_bus_subscription(
         &self,
         ros_node: &rclrs::Node,
@@ -231,10 +227,6 @@ impl<T> TopicMapper for T
 where
     T: TypedTopicMapper,
 {
-    fn type_name(&self) -> &str {
-        TypedTopicMapper::type_name(self)
-    }
-
     fn create_ros2_to_bus_subscription(
         &self,
         ros_node: &rclrs::Node,
@@ -367,10 +359,6 @@ where
 struct RefTopicMapper(&'static dyn TopicMapper);
 
 impl TopicMapper for RefTopicMapper {
-    fn type_name(&self) -> &'static str {
-        self.0.type_name()
-    }
-
     fn create_ros2_to_bus_subscription(
         &self,
         ros_node: &rclrs::Node,
@@ -390,8 +378,8 @@ impl TopicMapper for RefTopicMapper {
 static BUILTIN_MAPPERS: LazyLock<HashMap<&'static str, &'static dyn TopicMapper>> =
     LazyLock::new(|| {
         let mut map = HashMap::with_capacity(BUILTIN_MAPPER_LIST.len());
-        for m in BUILTIN_MAPPER_LIST {
-            map.insert(m.type_name(), *m);
+        for (name, m) in BUILTIN_MAPPER_LIST {
+            map.insert(*name, *m);
         }
         map
     });
@@ -461,9 +449,9 @@ mod tests {
     }
 
     #[test]
-    fn registry_keys_match_mapper_type_names() {
+    fn registry_lookup_succeeds_for_each_key() {
         for t in registered_topic_types() {
-            assert_eq!(lookup_topic_mapper(t).unwrap().type_name(), t);
+            assert!(lookup_topic_mapper(t).is_ok(), "{t}");
         }
     }
 

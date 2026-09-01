@@ -25,10 +25,6 @@ impl TypedTopicMapper for GeometryMsgsTransformStampedMapper {
     type Ros = ros_env::geometry_msgs::msg::TransformStamped;
     type Bus = crate::geometry_msgs::msg::v1::TransformStamped;
 
-    fn type_name(&self) -> &'static str {
-        "geometry_msgs/msg/TransformStamped"
-    }
-
     fn ros_to_bus(&self, msg: Self::Ros) -> crate::errors::Result<Self::Bus> {
         Ok(transform_stamped_to_bus(msg))
     }

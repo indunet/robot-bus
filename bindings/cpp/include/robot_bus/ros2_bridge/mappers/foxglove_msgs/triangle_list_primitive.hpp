@@ -57,8 +57,6 @@ inline ::foxglove_msgs::msg::TriangleListPrimitive triangle_list_primitive_to_ro
 class FoxgloveMsgsTriangleListPrimitiveMapper
     : public TypedTopicMapper<FoxgloveMsgsTriangleListPrimitiveMapper, ::foxglove_msgs::msg::TriangleListPrimitive> {
  public:
-  const char *type_name() const override { return "foxglove_msgs/msg/TriangleListPrimitive"; }
-
   std::vector<uint8_t> ros_to_bus(const ::foxglove_msgs::msg::TriangleListPrimitive &msg) const {
     auto bus = ros2_bridge_mappers::foxglove_msgs::triangle_list_primitive_to_bus(msg);
     std::string bytes;
@@ -73,9 +71,7 @@ class FoxgloveMsgsTriangleListPrimitiveMapper
   }
 };
 #else
-struct FoxgloveMsgsTriangleListPrimitiveMapper : TopicMapper {
-  const char *type_name() const override { return "foxglove_msgs/msg/TriangleListPrimitive"; }
-};
+struct FoxgloveMsgsTriangleListPrimitiveMapper : TopicMapper {};
 #endif
 
 }  // namespace robot_bus

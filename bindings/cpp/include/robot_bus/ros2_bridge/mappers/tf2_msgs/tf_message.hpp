@@ -40,8 +40,6 @@ inline ::tf2_msgs::msg::TFMessage tf_message_to_ros(const ::tf2_msgs::msg::v1::T
 class Tf2MsgsTfMessageMapper
     : public TypedTopicMapper<Tf2MsgsTfMessageMapper, ::tf2_msgs::msg::TFMessage> {
  public:
-  const char *type_name() const override { return "tf2_msgs/msg/TFMessage"; }
-
   std::vector<uint8_t> ros_to_bus(const ::tf2_msgs::msg::TFMessage &msg) const {
     auto bus = ros2_bridge_mappers::tf2_msgs::tf_message_to_bus(msg);
     std::string bytes;
@@ -56,9 +54,7 @@ class Tf2MsgsTfMessageMapper
   }
 };
 #else
-struct Tf2MsgsTfMessageMapper : TopicMapper {
-  const char *type_name() const override { return "tf2_msgs/msg/TFMessage"; }
-};
+struct Tf2MsgsTfMessageMapper : TopicMapper {};
 #endif
 
 }  // namespace robot_bus

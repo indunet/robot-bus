@@ -23,10 +23,6 @@ impl TypedTopicMapper for StdMsgsInt8MultiArrayMapper {
     type Ros = ros_env::std_msgs::msg::Int8MultiArray;
     type Bus = crate::std_msgs::msg::v1::Int8MultiArray;
 
-    fn type_name(&self) -> &'static str {
-        "std_msgs/msg/Int8MultiArray"
-    }
-
     fn ros_to_bus(&self, msg: Self::Ros) -> crate::errors::Result<Self::Bus> {
         Ok(int8_multi_array_to_bus(msg))
     }

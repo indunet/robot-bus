@@ -26,9 +26,6 @@ def interactive_marker_init_to_ros(bus):
 
 
 class VisualizationMsgsInteractiveMarkerInitMapper:
-    def type_name(self) -> str:
-        return "visualization_msgs/msg/InteractiveMarkerInit"
-
     def ros_msg_type(self):
         from visualization_msgs.msg import InteractiveMarkerInit as RosMsg
 

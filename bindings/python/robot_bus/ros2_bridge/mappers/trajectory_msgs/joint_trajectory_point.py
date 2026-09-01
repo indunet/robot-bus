@@ -30,9 +30,6 @@ def joint_trajectory_point_to_ros(bus):
 
 
 class TrajectoryMsgsJointTrajectoryPointMapper:
-    def type_name(self) -> str:
-        return "trajectory_msgs/msg/JointTrajectoryPoint"
-
     def ros_msg_type(self):
         from trajectory_msgs.msg import JointTrajectoryPoint as RosMsg
 

@@ -24,9 +24,6 @@ def accel_with_covariance_to_ros(bus):
 
 
 class GeometryMsgsAccelWithCovarianceMapper:
-    def type_name(self) -> str:
-        return "geometry_msgs/msg/AccelWithCovariance"
-
     def ros_msg_type(self):
         from geometry_msgs.msg import AccelWithCovariance as RosMsg
 

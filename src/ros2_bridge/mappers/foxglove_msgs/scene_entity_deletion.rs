@@ -25,10 +25,6 @@ impl TypedTopicMapper for FoxgloveMsgsSceneEntityDeletionMapper {
     type Ros = ros_env::foxglove_msgs::msg::SceneEntityDeletion;
     type Bus = crate::foxglove_msgs::msg::v1::SceneEntityDeletion;
 
-    fn type_name(&self) -> &'static str {
-        "foxglove_msgs/msg/SceneEntityDeletion"
-    }
-
     fn ros_to_bus(&self, msg: Self::Ros) -> crate::errors::Result<Self::Bus> {
         Ok(scene_entity_deletion_to_bus(msg))
     }

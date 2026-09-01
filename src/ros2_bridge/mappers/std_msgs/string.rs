@@ -25,10 +25,6 @@ impl TypedTopicMapper for StdMsgsStringMapper {
     type Ros = ros_env::std_msgs::msg::String;
     type Bus = crate::std_msgs::msg::v1::String;
 
-    fn type_name(&self) -> &'static str {
-        "std_msgs/msg/String"
-    }
-
     fn ros_to_bus(&self, msg: Self::Ros) -> crate::errors::Result<Self::Bus> {
         Ok(string_to_bus(msg))
     }

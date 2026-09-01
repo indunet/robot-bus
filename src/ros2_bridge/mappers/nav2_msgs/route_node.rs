@@ -23,10 +23,6 @@ impl TypedTopicMapper for Nav2MsgsRouteNodeMapper {
     type Ros = ros_env::nav2_msgs::msg::RouteNode;
     type Bus = crate::nav2_msgs::msg::v1::RouteNode;
 
-    fn type_name(&self) -> &'static str {
-        "nav2_msgs/msg/RouteNode"
-    }
-
     fn ros_to_bus(&self, msg: Self::Ros) -> crate::errors::Result<Self::Bus> {
         Ok(route_node_to_bus(msg))
     }

@@ -25,10 +25,6 @@ impl TypedTopicMapper for FoxgloveMsgsPackedElementFieldMapper {
     type Ros = ros_env::foxglove_msgs::msg::PackedElementField;
     type Bus = crate::foxglove_msgs::msg::v1::PackedElementField;
 
-    fn type_name(&self) -> &'static str {
-        "foxglove_msgs/msg/PackedElementField"
-    }
-
     fn ros_to_bus(&self, msg: Self::Ros) -> crate::errors::Result<Self::Bus> {
         Ok(packed_element_field_to_bus(msg))
     }

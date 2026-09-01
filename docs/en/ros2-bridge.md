@@ -28,7 +28,8 @@ Official releases: **Humble**, **Jazzy**. Mount routes with `.mapper(concrete ob
 
 ```bash
 source /opt/ros/humble/setup.bash   # or jazzy
-cargo run --bin robot_bus_broker    # or installed robot-bus-broker
+# Prefer RobotBusBroker.start() in application code; CLI is for a standalone broker beside the bridge
+cargo run --bin robot_bus_broker    # or python -m robot_bus.broker
 ```
 
 **Rust `feature = "ros2"`** uses crates.io **`rclrs` 0.7**. Typed messages come from published **`ros-env` 0.2**, which re-exports `share/<pkg>/rust/` on `AMENT_PREFIX_PATH` as `ros_env::sensor_msgs::msg::Image`. Current Humble apt packages for `common_interfaces` (including `sensor_msgs`) **already ship rust IDL**, so sourcing `/opt/ros/humble` is enough for Image / String and similar. The full mapper registry also needs packages Humble does not install by default (`nav2_msgs` / `control_msgs` / `apriltag_msgs`); only those need an overlay. See **Rust messages** below.
@@ -62,6 +63,41 @@ Each topic, service, and action endpoint is a **name + `TopicQos`**:
 ```
 
 After `TopicQos.keep_last(n)` you must call `.reliable()` or `.best_effort()`. ROS endpoints accept either; **bus** endpoints (topic, service, action) must be `.best_effort()` (no DDS reliability). ROS durability defaults to volatile; chain `.transient_local()` on the ROS endpoint for latched topics such as `/tf_static`. Direction is the `from_ros → to_bus` / `from_bus → to_ros` chain. **`both` is not allowed**. Typical ROS service QoS (matching `services_default`) is `TopicQos.keep_last(10).reliable()`. Typical bus RPC QoS is `TopicQos.keep_last(8).best_effort()` (depth → DEALER HWM). Action applies the ROS profile to goal / result / cancel services and the feedback topic; the status topic stays the ROS action-status default.
+
+Mount several topics on one bridge by `.add()` then starting the next route. A second topic is another `.from_ros` / `.from_bus`, **not** `.service()` / `.action()` (those switch kind). Directions may mix.
+
+```python
+.from_ros("/chatter", TopicQos.keep_last(10).reliable())
+.to_bus("/chatter", TopicQos.keep_last(8).best_effort())
+.mapper(StdMsgsStringMapper())
+.add()
+.from_ros("/pose", TopicQos.keep_last(10).reliable())
+.to_bus("/pose", TopicQos.keep_last(8).best_effort())
+.mapper(GeometryMsgsPoseStampedMapper())
+.add()
+```
+
+```rust
+.from_ros("/chatter", TopicQos::keep_last(10).reliable())
+.to_bus("/chatter", TopicQos::keep_last(8).best_effort())
+.mapper(StdMsgsStringMapper)
+.add()?
+.from_ros("/pose", TopicQos::keep_last(10).reliable())
+.to_bus("/pose", TopicQos::keep_last(8).best_effort())
+.mapper(GeometryMsgsPoseStampedMapper)
+.add()?
+```
+
+```cpp
+.from_ros("/chatter", robot_bus::TopicQos::keep_last(10).reliable())
+.to_bus("/chatter", robot_bus::TopicQos::keep_last(8).best_effort())
+.mapper(robot_bus::StdMsgsStringMapper{})
+.add()
+.from_ros("/pose", robot_bus::TopicQos::keep_last(10).reliable())
+.to_bus("/pose", robot_bus::TopicQos::keep_last(8).best_effort())
+.mapper(robot_bus::GeometryMsgsPoseStampedMapper{})
+.add()
+```
 
 - Default timeouts: service **5s**, action goal **30s**
 - Topic routes default to **eager** ROS subscriptions (`build()` creates them immediately so the ROS graph shows the bridge). Opt in to on-demand ROS2→bus with `.lazy()` on that route only.
@@ -323,10 +359,6 @@ struct MyStringMapper;
 impl TypedTopicMapper for MyStringMapper {
     type Ros = ros_env::std_msgs::msg::String;
     type Bus = robot_bus::std_msgs::msg::v1::String;
-
-    fn type_name(&self) -> &str {
-        "std_msgs/msg/String"
-    }
 
     fn ros_to_bus(&self, msg: Self::Ros) -> robot_bus::Result<Self::Bus> {
         Ok(Self::Bus { data: msg.data.to_string() })

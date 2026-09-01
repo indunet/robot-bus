@@ -43,8 +43,6 @@ inline ::geometry_msgs::msg::PoseArray pose_array_to_ros(const ::geometry_msgs::
 class GeometryMsgsPoseArrayMapper
     : public TypedTopicMapper<GeometryMsgsPoseArrayMapper, ::geometry_msgs::msg::PoseArray> {
  public:
-  const char *type_name() const override { return "geometry_msgs/msg/PoseArray"; }
-
   std::vector<uint8_t> ros_to_bus(const ::geometry_msgs::msg::PoseArray &msg) const {
     auto bus = ros2_bridge_mappers::geometry_msgs::pose_array_to_bus(msg);
     std::string bytes;
@@ -59,9 +57,7 @@ class GeometryMsgsPoseArrayMapper
   }
 };
 #else
-struct GeometryMsgsPoseArrayMapper : TopicMapper {
-  const char *type_name() const override { return "geometry_msgs/msg/PoseArray"; }
-};
+struct GeometryMsgsPoseArrayMapper : TopicMapper {};
 #endif
 
 }  // namespace robot_bus

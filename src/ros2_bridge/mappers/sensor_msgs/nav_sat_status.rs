@@ -23,10 +23,6 @@ impl TypedTopicMapper for SensorMsgsNavSatStatusMapper {
     type Ros = ros_env::sensor_msgs::msg::NavSatStatus;
     type Bus = crate::sensor_msgs::msg::v1::NavSatStatus;
 
-    fn type_name(&self) -> &'static str {
-        "sensor_msgs/msg/NavSatStatus"
-    }
-
     fn ros_to_bus(&self, msg: Self::Ros) -> crate::errors::Result<Self::Bus> {
         Ok(nav_sat_status_to_bus(msg))
     }

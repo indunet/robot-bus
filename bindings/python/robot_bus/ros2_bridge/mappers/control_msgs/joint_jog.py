@@ -30,9 +30,6 @@ def joint_jog_to_ros(bus):
 
 
 class ControlMsgsJointJogMapper:
-    def type_name(self) -> str:
-        return "control_msgs/msg/JointJog"
-
     def ros_msg_type(self):
         from control_msgs.msg import JointJog as RosMsg
 

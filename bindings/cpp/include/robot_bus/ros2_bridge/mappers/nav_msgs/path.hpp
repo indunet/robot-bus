@@ -43,8 +43,6 @@ inline ::nav_msgs::msg::Path path_to_ros(const ::nav_msgs::msg::v1::Path &bus) {
 class NavMsgsPathMapper
     : public TypedTopicMapper<NavMsgsPathMapper, ::nav_msgs::msg::Path> {
  public:
-  const char *type_name() const override { return "nav_msgs/msg/Path"; }
-
   std::vector<uint8_t> ros_to_bus(const ::nav_msgs::msg::Path &msg) const {
     auto bus = ros2_bridge_mappers::nav_msgs::path_to_bus(msg);
     std::string bytes;
@@ -59,9 +57,7 @@ class NavMsgsPathMapper
   }
 };
 #else
-struct NavMsgsPathMapper : TopicMapper {
-  const char *type_name() const override { return "nav_msgs/msg/Path"; }
-};
+struct NavMsgsPathMapper : TopicMapper {};
 #endif
 
 }  // namespace robot_bus

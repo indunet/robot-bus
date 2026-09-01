@@ -43,8 +43,6 @@ inline ::nav_msgs::msg::OccupancyGrid occupancy_grid_to_ros(const ::nav_msgs::ms
 class NavMsgsOccupancyGridMapper
     : public TypedTopicMapper<NavMsgsOccupancyGridMapper, ::nav_msgs::msg::OccupancyGrid> {
  public:
-  const char *type_name() const override { return "nav_msgs/msg/OccupancyGrid"; }
-
   std::vector<uint8_t> ros_to_bus(const ::nav_msgs::msg::OccupancyGrid &msg) const {
     auto bus = ros2_bridge_mappers::nav_msgs::occupancy_grid_to_bus(msg);
     std::string bytes;
@@ -59,9 +57,7 @@ class NavMsgsOccupancyGridMapper
   }
 };
 #else
-struct NavMsgsOccupancyGridMapper : TopicMapper {
-  const char *type_name() const override { return "nav_msgs/msg/OccupancyGrid"; }
-};
+struct NavMsgsOccupancyGridMapper : TopicMapper {};
 #endif
 
 }  // namespace robot_bus

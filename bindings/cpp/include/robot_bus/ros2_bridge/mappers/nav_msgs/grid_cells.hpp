@@ -47,8 +47,6 @@ inline ::nav_msgs::msg::GridCells grid_cells_to_ros(const ::nav_msgs::msg::v1::G
 class NavMsgsGridCellsMapper
     : public TypedTopicMapper<NavMsgsGridCellsMapper, ::nav_msgs::msg::GridCells> {
  public:
-  const char *type_name() const override { return "nav_msgs/msg/GridCells"; }
-
   std::vector<uint8_t> ros_to_bus(const ::nav_msgs::msg::GridCells &msg) const {
     auto bus = ros2_bridge_mappers::nav_msgs::grid_cells_to_bus(msg);
     std::string bytes;
@@ -63,9 +61,7 @@ class NavMsgsGridCellsMapper
   }
 };
 #else
-struct NavMsgsGridCellsMapper : TopicMapper {
-  const char *type_name() const override { return "nav_msgs/msg/GridCells"; }
-};
+struct NavMsgsGridCellsMapper : TopicMapper {};
 #endif
 
 }  // namespace robot_bus

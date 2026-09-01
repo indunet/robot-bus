@@ -25,10 +25,6 @@ impl TypedTopicMapper for SensorMsgsRelativeHumidityMapper {
     type Ros = ros_env::sensor_msgs::msg::RelativeHumidity;
     type Bus = crate::sensor_msgs::msg::v1::RelativeHumidity;
 
-    fn type_name(&self) -> &'static str {
-        "sensor_msgs/msg/RelativeHumidity"
-    }
-
     fn ros_to_bus(&self, msg: Self::Ros) -> crate::errors::Result<Self::Bus> {
         Ok(relative_humidity_to_bus(msg))
     }

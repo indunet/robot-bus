@@ -39,8 +39,6 @@ inline ::sensor_msgs::msg::RelativeHumidity relative_humidity_to_ros(const ::sen
 class SensorMsgsRelativeHumidityMapper
     : public TypedTopicMapper<SensorMsgsRelativeHumidityMapper, ::sensor_msgs::msg::RelativeHumidity> {
  public:
-  const char *type_name() const override { return "sensor_msgs/msg/RelativeHumidity"; }
-
   std::vector<uint8_t> ros_to_bus(const ::sensor_msgs::msg::RelativeHumidity &msg) const {
     auto bus = ros2_bridge_mappers::sensor_msgs::relative_humidity_to_bus(msg);
     std::string bytes;
@@ -55,9 +53,7 @@ class SensorMsgsRelativeHumidityMapper
   }
 };
 #else
-struct SensorMsgsRelativeHumidityMapper : TopicMapper {
-  const char *type_name() const override { return "sensor_msgs/msg/RelativeHumidity"; }
-};
+struct SensorMsgsRelativeHumidityMapper : TopicMapper {};
 #endif
 
 }  // namespace robot_bus

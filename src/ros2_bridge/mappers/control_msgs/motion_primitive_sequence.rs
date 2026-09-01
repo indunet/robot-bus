@@ -21,10 +21,6 @@ impl TypedTopicMapper for ControlMsgsMotionPrimitiveSequenceMapper {
     type Ros = ros_env::control_msgs::msg::MotionPrimitiveSequence;
     type Bus = crate::control_msgs::msg::v1::MotionPrimitiveSequence;
 
-    fn type_name(&self) -> &'static str {
-        "control_msgs/msg/MotionPrimitiveSequence"
-    }
-
     fn ros_to_bus(&self, msg: Self::Ros) -> crate::errors::Result<Self::Bus> {
         Ok(motion_primitive_sequence_to_bus(msg))
     }

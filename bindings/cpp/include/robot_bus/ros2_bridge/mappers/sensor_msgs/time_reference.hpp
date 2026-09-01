@@ -40,8 +40,6 @@ inline ::sensor_msgs::msg::TimeReference time_reference_to_ros(const ::sensor_ms
 class SensorMsgsTimeReferenceMapper
     : public TypedTopicMapper<SensorMsgsTimeReferenceMapper, ::sensor_msgs::msg::TimeReference> {
  public:
-  const char *type_name() const override { return "sensor_msgs/msg/TimeReference"; }
-
   std::vector<uint8_t> ros_to_bus(const ::sensor_msgs::msg::TimeReference &msg) const {
     auto bus = ros2_bridge_mappers::sensor_msgs::time_reference_to_bus(msg);
     std::string bytes;
@@ -56,9 +54,7 @@ class SensorMsgsTimeReferenceMapper
   }
 };
 #else
-struct SensorMsgsTimeReferenceMapper : TopicMapper {
-  const char *type_name() const override { return "sensor_msgs/msg/TimeReference"; }
-};
+struct SensorMsgsTimeReferenceMapper : TopicMapper {};
 #endif
 
 }  // namespace robot_bus

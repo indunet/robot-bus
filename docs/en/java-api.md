@@ -4,7 +4,7 @@ English | [中文](../zh/java-api.md)
 
 ```bash
 # Maven Central (when published)
-# implementation("org.indunet:robot-bus:2.1.0")           // JVM
+# implementation("org.indunet:robot-bus:2.2.0")           // JVM
 
 # Local:
 just java-dev       # gen-java + cargo FFI + mvn test
@@ -17,12 +17,7 @@ just java-dev       # gen-java + cargo FFI + mvn test
 Package name `org.indunet.robot.bus`. The Android AAR is an **independent** Kotlin SDK (does not depend on this JAR); see [`android-api.md`](android-api.md).
 ## Broker startup
 
-Same as other languages: start the broker first, then run your application logic.
-
-```bash
-robot-bus-broker
-# or robot-bus-broker --api-listen 0.0.0.0:15570 --tcp-only
-```
+**Prefer starting the broker from your program**, then run your application logic. The CLI is for demos, multi-process bring-up, or a standalone long-running broker.
 
 In-process:
 
@@ -32,6 +27,13 @@ import org.indunet.robot.bus.Broker;
 try (Broker broker = new Broker()) {
   // broker binds by default; business nodes connect to localhost
 }
+```
+
+Use the CLI when you need a standalone process:
+
+```bash
+python -m robot_bus.broker
+# or python -m robot_bus.broker --api-listen 0.0.0.0:15570 --tcp-only
 ```
 
 Cross-broker (federation) uses the same string conventions as the CLI:

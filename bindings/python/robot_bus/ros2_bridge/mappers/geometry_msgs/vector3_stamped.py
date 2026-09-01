@@ -25,9 +25,6 @@ def vector3_stamped_to_ros(bus):
 
 
 class GeometryMsgsVector3StampedMapper:
-    def type_name(self) -> str:
-        return "geometry_msgs/msg/Vector3Stamped"
-
     def ros_msg_type(self):
         from geometry_msgs.msg import Vector3Stamped as RosMsg
 

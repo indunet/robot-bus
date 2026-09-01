@@ -25,9 +25,6 @@ def april_tag_detection_array_to_ros(bus):
 
 
 class ApriltagMsgsAprilTagDetectionArrayMapper:
-    def type_name(self) -> str:
-        return "apriltag_msgs/msg/AprilTagDetectionArray"
-
     def ros_msg_type(self):
         from apriltag_msgs.msg import AprilTagDetectionArray as RosMsg
 

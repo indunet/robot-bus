@@ -10,7 +10,7 @@ Package: `org.indunet.robot.bus`
 
 ```bash
 # Maven Central (when published)
-# implementation("org.indunet:robot-bus-android:2.1.0")
+# implementation("org.indunet:robot-bus-android:2.2.0")
 
 # 本地：
 just gen-android    # → bindings/android/generated/
@@ -38,11 +38,13 @@ class App : Application() {
 ```kotlin
 // build.gradle.kts
 dependencies {
-  implementation("org.indunet:robot-bus-android:2.1.0")
+  implementation("org.indunet:robot-bus-android:2.2.0")
 }
 ```
 
 ## Message bus（Kotlin）
+
+Android 上没有独立 CLI，**在进程内起 broker**（`Broker()`）是推荐用法：
 
 ```kotlin
 import org.indunet.robot.bus.Broker

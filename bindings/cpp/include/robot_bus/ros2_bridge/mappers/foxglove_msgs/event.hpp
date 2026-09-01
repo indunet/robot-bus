@@ -44,8 +44,6 @@ inline ::foxglove_msgs::msg::Event event_to_ros(const ::foxglove_msgs::msg::v1::
 class FoxgloveMsgsEventMapper
     : public TypedTopicMapper<FoxgloveMsgsEventMapper, ::foxglove_msgs::msg::Event> {
  public:
-  const char *type_name() const override { return "foxglove_msgs/msg/Event"; }
-
   std::vector<uint8_t> ros_to_bus(const ::foxglove_msgs::msg::Event &msg) const {
     auto bus = ros2_bridge_mappers::foxglove_msgs::event_to_bus(msg);
     std::string bytes;
@@ -60,9 +58,7 @@ class FoxgloveMsgsEventMapper
   }
 };
 #else
-struct FoxgloveMsgsEventMapper : TopicMapper {
-  const char *type_name() const override { return "foxglove_msgs/msg/Event"; }
-};
+struct FoxgloveMsgsEventMapper : TopicMapper {};
 #endif
 
 }  // namespace robot_bus

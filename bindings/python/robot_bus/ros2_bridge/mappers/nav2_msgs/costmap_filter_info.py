@@ -30,9 +30,6 @@ def costmap_filter_info_to_ros(bus):
 
 
 class Nav2MsgsCostmapFilterInfoMapper:
-    def type_name(self) -> str:
-        return "nav2_msgs/msg/CostmapFilterInfo"
-
     def ros_msg_type(self):
         from nav2_msgs.msg import CostmapFilterInfo as RosMsg
 

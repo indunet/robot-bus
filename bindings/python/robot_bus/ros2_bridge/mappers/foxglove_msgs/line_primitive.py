@@ -38,9 +38,6 @@ def line_primitive_to_ros(bus):
 
 
 class FoxgloveMsgsLinePrimitiveMapper:
-    def type_name(self) -> str:
-        return "foxglove_msgs/msg/LinePrimitive"
-
     def ros_msg_type(self):
         from foxglove_msgs.msg import LinePrimitive as RosMsg
 

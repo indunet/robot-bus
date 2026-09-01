@@ -37,8 +37,6 @@ inline ::sensor_msgs::msg::LaserEcho laser_echo_to_ros(const ::sensor_msgs::msg:
 class SensorMsgsLaserEchoMapper
     : public TypedTopicMapper<SensorMsgsLaserEchoMapper, ::sensor_msgs::msg::LaserEcho> {
  public:
-  const char *type_name() const override { return "sensor_msgs/msg/LaserEcho"; }
-
   std::vector<uint8_t> ros_to_bus(const ::sensor_msgs::msg::LaserEcho &msg) const {
     auto bus = ros2_bridge_mappers::sensor_msgs::laser_echo_to_bus(msg);
     std::string bytes;
@@ -53,9 +51,7 @@ class SensorMsgsLaserEchoMapper
   }
 };
 #else
-struct SensorMsgsLaserEchoMapper : TopicMapper {
-  const char *type_name() const override { return "sensor_msgs/msg/LaserEcho"; }
-};
+struct SensorMsgsLaserEchoMapper : TopicMapper {};
 #endif
 
 }  // namespace robot_bus

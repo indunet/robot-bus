@@ -40,8 +40,6 @@ inline ::action_msgs::msg::GoalStatusArray goal_status_array_to_ros(const ::acti
 class ActionMsgsGoalStatusArrayMapper
     : public TypedTopicMapper<ActionMsgsGoalStatusArrayMapper, ::action_msgs::msg::GoalStatusArray> {
  public:
-  const char *type_name() const override { return "action_msgs/msg/GoalStatusArray"; }
-
   std::vector<uint8_t> ros_to_bus(const ::action_msgs::msg::GoalStatusArray &msg) const {
     auto bus = ros2_bridge_mappers::action_msgs::goal_status_array_to_bus(msg);
     std::string bytes;
@@ -56,9 +54,7 @@ class ActionMsgsGoalStatusArrayMapper
   }
 };
 #else
-struct ActionMsgsGoalStatusArrayMapper : TopicMapper {
-  const char *type_name() const override { return "action_msgs/msg/GoalStatusArray"; }
-};
+struct ActionMsgsGoalStatusArrayMapper : TopicMapper {};
 #endif
 
 }  // namespace robot_bus

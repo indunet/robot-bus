@@ -24,9 +24,6 @@ def collision_monitor_state_to_ros(bus):
 
 
 class Nav2MsgsCollisionMonitorStateMapper:
-    def type_name(self) -> str:
-        return "nav2_msgs/msg/CollisionMonitorState"
-
     def ros_msg_type(self):
         from nav2_msgs.msg import CollisionMonitorState as RosMsg
 

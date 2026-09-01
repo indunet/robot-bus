@@ -43,9 +43,6 @@ def camera_info_to_ros(bus):
 
 
 class SensorMsgsCameraInfoMapper:
-    def type_name(self) -> str:
-        return "sensor_msgs/msg/CameraInfo"
-
     def ros_msg_type(self):
         from sensor_msgs.msg import CameraInfo as RosMsg
 

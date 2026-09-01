@@ -25,10 +25,6 @@ impl TypedTopicMapper for SensorMsgsIlluminanceMapper {
     type Ros = ros_env::sensor_msgs::msg::Illuminance;
     type Bus = crate::sensor_msgs::msg::v1::Illuminance;
 
-    fn type_name(&self) -> &'static str {
-        "sensor_msgs/msg/Illuminance"
-    }
-
     fn ros_to_bus(&self, msg: Self::Ros) -> crate::errors::Result<Self::Bus> {
         Ok(illuminance_to_bus(msg))
     }

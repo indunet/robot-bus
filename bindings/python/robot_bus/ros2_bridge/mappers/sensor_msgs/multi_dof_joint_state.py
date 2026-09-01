@@ -33,9 +33,6 @@ def multi_dof_joint_state_to_ros(bus):
 
 
 class SensorMsgsMultiDofJointStateMapper:
-    def type_name(self) -> str:
-        return "sensor_msgs/msg/MultiDOFJointState"
-
     def ros_msg_type(self):
         from sensor_msgs.msg import MultiDOFJointState as RosMsg
 

@@ -50,8 +50,6 @@ inline ::control_msgs::msg::DynamicInterfaceGroupValues dynamic_interface_group_
 class ControlMsgsDynamicInterfaceGroupValuesMapper
     : public TypedTopicMapper<ControlMsgsDynamicInterfaceGroupValuesMapper, ::control_msgs::msg::DynamicInterfaceGroupValues> {
  public:
-  const char *type_name() const override { return "control_msgs/msg/DynamicInterfaceGroupValues"; }
-
   std::vector<uint8_t> ros_to_bus(const ::control_msgs::msg::DynamicInterfaceGroupValues &msg) const {
     auto bus = ros2_bridge_mappers::control_msgs::dynamic_interface_group_values_to_bus(msg);
     std::string bytes;
@@ -66,9 +64,7 @@ class ControlMsgsDynamicInterfaceGroupValuesMapper
   }
 };
 #else
-struct ControlMsgsDynamicInterfaceGroupValuesMapper : TopicMapper {
-  const char *type_name() const override { return "control_msgs/msg/DynamicInterfaceGroupValues"; }
-};
+struct ControlMsgsDynamicInterfaceGroupValuesMapper : TopicMapper {};
 #endif
 
 }  // namespace robot_bus

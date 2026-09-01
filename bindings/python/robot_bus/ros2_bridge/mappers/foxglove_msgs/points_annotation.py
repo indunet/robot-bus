@@ -38,9 +38,6 @@ def points_annotation_to_ros(bus):
 
 
 class FoxgloveMsgsPointsAnnotationMapper:
-    def type_name(self) -> str:
-        return "foxglove_msgs/msg/PointsAnnotation"
-
     def ros_msg_type(self):
         from foxglove_msgs.msg import PointsAnnotation as RosMsg
 

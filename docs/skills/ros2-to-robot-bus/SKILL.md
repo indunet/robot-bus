@@ -34,7 +34,7 @@ Progress:
 - [ ] 3. Map message types (.msg/.srv/.action → bus protobuf or custom proto)
 - [ ] 4. Replace build/runtime (ament → Cargo / pip / CMake+robot-bus)
 - [ ] 5. Rewrite Node / pub-sub / service / action / timer / params
-- [ ] 6. Ensure broker (external `robot_bus_broker` or in-process)
+- [ ] 6. Ensure broker (prefer in-process `RobotBusBroker`; CLI for a standalone process)
 - [ ] 7. Build & smoke-test with console / rbus / language tests
 ```
 
@@ -55,17 +55,22 @@ Prefer keeping **topic / service / action names** stable so a bridge or gradual 
 
 | ROS 2 | robot-bus |
 |-------|-----------|
-| DDS + `ros2` daemon | `robot_bus_broker` (tcp/ipc) or embedded `RobotBusBroker` |
+| DDS + `ros2` daemon | Embedded `RobotBusBroker` (preferred in app code) or standalone `robot_bus_broker` |
 | `source /opt/ros/<distro>/setup.bash` | Not required for pure bus apps |
 | ament workspace / colcon | Language package manager + bus SDK |
 | `ros2 run` / launch | Process + broker; optional process supervisor |
 | Message codegen from `.msg` | Crate/SDK protobuf (`sensor_msgs.msg.v1.*` etc.) or project `.proto` |
 
-Broker quick start:
+Broker quick start — **prefer in-process** in application code; CLI is for a standalone process:
+
+```python
+with robot_bus.RobotBusBroker.start() as broker:
+    ...
+```
 
 ```bash
-# installed
-robot-bus-broker
+# standalone process
+python -m robot_bus.broker
 # or from this repo
 cargo run --bin robot_bus_broker
 ```
@@ -112,7 +117,7 @@ fn main() -> robot_bus::Result<()> {
 }
 ```
 
-`Cargo.toml`: `robot-bus = "2.1.0"` (match current crate version). Bridge needs `features = ["ros2"]`.
+`Cargo.toml`: `robot-bus = "2.2.0"` (match current crate version). Bridge needs `features = ["ros2"]`.
 
 ### Python sketch
 

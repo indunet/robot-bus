@@ -33,10 +33,6 @@ impl TypedTopicMapper for Nav2MsgsCostmapMetaDataMapper {
     type Ros = ros_env::nav2_msgs::msg::CostmapMetaData;
     type Bus = crate::nav2_msgs::msg::v1::CostmapMetaData;
 
-    fn type_name(&self) -> &'static str {
-        "nav2_msgs/msg/CostmapMetaData"
-    }
-
     fn ros_to_bus(&self, msg: Self::Ros) -> crate::errors::Result<Self::Bus> {
         Ok(costmap_meta_data_to_bus(msg))
     }

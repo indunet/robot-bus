@@ -37,10 +37,6 @@ impl TypedTopicMapper for VisualizationMsgsInteractiveMarkerFeedbackMapper {
     type Ros = ros_env::visualization_msgs::msg::InteractiveMarkerFeedback;
     type Bus = crate::visualization_msgs::msg::v1::InteractiveMarkerFeedback;
 
-    fn type_name(&self) -> &'static str {
-        "visualization_msgs/msg/InteractiveMarkerFeedback"
-    }
-
     fn ros_to_bus(&self, msg: Self::Ros) -> crate::errors::Result<Self::Bus> {
         Ok(interactive_marker_feedback_to_bus(msg))
     }

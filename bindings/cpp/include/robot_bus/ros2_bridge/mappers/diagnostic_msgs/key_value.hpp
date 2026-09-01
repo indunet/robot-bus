@@ -37,8 +37,6 @@ inline ::diagnostic_msgs::msg::KeyValue key_value_to_ros(const ::diagnostic_msgs
 class DiagnosticMsgsKeyValueMapper
     : public TypedTopicMapper<DiagnosticMsgsKeyValueMapper, ::diagnostic_msgs::msg::KeyValue> {
  public:
-  const char *type_name() const override { return "diagnostic_msgs/msg/KeyValue"; }
-
   std::vector<uint8_t> ros_to_bus(const ::diagnostic_msgs::msg::KeyValue &msg) const {
     auto bus = ros2_bridge_mappers::diagnostic_msgs::key_value_to_bus(msg);
     std::string bytes;
@@ -53,9 +51,7 @@ class DiagnosticMsgsKeyValueMapper
   }
 };
 #else
-struct DiagnosticMsgsKeyValueMapper : TopicMapper {
-  const char *type_name() const override { return "diagnostic_msgs/msg/KeyValue"; }
-};
+struct DiagnosticMsgsKeyValueMapper : TopicMapper {};
 #endif
 
 }  // namespace robot_bus

@@ -25,9 +25,6 @@ def pose_with_covariance_stamped_to_ros(bus):
 
 
 class GeometryMsgsPoseWithCovarianceStampedMapper:
-    def type_name(self) -> str:
-        return "geometry_msgs/msg/PoseWithCovarianceStamped"
-
     def ros_msg_type(self):
         from geometry_msgs.msg import PoseWithCovarianceStamped as RosMsg
 

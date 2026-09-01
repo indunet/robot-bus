@@ -25,10 +25,6 @@ impl TypedTopicMapper for ControlMsgsDynamicJointStateMapper {
     type Ros = ros_env::control_msgs::msg::DynamicJointState;
     type Bus = crate::control_msgs::msg::v1::DynamicJointState;
 
-    fn type_name(&self) -> &'static str {
-        "control_msgs/msg/DynamicJointState"
-    }
-
     fn ros_to_bus(&self, msg: Self::Ros) -> crate::errors::Result<Self::Bus> {
         Ok(dynamic_joint_state_to_bus(msg))
     }

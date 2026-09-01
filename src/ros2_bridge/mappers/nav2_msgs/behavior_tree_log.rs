@@ -23,10 +23,6 @@ impl TypedTopicMapper for Nav2MsgsBehaviorTreeLogMapper {
     type Ros = ros_env::nav2_msgs::msg::BehaviorTreeLog;
     type Bus = crate::nav2_msgs::msg::v1::BehaviorTreeLog;
 
-    fn type_name(&self) -> &'static str {
-        "nav2_msgs/msg/BehaviorTreeLog"
-    }
-
     fn ros_to_bus(&self, msg: Self::Ros) -> crate::errors::Result<Self::Bus> {
         Ok(behavior_tree_log_to_bus(msg))
     }

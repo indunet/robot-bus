@@ -38,8 +38,6 @@ inline ::geometry_msgs::msg::PolygonInstanceStamped polygon_instance_stamped_to_
 class GeometryMsgsPolygonInstanceStampedMapper
     : public TypedTopicMapper<GeometryMsgsPolygonInstanceStampedMapper, ::geometry_msgs::msg::PolygonInstanceStamped> {
  public:
-  const char *type_name() const override { return "geometry_msgs/msg/PolygonInstanceStamped"; }
-
   std::vector<uint8_t> ros_to_bus(const ::geometry_msgs::msg::PolygonInstanceStamped &msg) const {
     auto bus = ros2_bridge_mappers::geometry_msgs::polygon_instance_stamped_to_bus(msg);
     std::string bytes;
@@ -54,9 +52,7 @@ class GeometryMsgsPolygonInstanceStampedMapper
   }
 };
 #else
-struct GeometryMsgsPolygonInstanceStampedMapper : TopicMapper {
-  const char *type_name() const override { return "geometry_msgs/msg/PolygonInstanceStamped"; }
-};
+struct GeometryMsgsPolygonInstanceStampedMapper : TopicMapper {};
 #endif
 
 }  // namespace robot_bus

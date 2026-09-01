@@ -26,9 +26,6 @@ def fluid_pressure_to_ros(bus):
 
 
 class SensorMsgsFluidPressureMapper:
-    def type_name(self) -> str:
-        return "sensor_msgs/msg/FluidPressure"
-
     def ros_msg_type(self):
         from sensor_msgs.msg import FluidPressure as RosMsg
 

@@ -58,8 +58,6 @@ inline ::trajectory_msgs::msg::MultiDOFJointTrajectoryPoint multi_dof_joint_traj
 class TrajectoryMsgsMultiDofJointTrajectoryPointMapper
     : public TypedTopicMapper<TrajectoryMsgsMultiDofJointTrajectoryPointMapper, ::trajectory_msgs::msg::MultiDOFJointTrajectoryPoint> {
  public:
-  const char *type_name() const override { return "trajectory_msgs/msg/MultiDOFJointTrajectoryPoint"; }
-
   std::vector<uint8_t> ros_to_bus(const ::trajectory_msgs::msg::MultiDOFJointTrajectoryPoint &msg) const {
     auto bus = ros2_bridge_mappers::trajectory_msgs::multi_dof_joint_trajectory_point_to_bus(msg);
     std::string bytes;
@@ -74,9 +72,7 @@ class TrajectoryMsgsMultiDofJointTrajectoryPointMapper
   }
 };
 #else
-struct TrajectoryMsgsMultiDofJointTrajectoryPointMapper : TopicMapper {
-  const char *type_name() const override { return "trajectory_msgs/msg/MultiDOFJointTrajectoryPoint"; }
-};
+struct TrajectoryMsgsMultiDofJointTrajectoryPointMapper : TopicMapper {};
 #endif
 
 }  // namespace robot_bus

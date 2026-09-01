@@ -23,10 +23,6 @@ impl TypedTopicMapper for ApriltagMsgsPointMapper {
     type Ros = ros_env::apriltag_msgs::msg::Point;
     type Bus = crate::apriltag_msgs::msg::v1::Point;
 
-    fn type_name(&self) -> &'static str {
-        "apriltag_msgs/msg/Point"
-    }
-
     fn ros_to_bus(&self, msg: Self::Ros) -> crate::errors::Result<Self::Bus> {
         Ok(point_to_bus(msg))
     }

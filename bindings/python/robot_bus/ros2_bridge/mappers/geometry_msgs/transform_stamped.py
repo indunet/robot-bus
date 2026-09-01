@@ -27,9 +27,6 @@ def transform_stamped_to_ros(bus):
 
 
 class GeometryMsgsTransformStampedMapper:
-    def type_name(self) -> str:
-        return "geometry_msgs/msg/TransformStamped"
-
     def ros_msg_type(self):
         from geometry_msgs.msg import TransformStamped as RosMsg
 

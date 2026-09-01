@@ -32,9 +32,6 @@ def range_to_ros(bus):
 
 
 class SensorMsgsRangeMapper:
-    def type_name(self) -> str:
-        return "sensor_msgs/msg/Range"
-
     def ros_msg_type(self):
         from sensor_msgs.msg import Range as RosMsg
 

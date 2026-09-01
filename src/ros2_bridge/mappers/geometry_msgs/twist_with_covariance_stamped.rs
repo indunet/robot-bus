@@ -23,10 +23,6 @@ impl TypedTopicMapper for GeometryMsgsTwistWithCovarianceStampedMapper {
     type Ros = ros_env::geometry_msgs::msg::TwistWithCovarianceStamped;
     type Bus = crate::geometry_msgs::msg::v1::TwistWithCovarianceStamped;
 
-    fn type_name(&self) -> &'static str {
-        "geometry_msgs/msg/TwistWithCovarianceStamped"
-    }
-
     fn ros_to_bus(&self, msg: Self::Ros) -> crate::errors::Result<Self::Bus> {
         Ok(twist_with_covariance_stamped_to_bus(msg))
     }

@@ -58,8 +58,6 @@ inline ::foxglove_msgs::msg::Grid grid_to_ros(const ::foxglove_msgs::msg::v1::Gr
 class FoxgloveMsgsGridMapper
     : public TypedTopicMapper<FoxgloveMsgsGridMapper, ::foxglove_msgs::msg::Grid> {
  public:
-  const char *type_name() const override { return "foxglove_msgs/msg/Grid"; }
-
   std::vector<uint8_t> ros_to_bus(const ::foxglove_msgs::msg::Grid &msg) const {
     auto bus = ros2_bridge_mappers::foxglove_msgs::grid_to_bus(msg);
     std::string bytes;
@@ -74,9 +72,7 @@ class FoxgloveMsgsGridMapper
   }
 };
 #else
-struct FoxgloveMsgsGridMapper : TopicMapper {
-  const char *type_name() const override { return "foxglove_msgs/msg/Grid"; }
-};
+struct FoxgloveMsgsGridMapper : TopicMapper {};
 #endif
 
 }  // namespace robot_bus

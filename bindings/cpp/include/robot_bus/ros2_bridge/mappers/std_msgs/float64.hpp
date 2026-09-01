@@ -35,8 +35,6 @@ inline ::std_msgs::msg::Float64 float64_to_ros(const ::std_msgs::msg::v1::Float6
 class StdMsgsFloat64Mapper
     : public TypedTopicMapper<StdMsgsFloat64Mapper, ::std_msgs::msg::Float64> {
  public:
-  const char *type_name() const override { return "std_msgs/msg/Float64"; }
-
   std::vector<uint8_t> ros_to_bus(const ::std_msgs::msg::Float64 &msg) const {
     auto bus = ros2_bridge_mappers::std_msgs::float64_to_bus(msg);
     std::string bytes;
@@ -51,9 +49,7 @@ class StdMsgsFloat64Mapper
   }
 };
 #else
-struct StdMsgsFloat64Mapper : TopicMapper {
-  const char *type_name() const override { return "std_msgs/msg/Float64"; }
-};
+struct StdMsgsFloat64Mapper : TopicMapper {};
 #endif
 
 }  // namespace robot_bus

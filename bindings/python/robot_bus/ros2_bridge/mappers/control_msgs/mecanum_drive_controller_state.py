@@ -33,9 +33,6 @@ def mecanum_drive_controller_state_to_ros(bus):
 
 
 class ControlMsgsMecanumDriveControllerStateMapper:
-    def type_name(self) -> str:
-        return "control_msgs/msg/MecanumDriveControllerState"
-
     def ros_msg_type(self):
         from control_msgs.msg import MecanumDriveControllerState as RosMsg
 

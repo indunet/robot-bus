@@ -60,8 +60,6 @@ inline ::control_msgs::msg::PidState pid_state_to_ros(const ::control_msgs::msg:
 class ControlMsgsPidStateMapper
     : public TypedTopicMapper<ControlMsgsPidStateMapper, ::control_msgs::msg::PidState> {
  public:
-  const char *type_name() const override { return "control_msgs/msg/PidState"; }
-
   std::vector<uint8_t> ros_to_bus(const ::control_msgs::msg::PidState &msg) const {
     auto bus = ros2_bridge_mappers::control_msgs::pid_state_to_bus(msg);
     std::string bytes;
@@ -76,9 +74,7 @@ class ControlMsgsPidStateMapper
   }
 };
 #else
-struct ControlMsgsPidStateMapper : TopicMapper {
-  const char *type_name() const override { return "control_msgs/msg/PidState"; }
-};
+struct ControlMsgsPidStateMapper : TopicMapper {};
 #endif
 
 }  // namespace robot_bus

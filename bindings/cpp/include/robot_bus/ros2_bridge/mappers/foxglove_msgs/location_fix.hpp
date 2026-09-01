@@ -64,8 +64,6 @@ inline ::foxglove_msgs::msg::LocationFix location_fix_to_ros(const ::foxglove_ms
 class FoxgloveMsgsLocationFixMapper
     : public TypedTopicMapper<FoxgloveMsgsLocationFixMapper, ::foxglove_msgs::msg::LocationFix> {
  public:
-  const char *type_name() const override { return "foxglove_msgs/msg/LocationFix"; }
-
   std::vector<uint8_t> ros_to_bus(const ::foxglove_msgs::msg::LocationFix &msg) const {
     auto bus = ros2_bridge_mappers::foxglove_msgs::location_fix_to_bus(msg);
     std::string bytes;
@@ -80,9 +78,7 @@ class FoxgloveMsgsLocationFixMapper
   }
 };
 #else
-struct FoxgloveMsgsLocationFixMapper : TopicMapper {
-  const char *type_name() const override { return "foxglove_msgs/msg/LocationFix"; }
-};
+struct FoxgloveMsgsLocationFixMapper : TopicMapper {};
 #endif
 
 }  // namespace robot_bus

@@ -39,8 +39,6 @@ inline ::sensor_msgs::msg::Temperature temperature_to_ros(const ::sensor_msgs::m
 class SensorMsgsTemperatureMapper
     : public TypedTopicMapper<SensorMsgsTemperatureMapper, ::sensor_msgs::msg::Temperature> {
  public:
-  const char *type_name() const override { return "sensor_msgs/msg/Temperature"; }
-
   std::vector<uint8_t> ros_to_bus(const ::sensor_msgs::msg::Temperature &msg) const {
     auto bus = ros2_bridge_mappers::sensor_msgs::temperature_to_bus(msg);
     std::string bytes;
@@ -55,9 +53,7 @@ class SensorMsgsTemperatureMapper
   }
 };
 #else
-struct SensorMsgsTemperatureMapper : TopicMapper {
-  const char *type_name() const override { return "sensor_msgs/msg/Temperature"; }
-};
+struct SensorMsgsTemperatureMapper : TopicMapper {};
 #endif
 
 }  // namespace robot_bus

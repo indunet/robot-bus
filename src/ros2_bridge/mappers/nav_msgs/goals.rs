@@ -23,10 +23,6 @@ impl TypedTopicMapper for NavMsgsGoalsMapper {
     type Ros = ros_env::nav_msgs::msg::Goals;
     type Bus = crate::nav_msgs::msg::v1::Goals;
 
-    fn type_name(&self) -> &'static str {
-        "nav_msgs/msg/Goals"
-    }
-
     fn ros_to_bus(&self, msg: Self::Ros) -> crate::errors::Result<Self::Bus> {
         Ok(goals_to_bus(msg))
     }

@@ -24,9 +24,6 @@ def point_to_ros(bus):
 
 
 class ApriltagMsgsPointMapper:
-    def type_name(self) -> str:
-        return "apriltag_msgs/msg/Point"
-
     def ros_msg_type(self):
         from apriltag_msgs.msg import Point as RosMsg
 

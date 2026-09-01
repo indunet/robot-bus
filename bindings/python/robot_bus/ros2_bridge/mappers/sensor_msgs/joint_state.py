@@ -30,9 +30,6 @@ def joint_state_to_ros(bus):
 
 
 class SensorMsgsJointStateMapper:
-    def type_name(self) -> str:
-        return "sensor_msgs/msg/JointState"
-
     def ros_msg_type(self):
         from sensor_msgs.msg import JointState as RosMsg
 

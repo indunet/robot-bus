@@ -23,10 +23,6 @@ impl TypedTopicMapper for VisualizationMsgsUvCoordinateMapper {
     type Ros = ros_env::visualization_msgs::msg::UVCoordinate;
     type Bus = crate::visualization_msgs::msg::v1::UvCoordinate;
 
-    fn type_name(&self) -> &'static str {
-        "visualization_msgs/msg/UVCoordinate"
-    }
-
     fn ros_to_bus(&self, msg: Self::Ros) -> crate::errors::Result<Self::Bus> {
         Ok(uv_coordinate_to_bus(msg))
     }

@@ -27,9 +27,6 @@ def time_reference_to_ros(bus):
 
 
 class SensorMsgsTimeReferenceMapper:
-    def type_name(self) -> str:
-        return "sensor_msgs/msg/TimeReference"
-
     def ros_msg_type(self):
         from sensor_msgs.msg import TimeReference as RosMsg
 

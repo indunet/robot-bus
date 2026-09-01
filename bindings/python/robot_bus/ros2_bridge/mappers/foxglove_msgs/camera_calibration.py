@@ -38,9 +38,6 @@ def camera_calibration_to_ros(bus):
 
 
 class FoxgloveMsgsCameraCalibrationMapper:
-    def type_name(self) -> str:
-        return "foxglove_msgs/msg/CameraCalibration"
-
     def ros_msg_type(self):
         from foxglove_msgs.msg import CameraCalibration as RosMsg
 

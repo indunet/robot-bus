@@ -21,10 +21,6 @@ impl TypedTopicMapper for UniqueIdentifierMsgsUuidMapper {
     type Ros = ros_env::unique_identifier_msgs::msg::UUID;
     type Bus = crate::unique_identifier_msgs::msg::v1::Uuid;
 
-    fn type_name(&self) -> &'static str {
-        "unique_identifier_msgs/msg/UUID"
-    }
-
     fn ros_to_bus(&self, msg: Self::Ros) -> crate::errors::Result<Self::Bus> {
         Ok(uuid_to_bus(msg))
     }

@@ -66,8 +66,6 @@ inline ::foxglove_msgs::msg::ImageAnnotations image_annotations_to_ros(const ::f
 class FoxgloveMsgsImageAnnotationsMapper
     : public TypedTopicMapper<FoxgloveMsgsImageAnnotationsMapper, ::foxglove_msgs::msg::ImageAnnotations> {
  public:
-  const char *type_name() const override { return "foxglove_msgs/msg/ImageAnnotations"; }
-
   std::vector<uint8_t> ros_to_bus(const ::foxglove_msgs::msg::ImageAnnotations &msg) const {
     auto bus = ros2_bridge_mappers::foxglove_msgs::image_annotations_to_bus(msg);
     std::string bytes;
@@ -82,9 +80,7 @@ class FoxgloveMsgsImageAnnotationsMapper
   }
 };
 #else
-struct FoxgloveMsgsImageAnnotationsMapper : TopicMapper {
-  const char *type_name() const override { return "foxglove_msgs/msg/ImageAnnotations"; }
-};
+struct FoxgloveMsgsImageAnnotationsMapper : TopicMapper {};
 #endif
 
 }  // namespace robot_bus

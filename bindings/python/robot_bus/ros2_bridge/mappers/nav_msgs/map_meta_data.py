@@ -31,9 +31,6 @@ def map_meta_data_to_ros(bus):
 
 
 class NavMsgsMapMetaDataMapper:
-    def type_name(self) -> str:
-        return "nav_msgs/msg/MapMetaData"
-
     def ros_msg_type(self):
         from nav_msgs.msg import MapMetaData as RosMsg
 

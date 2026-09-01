@@ -51,10 +51,6 @@ impl TypedTopicMapper for SensorMsgsBatteryStateMapper {
     type Ros = ros_env::sensor_msgs::msg::BatteryState;
     type Bus = crate::sensor_msgs::msg::v1::BatteryState;
 
-    fn type_name(&self) -> &'static str {
-        "sensor_msgs/msg/BatteryState"
-    }
-
     fn ros_to_bus(&self, msg: Self::Ros) -> crate::errors::Result<Self::Bus> {
         Ok(battery_state_to_bus(msg))
     }

@@ -62,8 +62,6 @@ inline ::control_msgs::msg::AdmittanceControllerState admittance_controller_stat
 class ControlMsgsAdmittanceControllerStateMapper
     : public TypedTopicMapper<ControlMsgsAdmittanceControllerStateMapper, ::control_msgs::msg::AdmittanceControllerState> {
  public:
-  const char *type_name() const override { return "control_msgs/msg/AdmittanceControllerState"; }
-
   std::vector<uint8_t> ros_to_bus(const ::control_msgs::msg::AdmittanceControllerState &msg) const {
     auto bus = ros2_bridge_mappers::control_msgs::admittance_controller_state_to_bus(msg);
     std::string bytes;
@@ -78,9 +76,7 @@ class ControlMsgsAdmittanceControllerStateMapper
   }
 };
 #else
-struct ControlMsgsAdmittanceControllerStateMapper : TopicMapper {
-  const char *type_name() const override { return "control_msgs/msg/AdmittanceControllerState"; }
-};
+struct ControlMsgsAdmittanceControllerStateMapper : TopicMapper {};
 #endif
 
 }  // namespace robot_bus

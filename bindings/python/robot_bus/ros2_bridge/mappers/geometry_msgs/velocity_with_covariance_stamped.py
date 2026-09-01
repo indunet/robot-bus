@@ -29,9 +29,6 @@ def velocity_with_covariance_stamped_to_ros(bus):
 
 
 class GeometryMsgsVelocityWithCovarianceStampedMapper:
-    def type_name(self) -> str:
-        return "geometry_msgs/msg/VelocityWithCovarianceStamped"
-
     def ros_msg_type(self):
         from geometry_msgs.msg import VelocityWithCovarianceStamped as RosMsg
 

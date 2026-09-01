@@ -30,9 +30,6 @@ def multi_dof_joint_trajectory_point_to_ros(bus):
 
 
 class TrajectoryMsgsMultiDofJointTrajectoryPointMapper:
-    def type_name(self) -> str:
-        return "trajectory_msgs/msg/MultiDOFJointTrajectoryPoint"
-
     def ros_msg_type(self):
         from trajectory_msgs.msg import MultiDOFJointTrajectoryPoint as RosMsg
 

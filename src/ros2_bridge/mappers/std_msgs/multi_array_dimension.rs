@@ -25,10 +25,6 @@ impl TypedTopicMapper for StdMsgsMultiArrayDimensionMapper {
     type Ros = ros_env::std_msgs::msg::MultiArrayDimension;
     type Bus = crate::std_msgs::msg::v1::MultiArrayDimension;
 
-    fn type_name(&self) -> &'static str {
-        "std_msgs/msg/MultiArrayDimension"
-    }
-
     fn ros_to_bus(&self, msg: Self::Ros) -> crate::errors::Result<Self::Bus> {
         Ok(multi_array_dimension_to_bus(msg))
     }

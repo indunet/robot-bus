@@ -4,9 +4,6 @@ from __future__ import annotations
 
 
 class SensorMsgsImageMapper:
-    def type_name(self) -> str:
-        return "sensor_msgs/msg/Image"
-
     def ros_msg_type(self):
         from sensor_msgs.msg import Image as RosImage
 

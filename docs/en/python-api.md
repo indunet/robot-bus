@@ -10,16 +10,9 @@ pip install robot-bus
 
 ## Broker startup
 
-Same as Rust: start the broker first, then run application code.
+Same as Rust: **prefer starting the broker from your program**, then run application code. The CLI is for demos, multi-process bring-up, or a standalone long-running broker.
 
-```bash
-# CLI after installing the package
-robot-bus-broker
-robot-bus-broker --help
-robot-bus-broker --api-listen 0.0.0.0:15570 --tcp-only
-```
-
-Or in-process (keyword arguments override default bind / HWM / heartbeat / API):
+In-process (keyword arguments override default bind / HWM / heartbeat / API):
 
 ```python
 import robot_bus
@@ -33,6 +26,14 @@ with robot_bus.RobotBusBroker.start(
     # broker.message_xsub_bind / message_xpub_bind / api_listen / console_listen
     # Web console: http://127.0.0.1:15570  (pass no_console=True to disable; no_tank / no_docs hide sidebar entries)
     pass
+```
+
+Use the CLI when you need a standalone process:
+
+```bash
+python -m robot_bus.broker
+python -m robot_bus.broker --help
+python -m robot_bus.broker --api-listen 0.0.0.0:15570 --tcp-only
 ```
 
 Cross-broker (federation) uses the same string conventions as the CLI:
@@ -81,7 +82,7 @@ with robot_bus.RobotBusBroker.start(context=ctx) as broker:
 ```
 
 tcp / ipc / ws do not require a shared Context.
-Default ports and full CLI options: see [rust-api.md](rust-api.md) “Broker startup”.
+Standalone process: `python -m robot_bus.broker --help`. Default ports and full CLI options: see [rust-api.md](rust-api.md) “Broker startup”.
 
 ---
 
@@ -439,7 +440,7 @@ print(robot_bus.__version__)
 | `Publisher(endpoint=None)` | Low-level XSUB connection (without Node) |
 | `ros2_available()` | Whether `import rclpy` succeeds (native Python bridge) |
 | `robot_bus.ros2_bridge.Ros2Bridge` / `Direction` / built-in Mapper | In-process ROS bridge (**rclpy**); see [ros2-bridge.md](ros2-bridge.md) |
-| `RobotBusBroker.start(...)` / `run_broker(...)` | Start three buses + WebSocket RPC API in-process; pass `context` for same-process inproc; peers use CLI-style string lists |
+| `RobotBusBroker.start(...)` / `python -m robot_bus.broker` | In-process `start`; standalone `python -m robot_bus.broker` (same CLI flags); pass `context` for same-process inproc; peers use CLI-style string lists |
 | `ShutdownHandle` / `TimerHandle` | Spin and timer control |
 
 WebSocket RPC mode Node: see previous section; low-level gateway RPC can also use the Rust tonic client directly ([rust-api.md](rust-api.md)).

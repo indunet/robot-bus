@@ -32,9 +32,6 @@ def steering_controller_status_to_ros(bus):
 
 
 class ControlMsgsSteeringControllerStatusMapper:
-    def type_name(self) -> str:
-        return "control_msgs/msg/SteeringControllerStatus"
-
     def ros_msg_type(self):
         from control_msgs.msg import SteeringControllerStatus as RosMsg
 

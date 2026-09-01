@@ -5,14 +5,24 @@
 `Cargo.toml`：
 
 ```toml
-robot-bus = "2.1.0"
+robot-bus = "2.2.0"
 # 本地：robot-bus = { path = "../robot-bus" }
-# 默认已启用 WebSocket RPC网关（`ws` feature）；若需关闭：robot-bus = { version = "2.1.0", default-features = false }
+# 默认已启用 WebSocket RPC网关（`ws` feature）；若需关闭：robot-bus = { version = "2.2.0", default-features = false }
 ```
 
 ## Broker启动
 
-运行示例前先起 broker（也可进程内嵌入，见下文）。默认一次启动 **message / service / action** 三条总线；每条 TCP默认 bind `…:0`（由操作系统分配空闲端口），并启动 **API**（WebSocket RPC `/ws` / `GET /api/v1/discover` / console http），默认 `0.0.0.0:15570`。
+**更鼓励在程序里启动 broker**（`RobotBusBroker::start`），让 broker 与业务同进程。CLI 适合演示、多进程示例，或单独拉起常驻 broker。默认一次启动 **message / service / action** 三条总线；每条 TCP默认 bind `…:0`（由操作系统分配空闲端口），并启动 **API**（WebSocket RPC `/ws` / `GET /api/v1/discover` / console http），默认 `0.0.0.0:15570`。
+
+```rust
+use robot_bus::{RobotBusBroker, RobotBusConfig};
+
+let broker = RobotBusBroker::start(RobotBusConfig::default())?;
+// 默认端点见下表；需要改端口 / 地址时再填 RobotBusConfig字段
+broker.stop()?;
+```
+
+需要独立进程时再用 CLI：
 
 ```bash
 cargo run --bin robot_bus_broker
@@ -86,16 +96,6 @@ broker.stop()?;
 `RobotBusBroker::start(config)`仍可用（内部自建 Context）；跨进程 tcp/ipc不要求共享。
 
 跨 broker（federation）：优先 `--peer HOST:PORT`（对端 API口，内部会 `GET /api/v1/discover`填齐 ZMQ peers），或在 `RobotBusConfig`上设置 `broker_id`与 `peers`（`MessagePeer` / `ServicePeer` / `ActionPeer`），或 CLI `--broker-id` / `--message-peer` / `--service-peer` / `--action-peer`。各语言嵌入式 start API使用同款字符串约定（见对应 `*-api.md`）。Message federation **不会**转发保留命名空间 `/robot_bus`（含 `/robot_bus/status`、topology、bot等 console系统 topic），避免多 broker帮连时状态快照互相覆盖；用户业务 topic仍按需推送。
-
-**进程内嵌入**（不必单独起二进制）：
-
-```rust
-use robot_bus::{RobotBusBroker, RobotBusConfig};
-
-let broker = RobotBusBroker::start(RobotBusConfig::default())?;
-// 默认端点同上；需要改端口 / 地址时再填 RobotBusConfig字段
-broker.stop()?;
-```
 
 典型流程：`Context` → `Node::with_context` → `create_*` → `node.spin()`（或便捷 `Node::new`）。多节点或需并行时再 `executor.add_node` + `executor.spin`。仅连 WebSocket RPC网关时用 `Node::ws` / `Node::ws_at`（见下文「WebSocket RPC模式 Node」）。
 

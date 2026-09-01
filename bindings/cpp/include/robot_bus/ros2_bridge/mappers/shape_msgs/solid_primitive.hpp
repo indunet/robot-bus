@@ -41,8 +41,6 @@ inline ::shape_msgs::msg::SolidPrimitive solid_primitive_to_ros(const ::shape_ms
 class ShapeMsgsSolidPrimitiveMapper
     : public TypedTopicMapper<ShapeMsgsSolidPrimitiveMapper, ::shape_msgs::msg::SolidPrimitive> {
  public:
-  const char *type_name() const override { return "shape_msgs/msg/SolidPrimitive"; }
-
   std::vector<uint8_t> ros_to_bus(const ::shape_msgs::msg::SolidPrimitive &msg) const {
     auto bus = ros2_bridge_mappers::shape_msgs::solid_primitive_to_bus(msg);
     std::string bytes;
@@ -57,9 +55,7 @@ class ShapeMsgsSolidPrimitiveMapper
   }
 };
 #else
-struct ShapeMsgsSolidPrimitiveMapper : TopicMapper {
-  const char *type_name() const override { return "shape_msgs/msg/SolidPrimitive"; }
-};
+struct ShapeMsgsSolidPrimitiveMapper : TopicMapper {};
 #endif
 
 }  // namespace robot_bus

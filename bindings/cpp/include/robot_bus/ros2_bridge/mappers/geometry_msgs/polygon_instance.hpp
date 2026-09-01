@@ -37,8 +37,6 @@ inline ::geometry_msgs::msg::PolygonInstance polygon_instance_to_ros(const ::geo
 class GeometryMsgsPolygonInstanceMapper
     : public TypedTopicMapper<GeometryMsgsPolygonInstanceMapper, ::geometry_msgs::msg::PolygonInstance> {
  public:
-  const char *type_name() const override { return "geometry_msgs/msg/PolygonInstance"; }
-
   std::vector<uint8_t> ros_to_bus(const ::geometry_msgs::msg::PolygonInstance &msg) const {
     auto bus = ros2_bridge_mappers::geometry_msgs::polygon_instance_to_bus(msg);
     std::string bytes;
@@ -53,9 +51,7 @@ class GeometryMsgsPolygonInstanceMapper
   }
 };
 #else
-struct GeometryMsgsPolygonInstanceMapper : TopicMapper {
-  const char *type_name() const override { return "geometry_msgs/msg/PolygonInstance"; }
-};
+struct GeometryMsgsPolygonInstanceMapper : TopicMapper {};
 #endif
 
 }  // namespace robot_bus

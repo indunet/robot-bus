@@ -23,10 +23,6 @@ impl TypedTopicMapper for FoxgloveMsgsVector2Mapper {
     type Ros = ros_env::foxglove_msgs::msg::Vector2;
     type Bus = crate::foxglove_msgs::msg::v1::Vector2;
 
-    fn type_name(&self) -> &'static str {
-        "foxglove_msgs/msg/Vector2"
-    }
-
     fn ros_to_bus(&self, msg: Self::Ros) -> crate::errors::Result<Self::Bus> {
         Ok(vector2_to_bus(msg))
     }

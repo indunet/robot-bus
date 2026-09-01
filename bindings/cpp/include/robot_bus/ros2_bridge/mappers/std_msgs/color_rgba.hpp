@@ -41,8 +41,6 @@ inline ::std_msgs::msg::ColorRGBA color_rgba_to_ros(const ::std_msgs::msg::v1::C
 class StdMsgsColorRgbaMapper
     : public TypedTopicMapper<StdMsgsColorRgbaMapper, ::std_msgs::msg::ColorRGBA> {
  public:
-  const char *type_name() const override { return "std_msgs/msg/ColorRGBA"; }
-
   std::vector<uint8_t> ros_to_bus(const ::std_msgs::msg::ColorRGBA &msg) const {
     auto bus = ros2_bridge_mappers::std_msgs::color_rgba_to_bus(msg);
     std::string bytes;
@@ -57,9 +55,7 @@ class StdMsgsColorRgbaMapper
   }
 };
 #else
-struct StdMsgsColorRgbaMapper : TopicMapper {
-  const char *type_name() const override { return "std_msgs/msg/ColorRGBA"; }
-};
+struct StdMsgsColorRgbaMapper : TopicMapper {};
 #endif
 
 }  // namespace robot_bus

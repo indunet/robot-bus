@@ -32,9 +32,6 @@ def log_to_ros(bus):
 
 
 class FoxgloveMsgsLogMapper:
-    def type_name(self) -> str:
-        return "foxglove_msgs/msg/Log"
-
     def ros_msg_type(self):
         from foxglove_msgs.msg import Log as RosMsg
 

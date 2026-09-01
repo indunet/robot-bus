@@ -24,9 +24,6 @@ def float32_multi_array_to_ros(bus):
 
 
 class StdMsgsFloat32MultiArrayMapper:
-    def type_name(self) -> str:
-        return "std_msgs/msg/Float32MultiArray"
-
     def ros_msg_type(self):
         from std_msgs.msg import Float32MultiArray as RosMsg
 

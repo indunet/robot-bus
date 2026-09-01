@@ -43,8 +43,6 @@ inline ::apriltag_msgs::msg::AprilTagDetectionArray april_tag_detection_array_to
 class ApriltagMsgsAprilTagDetectionArrayMapper
     : public TypedTopicMapper<ApriltagMsgsAprilTagDetectionArrayMapper, ::apriltag_msgs::msg::AprilTagDetectionArray> {
  public:
-  const char *type_name() const override { return "apriltag_msgs/msg/AprilTagDetectionArray"; }
-
   std::vector<uint8_t> ros_to_bus(const ::apriltag_msgs::msg::AprilTagDetectionArray &msg) const {
     auto bus = ros2_bridge_mappers::apriltag_msgs::april_tag_detection_array_to_bus(msg);
     std::string bytes;
@@ -59,9 +57,7 @@ class ApriltagMsgsAprilTagDetectionArrayMapper
   }
 };
 #else
-struct ApriltagMsgsAprilTagDetectionArrayMapper : TopicMapper {
-  const char *type_name() const override { return "apriltag_msgs/msg/AprilTagDetectionArray"; }
-};
+struct ApriltagMsgsAprilTagDetectionArrayMapper : TopicMapper {};
 #endif
 
 }  // namespace robot_bus

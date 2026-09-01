@@ -51,8 +51,6 @@ inline ::foxglove_msgs::msg::PointCloud point_cloud_to_ros(const ::foxglove_msgs
 class FoxgloveMsgsPointCloudMapper
     : public TypedTopicMapper<FoxgloveMsgsPointCloudMapper, ::foxglove_msgs::msg::PointCloud> {
  public:
-  const char *type_name() const override { return "foxglove_msgs/msg/PointCloud"; }
-
   std::vector<uint8_t> ros_to_bus(const ::foxglove_msgs::msg::PointCloud &msg) const {
     auto bus = ros2_bridge_mappers::foxglove_msgs::point_cloud_to_bus(msg);
     std::string bytes;
@@ -67,9 +65,7 @@ class FoxgloveMsgsPointCloudMapper
   }
 };
 #else
-struct FoxgloveMsgsPointCloudMapper : TopicMapper {
-  const char *type_name() const override { return "foxglove_msgs/msg/PointCloud"; }
-};
+struct FoxgloveMsgsPointCloudMapper : TopicMapper {};
 #endif
 
 }  // namespace robot_bus

@@ -30,9 +30,6 @@ def diagnostic_status_to_ros(bus):
 
 
 class DiagnosticMsgsDiagnosticStatusMapper:
-    def type_name(self) -> str:
-        return "diagnostic_msgs/msg/DiagnosticStatus"
-
     def ros_msg_type(self):
         from diagnostic_msgs.msg import DiagnosticStatus as RosMsg
 

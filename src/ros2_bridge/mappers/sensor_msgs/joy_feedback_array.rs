@@ -21,10 +21,6 @@ impl TypedTopicMapper for SensorMsgsJoyFeedbackArrayMapper {
     type Ros = ros_env::sensor_msgs::msg::JoyFeedbackArray;
     type Bus = crate::sensor_msgs::msg::v1::JoyFeedbackArray;
 
-    fn type_name(&self) -> &'static str {
-        "sensor_msgs/msg/JoyFeedbackArray"
-    }
-
     fn ros_to_bus(&self, msg: Self::Ros) -> crate::errors::Result<Self::Bus> {
         Ok(joy_feedback_array_to_bus(msg))
     }

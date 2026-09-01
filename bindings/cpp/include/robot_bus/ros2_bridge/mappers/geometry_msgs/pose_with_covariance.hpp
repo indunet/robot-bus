@@ -39,8 +39,6 @@ inline ::geometry_msgs::msg::PoseWithCovariance pose_with_covariance_to_ros(cons
 class GeometryMsgsPoseWithCovarianceMapper
     : public TypedTopicMapper<GeometryMsgsPoseWithCovarianceMapper, ::geometry_msgs::msg::PoseWithCovariance> {
  public:
-  const char *type_name() const override { return "geometry_msgs/msg/PoseWithCovariance"; }
-
   std::vector<uint8_t> ros_to_bus(const ::geometry_msgs::msg::PoseWithCovariance &msg) const {
     auto bus = ros2_bridge_mappers::geometry_msgs::pose_with_covariance_to_bus(msg);
     std::string bytes;
@@ -55,9 +53,7 @@ class GeometryMsgsPoseWithCovarianceMapper
   }
 };
 #else
-struct GeometryMsgsPoseWithCovarianceMapper : TopicMapper {
-  const char *type_name() const override { return "geometry_msgs/msg/PoseWithCovariance"; }
-};
+struct GeometryMsgsPoseWithCovarianceMapper : TopicMapper {};
 #endif
 
 }  // namespace robot_bus

@@ -29,10 +29,6 @@ impl TypedTopicMapper for FoxgloveMsgsImageAnnotationsMapper {
     type Ros = ros_env::foxglove_msgs::msg::ImageAnnotations;
     type Bus = crate::foxglove_msgs::msg::v1::ImageAnnotations;
 
-    fn type_name(&self) -> &'static str {
-        "foxglove_msgs/msg/ImageAnnotations"
-    }
-
     fn ros_to_bus(&self, msg: Self::Ros) -> crate::errors::Result<Self::Bus> {
         Ok(image_annotations_to_bus(msg))
     }

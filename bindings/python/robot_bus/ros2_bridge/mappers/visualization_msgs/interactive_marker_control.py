@@ -37,9 +37,6 @@ def interactive_marker_control_to_ros(bus):
 
 
 class VisualizationMsgsInteractiveMarkerControlMapper:
-    def type_name(self) -> str:
-        return "visualization_msgs/msg/InteractiveMarkerControl"
-
     def ros_msg_type(self):
         from visualization_msgs.msg import InteractiveMarkerControl as RosMsg
 

@@ -25,9 +25,6 @@ def diagnostic_array_to_ros(bus):
 
 
 class DiagnosticMsgsDiagnosticArrayMapper:
-    def type_name(self) -> str:
-        return "diagnostic_msgs/msg/DiagnosticArray"
-
     def ros_msg_type(self):
         from diagnostic_msgs.msg import DiagnosticArray as RosMsg
 

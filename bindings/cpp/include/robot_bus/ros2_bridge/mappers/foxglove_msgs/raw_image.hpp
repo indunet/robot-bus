@@ -47,8 +47,6 @@ inline ::foxglove_msgs::msg::RawImage raw_image_to_ros(const ::foxglove_msgs::ms
 class FoxgloveMsgsRawImageMapper
     : public TypedTopicMapper<FoxgloveMsgsRawImageMapper, ::foxglove_msgs::msg::RawImage> {
  public:
-  const char *type_name() const override { return "foxglove_msgs/msg/RawImage"; }
-
   std::vector<uint8_t> ros_to_bus(const ::foxglove_msgs::msg::RawImage &msg) const {
     auto bus = ros2_bridge_mappers::foxglove_msgs::raw_image_to_bus(msg);
     std::string bytes;
@@ -63,9 +61,7 @@ class FoxgloveMsgsRawImageMapper
   }
 };
 #else
-struct FoxgloveMsgsRawImageMapper : TopicMapper {
-  const char *type_name() const override { return "foxglove_msgs/msg/RawImage"; }
-};
+struct FoxgloveMsgsRawImageMapper : TopicMapper {};
 #endif
 
 }  // namespace robot_bus

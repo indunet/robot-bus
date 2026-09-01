@@ -23,10 +23,6 @@ impl TypedTopicMapper for NavMsgsPathMapper {
     type Ros = ros_env::nav_msgs::msg::Path;
     type Bus = crate::nav_msgs::msg::v1::Path;
 
-    fn type_name(&self) -> &'static str {
-        "nav_msgs/msg/Path"
-    }
-
     fn ros_to_bus(&self, msg: Self::Ros) -> crate::errors::Result<Self::Bus> {
         Ok(path_to_bus(msg))
     }

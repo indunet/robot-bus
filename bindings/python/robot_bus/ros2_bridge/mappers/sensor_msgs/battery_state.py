@@ -52,9 +52,6 @@ def battery_state_to_ros(bus):
 
 
 class SensorMsgsBatteryStateMapper:
-    def type_name(self) -> str:
-        return "sensor_msgs/msg/BatteryState"
-
     def ros_msg_type(self):
         from sensor_msgs.msg import BatteryState as RosMsg
 

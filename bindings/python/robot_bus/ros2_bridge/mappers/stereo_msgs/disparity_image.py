@@ -38,9 +38,6 @@ def disparity_image_to_ros(bus):
 
 
 class StereoMsgsDisparityImageMapper:
-    def type_name(self) -> str:
-        return "stereo_msgs/msg/DisparityImage"
-
     def ros_msg_type(self):
         from stereo_msgs.msg import DisparityImage as RosMsg
 

@@ -25,9 +25,6 @@ def wrench_stamped_to_ros(bus):
 
 
 class GeometryMsgsWrenchStampedMapper:
-    def type_name(self) -> str:
-        return "geometry_msgs/msg/WrenchStamped"
-
     def ros_msg_type(self):
         from geometry_msgs.msg import WrenchStamped as RosMsg
 

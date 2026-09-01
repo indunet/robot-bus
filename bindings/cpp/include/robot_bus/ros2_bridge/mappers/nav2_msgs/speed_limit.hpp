@@ -39,8 +39,6 @@ inline ::nav2_msgs::msg::SpeedLimit speed_limit_to_ros(const ::nav2_msgs::msg::v
 class Nav2MsgsSpeedLimitMapper
     : public TypedTopicMapper<Nav2MsgsSpeedLimitMapper, ::nav2_msgs::msg::SpeedLimit> {
  public:
-  const char *type_name() const override { return "nav2_msgs/msg/SpeedLimit"; }
-
   std::vector<uint8_t> ros_to_bus(const ::nav2_msgs::msg::SpeedLimit &msg) const {
     auto bus = ros2_bridge_mappers::nav2_msgs::speed_limit_to_bus(msg);
     std::string bytes;
@@ -55,9 +53,7 @@ class Nav2MsgsSpeedLimitMapper
   }
 };
 #else
-struct Nav2MsgsSpeedLimitMapper : TopicMapper {
-  const char *type_name() const override { return "nav2_msgs/msg/SpeedLimit"; }
-};
+struct Nav2MsgsSpeedLimitMapper : TopicMapper {};
 #endif
 
 }  // namespace robot_bus

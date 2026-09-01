@@ -39,8 +39,6 @@ inline ::control_msgs::msg::JointComponentTolerance joint_component_tolerance_to
 class ControlMsgsJointComponentToleranceMapper
     : public TypedTopicMapper<ControlMsgsJointComponentToleranceMapper, ::control_msgs::msg::JointComponentTolerance> {
  public:
-  const char *type_name() const override { return "control_msgs/msg/JointComponentTolerance"; }
-
   std::vector<uint8_t> ros_to_bus(const ::control_msgs::msg::JointComponentTolerance &msg) const {
     auto bus = ros2_bridge_mappers::control_msgs::joint_component_tolerance_to_bus(msg);
     std::string bytes;
@@ -55,9 +53,7 @@ class ControlMsgsJointComponentToleranceMapper
   }
 };
 #else
-struct ControlMsgsJointComponentToleranceMapper : TopicMapper {
-  const char *type_name() const override { return "control_msgs/msg/JointComponentTolerance"; }
-};
+struct ControlMsgsJointComponentToleranceMapper : TopicMapper {};
 #endif
 
 }  // namespace robot_bus

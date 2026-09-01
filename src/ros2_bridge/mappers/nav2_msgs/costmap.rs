@@ -25,10 +25,6 @@ impl TypedTopicMapper for Nav2MsgsCostmapMapper {
     type Ros = ros_env::nav2_msgs::msg::Costmap;
     type Bus = crate::nav2_msgs::msg::v1::Costmap;
 
-    fn type_name(&self) -> &'static str {
-        "nav2_msgs/msg/Costmap"
-    }
-
     fn ros_to_bus(&self, msg: Self::Ros) -> crate::errors::Result<Self::Bus> {
         Ok(costmap_to_bus(msg))
     }

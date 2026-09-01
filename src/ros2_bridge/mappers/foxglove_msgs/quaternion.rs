@@ -27,10 +27,6 @@ impl TypedTopicMapper for FoxgloveMsgsQuaternionMapper {
     type Ros = ros_env::foxglove_msgs::msg::Quaternion;
     type Bus = crate::foxglove_msgs::msg::v1::Quaternion;
 
-    fn type_name(&self) -> &'static str {
-        "foxglove_msgs/msg/Quaternion"
-    }
-
     fn ros_to_bus(&self, msg: Self::Ros) -> crate::errors::Result<Self::Bus> {
         Ok(quaternion_to_bus(msg))
     }

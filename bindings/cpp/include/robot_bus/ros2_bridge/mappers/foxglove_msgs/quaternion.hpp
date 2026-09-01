@@ -41,8 +41,6 @@ inline ::foxglove_msgs::msg::Quaternion quaternion_to_ros(const ::foxglove_msgs:
 class FoxgloveMsgsQuaternionMapper
     : public TypedTopicMapper<FoxgloveMsgsQuaternionMapper, ::foxglove_msgs::msg::Quaternion> {
  public:
-  const char *type_name() const override { return "foxglove_msgs/msg/Quaternion"; }
-
   std::vector<uint8_t> ros_to_bus(const ::foxglove_msgs::msg::Quaternion &msg) const {
     auto bus = ros2_bridge_mappers::foxglove_msgs::quaternion_to_bus(msg);
     std::string bytes;
@@ -57,9 +55,7 @@ class FoxgloveMsgsQuaternionMapper
   }
 };
 #else
-struct FoxgloveMsgsQuaternionMapper : TopicMapper {
-  const char *type_name() const override { return "foxglove_msgs/msg/Quaternion"; }
-};
+struct FoxgloveMsgsQuaternionMapper : TopicMapper {};
 #endif
 
 }  // namespace robot_bus

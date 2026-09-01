@@ -43,8 +43,6 @@ inline ::sensor_msgs::msg::Joy joy_to_ros(const ::sensor_msgs::msg::v1::Joy &bus
 class SensorMsgsJoyMapper
     : public TypedTopicMapper<SensorMsgsJoyMapper, ::sensor_msgs::msg::Joy> {
  public:
-  const char *type_name() const override { return "sensor_msgs/msg/Joy"; }
-
   std::vector<uint8_t> ros_to_bus(const ::sensor_msgs::msg::Joy &msg) const {
     auto bus = ros2_bridge_mappers::sensor_msgs::joy_to_bus(msg);
     std::string bytes;
@@ -59,9 +57,7 @@ class SensorMsgsJoyMapper
   }
 };
 #else
-struct SensorMsgsJoyMapper : TopicMapper {
-  const char *type_name() const override { return "sensor_msgs/msg/Joy"; }
-};
+struct SensorMsgsJoyMapper : TopicMapper {};
 #endif
 
 }  // namespace robot_bus

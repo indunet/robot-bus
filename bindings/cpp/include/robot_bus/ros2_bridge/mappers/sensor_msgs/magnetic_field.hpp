@@ -42,8 +42,6 @@ inline ::sensor_msgs::msg::MagneticField magnetic_field_to_ros(const ::sensor_ms
 class SensorMsgsMagneticFieldMapper
     : public TypedTopicMapper<SensorMsgsMagneticFieldMapper, ::sensor_msgs::msg::MagneticField> {
  public:
-  const char *type_name() const override { return "sensor_msgs/msg/MagneticField"; }
-
   std::vector<uint8_t> ros_to_bus(const ::sensor_msgs::msg::MagneticField &msg) const {
     auto bus = ros2_bridge_mappers::sensor_msgs::magnetic_field_to_bus(msg);
     std::string bytes;
@@ -58,9 +56,7 @@ class SensorMsgsMagneticFieldMapper
   }
 };
 #else
-struct SensorMsgsMagneticFieldMapper : TopicMapper {
-  const char *type_name() const override { return "sensor_msgs/msg/MagneticField"; }
-};
+struct SensorMsgsMagneticFieldMapper : TopicMapper {};
 #endif
 
 }  // namespace robot_bus

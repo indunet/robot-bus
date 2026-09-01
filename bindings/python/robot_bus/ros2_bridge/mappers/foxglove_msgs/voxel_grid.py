@@ -44,9 +44,6 @@ def voxel_grid_to_ros(bus):
 
 
 class FoxgloveMsgsVoxelGridMapper:
-    def type_name(self) -> str:
-        return "foxglove_msgs/msg/VoxelGrid"
-
     def ros_msg_type(self):
         from foxglove_msgs.msg import VoxelGrid as RosMsg
 

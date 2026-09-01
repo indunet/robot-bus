@@ -38,8 +38,6 @@ inline ::geometry_msgs::msg::Transform transform_to_ros(const ::geometry_msgs::m
 class GeometryMsgsTransformMapper
     : public TypedTopicMapper<GeometryMsgsTransformMapper, ::geometry_msgs::msg::Transform> {
  public:
-  const char *type_name() const override { return "geometry_msgs/msg/Transform"; }
-
   std::vector<uint8_t> ros_to_bus(const ::geometry_msgs::msg::Transform &msg) const {
     auto bus = ros2_bridge_mappers::geometry_msgs::transform_to_bus(msg);
     std::string bytes;
@@ -54,9 +52,7 @@ class GeometryMsgsTransformMapper
   }
 };
 #else
-struct GeometryMsgsTransformMapper : TopicMapper {
-  const char *type_name() const override { return "geometry_msgs/msg/Transform"; }
-};
+struct GeometryMsgsTransformMapper : TopicMapper {};
 #endif
 
 }  // namespace robot_bus

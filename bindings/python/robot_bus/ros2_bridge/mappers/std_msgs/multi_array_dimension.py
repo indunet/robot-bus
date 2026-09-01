@@ -26,9 +26,6 @@ def multi_array_dimension_to_ros(bus):
 
 
 class StdMsgsMultiArrayDimensionMapper:
-    def type_name(self) -> str:
-        return "std_msgs/msg/MultiArrayDimension"
-
     def ros_msg_type(self):
         from std_msgs.msg import MultiArrayDimension as RosMsg
 

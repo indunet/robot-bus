@@ -25,10 +25,6 @@ impl TypedTopicMapper for Nav2MsgsMissedWaypointMapper {
     type Ros = ros_env::nav2_msgs::msg::MissedWaypoint;
     type Bus = crate::nav2_msgs::msg::v1::MissedWaypoint;
 
-    fn type_name(&self) -> &'static str {
-        "nav2_msgs/msg/MissedWaypoint"
-    }
-
     fn ros_to_bus(&self, msg: Self::Ros) -> crate::errors::Result<Self::Bus> {
         Ok(missed_waypoint_to_bus(msg))
     }

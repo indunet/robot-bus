@@ -25,10 +25,6 @@ impl TypedTopicMapper for ControlMsgsDynamicInterfaceGroupValuesMapper {
     type Ros = ros_env::control_msgs::msg::DynamicInterfaceGroupValues;
     type Bus = crate::control_msgs::msg::v1::DynamicInterfaceGroupValues;
 
-    fn type_name(&self) -> &'static str {
-        "control_msgs/msg/DynamicInterfaceGroupValues"
-    }
-
     fn ros_to_bus(&self, msg: Self::Ros) -> crate::errors::Result<Self::Bus> {
         Ok(dynamic_interface_group_values_to_bus(msg))
     }

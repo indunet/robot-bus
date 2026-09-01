@@ -28,9 +28,6 @@ def compressed_image_to_ros(bus):
 
 
 class FoxgloveMsgsCompressedImageMapper:
-    def type_name(self) -> str:
-        return "foxglove_msgs/msg/CompressedImage"
-
     def ros_msg_type(self):
         from foxglove_msgs.msg import CompressedImage as RosMsg
 

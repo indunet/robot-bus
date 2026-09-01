@@ -36,14 +36,14 @@ CMake sets `CMAKE_CXX_STANDARD 17`. Building with a newer standard (e.g. `-DCMAK
 
 ```bash
 # Core SDK (no ROS bridge)
-sudo apt install ./robot-bus_2.1.0_linux_amd64.deb
+sudo apt install ./robot-bus_2.2.0_linux_amd64.deb
 
 # Or ROS 2 bridge variant (Humble example) — needs Humble already installed
-sudo apt install ./robot-bus-ros2-humble_2.1.0_linux_amd64.deb
+sudo apt install ./robot-bus-ros2-humble_2.2.0_linux_amd64.deb
 source /opt/ros/humble/setup.bash
 
 # macOS Apple Silicon (core package only)
-sudo installer -pkg robot-bus_2.1.0_macos_arm64.pkg -target /
+sudo installer -pkg robot-bus_2.2.0_macos_arm64.pkg -target /
 # Installs under /usr/local ({bin,lib,include})
 
 # Or from source (dev)
@@ -77,16 +77,19 @@ Check at runtime: `robot_bus::ros2_available()` / `robot_bus_ros2_available()` �
 
 ## Broker
 
-```bash
-robot_bus_broker
-# or in-process:
-```
+**Prefer starting the broker from your program.** The CLI is for demos, multi-process bring-up, or a standalone long-running broker.
 
 ```cpp
 #include <robot_bus/node.hpp>
 
 robot_bus::Broker broker;  // default binds
 // broker.message_xsub_bind() / api_listen() …
+```
+
+Use the CLI when you need a standalone process:
+
+```bash
+robot_bus_broker
 ```
 
 跨 broker（federation）通过 `RobotBusBrokerOptions`（与 CLI 同款字符串）：

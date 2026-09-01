@@ -39,8 +39,6 @@ inline ::std_msgs::msg::MultiArrayDimension multi_array_dimension_to_ros(const :
 class StdMsgsMultiArrayDimensionMapper
     : public TypedTopicMapper<StdMsgsMultiArrayDimensionMapper, ::std_msgs::msg::MultiArrayDimension> {
  public:
-  const char *type_name() const override { return "std_msgs/msg/MultiArrayDimension"; }
-
   std::vector<uint8_t> ros_to_bus(const ::std_msgs::msg::MultiArrayDimension &msg) const {
     auto bus = ros2_bridge_mappers::std_msgs::multi_array_dimension_to_bus(msg);
     std::string bytes;
@@ -55,9 +53,7 @@ class StdMsgsMultiArrayDimensionMapper
   }
 };
 #else
-struct StdMsgsMultiArrayDimensionMapper : TopicMapper {
-  const char *type_name() const override { return "std_msgs/msg/MultiArrayDimension"; }
-};
+struct StdMsgsMultiArrayDimensionMapper : TopicMapper {};
 #endif
 
 }  // namespace robot_bus

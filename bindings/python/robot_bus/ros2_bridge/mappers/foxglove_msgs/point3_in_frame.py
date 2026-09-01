@@ -26,9 +26,6 @@ def point3_in_frame_to_ros(bus):
 
 
 class FoxgloveMsgsPoint3InFrameMapper:
-    def type_name(self) -> str:
-        return "foxglove_msgs/msg/Point3InFrame"
-
     def ros_msg_type(self):
         from foxglove_msgs.msg import Point3InFrame as RosMsg
 

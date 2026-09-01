@@ -43,8 +43,6 @@ inline ::nav2_msgs::msg::Costmap costmap_to_ros(const ::nav2_msgs::msg::v1::Cost
 class Nav2MsgsCostmapMapper
     : public TypedTopicMapper<Nav2MsgsCostmapMapper, ::nav2_msgs::msg::Costmap> {
  public:
-  const char *type_name() const override { return "nav2_msgs/msg/Costmap"; }
-
   std::vector<uint8_t> ros_to_bus(const ::nav2_msgs::msg::Costmap &msg) const {
     auto bus = ros2_bridge_mappers::nav2_msgs::costmap_to_bus(msg);
     std::string bytes;
@@ -59,9 +57,7 @@ class Nav2MsgsCostmapMapper
   }
 };
 #else
-struct Nav2MsgsCostmapMapper : TopicMapper {
-  const char *type_name() const override { return "nav2_msgs/msg/Costmap"; }
-};
+struct Nav2MsgsCostmapMapper : TopicMapper {};
 #endif
 
 }  // namespace robot_bus

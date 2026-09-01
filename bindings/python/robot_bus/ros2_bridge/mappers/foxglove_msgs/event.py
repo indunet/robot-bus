@@ -26,9 +26,6 @@ def event_to_ros(bus):
 
 
 class FoxgloveMsgsEventMapper:
-    def type_name(self) -> str:
-        return "foxglove_msgs/msg/Event"
-
     def ros_msg_type(self):
         from foxglove_msgs.msg import Event as RosMsg
 

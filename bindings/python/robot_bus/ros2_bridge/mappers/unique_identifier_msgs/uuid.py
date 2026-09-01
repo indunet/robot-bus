@@ -22,9 +22,6 @@ def uuid_to_ros(bus):
 
 
 class UniqueIdentifierMsgsUuidMapper:
-    def type_name(self) -> str:
-        return "unique_identifier_msgs/msg/UUID"
-
     def ros_msg_type(self):
         from unique_identifier_msgs.msg import UUID as RosMsg
 

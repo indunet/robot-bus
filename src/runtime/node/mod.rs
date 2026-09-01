@@ -343,7 +343,7 @@ impl Node {
 
     fn not_connected_err(&self) -> BusError {
         BusError::Protocol(format!(
-            "node not connected to broker (state={}); call wait_for_broker() or start robot-bus-broker",
+            "node not connected to broker (state={}); call wait_for_broker() or start a broker process",
             self.session.state()
         ))
     }

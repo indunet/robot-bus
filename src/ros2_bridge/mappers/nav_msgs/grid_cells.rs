@@ -27,10 +27,6 @@ impl TypedTopicMapper for NavMsgsGridCellsMapper {
     type Ros = ros_env::nav_msgs::msg::GridCells;
     type Bus = crate::nav_msgs::msg::v1::GridCells;
 
-    fn type_name(&self) -> &'static str {
-        "nav_msgs/msg/GridCells"
-    }
-
     fn ros_to_bus(&self, msg: Self::Ros) -> crate::errors::Result<Self::Bus> {
         Ok(grid_cells_to_bus(msg))
     }

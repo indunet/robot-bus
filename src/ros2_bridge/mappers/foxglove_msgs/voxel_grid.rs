@@ -41,10 +41,6 @@ impl TypedTopicMapper for FoxgloveMsgsVoxelGridMapper {
     type Ros = ros_env::foxglove_msgs::msg::VoxelGrid;
     type Bus = crate::foxglove_msgs::msg::v1::VoxelGrid;
 
-    fn type_name(&self) -> &'static str {
-        "foxglove_msgs/msg/VoxelGrid"
-    }
-
     fn ros_to_bus(&self, msg: Self::Ros) -> crate::errors::Result<Self::Bus> {
         Ok(voxel_grid_to_bus(msg))
     }

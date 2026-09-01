@@ -34,9 +34,6 @@ def laser_scan_to_ros(bus):
 
 
 class FoxgloveMsgsLaserScanMapper:
-    def type_name(self) -> str:
-        return "foxglove_msgs/msg/LaserScan"
-
     def ros_msg_type(self):
         from foxglove_msgs.msg import LaserScan as RosMsg
 

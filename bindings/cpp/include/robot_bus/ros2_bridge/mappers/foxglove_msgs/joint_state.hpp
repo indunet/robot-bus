@@ -43,8 +43,6 @@ inline ::foxglove_msgs::msg::JointState joint_state_to_ros(const ::foxglove_msgs
 class FoxgloveMsgsJointStateMapper
     : public TypedTopicMapper<FoxgloveMsgsJointStateMapper, ::foxglove_msgs::msg::JointState> {
  public:
-  const char *type_name() const override { return "foxglove_msgs/msg/JointState"; }
-
   std::vector<uint8_t> ros_to_bus(const ::foxglove_msgs::msg::JointState &msg) const {
     auto bus = ros2_bridge_mappers::foxglove_msgs::joint_state_to_bus(msg);
     std::string bytes;
@@ -59,9 +57,7 @@ class FoxgloveMsgsJointStateMapper
   }
 };
 #else
-struct FoxgloveMsgsJointStateMapper : TopicMapper {
-  const char *type_name() const override { return "foxglove_msgs/msg/JointState"; }
-};
+struct FoxgloveMsgsJointStateMapper : TopicMapper {};
 #endif
 
 }  // namespace robot_bus

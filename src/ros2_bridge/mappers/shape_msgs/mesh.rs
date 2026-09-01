@@ -23,10 +23,6 @@ impl TypedTopicMapper for ShapeMsgsMeshMapper {
     type Ros = ros_env::shape_msgs::msg::Mesh;
     type Bus = crate::shape_msgs::msg::v1::Mesh;
 
-    fn type_name(&self) -> &'static str {
-        "shape_msgs/msg/Mesh"
-    }
-
     fn ros_to_bus(&self, msg: Self::Ros) -> crate::errors::Result<Self::Bus> {
         Ok(mesh_to_bus(msg))
     }

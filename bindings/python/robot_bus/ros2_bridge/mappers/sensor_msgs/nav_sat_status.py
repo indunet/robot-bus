@@ -24,9 +24,6 @@ def nav_sat_status_to_ros(bus):
 
 
 class SensorMsgsNavSatStatusMapper:
-    def type_name(self) -> str:
-        return "sensor_msgs/msg/NavSatStatus"
-
     def ros_msg_type(self):
         from sensor_msgs.msg import NavSatStatus as RosMsg
 

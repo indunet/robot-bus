@@ -37,8 +37,6 @@ inline ::control_msgs::msg::MotionArgument motion_argument_to_ros(const ::contro
 class ControlMsgsMotionArgumentMapper
     : public TypedTopicMapper<ControlMsgsMotionArgumentMapper, ::control_msgs::msg::MotionArgument> {
  public:
-  const char *type_name() const override { return "control_msgs/msg/MotionArgument"; }
-
   std::vector<uint8_t> ros_to_bus(const ::control_msgs::msg::MotionArgument &msg) const {
     auto bus = ros2_bridge_mappers::control_msgs::motion_argument_to_bus(msg);
     std::string bytes;
@@ -53,9 +51,7 @@ class ControlMsgsMotionArgumentMapper
   }
 };
 #else
-struct ControlMsgsMotionArgumentMapper : TopicMapper {
-  const char *type_name() const override { return "control_msgs/msg/MotionArgument"; }
-};
+struct ControlMsgsMotionArgumentMapper : TopicMapper {};
 #endif
 
 }  // namespace robot_bus

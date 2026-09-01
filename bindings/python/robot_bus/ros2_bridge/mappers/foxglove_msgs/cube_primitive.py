@@ -28,9 +28,6 @@ def cube_primitive_to_ros(bus):
 
 
 class FoxgloveMsgsCubePrimitiveMapper:
-    def type_name(self) -> str:
-        return "foxglove_msgs/msg/CubePrimitive"
-
     def ros_msg_type(self):
         from foxglove_msgs.msg import CubePrimitive as RosMsg
 

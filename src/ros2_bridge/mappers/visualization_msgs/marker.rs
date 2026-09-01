@@ -57,10 +57,6 @@ impl TypedTopicMapper for VisualizationMsgsMarkerMapper {
     type Ros = ros_env::visualization_msgs::msg::Marker;
     type Bus = crate::visualization_msgs::msg::v1::Marker;
 
-    fn type_name(&self) -> &'static str {
-        "visualization_msgs/msg/Marker"
-    }
-
     fn ros_to_bus(&self, msg: Self::Ros) -> crate::errors::Result<Self::Bus> {
         Ok(marker_to_bus(msg))
     }

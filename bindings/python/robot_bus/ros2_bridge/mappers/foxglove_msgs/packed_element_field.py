@@ -26,9 +26,6 @@ def packed_element_field_to_ros(bus):
 
 
 class FoxgloveMsgsPackedElementFieldMapper:
-    def type_name(self) -> str:
-        return "foxglove_msgs/msg/PackedElementField"
-
     def ros_msg_type(self):
         from foxglove_msgs.msg import PackedElementField as RosMsg
 

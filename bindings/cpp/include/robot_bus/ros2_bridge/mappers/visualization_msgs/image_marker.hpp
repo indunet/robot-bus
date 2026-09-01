@@ -72,8 +72,6 @@ inline ::visualization_msgs::msg::ImageMarker image_marker_to_ros(const ::visual
 class VisualizationMsgsImageMarkerMapper
     : public TypedTopicMapper<VisualizationMsgsImageMarkerMapper, ::visualization_msgs::msg::ImageMarker> {
  public:
-  const char *type_name() const override { return "visualization_msgs/msg/ImageMarker"; }
-
   std::vector<uint8_t> ros_to_bus(const ::visualization_msgs::msg::ImageMarker &msg) const {
     auto bus = ros2_bridge_mappers::visualization_msgs::image_marker_to_bus(msg);
     std::string bytes;
@@ -88,9 +86,7 @@ class VisualizationMsgsImageMarkerMapper
   }
 };
 #else
-struct VisualizationMsgsImageMarkerMapper : TopicMapper {
-  const char *type_name() const override { return "visualization_msgs/msg/ImageMarker"; }
-};
+struct VisualizationMsgsImageMarkerMapper : TopicMapper {};
 #endif
 
 }  // namespace robot_bus

@@ -38,8 +38,6 @@ inline ::geometry_msgs::msg::InertiaStamped inertia_stamped_to_ros(const ::geome
 class GeometryMsgsInertiaStampedMapper
     : public TypedTopicMapper<GeometryMsgsInertiaStampedMapper, ::geometry_msgs::msg::InertiaStamped> {
  public:
-  const char *type_name() const override { return "geometry_msgs/msg/InertiaStamped"; }
-
   std::vector<uint8_t> ros_to_bus(const ::geometry_msgs::msg::InertiaStamped &msg) const {
     auto bus = ros2_bridge_mappers::geometry_msgs::inertia_stamped_to_bus(msg);
     std::string bytes;
@@ -54,9 +52,7 @@ class GeometryMsgsInertiaStampedMapper
   }
 };
 #else
-struct GeometryMsgsInertiaStampedMapper : TopicMapper {
-  const char *type_name() const override { return "geometry_msgs/msg/InertiaStamped"; }
-};
+struct GeometryMsgsInertiaStampedMapper : TopicMapper {};
 #endif
 
 }  // namespace robot_bus

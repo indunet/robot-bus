@@ -40,9 +40,6 @@ def interactive_marker_feedback_to_ros(bus):
 
 
 class VisualizationMsgsInteractiveMarkerFeedbackMapper:
-    def type_name(self) -> str:
-        return "visualization_msgs/msg/InteractiveMarkerFeedback"
-
     def ros_msg_type(self):
         from visualization_msgs.msg import InteractiveMarkerFeedback as RosMsg
 

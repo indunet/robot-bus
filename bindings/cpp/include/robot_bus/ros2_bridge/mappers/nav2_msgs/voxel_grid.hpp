@@ -51,8 +51,6 @@ inline ::nav2_msgs::msg::VoxelGrid voxel_grid_to_ros(const ::nav2_msgs::msg::v1:
 class Nav2MsgsVoxelGridMapper
     : public TypedTopicMapper<Nav2MsgsVoxelGridMapper, ::nav2_msgs::msg::VoxelGrid> {
  public:
-  const char *type_name() const override { return "nav2_msgs/msg/VoxelGrid"; }
-
   std::vector<uint8_t> ros_to_bus(const ::nav2_msgs::msg::VoxelGrid &msg) const {
     auto bus = ros2_bridge_mappers::nav2_msgs::voxel_grid_to_bus(msg);
     std::string bytes;
@@ -67,9 +65,7 @@ class Nav2MsgsVoxelGridMapper
   }
 };
 #else
-struct Nav2MsgsVoxelGridMapper : TopicMapper {
-  const char *type_name() const override { return "nav2_msgs/msg/VoxelGrid"; }
-};
+struct Nav2MsgsVoxelGridMapper : TopicMapper {};
 #endif
 
 }  // namespace robot_bus

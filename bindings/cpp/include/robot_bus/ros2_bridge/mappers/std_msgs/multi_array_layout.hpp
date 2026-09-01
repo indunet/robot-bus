@@ -42,8 +42,6 @@ inline ::std_msgs::msg::MultiArrayLayout multi_array_layout_to_ros(const ::std_m
 class StdMsgsMultiArrayLayoutMapper
     : public TypedTopicMapper<StdMsgsMultiArrayLayoutMapper, ::std_msgs::msg::MultiArrayLayout> {
  public:
-  const char *type_name() const override { return "std_msgs/msg/MultiArrayLayout"; }
-
   std::vector<uint8_t> ros_to_bus(const ::std_msgs::msg::MultiArrayLayout &msg) const {
     auto bus = ros2_bridge_mappers::std_msgs::multi_array_layout_to_bus(msg);
     std::string bytes;
@@ -58,9 +56,7 @@ class StdMsgsMultiArrayLayoutMapper
   }
 };
 #else
-struct StdMsgsMultiArrayLayoutMapper : TopicMapper {
-  const char *type_name() const override { return "std_msgs/msg/MultiArrayLayout"; }
-};
+struct StdMsgsMultiArrayLayoutMapper : TopicMapper {};
 #endif
 
 }  // namespace robot_bus

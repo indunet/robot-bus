@@ -21,10 +21,6 @@ impl TypedTopicMapper for StdMsgsFloat64Mapper {
     type Ros = ros_env::std_msgs::msg::Float64;
     type Bus = crate::std_msgs::msg::v1::Float64;
 
-    fn type_name(&self) -> &'static str {
-        "std_msgs/msg/Float64"
-    }
-
     fn ros_to_bus(&self, msg: Self::Ros) -> crate::errors::Result<Self::Bus> {
         Ok(float64_to_bus(msg))
     }

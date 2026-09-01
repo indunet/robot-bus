@@ -23,10 +23,6 @@ impl TypedTopicMapper for GeometryMsgsPoseWithCovarianceMapper {
     type Ros = ros_env::geometry_msgs::msg::PoseWithCovariance;
     type Bus = crate::geometry_msgs::msg::v1::PoseWithCovariance;
 
-    fn type_name(&self) -> &'static str {
-        "geometry_msgs/msg/PoseWithCovariance"
-    }
-
     fn ros_to_bus(&self, msg: Self::Ros) -> crate::errors::Result<Self::Bus> {
         Ok(pose_with_covariance_to_bus(msg))
     }

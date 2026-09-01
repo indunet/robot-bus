@@ -28,9 +28,6 @@ def quaternion_to_ros(bus):
 
 
 class GeometryMsgsQuaternionMapper:
-    def type_name(self) -> str:
-        return "geometry_msgs/msg/Quaternion"
-
     def ros_msg_type(self):
         from geometry_msgs.msg import Quaternion as RosMsg
 

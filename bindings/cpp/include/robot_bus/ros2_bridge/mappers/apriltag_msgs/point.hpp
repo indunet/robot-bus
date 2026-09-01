@@ -37,8 +37,6 @@ inline ::apriltag_msgs::msg::Point point_to_ros(const ::apriltag_msgs::msg::v1::
 class ApriltagMsgsPointMapper
     : public TypedTopicMapper<ApriltagMsgsPointMapper, ::apriltag_msgs::msg::Point> {
  public:
-  const char *type_name() const override { return "apriltag_msgs/msg/Point"; }
-
   std::vector<uint8_t> ros_to_bus(const ::apriltag_msgs::msg::Point &msg) const {
     auto bus = ros2_bridge_mappers::apriltag_msgs::point_to_bus(msg);
     std::string bytes;
@@ -53,9 +51,7 @@ class ApriltagMsgsPointMapper
   }
 };
 #else
-struct ApriltagMsgsPointMapper : TopicMapper {
-  const char *type_name() const override { return "apriltag_msgs/msg/Point"; }
-};
+struct ApriltagMsgsPointMapper : TopicMapper {};
 #endif
 
 }  // namespace robot_bus

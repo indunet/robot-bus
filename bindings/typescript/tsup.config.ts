@@ -2,9 +2,10 @@ import { defineConfig } from "tsup";
 
 export default defineConfig([
   {
-    entry: { "index.node": "src/index.node.ts" },
+    entry: { "index.node": "src/index.node.ts", cli: "src/cli.ts" },
     format: ["esm"],
-    dts: true,
+    dts: { entry: { "index.node": "src/index.node.ts" } },
+    splitting: false,
     sourcemap: true,
     clean: true,
     target: "node18",

@@ -188,6 +188,7 @@ test-python-native:
 	python3 bindings/python/tests/test_inproc_context.py
 	python3 bindings/python/tests/test_federation_opts.py
 	python3 bindings/python/tests/test_console.py
+	python3 bindings/python/tests/test_main_module.py
 
 # Cross-language interop matrix (6 language-pair scenarios). Missing peers fail.
 # Needs `just python-dev`, console assets, protobuf C++ runtime, Java, Node/napi.

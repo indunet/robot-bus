@@ -23,10 +23,6 @@ impl TypedTopicMapper for StdMsgsByteMultiArrayMapper {
     type Ros = ros_env::std_msgs::msg::ByteMultiArray;
     type Bus = crate::std_msgs::msg::v1::ByteMultiArray;
 
-    fn type_name(&self) -> &'static str {
-        "std_msgs/msg/ByteMultiArray"
-    }
-
     fn ros_to_bus(&self, msg: Self::Ros) -> crate::errors::Result<Self::Bus> {
         Ok(byte_multi_array_to_bus(msg))
     }

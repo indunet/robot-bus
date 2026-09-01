@@ -21,10 +21,6 @@ impl TypedTopicMapper for ShapeMsgsMeshTriangleMapper {
     type Ros = ros_env::shape_msgs::msg::MeshTriangle;
     type Bus = crate::shape_msgs::msg::v1::MeshTriangle;
 
-    fn type_name(&self) -> &'static str {
-        "shape_msgs/msg/MeshTriangle"
-    }
-
     fn ros_to_bus(&self, msg: Self::Ros) -> crate::errors::Result<Self::Bus> {
         Ok(mesh_triangle_to_bus(msg))
     }

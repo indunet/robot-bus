@@ -25,9 +25,6 @@ def pose_to_ros(bus):
 
 
 class FoxgloveMsgsPoseMapper:
-    def type_name(self) -> str:
-        return "foxglove_msgs/msg/Pose"
-
     def ros_msg_type(self):
         from foxglove_msgs.msg import Pose as RosMsg
 

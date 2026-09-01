@@ -33,10 +33,6 @@ impl TypedTopicMapper for FoxgloveMsgsRawImageMapper {
     type Ros = ros_env::foxglove_msgs::msg::RawImage;
     type Bus = crate::foxglove_msgs::msg::v1::RawImage;
 
-    fn type_name(&self) -> &'static str {
-        "foxglove_msgs/msg/RawImage"
-    }
-
     fn ros_to_bus(&self, msg: Self::Ros) -> crate::errors::Result<Self::Bus> {
         Ok(raw_image_to_bus(msg))
     }

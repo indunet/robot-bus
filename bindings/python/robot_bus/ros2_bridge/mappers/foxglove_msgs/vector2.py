@@ -24,9 +24,6 @@ def vector2_to_ros(bus):
 
 
 class FoxgloveMsgsVector2Mapper:
-    def type_name(self) -> str:
-        return "foxglove_msgs/msg/Vector2"
-
     def ros_msg_type(self):
         from foxglove_msgs.msg import Vector2 as RosMsg
 

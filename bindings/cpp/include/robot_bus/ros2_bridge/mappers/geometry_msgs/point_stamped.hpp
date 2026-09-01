@@ -38,8 +38,6 @@ inline ::geometry_msgs::msg::PointStamped point_stamped_to_ros(const ::geometry_
 class GeometryMsgsPointStampedMapper
     : public TypedTopicMapper<GeometryMsgsPointStampedMapper, ::geometry_msgs::msg::PointStamped> {
  public:
-  const char *type_name() const override { return "geometry_msgs/msg/PointStamped"; }
-
   std::vector<uint8_t> ros_to_bus(const ::geometry_msgs::msg::PointStamped &msg) const {
     auto bus = ros2_bridge_mappers::geometry_msgs::point_stamped_to_bus(msg);
     std::string bytes;
@@ -54,9 +52,7 @@ class GeometryMsgsPointStampedMapper
   }
 };
 #else
-struct GeometryMsgsPointStampedMapper : TopicMapper {
-  const char *type_name() const override { return "geometry_msgs/msg/PointStamped"; }
-};
+struct GeometryMsgsPointStampedMapper : TopicMapper {};
 #endif
 
 }  // namespace robot_bus

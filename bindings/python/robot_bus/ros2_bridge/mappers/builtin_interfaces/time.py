@@ -24,9 +24,6 @@ def time_to_ros(bus):
 
 
 class BuiltinInterfacesTimeMapper:
-    def type_name(self) -> str:
-        return "builtin_interfaces/msg/Time"
-
     def ros_msg_type(self):
         from builtin_interfaces.msg import Time as RosMsg
 

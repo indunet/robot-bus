@@ -37,8 +37,6 @@ inline ::shape_msgs::msg::Plane plane_to_ros(const ::shape_msgs::msg::v1::Plane 
 class ShapeMsgsPlaneMapper
     : public TypedTopicMapper<ShapeMsgsPlaneMapper, ::shape_msgs::msg::Plane> {
  public:
-  const char *type_name() const override { return "shape_msgs/msg/Plane"; }
-
   std::vector<uint8_t> ros_to_bus(const ::shape_msgs::msg::Plane &msg) const {
     auto bus = ros2_bridge_mappers::shape_msgs::plane_to_bus(msg);
     std::string bytes;
@@ -53,9 +51,7 @@ class ShapeMsgsPlaneMapper
   }
 };
 #else
-struct ShapeMsgsPlaneMapper : TopicMapper {
-  const char *type_name() const override { return "shape_msgs/msg/Plane"; }
-};
+struct ShapeMsgsPlaneMapper : TopicMapper {};
 #endif
 
 }  // namespace robot_bus

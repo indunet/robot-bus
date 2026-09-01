@@ -33,10 +33,6 @@ impl TypedTopicMapper for FoxgloveMsgsCircleAnnotationMapper {
     type Ros = ros_env::foxglove_msgs::msg::CircleAnnotation;
     type Bus = crate::foxglove_msgs::msg::v1::CircleAnnotation;
 
-    fn type_name(&self) -> &'static str {
-        "foxglove_msgs/msg/CircleAnnotation"
-    }
-
     fn ros_to_bus(&self, msg: Self::Ros) -> crate::errors::Result<Self::Bus> {
         Ok(circle_annotation_to_bus(msg))
     }

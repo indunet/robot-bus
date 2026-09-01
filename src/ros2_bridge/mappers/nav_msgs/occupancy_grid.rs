@@ -38,10 +38,6 @@ impl TypedTopicMapper for NavMsgsOccupancyGridMapper {
     type Ros = ros_env::nav_msgs::msg::OccupancyGrid;
     type Bus = crate::nav_msgs::msg::v1::OccupancyGrid;
 
-    fn type_name(&self) -> &'static str {
-        "nav_msgs/msg/OccupancyGrid"
-    }
-
     fn ros_to_bus(&self, msg: Self::Ros) -> crate::errors::Result<Self::Bus> {
         Ok(occupancy_grid_to_bus(msg))
     }

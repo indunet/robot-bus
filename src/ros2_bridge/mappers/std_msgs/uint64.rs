@@ -21,10 +21,6 @@ impl TypedTopicMapper for StdMsgsUInt64Mapper {
     type Ros = ros_env::std_msgs::msg::UInt64;
     type Bus = crate::std_msgs::msg::v1::UInt64;
 
-    fn type_name(&self) -> &'static str {
-        "std_msgs/msg/UInt64"
-    }
-
     fn ros_to_bus(&self, msg: Self::Ros) -> crate::errors::Result<Self::Bus> {
         Ok(uint64_to_bus(msg))
     }

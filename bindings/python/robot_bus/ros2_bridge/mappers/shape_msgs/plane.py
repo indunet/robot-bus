@@ -22,9 +22,6 @@ def plane_to_ros(bus):
 
 
 class ShapeMsgsPlaneMapper:
-    def type_name(self) -> str:
-        return "shape_msgs/msg/Plane"
-
     def ros_msg_type(self):
         from shape_msgs.msg import Plane as RosMsg
 

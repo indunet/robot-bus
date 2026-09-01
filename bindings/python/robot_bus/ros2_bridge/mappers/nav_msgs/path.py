@@ -25,9 +25,6 @@ def path_to_ros(bus):
 
 
 class NavMsgsPathMapper:
-    def type_name(self) -> str:
-        return "nav_msgs/msg/Path"
-
     def ros_msg_type(self):
         from nav_msgs.msg import Path as RosMsg
 

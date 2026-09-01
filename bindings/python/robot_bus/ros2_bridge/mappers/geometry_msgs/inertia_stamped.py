@@ -25,9 +25,6 @@ def inertia_stamped_to_ros(bus):
 
 
 class GeometryMsgsInertiaStampedMapper:
-    def type_name(self) -> str:
-        return "geometry_msgs/msg/InertiaStamped"
-
     def ros_msg_type(self):
         from geometry_msgs.msg import InertiaStamped as RosMsg
 

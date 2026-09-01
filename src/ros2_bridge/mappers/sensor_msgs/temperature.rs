@@ -25,10 +25,6 @@ impl TypedTopicMapper for SensorMsgsTemperatureMapper {
     type Ros = ros_env::sensor_msgs::msg::Temperature;
     type Bus = crate::sensor_msgs::msg::v1::Temperature;
 
-    fn type_name(&self) -> &'static str {
-        "sensor_msgs/msg/Temperature"
-    }
-
     fn ros_to_bus(&self, msg: Self::Ros) -> crate::errors::Result<Self::Bus> {
         Ok(temperature_to_bus(msg))
     }

@@ -36,9 +36,6 @@ def model_primitive_to_ros(bus):
 
 
 class FoxgloveMsgsModelPrimitiveMapper:
-    def type_name(self) -> str:
-        return "foxglove_msgs/msg/ModelPrimitive"
-
     def ros_msg_type(self):
         from foxglove_msgs.msg import ModelPrimitive as RosMsg
 

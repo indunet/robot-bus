@@ -32,9 +32,6 @@ def triangle_list_primitive_to_ros(bus):
 
 
 class FoxgloveMsgsTriangleListPrimitiveMapper:
-    def type_name(self) -> str:
-        return "foxglove_msgs/msg/TriangleListPrimitive"
-
     def ros_msg_type(self):
         from foxglove_msgs.msg import TriangleListPrimitive as RosMsg
 

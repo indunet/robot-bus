@@ -69,8 +69,6 @@ inline ::sensor_msgs::msg::BatteryState battery_state_to_ros(const ::sensor_msgs
 class SensorMsgsBatteryStateMapper
     : public TypedTopicMapper<SensorMsgsBatteryStateMapper, ::sensor_msgs::msg::BatteryState> {
  public:
-  const char *type_name() const override { return "sensor_msgs/msg/BatteryState"; }
-
   std::vector<uint8_t> ros_to_bus(const ::sensor_msgs::msg::BatteryState &msg) const {
     auto bus = ros2_bridge_mappers::sensor_msgs::battery_state_to_bus(msg);
     std::string bytes;
@@ -85,9 +83,7 @@ class SensorMsgsBatteryStateMapper
   }
 };
 #else
-struct SensorMsgsBatteryStateMapper : TopicMapper {
-  const char *type_name() const override { return "sensor_msgs/msg/BatteryState"; }
-};
+struct SensorMsgsBatteryStateMapper : TopicMapper {};
 #endif
 
 }  // namespace robot_bus

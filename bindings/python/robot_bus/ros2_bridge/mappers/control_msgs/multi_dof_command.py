@@ -26,9 +26,6 @@ def multi_dof_command_to_ros(bus):
 
 
 class ControlMsgsMultiDofCommandMapper:
-    def type_name(self) -> str:
-        return "control_msgs/msg/MultiDOFCommand"
-
     def ros_msg_type(self):
         from control_msgs.msg import MultiDOFCommand as RosMsg
 

@@ -25,9 +25,6 @@ def twist_stamped_to_ros(bus):
 
 
 class GeometryMsgsTwistStampedMapper:
-    def type_name(self) -> str:
-        return "geometry_msgs/msg/TwistStamped"
-
     def ros_msg_type(self):
         from geometry_msgs.msg import TwistStamped as RosMsg
 

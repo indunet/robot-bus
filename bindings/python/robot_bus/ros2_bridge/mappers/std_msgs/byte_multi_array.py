@@ -24,9 +24,6 @@ def byte_multi_array_to_ros(bus):
 
 
 class StdMsgsByteMultiArrayMapper:
-    def type_name(self) -> str:
-        return "std_msgs/msg/ByteMultiArray"
-
     def ros_msg_type(self):
         from std_msgs.msg import ByteMultiArray as RosMsg
 

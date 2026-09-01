@@ -24,9 +24,6 @@ def twist_with_covariance_to_ros(bus):
 
 
 class GeometryMsgsTwistWithCovarianceMapper:
-    def type_name(self) -> str:
-        return "geometry_msgs/msg/TwistWithCovariance"
-
     def ros_msg_type(self):
         from geometry_msgs.msg import TwistWithCovariance as RosMsg
 

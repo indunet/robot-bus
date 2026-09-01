@@ -29,10 +29,6 @@ impl TypedTopicMapper for SensorMsgsRegionOfInterestMapper {
     type Ros = ros_env::sensor_msgs::msg::RegionOfInterest;
     type Bus = crate::sensor_msgs::msg::v1::RegionOfInterest;
 
-    fn type_name(&self) -> &'static str {
-        "sensor_msgs/msg/RegionOfInterest"
-    }
-
     fn ros_to_bus(&self, msg: Self::Ros) -> crate::errors::Result<Self::Bus> {
         Ok(region_of_interest_to_bus(msg))
     }

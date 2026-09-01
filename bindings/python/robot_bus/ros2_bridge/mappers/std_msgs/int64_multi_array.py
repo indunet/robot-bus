@@ -24,9 +24,6 @@ def int64_multi_array_to_ros(bus):
 
 
 class StdMsgsInt64MultiArrayMapper:
-    def type_name(self) -> str:
-        return "std_msgs/msg/Int64MultiArray"
-
     def ros_msg_type(self):
         from std_msgs.msg import Int64MultiArray as RosMsg
 

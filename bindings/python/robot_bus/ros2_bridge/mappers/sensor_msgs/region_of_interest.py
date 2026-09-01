@@ -30,9 +30,6 @@ def region_of_interest_to_ros(bus):
 
 
 class SensorMsgsRegionOfInterestMapper:
-    def type_name(self) -> str:
-        return "sensor_msgs/msg/RegionOfInterest"
-
     def ros_msg_type(self):
         from sensor_msgs.msg import RegionOfInterest as RosMsg
 

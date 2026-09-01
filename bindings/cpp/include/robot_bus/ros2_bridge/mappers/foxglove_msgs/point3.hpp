@@ -39,8 +39,6 @@ inline ::foxglove_msgs::msg::Point3 point3_to_ros(const ::foxglove_msgs::msg::v1
 class FoxgloveMsgsPoint3Mapper
     : public TypedTopicMapper<FoxgloveMsgsPoint3Mapper, ::foxglove_msgs::msg::Point3> {
  public:
-  const char *type_name() const override { return "foxglove_msgs/msg/Point3"; }
-
   std::vector<uint8_t> ros_to_bus(const ::foxglove_msgs::msg::Point3 &msg) const {
     auto bus = ros2_bridge_mappers::foxglove_msgs::point3_to_bus(msg);
     std::string bytes;
@@ -55,9 +53,7 @@ class FoxgloveMsgsPoint3Mapper
   }
 };
 #else
-struct FoxgloveMsgsPoint3Mapper : TopicMapper {
-  const char *type_name() const override { return "foxglove_msgs/msg/Point3"; }
-};
+struct FoxgloveMsgsPoint3Mapper : TopicMapper {};
 #endif
 
 }  // namespace robot_bus

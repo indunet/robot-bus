@@ -42,8 +42,6 @@ inline ::geometry_msgs::msg::VelocityStamped velocity_stamped_to_ros(const ::geo
 class GeometryMsgsVelocityStampedMapper
     : public TypedTopicMapper<GeometryMsgsVelocityStampedMapper, ::geometry_msgs::msg::VelocityStamped> {
  public:
-  const char *type_name() const override { return "geometry_msgs/msg/VelocityStamped"; }
-
   std::vector<uint8_t> ros_to_bus(const ::geometry_msgs::msg::VelocityStamped &msg) const {
     auto bus = ros2_bridge_mappers::geometry_msgs::velocity_stamped_to_bus(msg);
     std::string bytes;
@@ -58,9 +56,7 @@ class GeometryMsgsVelocityStampedMapper
   }
 };
 #else
-struct GeometryMsgsVelocityStampedMapper : TopicMapper {
-  const char *type_name() const override { return "geometry_msgs/msg/VelocityStamped"; }
-};
+struct GeometryMsgsVelocityStampedMapper : TopicMapper {};
 #endif
 
 }  // namespace robot_bus

@@ -44,9 +44,6 @@ def admittance_controller_state_to_ros(bus):
 
 
 class ControlMsgsAdmittanceControllerStateMapper:
-    def type_name(self) -> str:
-        return "control_msgs/msg/AdmittanceControllerState"
-
     def ros_msg_type(self):
         from control_msgs.msg import AdmittanceControllerState as RosMsg
 

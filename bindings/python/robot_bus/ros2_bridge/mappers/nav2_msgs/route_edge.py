@@ -26,9 +26,6 @@ def route_edge_to_ros(bus):
 
 
 class Nav2MsgsRouteEdgeMapper:
-    def type_name(self) -> str:
-        return "nav2_msgs/msg/RouteEdge"
-
     def ros_msg_type(self):
         from nav2_msgs.msg import RouteEdge as RosMsg
 

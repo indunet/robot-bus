@@ -29,10 +29,6 @@ impl TypedTopicMapper for DiagnosticMsgsDiagnosticStatusMapper {
     type Ros = ros_env::diagnostic_msgs::msg::DiagnosticStatus;
     type Bus = crate::diagnostic_msgs::msg::v1::DiagnosticStatus;
 
-    fn type_name(&self) -> &'static str {
-        "diagnostic_msgs/msg/DiagnosticStatus"
-    }
-
     fn ros_to_bus(&self, msg: Self::Ros) -> crate::errors::Result<Self::Bus> {
         Ok(diagnostic_status_to_bus(msg))
     }

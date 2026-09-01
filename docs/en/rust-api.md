@@ -5,14 +5,24 @@ English | [中文](../zh/rust-api.md)
 `Cargo.toml`:
 
 ```toml
-robot-bus = "2.1.0"
+robot-bus = "2.2.0"
 # Local: robot-bus = { path = "../robot-bus" }
-# WebSocket RPC gateway (`ws` feature) is on by default; to disable: robot-bus = { version = "2.1.0", default-features = false }
+# WebSocket RPC gateway (`ws` feature) is on by default; to disable: robot-bus = { version = "2.2.0", default-features = false }
 ```
 
 ## Broker startup
 
-Start the broker before running examples (or embed it in-process; see below). By default one startup brings up **message / service / action** buses; each TCP bind defaults to `…:0` (OS assigns a free port), plus **API** (WebSocket RPC `/ws` / `GET /api/v1/discover` / console http), default `0.0.0.0:15570`.
+**Prefer starting the broker from your program** (`RobotBusBroker::start`) so it shares a process with the application. The CLI is for demos, multi-process examples, or a standalone long-running broker. By default one startup brings up **message / service / action** buses; each TCP bind defaults to `…:0` (OS assigns a free port), plus **API** (WebSocket RPC `/ws` / `GET /api/v1/discover` / console http), default `0.0.0.0:15570`.
+
+```rust
+use robot_bus::{RobotBusBroker, RobotBusConfig};
+
+let broker = RobotBusBroker::start(RobotBusConfig::default())?;
+// Default endpoints in the table below; set RobotBusConfig fields when you need different ports / addresses
+broker.stop()?;
+```
+
+Use the CLI when you need a standalone process:
 
 ```bash
 cargo run --bin robot_bus_broker
@@ -86,16 +96,6 @@ broker.stop()?;
 `RobotBusBroker::start(config)` still works (creates its own Context internally); cross-process tcp/ipc does not require sharing.
 
 Cross-broker (federation): prefer `--peer HOST:PORT` (peer API port; internally `GET /api/v1/discover` fills ZMQ peers), or set `broker_id` and `peers` on `RobotBusConfig` (`MessagePeer` / `ServicePeer` / `ActionPeer`), or CLI `--broker-id` / `--message-peer` / `--service-peer` / `--action-peer`. Embedded start APIs in other languages use the same string conventions (see the corresponding `*-api.md`). Message federation **does not** forward the reserved namespace `/robot_bus` (including `/robot_bus/status`, topology, bot, and other console system topics), avoiding status snapshot overwrites when multiple brokers are bridged; user business topics are still pushed as needed.
-
-**In-process embed** (no separate binary required):
-
-```rust
-use robot_bus::{RobotBusBroker, RobotBusConfig};
-
-let broker = RobotBusBroker::start(RobotBusConfig::default())?;
-// Default endpoints as above; set RobotBusConfig fields when you need different ports / addresses
-broker.stop()?;
-```
 
 Typical flow: `Context` → `Node::with_context` → `create_*` → `node.spin()` (or convenience `Node::new`). For multiple nodes or parallelism, use `executor.add_node` + `executor.spin`. For the WebSocket RPC gateway only, use `Node::ws` / `Node::ws_at` (see “WebSocket RPC mode Node” below).
 

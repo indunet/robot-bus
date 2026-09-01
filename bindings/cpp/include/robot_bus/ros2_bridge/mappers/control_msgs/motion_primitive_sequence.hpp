@@ -40,8 +40,6 @@ inline ::control_msgs::msg::MotionPrimitiveSequence motion_primitive_sequence_to
 class ControlMsgsMotionPrimitiveSequenceMapper
     : public TypedTopicMapper<ControlMsgsMotionPrimitiveSequenceMapper, ::control_msgs::msg::MotionPrimitiveSequence> {
  public:
-  const char *type_name() const override { return "control_msgs/msg/MotionPrimitiveSequence"; }
-
   std::vector<uint8_t> ros_to_bus(const ::control_msgs::msg::MotionPrimitiveSequence &msg) const {
     auto bus = ros2_bridge_mappers::control_msgs::motion_primitive_sequence_to_bus(msg);
     std::string bytes;
@@ -56,9 +54,7 @@ class ControlMsgsMotionPrimitiveSequenceMapper
   }
 };
 #else
-struct ControlMsgsMotionPrimitiveSequenceMapper : TopicMapper {
-  const char *type_name() const override { return "control_msgs/msg/MotionPrimitiveSequence"; }
-};
+struct ControlMsgsMotionPrimitiveSequenceMapper : TopicMapper {};
 #endif
 
 }  // namespace robot_bus

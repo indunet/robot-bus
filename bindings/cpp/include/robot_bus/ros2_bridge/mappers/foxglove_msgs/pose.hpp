@@ -38,8 +38,6 @@ inline ::foxglove_msgs::msg::Pose pose_to_ros(const ::foxglove_msgs::msg::v1::Po
 class FoxgloveMsgsPoseMapper
     : public TypedTopicMapper<FoxgloveMsgsPoseMapper, ::foxglove_msgs::msg::Pose> {
  public:
-  const char *type_name() const override { return "foxglove_msgs/msg/Pose"; }
-
   std::vector<uint8_t> ros_to_bus(const ::foxglove_msgs::msg::Pose &msg) const {
     auto bus = ros2_bridge_mappers::foxglove_msgs::pose_to_bus(msg);
     std::string bytes;
@@ -54,9 +52,7 @@ class FoxgloveMsgsPoseMapper
   }
 };
 #else
-struct FoxgloveMsgsPoseMapper : TopicMapper {
-  const char *type_name() const override { return "foxglove_msgs/msg/Pose"; }
-};
+struct FoxgloveMsgsPoseMapper : TopicMapper {};
 #endif
 
 }  // namespace robot_bus

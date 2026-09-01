@@ -40,8 +40,6 @@ inline ::foxglove_msgs::msg::FrameTransforms frame_transforms_to_ros(const ::fox
 class FoxgloveMsgsFrameTransformsMapper
     : public TypedTopicMapper<FoxgloveMsgsFrameTransformsMapper, ::foxglove_msgs::msg::FrameTransforms> {
  public:
-  const char *type_name() const override { return "foxglove_msgs/msg/FrameTransforms"; }
-
   std::vector<uint8_t> ros_to_bus(const ::foxglove_msgs::msg::FrameTransforms &msg) const {
     auto bus = ros2_bridge_mappers::foxglove_msgs::frame_transforms_to_bus(msg);
     std::string bytes;
@@ -56,9 +54,7 @@ class FoxgloveMsgsFrameTransformsMapper
   }
 };
 #else
-struct FoxgloveMsgsFrameTransformsMapper : TopicMapper {
-  const char *type_name() const override { return "foxglove_msgs/msg/FrameTransforms"; }
-};
+struct FoxgloveMsgsFrameTransformsMapper : TopicMapper {};
 #endif
 
 }  // namespace robot_bus

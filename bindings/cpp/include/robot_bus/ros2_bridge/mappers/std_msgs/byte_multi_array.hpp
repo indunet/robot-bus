@@ -37,8 +37,6 @@ inline ::std_msgs::msg::ByteMultiArray byte_multi_array_to_ros(const ::std_msgs:
 class StdMsgsByteMultiArrayMapper
     : public TypedTopicMapper<StdMsgsByteMultiArrayMapper, ::std_msgs::msg::ByteMultiArray> {
  public:
-  const char *type_name() const override { return "std_msgs/msg/ByteMultiArray"; }
-
   std::vector<uint8_t> ros_to_bus(const ::std_msgs::msg::ByteMultiArray &msg) const {
     auto bus = ros2_bridge_mappers::std_msgs::byte_multi_array_to_bus(msg);
     std::string bytes;
@@ -53,9 +51,7 @@ class StdMsgsByteMultiArrayMapper
   }
 };
 #else
-struct StdMsgsByteMultiArrayMapper : TopicMapper {
-  const char *type_name() const override { return "std_msgs/msg/ByteMultiArray"; }
-};
+struct StdMsgsByteMultiArrayMapper : TopicMapper {};
 #endif
 
 }  // namespace robot_bus

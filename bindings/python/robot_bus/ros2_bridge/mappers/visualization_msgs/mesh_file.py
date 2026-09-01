@@ -24,9 +24,6 @@ def mesh_file_to_ros(bus):
 
 
 class VisualizationMsgsMeshFileMapper:
-    def type_name(self) -> str:
-        return "visualization_msgs/msg/MeshFile"
-
     def ros_msg_type(self):
         from visualization_msgs.msg import MeshFile as RosMsg
 

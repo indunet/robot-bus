@@ -24,9 +24,6 @@ def u_int32_multi_array_to_ros(bus):
 
 
 class StdMsgsUInt32MultiArrayMapper:
-    def type_name(self) -> str:
-        return "std_msgs/msg/UInt32MultiArray"
-
     def ros_msg_type(self):
         from std_msgs.msg import UInt32MultiArray as RosMsg
 

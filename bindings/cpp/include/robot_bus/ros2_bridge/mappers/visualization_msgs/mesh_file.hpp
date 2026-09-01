@@ -37,8 +37,6 @@ inline ::visualization_msgs::msg::MeshFile mesh_file_to_ros(const ::visualizatio
 class VisualizationMsgsMeshFileMapper
     : public TypedTopicMapper<VisualizationMsgsMeshFileMapper, ::visualization_msgs::msg::MeshFile> {
  public:
-  const char *type_name() const override { return "visualization_msgs/msg/MeshFile"; }
-
   std::vector<uint8_t> ros_to_bus(const ::visualization_msgs::msg::MeshFile &msg) const {
     auto bus = ros2_bridge_mappers::visualization_msgs::mesh_file_to_bus(msg);
     std::string bytes;
@@ -53,9 +51,7 @@ class VisualizationMsgsMeshFileMapper
   }
 };
 #else
-struct VisualizationMsgsMeshFileMapper : TopicMapper {
-  const char *type_name() const override { return "visualization_msgs/msg/MeshFile"; }
-};
+struct VisualizationMsgsMeshFileMapper : TopicMapper {};
 #endif
 
 }  // namespace robot_bus

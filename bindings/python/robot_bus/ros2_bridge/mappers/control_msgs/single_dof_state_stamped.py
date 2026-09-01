@@ -25,9 +25,6 @@ def single_dof_state_stamped_to_ros(bus):
 
 
 class ControlMsgsSingleDofStateStampedMapper:
-    def type_name(self) -> str:
-        return "control_msgs/msg/SingleDOFStateStamped"
-
     def ros_msg_type(self):
         from control_msgs.msg import SingleDOFStateStamped as RosMsg
 

@@ -29,10 +29,6 @@ impl TypedTopicMapper for FoxgloveMsgsRawAudioMapper {
     type Ros = ros_env::foxglove_msgs::msg::RawAudio;
     type Bus = crate::foxglove_msgs::msg::v1::RawAudio;
 
-    fn type_name(&self) -> &'static str {
-        "foxglove_msgs/msg/RawAudio"
-    }
-
     fn ros_to_bus(&self, msg: Self::Ros) -> crate::errors::Result<Self::Bus> {
         Ok(raw_audio_to_bus(msg))
     }

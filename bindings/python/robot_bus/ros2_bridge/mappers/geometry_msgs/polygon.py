@@ -22,9 +22,6 @@ def polygon_to_ros(bus):
 
 
 class GeometryMsgsPolygonMapper:
-    def type_name(self) -> str:
-        return "geometry_msgs/msg/Polygon"
-
     def ros_msg_type(self):
         from geometry_msgs.msg import Polygon as RosMsg
 

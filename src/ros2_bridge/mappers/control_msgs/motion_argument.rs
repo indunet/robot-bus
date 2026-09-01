@@ -23,10 +23,6 @@ impl TypedTopicMapper for ControlMsgsMotionArgumentMapper {
     type Ros = ros_env::control_msgs::msg::MotionArgument;
     type Bus = crate::control_msgs::msg::v1::MotionArgument;
 
-    fn type_name(&self) -> &'static str {
-        "control_msgs/msg/MotionArgument"
-    }
-
     fn ros_to_bus(&self, msg: Self::Ros) -> crate::errors::Result<Self::Bus> {
         Ok(motion_argument_to_bus(msg))
     }

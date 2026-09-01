@@ -23,10 +23,6 @@ impl TypedTopicMapper for ControlMsgsInterfaceValueMapper {
     type Ros = ros_env::control_msgs::msg::InterfaceValue;
     type Bus = crate::control_msgs::msg::v1::InterfaceValue;
 
-    fn type_name(&self) -> &'static str {
-        "control_msgs/msg/InterfaceValue"
-    }
-
     fn ros_to_bus(&self, msg: Self::Ros) -> crate::errors::Result<Self::Bus> {
         Ok(interface_value_to_bus(msg))
     }

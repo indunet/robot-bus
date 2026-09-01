@@ -27,10 +27,6 @@ impl TypedTopicMapper for StdMsgsColorRgbaMapper {
     type Ros = ros_env::std_msgs::msg::ColorRGBA;
     type Bus = crate::std_msgs::msg::v1::ColorRgba;
 
-    fn type_name(&self) -> &'static str {
-        "std_msgs/msg/ColorRGBA"
-    }
-
     fn ros_to_bus(&self, msg: Self::Ros) -> crate::errors::Result<Self::Bus> {
         Ok(color_rgba_to_bus(msg))
     }

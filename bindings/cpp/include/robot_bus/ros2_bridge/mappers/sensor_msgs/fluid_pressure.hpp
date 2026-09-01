@@ -39,8 +39,6 @@ inline ::sensor_msgs::msg::FluidPressure fluid_pressure_to_ros(const ::sensor_ms
 class SensorMsgsFluidPressureMapper
     : public TypedTopicMapper<SensorMsgsFluidPressureMapper, ::sensor_msgs::msg::FluidPressure> {
  public:
-  const char *type_name() const override { return "sensor_msgs/msg/FluidPressure"; }
-
   std::vector<uint8_t> ros_to_bus(const ::sensor_msgs::msg::FluidPressure &msg) const {
     auto bus = ros2_bridge_mappers::sensor_msgs::fluid_pressure_to_bus(msg);
     std::string bytes;
@@ -55,9 +53,7 @@ class SensorMsgsFluidPressureMapper
   }
 };
 #else
-struct SensorMsgsFluidPressureMapper : TopicMapper {
-  const char *type_name() const override { return "sensor_msgs/msg/FluidPressure"; }
-};
+struct SensorMsgsFluidPressureMapper : TopicMapper {};
 #endif
 
 }  // namespace robot_bus

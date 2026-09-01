@@ -21,10 +21,6 @@ impl TypedTopicMapper for StdMsgsUInt8Mapper {
     type Ros = ros_env::std_msgs::msg::UInt8;
     type Bus = crate::std_msgs::msg::v1::UInt8;
 
-    fn type_name(&self) -> &'static str {
-        "std_msgs/msg/UInt8"
-    }
-
     fn ros_to_bus(&self, msg: Self::Ros) -> crate::errors::Result<Self::Bus> {
         Ok(uint8_to_bus(msg))
     }

@@ -33,10 +33,6 @@ impl TypedTopicMapper for SensorMsgsImuMapper {
     type Ros = ros_env::sensor_msgs::msg::Imu;
     type Bus = crate::sensor_msgs::msg::v1::Imu;
 
-    fn type_name(&self) -> &'static str {
-        "sensor_msgs/msg/Imu"
-    }
-
     fn ros_to_bus(&self, msg: Self::Ros) -> crate::errors::Result<Self::Bus> {
         Ok(imu_to_bus(msg))
     }

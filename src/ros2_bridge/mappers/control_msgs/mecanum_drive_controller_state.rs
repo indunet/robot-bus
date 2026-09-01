@@ -31,10 +31,6 @@ impl TypedTopicMapper for ControlMsgsMecanumDriveControllerStateMapper {
     type Ros = ros_env::control_msgs::msg::MecanumDriveControllerState;
     type Bus = crate::control_msgs::msg::v1::MecanumDriveControllerState;
 
-    fn type_name(&self) -> &'static str {
-        "control_msgs/msg/MecanumDriveControllerState"
-    }
-
     fn ros_to_bus(&self, msg: Self::Ros) -> crate::errors::Result<Self::Bus> {
         Ok(mecanum_drive_controller_state_to_bus(msg))
     }

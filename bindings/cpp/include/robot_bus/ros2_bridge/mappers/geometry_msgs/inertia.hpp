@@ -49,8 +49,6 @@ inline ::geometry_msgs::msg::Inertia inertia_to_ros(const ::geometry_msgs::msg::
 class GeometryMsgsInertiaMapper
     : public TypedTopicMapper<GeometryMsgsInertiaMapper, ::geometry_msgs::msg::Inertia> {
  public:
-  const char *type_name() const override { return "geometry_msgs/msg/Inertia"; }
-
   std::vector<uint8_t> ros_to_bus(const ::geometry_msgs::msg::Inertia &msg) const {
     auto bus = ros2_bridge_mappers::geometry_msgs::inertia_to_bus(msg);
     std::string bytes;
@@ -65,9 +63,7 @@ class GeometryMsgsInertiaMapper
   }
 };
 #else
-struct GeometryMsgsInertiaMapper : TopicMapper {
-  const char *type_name() const override { return "geometry_msgs/msg/Inertia"; }
-};
+struct GeometryMsgsInertiaMapper : TopicMapper {};
 #endif
 
 }  // namespace robot_bus

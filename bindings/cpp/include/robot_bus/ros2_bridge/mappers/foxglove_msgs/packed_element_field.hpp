@@ -39,8 +39,6 @@ inline ::foxglove_msgs::msg::PackedElementField packed_element_field_to_ros(cons
 class FoxgloveMsgsPackedElementFieldMapper
     : public TypedTopicMapper<FoxgloveMsgsPackedElementFieldMapper, ::foxglove_msgs::msg::PackedElementField> {
  public:
-  const char *type_name() const override { return "foxglove_msgs/msg/PackedElementField"; }
-
   std::vector<uint8_t> ros_to_bus(const ::foxglove_msgs::msg::PackedElementField &msg) const {
     auto bus = ros2_bridge_mappers::foxglove_msgs::packed_element_field_to_bus(msg);
     std::string bytes;
@@ -55,9 +53,7 @@ class FoxgloveMsgsPackedElementFieldMapper
   }
 };
 #else
-struct FoxgloveMsgsPackedElementFieldMapper : TopicMapper {
-  const char *type_name() const override { return "foxglove_msgs/msg/PackedElementField"; }
-};
+struct FoxgloveMsgsPackedElementFieldMapper : TopicMapper {};
 #endif
 
 }  // namespace robot_bus

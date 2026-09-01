@@ -25,10 +25,6 @@ impl TypedTopicMapper for Nav2MsgsSpeedLimitMapper {
     type Ros = ros_env::nav2_msgs::msg::SpeedLimit;
     type Bus = crate::nav2_msgs::msg::v1::SpeedLimit;
 
-    fn type_name(&self) -> &'static str {
-        "nav2_msgs/msg/SpeedLimit"
-    }
-
     fn ros_to_bus(&self, msg: Self::Ros) -> crate::errors::Result<Self::Bus> {
         Ok(speed_limit_to_bus(msg))
     }

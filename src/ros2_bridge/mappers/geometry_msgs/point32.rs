@@ -25,10 +25,6 @@ impl TypedTopicMapper for GeometryMsgsPoint32Mapper {
     type Ros = ros_env::geometry_msgs::msg::Point32;
     type Bus = crate::geometry_msgs::msg::v1::Point32;
 
-    fn type_name(&self) -> &'static str {
-        "geometry_msgs/msg/Point32"
-    }
-
     fn ros_to_bus(&self, msg: Self::Ros) -> crate::errors::Result<Self::Bus> {
         Ok(point32_to_bus(msg))
     }

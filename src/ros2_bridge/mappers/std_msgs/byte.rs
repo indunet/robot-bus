@@ -21,10 +21,6 @@ impl TypedTopicMapper for StdMsgsByteMapper {
     type Ros = ros_env::std_msgs::msg::Byte;
     type Bus = crate::std_msgs::msg::v1::Byte;
 
-    fn type_name(&self) -> &'static str {
-        "std_msgs/msg/Byte"
-    }
-
     fn ros_to_bus(&self, msg: Self::Ros) -> crate::errors::Result<Self::Bus> {
         Ok(byte_to_bus(msg))
     }

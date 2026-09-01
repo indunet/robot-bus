@@ -47,9 +47,6 @@ def pid_state_to_ros(bus):
 
 
 class ControlMsgsPidStateMapper:
-    def type_name(self) -> str:
-        return "control_msgs/msg/PidState"
-
     def ros_msg_type(self):
         from control_msgs.msg import PidState as RosMsg
 

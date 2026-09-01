@@ -26,9 +26,6 @@ def illuminance_to_ros(bus):
 
 
 class SensorMsgsIlluminanceMapper:
-    def type_name(self) -> str:
-        return "sensor_msgs/msg/Illuminance"
-
     def ros_msg_type(self):
         from sensor_msgs.msg import Illuminance as RosMsg
 

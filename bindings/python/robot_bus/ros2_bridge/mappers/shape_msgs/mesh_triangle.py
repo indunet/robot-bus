@@ -22,9 +22,6 @@ def mesh_triangle_to_ros(bus):
 
 
 class ShapeMsgsMeshTriangleMapper:
-    def type_name(self) -> str:
-        return "shape_msgs/msg/MeshTriangle"
-
     def ros_msg_type(self):
         from shape_msgs.msg import MeshTriangle as RosMsg
 

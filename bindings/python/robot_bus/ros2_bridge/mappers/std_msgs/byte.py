@@ -22,9 +22,6 @@ def byte_to_ros(bus):
 
 
 class StdMsgsByteMapper:
-    def type_name(self) -> str:
-        return "std_msgs/msg/Byte"
-
     def ros_msg_type(self):
         from std_msgs.msg import Byte as RosMsg
 

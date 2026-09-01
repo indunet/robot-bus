@@ -114,8 +114,6 @@ inline ::foxglove_msgs::msg::SceneEntity scene_entity_to_ros(const ::foxglove_ms
 class FoxgloveMsgsSceneEntityMapper
     : public TypedTopicMapper<FoxgloveMsgsSceneEntityMapper, ::foxglove_msgs::msg::SceneEntity> {
  public:
-  const char *type_name() const override { return "foxglove_msgs/msg/SceneEntity"; }
-
   std::vector<uint8_t> ros_to_bus(const ::foxglove_msgs::msg::SceneEntity &msg) const {
     auto bus = ros2_bridge_mappers::foxglove_msgs::scene_entity_to_bus(msg);
     std::string bytes;
@@ -130,9 +128,7 @@ class FoxgloveMsgsSceneEntityMapper
   }
 };
 #else
-struct FoxgloveMsgsSceneEntityMapper : TopicMapper {
-  const char *type_name() const override { return "foxglove_msgs/msg/SceneEntity"; }
-};
+struct FoxgloveMsgsSceneEntityMapper : TopicMapper {};
 #endif
 
 }  // namespace robot_bus

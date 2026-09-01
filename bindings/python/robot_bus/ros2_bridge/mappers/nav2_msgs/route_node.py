@@ -24,9 +24,6 @@ def route_node_to_ros(bus):
 
 
 class Nav2MsgsRouteNodeMapper:
-    def type_name(self) -> str:
-        return "nav2_msgs/msg/RouteNode"
-
     def ros_msg_type(self):
         from nav2_msgs.msg import RouteNode as RosMsg
 

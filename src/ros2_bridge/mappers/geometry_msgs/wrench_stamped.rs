@@ -23,10 +23,6 @@ impl TypedTopicMapper for GeometryMsgsWrenchStampedMapper {
     type Ros = ros_env::geometry_msgs::msg::WrenchStamped;
     type Bus = crate::geometry_msgs::msg::v1::WrenchStamped;
 
-    fn type_name(&self) -> &'static str {
-        "geometry_msgs/msg/WrenchStamped"
-    }
-
     fn ros_to_bus(&self, msg: Self::Ros) -> crate::errors::Result<Self::Bus> {
         Ok(wrench_stamped_to_bus(msg))
     }

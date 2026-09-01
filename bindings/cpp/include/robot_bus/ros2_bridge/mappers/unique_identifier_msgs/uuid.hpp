@@ -35,8 +35,6 @@ inline ::unique_identifier_msgs::msg::UUID uuid_to_ros(const ::unique_identifier
 class UniqueIdentifierMsgsUuidMapper
     : public TypedTopicMapper<UniqueIdentifierMsgsUuidMapper, ::unique_identifier_msgs::msg::UUID> {
  public:
-  const char *type_name() const override { return "unique_identifier_msgs/msg/UUID"; }
-
   std::vector<uint8_t> ros_to_bus(const ::unique_identifier_msgs::msg::UUID &msg) const {
     auto bus = ros2_bridge_mappers::unique_identifier_msgs::uuid_to_bus(msg);
     std::string bytes;
@@ -51,9 +49,7 @@ class UniqueIdentifierMsgsUuidMapper
   }
 };
 #else
-struct UniqueIdentifierMsgsUuidMapper : TopicMapper {
-  const char *type_name() const override { return "unique_identifier_msgs/msg/UUID"; }
-};
+struct UniqueIdentifierMsgsUuidMapper : TopicMapper {};
 #endif
 
 }  // namespace robot_bus

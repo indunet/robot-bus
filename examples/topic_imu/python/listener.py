@@ -1,6 +1,6 @@
 """Subscribe to /examples/imu (typed sensor_msgs Imu).
 
-Requires a running robot-bus-broker and an installed robot_bus package
+Requires a running broker (`python -m robot_bus.broker`) and an installed robot_bus package
 (`pip install robot-bus` or `just python-dev`).
 """
 

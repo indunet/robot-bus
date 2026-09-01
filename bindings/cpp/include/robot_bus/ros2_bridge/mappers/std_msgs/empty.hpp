@@ -35,8 +35,6 @@ inline ::std_msgs::msg::Empty empty_to_ros(const ::std_msgs::msg::v1::Empty &bus
 class StdMsgsEmptyMapper
     : public TypedTopicMapper<StdMsgsEmptyMapper, ::std_msgs::msg::Empty> {
  public:
-  const char *type_name() const override { return "std_msgs/msg/Empty"; }
-
   std::vector<uint8_t> ros_to_bus(const ::std_msgs::msg::Empty &msg) const {
     auto bus = ros2_bridge_mappers::std_msgs::empty_to_bus(msg);
     std::string bytes;
@@ -51,9 +49,7 @@ class StdMsgsEmptyMapper
   }
 };
 #else
-struct StdMsgsEmptyMapper : TopicMapper {
-  const char *type_name() const override { return "std_msgs/msg/Empty"; }
-};
+struct StdMsgsEmptyMapper : TopicMapper {};
 #endif
 
 }  // namespace robot_bus

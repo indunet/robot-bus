@@ -41,10 +41,6 @@ impl TypedTopicMapper for SensorMsgsCameraInfoMapper {
     type Ros = ros_env::sensor_msgs::msg::CameraInfo;
     type Bus = crate::sensor_msgs::msg::v1::CameraInfo;
 
-    fn type_name(&self) -> &'static str {
-        "sensor_msgs/msg/CameraInfo"
-    }
-
     fn ros_to_bus(&self, msg: Self::Ros) -> crate::errors::Result<Self::Bus> {
         Ok(camera_info_to_bus(msg))
     }

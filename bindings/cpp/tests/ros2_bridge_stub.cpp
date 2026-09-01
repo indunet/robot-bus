@@ -16,9 +16,7 @@ namespace {
 robot_bus::TopicQos ros_qos() { return robot_bus::TopicQos::keep_last(10).reliable(); }
 robot_bus::TopicQos bus_qos() { return robot_bus::TopicQos::keep_last(8).best_effort(); }
 
-struct AttachOnlyMapper : robot_bus::TopicMapper {
-  const char *type_name() const override { return "test/msg/Dummy"; }
-};
+struct AttachOnlyMapper : robot_bus::TopicMapper {};
 
 bool throws_containing(const char *what, const std::string &haystack) {
   return haystack.find(what) != std::string::npos;

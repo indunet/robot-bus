@@ -35,8 +35,6 @@ inline ::foxglove_msgs::msg::GeoJSON geo_json_to_ros(const ::foxglove_msgs::msg:
 class FoxgloveMsgsGeoJsonMapper
     : public TypedTopicMapper<FoxgloveMsgsGeoJsonMapper, ::foxglove_msgs::msg::GeoJSON> {
  public:
-  const char *type_name() const override { return "foxglove_msgs/msg/GeoJSON"; }
-
   std::vector<uint8_t> ros_to_bus(const ::foxglove_msgs::msg::GeoJSON &msg) const {
     auto bus = ros2_bridge_mappers::foxglove_msgs::geo_json_to_bus(msg);
     std::string bytes;
@@ -51,9 +49,7 @@ class FoxgloveMsgsGeoJsonMapper
   }
 };
 #else
-struct FoxgloveMsgsGeoJsonMapper : TopicMapper {
-  const char *type_name() const override { return "foxglove_msgs/msg/GeoJSON"; }
-};
+struct FoxgloveMsgsGeoJsonMapper : TopicMapper {};
 #endif
 
 }  // namespace robot_bus

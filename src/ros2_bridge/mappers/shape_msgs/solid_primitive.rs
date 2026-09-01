@@ -25,10 +25,6 @@ impl TypedTopicMapper for ShapeMsgsSolidPrimitiveMapper {
     type Ros = ros_env::shape_msgs::msg::SolidPrimitive;
     type Bus = crate::shape_msgs::msg::v1::SolidPrimitive;
 
-    fn type_name(&self) -> &'static str {
-        "shape_msgs/msg/SolidPrimitive"
-    }
-
     fn ros_to_bus(&self, msg: Self::Ros) -> crate::errors::Result<Self::Bus> {
         Ok(solid_primitive_to_bus(msg))
     }

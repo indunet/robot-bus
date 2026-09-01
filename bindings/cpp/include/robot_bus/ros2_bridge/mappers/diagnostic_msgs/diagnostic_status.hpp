@@ -48,8 +48,6 @@ inline ::diagnostic_msgs::msg::DiagnosticStatus diagnostic_status_to_ros(const :
 class DiagnosticMsgsDiagnosticStatusMapper
     : public TypedTopicMapper<DiagnosticMsgsDiagnosticStatusMapper, ::diagnostic_msgs::msg::DiagnosticStatus> {
  public:
-  const char *type_name() const override { return "diagnostic_msgs/msg/DiagnosticStatus"; }
-
   std::vector<uint8_t> ros_to_bus(const ::diagnostic_msgs::msg::DiagnosticStatus &msg) const {
     auto bus = ros2_bridge_mappers::diagnostic_msgs::diagnostic_status_to_bus(msg);
     std::string bytes;
@@ -64,9 +62,7 @@ class DiagnosticMsgsDiagnosticStatusMapper
   }
 };
 #else
-struct DiagnosticMsgsDiagnosticStatusMapper : TopicMapper {
-  const char *type_name() const override { return "diagnostic_msgs/msg/DiagnosticStatus"; }
-};
+struct DiagnosticMsgsDiagnosticStatusMapper : TopicMapper {};
 #endif
 
 }  // namespace robot_bus

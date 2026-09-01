@@ -23,10 +23,6 @@ impl TypedTopicMapper for BuiltinInterfacesTimeMapper {
     type Ros = ros_env::builtin_interfaces::msg::Time;
     type Bus = crate::builtin_interfaces::msg::v1::Time;
 
-    fn type_name(&self) -> &'static str {
-        "builtin_interfaces/msg/Time"
-    }
-
     fn ros_to_bus(&self, msg: Self::Ros) -> crate::errors::Result<Self::Bus> {
         Ok(time_to_bus(msg))
     }

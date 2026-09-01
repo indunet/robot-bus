@@ -22,9 +22,6 @@ def location_fixes_to_ros(bus):
 
 
 class FoxgloveMsgsLocationFixesMapper:
-    def type_name(self) -> str:
-        return "foxglove_msgs/msg/LocationFixes"
-
     def ros_msg_type(self):
         from foxglove_msgs.msg import LocationFixes as RosMsg
 

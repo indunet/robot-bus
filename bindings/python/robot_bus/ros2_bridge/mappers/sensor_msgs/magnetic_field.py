@@ -27,9 +27,6 @@ def magnetic_field_to_ros(bus):
 
 
 class SensorMsgsMagneticFieldMapper:
-    def type_name(self) -> str:
-        return "sensor_msgs/msg/MagneticField"
-
     def ros_msg_type(self):
         from sensor_msgs.msg import MagneticField as RosMsg
 

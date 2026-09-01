@@ -25,9 +25,6 @@ def mesh_to_ros(bus):
 
 
 class ShapeMsgsMeshMapper:
-    def type_name(self) -> str:
-        return "shape_msgs/msg/Mesh"
-
     def ros_msg_type(self):
         from shape_msgs.msg import Mesh as RosMsg
 

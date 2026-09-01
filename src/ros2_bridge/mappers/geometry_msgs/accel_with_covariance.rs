@@ -23,10 +23,6 @@ impl TypedTopicMapper for GeometryMsgsAccelWithCovarianceMapper {
     type Ros = ros_env::geometry_msgs::msg::AccelWithCovariance;
     type Bus = crate::geometry_msgs::msg::v1::AccelWithCovariance;
 
-    fn type_name(&self) -> &'static str {
-        "geometry_msgs/msg/AccelWithCovariance"
-    }
-
     fn ros_to_bus(&self, msg: Self::Ros) -> crate::errors::Result<Self::Bus> {
         Ok(accel_with_covariance_to_bus(msg))
     }

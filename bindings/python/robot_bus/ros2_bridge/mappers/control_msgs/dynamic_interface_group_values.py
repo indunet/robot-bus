@@ -27,9 +27,6 @@ def dynamic_interface_group_values_to_ros(bus):
 
 
 class ControlMsgsDynamicInterfaceGroupValuesMapper:
-    def type_name(self) -> str:
-        return "control_msgs/msg/DynamicInterfaceGroupValues"
-
     def ros_msg_type(self):
         from control_msgs.msg import DynamicInterfaceGroupValues as RosMsg
 

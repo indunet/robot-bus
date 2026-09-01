@@ -16,7 +16,7 @@ colcon-build ``my_pkg`` first; swap ``type_name`` / ``ros_srv_type`` to
 ::
 
     source /opt/ros/humble/setup.bash
-    robot-bus-broker
+    python -m robot_bus.broker
     python3 examples/ros2_bridge/python/custom_add_two_ints.py
 
     ros2 service call /examples/add_two_ints example_interfaces/srv/AddTwoInts "{a: 2, b: 40}"

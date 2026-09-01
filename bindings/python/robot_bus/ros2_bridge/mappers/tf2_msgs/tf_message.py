@@ -22,9 +22,6 @@ def tf_message_to_ros(bus):
 
 
 class Tf2MsgsTfMessageMapper:
-    def type_name(self) -> str:
-        return "tf2_msgs/msg/TFMessage"
-
     def ros_msg_type(self):
         from tf2_msgs.msg import TFMessage as RosMsg
 

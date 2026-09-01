@@ -24,9 +24,6 @@ def edge_cost_to_ros(bus):
 
 
 class Nav2MsgsEdgeCostMapper:
-    def type_name(self) -> str:
-        return "nav2_msgs/msg/EdgeCost"
-
     def ros_msg_type(self):
         from nav2_msgs.msg import EdgeCost as RosMsg
 

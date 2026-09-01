@@ -1,8 +1,7 @@
 #!/usr/bin/env python3
 """Generate typed ROS↔protobuf topic mappers and ros-env-shim message stubs.
 
-Reads proto/*/msg/v1/*.proto plus existing mapper type_name() strings, then
-rewrites:
+Reads proto/*/msg/v1/*.proto plus existing mapper file headers, then rewrites:
 
 - Rust: src/ros2_bridge/mappers/<pkg>/<msg>.rs (except gold samples)
 - Python: bindings/python/robot_bus/ros2_bridge/mappers/<pkg>/<msg>.py
@@ -322,10 +321,7 @@ def existing_mappers() -> list[tuple[Path, str, str]]:
             continue
         text = path.read_text()
         sm = re.search(r"pub struct (\w+Mapper);", text)
-        tm = re.search(
-            r'fn type_name\(&self\) -> &(?:\'static )?str \{\s*"([^"]+)"',
-            text,
-        )
+        tm = re.search(r"//! Typed mapper for `([^`]+)`", text)
         if not sm or not tm:
             continue
         out.append((path, sm.group(1), tm.group(1)))
@@ -498,10 +494,6 @@ pub struct {struct};
 impl TypedTopicMapper for {struct} {{
     type Ros = {ros_ty};
     type Bus = {bus_ty};
-
-    fn type_name(&self) -> &'static str {{
-        "{msg.ros_type}"
-    }}
 
     fn ros_to_bus(&self, msg: Self::Ros) -> crate::errors::Result<Self::Bus> {{
         Ok({fn}_to_bus(msg))
@@ -753,9 +745,6 @@ def {stem}_to_ros(bus):
 
 
 class {struct}:
-    def type_name(self) -> str:
-        return "{msg.ros_type}"
-
     def ros_msg_type(self):
         from {pkg}.msg import {msg.name} as RosMsg
 
@@ -1019,8 +1008,6 @@ inline {ros_ty} {stem}_to_ros(const {bus_ty} &bus) {{
 class {struct}
     : public TypedTopicMapper<{struct}, {ros_ty}> {{
  public:
-  const char *type_name() const override {{ return "{msg.ros_type}"; }}
-
   std::vector<uint8_t> ros_to_bus(const {ros_ty} &msg) const {{
     auto bus = ros2_bridge_mappers::{pkg}::{stem}_to_bus(msg);
     std::string bytes;
@@ -1035,9 +1022,7 @@ class {struct}
   }}
 }};
 #else
-struct {struct} : TopicMapper {{
-  const char *type_name() const override {{ return "{msg.ros_type}"; }}
-}};
+struct {struct} : TopicMapper {{}};
 #endif
 
 }}  // namespace robot_bus

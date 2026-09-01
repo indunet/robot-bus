@@ -28,9 +28,6 @@ def color_rgba_to_ros(bus):
 
 
 class StdMsgsColorRgbaMapper:
-    def type_name(self) -> str:
-        return "std_msgs/msg/ColorRGBA"
-
     def ros_msg_type(self):
         from std_msgs.msg import ColorRGBA as RosMsg
 

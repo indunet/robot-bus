@@ -48,8 +48,6 @@ inline ::control_msgs::msg::MultiDOFCommand multi_dof_command_to_ros(const ::con
 class ControlMsgsMultiDofCommandMapper
     : public TypedTopicMapper<ControlMsgsMultiDofCommandMapper, ::control_msgs::msg::MultiDOFCommand> {
  public:
-  const char *type_name() const override { return "control_msgs/msg/MultiDOFCommand"; }
-
   std::vector<uint8_t> ros_to_bus(const ::control_msgs::msg::MultiDOFCommand &msg) const {
     auto bus = ros2_bridge_mappers::control_msgs::multi_dof_command_to_bus(msg);
     std::string bytes;
@@ -64,9 +62,7 @@ class ControlMsgsMultiDofCommandMapper
   }
 };
 #else
-struct ControlMsgsMultiDofCommandMapper : TopicMapper {
-  const char *type_name() const override { return "control_msgs/msg/MultiDOFCommand"; }
-};
+struct ControlMsgsMultiDofCommandMapper : TopicMapper {};
 #endif
 
 }  // namespace robot_bus

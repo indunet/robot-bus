@@ -1,6 +1,6 @@
 //! Subscribe to `/examples/imu` (typed `sensor_msgs/msg/Imu`).
 //!
-//! Run `robot-bus-broker` first, then this listener, then `topic_imu_talker`.
+//! Run a broker first (`python -m robot_bus.broker` or `cargo run --bin robot_bus_broker`), then this listener, then `topic_imu_talker`.
 
 use robot_bus::Node;
 use robot_bus::geometry_msgs::msg::v1::Vector3;

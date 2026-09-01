@@ -41,8 +41,6 @@ inline ::foxglove_msgs::msg::CompressedImage compressed_image_to_ros(const ::fox
 class FoxgloveMsgsCompressedImageMapper
     : public TypedTopicMapper<FoxgloveMsgsCompressedImageMapper, ::foxglove_msgs::msg::CompressedImage> {
  public:
-  const char *type_name() const override { return "foxglove_msgs/msg/CompressedImage"; }
-
   std::vector<uint8_t> ros_to_bus(const ::foxglove_msgs::msg::CompressedImage &msg) const {
     auto bus = ros2_bridge_mappers::foxglove_msgs::compressed_image_to_bus(msg);
     std::string bytes;
@@ -57,9 +55,7 @@ class FoxgloveMsgsCompressedImageMapper
   }
 };
 #else
-struct FoxgloveMsgsCompressedImageMapper : TopicMapper {
-  const char *type_name() const override { return "foxglove_msgs/msg/CompressedImage"; }
-};
+struct FoxgloveMsgsCompressedImageMapper : TopicMapper {};
 #endif
 
 }  // namespace robot_bus

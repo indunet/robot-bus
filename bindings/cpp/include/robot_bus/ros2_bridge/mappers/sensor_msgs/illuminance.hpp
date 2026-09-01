@@ -39,8 +39,6 @@ inline ::sensor_msgs::msg::Illuminance illuminance_to_ros(const ::sensor_msgs::m
 class SensorMsgsIlluminanceMapper
     : public TypedTopicMapper<SensorMsgsIlluminanceMapper, ::sensor_msgs::msg::Illuminance> {
  public:
-  const char *type_name() const override { return "sensor_msgs/msg/Illuminance"; }
-
   std::vector<uint8_t> ros_to_bus(const ::sensor_msgs::msg::Illuminance &msg) const {
     auto bus = ros2_bridge_mappers::sensor_msgs::illuminance_to_bus(msg);
     std::string bytes;
@@ -55,9 +53,7 @@ class SensorMsgsIlluminanceMapper
   }
 };
 #else
-struct SensorMsgsIlluminanceMapper : TopicMapper {
-  const char *type_name() const override { return "sensor_msgs/msg/Illuminance"; }
-};
+struct SensorMsgsIlluminanceMapper : TopicMapper {};
 #endif
 
 }  // namespace robot_bus

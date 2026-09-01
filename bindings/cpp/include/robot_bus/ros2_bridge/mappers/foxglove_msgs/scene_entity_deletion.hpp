@@ -39,8 +39,6 @@ inline ::foxglove_msgs::msg::SceneEntityDeletion scene_entity_deletion_to_ros(co
 class FoxgloveMsgsSceneEntityDeletionMapper
     : public TypedTopicMapper<FoxgloveMsgsSceneEntityDeletionMapper, ::foxglove_msgs::msg::SceneEntityDeletion> {
  public:
-  const char *type_name() const override { return "foxglove_msgs/msg/SceneEntityDeletion"; }
-
   std::vector<uint8_t> ros_to_bus(const ::foxglove_msgs::msg::SceneEntityDeletion &msg) const {
     auto bus = ros2_bridge_mappers::foxglove_msgs::scene_entity_deletion_to_bus(msg);
     std::string bytes;
@@ -55,9 +53,7 @@ class FoxgloveMsgsSceneEntityDeletionMapper
   }
 };
 #else
-struct FoxgloveMsgsSceneEntityDeletionMapper : TopicMapper {
-  const char *type_name() const override { return "foxglove_msgs/msg/SceneEntityDeletion"; }
-};
+struct FoxgloveMsgsSceneEntityDeletionMapper : TopicMapper {};
 #endif
 
 }  // namespace robot_bus

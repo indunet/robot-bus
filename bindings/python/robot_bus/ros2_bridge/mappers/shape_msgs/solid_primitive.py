@@ -26,9 +26,6 @@ def solid_primitive_to_ros(bus):
 
 
 class ShapeMsgsSolidPrimitiveMapper:
-    def type_name(self) -> str:
-        return "shape_msgs/msg/SolidPrimitive"
-
     def ros_msg_type(self):
         from shape_msgs.msg import SolidPrimitive as RosMsg
 

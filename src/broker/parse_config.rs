@@ -1,6 +1,6 @@
 //! CLI / argv parsing for [`RobotBusConfig`](super::RobotBusConfig).
 //!
-//! Shared by `robot_bus_broker` and the Python `robot-bus-broker` entry point.
+//! Shared by `robot_bus_broker`, `python -m robot_bus.broker`, and `npx robot-bus`.
 
 use anyhow::{Context, Result, bail};
 
@@ -328,10 +328,14 @@ pub fn parse_robot_bus_config(args: &[String]) -> Result<Option<RobotBusConfig>>
     Ok(Some(config))
 }
 
-/// Help text for `robot_bus_broker` / `robot-bus-broker`.
+/// Help text for `python -m robot_bus.broker` / `npx robot-bus` / `cargo run --bin robot_bus_broker` / `robot_bus_broker`.
 pub fn robot_bus_broker_help() -> &'static str {
-    "robot_bus_broker — start all ZeroMQ buses + API gateway + Web console in one process\n\n\
-Usage:\n  robot_bus_broker [options]\n\n\
+    "robot-bus broker — start all ZeroMQ buses + API gateway + Web console in one process\n\n\
+Usage:\n  \
+python -m robot_bus.broker [options]\n  \
+npx robot-bus [options]\n  \
+cargo run --bin robot_bus_broker -- [options]\n  \
+robot_bus_broker [options]\n\n\
 Defaults:\n  \
 message / service / action TCP binds: 0.0.0.0:0 (OS assigns free ports)\n  \
 API listen 0.0.0.0:15570 (WS /ws + discover REST + embedded Web UI)\n  \

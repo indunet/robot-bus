@@ -22,9 +22,6 @@ def string_to_ros(bus):
 
 
 class StdMsgsStringMapper:
-    def type_name(self) -> str:
-        return "std_msgs/msg/String"
-
     def ros_msg_type(self):
         from std_msgs.msg import String as RosMsg
 

@@ -23,10 +23,6 @@ impl TypedTopicMapper for Nav2MsgsEdgeCostMapper {
     type Ros = ros_env::nav2_msgs::msg::EdgeCost;
     type Bus = crate::nav2_msgs::msg::v1::EdgeCost;
 
-    fn type_name(&self) -> &'static str {
-        "nav2_msgs/msg/EdgeCost"
-    }
-
     fn ros_to_bus(&self, msg: Self::Ros) -> crate::errors::Result<Self::Bus> {
         Ok(edge_cost_to_bus(msg))
     }

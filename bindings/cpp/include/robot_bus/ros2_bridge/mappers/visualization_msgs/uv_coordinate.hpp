@@ -37,8 +37,6 @@ inline ::visualization_msgs::msg::UVCoordinate uv_coordinate_to_ros(const ::visu
 class VisualizationMsgsUvCoordinateMapper
     : public TypedTopicMapper<VisualizationMsgsUvCoordinateMapper, ::visualization_msgs::msg::UVCoordinate> {
  public:
-  const char *type_name() const override { return "visualization_msgs/msg/UVCoordinate"; }
-
   std::vector<uint8_t> ros_to_bus(const ::visualization_msgs::msg::UVCoordinate &msg) const {
     auto bus = ros2_bridge_mappers::visualization_msgs::uv_coordinate_to_bus(msg);
     std::string bytes;
@@ -53,9 +51,7 @@ class VisualizationMsgsUvCoordinateMapper
   }
 };
 #else
-struct VisualizationMsgsUvCoordinateMapper : TopicMapper {
-  const char *type_name() const override { return "visualization_msgs/msg/UVCoordinate"; }
-};
+struct VisualizationMsgsUvCoordinateMapper : TopicMapper {};
 #endif
 
 }  // namespace robot_bus

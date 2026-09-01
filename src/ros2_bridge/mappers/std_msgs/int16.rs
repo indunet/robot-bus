@@ -21,10 +21,6 @@ impl TypedTopicMapper for StdMsgsInt16Mapper {
     type Ros = ros_env::std_msgs::msg::Int16;
     type Bus = crate::std_msgs::msg::v1::Int16;
 
-    fn type_name(&self) -> &'static str {
-        "std_msgs/msg/Int16"
-    }
-
     fn ros_to_bus(&self, msg: Self::Ros) -> crate::errors::Result<Self::Bus> {
         Ok(int16_to_bus(msg))
     }

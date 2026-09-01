@@ -51,8 +51,6 @@ inline ::stereo_msgs::msg::DisparityImage disparity_image_to_ros(const ::stereo_
 class StereoMsgsDisparityImageMapper
     : public TypedTopicMapper<StereoMsgsDisparityImageMapper, ::stereo_msgs::msg::DisparityImage> {
  public:
-  const char *type_name() const override { return "stereo_msgs/msg/DisparityImage"; }
-
   std::vector<uint8_t> ros_to_bus(const ::stereo_msgs::msg::DisparityImage &msg) const {
     auto bus = ros2_bridge_mappers::stereo_msgs::disparity_image_to_bus(msg);
     std::string bytes;
@@ -67,9 +65,7 @@ class StereoMsgsDisparityImageMapper
   }
 };
 #else
-struct StereoMsgsDisparityImageMapper : TopicMapper {
-  const char *type_name() const override { return "stereo_msgs/msg/DisparityImage"; }
-};
+struct StereoMsgsDisparityImageMapper : TopicMapper {};
 #endif
 
 }  // namespace robot_bus

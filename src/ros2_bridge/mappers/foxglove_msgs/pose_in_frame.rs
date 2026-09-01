@@ -25,10 +25,6 @@ impl TypedTopicMapper for FoxgloveMsgsPoseInFrameMapper {
     type Ros = ros_env::foxglove_msgs::msg::PoseInFrame;
     type Bus = crate::foxglove_msgs::msg::v1::PoseInFrame;
 
-    fn type_name(&self) -> &'static str {
-        "foxglove_msgs/msg/PoseInFrame"
-    }
-
     fn ros_to_bus(&self, msg: Self::Ros) -> crate::errors::Result<Self::Bus> {
         Ok(pose_in_frame_to_bus(msg))
     }

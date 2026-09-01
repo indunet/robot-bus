@@ -23,10 +23,6 @@ impl TypedTopicMapper for FoxgloveMsgsJointStatesMapper {
     type Ros = ros_env::foxglove_msgs::msg::JointStates;
     type Bus = crate::foxglove_msgs::msg::v1::JointStates;
 
-    fn type_name(&self) -> &'static str {
-        "foxglove_msgs/msg/JointStates"
-    }
-
     fn ros_to_bus(&self, msg: Self::Ros) -> crate::errors::Result<Self::Bus> {
         Ok(joint_states_to_bus(msg))
     }

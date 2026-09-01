@@ -30,9 +30,6 @@ def raw_audio_to_ros(bus):
 
 
 class FoxgloveMsgsRawAudioMapper:
-    def type_name(self) -> str:
-        return "foxglove_msgs/msg/RawAudio"
-
     def ros_msg_type(self):
         from foxglove_msgs.msg import RawAudio as RosMsg
 

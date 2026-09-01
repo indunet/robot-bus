@@ -22,9 +22,6 @@ def int8_to_ros(bus):
 
 
 class StdMsgsInt8Mapper:
-    def type_name(self) -> str:
-        return "std_msgs/msg/Int8"
-
     def ros_msg_type(self):
         from std_msgs.msg import Int8 as RosMsg
 

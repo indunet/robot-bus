@@ -22,9 +22,6 @@ def u_int64_to_ros(bus):
 
 
 class StdMsgsUInt64Mapper:
-    def type_name(self) -> str:
-        return "std_msgs/msg/UInt64"
-
     def ros_msg_type(self):
         from std_msgs.msg import UInt64 as RosMsg
 

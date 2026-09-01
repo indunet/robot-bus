@@ -56,8 +56,6 @@ inline ::control_msgs::msg::MotionPrimitive motion_primitive_to_ros(const ::cont
 class ControlMsgsMotionPrimitiveMapper
     : public TypedTopicMapper<ControlMsgsMotionPrimitiveMapper, ::control_msgs::msg::MotionPrimitive> {
  public:
-  const char *type_name() const override { return "control_msgs/msg/MotionPrimitive"; }
-
   std::vector<uint8_t> ros_to_bus(const ::control_msgs::msg::MotionPrimitive &msg) const {
     auto bus = ros2_bridge_mappers::control_msgs::motion_primitive_to_bus(msg);
     std::string bytes;
@@ -72,9 +70,7 @@ class ControlMsgsMotionPrimitiveMapper
   }
 };
 #else
-struct ControlMsgsMotionPrimitiveMapper : TopicMapper {
-  const char *type_name() const override { return "control_msgs/msg/MotionPrimitive"; }
-};
+struct ControlMsgsMotionPrimitiveMapper : TopicMapper {};
 #endif
 
 }  // namespace robot_bus

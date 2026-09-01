@@ -25,9 +25,6 @@ def behavior_tree_log_to_ros(bus):
 
 
 class Nav2MsgsBehaviorTreeLogMapper:
-    def type_name(self) -> str:
-        return "nav2_msgs/msg/BehaviorTreeLog"
-
     def ros_msg_type(self):
         from nav2_msgs.msg import BehaviorTreeLog as RosMsg
 

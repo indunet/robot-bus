@@ -27,10 +27,6 @@ impl TypedTopicMapper for FoxgloveMsgsCompressedVideoMapper {
     type Ros = ros_env::foxglove_msgs::msg::CompressedVideo;
     type Bus = crate::foxglove_msgs::msg::v1::CompressedVideo;
 
-    fn type_name(&self) -> &'static str {
-        "foxglove_msgs/msg/CompressedVideo"
-    }
-
     fn ros_to_bus(&self, msg: Self::Ros) -> crate::errors::Result<Self::Bus> {
         Ok(compressed_video_to_bus(msg))
     }

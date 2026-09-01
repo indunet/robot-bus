@@ -23,10 +23,6 @@ impl TypedTopicMapper for Nav2MsgsCollisionMonitorStateMapper {
     type Ros = ros_env::nav2_msgs::msg::CollisionMonitorState;
     type Bus = crate::nav2_msgs::msg::v1::CollisionMonitorState;
 
-    fn type_name(&self) -> &'static str {
-        "nav2_msgs/msg/CollisionMonitorState"
-    }
-
     fn ros_to_bus(&self, msg: Self::Ros) -> crate::errors::Result<Self::Bus> {
         Ok(collision_monitor_state_to_bus(msg))
     }

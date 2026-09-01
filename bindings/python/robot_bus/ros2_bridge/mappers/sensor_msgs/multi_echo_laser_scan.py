@@ -41,9 +41,6 @@ def multi_echo_laser_scan_to_ros(bus):
 
 
 class SensorMsgsMultiEchoLaserScanMapper:
-    def type_name(self) -> str:
-        return "sensor_msgs/msg/MultiEchoLaserScan"
-
     def ros_msg_type(self):
         from sensor_msgs.msg import MultiEchoLaserScan as RosMsg
 

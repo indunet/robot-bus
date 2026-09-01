@@ -36,9 +36,6 @@ def april_tag_detection_to_ros(bus):
 
 
 class ApriltagMsgsAprilTagDetectionMapper:
-    def type_name(self) -> str:
-        return "apriltag_msgs/msg/AprilTagDetection"
-
     def ros_msg_type(self):
         from apriltag_msgs.msg import AprilTagDetection as RosMsg
 

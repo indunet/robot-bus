@@ -3,7 +3,6 @@ English | [中文](README-zh.md)
 # *Robot Bus*
 
 [![CI](https://github.com/indunet/robot-bus/actions/workflows/ci.yml/badge.svg)](https://github.com/indunet/robot-bus/actions/workflows/ci.yml)
-[![Code Quality](https://img.shields.io/github/actions/workflow/status/indunet/robot-bus/dynamic%2Fgithub-code-scanning%2Fcodeql?label=Code%20Quality)](https://github.com/indunet/robot-bus/security/code-scanning)
 [![crates.io](https://img.shields.io/crates/v/robot-bus.svg?color=f74c00)](https://crates.io/crates/robot-bus)
 [![PyPI](https://img.shields.io/pypi/v/robot-bus.svg?color=3775a9)](https://pypi.org/project/robot-bus/)
 [![npm](https://img.shields.io/npm/v/robot-bus.svg?color=cb3837)](https://www.npmjs.com/package/robot-bus)
@@ -17,7 +16,7 @@ SDKs: **Rust**, **Python**, **TypeScript**, **C++**, **Java**, **Android**.
 ## *Key Features*
 
 - **ROS 2–style primitives:** Topic pub/sub, service, action (`send_goal` → GoalHandle → `result` / `cancel`), timers, and parameters.
-- **One broker, many languages:** Rust, Python, TypeScript, C++, Java, and Android SDKs against the same bus.
+- **One broker, many languages:** Rust, Python, TypeScript, C++, Java, and Android SDKs against the same bus. **Prefer starting the broker from your program** (`RobotBusBroker.start()`); the CLI is for demos or a standalone process.
 - **Embedded Web console:** Overview, Topics, Services, Actions, Topology, plus a built-in tank demo — no extra frontend process.
 - **Optional ROS 2 bridge:** In-process topic / service / action bridging with `rclrs` / `rclpy` / `rclcpp` (Humble / Jazzy). The core SDK stays ROS-free unless the bridge is enabled.
 - **Protobuf contracts:** All payloads are Protocol Buffers (not ROS CDR), aligned with common ROS 2 package names under [`proto/`](proto/).
@@ -27,7 +26,7 @@ The Node programming model — `Context` / `Node`, topic pub-sub, service, actio
 
 ### *Install*
 
-* Python (includes the `robot-bus-broker` CLI)
+* Python
 
 ```bash
 pip install robot-bus
@@ -36,7 +35,7 @@ pip install robot-bus
 * Rust
 
 ```toml
-robot-bus = "2.1.0"
+robot-bus = "2.2.0"
 ```
 
 * npm
@@ -51,20 +50,20 @@ npm install robot-bus
 <dependency>
     <groupId>org.indunet</groupId>
     <artifactId>robot-bus</artifactId>
-    <version>2.1.0</version>
+    <version>2.2.0</version>
 </dependency>
 ```
 
 * Gradle (Android)
 
 ```kotlin
-implementation("org.indunet:robot-bus-android:2.1.0")
+implementation("org.indunet:robot-bus-android:2.2.0")
 ```
 
 * C++ ([GitHub Releases](https://github.com/indunet/robot-bus/releases) DEB / MSI)
 
 ```bash
-sudo apt install ./robot-bus_2.1.0_linux_amd64.deb
+sudo apt install ./robot-bus_2.2.0_linux_amd64.deb
 ```
 
 
@@ -72,16 +71,7 @@ sudo apt install ./robot-bus_2.1.0_linux_amd64.deb
 
 ### *1.1 Install and start the broker*
 
-```bash
-pip install robot-bus
-robot-bus-broker
-```
-
-Default API / Web console / WebSocket listen: `http://0.0.0.0:15570`. After the broker is up, open the [Web console](#2-web-console) in a browser.
-
-Runnable demos (topic, service, action) for Rust / Python / C++: [`examples/`](examples/).
-
-Or start the broker in-process:
+**Prefer starting the broker from your program** (`RobotBusBroker.start()` / the equivalent API in each language) so it shares a process and lifecycle with your application. The CLI is for demos, multi-process bring-up, or a standalone long-running broker.
 
 ```python
 import robot_bus
@@ -91,11 +81,24 @@ with robot_bus.RobotBusBroker.start() as broker:
     pass
 ```
 
+Rust / C++ / TypeScript / Java / Android expose the same in-process API; see the language guides.
+
+Default API / Web console / WebSocket listen: `http://0.0.0.0:15570`. After the broker is up, open the [Web console](#2-web-console) in a browser.
+
+Runnable demos (topic, service, action) for Rust / Python / C++: [`examples/`](examples/). Those examples are multi-process, so they use a standalone broker:
+
+```bash
+python -m robot_bus.broker
+# npx robot-bus          # after npm install robot-bus
+# cargo run --bin robot_bus_broker
+# robot_bus_broker   # C++ DEB / MSI / PKG
+```
+
 ### *1.2 Tank demo*
 
 A built-in mini tank sim helps you see topics moving end-to-end without writing code first:
 
-1. Start the broker (`robot-bus-broker`).
+1. Start the broker (`python -m robot_bus.broker`).
 2. Open **http://127.0.0.1:15570** and click **TANK** in the sidebar (or go to `/tank/`).
 3. Click the panel, then drive with **arrow keys**; or switch to point navigation and **click on the map** to send a goal.
 
@@ -195,7 +198,7 @@ More detail: [`docs/en/python-api.md`](docs/en/python-api.md).
 
 ## *2. Web console*
 
-The broker ships with an embedded monitoring UI (Overview, Topics, Services, Actions, Topology, logs). After `robot-bus-broker` (or `RobotBusBroker.start()`), open:
+The broker ships with an embedded monitoring UI (Overview, Topics, Services, Actions, Topology, logs). After `RobotBusBroker.start()` in your program (or a standalone `python -m robot_bus.broker` / `cargo run --bin robot_bus_broker`), open:
 
 **http://127.0.0.1:15570**
 
@@ -213,11 +216,11 @@ For a hands-on walkthrough, try the [Tank demo](#12-tank-demo) from the sidebar 
 
 In-process topic / service / action bridging between robot-bus and ROS 2. Each language uses its native client (`rclrs` / `rclpy` / `rclcpp`). Official support: **Humble** and **Jazzy**. The core SDK stays ROS-free unless the bridge is enabled.
 
-Requires a sourced ROS 2 distro and `rclpy`, plus a running broker:
+Requires a sourced ROS 2 distro and `rclpy`, plus a running broker (prefer `RobotBusBroker.start()` in application code; the CLI below is for a standalone broker):
 
 ```bash
 source /opt/ros/humble/setup.bash   # or jazzy
-robot-bus-broker                    # another terminal
+python -m robot_bus.broker                 # another terminal
 ```
 
 ```python

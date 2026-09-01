@@ -21,10 +21,6 @@ impl TypedTopicMapper for Tf2MsgsTfMessageMapper {
     type Ros = ros_env::tf2_msgs::msg::TFMessage;
     type Bus = crate::tf2_msgs::msg::v1::TfMessage;
 
-    fn type_name(&self) -> &'static str {
-        "tf2_msgs/msg/TFMessage"
-    }
-
     fn ros_to_bus(&self, msg: Self::Ros) -> crate::errors::Result<Self::Bus> {
         Ok(tf_message_to_bus(msg))
     }

@@ -33,9 +33,6 @@ def interactive_marker_update_to_ros(bus):
 
 
 class VisualizationMsgsInteractiveMarkerUpdateMapper:
-    def type_name(self) -> str:
-        return "visualization_msgs/msg/InteractiveMarkerUpdate"
-
     def ros_msg_type(self):
         from visualization_msgs.msg import InteractiveMarkerUpdate as RosMsg
 

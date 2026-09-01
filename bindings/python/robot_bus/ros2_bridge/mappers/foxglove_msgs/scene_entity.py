@@ -56,9 +56,6 @@ def scene_entity_to_ros(bus):
 
 
 class FoxgloveMsgsSceneEntityMapper:
-    def type_name(self) -> str:
-        return "foxglove_msgs/msg/SceneEntity"
-
     def ros_msg_type(self):
         from foxglove_msgs.msg import SceneEntity as RosMsg
 

@@ -26,9 +26,6 @@ def speed_limit_to_ros(bus):
 
 
 class Nav2MsgsSpeedLimitMapper:
-    def type_name(self) -> str:
-        return "nav2_msgs/msg/SpeedLimit"
-
     def ros_msg_type(self):
         from nav2_msgs.msg import SpeedLimit as RosMsg
 

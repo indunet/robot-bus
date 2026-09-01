@@ -45,7 +45,8 @@ Start services with `.service()` and actions with `.action()`. Pass `TopicQos` o
 
 ```bash
 source /opt/ros/humble/setup.bash   # or jazzy
-robot-bus-broker                    # or cargo run --bin robot_bus_broker
+# Prefer RobotBusBroker.start() in application code; CLI for a standalone broker
+python -m robot_bus.broker                    # or cargo run --bin robot_bus_broker
 ```
 
 | Language | Needs |

@@ -27,9 +27,6 @@ def occupancy_grid_to_ros(bus):
 
 
 class NavMsgsOccupancyGridMapper:
-    def type_name(self) -> str:
-        return "nav_msgs/msg/OccupancyGrid"
-
     def ros_msg_type(self):
         from nav_msgs.msg import OccupancyGrid as RosMsg
 

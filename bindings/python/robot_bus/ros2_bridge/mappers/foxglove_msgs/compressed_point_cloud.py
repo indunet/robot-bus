@@ -30,9 +30,6 @@ def compressed_point_cloud_to_ros(bus):
 
 
 class FoxgloveMsgsCompressedPointCloudMapper:
-    def type_name(self) -> str:
-        return "foxglove_msgs/msg/CompressedPointCloud"
-
     def ros_msg_type(self):
         from foxglove_msgs.msg import CompressedPointCloud as RosMsg
 

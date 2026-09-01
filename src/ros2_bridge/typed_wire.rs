@@ -39,23 +39,23 @@ where
     use prost::Message as _;
 
     let mapper = mapper.clone();
-    let type_name = mapper.type_name().to_string();
+    let topic = ros_topic.to_string();
     let opts = ros_topic_options(ros_topic, qos);
-    let type_name_cb = type_name.clone();
+    let topic_cb = topic.clone();
     let sub = ros_node
         .create_subscription(opts, move |msg: M::Ros| {
             let payload = match mapper.ros_to_bus(msg) {
                 Ok(bus) => bus.encode_to_vec(),
                 Err(e) => {
-                    log::warn!("ros→bus {type_name_cb} convert: {e}");
+                    log::warn!("ros→bus {topic_cb} convert: {e}");
                     return;
                 }
             };
             if let Err(e) = bus_pub.publish(&payload) {
-                log::warn!("ros→bus {type_name_cb} publish: {e}");
+                log::warn!("ros→bus {topic_cb} publish: {e}");
             }
         })
-        .map_err(|e| BusError::Protocol(format!("ros typed subscription {type_name}: {e}")))?;
+        .map_err(|e| BusError::Protocol(format!("ros typed subscription {topic}: {e}")))?;
     Ok(Box::new(sub))
 }
 
@@ -65,12 +65,12 @@ where
     M: TypedTopicMapper,
 {
     let mapper = mapper.clone();
-    let type_name = mapper.type_name().to_string();
+    let topic = ctx.ros_topic.to_string();
     let opts = ros_topic_options(ctx.ros_topic, ctx.ros_qos);
     let ros_pub = ctx
         .ros_node
         .create_publisher::<M::Ros>(opts)
-        .map_err(|e| BusError::Protocol(format!("ros typed publisher {type_name}: {e}")))?;
+        .map_err(|e| BusError::Protocol(format!("ros typed publisher {topic}: {e}")))?;
     let ros_pub_cb = ros_pub.clone();
     ctx.ros_entities.push(Box::new(ros_pub));
     let cb: MessageCallback = Arc::new(move |payload| {
@@ -78,17 +78,17 @@ where
         let bus = match M::Bus::decode(payload) {
             Ok(b) => b,
             Err(e) => {
-                log::warn!("bus→ros {type_name} decode: {e}");
+                log::warn!("bus→ros {topic} decode: {e}");
                 return;
             }
         };
         match mapper.bus_to_ros(bus) {
             Ok(ros_msg) => {
                 if let Err(e) = ros_pub_cb.publish(ros_msg) {
-                    log::warn!("bus→ros {type_name} publish: {e}");
+                    log::warn!("bus→ros {topic} publish: {e}");
                 }
             }
-            Err(e) => log::warn!("bus→ros {type_name} convert: {e}"),
+            Err(e) => log::warn!("bus→ros {topic} convert: {e}"),
         }
     });
         ctx.bus_node.create_subscription_raw_with_qos(

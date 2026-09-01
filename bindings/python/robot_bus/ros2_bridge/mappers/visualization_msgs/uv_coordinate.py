@@ -24,9 +24,6 @@ def uv_coordinate_to_ros(bus):
 
 
 class VisualizationMsgsUvCoordinateMapper:
-    def type_name(self) -> str:
-        return "visualization_msgs/msg/UVCoordinate"
-
     def ros_msg_type(self):
         from visualization_msgs.msg import UVCoordinate as RosMsg
 

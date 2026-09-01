@@ -41,8 +41,6 @@ inline ::sensor_msgs::msg::PointField point_field_to_ros(const ::sensor_msgs::ms
 class SensorMsgsPointFieldMapper
     : public TypedTopicMapper<SensorMsgsPointFieldMapper, ::sensor_msgs::msg::PointField> {
  public:
-  const char *type_name() const override { return "sensor_msgs/msg/PointField"; }
-
   std::vector<uint8_t> ros_to_bus(const ::sensor_msgs::msg::PointField &msg) const {
     auto bus = ros2_bridge_mappers::sensor_msgs::point_field_to_bus(msg);
     std::string bytes;
@@ -57,9 +55,7 @@ class SensorMsgsPointFieldMapper
   }
 };
 #else
-struct SensorMsgsPointFieldMapper : TopicMapper {
-  const char *type_name() const override { return "sensor_msgs/msg/PointField"; }
-};
+struct SensorMsgsPointFieldMapper : TopicMapper {};
 #endif
 
 }  // namespace robot_bus

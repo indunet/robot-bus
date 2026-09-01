@@ -22,9 +22,6 @@ def goal_status_array_to_ros(bus):
 
 
 class ActionMsgsGoalStatusArrayMapper:
-    def type_name(self) -> str:
-        return "action_msgs/msg/GoalStatusArray"
-
     def ros_msg_type(self):
         from action_msgs.msg import GoalStatusArray as RosMsg
 

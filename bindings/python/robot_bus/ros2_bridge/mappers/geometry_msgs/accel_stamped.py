@@ -25,9 +25,6 @@ def accel_stamped_to_ros(bus):
 
 
 class GeometryMsgsAccelStampedMapper:
-    def type_name(self) -> str:
-        return "geometry_msgs/msg/AccelStamped"
-
     def ros_msg_type(self):
         from geometry_msgs.msg import AccelStamped as RosMsg
 

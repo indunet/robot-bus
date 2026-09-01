@@ -57,8 +57,6 @@ inline ::sensor_msgs::msg::PointCloud2 point_cloud2_to_ros(const ::sensor_msgs::
 class SensorMsgsPointCloud2Mapper
     : public TypedTopicMapper<SensorMsgsPointCloud2Mapper, ::sensor_msgs::msg::PointCloud2> {
  public:
-  const char *type_name() const override { return "sensor_msgs/msg/PointCloud2"; }
-
   std::vector<uint8_t> ros_to_bus(const ::sensor_msgs::msg::PointCloud2 &msg) const {
     auto bus = ros2_bridge_mappers::sensor_msgs::point_cloud2_to_bus(msg);
     std::string bytes;
@@ -73,9 +71,7 @@ class SensorMsgsPointCloud2Mapper
   }
 };
 #else
-struct SensorMsgsPointCloud2Mapper : TopicMapper {
-  const char *type_name() const override { return "sensor_msgs/msg/PointCloud2"; }
-};
+struct SensorMsgsPointCloud2Mapper : TopicMapper {};
 #endif
 
 }  // namespace robot_bus

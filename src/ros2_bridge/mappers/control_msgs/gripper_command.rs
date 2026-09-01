@@ -23,10 +23,6 @@ impl TypedTopicMapper for ControlMsgsGripperCommandMapper {
     type Ros = ros_env::control_msgs::msg::GripperCommand;
     type Bus = crate::control_msgs::msg::v1::GripperCommand;
 
-    fn type_name(&self) -> &'static str {
-        "control_msgs/msg/GripperCommand"
-    }
-
     fn ros_to_bus(&self, msg: Self::Ros) -> crate::errors::Result<Self::Bus> {
         Ok(gripper_command_to_bus(msg))
     }

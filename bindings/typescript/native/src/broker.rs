@@ -281,6 +281,8 @@ impl RobotBusBroker {
 }
 
 /// Blocking CLI entry: start broker and wait for Ctrl+C.
+///
+/// Used by `npx robot-bus` after `npm install robot-bus`.
 #[napi]
 pub fn run_broker() -> Result<()> {
     let args = binding_broker_cli_args();
@@ -295,7 +297,7 @@ pub fn run_broker() -> Result<()> {
     let flag = Arc::new(AtomicBool::new(false));
     shutdown::install(flag.clone());
 
-    println!("robot-bus-broker starting message + service + action buses + WebSocket + console…");
+    println!("robot-bus broker starting message + service + action buses + WebSocket + console…");
     let broker = RustRobotBusBroker::start(config).map_err(anyhow_err)?;
     let mut broker = RobotBusBroker {
         inner: Some(broker),
@@ -306,7 +308,7 @@ pub fn run_broker() -> Result<()> {
     }
 
     broker.stop()?;
-    println!("robot-bus-broker stopped");
+    println!("robot-bus broker stopped");
     Ok(())
 }
 

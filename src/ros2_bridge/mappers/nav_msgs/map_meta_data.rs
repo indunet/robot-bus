@@ -29,10 +29,6 @@ impl TypedTopicMapper for NavMsgsMapMetaDataMapper {
     type Ros = ros_env::nav_msgs::msg::MapMetaData;
     type Bus = crate::nav_msgs::msg::v1::MapMetaData;
 
-    fn type_name(&self) -> &'static str {
-        "nav_msgs/msg/MapMetaData"
-    }
-
     fn ros_to_bus(&self, msg: Self::Ros) -> crate::errors::Result<Self::Bus> {
         Ok(map_meta_data_to_bus(msg))
     }

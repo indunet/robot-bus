@@ -23,10 +23,6 @@ impl TypedTopicMapper for StdMsgsHeaderMapper {
     type Ros = ros_env::std_msgs::msg::Header;
     type Bus = crate::std_msgs::msg::v1::Header;
 
-    fn type_name(&self) -> &'static str {
-        "std_msgs/msg/Header"
-    }
-
     fn ros_to_bus(&self, msg: Self::Ros) -> crate::errors::Result<Self::Bus> {
         Ok(header_to_bus(msg))
     }

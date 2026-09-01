@@ -21,10 +21,6 @@ impl TypedTopicMapper for FoxgloveMsgsFrameTransformsMapper {
     type Ros = ros_env::foxglove_msgs::msg::FrameTransforms;
     type Bus = crate::foxglove_msgs::msg::v1::FrameTransforms;
 
-    fn type_name(&self) -> &'static str {
-        "foxglove_msgs/msg/FrameTransforms"
-    }
-
     fn ros_to_bus(&self, msg: Self::Ros) -> crate::errors::Result<Self::Bus> {
         Ok(frame_transforms_to_bus(msg))
     }

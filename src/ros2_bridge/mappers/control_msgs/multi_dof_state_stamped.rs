@@ -23,10 +23,6 @@ impl TypedTopicMapper for ControlMsgsMultiDofStateStampedMapper {
     type Ros = ros_env::control_msgs::msg::MultiDOFStateStamped;
     type Bus = crate::control_msgs::msg::v1::MultiDofStateStamped;
 
-    fn type_name(&self) -> &'static str {
-        "control_msgs/msg/MultiDOFStateStamped"
-    }
-
     fn ros_to_bus(&self, msg: Self::Ros) -> crate::errors::Result<Self::Bus> {
         Ok(multi_dof_state_stamped_to_bus(msg))
     }

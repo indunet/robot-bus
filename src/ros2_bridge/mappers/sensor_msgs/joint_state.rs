@@ -29,10 +29,6 @@ impl TypedTopicMapper for SensorMsgsJointStateMapper {
     type Ros = ros_env::sensor_msgs::msg::JointState;
     type Bus = crate::sensor_msgs::msg::v1::JointState;
 
-    fn type_name(&self) -> &'static str {
-        "sensor_msgs/msg/JointState"
-    }
-
     fn ros_to_bus(&self, msg: Self::Ros) -> crate::errors::Result<Self::Bus> {
         Ok(joint_state_to_bus(msg))
     }

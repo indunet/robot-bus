@@ -23,10 +23,6 @@ impl TypedTopicMapper for FoxgloveMsgsKeyValuePairMapper {
     type Ros = ros_env::foxglove_msgs::msg::KeyValuePair;
     type Bus = crate::foxglove_msgs::msg::v1::KeyValuePair;
 
-    fn type_name(&self) -> &'static str {
-        "foxglove_msgs/msg/KeyValuePair"
-    }
-
     fn ros_to_bus(&self, msg: Self::Ros) -> crate::errors::Result<Self::Bus> {
         Ok(key_value_pair_to_bus(msg))
     }

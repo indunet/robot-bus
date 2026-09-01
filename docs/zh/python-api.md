@@ -10,16 +10,9 @@ pip install robot-bus
 
 ## Broker启动
 
-与 Rust相同：先起 broker，再跑业务代码。
+与 Rust相同：**更鼓励在程序里启动 broker**，再跑业务代码。CLI 适合演示、多进程联调，或单独拉起常驻 broker。
 
-```bash
-# 安装包后的 CLI
-robot-bus-broker
-robot-bus-broker --help
-robot-bus-broker --api-listen 0.0.0.0:15570 --tcp-only
-```
-
-或进程内（关键字参数覆盖默认 bind / HWM / 心跳 / API）：
+进程内（关键字参数覆盖默认 bind / HWM / 心跳 / API）：
 
 ```python
 import robot_bus
@@ -33,6 +26,14 @@ with robot_bus.RobotBusBroker.start(
     # broker.message_xsub_bind / message_xpub_bind / api_listen / console_listen
     # Web console: http://127.0.0.1:15570（no_console=True可关；no_tank / no_docs可隐藏侧栏菜单）
     pass
+```
+
+需要独立进程时再用 CLI：
+
+```bash
+python -m robot_bus.broker
+python -m robot_bus.broker --help
+python -m robot_bus.broker --api-listen 0.0.0.0:15570 --tcp-only
 ```
 
 跨 broker（federation）与 CLI同款字符串约定：
@@ -81,7 +82,7 @@ with robot_bus.RobotBusBroker.start(context=ctx) as broker:
 ```
 
 tcp / ipc / ws不要求共享 Context。
-默认端口与完整 CLI选项见 [rust-api.md](rust-api.md)「Broker启动」。
+独立进程：`python -m robot_bus.broker --help`。默认端口与完整 CLI选项见 [rust-api.md](rust-api.md)「Broker启动」。
 
 ---
 
@@ -439,7 +440,7 @@ print(robot_bus.__version__)
 | `Publisher(endpoint=None)` | 低层连 XSUB（不经 Node） |
 | `ros2_available()` | 能否 `import rclpy`（Python原生桥） |
 | `robot_bus.ros2_bridge.Ros2Bridge` / `Direction` / 内置 Mapper | 进程内 ROS桥（**rclpy**）；见 [ros2-bridge.md](ros2-bridge.md) |
-| `RobotBusBroker.start(...)` / `run_broker(...)` | 进程内启动三个 bus + WebSocket RPC API；同进程 inproc传 `context`；peers为 CLI同款字符串列表 |
+| `RobotBusBroker.start(...)` / `python -m robot_bus.broker` | 进程内 `start`；独立进程 `python -m robot_bus.broker`（同款 CLI flags）；同进程 inproc传 `context`；peers为 CLI同款字符串列表 |
 | `ShutdownHandle` / `TimerHandle` | spin与定时器控制 |
 
 WebSocket RPC模式 Node见上一节；底层网关 RPC也可直接用 Rust tonic客户端（[rust-api.md](rust-api.md)）。

@@ -4,7 +4,7 @@
 
 ```bash
 # Maven Central (when published)
-# implementation("org.indunet:robot-bus:2.1.0")           // JVM
+# implementation("org.indunet:robot-bus:2.2.0")           // JVM
 
 # 本地：
 just java-dev       # gen-java + cargo FFI + mvn test
@@ -17,12 +17,7 @@ just java-dev       # gen-java + cargo FFI + mvn test
 包名 `org.indunet.robot.bus`。Android AAR是**独立** Kotlin SDK（不依赖本 JAR），见 [`android-api.md`](android-api.md)。
 ## Broker启动
 
-与其他语言相同：先起 broker，再跑业务。
-
-```bash
-robot-bus-broker
-# 或 robot-bus-broker --api-listen 0.0.0.0:15570 --tcp-only
-```
+**更鼓励在程序里启动 broker**，再跑业务。CLI 适合演示、多进程联调，或单独拉起常驻 broker。
 
 进程内：
 
@@ -32,6 +27,13 @@ import org.indunet.robot.bus.Broker;
 try (Broker broker = new Broker()) {
   // broker默认 bind；业务节点连本机即可
 }
+```
+
+需要独立进程时再用 CLI：
+
+```bash
+python -m robot_bus.broker
+# 或 python -m robot_bus.broker --api-listen 0.0.0.0:15570 --tcp-only
 ```
 
 跨 broker（federation）与 CLI同款字符串约定：

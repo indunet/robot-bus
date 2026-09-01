@@ -27,10 +27,6 @@ impl TypedTopicMapper for NavMsgsOdometryMapper {
     type Ros = ros_env::nav_msgs::msg::Odometry;
     type Bus = crate::nav_msgs::msg::v1::Odometry;
 
-    fn type_name(&self) -> &'static str {
-        "nav_msgs/msg/Odometry"
-    }
-
     fn ros_to_bus(&self, msg: Self::Ros) -> crate::errors::Result<Self::Bus> {
         Ok(odometry_to_bus(msg))
     }

@@ -24,9 +24,6 @@ def key_value_pair_to_ros(bus):
 
 
 class FoxgloveMsgsKeyValuePairMapper:
-    def type_name(self) -> str:
-        return "foxglove_msgs/msg/KeyValuePair"
-
     def ros_msg_type(self):
         from foxglove_msgs.msg import KeyValuePair as RosMsg
 

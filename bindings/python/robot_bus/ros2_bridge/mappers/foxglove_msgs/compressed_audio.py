@@ -26,9 +26,6 @@ def compressed_audio_to_ros(bus):
 
 
 class FoxgloveMsgsCompressedAudioMapper:
-    def type_name(self) -> str:
-        return "foxglove_msgs/msg/CompressedAudio"
-
     def ros_msg_type(self):
         from foxglove_msgs.msg import CompressedAudio as RosMsg
 

@@ -25,10 +25,6 @@ impl TypedTopicMapper for ControlMsgsJointComponentToleranceMapper {
     type Ros = ros_env::control_msgs::msg::JointComponentTolerance;
     type Bus = crate::control_msgs::msg::v1::JointComponentTolerance;
 
-    fn type_name(&self) -> &'static str {
-        "control_msgs/msg/JointComponentTolerance"
-    }
-
     fn ros_to_bus(&self, msg: Self::Ros) -> crate::errors::Result<Self::Bus> {
         Ok(joint_component_tolerance_to_bus(msg))
     }

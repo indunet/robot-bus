@@ -19,12 +19,7 @@ The `console/` Web UI is **not** this SDK.
 
 ## Broker
 
-Same as Rust / Python: start the broker first, then run application code.
-
-```bash
-# Rust / Python CLI
-robot-bus-broker --api-listen 0.0.0.0:15570 --tcp-only
-```
+**Prefer starting the broker from your program**, then run application code. The CLI is for demos, multi-process bring-up, or a standalone long-running broker.
 
 In-process in Node:
 
@@ -38,6 +33,16 @@ const broker = RobotBusBroker.start({
 // …application…
 broker.stop();
 ```
+
+Use the CLI when you need a standalone process (`npm install robot-bus`, then):
+
+```bash
+npx robot-bus
+npx robot-bus --help
+npx robot-bus --api-listen 0.0.0.0:15570 --tcp-only
+```
+
+Or add `"broker": "robot-bus"` to your `package.json` scripts and run `npm run broker`. Same flags as `python -m robot_bus.broker` / `robot_bus_broker`.
 
 ### HTTP discovery (Node.js native only)
 

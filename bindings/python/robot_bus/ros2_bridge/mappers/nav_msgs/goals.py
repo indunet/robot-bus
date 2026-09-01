@@ -25,9 +25,6 @@ def goals_to_ros(bus):
 
 
 class NavMsgsGoalsMapper:
-    def type_name(self) -> str:
-        return "nav_msgs/msg/Goals"
-
     def ros_msg_type(self):
         from nav_msgs.msg import Goals as RosMsg
 

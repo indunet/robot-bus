@@ -39,8 +39,6 @@ inline ::nav2_msgs::msg::MissedWaypoint missed_waypoint_to_ros(const ::nav2_msgs
 class Nav2MsgsMissedWaypointMapper
     : public TypedTopicMapper<Nav2MsgsMissedWaypointMapper, ::nav2_msgs::msg::MissedWaypoint> {
  public:
-  const char *type_name() const override { return "nav2_msgs/msg/MissedWaypoint"; }
-
   std::vector<uint8_t> ros_to_bus(const ::nav2_msgs::msg::MissedWaypoint &msg) const {
     auto bus = ros2_bridge_mappers::nav2_msgs::missed_waypoint_to_bus(msg);
     std::string bytes;
@@ -55,9 +53,7 @@ class Nav2MsgsMissedWaypointMapper
   }
 };
 #else
-struct Nav2MsgsMissedWaypointMapper : TopicMapper {
-  const char *type_name() const override { return "nav2_msgs/msg/MissedWaypoint"; }
-};
+struct Nav2MsgsMissedWaypointMapper : TopicMapper {};
 #endif
 
 }  // namespace robot_bus

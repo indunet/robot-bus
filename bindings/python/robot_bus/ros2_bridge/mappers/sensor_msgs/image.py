@@ -34,9 +34,6 @@ def image_to_ros(bus):
 
 
 class SensorMsgsImageMapper:
-    def type_name(self) -> str:
-        return "sensor_msgs/msg/Image"
-
     def ros_msg_type(self):
         from sensor_msgs.msg import Image as RosMsg
 

@@ -54,8 +54,6 @@ inline ::foxglove_msgs::msg::CircleAnnotation circle_annotation_to_ros(const ::f
 class FoxgloveMsgsCircleAnnotationMapper
     : public TypedTopicMapper<FoxgloveMsgsCircleAnnotationMapper, ::foxglove_msgs::msg::CircleAnnotation> {
  public:
-  const char *type_name() const override { return "foxglove_msgs/msg/CircleAnnotation"; }
-
   std::vector<uint8_t> ros_to_bus(const ::foxglove_msgs::msg::CircleAnnotation &msg) const {
     auto bus = ros2_bridge_mappers::foxglove_msgs::circle_annotation_to_bus(msg);
     std::string bytes;
@@ -70,9 +68,7 @@ class FoxgloveMsgsCircleAnnotationMapper
   }
 };
 #else
-struct FoxgloveMsgsCircleAnnotationMapper : TopicMapper {
-  const char *type_name() const override { return "foxglove_msgs/msg/CircleAnnotation"; }
-};
+struct FoxgloveMsgsCircleAnnotationMapper : TopicMapper {};
 #endif
 
 }  // namespace robot_bus

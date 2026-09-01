@@ -22,9 +22,6 @@ def motion_primitive_sequence_to_ros(bus):
 
 
 class ControlMsgsMotionPrimitiveSequenceMapper:
-    def type_name(self) -> str:
-        return "control_msgs/msg/MotionPrimitiveSequence"
-
     def ros_msg_type(self):
         from control_msgs.msg import MotionPrimitiveSequence as RosMsg
 

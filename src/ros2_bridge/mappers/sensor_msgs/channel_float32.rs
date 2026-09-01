@@ -23,10 +23,6 @@ impl TypedTopicMapper for SensorMsgsChannelFloat32Mapper {
     type Ros = ros_env::sensor_msgs::msg::ChannelFloat32;
     type Bus = crate::sensor_msgs::msg::v1::ChannelFloat32;
 
-    fn type_name(&self) -> &'static str {
-        "sensor_msgs/msg/ChannelFloat32"
-    }
-
     fn ros_to_bus(&self, msg: Self::Ros) -> crate::errors::Result<Self::Bus> {
         Ok(channel_float32_to_bus(msg))
     }

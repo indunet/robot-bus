@@ -28,9 +28,6 @@ def point_field_to_ros(bus):
 
 
 class SensorMsgsPointFieldMapper:
-    def type_name(self) -> str:
-        return "sensor_msgs/msg/PointField"
-
     def ros_msg_type(self):
         from sensor_msgs.msg import PointField as RosMsg
 

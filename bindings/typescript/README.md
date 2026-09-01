@@ -12,6 +12,7 @@ Bundlers pick the right entry via `package.json` `exports` (`browser` vs default
 ```bash
 npm install robot-bus
 # local: just ts-dev
+npx robot-bus --help
 ```
 
 See [`docs/en/typescript-api.md`](../../docs/en/typescript-api.md).

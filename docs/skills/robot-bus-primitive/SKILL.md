@@ -19,11 +19,18 @@ For full ROS package migration, use **ros2-to-robot-bus** or **robot-bus-to-ros2
 
 ## Prerequisites
 
-1. Start a broker (or embed `RobotBusBroker` in-process).
+1. **Prefer embedding** `RobotBusBroker` in-process in application code. Use the CLI for demos or a standalone broker process.
 2. Create a `Node`, attach create_* APIs, then `spin` / `spin_once`.
 
+```python
+with robot_bus.RobotBusBroker.start() as broker:
+    node = robot_bus.Node("pilot")
+    # create_* then spin
+```
+
 ```bash
-robot-bus-broker
+# standalone process (examples / multi-process bring-up)
+python -m robot_bus.broker
 # or: cargo run --bin robot_bus_broker
 ```
 

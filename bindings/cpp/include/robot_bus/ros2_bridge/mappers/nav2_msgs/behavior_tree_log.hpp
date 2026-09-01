@@ -43,8 +43,6 @@ inline ::nav2_msgs::msg::BehaviorTreeLog behavior_tree_log_to_ros(const ::nav2_m
 class Nav2MsgsBehaviorTreeLogMapper
     : public TypedTopicMapper<Nav2MsgsBehaviorTreeLogMapper, ::nav2_msgs::msg::BehaviorTreeLog> {
  public:
-  const char *type_name() const override { return "nav2_msgs/msg/BehaviorTreeLog"; }
-
   std::vector<uint8_t> ros_to_bus(const ::nav2_msgs::msg::BehaviorTreeLog &msg) const {
     auto bus = ros2_bridge_mappers::nav2_msgs::behavior_tree_log_to_bus(msg);
     std::string bytes;
@@ -59,9 +57,7 @@ class Nav2MsgsBehaviorTreeLogMapper
   }
 };
 #else
-struct Nav2MsgsBehaviorTreeLogMapper : TopicMapper {
-  const char *type_name() const override { return "nav2_msgs/msg/BehaviorTreeLog"; }
-};
+struct Nav2MsgsBehaviorTreeLogMapper : TopicMapper {};
 #endif
 
 }  // namespace robot_bus

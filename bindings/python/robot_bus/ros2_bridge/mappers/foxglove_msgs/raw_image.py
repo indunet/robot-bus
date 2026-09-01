@@ -34,9 +34,6 @@ def raw_image_to_ros(bus):
 
 
 class FoxgloveMsgsRawImageMapper:
-    def type_name(self) -> str:
-        return "foxglove_msgs/msg/RawImage"
-
     def ros_msg_type(self):
         from foxglove_msgs.msg import RawImage as RosMsg
 

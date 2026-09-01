@@ -25,10 +25,6 @@ impl TypedTopicMapper for GeometryMsgsVector3Mapper {
     type Ros = ros_env::geometry_msgs::msg::Vector3;
     type Bus = crate::geometry_msgs::msg::v1::Vector3;
 
-    fn type_name(&self) -> &'static str {
-        "geometry_msgs/msg/Vector3"
-    }
-
     fn ros_to_bus(&self, msg: Self::Ros) -> crate::errors::Result<Self::Bus> {
         Ok(vector3_to_bus(msg))
     }

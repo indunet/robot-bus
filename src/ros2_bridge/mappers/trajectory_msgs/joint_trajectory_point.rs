@@ -29,10 +29,6 @@ impl TypedTopicMapper for TrajectoryMsgsJointTrajectoryPointMapper {
     type Ros = ros_env::trajectory_msgs::msg::JointTrajectoryPoint;
     type Bus = crate::trajectory_msgs::msg::v1::JointTrajectoryPoint;
 
-    fn type_name(&self) -> &'static str {
-        "trajectory_msgs/msg/JointTrajectoryPoint"
-    }
-
     fn ros_to_bus(&self, msg: Self::Ros) -> crate::errors::Result<Self::Bus> {
         Ok(joint_trajectory_point_to_bus(msg))
     }

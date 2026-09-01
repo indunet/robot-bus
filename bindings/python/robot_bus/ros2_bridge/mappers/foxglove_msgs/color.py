@@ -28,9 +28,6 @@ def color_to_ros(bus):
 
 
 class FoxgloveMsgsColorMapper:
-    def type_name(self) -> str:
-        return "foxglove_msgs/msg/Color"
-
     def ros_msg_type(self):
         from foxglove_msgs.msg import Color as RosMsg
 

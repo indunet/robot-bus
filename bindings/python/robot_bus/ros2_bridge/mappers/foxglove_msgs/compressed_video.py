@@ -28,9 +28,6 @@ def compressed_video_to_ros(bus):
 
 
 class FoxgloveMsgsCompressedVideoMapper:
-    def type_name(self) -> str:
-        return "foxglove_msgs/msg/CompressedVideo"
-
     def ros_msg_type(self):
         from foxglove_msgs.msg import CompressedVideo as RosMsg
 

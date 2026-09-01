@@ -51,8 +51,6 @@ inline ::trajectory_msgs::msg::JointTrajectoryPoint joint_trajectory_point_to_ro
 class TrajectoryMsgsJointTrajectoryPointMapper
     : public TypedTopicMapper<TrajectoryMsgsJointTrajectoryPointMapper, ::trajectory_msgs::msg::JointTrajectoryPoint> {
  public:
-  const char *type_name() const override { return "trajectory_msgs/msg/JointTrajectoryPoint"; }
-
   std::vector<uint8_t> ros_to_bus(const ::trajectory_msgs::msg::JointTrajectoryPoint &msg) const {
     auto bus = ros2_bridge_mappers::trajectory_msgs::joint_trajectory_point_to_bus(msg);
     std::string bytes;
@@ -67,9 +65,7 @@ class TrajectoryMsgsJointTrajectoryPointMapper
   }
 };
 #else
-struct TrajectoryMsgsJointTrajectoryPointMapper : TopicMapper {
-  const char *type_name() const override { return "trajectory_msgs/msg/JointTrajectoryPoint"; }
-};
+struct TrajectoryMsgsJointTrajectoryPointMapper : TopicMapper {};
 #endif
 
 }  // namespace robot_bus

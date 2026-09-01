@@ -26,9 +26,6 @@ def point32_to_ros(bus):
 
 
 class GeometryMsgsPoint32Mapper:
-    def type_name(self) -> str:
-        return "geometry_msgs/msg/Point32"
-
     def ros_msg_type(self):
         from geometry_msgs.msg import Point32 as RosMsg
 

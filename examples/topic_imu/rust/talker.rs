@@ -1,6 +1,6 @@
 //! Publish a few `sensor_msgs/msg/Imu` messages on `/examples/imu`.
 //!
-//! Run `robot-bus-broker` and `topic_imu_listener` first.
+//! Run a broker (`python -m robot_bus.broker` or `cargo run --bin robot_bus_broker`) and `topic_imu_listener` first.
 
 use std::thread;
 use std::time::Duration;

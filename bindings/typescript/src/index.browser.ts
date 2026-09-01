@@ -21,4 +21,4 @@ export {
 export { encode, decode, type MessageType } from "./typed.js";
 export * as consoleTopics from "./console-topics.js";
 
-export const __version__ = "2.1.0";
+export const __version__ = "2.2.0";

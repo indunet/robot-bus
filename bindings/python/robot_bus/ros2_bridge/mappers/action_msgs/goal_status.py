@@ -24,9 +24,6 @@ def goal_status_to_ros(bus):
 
 
 class ActionMsgsGoalStatusMapper:
-    def type_name(self) -> str:
-        return "action_msgs/msg/GoalStatus"
-
     def ros_msg_type(self):
         from action_msgs.msg import GoalStatus as RosMsg
 

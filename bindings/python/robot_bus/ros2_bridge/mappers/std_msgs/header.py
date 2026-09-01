@@ -24,9 +24,6 @@ def header_to_ros(bus):
 
 
 class StdMsgsHeaderMapper:
-    def type_name(self) -> str:
-        return "std_msgs/msg/Header"
-
     def ros_msg_type(self):
         from std_msgs.msg import Header as RosMsg
 

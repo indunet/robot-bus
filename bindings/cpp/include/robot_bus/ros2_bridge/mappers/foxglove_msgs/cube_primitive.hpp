@@ -41,8 +41,6 @@ inline ::foxglove_msgs::msg::CubePrimitive cube_primitive_to_ros(const ::foxglov
 class FoxgloveMsgsCubePrimitiveMapper
     : public TypedTopicMapper<FoxgloveMsgsCubePrimitiveMapper, ::foxglove_msgs::msg::CubePrimitive> {
  public:
-  const char *type_name() const override { return "foxglove_msgs/msg/CubePrimitive"; }
-
   std::vector<uint8_t> ros_to_bus(const ::foxglove_msgs::msg::CubePrimitive &msg) const {
     auto bus = ros2_bridge_mappers::foxglove_msgs::cube_primitive_to_bus(msg);
     std::string bytes;
@@ -57,9 +55,7 @@ class FoxgloveMsgsCubePrimitiveMapper
   }
 };
 #else
-struct FoxgloveMsgsCubePrimitiveMapper : TopicMapper {
-  const char *type_name() const override { return "foxglove_msgs/msg/CubePrimitive"; }
-};
+struct FoxgloveMsgsCubePrimitiveMapper : TopicMapper {};
 #endif
 
 }  // namespace robot_bus

@@ -27,10 +27,6 @@ impl TypedTopicMapper for GeometryMsgsVelocityWithCovarianceStampedMapper {
     type Ros = ros_env::geometry_msgs::msg::VelocityWithCovarianceStamped;
     type Bus = crate::geometry_msgs::msg::v1::VelocityWithCovarianceStamped;
 
-    fn type_name(&self) -> &'static str {
-        "geometry_msgs/msg/VelocityWithCovarianceStamped"
-    }
-
     fn ros_to_bus(&self, msg: Self::Ros) -> crate::errors::Result<Self::Bus> {
         Ok(velocity_with_covariance_stamped_to_bus(msg))
     }

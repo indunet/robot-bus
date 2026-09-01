@@ -29,10 +29,6 @@ impl TypedTopicMapper for NavMsgsTrajectoryPointMapper {
     type Ros = ros_env::nav_msgs::msg::TrajectoryPoint;
     type Bus = crate::nav_msgs::msg::v1::TrajectoryPoint;
 
-    fn type_name(&self) -> &'static str {
-        "nav_msgs/msg/TrajectoryPoint"
-    }
-
     fn ros_to_bus(&self, msg: Self::Ros) -> crate::errors::Result<Self::Bus> {
         Ok(trajectory_point_to_bus(msg))
     }

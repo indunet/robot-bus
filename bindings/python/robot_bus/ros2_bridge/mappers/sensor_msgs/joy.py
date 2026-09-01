@@ -26,9 +26,6 @@ def joy_to_ros(bus):
 
 
 class SensorMsgsJoyMapper:
-    def type_name(self) -> str:
-        return "sensor_msgs/msg/Joy"
-
     def ros_msg_type(self):
         from sensor_msgs.msg import Joy as RosMsg
 

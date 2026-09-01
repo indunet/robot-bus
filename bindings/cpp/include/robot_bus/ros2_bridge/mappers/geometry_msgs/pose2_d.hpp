@@ -39,8 +39,6 @@ inline ::geometry_msgs::msg::Pose2D pose2_d_to_ros(const ::geometry_msgs::msg::v
 class GeometryMsgsPose2DMapper
     : public TypedTopicMapper<GeometryMsgsPose2DMapper, ::geometry_msgs::msg::Pose2D> {
  public:
-  const char *type_name() const override { return "geometry_msgs/msg/Pose2D"; }
-
   std::vector<uint8_t> ros_to_bus(const ::geometry_msgs::msg::Pose2D &msg) const {
     auto bus = ros2_bridge_mappers::geometry_msgs::pose2_d_to_bus(msg);
     std::string bytes;
@@ -55,9 +53,7 @@ class GeometryMsgsPose2DMapper
   }
 };
 #else
-struct GeometryMsgsPose2DMapper : TopicMapper {
-  const char *type_name() const override { return "geometry_msgs/msg/Pose2D"; }
-};
+struct GeometryMsgsPose2DMapper : TopicMapper {};
 #endif
 
 }  // namespace robot_bus

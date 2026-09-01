@@ -45,8 +45,6 @@ inline ::sensor_msgs::msg::Range range_to_ros(const ::sensor_msgs::msg::v1::Rang
 class SensorMsgsRangeMapper
     : public TypedTopicMapper<SensorMsgsRangeMapper, ::sensor_msgs::msg::Range> {
  public:
-  const char *type_name() const override { return "sensor_msgs/msg/Range"; }
-
   std::vector<uint8_t> ros_to_bus(const ::sensor_msgs::msg::Range &msg) const {
     auto bus = ros2_bridge_mappers::sensor_msgs::range_to_bus(msg);
     std::string bytes;
@@ -61,9 +59,7 @@ class SensorMsgsRangeMapper
   }
 };
 #else
-struct SensorMsgsRangeMapper : TopicMapper {
-  const char *type_name() const override { return "sensor_msgs/msg/Range"; }
-};
+struct SensorMsgsRangeMapper : TopicMapper {};
 #endif
 
 }  // namespace robot_bus

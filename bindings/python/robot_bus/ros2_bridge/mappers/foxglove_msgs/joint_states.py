@@ -24,9 +24,6 @@ def joint_states_to_ros(bus):
 
 
 class FoxgloveMsgsJointStatesMapper:
-    def type_name(self) -> str:
-        return "foxglove_msgs/msg/JointStates"
-
     def ros_msg_type(self):
         from foxglove_msgs.msg import JointStates as RosMsg
 

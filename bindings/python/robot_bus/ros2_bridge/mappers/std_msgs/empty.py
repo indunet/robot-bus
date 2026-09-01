@@ -22,9 +22,6 @@ def empty_to_ros(bus):
 
 
 class StdMsgsEmptyMapper:
-    def type_name(self) -> str:
-        return "std_msgs/msg/Empty"
-
     def ros_msg_type(self):
         from std_msgs.msg import Empty as RosMsg
 

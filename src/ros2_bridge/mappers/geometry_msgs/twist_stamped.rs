@@ -23,10 +23,6 @@ impl TypedTopicMapper for GeometryMsgsTwistStampedMapper {
     type Ros = ros_env::geometry_msgs::msg::TwistStamped;
     type Bus = crate::geometry_msgs::msg::v1::TwistStamped;
 
-    fn type_name(&self) -> &'static str {
-        "geometry_msgs/msg/TwistStamped"
-    }
-
     fn ros_to_bus(&self, msg: Self::Ros) -> crate::errors::Result<Self::Bus> {
         Ok(twist_stamped_to_bus(msg))
     }

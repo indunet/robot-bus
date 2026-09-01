@@ -30,9 +30,6 @@ def odometry_to_ros(bus):
 
 
 class NavMsgsOdometryMapper:
-    def type_name(self) -> str:
-        return "nav_msgs/msg/Odometry"
-
     def ros_msg_type(self):
         from nav_msgs.msg import Odometry as RosMsg
 
