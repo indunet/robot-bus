@@ -4,15 +4,15 @@ use crate::ros2_bridge::mapper::TypedTopicMapper;
 
 pub(crate) fn duration_to_bus(msg: ros_env::builtin_interfaces::msg::Duration) -> crate::builtin_interfaces::msg::v1::Duration {
     crate::builtin_interfaces::msg::v1::Duration {
-        sec: msg.sec,
-        nanosec: msg.nanosec,
+        sec: msg.sec.into(),
+        nanosec: msg.nanosec.into(),
     }
 }
 
 pub(crate) fn duration_to_ros(bus: crate::builtin_interfaces::msg::v1::Duration) -> ros_env::builtin_interfaces::msg::Duration {
     ros_env::builtin_interfaces::msg::Duration {
-        sec: bus.sec,
-        nanosec: bus.nanosec,
+        sec: bus.sec as _,
+        nanosec: bus.nanosec as _,
     }
 }
 

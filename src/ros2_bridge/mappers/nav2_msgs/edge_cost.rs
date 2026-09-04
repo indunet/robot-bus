@@ -4,14 +4,14 @@ use crate::ros2_bridge::mapper::TypedTopicMapper;
 
 pub(crate) fn edge_cost_to_bus(msg: ros_env::nav2_msgs::msg::EdgeCost) -> crate::nav2_msgs::msg::v1::EdgeCost {
     crate::nav2_msgs::msg::v1::EdgeCost {
-        edgeid: msg.edgeid,
+        edgeid: msg.edgeid.into(),
         cost: msg.cost,
     }
 }
 
 pub(crate) fn edge_cost_to_ros(bus: crate::nav2_msgs::msg::v1::EdgeCost) -> ros_env::nav2_msgs::msg::EdgeCost {
     ros_env::nav2_msgs::msg::EdgeCost {
-        edgeid: bus.edgeid,
+        edgeid: bus.edgeid as _,
         cost: bus.cost,
     }
 }

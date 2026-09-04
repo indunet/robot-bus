@@ -4,21 +4,21 @@ use crate::ros2_bridge::mapper::TypedTopicMapper;
 
 pub(crate) fn menu_entry_to_bus(msg: ros_env::visualization_msgs::msg::MenuEntry) -> crate::visualization_msgs::msg::v1::MenuEntry {
     crate::visualization_msgs::msg::v1::MenuEntry {
-        id: msg.id,
-        parent_id: msg.parent_id,
+        id: msg.id.into(),
+        parent_id: msg.parent_id.into(),
         title: crate::ros2_bridge::mappers::convert::from_ros_string(msg.title),
         command: crate::ros2_bridge::mappers::convert::from_ros_string(msg.command),
-        command_type: msg.command_type,
+        command_type: msg.command_type.into(),
     }
 }
 
 pub(crate) fn menu_entry_to_ros(bus: crate::visualization_msgs::msg::v1::MenuEntry) -> ros_env::visualization_msgs::msg::MenuEntry {
     ros_env::visualization_msgs::msg::MenuEntry {
-        id: bus.id,
-        parent_id: bus.parent_id,
+        id: bus.id as _,
+        parent_id: bus.parent_id as _,
         title: crate::ros2_bridge::mappers::convert::to_ros_string(bus.title),
         command: crate::ros2_bridge::mappers::convert::to_ros_string(bus.command),
-        command_type: bus.command_type,
+        command_type: bus.command_type as _,
     }
 }
 

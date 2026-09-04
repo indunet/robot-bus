@@ -1,13 +1,13 @@
 //! Field conversions between typed ROS IDL structs and bus protobuf messages.
 
-use rosidl_runtime_rs::String as RosString;
-
 pub fn from_ros_string(s: impl ToString) -> String {
     s.to_string()
 }
 
-pub fn to_ros_string(s: impl AsRef<str>) -> RosString {
-    RosString::from(s.as_ref())
+/// Fill a ROS string field. `T` is the distro IDL type (`std::string::String`) or
+/// the shim (`rosidl_runtime_rs::String`).
+pub fn to_ros_string<T: for<'a> From<&'a str>>(s: impl AsRef<str>) -> T {
+    T::from(s.as_ref())
 }
 
 /// Reinterpret `Vec<i8>` as `Vec<u8>` without element-wise copies.
@@ -153,8 +153,8 @@ pub fn string_seq(v: impl IntoIterator<Item = impl ToString>) -> Vec<String> {
     v.into_iter().map(|s| s.to_string()).collect()
 }
 
-pub fn ros_string_seq(v: Vec<String>) -> Vec<RosString> {
-    v.into_iter().map(to_ros_string).collect()
+pub fn ros_string_seq<T: for<'a> From<&'a str>>(v: Vec<String>) -> Vec<T> {
+    v.into_iter().map(|s| to_ros_string(s)).collect()
 }
 
 pub fn time_to_timestamp(t: ros_env::builtin_interfaces::msg::Time) -> prost_types::Timestamp {

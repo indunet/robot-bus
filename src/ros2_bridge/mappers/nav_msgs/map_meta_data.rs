@@ -6,8 +6,8 @@ pub(crate) fn map_meta_data_to_bus(msg: ros_env::nav_msgs::msg::MapMetaData) -> 
     crate::nav_msgs::msg::v1::MapMetaData {
         map_load_time: Some(crate::ros2_bridge::mappers::builtin_interfaces::time::time_to_bus(msg.map_load_time)),
         resolution: msg.resolution,
-        width: msg.width,
-        height: msg.height,
+        width: msg.width.into(),
+        height: msg.height.into(),
         origin: Some(crate::ros2_bridge::mappers::geometry_msgs::pose::pose_to_bus(msg.origin)),
     }
 }
@@ -16,8 +16,8 @@ pub(crate) fn map_meta_data_to_ros(bus: crate::nav_msgs::msg::v1::MapMetaData) -
     ros_env::nav_msgs::msg::MapMetaData {
         map_load_time: crate::ros2_bridge::mappers::builtin_interfaces::time::time_to_ros(bus.map_load_time.unwrap_or_default()),
         resolution: bus.resolution,
-        width: bus.width,
-        height: bus.height,
+        width: bus.width as _,
+        height: bus.height as _,
         origin: crate::ros2_bridge::mappers::geometry_msgs::pose::pose_to_ros(bus.origin.unwrap_or_default()),
     }
 }

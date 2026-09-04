@@ -394,6 +394,9 @@ def to_bus_expr(msg: Msg, f: Field, existing: dict[str, tuple[Path, str]]) -> st
         return f"{ros}.into_iter().collect()"
     if f.optional and f.proto_type in SCALAR_ROS:
         return ros
+    # Proto int32/uint32 may be u8/i8/u16/… on distro rust IDL and u32/i32 on the shim.
+    if f.proto_type in ("int32", "uint32"):
+        return f"{ros}.into()"
     return ros
 
 
@@ -437,6 +440,9 @@ def to_ros_expr(msg: Msg, f: Field, existing: dict[str, tuple[Path, str]]) -> st
         return f"crate::ros2_bridge::mappers::convert::FromU32Seq::from_u32_seq({bus})"
     if f.repeated:
         return bus
+    # Infer distro (u8) vs shim (u32) from the ROS field type.
+    if f.proto_type in ("int32", "uint32"):
+        return f"{bus} as _"
     return bus
 
 

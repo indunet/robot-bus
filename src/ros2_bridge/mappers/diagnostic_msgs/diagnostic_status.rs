@@ -4,7 +4,7 @@ use crate::ros2_bridge::mapper::TypedTopicMapper;
 
 pub(crate) fn diagnostic_status_to_bus(msg: ros_env::diagnostic_msgs::msg::DiagnosticStatus) -> crate::diagnostic_msgs::msg::v1::DiagnosticStatus {
     crate::diagnostic_msgs::msg::v1::DiagnosticStatus {
-        level: msg.level,
+        level: msg.level.into(),
         name: crate::ros2_bridge::mappers::convert::from_ros_string(msg.name),
         message: crate::ros2_bridge::mappers::convert::from_ros_string(msg.message),
         hardware_id: crate::ros2_bridge::mappers::convert::from_ros_string(msg.hardware_id),
@@ -14,7 +14,7 @@ pub(crate) fn diagnostic_status_to_bus(msg: ros_env::diagnostic_msgs::msg::Diagn
 
 pub(crate) fn diagnostic_status_to_ros(bus: crate::diagnostic_msgs::msg::v1::DiagnosticStatus) -> ros_env::diagnostic_msgs::msg::DiagnosticStatus {
     ros_env::diagnostic_msgs::msg::DiagnosticStatus {
-        level: bus.level,
+        level: bus.level as _,
         name: crate::ros2_bridge::mappers::convert::to_ros_string(bus.name),
         message: crate::ros2_bridge::mappers::convert::to_ros_string(bus.message),
         hardware_id: crate::ros2_bridge::mappers::convert::to_ros_string(bus.hardware_id),

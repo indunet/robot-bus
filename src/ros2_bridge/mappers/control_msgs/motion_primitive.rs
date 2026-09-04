@@ -4,7 +4,7 @@ use crate::ros2_bridge::mapper::TypedTopicMapper;
 
 pub(crate) fn motion_primitive_to_bus(msg: ros_env::control_msgs::msg::MotionPrimitive) -> crate::control_msgs::msg::v1::MotionPrimitive {
     crate::control_msgs::msg::v1::MotionPrimitive {
-        r#type: msg.type_,
+        r#type: msg.type_.into(),
         blend_radius: msg.blend_radius,
         additional_arguments: msg.additional_arguments.into_iter().map(crate::ros2_bridge::mappers::control_msgs::motion_argument::motion_argument_to_bus).collect(),
         poses: msg.poses.into_iter().map(crate::ros2_bridge::mappers::geometry_msgs::pose_stamped::pose_stamped_to_bus).collect(),
@@ -14,7 +14,7 @@ pub(crate) fn motion_primitive_to_bus(msg: ros_env::control_msgs::msg::MotionPri
 
 pub(crate) fn motion_primitive_to_ros(bus: crate::control_msgs::msg::v1::MotionPrimitive) -> ros_env::control_msgs::msg::MotionPrimitive {
     ros_env::control_msgs::msg::MotionPrimitive {
-        type_: bus.r#type,
+        type_: bus.r#type as _,
         blend_radius: bus.blend_radius,
         additional_arguments: bus.additional_arguments.into_iter().map(crate::ros2_bridge::mappers::control_msgs::motion_argument::motion_argument_to_ros).collect(),
         poses: bus.poses.into_iter().map(crate::ros2_bridge::mappers::geometry_msgs::pose_stamped::pose_stamped_to_ros).collect(),

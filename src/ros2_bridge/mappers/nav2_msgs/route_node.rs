@@ -4,14 +4,14 @@ use crate::ros2_bridge::mapper::TypedTopicMapper;
 
 pub(crate) fn route_node_to_bus(msg: ros_env::nav2_msgs::msg::RouteNode) -> crate::nav2_msgs::msg::v1::RouteNode {
     crate::nav2_msgs::msg::v1::RouteNode {
-        nodeid: msg.nodeid,
+        nodeid: msg.nodeid.into(),
         position: Some(crate::ros2_bridge::mappers::geometry_msgs::point::point_to_bus(msg.position)),
     }
 }
 
 pub(crate) fn route_node_to_ros(bus: crate::nav2_msgs::msg::v1::RouteNode) -> ros_env::nav2_msgs::msg::RouteNode {
     ros_env::nav2_msgs::msg::RouteNode {
-        nodeid: bus.nodeid,
+        nodeid: bus.nodeid as _,
         position: crate::ros2_bridge::mappers::geometry_msgs::point::point_to_ros(bus.position.unwrap_or_default()),
     }
 }

@@ -4,16 +4,16 @@ use crate::ros2_bridge::mapper::TypedTopicMapper;
 
 pub(crate) fn joy_feedback_to_bus(msg: ros_env::sensor_msgs::msg::JoyFeedback) -> crate::sensor_msgs::msg::v1::JoyFeedback {
     crate::sensor_msgs::msg::v1::JoyFeedback {
-        r#type: msg.type_,
-        id: msg.id,
+        r#type: msg.type_.into(),
+        id: msg.id.into(),
         intensity: msg.intensity,
     }
 }
 
 pub(crate) fn joy_feedback_to_ros(bus: crate::sensor_msgs::msg::v1::JoyFeedback) -> ros_env::sensor_msgs::msg::JoyFeedback {
     ros_env::sensor_msgs::msg::JoyFeedback {
-        type_: bus.r#type,
-        id: bus.id,
+        type_: bus.r#type as _,
+        id: bus.id as _,
         intensity: bus.intensity,
     }
 }

@@ -5,18 +5,18 @@ use crate::ros2_bridge::mapper::TypedTopicMapper;
 pub(crate) fn point_field_to_bus(msg: ros_env::sensor_msgs::msg::PointField) -> crate::sensor_msgs::msg::v1::PointField {
     crate::sensor_msgs::msg::v1::PointField {
         name: crate::ros2_bridge::mappers::convert::from_ros_string(msg.name),
-        offset: msg.offset,
+        offset: msg.offset.into(),
         datatype: u32::from(msg.datatype),
-        count: msg.count,
+        count: msg.count.into(),
     }
 }
 
 pub(crate) fn point_field_to_ros(bus: crate::sensor_msgs::msg::v1::PointField) -> ros_env::sensor_msgs::msg::PointField {
     ros_env::sensor_msgs::msg::PointField {
         name: crate::ros2_bridge::mappers::convert::to_ros_string(bus.name),
-        offset: bus.offset,
+        offset: bus.offset as _,
         datatype: bus.datatype as u8,
-        count: bus.count,
+        count: bus.count as _,
     }
 }
 

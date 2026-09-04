@@ -5,7 +5,7 @@ use crate::ros2_bridge::mapper::TypedTopicMapper;
 pub(crate) fn joint_component_tolerance_to_bus(msg: ros_env::control_msgs::msg::JointComponentTolerance) -> crate::control_msgs::msg::v1::JointComponentTolerance {
     crate::control_msgs::msg::v1::JointComponentTolerance {
         joint_name: crate::ros2_bridge::mappers::convert::from_ros_string(msg.joint_name),
-        component: msg.component,
+        component: msg.component.into(),
         value: msg.value,
     }
 }
@@ -13,7 +13,7 @@ pub(crate) fn joint_component_tolerance_to_bus(msg: ros_env::control_msgs::msg::
 pub(crate) fn joint_component_tolerance_to_ros(bus: crate::control_msgs::msg::v1::JointComponentTolerance) -> ros_env::control_msgs::msg::JointComponentTolerance {
     ros_env::control_msgs::msg::JointComponentTolerance {
         joint_name: crate::ros2_bridge::mappers::convert::to_ros_string(bus.joint_name),
-        component: bus.component,
+        component: bus.component as _,
         value: bus.value,
     }
 }

@@ -4,17 +4,17 @@ use crate::ros2_bridge::mapper::TypedTopicMapper;
 
 pub(crate) fn route_edge_to_bus(msg: ros_env::nav2_msgs::msg::RouteEdge) -> crate::nav2_msgs::msg::v1::RouteEdge {
     crate::nav2_msgs::msg::v1::RouteEdge {
-        edgeid: msg.edgeid,
-        start: msg.start,
-        end: msg.end,
+        edgeid: msg.edgeid.into(),
+        start: msg.start.into(),
+        end: msg.end.into(),
     }
 }
 
 pub(crate) fn route_edge_to_ros(bus: crate::nav2_msgs::msg::v1::RouteEdge) -> ros_env::nav2_msgs::msg::RouteEdge {
     ros_env::nav2_msgs::msg::RouteEdge {
-        edgeid: bus.edgeid,
-        start: bus.start,
-        end: bus.end,
+        edgeid: bus.edgeid as _,
+        start: bus.start as _,
+        end: bus.end as _,
     }
 }
 

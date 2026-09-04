@@ -5,16 +5,16 @@ use crate::ros2_bridge::mapper::TypedTopicMapper;
 pub(crate) fn multi_array_dimension_to_bus(msg: ros_env::std_msgs::msg::MultiArrayDimension) -> crate::std_msgs::msg::v1::MultiArrayDimension {
     crate::std_msgs::msg::v1::MultiArrayDimension {
         label: crate::ros2_bridge::mappers::convert::from_ros_string(msg.label),
-        size: msg.size,
-        stride: msg.stride,
+        size: msg.size.into(),
+        stride: msg.stride.into(),
     }
 }
 
 pub(crate) fn multi_array_dimension_to_ros(bus: crate::std_msgs::msg::v1::MultiArrayDimension) -> ros_env::std_msgs::msg::MultiArrayDimension {
     ros_env::std_msgs::msg::MultiArrayDimension {
         label: crate::ros2_bridge::mappers::convert::to_ros_string(bus.label),
-        size: bus.size,
-        stride: bus.stride,
+        size: bus.size as _,
+        stride: bus.stride as _,
     }
 }
 

@@ -5,8 +5,8 @@ use crate::ros2_bridge::mapper::TypedTopicMapper;
 pub(crate) fn april_tag_detection_to_bus(msg: ros_env::apriltag_msgs::msg::AprilTagDetection) -> crate::apriltag_msgs::msg::v1::AprilTagDetection {
     crate::apriltag_msgs::msg::v1::AprilTagDetection {
         family: crate::ros2_bridge::mappers::convert::from_ros_string(msg.family),
-        id: msg.id,
-        hamming: msg.hamming,
+        id: msg.id.into(),
+        hamming: msg.hamming.into(),
         goodness: msg.goodness,
         decision_margin: msg.decision_margin,
         centre: Some(crate::ros2_bridge::mappers::apriltag_msgs::point::point_to_bus(msg.centre)),
@@ -18,8 +18,8 @@ pub(crate) fn april_tag_detection_to_bus(msg: ros_env::apriltag_msgs::msg::April
 pub(crate) fn april_tag_detection_to_ros(bus: crate::apriltag_msgs::msg::v1::AprilTagDetection) -> ros_env::apriltag_msgs::msg::AprilTagDetection {
     ros_env::apriltag_msgs::msg::AprilTagDetection {
         family: crate::ros2_bridge::mappers::convert::to_ros_string(bus.family),
-        id: bus.id,
-        hamming: bus.hamming,
+        id: bus.id as _,
+        hamming: bus.hamming as _,
         goodness: bus.goodness,
         decision_margin: bus.decision_margin,
         centre: crate::ros2_bridge::mappers::apriltag_msgs::point::point_to_ros(bus.centre.unwrap_or_default()),

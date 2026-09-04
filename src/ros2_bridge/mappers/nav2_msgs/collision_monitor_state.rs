@@ -4,14 +4,14 @@ use crate::ros2_bridge::mapper::TypedTopicMapper;
 
 pub(crate) fn collision_monitor_state_to_bus(msg: ros_env::nav2_msgs::msg::CollisionMonitorState) -> crate::nav2_msgs::msg::v1::CollisionMonitorState {
     crate::nav2_msgs::msg::v1::CollisionMonitorState {
-        action_type: msg.action_type,
+        action_type: msg.action_type.into(),
         polygon_name: crate::ros2_bridge::mappers::convert::from_ros_string(msg.polygon_name),
     }
 }
 
 pub(crate) fn collision_monitor_state_to_ros(bus: crate::nav2_msgs::msg::v1::CollisionMonitorState) -> ros_env::nav2_msgs::msg::CollisionMonitorState {
     ros_env::nav2_msgs::msg::CollisionMonitorState {
-        action_type: bus.action_type,
+        action_type: bus.action_type as _,
         polygon_name: crate::ros2_bridge::mappers::convert::to_ros_string(bus.polygon_name),
     }
 }

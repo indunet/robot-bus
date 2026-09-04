@@ -5,7 +5,7 @@ use crate::ros2_bridge::mapper::TypedTopicMapper;
 pub(crate) fn costmap_filter_info_to_bus(msg: ros_env::nav2_msgs::msg::CostmapFilterInfo) -> crate::nav2_msgs::msg::v1::CostmapFilterInfo {
     crate::nav2_msgs::msg::v1::CostmapFilterInfo {
         header: Some(crate::ros2_bridge::mappers::std_msgs::header::header_to_bus(msg.header)),
-        r#type: msg.type_,
+        r#type: msg.type_.into(),
         filter_mask_topic: crate::ros2_bridge::mappers::convert::from_ros_string(msg.filter_mask_topic),
         base: msg.base,
         multiplier: msg.multiplier,
@@ -15,7 +15,7 @@ pub(crate) fn costmap_filter_info_to_bus(msg: ros_env::nav2_msgs::msg::CostmapFi
 pub(crate) fn costmap_filter_info_to_ros(bus: crate::nav2_msgs::msg::v1::CostmapFilterInfo) -> ros_env::nav2_msgs::msg::CostmapFilterInfo {
     ros_env::nav2_msgs::msg::CostmapFilterInfo {
         header: crate::ros2_bridge::mappers::std_msgs::header::header_to_ros(bus.header.unwrap_or_default()),
-        type_: bus.r#type,
+        type_: bus.r#type as _,
         filter_mask_topic: crate::ros2_bridge::mappers::convert::to_ros_string(bus.filter_mask_topic),
         base: bus.base,
         multiplier: bus.multiplier,

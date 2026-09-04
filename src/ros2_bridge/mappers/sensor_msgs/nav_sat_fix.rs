@@ -10,7 +10,7 @@ pub(crate) fn nav_sat_fix_to_bus(msg: ros_env::sensor_msgs::msg::NavSatFix) -> c
         longitude: msg.longitude,
         altitude: msg.altitude,
         position_covariance: crate::ros2_bridge::mappers::convert::f64_seq(msg.position_covariance),
-        position_covariance_type: msg.position_covariance_type,
+        position_covariance_type: msg.position_covariance_type.into(),
     }
 }
 
@@ -22,7 +22,7 @@ pub(crate) fn nav_sat_fix_to_ros(bus: crate::sensor_msgs::msg::v1::NavSatFix) ->
         longitude: bus.longitude,
         altitude: bus.altitude,
         position_covariance: crate::ros2_bridge::mappers::convert::FromF64Seq::from_f64_seq(bus.position_covariance),
-        position_covariance_type: bus.position_covariance_type,
+        position_covariance_type: bus.position_covariance_type as _,
     }
 }
 

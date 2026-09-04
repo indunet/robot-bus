@@ -4,17 +4,17 @@ use crate::ros2_bridge::mapper::TypedTopicMapper;
 
 pub(crate) fn missed_waypoint_to_bus(msg: ros_env::nav2_msgs::msg::MissedWaypoint) -> crate::nav2_msgs::msg::v1::MissedWaypoint {
     crate::nav2_msgs::msg::v1::MissedWaypoint {
-        index: msg.index,
+        index: msg.index.into(),
         goal: Some(crate::ros2_bridge::mappers::geometry_msgs::pose_stamped::pose_stamped_to_bus(msg.goal)),
-        error_code: msg.error_code,
+        error_code: msg.error_code.into(),
     }
 }
 
 pub(crate) fn missed_waypoint_to_ros(bus: crate::nav2_msgs::msg::v1::MissedWaypoint) -> ros_env::nav2_msgs::msg::MissedWaypoint {
     ros_env::nav2_msgs::msg::MissedWaypoint {
-        index: bus.index,
+        index: bus.index as _,
         goal: crate::ros2_bridge::mappers::geometry_msgs::pose_stamped::pose_stamped_to_ros(bus.goal.unwrap_or_default()),
-        error_code: bus.error_code,
+        error_code: bus.error_code as _,
     }
 }
 

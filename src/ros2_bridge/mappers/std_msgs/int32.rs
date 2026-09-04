@@ -4,13 +4,13 @@ use crate::ros2_bridge::mapper::TypedTopicMapper;
 
 pub(crate) fn int32_to_bus(msg: ros_env::std_msgs::msg::Int32) -> crate::std_msgs::msg::v1::Int32 {
     crate::std_msgs::msg::v1::Int32 {
-        data: msg.data,
+        data: msg.data.into(),
     }
 }
 
 pub(crate) fn int32_to_ros(bus: crate::std_msgs::msg::v1::Int32) -> ros_env::std_msgs::msg::Int32 {
     ros_env::std_msgs::msg::Int32 {
-        data: bus.data,
+        data: bus.data as _,
     }
 }
 
