@@ -9,9 +9,20 @@ from robot_bus.ros2_bridge.mappers.geometry_msgs.twist_stamped import twist_stam
 from robot_bus.ros2_bridge.mappers.geometry_msgs.wrench_stamped import wrench_stamped_to_bus, wrench_stamped_to_ros
 from robot_bus.ros2_bridge.mappers.sensor_msgs.joint_state import joint_state_to_bus, joint_state_to_ros
 
-def admittance_controller_state_to_bus(msg):
-    from robot_bus.control_msgs.msg.v1 import AdmittanceControllerState as BusMsg
+_BusMsg = None
 
+
+def _bus_cls():
+    global _BusMsg
+    if _BusMsg is None:
+        from robot_bus.control_msgs.msg.v1 import AdmittanceControllerState as BusMsg
+
+        _BusMsg = BusMsg
+    return _BusMsg
+
+
+def admittance_controller_state_to_bus(msg):
+    BusMsg = _bus_cls()
     bus = BusMsg()
     bus.ref_trans_base_fts.CopyFrom(transform_stamped_to_bus(msg.ref_trans_base_fts))
     bus.selected_axes.CopyFrom(float64_multi_array_to_bus(msg.selected_axes))
@@ -44,17 +55,21 @@ def admittance_controller_state_to_ros(bus):
 
 
 class ControlMsgsAdmittanceControllerStateMapper:
-    def ros_msg_type(self):
-        from control_msgs.msg import AdmittanceControllerState as RosMsg
+    _ros_type = None
 
-        return RosMsg
+    def ros_msg_type(self):
+        cls = type(self)
+        if cls._ros_type is None:
+            from control_msgs.msg import AdmittanceControllerState as RosMsg
+
+            cls._ros_type = RosMsg
+        return cls._ros_type
 
     def ros_to_bus(self, msg) -> bytes:
         return admittance_controller_state_to_bus(msg).SerializeToString()
 
     def bus_to_ros(self, payload: bytes):
-        from robot_bus.control_msgs.msg.v1 import AdmittanceControllerState as BusMsg
-
+        BusMsg = _bus_cls()
         bus = BusMsg()
         bus.ParseFromString(payload)
         return admittance_controller_state_to_ros(bus)

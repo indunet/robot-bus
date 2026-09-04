@@ -5,9 +5,20 @@ from __future__ import annotations
 from robot_bus.ros2_bridge.mappers import _convert
 from robot_bus.ros2_bridge.mappers.std_msgs.multi_array_layout import multi_array_layout_to_bus, multi_array_layout_to_ros
 
-def u_int16_multi_array_to_bus(msg):
-    from robot_bus.std_msgs.msg.v1 import UInt16MultiArray as BusMsg
+_BusMsg = None
 
+
+def _bus_cls():
+    global _BusMsg
+    if _BusMsg is None:
+        from robot_bus.std_msgs.msg.v1 import UInt16MultiArray as BusMsg
+
+        _BusMsg = BusMsg
+    return _BusMsg
+
+
+def u_int16_multi_array_to_bus(msg):
+    BusMsg = _bus_cls()
     bus = BusMsg()
     bus.layout.CopyFrom(multi_array_layout_to_bus(msg.layout))
     bus.data.extend(list(msg.data))
@@ -24,17 +35,21 @@ def u_int16_multi_array_to_ros(bus):
 
 
 class StdMsgsUInt16MultiArrayMapper:
-    def ros_msg_type(self):
-        from std_msgs.msg import UInt16MultiArray as RosMsg
+    _ros_type = None
 
-        return RosMsg
+    def ros_msg_type(self):
+        cls = type(self)
+        if cls._ros_type is None:
+            from std_msgs.msg import UInt16MultiArray as RosMsg
+
+            cls._ros_type = RosMsg
+        return cls._ros_type
 
     def ros_to_bus(self, msg) -> bytes:
         return u_int16_multi_array_to_bus(msg).SerializeToString()
 
     def bus_to_ros(self, payload: bytes):
-        from robot_bus.std_msgs.msg.v1 import UInt16MultiArray as BusMsg
-
+        BusMsg = _bus_cls()
         bus = BusMsg()
         bus.ParseFromString(payload)
         return u_int16_multi_array_to_ros(bus)

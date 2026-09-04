@@ -7,9 +7,20 @@ from robot_bus.ros2_bridge.mappers.foxglove_msgs.point2 import point2_to_bus, po
 from robot_bus.ros2_bridge.mappers.foxglove_msgs.color import color_to_bus, color_to_ros
 from robot_bus.ros2_bridge.mappers.foxglove_msgs.key_value_pair import key_value_pair_to_bus, key_value_pair_to_ros
 
-def text_annotation_to_bus(msg):
-    from robot_bus.foxglove_msgs.msg.v1 import TextAnnotation as BusMsg
+_BusMsg = None
 
+
+def _bus_cls():
+    global _BusMsg
+    if _BusMsg is None:
+        from robot_bus.foxglove_msgs.msg.v1 import TextAnnotation as BusMsg
+
+        _BusMsg = BusMsg
+    return _BusMsg
+
+
+def text_annotation_to_bus(msg):
+    BusMsg = _bus_cls()
     bus = BusMsg()
     bus.timestamp = _convert.time_to_timestamp(msg.timestamp)
     bus.position.CopyFrom(point2_to_bus(msg.position))
@@ -36,17 +47,21 @@ def text_annotation_to_ros(bus):
 
 
 class FoxgloveMsgsTextAnnotationMapper:
-    def ros_msg_type(self):
-        from foxglove_msgs.msg import TextAnnotation as RosMsg
+    _ros_type = None
 
-        return RosMsg
+    def ros_msg_type(self):
+        cls = type(self)
+        if cls._ros_type is None:
+            from foxglove_msgs.msg import TextAnnotation as RosMsg
+
+            cls._ros_type = RosMsg
+        return cls._ros_type
 
     def ros_to_bus(self, msg) -> bytes:
         return text_annotation_to_bus(msg).SerializeToString()
 
     def bus_to_ros(self, payload: bytes):
-        from robot_bus.foxglove_msgs.msg.v1 import TextAnnotation as BusMsg
-
+        BusMsg = _bus_cls()
         bus = BusMsg()
         bus.ParseFromString(payload)
         return text_annotation_to_ros(bus)

@@ -4,10 +4,20 @@ from __future__ import annotations
 
 from robot_bus.ros2_bridge.mappers import _convert
 
+_BusMsg = None
+
+
+def _bus_cls():
+    global _BusMsg
+    if _BusMsg is None:
+        from robot_bus.visualization_msgs.msg.v1 import MeshFile as BusMsg
+
+        _BusMsg = BusMsg
+    return _BusMsg
+
 
 def mesh_file_to_bus(msg):
-    from robot_bus.visualization_msgs.msg.v1 import MeshFile as BusMsg
-
+    BusMsg = _bus_cls()
     bus = BusMsg()
     bus.filename = str(msg.filename)
     bus.data = bytes(msg.data)
@@ -24,17 +34,21 @@ def mesh_file_to_ros(bus):
 
 
 class VisualizationMsgsMeshFileMapper:
-    def ros_msg_type(self):
-        from visualization_msgs.msg import MeshFile as RosMsg
+    _ros_type = None
 
-        return RosMsg
+    def ros_msg_type(self):
+        cls = type(self)
+        if cls._ros_type is None:
+            from visualization_msgs.msg import MeshFile as RosMsg
+
+            cls._ros_type = RosMsg
+        return cls._ros_type
 
     def ros_to_bus(self, msg) -> bytes:
         return mesh_file_to_bus(msg).SerializeToString()
 
     def bus_to_ros(self, payload: bytes):
-        from robot_bus.visualization_msgs.msg.v1 import MeshFile as BusMsg
-
+        BusMsg = _bus_cls()
         bus = BusMsg()
         bus.ParseFromString(payload)
         return mesh_file_to_ros(bus)

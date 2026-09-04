@@ -6,9 +6,20 @@ from robot_bus.ros2_bridge.mappers import _convert
 from robot_bus.ros2_bridge.mappers.std_msgs.header import header_to_bus, header_to_ros
 from robot_bus.ros2_bridge.mappers.trajectory_msgs.multi_dof_joint_trajectory_point import multi_dof_joint_trajectory_point_to_bus, multi_dof_joint_trajectory_point_to_ros
 
-def multi_dof_joint_trajectory_to_bus(msg):
-    from robot_bus.trajectory_msgs.msg.v1 import MultiDOFJointTrajectory as BusMsg
+_BusMsg = None
 
+
+def _bus_cls():
+    global _BusMsg
+    if _BusMsg is None:
+        from robot_bus.trajectory_msgs.msg.v1 import MultiDOFJointTrajectory as BusMsg
+
+        _BusMsg = BusMsg
+    return _BusMsg
+
+
+def multi_dof_joint_trajectory_to_bus(msg):
+    BusMsg = _bus_cls()
     bus = BusMsg()
     bus.header.CopyFrom(header_to_bus(msg.header))
     bus.joint_names.extend([str(x) for x in msg.joint_names])
@@ -27,17 +38,21 @@ def multi_dof_joint_trajectory_to_ros(bus):
 
 
 class TrajectoryMsgsMultiDofJointTrajectoryMapper:
-    def ros_msg_type(self):
-        from trajectory_msgs.msg import MultiDOFJointTrajectory as RosMsg
+    _ros_type = None
 
-        return RosMsg
+    def ros_msg_type(self):
+        cls = type(self)
+        if cls._ros_type is None:
+            from trajectory_msgs.msg import MultiDOFJointTrajectory as RosMsg
+
+            cls._ros_type = RosMsg
+        return cls._ros_type
 
     def ros_to_bus(self, msg) -> bytes:
         return multi_dof_joint_trajectory_to_bus(msg).SerializeToString()
 
     def bus_to_ros(self, payload: bytes):
-        from robot_bus.trajectory_msgs.msg.v1 import MultiDOFJointTrajectory as BusMsg
-
+        BusMsg = _bus_cls()
         bus = BusMsg()
         bus.ParseFromString(payload)
         return multi_dof_joint_trajectory_to_ros(bus)

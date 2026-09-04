@@ -42,9 +42,7 @@ class VisualizationMsgsMarkerArrayMapper
  public:
   std::vector<uint8_t> ros_to_bus(const ::visualization_msgs::msg::MarkerArray &msg) const {
     auto bus = ros2_bridge_mappers::visualization_msgs::marker_array_to_bus(msg);
-    std::string bytes;
-    bus.SerializeToString(&bytes);
-    return std::vector<uint8_t>(bytes.begin(), bytes.end());
+    return encode_pb(bus);
   }
 
   ::visualization_msgs::msg::MarkerArray bus_to_ros(BytesView payload) const {

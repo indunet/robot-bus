@@ -20,10 +20,7 @@ inline ::nav2_msgs::msg::v1::Costmap costmap_to_bus(const ::nav2_msgs::msg::Cost
   ::nav2_msgs::msg::v1::Costmap bus;
   *bus.mutable_header() = ::robot_bus::ros2_bridge_mappers::std_msgs::header_to_bus(msg.header);
   *bus.mutable_metadata() = ::robot_bus::ros2_bridge_mappers::nav2_msgs::costmap_meta_data_to_bus(msg.metadata);
-  {
-    auto tmp = ::robot_bus::ros2_bridge_mappers::i8_seq_to_bytes(msg.data);
-    bus.set_data(tmp.data(), tmp.size());
-  }
+  bus.set_data(reinterpret_cast<const char *>(msg.data.data()), msg.data.size());
   return bus;
 }
 
@@ -45,9 +42,7 @@ class Nav2MsgsCostmapMapper
  public:
   std::vector<uint8_t> ros_to_bus(const ::nav2_msgs::msg::Costmap &msg) const {
     auto bus = ros2_bridge_mappers::nav2_msgs::costmap_to_bus(msg);
-    std::string bytes;
-    bus.SerializeToString(&bytes);
-    return std::vector<uint8_t>(bytes.begin(), bytes.end());
+    return encode_pb(bus);
   }
 
   ::nav2_msgs::msg::Costmap bus_to_ros(BytesView payload) const {

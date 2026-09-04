@@ -5,9 +5,20 @@ from __future__ import annotations
 from robot_bus.ros2_bridge.mappers import _convert
 from robot_bus.ros2_bridge.mappers.std_msgs.multi_array_dimension import multi_array_dimension_to_bus, multi_array_dimension_to_ros
 
-def multi_array_layout_to_bus(msg):
-    from robot_bus.std_msgs.msg.v1 import MultiArrayLayout as BusMsg
+_BusMsg = None
 
+
+def _bus_cls():
+    global _BusMsg
+    if _BusMsg is None:
+        from robot_bus.std_msgs.msg.v1 import MultiArrayLayout as BusMsg
+
+        _BusMsg = BusMsg
+    return _BusMsg
+
+
+def multi_array_layout_to_bus(msg):
+    BusMsg = _bus_cls()
     bus = BusMsg()
     bus.dim.extend([multi_array_dimension_to_bus(x) for x in msg.dim])
     bus.data_offset = msg.data_offset
@@ -24,17 +35,21 @@ def multi_array_layout_to_ros(bus):
 
 
 class StdMsgsMultiArrayLayoutMapper:
-    def ros_msg_type(self):
-        from std_msgs.msg import MultiArrayLayout as RosMsg
+    _ros_type = None
 
-        return RosMsg
+    def ros_msg_type(self):
+        cls = type(self)
+        if cls._ros_type is None:
+            from std_msgs.msg import MultiArrayLayout as RosMsg
+
+            cls._ros_type = RosMsg
+        return cls._ros_type
 
     def ros_to_bus(self, msg) -> bytes:
         return multi_array_layout_to_bus(msg).SerializeToString()
 
     def bus_to_ros(self, payload: bytes):
-        from robot_bus.std_msgs.msg.v1 import MultiArrayLayout as BusMsg
-
+        BusMsg = _bus_cls()
         bus = BusMsg()
         bus.ParseFromString(payload)
         return multi_array_layout_to_ros(bus)

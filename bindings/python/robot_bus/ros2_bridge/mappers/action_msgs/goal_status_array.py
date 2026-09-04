@@ -5,9 +5,20 @@ from __future__ import annotations
 from robot_bus.ros2_bridge.mappers import _convert
 from robot_bus.ros2_bridge.mappers.action_msgs.goal_status import goal_status_to_bus, goal_status_to_ros
 
-def goal_status_array_to_bus(msg):
-    from robot_bus.action_msgs.msg.v1 import GoalStatusArray as BusMsg
+_BusMsg = None
 
+
+def _bus_cls():
+    global _BusMsg
+    if _BusMsg is None:
+        from robot_bus.action_msgs.msg.v1 import GoalStatusArray as BusMsg
+
+        _BusMsg = BusMsg
+    return _BusMsg
+
+
+def goal_status_array_to_bus(msg):
+    BusMsg = _bus_cls()
     bus = BusMsg()
     bus.status_list.extend([goal_status_to_bus(x) for x in msg.status_list])
     return bus
@@ -22,17 +33,21 @@ def goal_status_array_to_ros(bus):
 
 
 class ActionMsgsGoalStatusArrayMapper:
-    def ros_msg_type(self):
-        from action_msgs.msg import GoalStatusArray as RosMsg
+    _ros_type = None
 
-        return RosMsg
+    def ros_msg_type(self):
+        cls = type(self)
+        if cls._ros_type is None:
+            from action_msgs.msg import GoalStatusArray as RosMsg
+
+            cls._ros_type = RosMsg
+        return cls._ros_type
 
     def ros_to_bus(self, msg) -> bytes:
         return goal_status_array_to_bus(msg).SerializeToString()
 
     def bus_to_ros(self, payload: bytes):
-        from robot_bus.action_msgs.msg.v1 import GoalStatusArray as BusMsg
-
+        BusMsg = _bus_cls()
         bus = BusMsg()
         bus.ParseFromString(payload)
         return goal_status_array_to_ros(bus)

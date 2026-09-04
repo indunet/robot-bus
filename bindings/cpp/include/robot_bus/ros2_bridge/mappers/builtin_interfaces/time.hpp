@@ -39,9 +39,7 @@ class BuiltinInterfacesTimeMapper
  public:
   std::vector<uint8_t> ros_to_bus(const ::builtin_interfaces::msg::Time &msg) const {
     auto bus = ros2_bridge_mappers::builtin_interfaces::time_to_bus(msg);
-    std::string bytes;
-    bus.SerializeToString(&bytes);
-    return std::vector<uint8_t>(bytes.begin(), bytes.end());
+    return encode_pb(bus);
   }
 
   ::builtin_interfaces::msg::Time bus_to_ros(BytesView payload) const {

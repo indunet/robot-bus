@@ -46,9 +46,7 @@ class FoxgloveMsgsEventMapper
  public:
   std::vector<uint8_t> ros_to_bus(const ::foxglove_msgs::msg::Event &msg) const {
     auto bus = ros2_bridge_mappers::foxglove_msgs::event_to_bus(msg);
-    std::string bytes;
-    bus.SerializeToString(&bytes);
-    return std::vector<uint8_t>(bytes.begin(), bytes.end());
+    return encode_pb(bus);
   }
 
   ::foxglove_msgs::msg::Event bus_to_ros(BytesView payload) const {

@@ -7,9 +7,20 @@ from robot_bus.ros2_bridge.mappers.std_msgs.header import header_to_bus, header_
 from robot_bus.ros2_bridge.mappers.geometry_msgs.point32 import point32_to_bus, point32_to_ros
 from robot_bus.ros2_bridge.mappers.geometry_msgs.vector3 import vector3_to_bus, vector3_to_ros
 
-def voxel_grid_to_bus(msg):
-    from robot_bus.nav2_msgs.msg.v1 import VoxelGrid as BusMsg
+_BusMsg = None
 
+
+def _bus_cls():
+    global _BusMsg
+    if _BusMsg is None:
+        from robot_bus.nav2_msgs.msg.v1 import VoxelGrid as BusMsg
+
+        _BusMsg = BusMsg
+    return _BusMsg
+
+
+def voxel_grid_to_bus(msg):
+    BusMsg = _bus_cls()
     bus = BusMsg()
     bus.header.CopyFrom(header_to_bus(msg.header))
     bus.data.extend(list(msg.data))
@@ -36,17 +47,21 @@ def voxel_grid_to_ros(bus):
 
 
 class Nav2MsgsVoxelGridMapper:
-    def ros_msg_type(self):
-        from nav2_msgs.msg import VoxelGrid as RosMsg
+    _ros_type = None
 
-        return RosMsg
+    def ros_msg_type(self):
+        cls = type(self)
+        if cls._ros_type is None:
+            from nav2_msgs.msg import VoxelGrid as RosMsg
+
+            cls._ros_type = RosMsg
+        return cls._ros_type
 
     def ros_to_bus(self, msg) -> bytes:
         return voxel_grid_to_bus(msg).SerializeToString()
 
     def bus_to_ros(self, payload: bytes):
-        from robot_bus.nav2_msgs.msg.v1 import VoxelGrid as BusMsg
-
+        BusMsg = _bus_cls()
         bus = BusMsg()
         bus.ParseFromString(payload)
         return voxel_grid_to_ros(bus)

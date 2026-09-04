@@ -49,9 +49,7 @@ class NavMsgsGridCellsMapper
  public:
   std::vector<uint8_t> ros_to_bus(const ::nav_msgs::msg::GridCells &msg) const {
     auto bus = ros2_bridge_mappers::nav_msgs::grid_cells_to_bus(msg);
-    std::string bytes;
-    bus.SerializeToString(&bytes);
-    return std::vector<uint8_t>(bytes.begin(), bytes.end());
+    return encode_pb(bus);
   }
 
   ::nav_msgs::msg::GridCells bus_to_ros(BytesView payload) const {

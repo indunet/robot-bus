@@ -39,9 +39,7 @@ class DiagnosticMsgsKeyValueMapper
  public:
   std::vector<uint8_t> ros_to_bus(const ::diagnostic_msgs::msg::KeyValue &msg) const {
     auto bus = ros2_bridge_mappers::diagnostic_msgs::key_value_to_bus(msg);
-    std::string bytes;
-    bus.SerializeToString(&bytes);
-    return std::vector<uint8_t>(bytes.begin(), bytes.end());
+    return encode_pb(bus);
   }
 
   ::diagnostic_msgs::msg::KeyValue bus_to_ros(BytesView payload) const {

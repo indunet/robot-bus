@@ -45,9 +45,7 @@ class Nav2MsgsParticleCloudMapper
  public:
   std::vector<uint8_t> ros_to_bus(const ::nav2_msgs::msg::ParticleCloud &msg) const {
     auto bus = ros2_bridge_mappers::nav2_msgs::particle_cloud_to_bus(msg);
-    std::string bytes;
-    bus.SerializeToString(&bytes);
-    return std::vector<uint8_t>(bytes.begin(), bytes.end());
+    return encode_pb(bus);
   }
 
   ::nav2_msgs::msg::ParticleCloud bus_to_ros(BytesView payload) const {

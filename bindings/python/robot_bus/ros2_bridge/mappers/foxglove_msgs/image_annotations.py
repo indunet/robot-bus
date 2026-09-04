@@ -8,9 +8,20 @@ from robot_bus.ros2_bridge.mappers.foxglove_msgs.points_annotation import points
 from robot_bus.ros2_bridge.mappers.foxglove_msgs.text_annotation import text_annotation_to_bus, text_annotation_to_ros
 from robot_bus.ros2_bridge.mappers.foxglove_msgs.key_value_pair import key_value_pair_to_bus, key_value_pair_to_ros
 
-def image_annotations_to_bus(msg):
-    from robot_bus.foxglove_msgs.msg.v1 import ImageAnnotations as BusMsg
+_BusMsg = None
 
+
+def _bus_cls():
+    global _BusMsg
+    if _BusMsg is None:
+        from robot_bus.foxglove_msgs.msg.v1 import ImageAnnotations as BusMsg
+
+        _BusMsg = BusMsg
+    return _BusMsg
+
+
+def image_annotations_to_bus(msg):
+    BusMsg = _bus_cls()
     bus = BusMsg()
     bus.timestamp = _convert.time_to_timestamp(msg.timestamp)
     bus.circles.extend([circle_annotation_to_bus(x) for x in msg.circles])
@@ -33,17 +44,21 @@ def image_annotations_to_ros(bus):
 
 
 class FoxgloveMsgsImageAnnotationsMapper:
-    def ros_msg_type(self):
-        from foxglove_msgs.msg import ImageAnnotations as RosMsg
+    _ros_type = None
 
-        return RosMsg
+    def ros_msg_type(self):
+        cls = type(self)
+        if cls._ros_type is None:
+            from foxglove_msgs.msg import ImageAnnotations as RosMsg
+
+            cls._ros_type = RosMsg
+        return cls._ros_type
 
     def ros_to_bus(self, msg) -> bytes:
         return image_annotations_to_bus(msg).SerializeToString()
 
     def bus_to_ros(self, payload: bytes):
-        from robot_bus.foxglove_msgs.msg.v1 import ImageAnnotations as BusMsg
-
+        BusMsg = _bus_cls()
         bus = BusMsg()
         bus.ParseFromString(payload)
         return image_annotations_to_ros(bus)

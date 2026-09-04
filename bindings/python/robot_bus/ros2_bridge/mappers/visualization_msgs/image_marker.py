@@ -8,9 +8,20 @@ from robot_bus.ros2_bridge.mappers.geometry_msgs.point import point_to_bus, poin
 from robot_bus.ros2_bridge.mappers.std_msgs.color_rgba import color_rgba_to_bus, color_rgba_to_ros
 from robot_bus.ros2_bridge.mappers.builtin_interfaces.duration import duration_to_bus, duration_to_ros
 
-def image_marker_to_bus(msg):
-    from robot_bus.visualization_msgs.msg.v1 import ImageMarker as BusMsg
+_BusMsg = None
 
+
+def _bus_cls():
+    global _BusMsg
+    if _BusMsg is None:
+        from robot_bus.visualization_msgs.msg.v1 import ImageMarker as BusMsg
+
+        _BusMsg = BusMsg
+    return _BusMsg
+
+
+def image_marker_to_bus(msg):
+    BusMsg = _bus_cls()
     bus = BusMsg()
     bus.header.CopyFrom(header_to_bus(msg.header))
     bus.ns = str(msg.ns)
@@ -49,17 +60,21 @@ def image_marker_to_ros(bus):
 
 
 class VisualizationMsgsImageMarkerMapper:
-    def ros_msg_type(self):
-        from visualization_msgs.msg import ImageMarker as RosMsg
+    _ros_type = None
 
-        return RosMsg
+    def ros_msg_type(self):
+        cls = type(self)
+        if cls._ros_type is None:
+            from visualization_msgs.msg import ImageMarker as RosMsg
+
+            cls._ros_type = RosMsg
+        return cls._ros_type
 
     def ros_to_bus(self, msg) -> bytes:
         return image_marker_to_bus(msg).SerializeToString()
 
     def bus_to_ros(self, payload: bytes):
-        from robot_bus.visualization_msgs.msg.v1 import ImageMarker as BusMsg
-
+        BusMsg = _bus_cls()
         bus = BusMsg()
         bus.ParseFromString(payload)
         return image_marker_to_ros(bus)

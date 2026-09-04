@@ -6,9 +6,20 @@ from robot_bus.ros2_bridge.mappers import _convert
 from robot_bus.ros2_bridge.mappers.std_msgs.header import header_to_bus, header_to_ros
 from robot_bus.ros2_bridge.mappers.geometry_msgs.twist_with_covariance import twist_with_covariance_to_bus, twist_with_covariance_to_ros
 
-def twist_with_covariance_stamped_to_bus(msg):
-    from robot_bus.geometry_msgs.msg.v1 import TwistWithCovarianceStamped as BusMsg
+_BusMsg = None
 
+
+def _bus_cls():
+    global _BusMsg
+    if _BusMsg is None:
+        from robot_bus.geometry_msgs.msg.v1 import TwistWithCovarianceStamped as BusMsg
+
+        _BusMsg = BusMsg
+    return _BusMsg
+
+
+def twist_with_covariance_stamped_to_bus(msg):
+    BusMsg = _bus_cls()
     bus = BusMsg()
     bus.header.CopyFrom(header_to_bus(msg.header))
     bus.twist.CopyFrom(twist_with_covariance_to_bus(msg.twist))
@@ -25,17 +36,21 @@ def twist_with_covariance_stamped_to_ros(bus):
 
 
 class GeometryMsgsTwistWithCovarianceStampedMapper:
-    def ros_msg_type(self):
-        from geometry_msgs.msg import TwistWithCovarianceStamped as RosMsg
+    _ros_type = None
 
-        return RosMsg
+    def ros_msg_type(self):
+        cls = type(self)
+        if cls._ros_type is None:
+            from geometry_msgs.msg import TwistWithCovarianceStamped as RosMsg
+
+            cls._ros_type = RosMsg
+        return cls._ros_type
 
     def ros_to_bus(self, msg) -> bytes:
         return twist_with_covariance_stamped_to_bus(msg).SerializeToString()
 
     def bus_to_ros(self, payload: bytes):
-        from robot_bus.geometry_msgs.msg.v1 import TwistWithCovarianceStamped as BusMsg
-
+        BusMsg = _bus_cls()
         bus = BusMsg()
         bus.ParseFromString(payload)
         return twist_with_covariance_stamped_to_ros(bus)

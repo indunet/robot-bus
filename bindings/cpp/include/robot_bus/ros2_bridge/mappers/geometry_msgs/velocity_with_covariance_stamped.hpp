@@ -44,9 +44,7 @@ class GeometryMsgsVelocityWithCovarianceStampedMapper
  public:
   std::vector<uint8_t> ros_to_bus(const ::geometry_msgs::msg::VelocityWithCovarianceStamped &msg) const {
     auto bus = ros2_bridge_mappers::geometry_msgs::velocity_with_covariance_stamped_to_bus(msg);
-    std::string bytes;
-    bus.SerializeToString(&bytes);
-    return std::vector<uint8_t>(bytes.begin(), bytes.end());
+    return encode_pb(bus);
   }
 
   ::geometry_msgs::msg::VelocityWithCovarianceStamped bus_to_ros(BytesView payload) const {

@@ -41,9 +41,7 @@ class StdMsgsFloat64MultiArrayMapper
  public:
   std::vector<uint8_t> ros_to_bus(const ::std_msgs::msg::Float64MultiArray &msg) const {
     auto bus = ros2_bridge_mappers::std_msgs::float64_multi_array_to_bus(msg);
-    std::string bytes;
-    bus.SerializeToString(&bytes);
-    return std::vector<uint8_t>(bytes.begin(), bytes.end());
+    return encode_pb(bus);
   }
 
   ::std_msgs::msg::Float64MultiArray bus_to_ros(BytesView payload) const {

@@ -63,4 +63,17 @@ mod tests {
         let back = occupancy_grid_to_ros(bus);
         assert_eq!(back.data, vec![0, 1, -1, 100]);
     }
+
+    #[test]
+    fn occupancy_grid_bulk_i8_roundtrip() {
+        let data: Vec<i8> = (0..4096).map(|i| ((i % 251) as i16 - 125) as i8).collect();
+        let ros = ros_env::nav_msgs::msg::OccupancyGrid {
+            header: Default::default(),
+            info: Default::default(),
+            data: data.clone(),
+        };
+        let bus = occupancy_grid_to_bus(ros);
+        assert_eq!(bus.data.len(), 4096);
+        assert_eq!(occupancy_grid_to_ros(bus).data, data);
+    }
 }

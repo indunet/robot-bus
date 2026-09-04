@@ -37,9 +37,7 @@ class UniqueIdentifierMsgsUuidMapper
  public:
   std::vector<uint8_t> ros_to_bus(const ::unique_identifier_msgs::msg::UUID &msg) const {
     auto bus = ros2_bridge_mappers::unique_identifier_msgs::uuid_to_bus(msg);
-    std::string bytes;
-    bus.SerializeToString(&bytes);
-    return std::vector<uint8_t>(bytes.begin(), bytes.end());
+    return encode_pb(bus);
   }
 
   ::unique_identifier_msgs::msg::UUID bus_to_ros(BytesView payload) const {

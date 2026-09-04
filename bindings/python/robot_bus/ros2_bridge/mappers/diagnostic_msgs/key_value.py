@@ -4,10 +4,20 @@ from __future__ import annotations
 
 from robot_bus.ros2_bridge.mappers import _convert
 
+_BusMsg = None
+
+
+def _bus_cls():
+    global _BusMsg
+    if _BusMsg is None:
+        from robot_bus.diagnostic_msgs.msg.v1 import KeyValue as BusMsg
+
+        _BusMsg = BusMsg
+    return _BusMsg
+
 
 def key_value_to_bus(msg):
-    from robot_bus.diagnostic_msgs.msg.v1 import KeyValue as BusMsg
-
+    BusMsg = _bus_cls()
     bus = BusMsg()
     bus.key = str(msg.key)
     bus.value = str(msg.value)
@@ -24,17 +34,21 @@ def key_value_to_ros(bus):
 
 
 class DiagnosticMsgsKeyValueMapper:
-    def ros_msg_type(self):
-        from diagnostic_msgs.msg import KeyValue as RosMsg
+    _ros_type = None
 
-        return RosMsg
+    def ros_msg_type(self):
+        cls = type(self)
+        if cls._ros_type is None:
+            from diagnostic_msgs.msg import KeyValue as RosMsg
+
+            cls._ros_type = RosMsg
+        return cls._ros_type
 
     def ros_to_bus(self, msg) -> bytes:
         return key_value_to_bus(msg).SerializeToString()
 
     def bus_to_ros(self, payload: bytes):
-        from robot_bus.diagnostic_msgs.msg.v1 import KeyValue as BusMsg
-
+        BusMsg = _bus_cls()
         bus = BusMsg()
         bus.ParseFromString(payload)
         return key_value_to_ros(bus)

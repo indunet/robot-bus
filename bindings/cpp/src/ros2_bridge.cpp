@@ -1,4 +1,5 @@
 #include <robot_bus/ros2_bridge.hpp>
+#include <robot_bus/typed.hpp>
 
 #include <robot_bus/builtin_interfaces/msg/v1/time.pb.h>
 #include <robot_bus/example_interfaces/action/v1/fibonacci.pb.h>
@@ -43,14 +44,7 @@ using detail::ServiceRouteSpec;
 using detail::TopicBuiltin;
 using detail::TopicRouteSpec;
 
-std::vector<uint8_t> serialize_pb(const google::protobuf::MessageLite &msg) {
-  const int size = static_cast<int>(msg.ByteSizeLong());
-  std::vector<uint8_t> bytes(static_cast<size_t>(size));
-  if (size > 0 && !msg.SerializeToArray(bytes.data(), size)) {
-    throw Error("protobuf SerializeToArray failed");
-  }
-  return bytes;
-}
+using robot_bus::encode_pb;
 
 template <typename T>
 T parse_pb(const uint8_t *data, size_t len) {
@@ -69,7 +63,7 @@ T parse_pb(BytesView view) {
 std::vector<uint8_t> string_ros_to_bus(const std_msgs::msg::String &ros) {
   std_msgs::msg::v1::String bus;
   bus.set_data(ros.data);
-  return serialize_pb(bus);
+  return encode_pb(bus);
 }
 
 std_msgs::msg::String string_bus_to_ros(const uint8_t *data, size_t len) {
@@ -92,7 +86,7 @@ std::vector<uint8_t> image_ros_to_bus(const sensor_msgs::msg::Image &ros) {
   bus.set_is_bigendian(ros.is_bigendian != 0);
   bus.set_step(ros.step);
   bus.set_data(ros.data.data(), ros.data.size());
-  return serialize_pb(bus);
+  return encode_pb(bus);
 }
 
 sensor_msgs::msg::Image image_bus_to_ros(const uint8_t *data, size_t len) {
@@ -115,14 +109,14 @@ sensor_msgs::msg::Image image_bus_to_ros(const uint8_t *data, size_t len) {
 }
 
 std::vector<uint8_t> trigger_req_to_bus() {
-  return serialize_pb(std_srvs::srv::v1::TriggerRequest{});
+  return encode_pb(std_srvs::srv::v1::TriggerRequest{});
 }
 
 std::vector<uint8_t> trigger_resp_ros_to_bus(const std_srvs::srv::Trigger::Response &ros) {
   std_srvs::srv::v1::TriggerResponse bus;
   bus.set_success(ros.success);
   bus.set_message(ros.message);
-  return serialize_pb(bus);
+  return encode_pb(bus);
 }
 
 std_srvs::srv::Trigger::Response trigger_resp_bus_to_ros(BytesView body) {
@@ -136,7 +130,7 @@ std_srvs::srv::Trigger::Response trigger_resp_bus_to_ros(BytesView body) {
 std::vector<uint8_t> set_bool_req_ros_to_bus(const std_srvs::srv::SetBool::Request &ros) {
   std_srvs::srv::v1::SetBoolRequest bus;
   bus.set_data(ros.data);
-  return serialize_pb(bus);
+  return encode_pb(bus);
 }
 
 std_srvs::srv::SetBool::Request set_bool_req_bus_to_ros(BytesView body) {
@@ -150,7 +144,7 @@ std::vector<uint8_t> set_bool_resp_ros_to_bus(const std_srvs::srv::SetBool::Resp
   std_srvs::srv::v1::SetBoolResponse bus;
   bus.set_success(ros.success);
   bus.set_message(ros.message);
-  return serialize_pb(bus);
+  return encode_pb(bus);
 }
 
 std_srvs::srv::SetBool::Response set_bool_resp_bus_to_ros(BytesView body) {
@@ -165,7 +159,7 @@ std::vector<uint8_t> fibonacci_goal_ros_to_bus(
     const example_interfaces::action::Fibonacci::Goal &ros) {
   example_interfaces::action::v1::FibonacciGoal bus;
   bus.set_order(ros.order);
-  return serialize_pb(bus);
+  return encode_pb(bus);
 }
 
 example_interfaces::action::Fibonacci::Goal fibonacci_goal_bus_to_ros(BytesView body) {
@@ -188,7 +182,7 @@ std::vector<uint8_t> fibonacci_feedback_ros_to_bus(
   for (auto v : ros.sequence) {
     bus.add_sequence(v);
   }
-  return serialize_pb(bus);
+  return encode_pb(bus);
 }
 
 example_interfaces::action::Fibonacci::Result fibonacci_result_bus_to_ros(BytesView body) {
@@ -204,11 +198,11 @@ std::vector<uint8_t> fibonacci_result_ros_to_bus(
   for (auto v : ros.sequence) {
     bus.add_sequence(v);
   }
-  return serialize_pb(bus);
+  return encode_pb(bus);
 }
 
 std::vector<uint8_t> fibonacci_empty_result() {
-  return serialize_pb(example_interfaces::action::v1::FibonacciResult{});
+  return encode_pb(example_interfaces::action::v1::FibonacciResult{});
 }
 
 Node make_bus_node(const BuilderState &state) {

@@ -46,9 +46,7 @@ class ControlMsgsInterfaceValueMapper
  public:
   std::vector<uint8_t> ros_to_bus(const ::control_msgs::msg::InterfaceValue &msg) const {
     auto bus = ros2_bridge_mappers::control_msgs::interface_value_to_bus(msg);
-    std::string bytes;
-    bus.SerializeToString(&bytes);
-    return std::vector<uint8_t>(bytes.begin(), bytes.end());
+    return encode_pb(bus);
   }
 
   ::control_msgs::msg::InterfaceValue bus_to_ros(BytesView payload) const {

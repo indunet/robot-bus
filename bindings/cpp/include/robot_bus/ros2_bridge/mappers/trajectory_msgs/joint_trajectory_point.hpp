@@ -53,9 +53,7 @@ class TrajectoryMsgsJointTrajectoryPointMapper
  public:
   std::vector<uint8_t> ros_to_bus(const ::trajectory_msgs::msg::JointTrajectoryPoint &msg) const {
     auto bus = ros2_bridge_mappers::trajectory_msgs::joint_trajectory_point_to_bus(msg);
-    std::string bytes;
-    bus.SerializeToString(&bytes);
-    return std::vector<uint8_t>(bytes.begin(), bytes.end());
+    return encode_pb(bus);
   }
 
   ::trajectory_msgs::msg::JointTrajectoryPoint bus_to_ros(BytesView payload) const {

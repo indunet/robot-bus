@@ -40,9 +40,7 @@ class GeometryMsgsTransformMapper
  public:
   std::vector<uint8_t> ros_to_bus(const ::geometry_msgs::msg::Transform &msg) const {
     auto bus = ros2_bridge_mappers::geometry_msgs::transform_to_bus(msg);
-    std::string bytes;
-    bus.SerializeToString(&bytes);
-    return std::vector<uint8_t>(bytes.begin(), bytes.end());
+    return encode_pb(bus);
   }
 
   ::geometry_msgs::msg::Transform bus_to_ros(BytesView payload) const {

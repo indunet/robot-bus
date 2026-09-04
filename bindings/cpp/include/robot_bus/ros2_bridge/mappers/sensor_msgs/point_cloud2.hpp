@@ -59,9 +59,7 @@ class SensorMsgsPointCloud2Mapper
  public:
   std::vector<uint8_t> ros_to_bus(const ::sensor_msgs::msg::PointCloud2 &msg) const {
     auto bus = ros2_bridge_mappers::sensor_msgs::point_cloud2_to_bus(msg);
-    std::string bytes;
-    bus.SerializeToString(&bytes);
-    return std::vector<uint8_t>(bytes.begin(), bytes.end());
+    return encode_pb(bus);
   }
 
   ::sensor_msgs::msg::PointCloud2 bus_to_ros(BytesView payload) const {

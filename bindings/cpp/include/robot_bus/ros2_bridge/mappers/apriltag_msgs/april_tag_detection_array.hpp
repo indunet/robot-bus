@@ -45,9 +45,7 @@ class ApriltagMsgsAprilTagDetectionArrayMapper
  public:
   std::vector<uint8_t> ros_to_bus(const ::apriltag_msgs::msg::AprilTagDetectionArray &msg) const {
     auto bus = ros2_bridge_mappers::apriltag_msgs::april_tag_detection_array_to_bus(msg);
-    std::string bytes;
-    bus.SerializeToString(&bytes);
-    return std::vector<uint8_t>(bytes.begin(), bytes.end());
+    return encode_pb(bus);
   }
 
   ::apriltag_msgs::msg::AprilTagDetectionArray bus_to_ros(BytesView payload) const {

@@ -6,9 +6,20 @@ from robot_bus.ros2_bridge.mappers import _convert
 from robot_bus.ros2_bridge.mappers.geometry_msgs.quaternion import quaternion_to_bus, quaternion_to_ros
 from robot_bus.ros2_bridge.mappers.visualization_msgs.marker import marker_to_bus, marker_to_ros
 
-def interactive_marker_control_to_bus(msg):
-    from robot_bus.visualization_msgs.msg.v1 import InteractiveMarkerControl as BusMsg
+_BusMsg = None
 
+
+def _bus_cls():
+    global _BusMsg
+    if _BusMsg is None:
+        from robot_bus.visualization_msgs.msg.v1 import InteractiveMarkerControl as BusMsg
+
+        _BusMsg = BusMsg
+    return _BusMsg
+
+
+def interactive_marker_control_to_bus(msg):
+    BusMsg = _bus_cls()
     bus = BusMsg()
     bus.name = str(msg.name)
     bus.orientation.CopyFrom(quaternion_to_bus(msg.orientation))
@@ -37,17 +48,21 @@ def interactive_marker_control_to_ros(bus):
 
 
 class VisualizationMsgsInteractiveMarkerControlMapper:
-    def ros_msg_type(self):
-        from visualization_msgs.msg import InteractiveMarkerControl as RosMsg
+    _ros_type = None
 
-        return RosMsg
+    def ros_msg_type(self):
+        cls = type(self)
+        if cls._ros_type is None:
+            from visualization_msgs.msg import InteractiveMarkerControl as RosMsg
+
+            cls._ros_type = RosMsg
+        return cls._ros_type
 
     def ros_to_bus(self, msg) -> bytes:
         return interactive_marker_control_to_bus(msg).SerializeToString()
 
     def bus_to_ros(self, payload: bytes):
-        from robot_bus.visualization_msgs.msg.v1 import InteractiveMarkerControl as BusMsg
-
+        BusMsg = _bus_cls()
         bus = BusMsg()
         bus.ParseFromString(payload)
         return interactive_marker_control_to_ros(bus)

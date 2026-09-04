@@ -15,21 +15,18 @@ namespace robot_bus {
 namespace ros2_bridge_mappers {
 
 inline std::string i8_seq_to_bytes(const std::vector<int8_t> &data) {
-  std::string out;
-  out.resize(data.size());
-  for (size_t i = 0; i < data.size(); ++i) {
-    out[i] = static_cast<char>(static_cast<uint8_t>(data[i]));
+  if (data.empty()) {
+    return {};
   }
-  return out;
+  return std::string(reinterpret_cast<const char *>(data.data()), data.size());
 }
 
 inline std::vector<int8_t> bytes_to_i8_seq(const std::string &data) {
-  std::vector<int8_t> out;
-  out.reserve(data.size());
-  for (unsigned char c : data) {
-    out.push_back(static_cast<int8_t>(c));
+  if (data.empty()) {
+    return {};
   }
-  return out;
+  const auto *p = reinterpret_cast<const int8_t *>(data.data());
+  return std::vector<int8_t>(p, p + data.size());
 }
 
 #ifdef ROBOT_BUS_HAS_ROS2

@@ -4,10 +4,20 @@ from __future__ import annotations
 
 from robot_bus.ros2_bridge.mappers import _convert
 
+_BusMsg = None
+
+
+def _bus_cls():
+    global _BusMsg
+    if _BusMsg is None:
+        from robot_bus.geometry_msgs.msg.v1 import Point32 as BusMsg
+
+        _BusMsg = BusMsg
+    return _BusMsg
+
 
 def point32_to_bus(msg):
-    from robot_bus.geometry_msgs.msg.v1 import Point32 as BusMsg
-
+    BusMsg = _bus_cls()
     bus = BusMsg()
     bus.x = msg.x
     bus.y = msg.y
@@ -26,17 +36,21 @@ def point32_to_ros(bus):
 
 
 class GeometryMsgsPoint32Mapper:
-    def ros_msg_type(self):
-        from geometry_msgs.msg import Point32 as RosMsg
+    _ros_type = None
 
-        return RosMsg
+    def ros_msg_type(self):
+        cls = type(self)
+        if cls._ros_type is None:
+            from geometry_msgs.msg import Point32 as RosMsg
+
+            cls._ros_type = RosMsg
+        return cls._ros_type
 
     def ros_to_bus(self, msg) -> bytes:
         return point32_to_bus(msg).SerializeToString()
 
     def bus_to_ros(self, payload: bytes):
-        from robot_bus.geometry_msgs.msg.v1 import Point32 as BusMsg
-
+        BusMsg = _bus_cls()
         bus = BusMsg()
         bus.ParseFromString(payload)
         return point32_to_ros(bus)

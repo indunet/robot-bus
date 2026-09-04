@@ -6,9 +6,20 @@ from robot_bus.ros2_bridge.mappers import _convert
 from robot_bus.ros2_bridge.mappers.foxglove_msgs.vector3 import vector3_to_bus, vector3_to_ros
 from robot_bus.ros2_bridge.mappers.foxglove_msgs.quaternion import quaternion_to_bus, quaternion_to_ros
 
-def frame_transform_to_bus(msg):
-    from robot_bus.foxglove_msgs.msg.v1 import FrameTransform as BusMsg
+_BusMsg = None
 
+
+def _bus_cls():
+    global _BusMsg
+    if _BusMsg is None:
+        from robot_bus.foxglove_msgs.msg.v1 import FrameTransform as BusMsg
+
+        _BusMsg = BusMsg
+    return _BusMsg
+
+
+def frame_transform_to_bus(msg):
+    BusMsg = _bus_cls()
     bus = BusMsg()
     bus.timestamp = _convert.time_to_timestamp(msg.timestamp)
     bus.parent_frame_id = str(msg.parent_frame_id)
@@ -31,17 +42,21 @@ def frame_transform_to_ros(bus):
 
 
 class FoxgloveMsgsFrameTransformMapper:
-    def ros_msg_type(self):
-        from foxglove_msgs.msg import FrameTransform as RosMsg
+    _ros_type = None
 
-        return RosMsg
+    def ros_msg_type(self):
+        cls = type(self)
+        if cls._ros_type is None:
+            from foxglove_msgs.msg import FrameTransform as RosMsg
+
+            cls._ros_type = RosMsg
+        return cls._ros_type
 
     def ros_to_bus(self, msg) -> bytes:
         return frame_transform_to_bus(msg).SerializeToString()
 
     def bus_to_ros(self, payload: bytes):
-        from robot_bus.foxglove_msgs.msg.v1 import FrameTransform as BusMsg
-
+        BusMsg = _bus_cls()
         bus = BusMsg()
         bus.ParseFromString(payload)
         return frame_transform_to_ros(bus)

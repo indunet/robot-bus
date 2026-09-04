@@ -13,9 +13,20 @@ from robot_bus.ros2_bridge.mappers.sensor_msgs.compressed_image import compresse
 from robot_bus.ros2_bridge.mappers.visualization_msgs.uv_coordinate import uv_coordinate_to_bus, uv_coordinate_to_ros
 from robot_bus.ros2_bridge.mappers.visualization_msgs.mesh_file import mesh_file_to_bus, mesh_file_to_ros
 
-def marker_to_bus(msg):
-    from robot_bus.visualization_msgs.msg.v1 import Marker as BusMsg
+_BusMsg = None
 
+
+def _bus_cls():
+    global _BusMsg
+    if _BusMsg is None:
+        from robot_bus.visualization_msgs.msg.v1 import Marker as BusMsg
+
+        _BusMsg = BusMsg
+    return _BusMsg
+
+
+def marker_to_bus(msg):
+    BusMsg = _bus_cls()
     bus = BusMsg()
     bus.header.CopyFrom(header_to_bus(msg.header))
     bus.ns = str(msg.ns)
@@ -66,17 +77,21 @@ def marker_to_ros(bus):
 
 
 class VisualizationMsgsMarkerMapper:
-    def ros_msg_type(self):
-        from visualization_msgs.msg import Marker as RosMsg
+    _ros_type = None
 
-        return RosMsg
+    def ros_msg_type(self):
+        cls = type(self)
+        if cls._ros_type is None:
+            from visualization_msgs.msg import Marker as RosMsg
+
+            cls._ros_type = RosMsg
+        return cls._ros_type
 
     def ros_to_bus(self, msg) -> bytes:
         return marker_to_bus(msg).SerializeToString()
 
     def bus_to_ros(self, payload: bytes):
-        from robot_bus.visualization_msgs.msg.v1 import Marker as BusMsg
-
+        BusMsg = _bus_cls()
         bus = BusMsg()
         bus.ParseFromString(payload)
         return marker_to_ros(bus)

@@ -40,9 +40,7 @@ class ActionMsgsGoalInfoMapper
  public:
   std::vector<uint8_t> ros_to_bus(const ::action_msgs::msg::GoalInfo &msg) const {
     auto bus = ros2_bridge_mappers::action_msgs::goal_info_to_bus(msg);
-    std::string bytes;
-    bus.SerializeToString(&bytes);
-    return std::vector<uint8_t>(bytes.begin(), bytes.end());
+    return encode_pb(bus);
   }
 
   ::action_msgs::msg::GoalInfo bus_to_ros(BytesView payload) const {

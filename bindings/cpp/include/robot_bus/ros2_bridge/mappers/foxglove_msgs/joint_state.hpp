@@ -45,9 +45,7 @@ class FoxgloveMsgsJointStateMapper
  public:
   std::vector<uint8_t> ros_to_bus(const ::foxglove_msgs::msg::JointState &msg) const {
     auto bus = ros2_bridge_mappers::foxglove_msgs::joint_state_to_bus(msg);
-    std::string bytes;
-    bus.SerializeToString(&bytes);
-    return std::vector<uint8_t>(bytes.begin(), bytes.end());
+    return encode_pb(bus);
   }
 
   ::foxglove_msgs::msg::JointState bus_to_ros(BytesView payload) const {

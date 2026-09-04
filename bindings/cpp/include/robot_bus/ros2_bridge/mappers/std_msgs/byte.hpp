@@ -37,9 +37,7 @@ class StdMsgsByteMapper
  public:
   std::vector<uint8_t> ros_to_bus(const ::std_msgs::msg::Byte &msg) const {
     auto bus = ros2_bridge_mappers::std_msgs::byte_to_bus(msg);
-    std::string bytes;
-    bus.SerializeToString(&bytes);
-    return std::vector<uint8_t>(bytes.begin(), bytes.end());
+    return encode_pb(bus);
   }
 
   ::std_msgs::msg::Byte bus_to_ros(BytesView payload) const {

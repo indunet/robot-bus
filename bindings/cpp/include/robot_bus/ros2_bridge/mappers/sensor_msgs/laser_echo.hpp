@@ -39,9 +39,7 @@ class SensorMsgsLaserEchoMapper
  public:
   std::vector<uint8_t> ros_to_bus(const ::sensor_msgs::msg::LaserEcho &msg) const {
     auto bus = ros2_bridge_mappers::sensor_msgs::laser_echo_to_bus(msg);
-    std::string bytes;
-    bus.SerializeToString(&bytes);
-    return std::vector<uint8_t>(bytes.begin(), bytes.end());
+    return encode_pb(bus);
   }
 
   ::sensor_msgs::msg::LaserEcho bus_to_ros(BytesView payload) const {

@@ -4,6 +4,8 @@
 /// Include after `ros2_bridge.hpp` definitions of WireContext / Mapper bases.
 /// Requires `ROBOT_BUS_HAS_ROS2`.
 
+#include <robot_bus/typed.hpp>
+
 #include <chrono>
 #include <future>
 #include <memory>

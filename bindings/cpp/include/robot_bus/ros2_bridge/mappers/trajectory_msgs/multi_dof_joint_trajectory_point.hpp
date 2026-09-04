@@ -60,9 +60,7 @@ class TrajectoryMsgsMultiDofJointTrajectoryPointMapper
  public:
   std::vector<uint8_t> ros_to_bus(const ::trajectory_msgs::msg::MultiDOFJointTrajectoryPoint &msg) const {
     auto bus = ros2_bridge_mappers::trajectory_msgs::multi_dof_joint_trajectory_point_to_bus(msg);
-    std::string bytes;
-    bus.SerializeToString(&bytes);
-    return std::vector<uint8_t>(bytes.begin(), bytes.end());
+    return encode_pb(bus);
   }
 
   ::trajectory_msgs::msg::MultiDOFJointTrajectoryPoint bus_to_ros(BytesView payload) const {

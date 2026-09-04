@@ -20,10 +20,7 @@ inline ::nav_msgs::msg::v1::OccupancyGrid occupancy_grid_to_bus(const ::nav_msgs
   ::nav_msgs::msg::v1::OccupancyGrid bus;
   *bus.mutable_header() = ::robot_bus::ros2_bridge_mappers::std_msgs::header_to_bus(msg.header);
   *bus.mutable_info() = ::robot_bus::ros2_bridge_mappers::nav_msgs::map_meta_data_to_bus(msg.info);
-  {
-    auto tmp = ::robot_bus::ros2_bridge_mappers::i8_seq_to_bytes(msg.data);
-    bus.set_data(tmp.data(), tmp.size());
-  }
+  bus.set_data(reinterpret_cast<const char *>(msg.data.data()), msg.data.size());
   return bus;
 }
 
@@ -45,9 +42,7 @@ class NavMsgsOccupancyGridMapper
  public:
   std::vector<uint8_t> ros_to_bus(const ::nav_msgs::msg::OccupancyGrid &msg) const {
     auto bus = ros2_bridge_mappers::nav_msgs::occupancy_grid_to_bus(msg);
-    std::string bytes;
-    bus.SerializeToString(&bytes);
-    return std::vector<uint8_t>(bytes.begin(), bytes.end());
+    return encode_pb(bus);
   }
 
   ::nav_msgs::msg::OccupancyGrid bus_to_ros(BytesView payload) const {

@@ -721,16 +721,27 @@ def emit_python(struct: str, msg: Msg, existing: dict[str, tuple[Path, str]]) ->
         to_ros_lines.append(f"    out.{f.name} = {py_bus_to_ros_value(msg, f, b)}")
     to_bus_body = "\n".join(to_bus_lines) if to_bus_lines else "    pass"
     to_ros_body = "\n".join(to_ros_lines) if to_ros_lines else "    pass"
+    nested_extra = f"\n{nested_block}" if nested_block else ""
     return f'''"""Generated mapper for `{msg.ros_type}`."""
 
 from __future__ import annotations
 
-from robot_bus.ros2_bridge.mappers import _convert
-{nested_block}
+from robot_bus.ros2_bridge.mappers import _convert{nested_extra}
+
+_BusMsg = None
+
+
+def _bus_cls():
+    global _BusMsg
+    if _BusMsg is None:
+        from robot_bus.{pkg}.msg.v1 import {msg.name} as BusMsg
+
+        _BusMsg = BusMsg
+    return _BusMsg
+
 
 def {stem}_to_bus(msg):
-    from robot_bus.{pkg}.msg.v1 import {msg.name} as BusMsg
-
+    BusMsg = _bus_cls()
     bus = BusMsg()
 {to_bus_body}
     return bus
@@ -745,17 +756,21 @@ def {stem}_to_ros(bus):
 
 
 class {struct}:
-    def ros_msg_type(self):
-        from {pkg}.msg import {msg.name} as RosMsg
+    _ros_type = None
 
-        return RosMsg
+    def ros_msg_type(self):
+        cls = type(self)
+        if cls._ros_type is None:
+            from {pkg}.msg import {msg.name} as RosMsg
+
+            cls._ros_type = RosMsg
+        return cls._ros_type
 
     def ros_to_bus(self, msg) -> bytes:
         return {stem}_to_bus(msg).SerializeToString()
 
     def bus_to_ros(self, payload: bytes):
-        from robot_bus.{pkg}.msg.v1 import {msg.name} as BusMsg
-
+        BusMsg = _bus_cls()
         bus = BusMsg()
         bus.ParseFromString(payload)
         return {stem}_to_ros(bus)
@@ -804,8 +819,7 @@ def cpp_to_bus_stmt(msg: Msg, f: Field, existing: dict[str, tuple[Path, str]]) -
         return f"  bus.set_{setter}(static_cast<int32_t>({ros}));"
     if f.is_bytes and key in INT8_BYTES:
         return (
-            f"  {{\n    auto tmp = ::robot_bus::ros2_bridge_mappers::i8_seq_to_bytes({ros});\n"
-            f"    bus.set_{setter}(tmp.data(), tmp.size());\n  }}"
+            f"  bus.set_{setter}(reinterpret_cast<const char *>({ros}.data()), {ros}.size());"
         )
     if f.is_bytes:
         return (
@@ -893,21 +907,18 @@ namespace robot_bus {
 namespace ros2_bridge_mappers {
 
 inline std::string i8_seq_to_bytes(const std::vector<int8_t> &data) {
-  std::string out;
-  out.resize(data.size());
-  for (size_t i = 0; i < data.size(); ++i) {
-    out[i] = static_cast<char>(static_cast<uint8_t>(data[i]));
+  if (data.empty()) {
+    return {};
   }
-  return out;
+  return std::string(reinterpret_cast<const char *>(data.data()), data.size());
 }
 
 inline std::vector<int8_t> bytes_to_i8_seq(const std::string &data) {
-  std::vector<int8_t> out;
-  out.reserve(data.size());
-  for (unsigned char c : data) {
-    out.push_back(static_cast<int8_t>(c));
+  if (data.empty()) {
+    return {};
   }
-  return out;
+  const auto *p = reinterpret_cast<const int8_t *>(data.data());
+  return std::vector<int8_t>(p, p + data.size());
 }
 
 #ifdef ROBOT_BUS_HAS_ROS2
@@ -1010,9 +1021,7 @@ class {struct}
  public:
   std::vector<uint8_t> ros_to_bus(const {ros_ty} &msg) const {{
     auto bus = ros2_bridge_mappers::{pkg}::{stem}_to_bus(msg);
-    std::string bytes;
-    bus.SerializeToString(&bytes);
-    return std::vector<uint8_t>(bytes.begin(), bytes.end());
+    return encode_pb(bus);
   }}
 
   {ros_ty} bus_to_ros(BytesView payload) const {{
@@ -1077,13 +1086,21 @@ def emit_python_convert() -> str:
 
 from __future__ import annotations
 
+import array
+
 
 def i8_seq_to_bytes(data) -> bytes:
-    return bytes((int(v) & 0xFF) for v in data)
+    """Bulk `int8[]` → proto `bytes` (no per-cell Python ints)."""
+    if isinstance(data, (bytes, bytearray, memoryview)):
+        return bytes(data)
+    if isinstance(data, array.array) and data.typecode in ("b", "B"):
+        return data.tobytes()
+    return array.array("b", data).tobytes()
 
 
 def bytes_to_i8_seq(data: bytes):
-    return [int.from_bytes(bytes([b]), "little", signed=True) for b in data]
+    """Bulk proto `bytes` → ROS `int8[]` as `array.array('b')`."""
+    return array.array("b", data)
 
 
 def time_to_timestamp(t):

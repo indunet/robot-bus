@@ -39,9 +39,7 @@ class BuiltinInterfacesDurationMapper
  public:
   std::vector<uint8_t> ros_to_bus(const ::builtin_interfaces::msg::Duration &msg) const {
     auto bus = ros2_bridge_mappers::builtin_interfaces::duration_to_bus(msg);
-    std::string bytes;
-    bus.SerializeToString(&bytes);
-    return std::vector<uint8_t>(bytes.begin(), bytes.end());
+    return encode_pb(bus);
   }
 
   ::builtin_interfaces::msg::Duration bus_to_ros(BytesView payload) const {

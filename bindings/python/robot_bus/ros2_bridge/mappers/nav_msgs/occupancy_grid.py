@@ -6,9 +6,20 @@ from robot_bus.ros2_bridge.mappers import _convert
 from robot_bus.ros2_bridge.mappers.std_msgs.header import header_to_bus, header_to_ros
 from robot_bus.ros2_bridge.mappers.nav_msgs.map_meta_data import map_meta_data_to_bus, map_meta_data_to_ros
 
-def occupancy_grid_to_bus(msg):
-    from robot_bus.nav_msgs.msg.v1 import OccupancyGrid as BusMsg
+_BusMsg = None
 
+
+def _bus_cls():
+    global _BusMsg
+    if _BusMsg is None:
+        from robot_bus.nav_msgs.msg.v1 import OccupancyGrid as BusMsg
+
+        _BusMsg = BusMsg
+    return _BusMsg
+
+
+def occupancy_grid_to_bus(msg):
+    BusMsg = _bus_cls()
     bus = BusMsg()
     bus.header.CopyFrom(header_to_bus(msg.header))
     bus.info.CopyFrom(map_meta_data_to_bus(msg.info))
@@ -27,17 +38,21 @@ def occupancy_grid_to_ros(bus):
 
 
 class NavMsgsOccupancyGridMapper:
-    def ros_msg_type(self):
-        from nav_msgs.msg import OccupancyGrid as RosMsg
+    _ros_type = None
 
-        return RosMsg
+    def ros_msg_type(self):
+        cls = type(self)
+        if cls._ros_type is None:
+            from nav_msgs.msg import OccupancyGrid as RosMsg
+
+            cls._ros_type = RosMsg
+        return cls._ros_type
 
     def ros_to_bus(self, msg) -> bytes:
         return occupancy_grid_to_bus(msg).SerializeToString()
 
     def bus_to_ros(self, payload: bytes):
-        from robot_bus.nav_msgs.msg.v1 import OccupancyGrid as BusMsg
-
+        BusMsg = _bus_cls()
         bus = BusMsg()
         bus.ParseFromString(payload)
         return occupancy_grid_to_ros(bus)

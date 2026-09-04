@@ -6,9 +6,20 @@ from robot_bus.ros2_bridge.mappers import _convert
 from robot_bus.ros2_bridge.mappers.std_msgs.header import header_to_bus, header_to_ros
 from robot_bus.ros2_bridge.mappers.nav_msgs.trajectory_point import trajectory_point_to_bus, trajectory_point_to_ros
 
-def trajectory_to_bus(msg):
-    from robot_bus.nav_msgs.msg.v1 import Trajectory as BusMsg
+_BusMsg = None
 
+
+def _bus_cls():
+    global _BusMsg
+    if _BusMsg is None:
+        from robot_bus.nav_msgs.msg.v1 import Trajectory as BusMsg
+
+        _BusMsg = BusMsg
+    return _BusMsg
+
+
+def trajectory_to_bus(msg):
+    BusMsg = _bus_cls()
     bus = BusMsg()
     bus.header.CopyFrom(header_to_bus(msg.header))
     bus.points.extend([trajectory_point_to_bus(x) for x in msg.points])
@@ -25,17 +36,21 @@ def trajectory_to_ros(bus):
 
 
 class NavMsgsTrajectoryMapper:
-    def ros_msg_type(self):
-        from nav_msgs.msg import Trajectory as RosMsg
+    _ros_type = None
 
-        return RosMsg
+    def ros_msg_type(self):
+        cls = type(self)
+        if cls._ros_type is None:
+            from nav_msgs.msg import Trajectory as RosMsg
+
+            cls._ros_type = RosMsg
+        return cls._ros_type
 
     def ros_to_bus(self, msg) -> bytes:
         return trajectory_to_bus(msg).SerializeToString()
 
     def bus_to_ros(self, payload: bytes):
-        from robot_bus.nav_msgs.msg.v1 import Trajectory as BusMsg
-
+        BusMsg = _bus_cls()
         bus = BusMsg()
         bus.ParseFromString(payload)
         return trajectory_to_ros(bus)

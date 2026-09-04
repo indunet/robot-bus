@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import array
+
 
 class SensorMsgsImageMapper:
     def ros_msg_type(self):
@@ -39,7 +41,5 @@ class SensorMsgsImageMapper:
         out.encoding = bus.encoding
         out.is_bigendian = 1 if bus.is_bigendian else 0
         out.step = bus.step
-        import array
-
         out.data = array.array("B", bus.data)
         return out

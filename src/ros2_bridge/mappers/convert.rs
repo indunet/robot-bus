@@ -10,12 +10,19 @@ pub fn to_ros_string(s: impl AsRef<str>) -> RosString {
     RosString::from(s.as_ref())
 }
 
-pub fn i8_seq_to_bytes(data: impl IntoIterator<Item = i8>) -> Vec<u8> {
-    data.into_iter().map(|v| v as u8).collect()
+/// Reinterpret `Vec<i8>` as `Vec<u8>` without element-wise copies.
+/// OccupancyGrid / Costmap `int8[]` and proto `bytes` share the same layout.
+pub fn i8_seq_to_bytes(data: Vec<i8>) -> Vec<u8> {
+    let mut data = std::mem::ManuallyDrop::new(data);
+    // SAFETY: i8 and u8 have identical size/alignment; Vec's heap buffer is interchangeable.
+    unsafe { Vec::from_raw_parts(data.as_mut_ptr().cast::<u8>(), data.len(), data.capacity()) }
 }
 
+/// Reverse of [`i8_seq_to_bytes`].
 pub fn bytes_to_i8_seq(data: Vec<u8>) -> Vec<i8> {
-    data.into_iter().map(|v| v as i8).collect()
+    let mut data = std::mem::ManuallyDrop::new(data);
+    // SAFETY: same as [`i8_seq_to_bytes`].
+    unsafe { Vec::from_raw_parts(data.as_mut_ptr().cast::<i8>(), data.len(), data.capacity()) }
 }
 
 pub fn octet_to_bool(v: u8) -> bool {
@@ -175,5 +182,24 @@ pub fn proto_to_duration(d: prost_types::Duration) -> ros_env::builtin_interface
     ros_env::builtin_interfaces::msg::Duration {
         sec: d.seconds as i32,
         nanosec: d.nanos as u32,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn i8_bytes_roundtrip_preserves_layout() {
+        let src: Vec<i8> = vec![0, 1, -1, 100, -128, 127];
+        let bytes = i8_seq_to_bytes(src.clone());
+        assert_eq!(bytes, vec![0, 1, 255, 100, 128, 127]);
+        assert_eq!(bytes_to_i8_seq(bytes), src);
+    }
+
+    #[test]
+    fn i8_bytes_empty() {
+        assert!(i8_seq_to_bytes(Vec::new()).is_empty());
+        assert!(bytes_to_i8_seq(Vec::new()).is_empty());
     }
 }

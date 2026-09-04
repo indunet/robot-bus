@@ -41,9 +41,7 @@ class SensorMsgsIlluminanceMapper
  public:
   std::vector<uint8_t> ros_to_bus(const ::sensor_msgs::msg::Illuminance &msg) const {
     auto bus = ros2_bridge_mappers::sensor_msgs::illuminance_to_bus(msg);
-    std::string bytes;
-    bus.SerializeToString(&bytes);
-    return std::vector<uint8_t>(bytes.begin(), bytes.end());
+    return encode_pb(bus);
   }
 
   ::sensor_msgs::msg::Illuminance bus_to_ros(BytesView payload) const {

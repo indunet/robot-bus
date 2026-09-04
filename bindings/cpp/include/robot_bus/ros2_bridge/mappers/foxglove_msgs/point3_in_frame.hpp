@@ -41,9 +41,7 @@ class FoxgloveMsgsPoint3InFrameMapper
  public:
   std::vector<uint8_t> ros_to_bus(const ::foxglove_msgs::msg::Point3InFrame &msg) const {
     auto bus = ros2_bridge_mappers::foxglove_msgs::point3_in_frame_to_bus(msg);
-    std::string bytes;
-    bus.SerializeToString(&bytes);
-    return std::vector<uint8_t>(bytes.begin(), bytes.end());
+    return encode_pb(bus);
   }
 
   ::foxglove_msgs::msg::Point3InFrame bus_to_ros(BytesView payload) const {

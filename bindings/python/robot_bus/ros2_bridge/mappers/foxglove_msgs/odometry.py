@@ -7,9 +7,20 @@ from robot_bus.ros2_bridge.mappers.foxglove_msgs.pose import pose_to_bus, pose_t
 from robot_bus.ros2_bridge.mappers.foxglove_msgs.vector3 import vector3_to_bus, vector3_to_ros
 from robot_bus.ros2_bridge.mappers.foxglove_msgs.key_value_pair import key_value_pair_to_bus, key_value_pair_to_ros
 
-def odometry_to_bus(msg):
-    from robot_bus.foxglove_msgs.msg.v1 import Odometry as BusMsg
+_BusMsg = None
 
+
+def _bus_cls():
+    global _BusMsg
+    if _BusMsg is None:
+        from robot_bus.foxglove_msgs.msg.v1 import Odometry as BusMsg
+
+        _BusMsg = BusMsg
+    return _BusMsg
+
+
+def odometry_to_bus(msg):
+    BusMsg = _bus_cls()
     bus = BusMsg()
     bus.timestamp = _convert.time_to_timestamp(msg.timestamp)
     bus.frame_id = str(msg.frame_id)
@@ -40,17 +51,21 @@ def odometry_to_ros(bus):
 
 
 class FoxgloveMsgsOdometryMapper:
-    def ros_msg_type(self):
-        from foxglove_msgs.msg import Odometry as RosMsg
+    _ros_type = None
 
-        return RosMsg
+    def ros_msg_type(self):
+        cls = type(self)
+        if cls._ros_type is None:
+            from foxglove_msgs.msg import Odometry as RosMsg
+
+            cls._ros_type = RosMsg
+        return cls._ros_type
 
     def ros_to_bus(self, msg) -> bytes:
         return odometry_to_bus(msg).SerializeToString()
 
     def bus_to_ros(self, payload: bytes):
-        from robot_bus.foxglove_msgs.msg.v1 import Odometry as BusMsg
-
+        BusMsg = _bus_cls()
         bus = BusMsg()
         bus.ParseFromString(payload)
         return odometry_to_ros(bus)

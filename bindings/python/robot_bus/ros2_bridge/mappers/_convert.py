@@ -2,13 +2,21 @@
 
 from __future__ import annotations
 
+import array
+
 
 def i8_seq_to_bytes(data) -> bytes:
-    return bytes((int(v) & 0xFF) for v in data)
+    """Bulk `int8[]` → proto `bytes` (no per-cell Python ints)."""
+    if isinstance(data, (bytes, bytearray, memoryview)):
+        return bytes(data)
+    if isinstance(data, array.array) and data.typecode in ("b", "B"):
+        return data.tobytes()
+    return array.array("b", data).tobytes()
 
 
 def bytes_to_i8_seq(data: bytes):
-    return [int.from_bytes(bytes([b]), "little", signed=True) for b in data]
+    """Bulk proto `bytes` → ROS `int8[]` as `array.array('b')`."""
+    return array.array("b", data)
 
 
 def time_to_timestamp(t):
