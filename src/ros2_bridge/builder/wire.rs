@@ -8,6 +8,7 @@ use prost::Message;
 use crate::console_topics;
 use crate::errors::Result;
 use crate::robot_bus_interfaces::msg::v1::{TopicDemand, TopicStatsList};
+use crate::ros2_bridge::drop_stats::DropStats;
 use crate::ros2_bridge::mapper::{
     ActionWireContext, Direction, ServiceWireContext, TopicMapper, TopicQos, TopicWireContext,
 };
@@ -34,8 +35,9 @@ pub(super) fn create_ros2_to_bus_sub(
     mapper: &Arc<dyn TopicMapper>,
     ros_topic: &str,
     qos: TopicQos,
+    drop_stats: Arc<DropStats>,
 ) -> Result<Box<dyn Any + Send + Sync>> {
-    mapper.create_ros2_to_bus_subscription(ros_node, bus_pub, ros_topic, qos)
+    mapper.create_ros2_to_bus_subscription(ros_node, bus_pub, ros_topic, qos, drop_stats)
 }
 
 pub(super) fn subscribe_demand(
@@ -82,6 +84,7 @@ pub(super) fn wire_route(
     route: &RouteSpec,
     ros_subs: &mut Vec<Box<dyn Any + Send + Sync>>,
     ros_entities: &mut Vec<Box<dyn Any + Send + Sync>>,
+    drop_stats: Arc<DropStats>,
 ) -> Result<()> {
     let mapper = Arc::clone(&route.mapper);
     let ros_topic = route.ros_topic.clone();
@@ -99,6 +102,7 @@ pub(super) fn wire_route(
                 ros_qos,
                 bus_qos,
                 ros_entities,
+                drop_stats,
             })?;
         }
         Direction::Ros2ToBus => {
@@ -115,7 +119,14 @@ pub(super) fn wire_route(
                     },
                 );
             } else {
-                let sub = create_ros2_to_bus_sub(ros_node, bus_pub, &mapper, &ros_topic, ros_qos)?;
+                let sub = create_ros2_to_bus_sub(
+                    ros_node,
+                    bus_pub,
+                    &mapper,
+                    &ros_topic,
+                    ros_qos,
+                    drop_stats,
+                )?;
                 ros_subs.push(sub);
                 eager_bus_topics.insert(bus_topic);
             }

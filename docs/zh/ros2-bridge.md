@@ -583,6 +583,20 @@ just python-dev-ros2   # 或 just python-dev；需本机有 rclpy
 
 同进程同时持有 ROS 节点（rclrs / rclpy / rclcpp）和 robot-bus `Node`。主循环需推进两侧（`spin` / `spin_once`）：排空 ROS↔bus 队列并驱动 bus。
 
+话题转换 / 解码 / 发出失败会丢掉该帧（桥继续转）。每座桥有原子计数，`drop_stats()` 返回快照（`convert_fail` / `decode_fail` / `publish_fail`），同时打 warn。不发到 console topic。
+
+```python
+bridge.drop_stats()  # {"convert_fail": 0, "decode_fail": 0, "publish_fail": 0}
+```
+
+```rust
+let snap = bridge.drop_stats(); // snap.convert_fail / decode_fail / publish_fail
+```
+
+```cpp
+auto snap = bridge.drop_stats();  // snap.convert_fail / decode_fail / publish_fail
+```
+
 ---
 
 ## 常见问题

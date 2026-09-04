@@ -17,6 +17,7 @@ use rclrs::IntoPrimitiveOptions;
 use rosidl_runtime_rs::{Action as ActionIdl, Message as RosMessage, Service as ServiceIdl};
 
 use crate::errors::{BusError, Result as BusResult};
+use crate::ros2_bridge::drop_stats::DropStats;
 use crate::runtime::{Node, TopicPublisherRaw};
 
 use super::mappers::BUILTIN_MAPPER_LIST;
@@ -195,6 +196,7 @@ pub struct TopicWireContext<'a> {
     pub ros_qos: TopicQos,
     pub bus_qos: TopicQos,
     pub ros_entities: &'a mut Vec<Box<dyn Any + Send + Sync>>,
+    pub drop_stats: Arc<DropStats>,
 }
 
 /// Typed topic codec: ROS IDL object ↔ bus protobuf object.
@@ -218,6 +220,7 @@ pub trait TopicMapper: Send + Sync {
         bus_pub: TopicPublisherRaw,
         ros_topic: &str,
         qos: TopicQos,
+        drop_stats: Arc<DropStats>,
     ) -> Result<Box<dyn Any + Send + Sync>>;
 
     fn attach_bus_to_ros(&self, ctx: TopicWireContext<'_>) -> Result<()>;
@@ -233,8 +236,9 @@ where
         bus_pub: TopicPublisherRaw,
         ros_topic: &str,
         qos: TopicQos,
+        drop_stats: Arc<DropStats>,
     ) -> Result<Box<dyn Any + Send + Sync>> {
-        create_typed_ros2_to_bus_sub(self, ros_node, bus_pub, ros_topic, qos)
+        create_typed_ros2_to_bus_sub(self, ros_node, bus_pub, ros_topic, qos, drop_stats)
     }
 
     fn attach_bus_to_ros(&self, ctx: TopicWireContext<'_>) -> Result<()> {
@@ -365,9 +369,10 @@ impl TopicMapper for RefTopicMapper {
         bus_pub: TopicPublisherRaw,
         ros_topic: &str,
         qos: TopicQos,
+        drop_stats: Arc<DropStats>,
     ) -> Result<Box<dyn Any + Send + Sync>> {
         self.0
-            .create_ros2_to_bus_subscription(ros_node, bus_pub, ros_topic, qos)
+            .create_ros2_to_bus_subscription(ros_node, bus_pub, ros_topic, qos, drop_stats)
     }
 
     fn attach_bus_to_ros(&self, ctx: TopicWireContext<'_>) -> Result<()> {

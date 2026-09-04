@@ -27,17 +27,17 @@ class TypedTopicMapper : public TopicMapper {
   rclcpp::SubscriptionBase::SharedPtr create_ros2_to_bus_subscription(
       rclcpp::Node::SharedPtr ros_node, const std::string &ros_topic,
       std::shared_ptr<TopicPublisher> bus_pub, std::shared_ptr<std::mutex> mtx,
-      const rclcpp::QoS &qos) override {
+      const rclcpp::QoS &qos, std::shared_ptr<DropStats> drop_stats = {}) override {
     auto *self = static_cast<Derived *>(this);
     return ros_node->template create_subscription<RosMsg>(
         ros_topic, qos,
-        [self, bus_pub, mtx](typename RosMsg::ConstSharedPtr msg) {
-          try {
-            auto bytes = self->ros_to_bus(*msg);
-            std::lock_guard<std::mutex> lock(*mtx);
-            bus_pub->publish(bytes);
-          } catch (...) {
-          }
+        [self, bus_pub, mtx, drop_stats, topic = ros_topic](typename RosMsg::ConstSharedPtr msg) {
+          forward_ros_to_bus(
+              drop_stats, topic, [self, msg]() { return self->ros_to_bus(*msg); },
+              [bus_pub, mtx](const std::vector<uint8_t> &bytes) {
+                std::lock_guard<std::mutex> lock(*mtx);
+                bus_pub->publish(bytes);
+              });
         });
   }
 
@@ -48,7 +48,8 @@ class TypedTopicMapper : public TopicMapper {
           ? ctx.bus_node.create_publisher(ctx.bus_topic.c_str(), ctx.bus_qos_depth)
           : ctx.bus_node.create_publisher(ctx.bus_topic.c_str()));
       auto mtx = std::make_shared<std::mutex>();
-      auto sub = create_ros2_to_bus_subscription(ctx.ros_node, ctx.ros_topic, pub, mtx, ctx.qos);
+      auto sub = create_ros2_to_bus_subscription(ctx.ros_node, ctx.ros_topic, pub, mtx, ctx.qos,
+                                                 ctx.drop_stats);
       ctx.retain(std::move(pub));
       ctx.retain(std::move(mtx));
       ctx.retain(std::move(sub));
@@ -56,17 +57,18 @@ class TypedTopicMapper : public TopicMapper {
       auto *self = static_cast<Derived *>(this);
       auto ros_pub = ctx.ros_node->template create_publisher<RosMsg>(ctx.ros_topic, ctx.qos);
       auto weak_pub = std::weak_ptr<rclcpp::Publisher<RosMsg>>(ros_pub);
+      auto stats = ctx.drop_stats;
+      auto topic = ctx.ros_topic;
       ctx.retain(std::make_shared<SubscriptionHandle>(ctx.bus_node.create_subscription(
           ctx.bus_topic.c_str(),
-          [self, weak_pub](BytesView payload) {
+          [self, weak_pub, stats, topic](BytesView payload) {
             auto pub = weak_pub.lock();
             if (!pub) {
               return;
             }
-            try {
-              pub->publish(self->bus_to_ros(payload));
-            } catch (...) {
-            }
+            forward_bus_to_ros(
+                stats, topic, [self, payload]() { return self->bus_to_ros(payload); },
+                [pub](RosMsg msg) { pub->publish(std::move(msg)); });
           },
           nullptr, ctx.bus_qos_depth)));
       ctx.retain(std::move(ros_pub));

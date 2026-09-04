@@ -9,6 +9,7 @@ use rclrs::{Context as RosContext, CreateBasicExecutor, SpinOptions};
 
 use crate::discovery::DiscoverOpts;
 use crate::errors::{BusError, Result};
+use crate::ros2_bridge::drop_stats::DropStats;
 use crate::ros2_bridge::mapper::{ActionMapper, Direction, ServiceMapper, TopicMapper};
 use crate::runtime::{Node, NodeOptions};
 
@@ -206,6 +207,7 @@ impl Ros2BridgeBuilder {
         let mut lazy_routes: HashMap<String, LazyRos2ToBus> = HashMap::new();
         let mut eager_bus_topics = HashSet::new();
         let mut ros_entities: Vec<Box<dyn Any + Send + Sync>> = Vec::new();
+        let drop_stats = Arc::new(DropStats::new());
 
         for route in &self.routes {
             wire_route(
@@ -217,6 +219,7 @@ impl Ros2BridgeBuilder {
                 route,
                 &mut ros_subs,
                 &mut ros_entities,
+                Arc::clone(&drop_stats),
             )?;
         }
 
@@ -257,6 +260,7 @@ impl Ros2BridgeBuilder {
             _ros_entities: ros_entities,
             ros_commands,
             _ros_spin: Some(ros_spin),
+            drop_stats,
         })
     }
 }

@@ -7,6 +7,7 @@ use std::time::{Duration, Instant};
 
 use crate::errors::{BusError, Result};
 use crate::lazy_subscribe::{should_enable_ros_subscription, CONSOLE_DETECT_TIMEOUT};
+use crate::ros2_bridge::drop_stats::{DropStats, DropStatsSnapshot};
 use crate::runtime::{Node, TopicPublisherRaw};
 
 use super::specs::DemandEvent;
@@ -30,6 +31,7 @@ pub struct Ros2Bridge {
     pub(super) _ros_entities: Vec<Box<dyn Any + Send + Sync>>,
     pub(super) ros_commands: Arc<rclrs::ExecutorCommands>,
     pub(super) _ros_spin: Option<JoinHandle<()>>,
+    pub(super) drop_stats: Arc<DropStats>,
 }
 
 impl Drop for Ros2Bridge {
@@ -52,6 +54,11 @@ impl Ros2Bridge {
         } else {
             self.eager_bus_topics.contains(bus_topic)
         }
+    }
+
+    /// Cumulative topic samples dropped on convert / decode / publish.
+    pub fn drop_stats(&self) -> DropStatsSnapshot {
+        self.drop_stats.snapshot()
     }
 
     pub fn spin(&mut self) -> Result<()> {
@@ -140,6 +147,7 @@ impl Ros2Bridge {
                 &route.mapper,
                 &route.ros_topic,
                 route.ros_qos,
+                Arc::clone(&self.drop_stats),
             ) {
                 Ok(sub) => route.sub = Some(sub),
                 Err(err) => log::warn!("lazy ros2 subscribe {topic}: {err}"),

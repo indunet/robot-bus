@@ -24,6 +24,7 @@ from .config import (
     TOPIC_DEMAND,
     TOPICS_SNAPSHOT,
 )
+from .drop_stats import DropStats, forward_bus_to_ros, forward_ros_to_bus
 
 class Ros2Bridge:
     def __init__(self) -> None:
@@ -39,6 +40,7 @@ class Ros2Bridge:
         self._console_live: Optional[bool] = None
         self._first_spin_at: Optional[float] = None
         self._callback_group: Any = None
+        self._drop_stats = DropStats()
 
     @staticmethod
     def new(name: str) -> Ros2BridgeBuilder:
@@ -105,6 +107,9 @@ class Ros2Bridge:
         if bus_topic in self._lazy_routes:
             return self._lazy_routes[bus_topic]["sub"] is not None
         return bus_topic in self._eager_bus_topics
+
+    def drop_stats(self) -> dict[str, int]:
+        return self._drop_stats.snapshot()
 
     def close(self) -> None:
         self._halt.set()
@@ -195,6 +200,7 @@ class Ros2Bridge:
                 self._keep_alive,
                 qos=_ros_qos(route["ros_qos"]),
                 bus_qos_depth=route["bus_qos"].depth,
+                drop_stats=self._drop_stats,
             )
             mapper.attach(ctx)
             if direction == Direction.Ros2ToBus:
@@ -208,10 +214,9 @@ class Ros2Bridge:
             ros_pub = self._ros_node.create_publisher(msg_type, ros_topic, ros_qos)
 
             def on_bus(payload: bytes, m=mapper, pub=ros_pub) -> None:
-                try:
-                    pub.publish(m.bus_to_ros(payload))
-                except Exception:
-                    pass
+                forward_bus_to_ros(
+                    self._drop_stats, ros_topic, m.bus_to_ros, pub.publish, payload
+                )
 
             sub_kw: dict[str, Any] = {"qos_depth": bus_depth}
             self._keep_alive.append(self._bus.create_subscription(bus_topic, on_bus, **sub_kw))
@@ -226,12 +231,11 @@ class Ros2Bridge:
             m=mapper, t=msg_type, rt=ros_topic, pub=bus_pub, mtx=lock, rq=ros_qos
         ) -> Any:
             def on_ros(msg, pub=pub, mtx=mtx, m=m) -> None:
-                try:
-                    payload = m.ros_to_bus(msg)
+                def publish(payload: bytes) -> None:
                     with mtx:
                         pub.publish(payload)
-                except Exception:
-                    pass
+
+                forward_ros_to_bus(self._drop_stats, rt, m.ros_to_bus, publish, msg)
 
             return self._ros_node.create_subscription(t, rt, on_ros, rq)
 

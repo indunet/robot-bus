@@ -10,6 +10,7 @@
 #include <vector>
 
 #ifdef ROBOT_BUS_HAS_ROS2
+#include <atomic>
 #include <mutex>
 #include <rcl_action/action_client.h>
 #include <rcl_action/action_server.h>
@@ -96,6 +97,106 @@ inline void require_bus_best_effort(const TopicQos &qos) {
   }
 }
 
+/// Point-in-time copy of per-bridge topic drop counters.
+struct DropStatsSnapshot {
+  uint64_t convert_fail = 0;
+  uint64_t decode_fail = 0;
+  uint64_t publish_fail = 0;
+};
+
+#ifdef ROBOT_BUS_HAS_ROS2
+/// Atomic drop counters shared with ROS and bus callbacks.
+struct DropStats {
+  std::atomic<uint64_t> convert_fail{0};
+  std::atomic<uint64_t> decode_fail{0};
+  std::atomic<uint64_t> publish_fail{0};
+
+  DropStatsSnapshot snapshot() const {
+    return DropStatsSnapshot{
+        convert_fail.load(std::memory_order_relaxed),
+        decode_fail.load(std::memory_order_relaxed),
+        publish_fail.load(std::memory_order_relaxed),
+    };
+  }
+};
+
+class BridgeDecodeError : public Error {
+ public:
+  explicit BridgeDecodeError(std::string msg) : Error(std::move(msg)) {}
+};
+
+inline rclcpp::Logger ros2_bridge_logger() {
+  return rclcpp::get_logger("robot_bus.ros2_bridge");
+}
+
+inline void note_convert_fail(const std::shared_ptr<DropStats> &stats, const char *dir,
+                              const std::string &topic, const char *err) {
+  RCLCPP_WARN(ros2_bridge_logger(), "%s %s convert: %s", dir, topic.c_str(), err);
+  if (stats) {
+    stats->convert_fail.fetch_add(1, std::memory_order_relaxed);
+  }
+}
+
+inline void note_decode_fail(const std::shared_ptr<DropStats> &stats, const char *dir,
+                             const std::string &topic, const char *err) {
+  RCLCPP_WARN(ros2_bridge_logger(), "%s %s decode: %s", dir, topic.c_str(), err);
+  if (stats) {
+    stats->decode_fail.fetch_add(1, std::memory_order_relaxed);
+  }
+}
+
+inline void note_publish_fail(const std::shared_ptr<DropStats> &stats, const char *dir,
+                              const std::string &topic, const char *err) {
+  RCLCPP_WARN(ros2_bridge_logger(), "%s %s publish: %s", dir, topic.c_str(), err);
+  if (stats) {
+    stats->publish_fail.fetch_add(1, std::memory_order_relaxed);
+  }
+}
+
+template <typename ConvertFn, typename PublishFn>
+void forward_ros_to_bus(const std::shared_ptr<DropStats> &stats, const std::string &topic,
+                        ConvertFn &&convert, PublishFn &&publish) {
+  std::vector<uint8_t> bytes;
+  try {
+    bytes = std::forward<ConvertFn>(convert)();
+  } catch (const std::exception &e) {
+    note_convert_fail(stats, "ros→bus", topic, e.what());
+    return;
+  } catch (...) {
+    note_convert_fail(stats, "ros→bus", topic, "unknown");
+    return;
+  }
+  try {
+    std::forward<PublishFn>(publish)(bytes);
+  } catch (const std::exception &e) {
+    note_publish_fail(stats, "ros→bus", topic, e.what());
+  } catch (...) {
+    note_publish_fail(stats, "ros→bus", topic, "unknown");
+  }
+}
+
+template <typename ConvertFn, typename PublishFn>
+void forward_bus_to_ros(const std::shared_ptr<DropStats> &stats, const std::string &topic,
+                        ConvertFn &&convert, PublishFn &&publish) {
+  try {
+    auto ros_msg = std::forward<ConvertFn>(convert)();
+    try {
+      std::forward<PublishFn>(publish)(std::move(ros_msg));
+    } catch (const std::exception &e) {
+      note_publish_fail(stats, "bus→ros", topic, e.what());
+    } catch (...) {
+      note_publish_fail(stats, "bus→ros", topic, "unknown");
+    }
+  } catch (const BridgeDecodeError &e) {
+    note_decode_fail(stats, "bus→ros", topic, e.what());
+  } catch (const std::exception &e) {
+    note_convert_fail(stats, "bus→ros", topic, e.what());
+  } catch (...) {
+    note_convert_fail(stats, "bus→ros", topic, "unknown");
+  }
+}
+#endif
+
 #ifdef ROBOT_BUS_HAS_ROS2
 inline rmw_qos_profile_t apply_keep_last_reliability(rmw_qos_profile_t base,
                                                      const TopicQos &qos) {
@@ -150,6 +251,7 @@ struct TopicWireContext {
   int32_t bus_qos_depth{0};
   /// Keep ROS / bus entities alive for the bridge lifetime.
   std::vector<std::shared_ptr<void>> &keep_alive;
+  std::shared_ptr<DropStats> drop_stats;
 
   template <typename T>
   void retain(std::shared_ptr<T> p) {

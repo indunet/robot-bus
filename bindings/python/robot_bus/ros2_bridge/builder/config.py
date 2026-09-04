@@ -185,6 +185,7 @@ class TopicWireContext:
         keep_alive: list,
         qos: Any = 10,
         bus_qos_depth: Optional[int] = None,
+        drop_stats: Any = None,
     ) -> None:
         self.ros_node = ros_node
         self.bus_node = bus_node
@@ -194,6 +195,7 @@ class TopicWireContext:
         self.keep_alive = keep_alive
         self.qos = qos
         self.bus_qos_depth = bus_qos_depth
+        self.drop_stats = drop_stats
 
     def retain(self, obj: Any) -> None:
         self.keep_alive.append(obj)

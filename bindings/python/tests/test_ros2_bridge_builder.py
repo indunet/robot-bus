@@ -319,6 +319,54 @@ def test_service_qos_required_on_bus_endpoint():
         )
 
 
+def test_drop_stats_helper_counts_convert_decode_publish():
+    from google.protobuf.message import DecodeError
+
+    from robot_bus.ros2_bridge.builder.drop_stats import (
+        DropStats,
+        forward_bus_to_ros,
+        forward_ros_to_bus,
+    )
+
+    stats = DropStats()
+    assert stats.snapshot() == {"convert_fail": 0, "decode_fail": 0, "publish_fail": 0}
+
+    published: list[bytes] = []
+
+    def boom_convert(_msg) -> bytes:
+        raise ValueError("bad ros")
+
+    forward_ros_to_bus(stats, "/cam", boom_convert, published.append, object())
+    assert stats.snapshot()["convert_fail"] == 1
+    assert published == []
+
+    def boom_publish(_payload: bytes) -> None:
+        raise RuntimeError("bus down")
+
+    forward_ros_to_bus(stats, "/cam", lambda _m: b"ok", boom_publish, object())
+    assert stats.snapshot()["publish_fail"] == 1
+
+    def boom_decode(_payload: bytes):
+        raise DecodeError("truncated")
+
+    forward_bus_to_ros(stats, "/cam", boom_decode, lambda _m: None, b"xx")
+    assert stats.snapshot()["decode_fail"] == 1
+
+    def boom_bus_convert(_payload: bytes):
+        raise TypeError("mapper")
+
+    forward_bus_to_ros(stats, "/cam", boom_bus_convert, lambda _m: None, b"xx")
+    snap = stats.snapshot()
+    assert snap == {"convert_fail": 2, "decode_fail": 1, "publish_fail": 1}
+
+
+def test_ros2_bridge_drop_stats_starts_zero():
+    from robot_bus.ros2_bridge import Ros2Bridge
+
+    bridge = Ros2Bridge()
+    assert bridge.drop_stats() == {"convert_fail": 0, "decode_fail": 0, "publish_fail": 0}
+
+
 def test_ros2_available_checks_rclpy():
     import robot_bus
 
@@ -344,6 +392,8 @@ if __name__ == "__main__":
     test_service_qos_required_on_ros_endpoint()
     test_service_qos_required_on_bus_endpoint()
     test_action_stores_ros_qos()
+    test_drop_stats_helper_counts_convert_decode_publish()
+    test_ros2_bridge_drop_stats_starts_zero()
     test_ros2_available_checks_rclpy()
     try:
         test_builder_accepts_concrete_mappers_without_build()

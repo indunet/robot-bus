@@ -13,6 +13,7 @@ use rclrs::{BeginAcceptedGoal, GoalClient, IntoActionClientOptions, IntoActionSe
 use rosidl_runtime_rs::{Action as ActionIdl, Service as ServiceIdl};
 
 use crate::errors::{BusError, Result};
+use crate::ros2_bridge::drop_stats::DropStats;
 use crate::ros2_bridge::mapper::{
     ros_action_feedback_qos_profile, ros_service_qos_profile, ros_topic_options, ActionWireContext,
     Direction, ServiceWireContext, TopicQos, TopicWireContext, TypedActionMapper,
@@ -32,6 +33,7 @@ pub fn create_typed_ros2_to_bus_sub<M>(
     bus_pub: TopicPublisherRaw,
     ros_topic: &str,
     qos: TopicQos,
+    drop_stats: Arc<DropStats>,
 ) -> Result<Box<dyn Any + Send + Sync>>
 where
     M: TypedTopicMapper,
@@ -48,11 +50,13 @@ where
                 Ok(bus) => bus.encode_to_vec(),
                 Err(e) => {
                     log::warn!("ros→bus {topic_cb} convert: {e}");
+                    drop_stats.record_convert_fail();
                     return;
                 }
             };
             if let Err(e) = bus_pub.publish(&payload) {
                 log::warn!("ros→bus {topic_cb} publish: {e}");
+                drop_stats.record_publish_fail();
             }
         })
         .map_err(|e| BusError::Protocol(format!("ros typed subscription {topic}: {e}")))?;
@@ -73,12 +77,14 @@ where
         .map_err(|e| BusError::Protocol(format!("ros typed publisher {topic}: {e}")))?;
     let ros_pub_cb = ros_pub.clone();
     ctx.ros_entities.push(Box::new(ros_pub));
+    let drop_stats = Arc::clone(&ctx.drop_stats);
     let cb: MessageCallback = Arc::new(move |payload| {
         use prost::Message as _;
         let bus = match M::Bus::decode(payload) {
             Ok(b) => b,
             Err(e) => {
                 log::warn!("bus→ros {topic} decode: {e}");
+                drop_stats.record_decode_fail();
                 return;
             }
         };
@@ -86,9 +92,13 @@ where
             Ok(ros_msg) => {
                 if let Err(e) = ros_pub_cb.publish(ros_msg) {
                     log::warn!("bus→ros {topic} publish: {e}");
+                    drop_stats.record_publish_fail();
                 }
             }
-            Err(e) => log::warn!("bus→ros {topic} convert: {e}"),
+            Err(e) => {
+                log::warn!("bus→ros {topic} convert: {e}");
+                drop_stats.record_convert_fail();
+            }
         }
     });
         ctx.bus_node.create_subscription_raw_with_qos(

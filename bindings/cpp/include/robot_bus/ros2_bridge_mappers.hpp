@@ -18,7 +18,7 @@ class TopicMapper {
   virtual rclcpp::SubscriptionBase::SharedPtr create_ros2_to_bus_subscription(
       rclcpp::Node::SharedPtr ros_node, const std::string &ros_topic,
       std::shared_ptr<TopicPublisher> bus_pub, std::shared_ptr<std::mutex> mtx,
-      const rclcpp::QoS &qos);
+      const rclcpp::QoS &qos, std::shared_ptr<DropStats> drop_stats = {});
 #endif
 };
 

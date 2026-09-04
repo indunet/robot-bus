@@ -566,6 +566,20 @@ Same process holds both:
 
 The main loop must drive both sides (`spin` / `spin_once`); implementation details differ per language, semantics are the same: drain ROS↔bus queues and drive the bus.
 
+Topic convert / decode / publish failures are dropped (the bridge stays up). Each bridge keeps atomic counters; `drop_stats()` returns a snapshot (`convert_fail` / `decode_fail` / `publish_fail`). Failures also log a warning. This is not published on a console topic.
+
+```python
+bridge.drop_stats()  # {"convert_fail": 0, "decode_fail": 0, "publish_fail": 0}
+```
+
+```rust
+let snap = bridge.drop_stats(); // snap.convert_fail / decode_fail / publish_fail
+```
+
+```cpp
+auto snap = bridge.drop_stats();  // snap.convert_fail / decode_fail / publish_fail
+```
+
 ---
 
 ## FAQ

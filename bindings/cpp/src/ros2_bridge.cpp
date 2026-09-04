@@ -50,7 +50,7 @@ template <typename T>
 T parse_pb(const uint8_t *data, size_t len) {
   T msg;
   if (!msg.ParseFromArray(data, static_cast<int>(len))) {
-    throw Error("protobuf ParseFromArray failed");
+    throw BridgeDecodeError("protobuf ParseFromArray failed");
   }
   return msg;
 }
@@ -274,17 +274,16 @@ template <typename RosMsg>
 rclcpp::SubscriptionBase::SharedPtr make_ros2_to_bus_sub(
     rclcpp::Node::SharedPtr ros_node, const std::string &ros_topic, const rclcpp::QoS &qos,
     std::shared_ptr<TopicPublisher> pub, std::shared_ptr<std::mutex> mtx,
-    std::vector<uint8_t> (*convert)(const RosMsg &)) {
+    std::vector<uint8_t> (*convert)(const RosMsg &), std::shared_ptr<DropStats> stats) {
   return ros_node->create_subscription<RosMsg>(
       ros_topic, qos,
-      [pub, mtx, convert](typename RosMsg::ConstSharedPtr msg) {
-        try {
-          auto bytes = convert(*msg);
-          std::lock_guard<std::mutex> lock(*mtx);
-          pub->publish(bytes);
-        } catch (...) {
-          // Drop conversion / publish errors; keep bridge alive.
-        }
+      [pub, mtx, convert, stats, topic = ros_topic](typename RosMsg::ConstSharedPtr msg) {
+        forward_ros_to_bus(
+            stats, topic, [convert, msg]() { return convert(*msg); },
+            [pub, mtx](const std::vector<uint8_t> &bytes) {
+              std::lock_guard<std::mutex> lock(*mtx);
+              pub->publish(bytes);
+            });
       });
 }
 
@@ -296,12 +295,13 @@ void wire_topic_ros_to_bus(rclcpp::Node::SharedPtr ros_node, Node &bus_node,
                            std::vector<std::shared_ptr<TopicPublisher>> &pubs,
                            std::vector<std::shared_ptr<std::mutex>> &pub_mutexes,
                            std::vector<LazyTopic> &lazy_routes,
-                           std::unordered_set<std::string> &eager_bus_topics) {
+                           std::unordered_set<std::string> &eager_bus_topics,
+                           std::shared_ptr<DropStats> stats) {
   auto pub = std::make_shared<TopicPublisher>(make_bus_publisher(bus_node, route));
   auto mtx = std::make_shared<std::mutex>();
   auto qos = topic_ros_qos(route.ros_qos);
-  auto create = [ros_node, ros_topic = route.ros_topic, qos, pub, mtx, convert]() {
-    return make_ros2_to_bus_sub<RosMsg>(ros_node, ros_topic, qos, pub, mtx, convert);
+  auto create = [ros_node, ros_topic = route.ros_topic, qos, pub, mtx, convert, stats]() {
+    return make_ros2_to_bus_sub<RosMsg>(ros_node, ros_topic, qos, pub, mtx, convert, stats);
   };
   if (route.lazy) {
     lazy_routes.push_back(LazyTopic{route.bus_topic, std::move(create), nullptr});
@@ -318,21 +318,23 @@ void wire_topic_bus_to_ros(rclcpp::Node::SharedPtr ros_node, Node &bus_node,
                            const TopicRouteSpec &route,
                            RosMsg (*convert)(const uint8_t *, size_t),
                            std::vector<rclcpp::PublisherBase::SharedPtr> &pubs,
-                           std::vector<std::shared_ptr<void>> &keep_alive) {
+                           std::vector<std::shared_ptr<void>> &keep_alive,
+                           std::shared_ptr<DropStats> stats) {
   auto qos = topic_ros_qos(route.ros_qos);
   auto ros_pub = ros_node->create_publisher<RosMsg>(route.ros_topic, qos);
   auto weak_pub = std::weak_ptr<typename rclcpp::Publisher<RosMsg>>(ros_pub);
+  auto topic = route.ros_topic;
   keep_alive.push_back(std::make_shared<SubscriptionHandle>(bus_node.create_subscription(
       route.bus_topic.c_str(),
-      [weak_pub, convert](BytesView payload) {
+      [weak_pub, convert, stats, topic](BytesView payload) {
         auto pub = weak_pub.lock();
         if (!pub) {
           return;
         }
-        try {
-          pub->publish(convert(payload.data, payload.size));
-        } catch (...) {
-        }
+        forward_bus_to_ros(
+            stats, topic,
+            [convert, payload]() { return convert(payload.data, payload.size); },
+            [pub](RosMsg msg) { pub->publish(std::move(msg)); });
       },
       nullptr, route.bus_qos.depth())));
   pubs.push_back(std::move(ros_pub));
@@ -346,29 +348,30 @@ void wire_topic_builtin(rclcpp::Node::SharedPtr ros_node, Node &bus_node,
                         std::vector<std::shared_ptr<std::mutex>> &bus_pub_mutexes,
                         std::vector<std::shared_ptr<void>> &keep_alive,
                         std::vector<LazyTopic> &lazy_routes,
-                        std::unordered_set<std::string> &eager_bus_topics) {
+                        std::unordered_set<std::string> &eager_bus_topics,
+                        std::shared_ptr<DropStats> stats) {
   if (route.direction == Direction::Ros2ToBus) {
     switch (route.builtin) {
       case TopicBuiltin::StdMsgsString:
         wire_topic_ros_to_bus<std_msgs::msg::String>(ros_node, bus_node, route, string_ros_to_bus,
                                                      ros_subs, bus_pubs, bus_pub_mutexes,
-                                                     lazy_routes, eager_bus_topics);
+                                                     lazy_routes, eager_bus_topics, stats);
         break;
       case TopicBuiltin::SensorMsgsImage:
         wire_topic_ros_to_bus<sensor_msgs::msg::Image>(ros_node, bus_node, route, image_ros_to_bus,
                                                        ros_subs, bus_pubs, bus_pub_mutexes,
-                                                       lazy_routes, eager_bus_topics);
+                                                       lazy_routes, eager_bus_topics, stats);
         break;
     }
   } else {
     switch (route.builtin) {
       case TopicBuiltin::StdMsgsString:
         wire_topic_bus_to_ros<std_msgs::msg::String>(ros_node, bus_node, route, string_bus_to_ros,
-                                                     ros_pubs, keep_alive);
+                                                     ros_pubs, keep_alive, stats);
         break;
       case TopicBuiltin::SensorMsgsImage:
         wire_topic_bus_to_ros<sensor_msgs::msg::Image>(ros_node, bus_node, route, image_bus_to_ros,
-                                                       ros_pubs, keep_alive);
+                                                       ros_pubs, keep_alive, stats);
         break;
     }
   }
@@ -381,7 +384,8 @@ void wire_topic(rclcpp::Node::SharedPtr ros_node, Node &bus_node, const TopicRou
                 std::vector<std::shared_ptr<std::mutex>> &bus_pub_mutexes,
                 std::vector<std::shared_ptr<void>> &keep_alive,
                 std::vector<LazyTopic> &lazy_routes,
-                std::unordered_set<std::string> &eager_bus_topics) {
+                std::unordered_set<std::string> &eager_bus_topics,
+                std::shared_ptr<DropStats> stats) {
   if (route.is_custom()) {
     keep_alive.push_back(std::shared_ptr<void>(route.custom));
     if (route.lazy) {
@@ -394,8 +398,9 @@ void wire_topic(rclcpp::Node::SharedPtr ros_node, Node &bus_node, const TopicRou
       bus_pub_mutexes.push_back(mtx);
       lazy_routes.push_back(LazyTopic{
           route.bus_topic,
-          [ros_node, mapper, ros_topic, pub, mtx, qos]() {
-            return mapper->create_ros2_to_bus_subscription(ros_node, ros_topic, pub, mtx, qos);
+          [ros_node, mapper, ros_topic, pub, mtx, qos, stats]() {
+            return mapper->create_ros2_to_bus_subscription(ros_node, ros_topic, pub, mtx, qos,
+                                                           stats);
           },
           nullptr});
       return;
@@ -407,7 +412,8 @@ void wire_topic(rclcpp::Node::SharedPtr ros_node, Node &bus_node, const TopicRou
                          route.direction,
                          topic_ros_qos(route.ros_qos),
                          route.bus_qos.depth(),
-                         keep_alive};
+                         keep_alive,
+                         stats};
     route.custom->attach(ctx);
     if (route.direction == Direction::Ros2ToBus) {
       eager_bus_topics.insert(route.bus_topic);
@@ -415,7 +421,7 @@ void wire_topic(rclcpp::Node::SharedPtr ros_node, Node &bus_node, const TopicRou
     return;
   }
   wire_topic_builtin(ros_node, bus_node, route, ros_subs, ros_pubs, bus_pubs, bus_pub_mutexes,
-                     keep_alive, lazy_routes, eager_bus_topics);
+                     keep_alive, lazy_routes, eager_bus_topics, stats);
 }
 
 void wire_trigger(rclcpp::Node::SharedPtr ros_node, Node &bus_node, const ServiceRouteSpec &route,
@@ -800,7 +806,7 @@ void TopicMapper::attach(TopicWireContext &ctx) {
 
 rclcpp::SubscriptionBase::SharedPtr TopicMapper::create_ros2_to_bus_subscription(
     rclcpp::Node::SharedPtr, const std::string &, std::shared_ptr<TopicPublisher>,
-    std::shared_ptr<std::mutex>, const rclcpp::QoS &) {
+    std::shared_ptr<std::mutex>, const rclcpp::QoS &, std::shared_ptr<DropStats>) {
   throw Error("custom TopicMapper does not support .lazy()");
 }
 
@@ -838,6 +844,7 @@ struct Ros2Bridge::Impl {
   std::optional<std::chrono::steady_clock::time_point> first_spin;
   std::atomic<bool> halt{false};
   std::thread spin_thread;
+  std::shared_ptr<DropStats> drop_stats = std::make_shared<DropStats>();
 
   explicit Impl(Node bus) : bus_node(std::move(bus)) {}
 
@@ -950,6 +957,13 @@ bool Ros2Bridge::has_ros_subscription(const std::string &bus_topic) const {
   return impl_->eager_bus_topics.count(bus_topic) != 0;
 }
 
+DropStatsSnapshot Ros2Bridge::drop_stats() const {
+  if (!impl_ || !impl_->drop_stats) {
+    return {};
+  }
+  return impl_->drop_stats->snapshot();
+}
+
 Ros2Bridge Ros2BridgeBuilder::build() && {
   if (!state_) {
     throw Error("Ros2Bridge builder already consumed");
@@ -973,7 +987,7 @@ Ros2Bridge Ros2BridgeBuilder::build() && {
   for (const auto &route : state->routes) {
     wire_topic(impl->ros_node, impl->bus_node, route, impl->ros_subs, impl->ros_pubs,
                impl->bus_pubs, impl->bus_pub_mutexes, impl->keep_alive, impl->lazy_routes,
-               impl->eager_bus_topics);
+               impl->eager_bus_topics, impl->drop_stats);
   }
   for (const auto &svc : state->services) {
     wire_service(impl->ros_node, impl->bus_node, svc, impl->callback_group, impl->ros_srvs,

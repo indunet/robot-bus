@@ -142,6 +142,27 @@ int test_service_builder() {
   return 0;
 }
 
+int test_drop_stats_snapshot() {
+  robot_bus::DropStatsSnapshot empty;
+  if (empty.convert_fail != 0 || empty.decode_fail != 0 || empty.publish_fail != 0) {
+    std::fprintf(stderr, "DropStatsSnapshot should start at zero\n");
+    return 1;
+  }
+#ifdef ROBOT_BUS_HAS_ROS2
+  robot_bus::DropStats stats;
+  stats.convert_fail.fetch_add(1);
+  stats.decode_fail.fetch_add(2);
+  stats.publish_fail.fetch_add(3);
+  auto snap = stats.snapshot();
+  if (snap.convert_fail != 1 || snap.decode_fail != 2 || snap.publish_fail != 3) {
+    std::fprintf(stderr, "DropStats snapshot mismatch\n");
+    return 1;
+  }
+#endif
+  std::printf("drop_stats snapshot ok\n");
+  return 0;
+}
+
 }  // namespace
 
 int main() {
@@ -155,6 +176,9 @@ int main() {
     return rc;
   }
   if (int rc = test_service_builder()) {
+    return rc;
+  }
+  if (int rc = test_drop_stats_snapshot()) {
     return rc;
   }
 
@@ -171,6 +195,11 @@ int main() {
                         .add()
                         .build();
       bridge.spin_once(0.05);
+      auto drops = bridge.drop_stats();
+      if (drops.convert_fail != 0 || drops.decode_fail != 0 || drops.publish_fail != 0) {
+        std::fprintf(stderr, "expected zero drop_stats on smoke bridge\n");
+        return 1;
+      }
       std::printf("cpp live ros2 bridge ok\n");
     } catch (const robot_bus::Error &e) {
       std::fprintf(stderr, "live ros2 bridge failed: %s\n", e.what());

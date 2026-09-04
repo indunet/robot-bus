@@ -22,6 +22,8 @@ class Ros2Bridge {
   void spin_once(double timeout_secs = 0.01);
   /// True when this bridge currently holds a ROS subscription for `bus_topic`.
   bool has_ros_subscription(const std::string &bus_topic) const;
+  /// Cumulative topic samples dropped on convert / decode / publish.
+  DropStatsSnapshot drop_stats() const;
 
  private:
   friend class Ros2BridgeBuilder;

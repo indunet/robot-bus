@@ -2,6 +2,7 @@ use std::any::Any;
 use std::time::Duration;
 
 use crate::errors::BusError;
+use crate::ros2_bridge::drop_stats::DropStats;
 use crate::ros2_bridge::mapper::{Direction, TopicMapper, TopicWireContext};
 use crate::runtime::TopicPublisherRaw;
 
@@ -23,6 +24,7 @@ impl TopicMapper for DummyTopicMapper {
         _bus_pub: TopicPublisherRaw,
         _ros_topic: &str,
         _qos: TopicQos,
+        _drop_stats: std::sync::Arc<DropStats>,
     ) -> std::result::Result<Box<dyn Any + Send + Sync>, BusError> {
         Err(BusError::Protocol("dummy".into()))
     }
