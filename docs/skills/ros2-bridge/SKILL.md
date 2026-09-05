@@ -82,7 +82,9 @@ Progress:
 
 ### Built-in mappers (objects, not strings)
 
-**Topics** share one catalog across Rust / Python / C++ (`proto/*/msg/v1`, ~214 types). After proto changes, re-run `just gen-topic-mappers`. Mount with `.mapper(GeometryMsgsPoseStampedMapper())` (Python) / `.mapper(GeometryMsgsPoseStampedMapper{})` (C++; same attach path as custom mappers; C++ `TopicBuiltin` stays String/Image only).
+**Topics** share one catalog across Rust / Python / C++ (~125 types from Humble/Jazzy **distro-common** packages; allowlist `CORE_BRIDGE_PACKAGES` in `scripts/generate_topic_mappers.py`). After proto changes, re-run `just gen-topic-mappers`. Mount with `.mapper(GeometryMsgsPoseStampedMapper())` (Python) / `.mapper(GeometryMsgsPoseStampedMapper{})` (C++; same attach path as custom mappers; C++ `TopicBuiltin` stays String/Image only).
+
+**Not builtins:** `nav2_msgs` / `control_msgs` / `foxglove_msgs` / `apriltag_msgs`. Keep using bus protos if present; write TypedTopicMapper for ROS bridging. Later `apt install` of those packages does not enable bridge mappers.
 
 **Service / action** remain hand-written phase-1 builtins (no generated srv/action catalog):
 
@@ -95,7 +97,7 @@ Progress:
 | Service | `SetBoolServiceMapper` | `std_srvs/srv/SetBool` |
 | Action | `FibonacciActionMapper` | `example_interfaces/action/Fibonacci` |
 
-Rust: `lookup_topic_mapper` / `registered_topic_types`. C++ Humble-default-missing packages (`nav2_msgs` / `control_msgs` / `apriltag_msgs` / `foxglove_msgs`) use `find_package(... QUIET)` — ROS conversion compiles only when the package is found. **Mounting still requires** `.mapper(concrete object)`, not a type-name string.
+Rust: `lookup_topic_mapper` / `registered_topic_types` for the core set. **Mounting still requires** `.mapper(concrete object)`, not a type-name string.
 
 ## Minimal examples
 

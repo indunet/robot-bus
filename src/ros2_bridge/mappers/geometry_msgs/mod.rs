@@ -30,6 +30,5 @@ pub mod twist_with_covariance_stamped;
 pub mod vector3;
 pub mod vector3_stamped;
 pub mod velocity_stamped;
-pub mod velocity_with_covariance_stamped;
 pub mod wrench;
 pub mod wrench_stamped;

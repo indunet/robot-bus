@@ -396,8 +396,8 @@ pub fn lookup_topic_mapper(type_name: &str) -> Result<&'static dyn TopicMapper> 
     BUILTIN_MAPPERS.get(type_name).copied().ok_or_else(|| {
         BusError::Protocol(format!(
             "unsupported ros2 bridge topic type {type_name:?}; \
-             registered types mirror proto/*/msg/v1 ({} total), see registered_topic_types(); \
-             for custom types use .mapper(...) on the route",
+             registered types are Humble/Jazzy core bridge builtins ({} total), see registered_topic_types(); \
+             for custom / extension types use .mapper(...) on the route",
             BUILTIN_MAPPERS.len()
         ))
     })
@@ -435,21 +435,33 @@ mod tests {
     }
 
     #[test]
-    fn registry_covers_proto_message_types() {
+    fn registry_covers_core_distro_message_types() {
         let types = registered_topic_types();
         assert!(
-            types.len() >= 150,
-            "expected the registry to mirror proto/*/msg/v1, got {}",
+            (120..=130).contains(&types.len()),
+            "expected ~125 Humble/Jazzy core bridge types, got {}",
             types.len()
         );
         for expected in [
             "builtin_interfaces/msg/Time",
-            "foxglove_msgs/msg/CompressedVideo",
             "geometry_msgs/msg/PoseStamped",
             "std_msgs/msg/String",
             "sensor_msgs/msg/Image",
+            "nav_msgs/msg/Odometry",
+            "visualization_msgs/msg/Marker",
         ] {
             assert!(types.contains(&expected), "{expected} not registered");
+        }
+        for unexpected in [
+            "foxglove_msgs/msg/CompressedVideo",
+            "nav2_msgs/msg/Costmap",
+            "control_msgs/msg/JointJog",
+            "apriltag_msgs/msg/AprilTagDetection",
+        ] {
+            assert!(
+                !types.contains(&unexpected),
+                "{unexpected} must not be a default bridge builtin"
+            );
         }
     }
 

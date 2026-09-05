@@ -29,7 +29,6 @@ from .accel_stamped import GeometryMsgsAccelStampedMapper
 from .wrench import GeometryMsgsWrenchMapper
 from .quaternion_stamped import GeometryMsgsQuaternionStampedMapper
 from .polygon import GeometryMsgsPolygonMapper
-from .velocity_with_covariance_stamped import GeometryMsgsVelocityWithCovarianceStampedMapper
 from .wrench_stamped import GeometryMsgsWrenchStampedMapper
 from .transform_stamped import GeometryMsgsTransformStampedMapper
 from .polygon_stamped import GeometryMsgsPolygonStampedMapper
@@ -64,7 +63,6 @@ __all__ = [
     "GeometryMsgsWrenchMapper",
     "GeometryMsgsQuaternionStampedMapper",
     "GeometryMsgsPolygonMapper",
-    "GeometryMsgsVelocityWithCovarianceStampedMapper",
     "GeometryMsgsWrenchStampedMapper",
     "GeometryMsgsTransformStampedMapper",
     "GeometryMsgsPolygonStampedMapper",

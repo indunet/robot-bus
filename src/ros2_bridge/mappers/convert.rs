@@ -79,6 +79,16 @@ impl FromF64Seq for Vec<f64> {
     }
 }
 
+impl FromF64Seq for [f64; 4] {
+    fn from_f64_seq(v: Vec<f64>) -> Self {
+        let mut a = [0.0; 4];
+        for (i, x) in v.into_iter().take(4).enumerate() {
+            a[i] = x;
+        }
+        a
+    }
+}
+
 impl FromF64Seq for [f64; 9] {
     fn from_f64_seq(v: Vec<f64>) -> Self {
         let mut a = [0.0; 9];
@@ -109,6 +119,35 @@ impl FromF64Seq for [f64; 12] {
     }
 }
 
+impl FromF64Seq for rosidl_runtime_rs::BoundedSequence<f64, 3> {
+    fn from_f64_seq(v: Vec<f64>) -> Self {
+        let truncated: Vec<f64> = v.into_iter().take(3).collect();
+        Self::try_from(truncated).unwrap_or_default()
+    }
+}
+
+pub trait FromI32Seq: Sized {
+    fn from_i32_seq(v: Vec<i32>) -> Self;
+}
+
+impl FromI32Seq for Vec<i32> {
+    fn from_i32_seq(v: Vec<i32>) -> Self {
+        v
+    }
+}
+
+impl FromI32Seq for Vec<i8> {
+    fn from_i32_seq(v: Vec<i32>) -> Self {
+        v.into_iter().map(|x| x as i8).collect()
+    }
+}
+
+impl FromI32Seq for Vec<i16> {
+    fn from_i32_seq(v: Vec<i32>) -> Self {
+        v.into_iter().map(|x| x as i16).collect()
+    }
+}
+
 pub trait FromU32Seq: Sized {
     fn from_u32_seq(v: Vec<u32>) -> Self;
 }
@@ -116,6 +155,18 @@ pub trait FromU32Seq: Sized {
 impl FromU32Seq for Vec<u32> {
     fn from_u32_seq(v: Vec<u32>) -> Self {
         v
+    }
+}
+
+impl FromU32Seq for Vec<u8> {
+    fn from_u32_seq(v: Vec<u32>) -> Self {
+        v.into_iter().map(|x| x as u8).collect()
+    }
+}
+
+impl FromU32Seq for Vec<u16> {
+    fn from_u32_seq(v: Vec<u32>) -> Self {
+        v.into_iter().map(|x| x as u16).collect()
     }
 }
 
@@ -137,16 +188,16 @@ pub fn f32_seq(v: impl IntoIterator<Item = f32>) -> Vec<f32> {
     v.into_iter().collect()
 }
 
-pub fn i32_seq(v: impl IntoIterator<Item = i32>) -> Vec<i32> {
-    v.into_iter().collect()
+pub fn i32_seq(v: impl IntoIterator<Item = impl Into<i32>>) -> Vec<i32> {
+    v.into_iter().map(Into::into).collect()
 }
 
 pub fn i64_seq(v: impl IntoIterator<Item = i64>) -> Vec<i64> {
     v.into_iter().collect()
 }
 
-pub fn u32_seq(v: impl IntoIterator<Item = u32>) -> Vec<u32> {
-    v.into_iter().collect()
+pub fn u32_seq(v: impl IntoIterator<Item = impl Into<u32>>) -> Vec<u32> {
+    v.into_iter().map(Into::into).collect()
 }
 
 pub fn string_seq(v: impl IntoIterator<Item = impl ToString>) -> Vec<String> {

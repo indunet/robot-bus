@@ -8,7 +8,9 @@ Reads proto/*/msg/v1/*.proto plus existing mapper file headers, then rewrites:
 - C++: bindings/cpp/include/robot_bus/ros2_bridge/mappers/<pkg>/<msg>.hpp
 - Shim: third_party/ros-env-shim/src/generated_msgs.rs
 
-Service/action builtins (Trigger / SetBool / Fibonacci) stay hand-written.
+Only packages in CORE_BRIDGE_PACKAGES are generated. Extension stacks
+(nav2 / control / foxglove / apriltag) are not bridge builtins — users write
+Typed*Mapper themselves. Service/action builtins stay hand-written.
 """
 
 from __future__ import annotations
@@ -26,14 +28,33 @@ GENERATED = ROOT / "src" / "generated"
 
 GOLD = {
     MAPPERS / "std_msgs" / "string.rs",
+    MAPPERS / "std_msgs" / "empty.rs",
     MAPPERS / "sensor_msgs" / "image.rs",
     MAPPERS / "nav_msgs" / "occupancy_grid.rs",
 }
 
+# Humble/Jazzy distro-common interface packages only (bridge builtins).
+CORE_BRIDGE_PACKAGES = frozenset(
+    {
+        "action_msgs",
+        "builtin_interfaces",
+        "diagnostic_msgs",
+        "geometry_msgs",
+        "nav_msgs",
+        "sensor_msgs",
+        "shape_msgs",
+        "std_msgs",
+        "stereo_msgs",
+        "tf2_msgs",
+        "trajectory_msgs",
+        "unique_identifier_msgs",
+        "visualization_msgs",
+    }
+)
+
 INT8_BYTES = {
     ("nav_msgs/msg/OccupancyGrid", "data"),
     ("nav_msgs/msg/OccupancyGridUpdate", "data"),
-    ("nav2_msgs/msg/Costmap", "data"),
     ("std_msgs/msg/Int8MultiArray", "data"),
 }
 
@@ -319,6 +340,9 @@ def existing_mappers() -> list[tuple[Path, str, str]]:
             continue
         if path.name in {"action_bridges.rs", "service_bridges.rs"}:
             continue
+        pkg = path.parent.name
+        if pkg not in CORE_BRIDGE_PACKAGES:
+            continue
         text = path.read_text()
         sm = re.search(r"pub struct (\w+Mapper);", text)
         tm = re.search(r"//! Typed mapper for `([^`]+)`", text)
@@ -436,6 +460,8 @@ def to_ros_expr(msg: Msg, f: Field, existing: dict[str, tuple[Path, str]]) -> st
         return f"{base}_to_ros({bus}.unwrap_or_default())"
     if f.repeated and f.proto_type == "double":
         return f"crate::ros2_bridge::mappers::convert::FromF64Seq::from_f64_seq({bus})"
+    if f.repeated and f.proto_type == "int32":
+        return f"crate::ros2_bridge::mappers::convert::FromI32Seq::from_i32_seq({bus})"
     if f.repeated and f.proto_type in ("uint32", "fixed32"):
         return f"crate::ros2_bridge::mappers::convert::FromU32Seq::from_u32_seq({bus})"
     if f.repeated:
@@ -609,13 +635,6 @@ PY_GOLD_TYPES = {
 }
 CPP_GOLD_TYPES = set(PY_GOLD_TYPES)
 
-OPTIONAL_CPP_PACKAGES = {
-    "nav2_msgs": "ROBOT_BUS_HAS_NAV2_MSGS",
-    "control_msgs": "ROBOT_BUS_HAS_CONTROL_MSGS",
-    "apriltag_msgs": "ROBOT_BUS_HAS_APRILTAG_MSGS",
-    "foxglove_msgs": "ROBOT_BUS_HAS_FOXGLOVE_MSGS",
-}
-
 KEEP_PY_MANUAL = (
     "FibonacciActionMapper",
     "SensorMsgsImageMapper",
@@ -781,10 +800,6 @@ class {struct}:
         bus.ParseFromString(payload)
         return {stem}_to_ros(bus)
 '''
-
-
-def cpp_pkg_guard(package: str) -> str | None:
-    return OPTIONAL_CPP_PACKAGES.get(package)
 
 
 def cpp_ros_include(msg: Msg) -> str:
@@ -964,7 +979,6 @@ inline builtin_interfaces::msg::Duration proto_to_duration(const google::protobu
 
 def emit_cpp(struct: str, msg: Msg, existing: dict[str, tuple[Path, str]]) -> str:
     pkg, stem = py_mod_path(msg.ros_type)
-    guard = cpp_pkg_guard(pkg)
     nested_includes = []
     seen = set()
     for f in msg.fields:
@@ -983,8 +997,6 @@ def emit_cpp(struct: str, msg: Msg, existing: dict[str, tuple[Path, str]]) -> st
     ros_ty = cpp_ros_type(msg)
     ros_inc = cpp_ros_include(msg)
     has_ros = "defined(ROBOT_BUS_HAS_ROS2)"
-    if guard:
-        has_ros = f"defined(ROBOT_BUS_HAS_ROS2) && defined({guard})"
     body = f'''#pragma once
 
 #include <robot_bus/ros2_bridge_mappers.hpp>

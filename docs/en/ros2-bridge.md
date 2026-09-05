@@ -32,7 +32,7 @@ source /opt/ros/humble/setup.bash   # or jazzy
 cargo run --bin robot_bus_broker    # or python -m robot_bus.broker
 ```
 
-**Rust `feature = "ros2"`** uses crates.io **`rclrs` 0.7**. Typed messages come from published **`ros-env` 0.2**, which re-exports `share/<pkg>/rust/` on `AMENT_PREFIX_PATH` as `ros_env::sensor_msgs::msg::Image`. Current Humble apt packages for `common_interfaces` (including `sensor_msgs`) **already ship rust IDL**, so sourcing `/opt/ros/humble` is enough for Image / String and similar. The full mapper registry also needs packages Humble does not install by default (`nav2_msgs` / `control_msgs` / `apriltag_msgs`); only those need an overlay. See **Rust messages** below.
+**Rust `feature = "ros2"`** uses crates.io **`rclrs`**. Typed messages come from **`ros-env`**, which re-exports `share/<pkg>/rust/` on `AMENT_PREFIX_PATH`. Builtin topic mappers cover **Humble/Jazzy distro-common** interface packages only (`CORE_BRIDGE_PACKAGES` in `scripts/generate_topic_mappers.py`). Sourcing `/opt/ros/humble` (or jazzy) is enough for that core set. Extension stacks (`nav2_msgs` / `control_msgs` / `foxglove_msgs` / `apriltag_msgs`) are **not** bridge builtins — write a Typed*Mapper (protos may still exist for bus-native use). See **Rust messages** below.
 
 | Language | Dependencies |
 |----------|--------------|
@@ -157,9 +157,11 @@ Same type in all three languages. Pass one copy per endpoint (depth / reliabilit
 
 To match a ROS graph that uses best-effort KeepLast(5), write `keep_last(5).best_effort()` on both topic ends. For services, `keep_last(10).reliable()` matches ROS `services_default`. For `/tf_static`, write `keep_last(1).reliable().transient_local()` on the ROS end.
 
-### Phase-1 built-in mappers
+### Built-in mappers (core distro only)
 
-**Topic mappers share one catalog across Rust / Python / C++** (`proto/*/msg/v1`, ~214 types): Rust `src/ros2_bridge/mappers/`, Python `robot_bus.ros2_bridge.mappers.<pkg>`, C++ `robot_bus/ros2_bridge/mappers/<pkg>/<msg>.hpp`. After changing protos, re-run `just gen-topic-mappers`. Mount with `.mapper(GeometryMsgsPoseStampedMapper())` (Python) / `.mapper(GeometryMsgsPoseStampedMapper{})` (C++; same attach path as custom mappers; `TopicBuiltin` stays String/Image only).
+**Topic mappers share one catalog across Rust / Python / C++** (~125 types from Humble/Jazzy common interface packages): Rust `src/ros2_bridge/mappers/`, Python `robot_bus.ros2_bridge.mappers.<pkg>`, C++ `robot_bus/ros2_bridge/mappers/<pkg>/<msg>.hpp`. Package allowlist: `CORE_BRIDGE_PACKAGES` in `scripts/generate_topic_mappers.py`. After changing protos, re-run `just gen-topic-mappers`. Mount with `.mapper(GeometryMsgsPoseStampedMapper())` (Python) / `.mapper(GeometryMsgsPoseStampedMapper{})` (C++; same attach path as custom mappers; `TopicBuiltin` stays String/Image only).
+
+**Not bridge builtins:** `nav2_msgs` / `control_msgs` / `foxglove_msgs` / `apriltag_msgs`. Matching **protos may remain** for bus-native APIs; ROS↔bus conversion requires a user TypedTopicMapper. Installing those apt packages later does **not** enable bridge mappers automatically.
 
 Service / action remain hand-written phase-1 builtins (no generated srv/action catalogs):
 
@@ -172,7 +174,7 @@ Service / action remain hand-written phase-1 builtins (no generated srv/action c
 | Service | `SetBoolServiceMapper` | `std_srvs/srv/SetBool` |
 | Action | `FibonacciActionMapper` | `example_interfaces/action/Fibonacci` |
 
-Rust also exposes `lookup_topic_mapper` / `registered_topic_types`. C++ treats Humble-optional interface packages (`nav2_msgs` / `control_msgs` / `apriltag_msgs` / `foxglove_msgs`) as `find_package(... QUIET)`: ROS conversion for those mappers compiles only when the package is present.
+Rust also exposes `lookup_topic_mapper` / `registered_topic_types` for the core set only.
 
 ---
 
@@ -464,23 +466,11 @@ fn main() -> robot_bus::Result<()> {
 
 ### Rust messages (`ros-env` + ament rust IDL)
 
-The client is crates.io **`rclrs` 0.7**. Message types come from **`ros-env` 0.2** re-exporting `share/<pkg>/rust/`, not from rclrs itself.
+The client is crates.io **`rclrs`**. Message types come from **`ros-env`** re-exporting `share/<pkg>/rust/`, not from rclrs itself.
 
-On Humble, `ros-humble-sensor-msgs` and similar packages already include `share/sensor_msgs/rust/` (with `msg::Image`). After `source /opt/ros/humble`, `ros_env` can see those crates. The in-tree topic mapper registry still depends on a few packages **not** in a default apt install (`nav2_msgs`, `control_msgs`, `apriltag_msgs`). For the full registry, put the missing interface packages in an overlay workspace and `colcon build`:
+On Humble/Jazzy, distro-common packages used by the **core** bridge mapper set typically already ship rust IDL. After `source /opt/ros/<distro>`, `cargo build --features ros2` should see `ros_env::<pkg>::msg` for those packages. Extension stacks are not builtins — do not expect nav2/control/foxglove/apriltag overlay to unlock in-tree mappers (write TypedTopicMapper instead).
 
-```bash
-mkdir -p ~/ros2_rust_ws/src && cd ~/ros2_rust_ws
-# Only add packages whose rust IDL is missing from the distro, e.g.:
-git clone -b humble https://github.com/ros-navigation/nav2_msgs.git src/nav2_msgs
-# likewise control_msgs / apriltag_msgs
-git clone https://github.com/ros2-rust/rosidl_rust.git src/rosidl_rust
-source /opt/ros/humble/setup.bash
-colcon build
-source install/setup.bash
-# cargo build --features ros2 can then see ros_env::<pkg>::msg
-```
-
-Without an overlay, use `just check-ros2-shim`. crates.io `ros-env` empties its shim; this repo patches it with **typed field stubs** in [`third_party/ros-env-shim`](../../third_party/ros-env-shim) (generated from proto; not a DynamicMessage fallback). Our `std_srvs` vendor still uses system C typesupport and does not need rust IDL.
+Without ROS, use `just check-ros2-shim`. crates.io `ros-env` empties its shim; this repo patches it with **typed field stubs** in [`third_party/ros-env-shim`](../../third_party/ros-env-shim) (generated from core mapper protos). Our `std_srvs` vendor still uses system C typesupport and does not need rust IDL.
 
 ---
 
@@ -587,7 +577,7 @@ auto snap = bridge.drop_stats();  // snap.convert_fail / decode_fail / publish_f
 1. **ROS not sourced** — all three language bindings fail.
 2. **C++ `ros2_available() == false`** — not linked with `robot_bus_ros2_bridge` / installed package without bridge.
 3. **Python `ros2_available() == False`** — `rclpy` not installed or ROS not sourced.
-4. **Rust topic registered but fails at runtime** — missing corresponding ROS typesupport (e.g. `foxglove_msgs`).
+4. **Rust topic registered but fails at runtime** — missing corresponding ROS typesupport, or rust IDL not on `AMENT_PREFIX_PATH`.
 
 ---
 

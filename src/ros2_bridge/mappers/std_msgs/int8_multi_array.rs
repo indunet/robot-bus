@@ -12,7 +12,7 @@ pub(crate) fn int8_multi_array_to_bus(msg: ros_env::std_msgs::msg::Int8MultiArra
 pub(crate) fn int8_multi_array_to_ros(bus: crate::std_msgs::msg::v1::Int8MultiArray) -> ros_env::std_msgs::msg::Int8MultiArray {
     ros_env::std_msgs::msg::Int8MultiArray {
         layout: crate::ros2_bridge::mappers::std_msgs::multi_array_layout::multi_array_layout_to_ros(bus.layout.unwrap_or_default()),
-        data: bus.data,
+        data: crate::ros2_bridge::mappers::convert::FromI32Seq::from_i32_seq(bus.data),
     }
 }
 

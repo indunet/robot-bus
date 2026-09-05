@@ -7,7 +7,8 @@ pub(crate) fn empty_to_bus(_msg: ros_env::std_msgs::msg::Empty) -> crate::std_ms
 }
 
 pub(crate) fn empty_to_ros(_bus: crate::std_msgs::msg::v1::Empty) -> ros_env::std_msgs::msg::Empty {
-    ros_env::std_msgs::msg::Empty {}
+    // Distro IDL uses `structure_needs_at_least_one_member`; Default covers both.
+    ros_env::std_msgs::msg::Empty::default()
 }
 
 #[derive(Clone, Copy, Debug, Default)]

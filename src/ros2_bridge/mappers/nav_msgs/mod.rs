@@ -6,5 +6,3 @@ pub mod map_meta_data;
 pub mod occupancy_grid;
 pub mod odometry;
 pub mod path;
-pub mod trajectory;
-pub mod trajectory_point;

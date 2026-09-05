@@ -130,7 +130,9 @@ bridge.spin();
 
 Rust / C++ 同样在 reliability 后面接 `.transient_local()`（C++ 若要改回默认，方法名是 `.durability_volatile()`，因为 `volatile` 是关键字）。bus 端没有 DDS durability，写了也会被忽略。
 
-Topic mapper 三语言同一套目录（`proto/*/msg/v1`，约 214 个类型）：Rust `src/ros2_bridge/mappers/`，Python `robot_bus.ros2_bridge.mappers.<pkg>`，C++ `robot_bus/ros2_bridge/mappers/<pkg>/<msg>.hpp`。改 proto 后跑 `just gen-topic-mappers`。挂路由直接 `.mapper(GeometryMsgsPoseStampedMapper())` / `.mapper(GeometryMsgsPoseStampedMapper{})`。
+Topic mapper 三语言同一套目录（Humble/Jazzy **发行版常见自带**接口包，约 125 个类型）：Rust `src/ros2_bridge/mappers/`，Python `robot_bus.ros2_bridge.mappers.<pkg>`，C++ `robot_bus/ros2_bridge/mappers/<pkg>/<msg>.hpp`。包集合见 `scripts/generate_topic_mappers.py` 的 `CORE_BRIDGE_PACKAGES`。改 proto 后跑 `just gen-topic-mappers`。挂路由直接 `.mapper(GeometryMsgsPoseStampedMapper())` / `.mapper(GeometryMsgsPoseStampedMapper{})`。
+
+**不作为桥内置**：`nav2_msgs` / `control_msgs` / `foxglove_msgs` / `apriltag_msgs` 等扩展栈。仓库里仍可有对应 **proto**（bus 原生可用），但默认不提供 ROS↔bus mapper；需要时请自写 `TypedTopicMapper`。后装 apt 扩展包**不会**自动点亮桥能力。
 
 | 示例 mapper | ROS 类型 |
 |-------------|----------|
@@ -138,7 +140,7 @@ Topic mapper 三语言同一套目录（`proto/*/msg/v1`，约 214 个类型）�
 | `SensorMsgsImageMapper` | `sensor_msgs/msg/Image` |
 | `GeometryMsgsPoseStampedMapper` | `geometry_msgs/msg/PoseStamped` |
 
-Rust 另有 `lookup_topic_mapper` / `registered_topic_types`。C++ Humble 默认没有的接口包（`nav2_msgs` / `control_msgs` / `apriltag_msgs` / `foxglove_msgs`）用 `find_package(... QUIET)`：找到才打开对应 mapper 的 ROS 转换。
+Rust 另有 `lookup_topic_mapper` / `registered_topic_types`（仅核心集）。
 
 ### `.lazy()`（大流量 ROS → bus）
 
@@ -537,30 +539,9 @@ class MyFibonacciMapper:
 
 ### Rust（`rclrs`）
 
-`feature = "ros2"` 还要一层 **ros2_rust** overlay：`AMENT_PREFIX_PATH` 里必须有 `rosidl_generator_rs` 生成的 `share/<pkg>/rust/`，覆盖 **mappers 里全部包**（不只是 `std_msgs` / `sensor_msgs`）。只 `source /opt/ros/humble` **编不出** typed 路径。`apt install ros-humble-sensor-msgs` 只提供 C typesupport，不含 rust IDL。
+`feature = "ros2"` 需要 `AMENT_PREFIX_PATH` 上有核心桥包的 rust IDL（`share/<pkg>/rust/`）。Humble 上 `common_interfaces` 等常见包通常已自带；`source /opt/ros/humble` 后应对 **默认内置** mapper 足够。扩展栈（nav2 / control / foxglove / apriltag）**不是**桥内置，不必为它们建 overlay。
 
-Humble 示例（在独立 workspace 里 `colcon build` 后 `source install/setup.bash`）：
-
-```bash
-mkdir -p ~/ros2_rust_ws/src && cd ~/ros2_rust_ws
-git clone -b humble https://github.com/ros2/common_interfaces.git src/common_interfaces
-git clone -b humble https://github.com/ros2/example_interfaces.git src/example_interfaces
-git clone -b humble https://github.com/ros2/rcl_interfaces.git src/rcl_interfaces
-git clone -b humble https://github.com/ros2/rosidl_core.git src/rosidl_core
-git clone -b humble https://github.com/ros2/rosidl_defaults.git src/rosidl_defaults
-git clone -b humble https://github.com/ros2/unique_identifier_msgs.git src/unique_identifier_msgs
-git clone https://github.com/ros2-rust/rosidl_rust.git src/rosidl_rust
-# Topic mappers also need rust IDL for these packages (same overlay workspace):
-#   nav_msgs nav2_msgs geometry_msgs visualization_msgs tf2_msgs
-#   diagnostic_msgs trajectory_msgs shape_msgs stereo_msgs
-#   control_msgs foxglove_msgs apriltag_msgs action_msgs builtin_interfaces
-source /opt/ros/humble/setup.bash
-colcon build
-source install/setup.bash
-# 之后 cargo build --features ros2 才能看到 ros_env::<pkg>::msg
-```
-
-无 overlay 时可用 `just check-ros2-shim`。`rclrs` 0.8 走 `ros_env::*`，crates.io 的 `ros-env` shim 是空的，本仓库用 [`third_party/ros-env-shim`](../../third_party/ros-env-shim) 通过 `[patch.crates-io]` 提供 **typed 字段桩**（按 proto 生成，不是 DynamicMessage 退路）。我们自己的 `std_srvs` vendor 仍走系统 C typesupport，不依赖 rust IDL。
+无 ROS 环境时可用 `just check-ros2-shim`。`rclrs` 走 `ros_env::*`，crates.io 的 `ros-env` shim 是空的，本仓库用 [`third_party/ros-env-shim`](../../third_party/ros-env-shim) 通过 `[patch.crates-io]` 提供 **typed 字段桩**（按核心 mapper proto 生成）。我们自己的 `std_srvs` vendor 仍走系统 C typesupport，不依赖 rust IDL。
 
 ### Python（`rclpy`）
 
@@ -604,7 +585,7 @@ auto snap = bridge.drop_stats();  // snap.convert_fail / decode_fail / publish_f
 1. **未 source ROS** — 三端都会失败。
 2. **C++ `ros2_available() == false`** — 未链 `robot_bus_ros2_bridge` / 装的是无桥包。
 3. **Python `ros2_available() == False`** — 未安装或未 source 到 `rclpy`。
-4. **Rust topic 登记了但跑不起来** — 缺对应 ROS typesupport（如 `foxglove_msgs`）。
+4. **Rust topic 登记了但跑不起来** — 缺对应 ROS typesupport，或发行版 rust IDL 未 source。
 
 ---
 
