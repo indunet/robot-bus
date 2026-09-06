@@ -23,7 +23,7 @@ inline ::unique_identifier_msgs::msg::v1::UUID uuid_to_bus(const ::unique_identi
 
 inline ::unique_identifier_msgs::msg::UUID uuid_to_ros(const ::unique_identifier_msgs::msg::v1::UUID &bus) {
   ::unique_identifier_msgs::msg::UUID out;
-  out.uuid.assign(bus.uuid().begin(), bus.uuid().end());
+  ::robot_bus::ros2_bridge_mappers::copy_seq(out.uuid, bus.uuid());
   return out;
 }
 #endif

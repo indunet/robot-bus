@@ -30,8 +30,8 @@ inline ::sensor_msgs::msg::v1::Joy joy_to_bus(const ::sensor_msgs::msg::Joy &msg
 inline ::sensor_msgs::msg::Joy joy_to_ros(const ::sensor_msgs::msg::v1::Joy &bus) {
   ::sensor_msgs::msg::Joy out;
   out.header = ::robot_bus::ros2_bridge_mappers::std_msgs::header_to_ros(bus.header());
-  out.axes.assign(bus.axes().begin(), bus.axes().end());
-  out.buttons.assign(bus.buttons().begin(), bus.buttons().end());
+  ::robot_bus::ros2_bridge_mappers::copy_seq(out.axes, bus.axes());
+  ::robot_bus::ros2_bridge_mappers::copy_seq(out.buttons, bus.buttons());
   return out;
 }
 #endif

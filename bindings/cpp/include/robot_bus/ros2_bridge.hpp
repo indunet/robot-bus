@@ -1,6 +1,7 @@
 #pragma once
 
 #include <robot_bus/ros2_bridge_builder.hpp>
+#include <robot_bus/ros2_bridge_topic_mappers.hpp>
 
 namespace robot_bus {
 

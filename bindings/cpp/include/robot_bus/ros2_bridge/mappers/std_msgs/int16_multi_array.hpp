@@ -27,7 +27,7 @@ inline ::std_msgs::msg::v1::Int16MultiArray int16_multi_array_to_bus(const ::std
 inline ::std_msgs::msg::Int16MultiArray int16_multi_array_to_ros(const ::std_msgs::msg::v1::Int16MultiArray &bus) {
   ::std_msgs::msg::Int16MultiArray out;
   out.layout = ::robot_bus::ros2_bridge_mappers::std_msgs::multi_array_layout_to_ros(bus.layout());
-  out.data.assign(bus.data().begin(), bus.data().end());
+  ::robot_bus::ros2_bridge_mappers::copy_seq(out.data, bus.data());
   return out;
 }
 #endif

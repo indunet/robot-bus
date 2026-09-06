@@ -27,7 +27,7 @@ inline ::geometry_msgs::msg::v1::PoseWithCovariance pose_with_covariance_to_bus(
 inline ::geometry_msgs::msg::PoseWithCovariance pose_with_covariance_to_ros(const ::geometry_msgs::msg::v1::PoseWithCovariance &bus) {
   ::geometry_msgs::msg::PoseWithCovariance out;
   out.pose = ::robot_bus::ros2_bridge_mappers::geometry_msgs::pose_to_ros(bus.pose());
-  out.covariance.assign(bus.covariance().begin(), bus.covariance().end());
+  ::robot_bus::ros2_bridge_mappers::copy_seq(out.covariance, bus.covariance());
   return out;
 }
 #endif

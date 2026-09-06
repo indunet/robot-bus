@@ -37,7 +37,7 @@ inline ::sensor_msgs::msg::NavSatFix nav_sat_fix_to_ros(const ::sensor_msgs::msg
   out.latitude = bus.latitude();
   out.longitude = bus.longitude();
   out.altitude = bus.altitude();
-  out.position_covariance.assign(bus.position_covariance().begin(), bus.position_covariance().end());
+  ::robot_bus::ros2_bridge_mappers::copy_seq(out.position_covariance, bus.position_covariance());
   out.position_covariance_type = bus.position_covariance_type();
   return out;
 }

@@ -130,7 +130,7 @@ bridge.spin();
 
 Rust / C++ 同样在 reliability 后面接 `.transient_local()`（C++ 若要改回默认，方法名是 `.durability_volatile()`，因为 `volatile` 是关键字）。bus 端没有 DDS durability，写了也会被忽略。
 
-Topic mapper 三语言同一套目录（Humble/Jazzy **发行版常见自带**接口包，约 125 个类型）：Rust `src/ros2_bridge/mappers/`，Python `robot_bus.ros2_bridge.mappers.<pkg>`，C++ `robot_bus/ros2_bridge/mappers/<pkg>/<msg>.hpp`。包集合见 `scripts/generate_topic_mappers.py` 的 `CORE_BRIDGE_PACKAGES`。改 proto 后跑 `just gen-topic-mappers`。挂路由直接 `.mapper(GeometryMsgsPoseStampedMapper())` / `.mapper(GeometryMsgsPoseStampedMapper{})`。
+Topic mapper 三语言同一套目录（Humble/Jazzy **发行版常见自带**接口包，约 125 个类型）：Rust `src/ros2_bridge/mappers/`，Python `from robot_bus.ros2_bridge import GeometryMsgsPoseStampedMapper`，C++ `#include <robot_bus/ros2_bridge.hpp>`（伞头文件 `ros2_bridge_topic_mappers.hpp`）。包集合见 `scripts/generate_topic_mappers.py` 的 `CORE_BRIDGE_PACKAGES`。改 proto 后跑 `just gen-topic-mappers`。挂路由直接 `.mapper(GeometryMsgsPoseStampedMapper())` / `.mapper(GeometryMsgsPoseStampedMapper{})`。
 
 **不作为桥内置**：`nav2_msgs` / `control_msgs` / `foxglove_msgs` / `apriltag_msgs` 等扩展栈。仓库里仍可有对应 **proto**（bus 原生可用），但默认不提供 ROS↔bus mapper；需要时请自写 `TypedTopicMapper`。后装 apt 扩展包**不会**自动点亮桥能力。
 

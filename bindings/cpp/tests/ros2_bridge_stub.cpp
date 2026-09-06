@@ -2,7 +2,6 @@
 // Builder `.lazy()` checks run with or without ROS.
 // With ROBOT_BUS_HAS_ROS2, also build()+spin_once against an in-process broker.
 #include <robot_bus/ros2_bridge.hpp>
-#include <robot_bus/ros2_bridge/mappers/geometry_msgs/pose_stamped.hpp>
 
 #include "harness.hpp"
 

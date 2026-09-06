@@ -35,7 +35,7 @@ inline ::sensor_msgs::msg::Image image_to_ros(const ::sensor_msgs::msg::v1::Imag
   out.encoding = bus.encoding();
   out.is_bigendian = bus.is_bigendian() ? 1 : 0;
   out.step = bus.step();
-  out.data.assign(bus.data().begin(), bus.data().end());
+  ::robot_bus::ros2_bridge_mappers::copy_seq(out.data, bus.data());
   return out;
 }
 #endif

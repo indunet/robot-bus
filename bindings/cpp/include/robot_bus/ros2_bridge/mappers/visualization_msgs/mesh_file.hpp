@@ -25,7 +25,7 @@ inline ::visualization_msgs::msg::v1::MeshFile mesh_file_to_bus(const ::visualiz
 inline ::visualization_msgs::msg::MeshFile mesh_file_to_ros(const ::visualization_msgs::msg::v1::MeshFile &bus) {
   ::visualization_msgs::msg::MeshFile out;
   out.filename = bus.filename();
-  out.data.assign(bus.data().begin(), bus.data().end());
+  ::robot_bus::ros2_bridge_mappers::copy_seq(out.data, bus.data());
   return out;
 }
 #endif

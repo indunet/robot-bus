@@ -396,7 +396,7 @@ bridge.spin()
 Key points:
 
 - Configuration is code-only via `.mapper(concrete object)`; no YAML, no type name strings on routes
-- Built-in (phase 1): `StdMsgsStringMapper`, `SensorMsgsImageMapper`, `TriggerServiceMapper`, `SetBoolServiceMapper`, `FibonacciActionMapper`
+- Built-in topic mappers: Humble/Jazzy core catalog (~125 types, e.g. `StdMsgsStringMapper`, `SensorMsgsImageMapper`, `GeometryMsgsPoseStampedMapper`); import from `robot_bus.ros2_bridge`. Service/action builtins remain hand-written: `TriggerServiceMapper`, `SetBoolServiceMapper`, `FibonacciActionMapper`
 - `ros2_available()`: whether `import rclpy` succeeds
 - **Custom service/action: yes** — write a bus `.proto` aligned with the ROS type and `protoc` it, then a duck-typed mapper (`ros_srv_type` + `ros_req_to_bus` / `bus_req_to_ros` …) and `.mapper(MyFoo())`; example in [ros2-bridge.md](ros2-bridge.md#user-defined-service--action-yes)
 - `bus_discover(api_url="", timeout=0.0, broker_id="")` aligns with C++/Rust (empty url / `timeout<=0` uses defaults)

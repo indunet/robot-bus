@@ -267,6 +267,6 @@ auto bridge = robot_bus::Ros2Bridge::New("ros_bridge")
 bridge.spin_once(0.01);
 ```
 
-一期内置：`StdMsgsStringMapper`、`SensorMsgsImageMapper`、`TriggerServiceMapper`、`SetBoolServiceMapper`、`FibonacciActionMapper`。  
+内置话题 mapper：Humble/Jazzy 核心目录（约 125 个类型）。`#include <robot_bus/ros2_bridge.hpp>` 即可使用（例如 `GeometryMsgsPoseStampedMapper`）。服务/动作内置仍为手写：`TriggerServiceMapper`、`SetBoolServiceMapper`、`FibonacciActionMapper`。  
 自定义：先写对齐 ROS的 bus `.proto`并 `protoc`，再继承 `TypedTopicMapper` / `TypedServiceMapper` / `TypedActionMapper` CRTP，只实现 convert方法，用 `.mapper(std::make_shared<…>())`挂载（见 [ros2-bridge.md](ros2-bridge.md)）。高级场景才 override裸 `attach`。  
 链接 `ROBOT_BUS_HAS_ROS2`时 `ros2_available()`为 true。默认 `robot-bus` stub会抛出明确的 `robot_bus::Error`。

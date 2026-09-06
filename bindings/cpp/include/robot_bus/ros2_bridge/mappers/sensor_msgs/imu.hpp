@@ -39,11 +39,11 @@ inline ::sensor_msgs::msg::Imu imu_to_ros(const ::sensor_msgs::msg::v1::Imu &bus
   ::sensor_msgs::msg::Imu out;
   out.header = ::robot_bus::ros2_bridge_mappers::std_msgs::header_to_ros(bus.header());
   out.orientation = ::robot_bus::ros2_bridge_mappers::geometry_msgs::quaternion_to_ros(bus.orientation());
-  out.orientation_covariance.assign(bus.orientation_covariance().begin(), bus.orientation_covariance().end());
+  ::robot_bus::ros2_bridge_mappers::copy_seq(out.orientation_covariance, bus.orientation_covariance());
   out.angular_velocity = ::robot_bus::ros2_bridge_mappers::geometry_msgs::vector3_to_ros(bus.angular_velocity());
-  out.angular_velocity_covariance.assign(bus.angular_velocity_covariance().begin(), bus.angular_velocity_covariance().end());
+  ::robot_bus::ros2_bridge_mappers::copy_seq(out.angular_velocity_covariance, bus.angular_velocity_covariance());
   out.linear_acceleration = ::robot_bus::ros2_bridge_mappers::geometry_msgs::vector3_to_ros(bus.linear_acceleration());
-  out.linear_acceleration_covariance.assign(bus.linear_acceleration_covariance().begin(), bus.linear_acceleration_covariance().end());
+  ::robot_bus::ros2_bridge_mappers::copy_seq(out.linear_acceleration_covariance, bus.linear_acceleration_covariance());
   return out;
 }
 #endif

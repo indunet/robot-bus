@@ -44,7 +44,7 @@ inline ::sensor_msgs::msg::PointCloud2 point_cloud2_to_ros(const ::sensor_msgs::
   out.is_bigendian = bus.is_bigendian();
   out.point_step = bus.point_step();
   out.row_step = bus.row_step();
-  out.data.assign(bus.data().begin(), bus.data().end());
+  ::robot_bus::ros2_bridge_mappers::copy_seq(out.data, bus.data());
   out.is_dense = bus.is_dense();
   return out;
 }

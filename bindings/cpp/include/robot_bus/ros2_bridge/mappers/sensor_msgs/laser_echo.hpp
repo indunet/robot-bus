@@ -25,7 +25,7 @@ inline ::sensor_msgs::msg::v1::LaserEcho laser_echo_to_bus(const ::sensor_msgs::
 
 inline ::sensor_msgs::msg::LaserEcho laser_echo_to_ros(const ::sensor_msgs::msg::v1::LaserEcho &bus) {
   ::sensor_msgs::msg::LaserEcho out;
-  out.echoes.assign(bus.echoes().begin(), bus.echoes().end());
+  ::robot_bus::ros2_bridge_mappers::copy_seq(out.echoes, bus.echoes());
   return out;
 }
 #endif

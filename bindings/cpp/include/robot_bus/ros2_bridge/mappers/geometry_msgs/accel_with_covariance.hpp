@@ -27,7 +27,7 @@ inline ::geometry_msgs::msg::v1::AccelWithCovariance accel_with_covariance_to_bu
 inline ::geometry_msgs::msg::AccelWithCovariance accel_with_covariance_to_ros(const ::geometry_msgs::msg::v1::AccelWithCovariance &bus) {
   ::geometry_msgs::msg::AccelWithCovariance out;
   out.accel = ::robot_bus::ros2_bridge_mappers::geometry_msgs::accel_to_ros(bus.accel());
-  out.covariance.assign(bus.covariance().begin(), bus.covariance().end());
+  ::robot_bus::ros2_bridge_mappers::copy_seq(out.covariance, bus.covariance());
   return out;
 }
 #endif

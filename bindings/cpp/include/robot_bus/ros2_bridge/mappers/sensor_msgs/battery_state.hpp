@@ -53,8 +53,8 @@ inline ::sensor_msgs::msg::BatteryState battery_state_to_ros(const ::sensor_msgs
   out.power_supply_health = bus.power_supply_health();
   out.power_supply_technology = bus.power_supply_technology();
   out.present = bus.present();
-  out.cell_voltage.assign(bus.cell_voltage().begin(), bus.cell_voltage().end());
-  out.cell_temperature.assign(bus.cell_temperature().begin(), bus.cell_temperature().end());
+  ::robot_bus::ros2_bridge_mappers::copy_seq(out.cell_voltage, bus.cell_voltage());
+  ::robot_bus::ros2_bridge_mappers::copy_seq(out.cell_temperature, bus.cell_temperature());
   out.location = bus.location();
   out.serial_number = bus.serial_number();
   out.temperature = bus.temperature();

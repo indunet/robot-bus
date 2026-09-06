@@ -105,7 +105,7 @@ A **custom** bridge needs both sides in-tree:
 
 | Demo | What it shows |
 |------|----------------|
-| **builtin** | Phase-1 mappers: String / Trigger / Fibonacci |
+| **builtin** | Built-in mappers: String / Trigger / Fibonacci |
 | **custom_add_two_ints** | Your ROS `.srv` + your bus `.proto` + mapper |
 
 #### Built-in mappers

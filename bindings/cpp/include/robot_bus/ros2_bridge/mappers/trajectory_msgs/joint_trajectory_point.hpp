@@ -35,10 +35,10 @@ inline ::trajectory_msgs::msg::v1::JointTrajectoryPoint joint_trajectory_point_t
 
 inline ::trajectory_msgs::msg::JointTrajectoryPoint joint_trajectory_point_to_ros(const ::trajectory_msgs::msg::v1::JointTrajectoryPoint &bus) {
   ::trajectory_msgs::msg::JointTrajectoryPoint out;
-  out.positions.assign(bus.positions().begin(), bus.positions().end());
-  out.velocities.assign(bus.velocities().begin(), bus.velocities().end());
-  out.accelerations.assign(bus.accelerations().begin(), bus.accelerations().end());
-  out.effort.assign(bus.effort().begin(), bus.effort().end());
+  ::robot_bus::ros2_bridge_mappers::copy_seq(out.positions, bus.positions());
+  ::robot_bus::ros2_bridge_mappers::copy_seq(out.velocities, bus.velocities());
+  ::robot_bus::ros2_bridge_mappers::copy_seq(out.accelerations, bus.accelerations());
+  ::robot_bus::ros2_bridge_mappers::copy_seq(out.effort, bus.effort());
   out.time_from_start = ::robot_bus::ros2_bridge_mappers::builtin_interfaces::duration_to_ros(bus.time_from_start());
   return out;
 }

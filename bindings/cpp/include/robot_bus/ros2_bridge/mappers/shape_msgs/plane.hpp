@@ -25,7 +25,7 @@ inline ::shape_msgs::msg::v1::Plane plane_to_bus(const ::shape_msgs::msg::Plane 
 
 inline ::shape_msgs::msg::Plane plane_to_ros(const ::shape_msgs::msg::v1::Plane &bus) {
   ::shape_msgs::msg::Plane out;
-  out.coef.assign(bus.coef().begin(), bus.coef().end());
+  ::robot_bus::ros2_bridge_mappers::copy_seq(out.coef, bus.coef());
   return out;
 }
 #endif

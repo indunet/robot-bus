@@ -40,6 +40,7 @@ EXPECTED_PROTOC_VERSION = "35.1"
 # Top-level packages that own message/service protos (not robot_bus.grpc).
 MSG_PACKAGES = (
     "ackermann_msgs",
+    "action_msgs",
     "apriltag_msgs",
     "builtin_interfaces",
     "control_msgs",
@@ -55,6 +56,7 @@ MSG_PACKAGES = (
     "shape_msgs",
     "std_msgs",
     "std_srvs",
+    "stereo_msgs",
     "tf2_msgs",
     "trajectory_msgs",
     "unique_identifier_msgs",

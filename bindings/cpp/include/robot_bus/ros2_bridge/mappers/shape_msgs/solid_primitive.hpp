@@ -28,7 +28,7 @@ inline ::shape_msgs::msg::v1::SolidPrimitive solid_primitive_to_bus(const ::shap
 inline ::shape_msgs::msg::SolidPrimitive solid_primitive_to_ros(const ::shape_msgs::msg::v1::SolidPrimitive &bus) {
   ::shape_msgs::msg::SolidPrimitive out;
   out.type = bus.type();
-  out.dimensions.assign(bus.dimensions().begin(), bus.dimensions().end());
+  ::robot_bus::ros2_bridge_mappers::copy_seq(out.dimensions, bus.dimensions());
   out.polygon = ::robot_bus::ros2_bridge_mappers::geometry_msgs::polygon_to_ros(bus.polygon());
   return out;
 }

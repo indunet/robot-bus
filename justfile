@@ -181,6 +181,7 @@ test-python: proto
 	PYTHONPATH=bindings/python python3 bindings/python/tests/test_typed_api.py
 	PYTHONPATH=bindings/python python3 bindings/python/tests/test_ros2_bridge_builder.py
 	PYTHONPATH=bindings/python python3 bindings/python/tests/test_ros2_bridge_image_mapper.py
+	PYTHONPATH=bindings/python python3 bindings/python/tests/test_ros2_bridge_topic_mappers.py
 
 # Native Python integration (requires `just python-dev`; fails if extension missing)
 test-python-native:

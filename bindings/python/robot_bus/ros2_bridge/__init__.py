@@ -29,13 +29,8 @@ from robot_bus.ros2_bridge.builder import (
     TopicQosKeepLast,
     should_enable_ros_subscription,
 )
-from robot_bus.ros2_bridge.mappers import (
-    FibonacciActionMapper,
-    SensorMsgsImageMapper,
-    SetBoolServiceMapper,
-    StdMsgsStringMapper,
-    TriggerServiceMapper,
-)
+from robot_bus.ros2_bridge.mappers import *  # noqa: F403
+from robot_bus.ros2_bridge.mappers import __all__ as _MAPPER_EXPORTS
 
 __all__ = [
     "ACTION_CALL_TIMEOUT",
@@ -48,7 +43,6 @@ __all__ = [
     "ActionReady",
     "BusToRos2Ready",
     "Direction",
-    "FibonacciActionMapper",
     "FromBus",
     "FromBusToRos",
     "FromRos",
@@ -56,16 +50,13 @@ __all__ = [
     "Ros2Bridge",
     "Ros2BridgeBuilder",
     "Ros2ToBusReady",
-    "SensorMsgsImageMapper",
     "Service",
     "ServiceFromBus",
     "ServiceFromRos",
     "ServicePair",
     "ServiceReady",
-    "SetBoolServiceMapper",
-    "StdMsgsStringMapper",
     "TopicQos",
     "TopicQosKeepLast",
-    "TriggerServiceMapper",
     "should_enable_ros_subscription",
+    *_MAPPER_EXPORTS,
 ]

@@ -256,7 +256,7 @@ auto bridge = robot_bus::Ros2Bridge::New("ros_bridge")
 bridge.spin_once(0.01);
 ```
 
-Phase-1 builtins: `StdMsgsStringMapper`, `SensorMsgsImageMapper`, `TriggerServiceMapper`, `SetBoolServiceMapper`, `FibonacciActionMapper`.  
+Built-in topic mappers: Humble/Jazzy core catalog (~125 types). `#include <robot_bus/ros2_bridge.hpp>` provides them (e.g. `GeometryMsgsPoseStampedMapper`). Service/action builtins remain hand-written: `TriggerServiceMapper`, `SetBoolServiceMapper`, `FibonacciActionMapper`.  
 Custom: write a bus `.proto` aligned with the ROS type and `protoc` it, then inherit `TypedTopicMapper` / `TypedServiceMapper` / `TypedActionMapper` CRTP, implement convert methods only, mount with `.mapper(std::make_shared<…>())` (see [ros2-bridge.md](ros2-bridge.md)). Override bare `attach` only for advanced cases.  
 `ros2_available()` is true when linked with `ROBOT_BUS_HAS_ROS2`. Default `robot-bus` stubs throw a clear `robot_bus::Error`.
 

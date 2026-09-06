@@ -36,6 +36,15 @@ def test_generated_topic_mapper_catalog():
 
 
 def test_pose_stamped_mapper_exists():
-    from robot_bus.ros2_bridge.mappers import GeometryMsgsPoseStampedMapper
+    from robot_bus.ros2_bridge import GeometryMsgsPoseStampedMapper
 
     assert GeometryMsgsPoseStampedMapper() is not None
+    from robot_bus.ros2_bridge import __all__ as exports
+
+    assert "GeometryMsgsPoseStampedMapper" in exports
+
+
+if __name__ == "__main__":
+    test_generated_topic_mapper_catalog()
+    test_pose_stamped_mapper_exists()
+    print("test_ros2_bridge_topic_mappers ok")

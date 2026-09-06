@@ -396,7 +396,7 @@ bridge.spin()
 要点：
 
 - 配置只走代码 `.mapper(具体对象)`；无 YAML、无类型名字符串挂路由
-- 一期内置：`StdMsgsStringMapper`、`SensorMsgsImageMapper`、`TriggerServiceMapper`、`SetBoolServiceMapper`、`FibonacciActionMapper`
+- 内置话题 mapper：Humble/Jazzy 核心目录（约 125 个类型，例如 `StdMsgsStringMapper`、`SensorMsgsImageMapper`、`GeometryMsgsPoseStampedMapper`）；从 `robot_bus.ros2_bridge` 导入。服务/动作内置仍为手写：`TriggerServiceMapper`、`SetBoolServiceMapper`、`FibonacciActionMapper`
 - `ros2_available()`：能否 `import rclpy`
 - **自定义 service/action：可以**——先写对齐 ROS的 bus `.proto`并 `protoc`，再写 duck-typed mapper（`ros_srv_type` + `ros_req_to_bus` / `bus_req_to_ros` …），`.mapper(MyFoo())`；示例见 [ros2-bridge.md](ros2-bridge.md#自定义服务-mapper)
 - `bus_discover(api_url="", timeout=0.0, broker_id="")`与 C++/Rust对齐（空 url / `timeout<=0`用默认）

@@ -159,11 +159,11 @@ To match a ROS graph that uses best-effort KeepLast(5), write `keep_last(5).best
 
 ### Built-in mappers (core distro only)
 
-**Topic mappers share one catalog across Rust / Python / C++** (~125 types from Humble/Jazzy common interface packages): Rust `src/ros2_bridge/mappers/`, Python `robot_bus.ros2_bridge.mappers.<pkg>`, C++ `robot_bus/ros2_bridge/mappers/<pkg>/<msg>.hpp`. Package allowlist: `CORE_BRIDGE_PACKAGES` in `scripts/generate_topic_mappers.py`. After changing protos, re-run `just gen-topic-mappers`. Mount with `.mapper(GeometryMsgsPoseStampedMapper())` (Python) / `.mapper(GeometryMsgsPoseStampedMapper{})` (C++; same attach path as custom mappers; `TopicBuiltin` stays String/Image only).
+**Topic mappers share one catalog across Rust / Python / C++** (~125 types from Humble/Jazzy common interface packages): Rust `src/ros2_bridge/mappers/`, Python `from robot_bus.ros2_bridge import GeometryMsgsPoseStampedMapper`, C++ `#include <robot_bus/ros2_bridge.hpp>` (umbrella `ros2_bridge_topic_mappers.hpp`). Package allowlist: `CORE_BRIDGE_PACKAGES` in `scripts/generate_topic_mappers.py`. After changing protos, re-run `just gen-topic-mappers`. Mount with `.mapper(GeometryMsgsPoseStampedMapper())` (Python) / `.mapper(GeometryMsgsPoseStampedMapper{})` (C++; same attach path as custom mappers; `TopicBuiltin` stays String/Image only).
 
 **Not bridge builtins:** `nav2_msgs` / `control_msgs` / `foxglove_msgs` / `apriltag_msgs`. Matching **protos may remain** for bus-native APIs; ROS↔bus conversion requires a user TypedTopicMapper. Installing those apt packages later does **not** enable bridge mappers automatically.
 
-Service / action remain hand-written phase-1 builtins (no generated srv/action catalogs):
+Service / action remain hand-written builtins (no generated srv/action catalogs):
 
 | Kind | Mapper | ROS type |
 |------|--------|----------|
@@ -195,7 +195,7 @@ project-local `my_pkg/srv/AddTwoInts`), starting from the proto through mounting
 the bridge.
 
 **Runnable demos** (Python / Rust / C++): [`examples/ros2_bridge/`](../../examples/ros2_bridge/)
-— `builtin` for phase-1 mappers, `custom_add_two_ints` for this custom flow.
+— `builtin` for built-in mappers, `custom_add_two_ints` for this custom flow.
 
 ### 1. Define the bus protobuf
 

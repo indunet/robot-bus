@@ -27,7 +27,7 @@ inline ::geometry_msgs::msg::v1::TwistWithCovariance twist_with_covariance_to_bu
 inline ::geometry_msgs::msg::TwistWithCovariance twist_with_covariance_to_ros(const ::geometry_msgs::msg::v1::TwistWithCovariance &bus) {
   ::geometry_msgs::msg::TwistWithCovariance out;
   out.twist = ::robot_bus::ros2_bridge_mappers::geometry_msgs::twist_to_ros(bus.twist());
-  out.covariance.assign(bus.covariance().begin(), bus.covariance().end());
+  ::robot_bus::ros2_bridge_mappers::copy_seq(out.covariance, bus.covariance());
   return out;
 }
 #endif

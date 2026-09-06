@@ -25,7 +25,7 @@ inline ::shape_msgs::msg::v1::MeshTriangle mesh_triangle_to_bus(const ::shape_ms
 
 inline ::shape_msgs::msg::MeshTriangle mesh_triangle_to_ros(const ::shape_msgs::msg::v1::MeshTriangle &bus) {
   ::shape_msgs::msg::MeshTriangle out;
-  out.vertex_indices.assign(bus.vertex_indices().begin(), bus.vertex_indices().end());
+  ::robot_bus::ros2_bridge_mappers::copy_seq(out.vertex_indices, bus.vertex_indices());
   return out;
 }
 #endif

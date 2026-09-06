@@ -40,9 +40,9 @@ inline ::sensor_msgs::msg::JointState joint_state_to_ros(const ::sensor_msgs::ms
   for (const auto &x : bus.name()) {
     out.name.push_back(x);
   }
-  out.position.assign(bus.position().begin(), bus.position().end());
-  out.velocity.assign(bus.velocity().begin(), bus.velocity().end());
-  out.effort.assign(bus.effort().begin(), bus.effort().end());
+  ::robot_bus::ros2_bridge_mappers::copy_seq(out.position, bus.position());
+  ::robot_bus::ros2_bridge_mappers::copy_seq(out.velocity, bus.velocity());
+  ::robot_bus::ros2_bridge_mappers::copy_seq(out.effort, bus.effort());
   return out;
 }
 #endif

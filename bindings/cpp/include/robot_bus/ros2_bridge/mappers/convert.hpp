@@ -1,5 +1,6 @@
 #pragma once
 
+#include <algorithm>
 #include <cstdint>
 #include <string>
 #include <vector>
@@ -13,6 +14,25 @@
 
 namespace robot_bus {
 namespace ros2_bridge_mappers {
+
+/// `std::vector` (and ROS bounded vectors) have `assign`; ROS fixed arrays do not.
+template <typename Dst, typename Src>
+auto copy_seq(Dst &dst, const Src &src, int)
+    -> decltype(dst.assign(src.begin(), src.end()), void()) {
+  dst.assign(src.begin(), src.end());
+}
+
+template <typename Dst, typename Src>
+void copy_seq(Dst &dst, const Src &src, long) {
+  using size_type = decltype(dst.size());
+  const auto n = std::min(dst.size(), static_cast<size_type>(src.size()));
+  std::copy_n(src.begin(), n, dst.begin());
+}
+
+template <typename Dst, typename Src>
+void copy_seq(Dst &dst, const Src &src) {
+  copy_seq(dst, src, 0);
+}
 
 inline std::string i8_seq_to_bytes(const std::vector<int8_t> &data) {
   if (data.empty()) {

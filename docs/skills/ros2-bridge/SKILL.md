@@ -86,7 +86,7 @@ Progress:
 
 **Not builtins:** `nav2_msgs` / `control_msgs` / `foxglove_msgs` / `apriltag_msgs`. Keep using bus protos if present; write TypedTopicMapper for ROS bridging. Later `apt install` of those packages does not enable bridge mappers.
 
-**Service / action** remain hand-written phase-1 builtins (no generated srv/action catalog):
+**Service / action** remain hand-written builtins (no generated srv/action catalog):
 
 | Kind | Mapper | ROS type |
 |------|--------|----------|

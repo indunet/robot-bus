@@ -27,7 +27,7 @@ inline ::sensor_msgs::msg::CompressedImage compressed_image_to_ros(const ::senso
   ::sensor_msgs::msg::CompressedImage out;
   out.header = ::robot_bus::ros2_bridge_mappers::std_msgs::header_to_ros(bus.header());
   out.format = bus.format();
-  out.data.assign(bus.data().begin(), bus.data().end());
+  ::robot_bus::ros2_bridge_mappers::copy_seq(out.data, bus.data());
   return out;
 }
 #endif

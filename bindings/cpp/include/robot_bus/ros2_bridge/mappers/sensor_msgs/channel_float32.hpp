@@ -27,7 +27,7 @@ inline ::sensor_msgs::msg::v1::ChannelFloat32 channel_float32_to_bus(const ::sen
 inline ::sensor_msgs::msg::ChannelFloat32 channel_float32_to_ros(const ::sensor_msgs::msg::v1::ChannelFloat32 &bus) {
   ::sensor_msgs::msg::ChannelFloat32 out;
   out.name = bus.name();
-  out.values.assign(bus.values().begin(), bus.values().end());
+  ::robot_bus::ros2_bridge_mappers::copy_seq(out.values, bus.values());
   return out;
 }
 #endif

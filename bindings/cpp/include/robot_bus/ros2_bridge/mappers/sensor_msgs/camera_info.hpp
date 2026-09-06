@@ -46,10 +46,10 @@ inline ::sensor_msgs::msg::CameraInfo camera_info_to_ros(const ::sensor_msgs::ms
   out.height = bus.height();
   out.width = bus.width();
   out.distortion_model = bus.distortion_model();
-  out.d.assign(bus.d().begin(), bus.d().end());
-  out.k.assign(bus.k().begin(), bus.k().end());
-  out.r.assign(bus.r().begin(), bus.r().end());
-  out.p.assign(bus.p().begin(), bus.p().end());
+  ::robot_bus::ros2_bridge_mappers::copy_seq(out.d, bus.d());
+  ::robot_bus::ros2_bridge_mappers::copy_seq(out.k, bus.k());
+  ::robot_bus::ros2_bridge_mappers::copy_seq(out.r, bus.r());
+  ::robot_bus::ros2_bridge_mappers::copy_seq(out.p, bus.p());
   out.binning_x = bus.binning_x();
   out.binning_y = bus.binning_y();
   out.roi = ::robot_bus::ros2_bridge_mappers::sensor_msgs::region_of_interest_to_ros(bus.roi());

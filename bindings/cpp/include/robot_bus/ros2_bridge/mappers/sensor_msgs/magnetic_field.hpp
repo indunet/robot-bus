@@ -30,7 +30,7 @@ inline ::sensor_msgs::msg::MagneticField magnetic_field_to_ros(const ::sensor_ms
   ::sensor_msgs::msg::MagneticField out;
   out.header = ::robot_bus::ros2_bridge_mappers::std_msgs::header_to_ros(bus.header());
   out.magnetic_field = ::robot_bus::ros2_bridge_mappers::geometry_msgs::vector3_to_ros(bus.magnetic_field());
-  out.magnetic_field_covariance.assign(bus.magnetic_field_covariance().begin(), bus.magnetic_field_covariance().end());
+  ::robot_bus::ros2_bridge_mappers::copy_seq(out.magnetic_field_covariance, bus.magnetic_field_covariance());
   return out;
 }
 #endif

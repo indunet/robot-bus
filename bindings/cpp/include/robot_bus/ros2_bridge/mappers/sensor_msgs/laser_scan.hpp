@@ -44,8 +44,8 @@ inline ::sensor_msgs::msg::LaserScan laser_scan_to_ros(const ::sensor_msgs::msg:
   out.scan_time = bus.scan_time();
   out.range_min = bus.range_min();
   out.range_max = bus.range_max();
-  out.ranges.assign(bus.ranges().begin(), bus.ranges().end());
-  out.intensities.assign(bus.intensities().begin(), bus.intensities().end());
+  ::robot_bus::ros2_bridge_mappers::copy_seq(out.ranges, bus.ranges());
+  ::robot_bus::ros2_bridge_mappers::copy_seq(out.intensities, bus.intensities());
   return out;
 }
 #endif
