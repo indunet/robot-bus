@@ -70,7 +70,7 @@ export default function DocsView() {
                 className={`w-full text-left px-3 py-2 font-mono text-[11px] tracking-wide transition-colors truncate ${
                   selected
                     ? 'bg-bus-cyan/15 text-bus-cyan border-l-2 border-bus-cyan'
-                    : 'text-bus-muted hover:text-bus-text hover:bg-[#1f2428] border-l-2 border-transparent'
+                    : 'text-bus-text hover:text-white hover:bg-white/[0.06] border-l-2 border-transparent'
                 }`}
               >
                 {label}
@@ -82,7 +82,7 @@ export default function DocsView() {
 
       <section className="flex-1 min-w-0 flex flex-col rounded border border-bus-border bg-bus-panel overflow-hidden">
         <PanelHeader title={headerTitle} />
-        <div className="flex-1 overflow-y-auto overflow-x-hidden bus-scroll bg-[#0d1117]">
+        <div className="flex-1 overflow-y-auto overflow-x-hidden docs-md-scroll bg-white">
           <article className="markdown-body docs-md">
             <Markdown
               remarkPlugins={remarkPlugins}
