@@ -936,7 +936,7 @@ struct Ros2Bridge::Impl {
   explicit Impl(Node bus) : bus_node(std::move(bus)) {}
 
   ~Impl() {
-    halt.store(true);
+    halt.store(true, std::memory_order_relaxed);
     if (executor) {
       executor->cancel();
     }
@@ -1214,7 +1214,11 @@ Ros2Bridge Ros2BridgeBuilder::build() && {
 
   auto *raw = impl.get();
   raw->spin_thread = std::thread([raw]() {
-    raw->executor->spin();
+    // Humble MultiThreadedExecutor::spin() often ignores cancel() from another
+    // thread. Timed spin_once lets ~Impl join after halt is set.
+    while (!raw->halt.load(std::memory_order_relaxed)) {
+      raw->executor->spin_once(std::chrono::milliseconds(50));
+    }
   });
 
   return Ros2Bridge(std::move(impl));
