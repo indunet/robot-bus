@@ -2,7 +2,9 @@
 
 use crate::ros2_bridge::mapper::TypedTopicMapper;
 
-pub(crate) fn quaternion_to_bus(msg: ros_env::geometry_msgs::msg::Quaternion) -> crate::geometry_msgs::msg::v1::Quaternion {
+pub(crate) fn quaternion_to_bus(
+    msg: ros_env::geometry_msgs::msg::Quaternion,
+) -> crate::geometry_msgs::msg::v1::Quaternion {
     crate::geometry_msgs::msg::v1::Quaternion {
         x: msg.x,
         y: msg.y,
@@ -11,7 +13,9 @@ pub(crate) fn quaternion_to_bus(msg: ros_env::geometry_msgs::msg::Quaternion) ->
     }
 }
 
-pub(crate) fn quaternion_to_ros(bus: crate::geometry_msgs::msg::v1::Quaternion) -> ros_env::geometry_msgs::msg::Quaternion {
+pub(crate) fn quaternion_to_ros(
+    bus: crate::geometry_msgs::msg::v1::Quaternion,
+) -> ros_env::geometry_msgs::msg::Quaternion {
     ros_env::geometry_msgs::msg::Quaternion {
         x: bus.x,
         y: bus.y,

@@ -334,10 +334,7 @@ fn decode_request(stream_id: u32, rest: &[u8]) -> Result<Frame, FrameError> {
         Opcode::Subscribe => {
             let topic = read_str(&mut cur)?;
             let qos_depth = read_i32(&mut cur)?;
-            (
-                RequestHeader::Subscribe { topic, qos_depth },
-                Vec::new(),
-            )
+            (RequestHeader::Subscribe { topic, qos_depth }, Vec::new())
         }
         Opcode::Publish => {
             let topic = read_str(&mut cur)?;

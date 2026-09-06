@@ -2,16 +2,22 @@
 
 use crate::ros2_bridge::mapper::TypedTopicMapper;
 
-pub(crate) fn twist_with_covariance_to_bus(msg: ros_env::geometry_msgs::msg::TwistWithCovariance) -> crate::geometry_msgs::msg::v1::TwistWithCovariance {
+pub(crate) fn twist_with_covariance_to_bus(
+    msg: ros_env::geometry_msgs::msg::TwistWithCovariance,
+) -> crate::geometry_msgs::msg::v1::TwistWithCovariance {
     crate::geometry_msgs::msg::v1::TwistWithCovariance {
         twist: Some(crate::ros2_bridge::mappers::geometry_msgs::twist::twist_to_bus(msg.twist)),
         covariance: crate::ros2_bridge::mappers::convert::f64_seq(msg.covariance),
     }
 }
 
-pub(crate) fn twist_with_covariance_to_ros(bus: crate::geometry_msgs::msg::v1::TwistWithCovariance) -> ros_env::geometry_msgs::msg::TwistWithCovariance {
+pub(crate) fn twist_with_covariance_to_ros(
+    bus: crate::geometry_msgs::msg::v1::TwistWithCovariance,
+) -> ros_env::geometry_msgs::msg::TwistWithCovariance {
     ros_env::geometry_msgs::msg::TwistWithCovariance {
-        twist: crate::ros2_bridge::mappers::geometry_msgs::twist::twist_to_ros(bus.twist.unwrap_or_default()),
+        twist: crate::ros2_bridge::mappers::geometry_msgs::twist::twist_to_ros(
+            bus.twist.unwrap_or_default(),
+        ),
         covariance: crate::ros2_bridge::mappers::convert::FromF64Seq::from_f64_seq(bus.covariance),
     }
 }

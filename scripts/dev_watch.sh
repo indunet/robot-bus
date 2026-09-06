@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Watch Rust + console sources → rebuild embedded UI (if needed) + restart broker.
-# Open http://127.0.0.1:15570 after it comes up.
+# Open http://127.0.0.1:15560 after it comes up.
 set -euo pipefail
 root="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$root"
@@ -9,13 +9,13 @@ cd "$root"
 # leave cargo-watch spam "[Running …]" while the old process keeps serving).
 stop_broker_listeners() {
   local pids
-  pids="$(lsof -nP -iTCP:15570 -sTCP:LISTEN -t 2>/dev/null || true)"
+  pids="$(lsof -nP -iTCP:15560 -sTCP:LISTEN -t 2>/dev/null || true)"
   if [[ -n "${pids}" ]]; then
-    echo "Stopping previous listener(s) on :15570 → ${pids//$'\n'/ }"
+    echo "Stopping previous listener(s) on :15560 → ${pids//$'\n'/ }"
     # shellcheck disable=SC2086
     kill ${pids} 2>/dev/null || true
     sleep 0.3
-    pids="$(lsof -nP -iTCP:15570 -sTCP:LISTEN -t 2>/dev/null || true)"
+    pids="$(lsof -nP -iTCP:15560 -sTCP:LISTEN -t 2>/dev/null || true)"
     if [[ -n "${pids}" ]]; then
       # shellcheck disable=SC2086
       kill -9 ${pids} 2>/dev/null || true
@@ -57,7 +57,7 @@ run_once() {
     echo "Console assets up to date; skipping just console."
   fi
 
-  echo "Starting broker → http://127.0.0.1:15570"
+  echo "Starting broker → http://127.0.0.1:15560"
   # Do not `exec`: cargo-watch needs a killable process group; with `exec` the
   # broker can survive a flaky restart and keep serving stale assets.
   cargo run --bin robot_bus_broker

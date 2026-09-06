@@ -2,7 +2,7 @@
 //!
 //! Enabled with `--features ws`. Covers message Subscribe / Publish, service
 //! Call, and action SendGoal (one GOAL request → FEEDBACK / RESULT stream).
-//! Native and browser clients share `/ws` (V3: one WebSocket, many streams).
+//! Native and browser clients share `/ws-rpc` (V3: one WebSocket, many streams).
 
 pub mod action;
 pub mod message;

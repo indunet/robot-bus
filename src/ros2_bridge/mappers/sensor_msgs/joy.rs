@@ -12,7 +12,9 @@ pub(crate) fn joy_to_bus(msg: ros_env::sensor_msgs::msg::Joy) -> crate::sensor_m
 
 pub(crate) fn joy_to_ros(bus: crate::sensor_msgs::msg::v1::Joy) -> ros_env::sensor_msgs::msg::Joy {
     ros_env::sensor_msgs::msg::Joy {
-        header: crate::ros2_bridge::mappers::std_msgs::header::header_to_ros(bus.header.unwrap_or_default()),
+        header: crate::ros2_bridge::mappers::std_msgs::header::header_to_ros(
+            bus.header.unwrap_or_default(),
+        ),
         axes: bus.axes,
         buttons: crate::ros2_bridge::mappers::convert::FromI32Seq::from_i32_seq(bus.buttons),
     }

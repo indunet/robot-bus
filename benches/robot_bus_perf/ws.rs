@@ -5,9 +5,9 @@ use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::{Duration, Instant};
 
+use crate::support::{LatencyStats, ScenarioResult, now_ns};
 use robot_bus::worker_thread::WorkerThread;
 use robot_bus::{HighWaterMark, Node, Publisher, RobotBusBroker, Subscriber};
-use crate::support::{now_ns, LatencyStats, ScenarioResult};
 
 use crate::pacing::{
     GoodputTrial, MSG_HWM, WARMUP, find_max_goodput, goodput_settle, goodput_trial_secs,

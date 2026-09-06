@@ -1,5 +1,5 @@
 /** @type {import('next').NextConfig} */
-const brokerOrigin = process.env.ROBOT_BUS_BROKER_URL ?? 'http://127.0.0.1:15570'
+const brokerOrigin = process.env.ROBOT_BUS_BROKER_URL ?? 'http://127.0.0.1:15560'
 const isProd = process.env.NODE_ENV === 'production'
 
 /** @type {import('next').NextConfig} */
@@ -28,7 +28,7 @@ const nextConfig = {
 }
 
 // Under `pnpm dev`, proxy REST to the broker. Browser WebSocket RPC should talk
-// to the broker directly (`resolveBusUrl` → :15570/ws) — Next rewrites are unreliable for WS.
+// to the broker directly (`resolveBusUrl` → :15560/ws-rpc) — Next rewrites are unreliable for WS.
 if (!isProd) {
   nextConfig.rewrites = async () => ({
     beforeFiles: [

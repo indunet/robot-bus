@@ -68,7 +68,7 @@ Target ROS client library usually matches the bus language:
 | robot-bus | ROS 2 |
 |-----------|-------|
 | `robot_bus_broker` | DDS + ROS daemon / `ros2` |
-| Discover `http://127.0.0.1:15570` | ROS graph discovery |
+| Discover `http://127.0.0.1:15560` | ROS graph discovery |
 | `robot-bus` crate / pip / native SDK | `rclcpp` / `rclpy` / `rclrs` + interface packages |
 | Process + broker | `ros2 run` / launch |
 | Protobuf types in SDK | `.msg` / `.srv` / `.action` + typesupport |
@@ -198,7 +198,7 @@ ros2 service call …   # if applicable
 ros2 action send_goal …  # if applicable
 ```
 
-If bridging: confirm both `ros2 topic list` and bus console (`http://127.0.0.1:15570`) see the mapped names.
+If bridging: confirm both `ros2 topic list` and bus console (`http://127.0.0.1:15560`) see the mapped names.
 
 ## 8. Deliverables
 

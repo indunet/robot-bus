@@ -2,15 +2,21 @@
 
 use crate::ros2_bridge::mapper::TypedTopicMapper;
 
-pub(crate) fn mesh_triangle_to_bus(msg: ros_env::shape_msgs::msg::MeshTriangle) -> crate::shape_msgs::msg::v1::MeshTriangle {
+pub(crate) fn mesh_triangle_to_bus(
+    msg: ros_env::shape_msgs::msg::MeshTriangle,
+) -> crate::shape_msgs::msg::v1::MeshTriangle {
     crate::shape_msgs::msg::v1::MeshTriangle {
         vertex_indices: crate::ros2_bridge::mappers::convert::u32_seq(msg.vertex_indices),
     }
 }
 
-pub(crate) fn mesh_triangle_to_ros(bus: crate::shape_msgs::msg::v1::MeshTriangle) -> ros_env::shape_msgs::msg::MeshTriangle {
+pub(crate) fn mesh_triangle_to_ros(
+    bus: crate::shape_msgs::msg::v1::MeshTriangle,
+) -> ros_env::shape_msgs::msg::MeshTriangle {
     ros_env::shape_msgs::msg::MeshTriangle {
-        vertex_indices: crate::ros2_bridge::mappers::convert::FromU32Seq::from_u32_seq(bus.vertex_indices),
+        vertex_indices: crate::ros2_bridge::mappers::convert::FromU32Seq::from_u32_seq(
+            bus.vertex_indices,
+        ),
     }
 }
 

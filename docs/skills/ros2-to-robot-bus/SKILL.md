@@ -75,7 +75,7 @@ python -m robot_bus.broker
 cargo run --bin robot_bus_broker
 ```
 
-Default API / console: `http://127.0.0.1:15570`. `Node` defaults to tcp + discover against that API.
+Default API / console: `http://127.0.0.1:15560`. `Node` defaults to tcp + discover against that API.
 
 **Inproc** (same process as embedded broker): share one `Context` — see rust-api.md. Cross-process tcp/ipc does not need shared context.
 
@@ -186,7 +186,7 @@ Default chain is `from_ros → to_bus` when ROS is the publisher/server feeding 
 
 ## 7. Verification
 
-1. Start broker; open `http://127.0.0.1:15570` — topics/services/actions appear when nodes run.
+1. Start broker; open `http://127.0.0.1:15560` — topics/services/actions appear when nodes run.
 2. Publish/subscribe once end-to-end; call one service; send one action goal if used.
 3. If bridging: source ROS, confirm `ros2 topic echo` / bus console both see traffic on mapped names.
 4. Match original remaps/namespaces deliberately; prefer absolute names like `/robot1/imu`.

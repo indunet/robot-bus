@@ -2,13 +2,17 @@
 
 use crate::ros2_bridge::mapper::TypedTopicMapper;
 
-pub(crate) fn plane_to_bus(msg: ros_env::shape_msgs::msg::Plane) -> crate::shape_msgs::msg::v1::Plane {
+pub(crate) fn plane_to_bus(
+    msg: ros_env::shape_msgs::msg::Plane,
+) -> crate::shape_msgs::msg::v1::Plane {
     crate::shape_msgs::msg::v1::Plane {
         coef: crate::ros2_bridge::mappers::convert::f64_seq(msg.coef),
     }
 }
 
-pub(crate) fn plane_to_ros(bus: crate::shape_msgs::msg::v1::Plane) -> ros_env::shape_msgs::msg::Plane {
+pub(crate) fn plane_to_ros(
+    bus: crate::shape_msgs::msg::v1::Plane,
+) -> ros_env::shape_msgs::msg::Plane {
     ros_env::shape_msgs::msg::Plane {
         coef: crate::ros2_bridge::mappers::convert::FromF64Seq::from_f64_seq(bus.coef),
     }

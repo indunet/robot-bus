@@ -39,9 +39,11 @@ pub struct GatewayConfig {
 impl Default for GatewayConfig {
     fn default() -> Self {
         Self {
-            listen: "0.0.0.0:15570".parse().expect("default listen"),
-            message_xpub: "tcp://127.0.0.1:15561".to_string(),
-            message_xsub: "tcp://127.0.0.1:15560".to_string(),
+            listen: format!("0.0.0.0:{}", crate::transports::DEFAULT_API_PORT)
+                .parse()
+                .expect("default listen"),
+            message_xpub: format!("tcp://127.0.0.1:{}", crate::transports::XPUB_PORT),
+            message_xsub: format!("tcp://127.0.0.1:{}", crate::transports::XSUB_PORT),
             service_frontend: "tcp://127.0.0.1:15662".to_string(),
             action_frontend: "tcp://127.0.0.1:15664".to_string(),
             cors_origins: Vec::new(),
@@ -86,7 +88,7 @@ pub async fn serve_on_listener(
     let with_console = false;
 
     log::info!(
-        "robot_bus WebSocket RPC gateway listening on http://{} (/ws{}); \
+        "robot_bus WebSocket RPC gateway listening on http://{} (/ws-rpc{}); \
          message XPUB {}; message XSUB {}; service frontend {}; action frontend {}",
         config.listen,
         if with_console { " + console" } else { "" },
@@ -103,7 +105,7 @@ pub async fn serve_on_listener(
     });
 
     let app = Router::new()
-        .route("/ws", get(ws_upgrade))
+        .route(crate::discovery::DEFAULT_WS_RPC_PATH, get(ws_upgrade))
         .with_state(ws_state);
 
     let app = if let Some(disc) = config.discover.clone() {

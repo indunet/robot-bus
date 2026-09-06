@@ -2,13 +2,17 @@
 
 use crate::ros2_bridge::mapper::TypedTopicMapper;
 
-pub(crate) fn uuid_to_bus(msg: ros_env::unique_identifier_msgs::msg::UUID) -> crate::unique_identifier_msgs::msg::v1::Uuid {
+pub(crate) fn uuid_to_bus(
+    msg: ros_env::unique_identifier_msgs::msg::UUID,
+) -> crate::unique_identifier_msgs::msg::v1::Uuid {
     crate::unique_identifier_msgs::msg::v1::Uuid {
         uuid: crate::ros2_bridge::mappers::convert::IntoU8Vec::into_u8_vec(msg.uuid),
     }
 }
 
-pub(crate) fn uuid_to_ros(bus: crate::unique_identifier_msgs::msg::v1::Uuid) -> ros_env::unique_identifier_msgs::msg::UUID {
+pub(crate) fn uuid_to_ros(
+    bus: crate::unique_identifier_msgs::msg::v1::Uuid,
+) -> ros_env::unique_identifier_msgs::msg::UUID {
     ros_env::unique_identifier_msgs::msg::UUID {
         uuid: crate::ros2_bridge::mappers::convert::FromByteSeq::from_byte_seq(bus.uuid),
     }

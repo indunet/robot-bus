@@ -20,7 +20,7 @@ SDKs: **Rust**, **Python**, **TypeScript**, **C++**, **Java**, **Android**.
 - **Embedded Web console:** Overview, Topics, Services, Actions, Topology, plus a built-in tank demo — no extra frontend process.
 - **Optional ROS 2 bridge:** In-process topic / service / action bridging with `rclrs` / `rclpy` / `rclcpp` (Humble / Jazzy). The core SDK stays ROS-free unless the bridge is enabled.
 - **Protobuf contracts:** All payloads are Protocol Buffers (not ROS CDR), aligned with common ROS 2 package names under [`proto/`](proto/).
-- **Browser and remote clients:** WebSocket RPC (`Node::ws` / `Node.ws`; transport `"ws"`). **Breaking:** `/ws` is V3 framing (opcode + raw payload); V2 clients are not compatible.
+- **Browser and remote clients:** WebSocket RPC (`Node::ws` / `Node.ws`; transport `"ws"`). **Breaking:** `/ws-rpc` is V3 framing (opcode + raw payload); V2 clients are not compatible.
 
 The Node programming model — `Context` / `Node`, topic pub-sub, service, action, and `spin` — is the stable public API.
 
@@ -83,7 +83,7 @@ with robot_bus.RobotBusBroker.start() as broker:
 
 Rust / C++ / TypeScript / Java / Android expose the same in-process API; see the language guides.
 
-Default API / Web console / WebSocket listen: `http://0.0.0.0:15570`. After the broker is up, open the [Web console](#2-web-console) in a browser.
+Default API / Web console / WebSocket listen: `http://0.0.0.0:15560`. After the broker is up, open the [Web console](#2-web-console) in a browser.
 
 Runnable demos (topic, service, action) for Rust / Python / C++: [`examples/`](examples/). Those examples are multi-process, so they use a standalone broker:
 
@@ -99,7 +99,7 @@ python -m robot_bus.broker
 A built-in mini tank sim helps you see topics moving end-to-end without writing code first:
 
 1. Start the broker (`python -m robot_bus.broker`).
-2. Open **http://127.0.0.1:15570** and click **TANK** in the sidebar (or go to `/tank/`).
+2. Open **http://127.0.0.1:15560** and click **TANK** in the sidebar (or go to `/tank/`).
 3. Click the panel, then drive with **arrow keys**; or switch to point navigation and **click on the map** to send a goal.
 
 Opening the panel starts the in-process tank node. It subscribes to `/robot_bus/tank/cmd_vel` and publishes `/robot_bus/tank/pose`. Multiple browsers share one world (teleop is last-writer-wins). Disable with `--no-tank` if needed. Sidebar **DOCS** is shown by default; hide with `--no-docs`.
@@ -200,7 +200,7 @@ More detail: [`docs/en/python-api.md`](docs/en/python-api.md).
 
 The broker ships with an embedded monitoring UI (Overview, Topics, Services, Actions, Topology, logs). After `RobotBusBroker.start()` in your program (or a standalone `python -m robot_bus.broker` / `cargo run --bin robot_bus_broker`), open:
 
-**http://127.0.0.1:15570**
+**http://127.0.0.1:15560**
 
 ![Robot Bus Web console](docs/images/console-overview.png)
 

@@ -13,7 +13,7 @@ npm install robot-bus
 | 环境 | 入口 | 能力 |
 |------|------|------|
 | Node.js | napi-rs原生扩展 | 完整 ZMQ Node（publish、service/action server、本地 broker） |
-| 浏览器 | WebSocket RPC（`/ws`） | 订阅 / publish / 调 service / action（无 server） |
+| 浏览器 | WebSocket RPC（`/ws-rpc`） | 订阅 / publish / 调 service / action（无 server） |
 
 `console/` Web UI **不是**本 SDK。
 
@@ -27,7 +27,7 @@ Node进程内：
 import { RobotBusBroker } from "robot-bus";
 
 const broker = RobotBusBroker.start({
-  apiListen: "0.0.0.0:15570",
+  apiListen: "0.0.0.0:15560",
   tcpOnly: true,
 });
 // …业务…
@@ -39,7 +39,7 @@ broker.stop();
 ```bash
 npx robot-bus
 npx robot-bus --help
-npx robot-bus --api-listen 0.0.0.0:15570 --tcp-only
+npx robot-bus --api-listen 0.0.0.0:15560 --tcp-only
 ```
 
 也可以在自己的 `package.json` 里加 `"broker": "robot-bus"`，然后 `npm run broker`。flags 与 `python -m robot_bus.broker` / `robot_bus_broker` 相同。
@@ -53,19 +53,19 @@ import { Node } from "robot-bus";
 
 const node = Node.discover("talker", {
   transport: "tcp",
-  apiUrl: "http://127.0.0.1:15570",
+  apiUrl: "http://127.0.0.1:15560",
   // brokerId / timeoutSecs可选
 });
 ```
 
-浏览器入口无 HTTP discover工厂；请用显式 `wsUrl`（HTTP原点；SDK会连 `ws://…/ws`）。
+浏览器入口无 HTTP discover工厂；请用显式 `wsUrl`（HTTP原点；SDK会连 `ws://…/ws-rpc`）。
 
 跨 broker（federation）与 CLI同款字符串约定：
 
 ```ts
 const broker = RobotBusBroker.start({
   brokerId: "broker-a",
-  messagePeers: ["tcp://10.0.0.2:15561"],
+  messagePeers: ["tcp://10.0.0.2:15581"],
   servicePeers: ["broker-b=tcp://10.0.0.2:15663"],
   actionPeers: ["broker-b=tcp://10.0.0.2:15665"],
   tcpOnly: true,
@@ -135,7 +135,7 @@ WebSocket RPC客户端模式（不启 ZMQ）：
 
 ```ts
 const node = Node.ws("web-client");
-// 或 Node.wsAt("web-client", "http://127.0.0.1:15570");
+// 或 Node.wsAt("web-client", "http://127.0.0.1:15560");
 ```
 
 | 支持 | 不支持（WS模式） |
@@ -148,13 +148,13 @@ const node = Node.ws("web-client");
 
 ## 浏览器（WebSocket RPC）
 
-浏览器客户端走 broker的 **`/ws`**（V3多路复用 WebSocket RPC，**一条连接多条流**），不再使用 gRPC-Web。
+浏览器客户端走 broker的 **`/ws-rpc`**（V3多路复用 WebSocket RPC，**一条连接多条流**），不再使用 gRPC-Web。
 
 ```ts
 import { Node } from "robot-bus";
 // bundler自动解析到 browser入口
 
-const node = Node.ws("browser-client"); // 默认 http://127.0.0.1:15570 → ws://127.0.0.1:15570/ws
+const node = Node.ws("browser-client"); // 默认 http://127.0.0.1:15560 → ws://127.0.0.1:15560/ws-rpc
 const pub = node.createPublisher("/robot1/cmd");
 await pub.publish(new TextEncoder().encode("go"));
 node.createSubscription("/robot1/imu", (payload) => {
@@ -173,7 +173,7 @@ import { WsNode } from "robot-bus"; // Node入口也导出 WsNode
 
 ### WebSocket帧（V3多路复用）
 
-路径：`ws://<host>:<port>/ws`（HTTPS站点用 `wss://`）。**一条连接承载多个 RPC**（`stream_id`，客户端用奇数）。会话会自动退避重连（200ms–5s）；`connectionState` / `waitForBroker`跟着这条 WebSocket，不是 HTTP 200。进行中的 Publish / Call / SendGoal **当次失败**，不自动重放；订阅在新连接上重新 Subscribe。
+路径：`ws://<host>:<port>/ws-rpc`（HTTPS站点用 `wss://`）。**一条连接承载多个 RPC**（`stream_id`，客户端用奇数）。会话会自动退避重连（200ms–5s）；`connectionState` / `waitForBroker`跟着这条 WebSocket，不是 HTTP 200。进行中的 Publish / Call / SendGoal **当次失败**，不自动重放；订阅在新连接上重新 Subscribe。
 
 | type | 值 | 含义 |
 |------|----|------|

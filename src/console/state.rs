@@ -188,7 +188,7 @@ impl ConsoleState {
             state.events.emit(
                 "INFO",
                 "ws",
-                format!("WebSocket RPC (/ws) gateway at {}", state.endpoints.ws),
+                format!("WebSocket RPC (/ws-rpc) gateway at {}", state.endpoints.ws),
             );
         }
         if !state.tank_enabled {
@@ -351,11 +351,7 @@ fn window_baselines<T>(history: &VecDeque<(Instant, T)>) -> Option<(&T, f64, &T,
 
 /// High-rate traffic uses the ~1 s sample; sub-2 Hz uses the 10 s window.
 pub(crate) fn pick_rate(short: f64, long: f64) -> f64 {
-    if short >= RATE_SHORT_HZ {
-        short
-    } else {
-        long
-    }
+    if short >= RATE_SHORT_HZ { short } else { long }
 }
 
 pub(crate) fn quantize_hz(r: f64) -> f64 {

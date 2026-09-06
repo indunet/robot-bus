@@ -2,7 +2,9 @@
 
 use crate::ros2_bridge::mapper::TypedTopicMapper;
 
-pub(crate) fn color_rgba_to_bus(msg: ros_env::std_msgs::msg::ColorRGBA) -> crate::std_msgs::msg::v1::ColorRgba {
+pub(crate) fn color_rgba_to_bus(
+    msg: ros_env::std_msgs::msg::ColorRGBA,
+) -> crate::std_msgs::msg::v1::ColorRgba {
     crate::std_msgs::msg::v1::ColorRgba {
         r: msg.r,
         g: msg.g,
@@ -11,7 +13,9 @@ pub(crate) fn color_rgba_to_bus(msg: ros_env::std_msgs::msg::ColorRGBA) -> crate
     }
 }
 
-pub(crate) fn color_rgba_to_ros(bus: crate::std_msgs::msg::v1::ColorRgba) -> ros_env::std_msgs::msg::ColorRGBA {
+pub(crate) fn color_rgba_to_ros(
+    bus: crate::std_msgs::msg::v1::ColorRgba,
+) -> ros_env::std_msgs::msg::ColorRGBA {
     ros_env::std_msgs::msg::ColorRGBA {
         r: bus.r,
         g: bus.g,

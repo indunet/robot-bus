@@ -32,8 +32,8 @@ use super::ActionBusConfig;
 use super::metrics::ActionMetrics;
 use goals::PendingGoal;
 use wire::{
-    ERR_CANCELLED, ERR_NO_GOAL, ERR_NO_WORKER, ERR_WORKER_DIED, KIND_RESULT,
-    MAX_GOALS, MAX_PENDING, POLL_CAP_MS, kind_as_bytes,
+    ERR_CANCELLED, ERR_NO_GOAL, ERR_NO_WORKER, ERR_WORKER_DIED, KIND_RESULT, MAX_GOALS,
+    MAX_PENDING, POLL_CAP_MS, kind_as_bytes,
 };
 
 /// Run the broker poll loop until `shutdown` is set.
@@ -425,7 +425,6 @@ fn retry_pending(
 }
 
 // ── Unit tests (no sockets, no ports) ─────────────────────────────────────
-
 
 #[cfg(test)]
 mod tests {

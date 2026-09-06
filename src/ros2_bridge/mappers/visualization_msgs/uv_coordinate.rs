@@ -2,18 +2,16 @@
 
 use crate::ros2_bridge::mapper::TypedTopicMapper;
 
-pub(crate) fn uv_coordinate_to_bus(msg: ros_env::visualization_msgs::msg::UVCoordinate) -> crate::visualization_msgs::msg::v1::UvCoordinate {
-    crate::visualization_msgs::msg::v1::UvCoordinate {
-        u: msg.u,
-        v: msg.v,
-    }
+pub(crate) fn uv_coordinate_to_bus(
+    msg: ros_env::visualization_msgs::msg::UVCoordinate,
+) -> crate::visualization_msgs::msg::v1::UvCoordinate {
+    crate::visualization_msgs::msg::v1::UvCoordinate { u: msg.u, v: msg.v }
 }
 
-pub(crate) fn uv_coordinate_to_ros(bus: crate::visualization_msgs::msg::v1::UvCoordinate) -> ros_env::visualization_msgs::msg::UVCoordinate {
-    ros_env::visualization_msgs::msg::UVCoordinate {
-        u: bus.u,
-        v: bus.v,
-    }
+pub(crate) fn uv_coordinate_to_ros(
+    bus: crate::visualization_msgs::msg::v1::UvCoordinate,
+) -> ros_env::visualization_msgs::msg::UVCoordinate {
+    ros_env::visualization_msgs::msg::UVCoordinate { u: bus.u, v: bus.v }
 }
 
 #[derive(Clone, Copy, Debug, Default)]

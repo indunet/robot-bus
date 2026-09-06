@@ -2,13 +2,17 @@
 
 use crate::ros2_bridge::mapper::TypedTopicMapper;
 
-pub(crate) fn tf_message_to_bus(msg: ros_env::tf2_msgs::msg::TFMessage) -> crate::tf2_msgs::msg::v1::TfMessage {
+pub(crate) fn tf_message_to_bus(
+    msg: ros_env::tf2_msgs::msg::TFMessage,
+) -> crate::tf2_msgs::msg::v1::TfMessage {
     crate::tf2_msgs::msg::v1::TfMessage {
         transforms: msg.transforms.into_iter().map(crate::ros2_bridge::mappers::geometry_msgs::transform_stamped::transform_stamped_to_bus).collect(),
     }
 }
 
-pub(crate) fn tf_message_to_ros(bus: crate::tf2_msgs::msg::v1::TfMessage) -> ros_env::tf2_msgs::msg::TFMessage {
+pub(crate) fn tf_message_to_ros(
+    bus: crate::tf2_msgs::msg::v1::TfMessage,
+) -> ros_env::tf2_msgs::msg::TFMessage {
     ros_env::tf2_msgs::msg::TFMessage {
         transforms: bus.transforms.into_iter().map(crate::ros2_bridge::mappers::geometry_msgs::transform_stamped::transform_stamped_to_ros).collect(),
     }

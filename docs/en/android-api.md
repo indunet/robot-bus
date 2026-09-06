@@ -82,7 +82,7 @@ Request `GET /api/v1/discover` on a known API base URL:
 
 ```kotlin
 val node = Node.discover(
-    "talker", "tcp", DiscoverOpts(apiUrl = "http://127.0.0.1:15570"))
+    "talker", "tcp", DiscoverOpts(apiUrl = "http://127.0.0.1:15560"))
 // Optional: brokerId, timeoutSecs; BrokerOptions.noDiscovery / domainId are not UDP
 ```
 
@@ -92,7 +92,7 @@ Cross-broker (federation):
 Broker(
   BrokerOptions(
     brokerId = "broker-a",
-    messagePeers = listOf("tcp://10.0.0.2:15561"),
+    messagePeers = listOf("tcp://10.0.0.2:15581"),
     servicePeers = listOf("broker-b=tcp://10.0.0.2:15663"),
     actionPeers = listOf("broker-b=tcp://10.0.0.2:15665"),
     tcpOnly = true,

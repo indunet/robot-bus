@@ -174,7 +174,7 @@ impl PyNode {
         }
     }
 
-    /// WebSocket RPC client node talking to the local broker gateway (`http://127.0.0.1:15570`).
+    /// WebSocket RPC client node talking to the local broker gateway (`http://127.0.0.1:15560`).
     #[cfg(feature = "ws")]
     #[classmethod]
     #[pyo3(signature = (name,))]
@@ -211,7 +211,7 @@ impl PyNode {
         })
     }
 
-    /// WebSocket RPC client node talking to `url` (e.g. `http://127.0.0.1:15570`).
+    /// WebSocket RPC client node talking to `url` (e.g. `http://127.0.0.1:15560`).
     #[cfg(feature = "ws")]
     #[classmethod]
     #[pyo3(signature = (name, url))]
@@ -513,12 +513,7 @@ impl PyNode {
             if streaming {
                 let cb: ActionGoalLiveHandler = Arc::new(move |payload, ctx| {
                     Python::with_gil(|py| {
-                        let py_ctx = match Py::new(
-                            py,
-                            PyActionGoalContext {
-                                inner: ctx.clone(),
-                            },
-                        ) {
+                        let py_ctx = match Py::new(py, PyActionGoalContext { inner: ctx.clone() }) {
                             Ok(obj) => obj,
                             Err(err) => {
                                 err.print(py);

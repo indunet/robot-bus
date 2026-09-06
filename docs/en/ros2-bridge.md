@@ -1,6 +1,6 @@
 English | [中文](../zh/ros2-bridge.md)
 
-# ROS 2 Bridge (`ros2_bridge`)
+# ROS2 Bridge (`ros2_bridge`)
 
 In-process bridge between **ROS 2** and **robot-bus**: Topic / Service / Action.
 

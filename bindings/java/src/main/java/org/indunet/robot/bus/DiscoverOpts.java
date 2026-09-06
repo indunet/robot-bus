@@ -10,7 +10,7 @@ public final class DiscoverOpts {
         this(null, null, 0.0);
     }
 
-    /** @param apiUrl broker API base, e.g. {@code http://127.0.0.1:15570}; null = default */
+    /** @param apiUrl broker API base, e.g. {@code http://127.0.0.1:15560}; null = default */
     public DiscoverOpts(String apiUrl) {
         this(apiUrl, null, 0.0);
     }

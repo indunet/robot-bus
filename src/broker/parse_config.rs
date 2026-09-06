@@ -338,7 +338,7 @@ cargo run --bin robot_bus_broker -- [options]\n  \
 robot_bus_broker [options]\n\n\
 Defaults:\n  \
 message / service / action TCP binds: 0.0.0.0:0 (OS assigns free ports)\n  \
-API listen 0.0.0.0:15570 (WS /ws + discover REST + embedded Web UI)\n  \
+API listen 0.0.0.0:15560 (WS /ws-rpc + discover REST + embedded Web UI)\n  \
 console  same port as API (use --no-console to disable UI; discover still on API)\n\n\
 Message options:\n  \
 --message-xsub-bind ADDR       Publisher bind (default tcp://0.0.0.0:0; alias: --xsub-bind)\n  \
@@ -385,7 +385,7 @@ Console options (feature `console`, default on):\n  \
 --console-cors-origin ORIGIN   Allow browser origin (repeatable)\n\n\
 --help, -h                     Show this help\n\n\
 Embed in code: robot_bus::RobotBusBroker::start(RobotBusConfig { ... }).\n\
-Clients: GET http://HOST:15570/api/v1/discover then connect to returned ZMQ endpoints.\n"
+Clients: GET http://HOST:15560/api/v1/discover then connect to returned ZMQ endpoints.\n"
 }
 
 /// Apply federation options shared by language bindings (CLI-compatible string forms).
@@ -458,9 +458,9 @@ mod tests {
                 "tsx",
                 "broker.ts",
                 "--api-listen",
-                "127.0.0.1:15570"
+                "127.0.0.1:15560"
             ])),
-            args(&["--api-listen", "127.0.0.1:15570"])
+            args(&["--api-listen", "127.0.0.1:15560"])
         );
         assert_eq!(
             strip_runtime_argv(args(&["--tcp-only"])),
@@ -643,7 +643,7 @@ mod tests {
         apply_federation_opts(
             &mut config,
             Some("broker-a"),
-            &["tcp://10.0.0.2:15561".to_string()],
+            &["tcp://10.0.0.2:15581".to_string()],
             &["broker-b=tcp://10.0.0.2:15663".to_string()],
             &["broker-b=tcp://10.0.0.2:15665".to_string()],
         )
@@ -652,8 +652,8 @@ mod tests {
         assert_eq!(config.service.broker_id, "broker-a");
         assert_eq!(config.action.broker_id, "broker-a");
         assert_eq!(config.message.peers.len(), 1);
-        assert_eq!(config.message.peers[0].xpub, "tcp://10.0.0.2:15561");
-        assert_eq!(config.message.peers[0].xsub, "tcp://10.0.0.2:15560");
+        assert_eq!(config.message.peers[0].xpub, "tcp://10.0.0.2:15581");
+        assert_eq!(config.message.peers[0].xsub, "tcp://10.0.0.2:15580");
         assert_eq!(config.service.peers[0].broker_id, "broker-b");
         assert_eq!(config.action.peers[0].broker_id, "broker-b");
     }

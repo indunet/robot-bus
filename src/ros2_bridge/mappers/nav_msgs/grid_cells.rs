@@ -2,21 +2,35 @@
 
 use crate::ros2_bridge::mapper::TypedTopicMapper;
 
-pub(crate) fn grid_cells_to_bus(msg: ros_env::nav_msgs::msg::GridCells) -> crate::nav_msgs::msg::v1::GridCells {
+pub(crate) fn grid_cells_to_bus(
+    msg: ros_env::nav_msgs::msg::GridCells,
+) -> crate::nav_msgs::msg::v1::GridCells {
     crate::nav_msgs::msg::v1::GridCells {
         header: Some(crate::ros2_bridge::mappers::std_msgs::header::header_to_bus(msg.header)),
         cell_width: msg.cell_width,
         cell_height: msg.cell_height,
-        cells: msg.cells.into_iter().map(crate::ros2_bridge::mappers::geometry_msgs::point::point_to_bus).collect(),
+        cells: msg
+            .cells
+            .into_iter()
+            .map(crate::ros2_bridge::mappers::geometry_msgs::point::point_to_bus)
+            .collect(),
     }
 }
 
-pub(crate) fn grid_cells_to_ros(bus: crate::nav_msgs::msg::v1::GridCells) -> ros_env::nav_msgs::msg::GridCells {
+pub(crate) fn grid_cells_to_ros(
+    bus: crate::nav_msgs::msg::v1::GridCells,
+) -> ros_env::nav_msgs::msg::GridCells {
     ros_env::nav_msgs::msg::GridCells {
-        header: crate::ros2_bridge::mappers::std_msgs::header::header_to_ros(bus.header.unwrap_or_default()),
+        header: crate::ros2_bridge::mappers::std_msgs::header::header_to_ros(
+            bus.header.unwrap_or_default(),
+        ),
         cell_width: bus.cell_width,
         cell_height: bus.cell_height,
-        cells: bus.cells.into_iter().map(crate::ros2_bridge::mappers::geometry_msgs::point::point_to_ros).collect(),
+        cells: bus
+            .cells
+            .into_iter()
+            .map(crate::ros2_bridge::mappers::geometry_msgs::point::point_to_ros)
+            .collect(),
     }
 }
 

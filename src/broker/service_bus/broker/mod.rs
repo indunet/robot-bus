@@ -338,7 +338,6 @@ fn retry_pending(
 
 // ── Unit tests (no sockets, no ports) ─────────────────────────────────────
 
-
 #[cfg(test)]
 mod tests {
     use super::*;

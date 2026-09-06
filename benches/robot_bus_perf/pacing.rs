@@ -4,8 +4,8 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::thread;
 use std::time::{Duration, Instant};
 
-use robot_bus::Publisher;
 use crate::support::{env_f64, env_usize, now_ns};
+use robot_bus::Publisher;
 
 pub const PAYLOAD_LEN: usize = 64;
 pub const WARMUP: usize = 50;
@@ -121,7 +121,12 @@ pub fn publish_paced_for(
 
 /// Publish `n` messages aiming for `rate_hz`. Uses sleep for coarse gaps and
 /// busy-wait for sub-ms deadlines (macOS sleep granularity is ~1ms).
-pub fn publish_paced(publisher: &Publisher, topic: &str, n: usize, rate_hz: f64) -> (usize, Duration) {
+pub fn publish_paced(
+    publisher: &Publisher,
+    topic: &str,
+    n: usize,
+    rate_hz: f64,
+) -> (usize, Duration) {
     let interval = Duration::from_secs_f64(1.0 / rate_hz.max(1.0));
     let t0 = Instant::now();
     let mut next = t0;

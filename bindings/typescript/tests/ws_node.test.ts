@@ -79,8 +79,8 @@ describe("WsNode capability guards", () => {
   });
 
   it("default and custom urls", () => {
-    assert.equal(WsNode.ws("a").url, "http://127.0.0.1:15570");
-    assert.equal(WsNode.wsAt("a", "http://example:15570/").url, "http://example:15570");
+    assert.equal(WsNode.ws("a").url, "http://127.0.0.1:15560");
+    assert.equal(WsNode.wsAt("a", "http://example:15560/").url, "http://example:15560");
   });
 });
 
@@ -114,7 +114,7 @@ describe("WsNode connectionState", () => {
 
   it("tracks reconnecting when the socket closes", async () => {
     __setWebSocketForTests(FakeWebSocket as unknown as typeof WebSocket);
-    const node = WsNode.wsAt("n", "http://127.0.0.1:15570");
+    const node = WsNode.wsAt("n", "http://127.0.0.1:15560");
     const states: string[] = [];
     node.addOnConnectionEvent((_o, next) => states.push(next));
     assert.equal(await node.waitForBroker(1), true);

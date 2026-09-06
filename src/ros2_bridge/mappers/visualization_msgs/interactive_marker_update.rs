@@ -2,7 +2,9 @@
 
 use crate::ros2_bridge::mapper::TypedTopicMapper;
 
-pub(crate) fn interactive_marker_update_to_bus(msg: ros_env::visualization_msgs::msg::InteractiveMarkerUpdate) -> crate::visualization_msgs::msg::v1::InteractiveMarkerUpdate {
+pub(crate) fn interactive_marker_update_to_bus(
+    msg: ros_env::visualization_msgs::msg::InteractiveMarkerUpdate,
+) -> crate::visualization_msgs::msg::v1::InteractiveMarkerUpdate {
     crate::visualization_msgs::msg::v1::InteractiveMarkerUpdate {
         server_id: crate::ros2_bridge::mappers::convert::from_ros_string(msg.server_id),
         seq_num: msg.seq_num,
@@ -13,7 +15,9 @@ pub(crate) fn interactive_marker_update_to_bus(msg: ros_env::visualization_msgs:
     }
 }
 
-pub(crate) fn interactive_marker_update_to_ros(bus: crate::visualization_msgs::msg::v1::InteractiveMarkerUpdate) -> ros_env::visualization_msgs::msg::InteractiveMarkerUpdate {
+pub(crate) fn interactive_marker_update_to_ros(
+    bus: crate::visualization_msgs::msg::v1::InteractiveMarkerUpdate,
+) -> ros_env::visualization_msgs::msg::InteractiveMarkerUpdate {
     ros_env::visualization_msgs::msg::InteractiveMarkerUpdate {
         server_id: crate::ros2_bridge::mappers::convert::to_ros_string(bus.server_id),
         seq_num: bus.seq_num,

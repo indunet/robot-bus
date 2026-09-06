@@ -2,17 +2,29 @@
 
 use crate::ros2_bridge::mapper::TypedTopicMapper;
 
-pub(crate) fn accel_to_bus(msg: ros_env::geometry_msgs::msg::Accel) -> crate::geometry_msgs::msg::v1::Accel {
+pub(crate) fn accel_to_bus(
+    msg: ros_env::geometry_msgs::msg::Accel,
+) -> crate::geometry_msgs::msg::v1::Accel {
     crate::geometry_msgs::msg::v1::Accel {
-        linear: Some(crate::ros2_bridge::mappers::geometry_msgs::vector3::vector3_to_bus(msg.linear)),
-        angular: Some(crate::ros2_bridge::mappers::geometry_msgs::vector3::vector3_to_bus(msg.angular)),
+        linear: Some(
+            crate::ros2_bridge::mappers::geometry_msgs::vector3::vector3_to_bus(msg.linear),
+        ),
+        angular: Some(
+            crate::ros2_bridge::mappers::geometry_msgs::vector3::vector3_to_bus(msg.angular),
+        ),
     }
 }
 
-pub(crate) fn accel_to_ros(bus: crate::geometry_msgs::msg::v1::Accel) -> ros_env::geometry_msgs::msg::Accel {
+pub(crate) fn accel_to_ros(
+    bus: crate::geometry_msgs::msg::v1::Accel,
+) -> ros_env::geometry_msgs::msg::Accel {
     ros_env::geometry_msgs::msg::Accel {
-        linear: crate::ros2_bridge::mappers::geometry_msgs::vector3::vector3_to_ros(bus.linear.unwrap_or_default()),
-        angular: crate::ros2_bridge::mappers::geometry_msgs::vector3::vector3_to_ros(bus.angular.unwrap_or_default()),
+        linear: crate::ros2_bridge::mappers::geometry_msgs::vector3::vector3_to_ros(
+            bus.linear.unwrap_or_default(),
+        ),
+        angular: crate::ros2_bridge::mappers::geometry_msgs::vector3::vector3_to_ros(
+            bus.angular.unwrap_or_default(),
+        ),
     }
 }
 

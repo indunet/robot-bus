@@ -2,19 +2,41 @@
 
 use crate::ros2_bridge::mapper::TypedTopicMapper;
 
-pub(crate) fn point_cloud_to_bus(msg: ros_env::sensor_msgs::msg::PointCloud) -> crate::sensor_msgs::msg::v1::PointCloud {
+pub(crate) fn point_cloud_to_bus(
+    msg: ros_env::sensor_msgs::msg::PointCloud,
+) -> crate::sensor_msgs::msg::v1::PointCloud {
     crate::sensor_msgs::msg::v1::PointCloud {
         header: Some(crate::ros2_bridge::mappers::std_msgs::header::header_to_bus(msg.header)),
-        points: msg.points.into_iter().map(crate::ros2_bridge::mappers::geometry_msgs::point32::point32_to_bus).collect(),
-        channels: msg.channels.into_iter().map(crate::ros2_bridge::mappers::sensor_msgs::channel_float32::channel_float32_to_bus).collect(),
+        points: msg
+            .points
+            .into_iter()
+            .map(crate::ros2_bridge::mappers::geometry_msgs::point32::point32_to_bus)
+            .collect(),
+        channels: msg
+            .channels
+            .into_iter()
+            .map(crate::ros2_bridge::mappers::sensor_msgs::channel_float32::channel_float32_to_bus)
+            .collect(),
     }
 }
 
-pub(crate) fn point_cloud_to_ros(bus: crate::sensor_msgs::msg::v1::PointCloud) -> ros_env::sensor_msgs::msg::PointCloud {
+pub(crate) fn point_cloud_to_ros(
+    bus: crate::sensor_msgs::msg::v1::PointCloud,
+) -> ros_env::sensor_msgs::msg::PointCloud {
     ros_env::sensor_msgs::msg::PointCloud {
-        header: crate::ros2_bridge::mappers::std_msgs::header::header_to_ros(bus.header.unwrap_or_default()),
-        points: bus.points.into_iter().map(crate::ros2_bridge::mappers::geometry_msgs::point32::point32_to_ros).collect(),
-        channels: bus.channels.into_iter().map(crate::ros2_bridge::mappers::sensor_msgs::channel_float32::channel_float32_to_ros).collect(),
+        header: crate::ros2_bridge::mappers::std_msgs::header::header_to_ros(
+            bus.header.unwrap_or_default(),
+        ),
+        points: bus
+            .points
+            .into_iter()
+            .map(crate::ros2_bridge::mappers::geometry_msgs::point32::point32_to_ros)
+            .collect(),
+        channels: bus
+            .channels
+            .into_iter()
+            .map(crate::ros2_bridge::mappers::sensor_msgs::channel_float32::channel_float32_to_ros)
+            .collect(),
     }
 }
 

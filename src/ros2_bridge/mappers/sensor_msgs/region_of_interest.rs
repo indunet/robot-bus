@@ -2,7 +2,9 @@
 
 use crate::ros2_bridge::mapper::TypedTopicMapper;
 
-pub(crate) fn region_of_interest_to_bus(msg: ros_env::sensor_msgs::msg::RegionOfInterest) -> crate::sensor_msgs::msg::v1::RegionOfInterest {
+pub(crate) fn region_of_interest_to_bus(
+    msg: ros_env::sensor_msgs::msg::RegionOfInterest,
+) -> crate::sensor_msgs::msg::v1::RegionOfInterest {
     crate::sensor_msgs::msg::v1::RegionOfInterest {
         x_offset: msg.x_offset.into(),
         y_offset: msg.y_offset.into(),
@@ -12,7 +14,9 @@ pub(crate) fn region_of_interest_to_bus(msg: ros_env::sensor_msgs::msg::RegionOf
     }
 }
 
-pub(crate) fn region_of_interest_to_ros(bus: crate::sensor_msgs::msg::v1::RegionOfInterest) -> ros_env::sensor_msgs::msg::RegionOfInterest {
+pub(crate) fn region_of_interest_to_ros(
+    bus: crate::sensor_msgs::msg::v1::RegionOfInterest,
+) -> ros_env::sensor_msgs::msg::RegionOfInterest {
     ros_env::sensor_msgs::msg::RegionOfInterest {
         x_offset: bus.x_offset as _,
         y_offset: bus.y_offset as _,

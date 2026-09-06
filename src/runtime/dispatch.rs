@@ -1,9 +1,9 @@
 //! Frame parsing and inline callback dispatch for [`super::Executor`].
 
 use std::collections::HashMap;
+use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::Sender;
-use std::sync::Arc;
 use std::thread;
 
 use crate::action_bus::{ActionKind, ActionMessage};

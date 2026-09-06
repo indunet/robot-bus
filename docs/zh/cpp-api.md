@@ -95,7 +95,7 @@ robot_bus_broker
 跨 broker（federation）通过 `RobotBusBrokerOptions`（与 CLI同款字符串）：
 
 ```cpp
-const char *message_peers[] = {"tcp://10.0.0.2:15561"};
+const char *message_peers[] = {"tcp://10.0.0.2:15581"};
 const char *service_peers[] = {"broker-b=tcp://10.0.0.2:15663"};
 const char *action_peers[] = {"broker-b=tcp://10.0.0.2:15665"};
 
@@ -129,7 +129,7 @@ tcp / ipc / ws不需要共享 context。
 
 ```cpp
 RobotBusDiscoverOpts d{};
-d.api_url = "http://127.0.0.1:15570";
+d.api_url = "http://127.0.0.1:15560";
 // d.broker_id / d.timeout_secs可选；nullptr / 0 → 默认
 auto node = robot_bus::Node::discover("talker", "tcp", &d);
 // RobotBusBrokerOptions.no_discovery / domain_id为兼容软标签，非 UDP组播
@@ -206,7 +206,7 @@ auto sub = node.create_subscription("/imu", [](robot_bus::BytesView payload) {
 
 ```cpp
 auto node = robot_bus::Node::ws("web-client");
-// 或 robot_bus::Node::ws_at("web-client", "http://127.0.0.1:15570");
+// 或 robot_bus::Node::ws_at("web-client", "http://127.0.0.1:15560");
 ```
 
 本地覆盖见 `bindings/cpp/tests/ws_node.cpp`（`just test-cpp`）。

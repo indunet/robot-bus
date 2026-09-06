@@ -3,15 +3,11 @@
 use crate::ros2_bridge::mapper::TypedTopicMapper;
 
 pub(crate) fn int64_to_bus(msg: ros_env::std_msgs::msg::Int64) -> crate::std_msgs::msg::v1::Int64 {
-    crate::std_msgs::msg::v1::Int64 {
-        data: msg.data,
-    }
+    crate::std_msgs::msg::v1::Int64 { data: msg.data }
 }
 
 pub(crate) fn int64_to_ros(bus: crate::std_msgs::msg::v1::Int64) -> ros_env::std_msgs::msg::Int64 {
-    ros_env::std_msgs::msg::Int64 {
-        data: bus.data,
-    }
+    ros_env::std_msgs::msg::Int64 { data: bus.data }
 }
 
 #[derive(Clone, Copy, Debug, Default)]

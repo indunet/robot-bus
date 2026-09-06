@@ -229,7 +229,7 @@ export declare class MultiThreadedExecutor {
 
 export interface DiscoverNodeOptions {
   transport?: string;
-  /** Broker API base URL, e.g. http://127.0.0.1:15570 */
+  /** Broker API base URL, e.g. http://127.0.0.1:15560 */
   apiUrl?: string;
   brokerId?: string;
   timeoutSecs?: number;
@@ -258,7 +258,7 @@ export interface BrokerStartOptions {
   heartbeatIntervalMs?: number;
   heartbeatTimeoutMs?: number;
   tcpOnly?: boolean;
-  /** API / WebSocket / console listen address (default 0.0.0.0:15570). */
+  /** API / WebSocket / console listen address (default 0.0.0.0:15560). */
   apiListen?: string;
   corsOrigins?: string[];
   consoleListen?: string;

@@ -2,17 +2,29 @@
 
 use crate::ros2_bridge::mapper::TypedTopicMapper;
 
-pub(crate) fn twist_to_bus(msg: ros_env::geometry_msgs::msg::Twist) -> crate::geometry_msgs::msg::v1::Twist {
+pub(crate) fn twist_to_bus(
+    msg: ros_env::geometry_msgs::msg::Twist,
+) -> crate::geometry_msgs::msg::v1::Twist {
     crate::geometry_msgs::msg::v1::Twist {
-        linear: Some(crate::ros2_bridge::mappers::geometry_msgs::vector3::vector3_to_bus(msg.linear)),
-        angular: Some(crate::ros2_bridge::mappers::geometry_msgs::vector3::vector3_to_bus(msg.angular)),
+        linear: Some(
+            crate::ros2_bridge::mappers::geometry_msgs::vector3::vector3_to_bus(msg.linear),
+        ),
+        angular: Some(
+            crate::ros2_bridge::mappers::geometry_msgs::vector3::vector3_to_bus(msg.angular),
+        ),
     }
 }
 
-pub(crate) fn twist_to_ros(bus: crate::geometry_msgs::msg::v1::Twist) -> ros_env::geometry_msgs::msg::Twist {
+pub(crate) fn twist_to_ros(
+    bus: crate::geometry_msgs::msg::v1::Twist,
+) -> ros_env::geometry_msgs::msg::Twist {
     ros_env::geometry_msgs::msg::Twist {
-        linear: crate::ros2_bridge::mappers::geometry_msgs::vector3::vector3_to_ros(bus.linear.unwrap_or_default()),
-        angular: crate::ros2_bridge::mappers::geometry_msgs::vector3::vector3_to_ros(bus.angular.unwrap_or_default()),
+        linear: crate::ros2_bridge::mappers::geometry_msgs::vector3::vector3_to_ros(
+            bus.linear.unwrap_or_default(),
+        ),
+        angular: crate::ros2_bridge::mappers::geometry_msgs::vector3::vector3_to_ros(
+            bus.angular.unwrap_or_default(),
+        ),
     }
 }
 

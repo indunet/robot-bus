@@ -3,7 +3,7 @@
  *
  * Mirrors Rust/Python `Node.ws` / `Node.ws_at`: publish, subscribe, service
  * call, action run. Does not support service/action servers or local broker.
- * Transport is multiplexed WebSocket RPC (`/ws`, one connection many streams).
+ * Transport is multiplexed WebSocket RPC (`/ws-rpc`, one connection many streams).
  */
 
 import { decode, encode, type MessageType } from "./typed.js";
@@ -39,7 +39,7 @@ export function __setWsRpcForTests(factory?: ((url: string) => WsSession) | null
   sessionFactory = factory ?? null;
 }
 
-export const DEFAULT_WS_URL = "http://127.0.0.1:15570";
+export const DEFAULT_WS_URL = "http://127.0.0.1:15560";
 const DEFAULT_TOPOLOGY_REFRESH_MS = 10_000;
 
 export interface WsNodeOptions {
@@ -732,8 +732,21 @@ export class WsNode {
       session.close();
     }
     this.actionSessions.clear();
-    this.stopTopologyRegistration();
-    this.session.close();
+    const flush = this.stopTopologyRegistration();
+    void (async () => {
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      try {
+        await Promise.race([
+          flush,
+          new Promise<void>((resolve) => {
+            timer = setTimeout(resolve, 1200);
+          }),
+        ]);
+      } finally {
+        if (timer !== undefined) clearTimeout(timer);
+        this.session.close();
+      }
+    })();
   }
 
   private trackEndpoint(kind: TopologyKind, topic: string): void {
@@ -751,19 +764,22 @@ export class WsNode {
     this.topologyTimer = setInterval(() => this.refreshTopology(), this.topologyRefreshMs);
   }
 
-  private stopTopologyRegistration(): void {
-    if (!this.topologyStarted) return;
+  private stopTopologyRegistration(): Promise<void> {
+    if (!this.topologyStarted) return Promise.resolve();
     this.topologyStarted = false;
     if (this.topologyTimer) clearInterval(this.topologyTimer);
     this.topologyTimer = null;
-    for (const endpoint of this.topologyEndpoints.values()) {
-      this.publishControl(
+    const tasks = [...this.topologyEndpoints.values()].map((endpoint) =>
+      this.callService(
         TOPOLOGY_UNREGISTER,
         TopologyUnregister.toBinary(
           TopologyUnregister.create({ endpointId: endpoint.endpointId }),
         ),
-      );
-    }
+        1,
+      ).catch(() => undefined),
+    );
+    this.topologyEndpoints.clear();
+    return Promise.all(tasks).then(() => undefined);
   }
 
   private refreshTopology(): void {

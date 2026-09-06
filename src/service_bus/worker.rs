@@ -8,7 +8,7 @@ use zmq::{Context, Socket, SocketType};
 
 use crate::errors::{BusError, Result};
 use crate::transports;
-use crate::zmq_helpers::{apply_rpc_options_with, poll_readable, HighWaterMark};
+use crate::zmq_helpers::{HighWaterMark, apply_rpc_options_with, poll_readable};
 
 pub type ServiceHandler = Arc<dyn Fn(&[u8]) -> Vec<u8> + Send + Sync>;
 

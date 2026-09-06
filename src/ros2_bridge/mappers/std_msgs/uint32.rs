@@ -2,13 +2,17 @@
 
 use crate::ros2_bridge::mapper::TypedTopicMapper;
 
-pub(crate) fn uint32_to_bus(msg: ros_env::std_msgs::msg::UInt32) -> crate::std_msgs::msg::v1::UInt32 {
+pub(crate) fn uint32_to_bus(
+    msg: ros_env::std_msgs::msg::UInt32,
+) -> crate::std_msgs::msg::v1::UInt32 {
     crate::std_msgs::msg::v1::UInt32 {
         data: msg.data.into(),
     }
 }
 
-pub(crate) fn uint32_to_ros(bus: crate::std_msgs::msg::v1::UInt32) -> ros_env::std_msgs::msg::UInt32 {
+pub(crate) fn uint32_to_ros(
+    bus: crate::std_msgs::msg::v1::UInt32,
+) -> ros_env::std_msgs::msg::UInt32 {
     ros_env::std_msgs::msg::UInt32 {
         data: bus.data as _,
     }

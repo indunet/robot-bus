@@ -4,15 +4,31 @@ use crate::ros2_bridge::mapper::TypedTopicMapper;
 
 pub(crate) fn mesh_to_bus(msg: ros_env::shape_msgs::msg::Mesh) -> crate::shape_msgs::msg::v1::Mesh {
     crate::shape_msgs::msg::v1::Mesh {
-        triangles: msg.triangles.into_iter().map(crate::ros2_bridge::mappers::shape_msgs::mesh_triangle::mesh_triangle_to_bus).collect(),
-        vertices: msg.vertices.into_iter().map(crate::ros2_bridge::mappers::geometry_msgs::point::point_to_bus).collect(),
+        triangles: msg
+            .triangles
+            .into_iter()
+            .map(crate::ros2_bridge::mappers::shape_msgs::mesh_triangle::mesh_triangle_to_bus)
+            .collect(),
+        vertices: msg
+            .vertices
+            .into_iter()
+            .map(crate::ros2_bridge::mappers::geometry_msgs::point::point_to_bus)
+            .collect(),
     }
 }
 
 pub(crate) fn mesh_to_ros(bus: crate::shape_msgs::msg::v1::Mesh) -> ros_env::shape_msgs::msg::Mesh {
     ros_env::shape_msgs::msg::Mesh {
-        triangles: bus.triangles.into_iter().map(crate::ros2_bridge::mappers::shape_msgs::mesh_triangle::mesh_triangle_to_ros).collect(),
-        vertices: bus.vertices.into_iter().map(crate::ros2_bridge::mappers::geometry_msgs::point::point_to_ros).collect(),
+        triangles: bus
+            .triangles
+            .into_iter()
+            .map(crate::ros2_bridge::mappers::shape_msgs::mesh_triangle::mesh_triangle_to_ros)
+            .collect(),
+        vertices: bus
+            .vertices
+            .into_iter()
+            .map(crate::ros2_bridge::mappers::geometry_msgs::point::point_to_ros)
+            .collect(),
     }
 }
 

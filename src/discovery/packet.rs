@@ -124,8 +124,8 @@ mod tests {
             domain_id: 0,
             advertise_host: "127.0.0.1".into(),
             tcp: Some(TcpPorts {
-                message_xsub: 15560,
-                message_xpub: 15561,
+                message_xsub: 15580,
+                message_xpub: 15581,
                 service_frontend: 15662,
                 service_backend: 15663,
                 action_frontend: 15664,
@@ -133,8 +133,8 @@ mod tests {
             }),
             ipc_dir: Some("/tmp/robot_bus".into()),
             inproc_prefix: Some("robot_bus".into()),
-            ws_url: Some("http://127.0.0.1:15570".into()),
-            console_url: Some("http://127.0.0.1:15570".into()),
+            ws_url: Some("http://127.0.0.1:15560".into()),
+            console_url: Some("http://127.0.0.1:15560".into()),
         }
     }
 

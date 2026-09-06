@@ -2,7 +2,9 @@
 
 use crate::ros2_bridge::mapper::TypedTopicMapper;
 
-pub(crate) fn vector3_to_bus(msg: ros_env::geometry_msgs::msg::Vector3) -> crate::geometry_msgs::msg::v1::Vector3 {
+pub(crate) fn vector3_to_bus(
+    msg: ros_env::geometry_msgs::msg::Vector3,
+) -> crate::geometry_msgs::msg::v1::Vector3 {
     crate::geometry_msgs::msg::v1::Vector3 {
         x: msg.x,
         y: msg.y,
@@ -10,7 +12,9 @@ pub(crate) fn vector3_to_bus(msg: ros_env::geometry_msgs::msg::Vector3) -> crate
     }
 }
 
-pub(crate) fn vector3_to_ros(bus: crate::geometry_msgs::msg::v1::Vector3) -> ros_env::geometry_msgs::msg::Vector3 {
+pub(crate) fn vector3_to_ros(
+    bus: crate::geometry_msgs::msg::v1::Vector3,
+) -> ros_env::geometry_msgs::msg::Vector3 {
     ros_env::geometry_msgs::msg::Vector3 {
         x: bus.x,
         y: bus.y,

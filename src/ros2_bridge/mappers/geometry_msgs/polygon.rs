@@ -2,15 +2,27 @@
 
 use crate::ros2_bridge::mapper::TypedTopicMapper;
 
-pub(crate) fn polygon_to_bus(msg: ros_env::geometry_msgs::msg::Polygon) -> crate::geometry_msgs::msg::v1::Polygon {
+pub(crate) fn polygon_to_bus(
+    msg: ros_env::geometry_msgs::msg::Polygon,
+) -> crate::geometry_msgs::msg::v1::Polygon {
     crate::geometry_msgs::msg::v1::Polygon {
-        points: msg.points.into_iter().map(crate::ros2_bridge::mappers::geometry_msgs::point32::point32_to_bus).collect(),
+        points: msg
+            .points
+            .into_iter()
+            .map(crate::ros2_bridge::mappers::geometry_msgs::point32::point32_to_bus)
+            .collect(),
     }
 }
 
-pub(crate) fn polygon_to_ros(bus: crate::geometry_msgs::msg::v1::Polygon) -> ros_env::geometry_msgs::msg::Polygon {
+pub(crate) fn polygon_to_ros(
+    bus: crate::geometry_msgs::msg::v1::Polygon,
+) -> ros_env::geometry_msgs::msg::Polygon {
     ros_env::geometry_msgs::msg::Polygon {
-        points: bus.points.into_iter().map(crate::ros2_bridge::mappers::geometry_msgs::point32::point32_to_ros).collect(),
+        points: bus
+            .points
+            .into_iter()
+            .map(crate::ros2_bridge::mappers::geometry_msgs::point32::point32_to_ros)
+            .collect(),
     }
 }
 

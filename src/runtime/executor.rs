@@ -16,9 +16,9 @@
 //! parallel. The poll thread never runs those callbacks itself.
 
 use std::collections::HashMap;
+use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{self, Receiver, Sender};
-use std::sync::Arc;
 use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant};
 
@@ -39,14 +39,14 @@ use crate::runtime::registrations::{
     MessageCallback, Registration, ServiceHandler, ServiceRegistration, SubRegistration,
 };
 use crate::runtime::timers::{
-    effective_poll_timeout_ms, tick_timers, SubscriptionHandle, Timer, TimerCallback, TimerHandle,
+    SubscriptionHandle, Timer, TimerCallback, TimerHandle, effective_poll_timeout_ms, tick_timers,
 };
 use crate::runtime::worker_pool::WorkerPool;
 use crate::transports::{
     action_backend_endpoint, action_frontend_endpoint, message_xpub_endpoint,
     service_backend_endpoint,
 };
-use crate::zmq_helpers::{apply_subscriber_options_with, wait_for_connection, HighWaterMark};
+use crate::zmq_helpers::{HighWaterMark, apply_subscriber_options_with, wait_for_connection};
 
 const DEFAULT_POLL_TIMEOUT_MS: i64 = 250;
 const DEFAULT_HEARTBEAT_INTERVAL_MS: u64 = 2500;

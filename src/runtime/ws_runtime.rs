@@ -1,4 +1,4 @@
-//! WebSocket-mode runtime for [`super::Node`]: multiplexed `/ws` client.
+//! WebSocket-mode runtime for [`super::Node`]: multiplexed `/ws-rpc` client.
 //!
 //! One WebSocket connection per node carries all subscribe / publish / service /
 //! action RPCs (V3 framing with `stream_id`).
@@ -33,7 +33,7 @@ use crate::ws_gateway::ws_frame::{
     RequestHeader, decode_action_data, decode_frame, decode_subscribe_data, encode_frame,
 };
 
-const DEFAULT_WS_URL: &str = "http://127.0.0.1:15570";
+const DEFAULT_WS_URL: &str = "http://127.0.0.1:15560";
 const DEFAULT_SPIN_TIMEOUT_MS: i64 = 250;
 
 #[derive(Debug)]
@@ -886,20 +886,16 @@ fn fail_stream(kind: StreamKind, err: BusError) {
 
 pub fn http_url_to_ws_rpc(url: &str) -> String {
     let trimmed = url.trim_end_matches('/');
-    if trimmed.starts_with("ws://") || trimmed.starts_with("wss://") {
-        return if trimmed.ends_with("/ws") {
-            trimmed.to_string()
-        } else {
-            format!("{trimmed}/ws")
-        };
-    }
-    if let Some(rest) = trimmed.strip_prefix("https://") {
-        return format!("wss://{rest}/ws");
-    }
-    if let Some(rest) = trimmed.strip_prefix("http://") {
-        return format!("ws://{rest}/ws");
-    }
-    format!("ws://{trimmed}/ws")
+    let as_ws = if trimmed.starts_with("ws://") || trimmed.starts_with("wss://") {
+        trimmed.to_string()
+    } else if let Some(rest) = trimmed.strip_prefix("https://") {
+        format!("wss://{rest}")
+    } else if let Some(rest) = trimmed.strip_prefix("http://") {
+        format!("ws://{rest}")
+    } else {
+        format!("ws://{trimmed}")
+    };
+    crate::discovery::with_ws_rpc_path(&as_ws)
 }
 
 fn timeout_ms_u32(timeout: Option<Duration>) -> u32 {

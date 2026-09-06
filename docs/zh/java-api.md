@@ -33,7 +33,7 @@ try (Broker broker = new Broker()) {
 
 ```bash
 python -m robot_bus.broker
-# 或 python -m robot_bus.broker --api-listen 0.0.0.0:15570 --tcp-only
+# 或 python -m robot_bus.broker --api-listen 0.0.0.0:15560 --tcp-only
 ```
 
 跨 broker（federation）与 CLI同款字符串约定：
@@ -56,7 +56,7 @@ BrokerOptions opts =
         true,
         true,
         "broker-a",
-        List.of("tcp://10.0.0.2:15561"),
+        List.of("tcp://10.0.0.2:15581"),
         List.of("broker-b=tcp://10.0.0.2:15663"),
         List.of("broker-b=tcp://10.0.0.2:15665"));
 try (Broker broker = new Broker(opts)) {
@@ -122,7 +122,7 @@ node.createSubscription("/robot1/imu", (payload) -> {
 
 ```java
 Node node = Node.discover(
-    "talker", "tcp", new DiscoverOpts("http://127.0.0.1:15570"));
+    "talker", "tcp", new DiscoverOpts("http://127.0.0.1:15560"));
 // 可选：brokerId、timeoutSecs；null / 0 → 默认
 // BrokerOptions.noDiscovery / domainId为兼容软标签，非 UDP组播
 ```
@@ -140,7 +140,7 @@ Node node = Node.discover(
 
 ```java
 Node node = Node.ws("web-client");
-// 或 Node.wsAt("web-client", "http://127.0.0.1:15570");
+// 或 Node.wsAt("web-client", "http://127.0.0.1:15560");
 ```
 
 ### Service / Action（typed）

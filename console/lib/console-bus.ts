@@ -158,15 +158,15 @@ function mapBridge(msg: BridgeSnapshot): BridgeInfo {
 
 const BRIDGE_TTL_MS = 3000
 
-const DEFAULT_BROKER_PORT = '15570'
+const DEFAULT_BROKER_PORT = '15560'
 /** Next.js `pnpm dev` ports — browser WS RPC should hit the broker directly. */
 const DEV_UI_PORTS = new Set(['3000', '3020'])
 
 /**
  * Base URL for WebSocket RPC + console REST.
  *
- * - Embedded console on the broker port → same origin (SDK maps to `ws://…/ws`).
- * - `pnpm dev` on :3020/:3000 → talk to the broker directly (same hostname, port 15570).
+ * - Embedded console on the broker port → same origin (SDK maps to `ws://…/ws-rpc`).
+ * - `pnpm dev` on :3020/:3000 → talk to the broker directly (same hostname, port 15560).
  */
 export function resolveBusUrl(): string {
   if (typeof window !== 'undefined' && window.location?.hostname) {
@@ -190,7 +190,7 @@ export function startConsoleBus(handlers: ConsoleBusHandlers): () => void {
   const url = resolveBusUrl()
   // Topology + topic-type registration enabled so console subscriptions show in
   // Pub/Sub counts and fill TYPE for `/robot_bus/*` system topics.
-  const node = RobotBusNode.wsAt('console_ui', url)
+  const node = RobotBusNode.wsAt('console_web', url)
 
   node.createSubscription(consoleTopics.STATUS, (msg) => {
     handlers.onStatus(mapStatus(msg))

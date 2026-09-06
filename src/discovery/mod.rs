@@ -1,7 +1,7 @@
 //! HTTP API broker discovery (control plane).
 //!
 //! Brokers expose [`GET /api/v1/discover`](crate::discovery::DiscoverResponse) on the
-//! API listen port (default `15570`). Clients fetch that JSON, then
+//! API listen port (default `15560`). Clients fetch that JSON, then
 //! [`BrokerAnnouncement::apply`] fills location fields on a user-chosen
 //! [`crate::NodeOptions`] transport (`tcp` / `ipc` / `inproc` / `ws`).
 //!
@@ -16,8 +16,8 @@ mod packet;
 pub use config::DEFAULT_DISCOVERY_PORT;
 #[allow(deprecated)]
 pub use config::{
-    DEFAULT_API_DISCOVER_PATH, DEFAULT_DISCOVERY_TIMEOUT, DEFAULT_MULTICAST_ADDR, DiscoverOpts,
-    DiscoveryConfig, MAGIC, SCHEMA_VERSION,
+    DEFAULT_API_DISCOVER_PATH, DEFAULT_DISCOVERY_TIMEOUT, DEFAULT_MULTICAST_ADDR,
+    DEFAULT_WS_RPC_PATH, DiscoverOpts, DiscoveryConfig, MAGIC, SCHEMA_VERSION, with_ws_rpc_path,
 };
 pub use http::{DiscoverResponse, fetch_discover, normalize_api_base, rewrite_bind_host};
 pub use net::{infer_advertise_host, resolve_advertise_host, tcp_port_from_bind};

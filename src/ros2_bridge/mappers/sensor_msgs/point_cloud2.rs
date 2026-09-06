@@ -2,12 +2,18 @@
 
 use crate::ros2_bridge::mapper::TypedTopicMapper;
 
-pub(crate) fn point_cloud2_to_bus(msg: ros_env::sensor_msgs::msg::PointCloud2) -> crate::sensor_msgs::msg::v1::PointCloud2 {
+pub(crate) fn point_cloud2_to_bus(
+    msg: ros_env::sensor_msgs::msg::PointCloud2,
+) -> crate::sensor_msgs::msg::v1::PointCloud2 {
     crate::sensor_msgs::msg::v1::PointCloud2 {
         header: Some(crate::ros2_bridge::mappers::std_msgs::header::header_to_bus(msg.header)),
         height: msg.height.into(),
         width: msg.width.into(),
-        fields: msg.fields.into_iter().map(crate::ros2_bridge::mappers::sensor_msgs::point_field::point_field_to_bus).collect(),
+        fields: msg
+            .fields
+            .into_iter()
+            .map(crate::ros2_bridge::mappers::sensor_msgs::point_field::point_field_to_bus)
+            .collect(),
         is_bigendian: msg.is_bigendian,
         point_step: msg.point_step.into(),
         row_step: msg.row_step.into(),
@@ -16,12 +22,20 @@ pub(crate) fn point_cloud2_to_bus(msg: ros_env::sensor_msgs::msg::PointCloud2) -
     }
 }
 
-pub(crate) fn point_cloud2_to_ros(bus: crate::sensor_msgs::msg::v1::PointCloud2) -> ros_env::sensor_msgs::msg::PointCloud2 {
+pub(crate) fn point_cloud2_to_ros(
+    bus: crate::sensor_msgs::msg::v1::PointCloud2,
+) -> ros_env::sensor_msgs::msg::PointCloud2 {
     ros_env::sensor_msgs::msg::PointCloud2 {
-        header: crate::ros2_bridge::mappers::std_msgs::header::header_to_ros(bus.header.unwrap_or_default()),
+        header: crate::ros2_bridge::mappers::std_msgs::header::header_to_ros(
+            bus.header.unwrap_or_default(),
+        ),
         height: bus.height as _,
         width: bus.width as _,
-        fields: bus.fields.into_iter().map(crate::ros2_bridge::mappers::sensor_msgs::point_field::point_field_to_ros).collect(),
+        fields: bus
+            .fields
+            .into_iter()
+            .map(crate::ros2_bridge::mappers::sensor_msgs::point_field::point_field_to_ros)
+            .collect(),
         is_bigendian: bus.is_bigendian,
         point_step: bus.point_step as _,
         row_step: bus.row_step as _,

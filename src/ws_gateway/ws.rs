@@ -155,9 +155,7 @@ async fn run_rpc(
     mut cmd_rx: mpsc::Receiver<StreamCmd>,
 ) {
     let result = match header.opcode() {
-        Opcode::Subscribe => {
-            run_subscribe(stream_id, &state, header, &out_tx, &mut cmd_rx).await
-        }
+        Opcode::Subscribe => run_subscribe(stream_id, &state, header, &out_tx, &mut cmd_rx).await,
         Opcode::Publish => run_publish(&state, header, body).await,
         Opcode::Call => run_call(stream_id, &state, header, body, &out_tx).await,
         Opcode::SendGoal => {

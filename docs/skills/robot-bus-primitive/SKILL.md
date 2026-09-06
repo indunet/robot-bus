@@ -34,7 +34,7 @@ python -m robot_bus.broker
 # or: cargo run --bin robot_bus_broker
 ```
 
-Default console / discover API: `http://127.0.0.1:15570`.
+Default console / discover API: `http://127.0.0.1:15560`.
 
 | Transport | Notes |
 |-----------|--------|
@@ -262,7 +262,7 @@ handle = node.create_timer(0.1, lambda: print("tick"))  # seconds
 
 ## 7. Verification
 
-1. Broker running; open `http://127.0.0.1:15570` (or `rbus topic list`).
+1. Broker running; open `http://127.0.0.1:15560` (or `rbus topic list`).
 2. Smoke: one publish/subscribe pair, one service call, one action goal if used.
 3. Timer: confirm ticks only while spinning.
 

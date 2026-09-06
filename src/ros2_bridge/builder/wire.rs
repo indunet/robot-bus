@@ -1,7 +1,7 @@
 use std::any::Any;
 use std::collections::{HashMap, HashSet};
-use std::sync::mpsc::Sender;
 use std::sync::Arc;
+use std::sync::mpsc::Sender;
 
 use prost::Message;
 

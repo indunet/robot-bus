@@ -2,17 +2,27 @@
 
 use crate::ros2_bridge::mapper::TypedTopicMapper;
 
-pub(crate) fn wrench_to_bus(msg: ros_env::geometry_msgs::msg::Wrench) -> crate::geometry_msgs::msg::v1::Wrench {
+pub(crate) fn wrench_to_bus(
+    msg: ros_env::geometry_msgs::msg::Wrench,
+) -> crate::geometry_msgs::msg::v1::Wrench {
     crate::geometry_msgs::msg::v1::Wrench {
         force: Some(crate::ros2_bridge::mappers::geometry_msgs::vector3::vector3_to_bus(msg.force)),
-        torque: Some(crate::ros2_bridge::mappers::geometry_msgs::vector3::vector3_to_bus(msg.torque)),
+        torque: Some(
+            crate::ros2_bridge::mappers::geometry_msgs::vector3::vector3_to_bus(msg.torque),
+        ),
     }
 }
 
-pub(crate) fn wrench_to_ros(bus: crate::geometry_msgs::msg::v1::Wrench) -> ros_env::geometry_msgs::msg::Wrench {
+pub(crate) fn wrench_to_ros(
+    bus: crate::geometry_msgs::msg::v1::Wrench,
+) -> ros_env::geometry_msgs::msg::Wrench {
     ros_env::geometry_msgs::msg::Wrench {
-        force: crate::ros2_bridge::mappers::geometry_msgs::vector3::vector3_to_ros(bus.force.unwrap_or_default()),
-        torque: crate::ros2_bridge::mappers::geometry_msgs::vector3::vector3_to_ros(bus.torque.unwrap_or_default()),
+        force: crate::ros2_bridge::mappers::geometry_msgs::vector3::vector3_to_ros(
+            bus.force.unwrap_or_default(),
+        ),
+        torque: crate::ros2_bridge::mappers::geometry_msgs::vector3::vector3_to_ros(
+            bus.torque.unwrap_or_default(),
+        ),
     }
 }
 

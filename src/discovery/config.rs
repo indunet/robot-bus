@@ -21,6 +21,24 @@ pub const DEFAULT_DISCOVERY_PORT: u16 = 15550;
 /// Path on the API listen port for broker endpoint discovery.
 pub const DEFAULT_API_DISCOVER_PATH: &str = "/api/v1/discover";
 
+/// HTTP path for multiplexed WebSocket RPC on the API listen port.
+pub const DEFAULT_WS_RPC_PATH: &str = "/ws-rpc";
+
+/// Append [`DEFAULT_WS_RPC_PATH`] to an HTTP or `ws(s)` origin.
+///
+/// Already-suffixed `/ws-rpc` is left unchanged. A leftover `/ws` suffix
+/// (pre-rename clients) is rewritten to `/ws-rpc`.
+pub fn with_ws_rpc_path(url: &str) -> String {
+    let trimmed = url.trim_end_matches('/');
+    if trimmed.ends_with(DEFAULT_WS_RPC_PATH) {
+        trimmed.to_string()
+    } else if let Some(prefix) = trimmed.strip_suffix("/ws") {
+        format!("{prefix}{DEFAULT_WS_RPC_PATH}")
+    } else {
+        format!("{trimmed}{DEFAULT_WS_RPC_PATH}")
+    }
+}
+
 /// Default client wait timeout.
 pub const DEFAULT_DISCOVERY_TIMEOUT: Duration = Duration::from_secs(3);
 
@@ -48,7 +66,7 @@ impl Default for DiscoveryConfig {
 /// Client-side discover options (HTTP against the broker API listen port).
 #[derive(Clone, Debug)]
 pub struct DiscoverOpts {
-    /// Broker API base URL, e.g. `http://127.0.0.1:15570` or `127.0.0.1:15570`.
+    /// Broker API base URL, e.g. `http://127.0.0.1:15560` or `127.0.0.1:15560`.
     pub api_url: String,
     /// When set, only accept this broker id.
     pub broker_id: Option<String>,
@@ -86,5 +104,30 @@ impl DiscoverOpts {
             api_url: api_url.into(),
             ..Self::default()
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn with_ws_rpc_path_appends_and_rewrites_legacy() {
+        assert_eq!(
+            with_ws_rpc_path("http://127.0.0.1:15560"),
+            "http://127.0.0.1:15560/ws-rpc"
+        );
+        assert_eq!(
+            with_ws_rpc_path("http://127.0.0.1:15560/"),
+            "http://127.0.0.1:15560/ws-rpc"
+        );
+        assert_eq!(
+            with_ws_rpc_path("ws://127.0.0.1:15560/ws-rpc"),
+            "ws://127.0.0.1:15560/ws-rpc"
+        );
+        assert_eq!(
+            with_ws_rpc_path("ws://127.0.0.1:15560/ws"),
+            "ws://127.0.0.1:15560/ws-rpc"
+        );
     }
 }

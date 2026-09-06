@@ -16,7 +16,7 @@ use robot_bus::{
 use support::lock_brokers;
 
 fn inproc_broker_config() -> RobotBusConfig {
-    // Ephemeral TCP/gRPC ports — defaults (e.g. :15570) collide under parallel cargo test.
+    // Ephemeral TCP/gRPC ports — defaults (e.g. :15560) collide under parallel cargo test.
     let mut config = support::ephemeral_robot_bus_config();
     // Keep inproc (+ ipc/tcp) so Node::inproc_with_context can reach the proxy.
     config.message.bind_all_transports = true;

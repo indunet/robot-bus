@@ -2,7 +2,9 @@
 
 use crate::ros2_bridge::mapper::TypedTopicMapper;
 
-pub(crate) fn temperature_to_bus(msg: ros_env::sensor_msgs::msg::Temperature) -> crate::sensor_msgs::msg::v1::Temperature {
+pub(crate) fn temperature_to_bus(
+    msg: ros_env::sensor_msgs::msg::Temperature,
+) -> crate::sensor_msgs::msg::v1::Temperature {
     crate::sensor_msgs::msg::v1::Temperature {
         header: Some(crate::ros2_bridge::mappers::std_msgs::header::header_to_bus(msg.header)),
         temperature: msg.temperature,
@@ -10,9 +12,13 @@ pub(crate) fn temperature_to_bus(msg: ros_env::sensor_msgs::msg::Temperature) ->
     }
 }
 
-pub(crate) fn temperature_to_ros(bus: crate::sensor_msgs::msg::v1::Temperature) -> ros_env::sensor_msgs::msg::Temperature {
+pub(crate) fn temperature_to_ros(
+    bus: crate::sensor_msgs::msg::v1::Temperature,
+) -> ros_env::sensor_msgs::msg::Temperature {
     ros_env::sensor_msgs::msg::Temperature {
-        header: crate::ros2_bridge::mappers::std_msgs::header::header_to_ros(bus.header.unwrap_or_default()),
+        header: crate::ros2_bridge::mappers::std_msgs::header::header_to_ros(
+            bus.header.unwrap_or_default(),
+        ),
         temperature: bus.temperature,
         variance: bus.variance,
     }

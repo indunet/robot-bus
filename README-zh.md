@@ -20,7 +20,7 @@ SDK：**Rust**、**Python**、**TypeScript**、**C++**、**Java**、**Android**�
 - **内嵌 Web控制台：** Overview、Topics、Services、Actions、Topology，以及内置小坦克示例 —— 无需额外前端进程。
 - **可选 ROS2桥：** 进程内用 `rclrs` / `rclpy` / `rclcpp`桥接 topic / service / action（Humble / Jazzy）。未启用桥时，核心 SDK不依赖 ROS。
 - **Protobuf契约：** 全部载荷使用 Protocol Buffers（不是 ROS CDR），目录与常见 ROS2包名对齐，见 [`proto/`](proto/)。
-- **浏览器与远程客户端：** WebSocket RPC（`Node::ws` / `Node.ws`；传输 `"ws"`）。**不兼容旧版：** `/ws`为 V3成帧（opcode + 原始 payload），V2客户端连不上。
+- **浏览器与远程客户端：** WebSocket RPC（`Node::ws` / `Node.ws`；传输 `"ws"`）。**不兼容旧版：** `/ws-rpc`为 V3成帧（opcode + 原始 payload），V2客户端连不上。
 
 Node编程模型——`Context` / `Node`、topic pub-sub、service、action以及 `spin`——为稳定的公开 API。
 
@@ -83,7 +83,7 @@ with robot_bus.RobotBusBroker.start() as broker:
 
 Rust / C++ / TypeScript / Java / Android 同样提供进程内 API，见各语言文档。
 
-默认 API / Web控制台 / WebSocket监听：`http://0.0.0.0:15570`。broker启动后，用浏览器打开 [Web控制台](#2-web控制台) 即可查看。
+默认 API / Web控制台 / WebSocket监听：`http://0.0.0.0:15560`。broker启动后，用浏览器打开 [Web控制台](#2-web控制台) 即可查看。
 
 可运行示例（topic、service、action，Rust / Python / C++）：[`examples/`](examples/)。这些示例是多进程的，可用下面命令单独起 broker：
 
@@ -99,7 +99,7 @@ python -m robot_bus.broker
 内置的小坦克仿真，无需先写代码即可看到 topic端到端跑通：
 
 1. 启动 broker（`python -m robot_bus.broker`）。
-2. 打开 **http://127.0.0.1:15570**，在侧栏点击 **TANK**（或访问 `/tank/`）。
+2. 打开 **http://127.0.0.1:15560**，在侧栏点击 **TANK**（或访问 `/tank/`）。
 3. 点击面板后，用 **方向键** 遥控；也可切换到点选导航，在地图上 **鼠标点击** 下发目标点。
 
 打开面板会拉起进程内 tank节点：订阅 `/robot_bus/tank/cmd_vel`，发布 `/robot_bus/tank/pose`。多浏览器共享同一场景（遥控 last-writer-wins）。不需要时可加 `--no-tank`。侧栏 **文档** 默认显示，可用 `--no-docs`隐藏。
@@ -200,7 +200,7 @@ goal = act.send_goal(
 
 Broker内嵌监控界面（Overview、Topics、Services、Actions、Topology、日志）。在程序里 `RobotBusBroker.start()`（或独立进程 `python -m robot_bus.broker` / `cargo run --bin robot_bus_broker`）后，用浏览器打开：
 
-**http://127.0.0.1:15570**
+**http://127.0.0.1:15560**
 
 ![Robot Bus Web控制台](docs/images/console-overview.png)
 

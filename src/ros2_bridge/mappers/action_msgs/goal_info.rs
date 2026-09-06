@@ -2,17 +2,27 @@
 
 use crate::ros2_bridge::mapper::TypedTopicMapper;
 
-pub(crate) fn goal_info_to_bus(msg: ros_env::action_msgs::msg::GoalInfo) -> crate::action_msgs::msg::v1::GoalInfo {
+pub(crate) fn goal_info_to_bus(
+    msg: ros_env::action_msgs::msg::GoalInfo,
+) -> crate::action_msgs::msg::v1::GoalInfo {
     crate::action_msgs::msg::v1::GoalInfo {
-        goal_id: Some(crate::ros2_bridge::mappers::unique_identifier_msgs::uuid::uuid_to_bus(msg.goal_id)),
+        goal_id: Some(
+            crate::ros2_bridge::mappers::unique_identifier_msgs::uuid::uuid_to_bus(msg.goal_id),
+        ),
         stamp: Some(crate::ros2_bridge::mappers::builtin_interfaces::time::time_to_bus(msg.stamp)),
     }
 }
 
-pub(crate) fn goal_info_to_ros(bus: crate::action_msgs::msg::v1::GoalInfo) -> ros_env::action_msgs::msg::GoalInfo {
+pub(crate) fn goal_info_to_ros(
+    bus: crate::action_msgs::msg::v1::GoalInfo,
+) -> ros_env::action_msgs::msg::GoalInfo {
     ros_env::action_msgs::msg::GoalInfo {
-        goal_id: crate::ros2_bridge::mappers::unique_identifier_msgs::uuid::uuid_to_ros(bus.goal_id.unwrap_or_default()),
-        stamp: crate::ros2_bridge::mappers::builtin_interfaces::time::time_to_ros(bus.stamp.unwrap_or_default()),
+        goal_id: crate::ros2_bridge::mappers::unique_identifier_msgs::uuid::uuid_to_ros(
+            bus.goal_id.unwrap_or_default(),
+        ),
+        stamp: crate::ros2_bridge::mappers::builtin_interfaces::time::time_to_ros(
+            bus.stamp.unwrap_or_default(),
+        ),
     }
 }
 

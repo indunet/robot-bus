@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import { type BrokerInfo, fmtBytes, fmtNum, fmtRate } from '@/lib/mock-data'
 import { Activity, Server, Zap, AlertTriangle, Clock } from 'lucide-react'
-import { fmtUptimeLocalized, useI18n, type Locale } from '@/lib/i18n'
+import { useI18n, type Locale } from '@/lib/i18n'
 
 interface StatusBarProps {
   broker: BrokerInfo
@@ -47,7 +47,7 @@ export default function StatusBar({ broker }: StatusBarProps) {
         <span className="font-brand text-[15px] font-semibold tracking-[0.2em] text-bus-cyan uppercase leading-none">
           ROBOT-BUS
         </span>
-        <span className="font-mono text-xs text-bus-muted ml-0.5">
+        <span className="font-mono text-xs text-bus-muted ml-0.5 inline-block min-w-[4.5rem] tabular-nums">
           {connecting ? 'v…' : `v${broker.version}`}
         </span>
       </div>
@@ -56,7 +56,7 @@ export default function StatusBar({ broker }: StatusBarProps) {
 
       <div className="flex items-center gap-1.5 shrink-0">
         <span className={`w-2.5 h-2.5 rounded-full ${statusPulse}`} />
-        <span className={`font-mono text-xs font-semibold ${statusColor}`}>
+        <span className={`font-mono text-xs font-semibold min-w-[7.5rem] ${statusColor}`}>
           {statusLabel}
           {connecting && (
             <span className="connecting-dots inline-block w-4 text-left" data-phase={dotPhase} />
@@ -67,24 +67,26 @@ export default function StatusBar({ broker }: StatusBarProps) {
       <div className="w-px h-5 bg-bus-border shrink-0" />
 
       <div className="flex items-center gap-5 shrink-0">
-        <Metric icon={<Activity size={13} className="text-bus-muted" />} label={t('metricMsgS')} value={fmtRate(broker.msgPerSec)} accent />
-        <Metric icon={<Server size={13} className="text-bus-muted" />} label={t('metricBw')} value={`${fmtBytes(broker.bytesPerSec)}/s`} />
-        <Metric label={t('metricSvcS')} value={fmtRate(broker.svcCallsPerSec)} />
-        <Metric label={t('metricActS')} value={fmtRate(broker.actRunsPerSec)} />
-        <Metric label={t('metricTotal')} value={fmtNum(broker.totalMessages)} />
-        <Metric label={t('metricUptime')} value={fmtUptimeLocalized(broker.uptime, t)} />
-        <Metric label={t('metricPid')} value={String(broker.pid)} />
+        <Metric icon={<Activity size={13} className="text-bus-muted" />} label={t('metricMsgS')} value={fmtRate(broker.msgPerSec)} valueWidth="w-[6ch]" accent />
+        <Metric icon={<Server size={13} className="text-bus-muted" />} label={t('metricBw')} value={`${fmtBytes(broker.bytesPerSec)}/s`} valueWidth="w-[10ch]" />
+        <Metric label={t('metricSvcS')} value={fmtRate(broker.svcCallsPerSec)} valueWidth="w-[6ch]" />
+        <Metric label={t('metricActS')} value={fmtRate(broker.actRunsPerSec)} valueWidth="w-[6ch]" />
+        <Metric label={t('metricTotal')} value={fmtNum(broker.totalMessages)} valueWidth="w-[6ch]" />
+        <Metric label={t('metricUptime')} value={fmtUptimeStable(broker.uptime)} valueWidth="w-[12ch]" />
+        <Metric label={t('metricPid')} value={connecting ? '—' : String(broker.pid)} valueWidth="w-[7ch]" />
       </div>
 
-      {broker.totalErrors > 0 && (
-        <>
-          <div className="w-px h-5 bg-bus-border shrink-0" />
-          <div className="flex items-center gap-1.5 shrink-0">
-            <AlertTriangle size={13} className="text-bus-red" />
-            <span className="font-mono text-sm text-bus-red">{broker.totalErrors} {t('metricErr')}</span>
-          </div>
-        </>
-      )}
+      <div className="w-px h-5 bg-bus-border shrink-0" />
+      <div
+        className={`flex items-center gap-1.5 shrink-0 min-w-[4.75rem] ${
+          broker.totalErrors > 0 ? '' : 'invisible'
+        }`}
+      >
+        <AlertTriangle size={13} className="text-bus-red" />
+        <span className="font-mono text-sm text-bus-red tabular-nums">
+          {broker.totalErrors} {t('metricErr')}
+        </span>
+      </div>
 
       <div className="flex-1" />
 
@@ -137,23 +139,40 @@ function LangSwitch({
 }
 
 function Metric({
-  icon, label, value, accent,
+  icon, label, value, accent, valueWidth,
 }: {
   icon?: React.ReactNode
   label: string
   value: string
   accent?: boolean
+  /** Fixed slot so live counters do not shove neighbors. */
+  valueWidth: string
 }) {
   const { labelCase } = useI18n()
   return (
     <div className="flex items-center gap-1.5">
       {icon}
-      <span className={`font-mono text-xs text-bus-muted ${labelCase}`}>{label}</span>
-      <span className={`font-mono text-sm font-semibold tabular-nums ${accent ? 'text-bus-cyan' : 'text-bus-text'}`}>
+      <span className={`font-mono text-xs text-bus-muted shrink-0 ${labelCase}`}>{label}</span>
+      <span
+        className={`font-mono text-sm font-semibold tabular-nums text-right ${valueWidth} ${
+          accent ? 'text-bus-cyan' : 'text-bus-text'
+        }`}
+      >
         {value}
       </span>
     </div>
   )
+}
+
+/** Fixed-width uptime (`00d 00:05:03`) so the header does not reflow every second. */
+function fmtUptimeStable(s: number): string {
+  const total = Math.max(0, Math.floor(s))
+  const d = Math.floor(total / 86400)
+  const h = Math.floor((total % 86400) / 3600)
+  const m = Math.floor((total % 3600) / 60)
+  const ss = total % 60
+  const pad = (n: number) => String(n).padStart(2, '0')
+  return `${pad(Math.min(d, 99))}d ${pad(h)}:${pad(m)}:${pad(ss)}`
 }
 
 function LiveClock({ dateLocale }: { dateLocale: string }) {

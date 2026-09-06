@@ -42,21 +42,21 @@ pub mod typed_service {
 
 /// Historical note on dynamic service/action feasibility (not a product path).
 pub mod dynamic_rpc {
-    pub use super::dynamic_rpc_spike::{spike_summary, DynamicServiceSpikeResult, SPIKE_RESULT};
+    pub use super::dynamic_rpc_spike::{DynamicServiceSpikeResult, SPIKE_RESULT, spike_summary};
 }
 
 pub use builder::{
-    Action, ActionFromBus, ActionFromRos, ActionPair, ActionReady, BusToRos2Ready, FromBus,
-    FromBusToRos, FromRos, FromRosToBus, IntoActionMapper, IntoServiceMapper, IntoTopicMapper,
-    Ros2Bridge, Ros2BridgeBuilder, Ros2ToBusReady, Service, ServiceFromBus, ServiceFromRos,
-    ServicePair, ServiceReady, ACTION_CALL_TIMEOUT, SERVICE_CALL_TIMEOUT,
+    ACTION_CALL_TIMEOUT, Action, ActionFromBus, ActionFromRos, ActionPair, ActionReady,
+    BusToRos2Ready, FromBus, FromBusToRos, FromRos, FromRosToBus, IntoActionMapper,
+    IntoServiceMapper, IntoTopicMapper, Ros2Bridge, Ros2BridgeBuilder, Ros2ToBusReady,
+    SERVICE_CALL_TIMEOUT, Service, ServiceFromBus, ServiceFromRos, ServicePair, ServiceReady,
 };
 pub use drop_stats::{DropStats, DropStatsSnapshot, RouteHealth};
 pub use mapper::{
-    lookup_topic_mapper, lookup_topic_mapper_arc, registered_topic_types, ActionMapper,
-    ActionWireContext, Direction, ServiceMapper, ServiceWireContext, TopicDurability, TopicMapper,
-    TopicQos, TopicQosKeepLast, TopicReliability, TopicWireContext, TypedActionMapper,
-    TypedServiceMapper, TypedTopicMapper,
+    ActionMapper, ActionWireContext, Direction, ServiceMapper, ServiceWireContext, TopicDurability,
+    TopicMapper, TopicQos, TopicQosKeepLast, TopicReliability, TopicWireContext, TypedActionMapper,
+    TypedServiceMapper, TypedTopicMapper, lookup_topic_mapper, lookup_topic_mapper_arc,
+    registered_topic_types,
 };
 pub use mappers::action_bridges::FibonacciActionMapper;
 pub use mappers::service_bridges::{SetBoolServiceMapper, TriggerServiceMapper};

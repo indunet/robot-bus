@@ -2,19 +2,33 @@
 
 use crate::ros2_bridge::mapper::TypedTopicMapper;
 
-pub(crate) fn magnetic_field_to_bus(msg: ros_env::sensor_msgs::msg::MagneticField) -> crate::sensor_msgs::msg::v1::MagneticField {
+pub(crate) fn magnetic_field_to_bus(
+    msg: ros_env::sensor_msgs::msg::MagneticField,
+) -> crate::sensor_msgs::msg::v1::MagneticField {
     crate::sensor_msgs::msg::v1::MagneticField {
         header: Some(crate::ros2_bridge::mappers::std_msgs::header::header_to_bus(msg.header)),
-        magnetic_field: Some(crate::ros2_bridge::mappers::geometry_msgs::vector3::vector3_to_bus(msg.magnetic_field)),
-        magnetic_field_covariance: crate::ros2_bridge::mappers::convert::f64_seq(msg.magnetic_field_covariance),
+        magnetic_field: Some(
+            crate::ros2_bridge::mappers::geometry_msgs::vector3::vector3_to_bus(msg.magnetic_field),
+        ),
+        magnetic_field_covariance: crate::ros2_bridge::mappers::convert::f64_seq(
+            msg.magnetic_field_covariance,
+        ),
     }
 }
 
-pub(crate) fn magnetic_field_to_ros(bus: crate::sensor_msgs::msg::v1::MagneticField) -> ros_env::sensor_msgs::msg::MagneticField {
+pub(crate) fn magnetic_field_to_ros(
+    bus: crate::sensor_msgs::msg::v1::MagneticField,
+) -> ros_env::sensor_msgs::msg::MagneticField {
     ros_env::sensor_msgs::msg::MagneticField {
-        header: crate::ros2_bridge::mappers::std_msgs::header::header_to_ros(bus.header.unwrap_or_default()),
-        magnetic_field: crate::ros2_bridge::mappers::geometry_msgs::vector3::vector3_to_ros(bus.magnetic_field.unwrap_or_default()),
-        magnetic_field_covariance: crate::ros2_bridge::mappers::convert::FromF64Seq::from_f64_seq(bus.magnetic_field_covariance),
+        header: crate::ros2_bridge::mappers::std_msgs::header::header_to_ros(
+            bus.header.unwrap_or_default(),
+        ),
+        magnetic_field: crate::ros2_bridge::mappers::geometry_msgs::vector3::vector3_to_ros(
+            bus.magnetic_field.unwrap_or_default(),
+        ),
+        magnetic_field_covariance: crate::ros2_bridge::mappers::convert::FromF64Seq::from_f64_seq(
+            bus.magnetic_field_covariance,
+        ),
     }
 }
 

@@ -12,19 +12,19 @@ use std::time::{Duration, Instant};
 use rclrs::{BeginAcceptedGoal, GoalClient, IntoActionClientOptions, IntoActionServerOptions};
 use rosidl_runtime_rs::{Action as ActionIdl, Service as ServiceIdl};
 
+use crate::ActionKind;
 use crate::action_bus::ActionMessage;
 use crate::errors::{BusError, Result};
 use crate::ros2_bridge::drop_stats::{DropStats, RouteHealth};
 use crate::ros2_bridge::mapper::{
-    ros_action_feedback_qos_profile, ros_service_qos_profile, ros_topic_options, ActionWireContext,
-    Direction, ServiceWireContext, TopicQos, TopicWireContext, TypedActionMapper,
-    TypedServiceMapper, TypedTopicMapper,
+    ActionWireContext, Direction, ServiceWireContext, TopicQos, TopicWireContext,
+    TypedActionMapper, TypedServiceMapper, TypedTopicMapper, ros_action_feedback_qos_profile,
+    ros_service_qos_profile, ros_topic_options,
 };
 use crate::runtime::{
     ActionGoalLiveHandler, MessageCallback, QosProfile, RawActionFeedbackCallback, ServiceHandler,
     TopicPublisherRaw,
 };
-use crate::ActionKind;
 
 /// Typed ROS→bus subscription: `create_subscription<Ros>` then convert + publish.
 pub fn create_typed_ros2_to_bus_sub<M>(

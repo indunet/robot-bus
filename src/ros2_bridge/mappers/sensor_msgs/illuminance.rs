@@ -2,7 +2,9 @@
 
 use crate::ros2_bridge::mapper::TypedTopicMapper;
 
-pub(crate) fn illuminance_to_bus(msg: ros_env::sensor_msgs::msg::Illuminance) -> crate::sensor_msgs::msg::v1::Illuminance {
+pub(crate) fn illuminance_to_bus(
+    msg: ros_env::sensor_msgs::msg::Illuminance,
+) -> crate::sensor_msgs::msg::v1::Illuminance {
     crate::sensor_msgs::msg::v1::Illuminance {
         header: Some(crate::ros2_bridge::mappers::std_msgs::header::header_to_bus(msg.header)),
         illuminance: msg.illuminance,
@@ -10,9 +12,13 @@ pub(crate) fn illuminance_to_bus(msg: ros_env::sensor_msgs::msg::Illuminance) ->
     }
 }
 
-pub(crate) fn illuminance_to_ros(bus: crate::sensor_msgs::msg::v1::Illuminance) -> ros_env::sensor_msgs::msg::Illuminance {
+pub(crate) fn illuminance_to_ros(
+    bus: crate::sensor_msgs::msg::v1::Illuminance,
+) -> ros_env::sensor_msgs::msg::Illuminance {
     ros_env::sensor_msgs::msg::Illuminance {
-        header: crate::ros2_bridge::mappers::std_msgs::header::header_to_ros(bus.header.unwrap_or_default()),
+        header: crate::ros2_bridge::mappers::std_msgs::header::header_to_ros(
+            bus.header.unwrap_or_default(),
+        ),
         illuminance: bus.illuminance,
         variance: bus.variance,
     }

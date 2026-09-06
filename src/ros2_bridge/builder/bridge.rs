@@ -1,12 +1,12 @@
 use std::any::Any;
 use std::collections::{HashMap, HashSet};
-use std::sync::mpsc::Receiver;
 use std::sync::Arc;
+use std::sync::mpsc::Receiver;
 use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
 
 use crate::errors::{BusError, Result};
-use crate::lazy_subscribe::{should_enable_ros_subscription, CONSOLE_DETECT_TIMEOUT};
+use crate::lazy_subscribe::{CONSOLE_DETECT_TIMEOUT, should_enable_ros_subscription};
 use crate::ros2_bridge::drop_stats::{DropStats, DropStatsSnapshot};
 use crate::ros2_bridge::observe::{self, ConsoleRoute, IDLE_GRACE, SNAPSHOT_INTERVAL};
 use crate::runtime::{Node, TopicPublisherRaw};

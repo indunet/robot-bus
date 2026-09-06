@@ -15,7 +15,7 @@ cargo run --bin robot_bus_broker          # terminal 1
 ```
 
 Both Tank pages and the Dashboard use the in-repo TypeScript `WsNode` and connect to
-**same-origin** WebSocket RPC at `/ws` (broker default `http://127.0.0.1:15570` → `ws://127.0.0.1:15570/ws`).
+**same-origin** WebSocket RPC at `/ws-rpc` (broker default `http://127.0.0.1:15560` → `ws://127.0.0.1:15560/ws-rpc`).
 
 Monitoring data is published by the broker on system topics:
 
@@ -44,7 +44,7 @@ Sidebar **TOPOLOGY**: pub/sub graph from best-effort control-plane service regis
 ## Development (recommended)
 
 Start the broker, then hot-reload the frontend. `pnpm dev` proxies `/api/*` to the broker;
-browser WebSocket RPC connects to the broker directly (default `ws://127.0.0.1:15570/ws`):
+browser WebSocket RPC connects to the broker directly (default `ws://127.0.0.1:15560/ws-rpc`):
 
 ```bash
 # repo root
@@ -54,7 +54,7 @@ cargo run --bin robot_bus_broker
 cd console
 pnpm install
 pnpm dev
-# http://localhost:3020  (UI; WS/REST go to broker :15570 directly)
+# http://localhost:3020  (UI; WS/REST go to broker :15560 directly)
 ```
 
 Custom broker URL (Next rewrite + browser client):
@@ -74,7 +74,7 @@ Static export synced to `assets/console/` (gitignored):
 just console
 # equivalent: pnpm build && ../scripts/sync_console_assets.sh
 cargo run --bin robot_bus_broker
-# http://localhost:15570
+# http://localhost:15560
 ```
 
 Builds with the `console` feature require `assets/console/index.html` or `build.rs` fails and tells you to run `just console`.

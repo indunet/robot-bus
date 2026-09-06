@@ -2,16 +2,22 @@
 
 use crate::ros2_bridge::mapper::TypedTopicMapper;
 
-pub(crate) fn header_to_bus(msg: ros_env::std_msgs::msg::Header) -> crate::std_msgs::msg::v1::Header {
+pub(crate) fn header_to_bus(
+    msg: ros_env::std_msgs::msg::Header,
+) -> crate::std_msgs::msg::v1::Header {
     crate::std_msgs::msg::v1::Header {
         stamp: Some(crate::ros2_bridge::mappers::builtin_interfaces::time::time_to_bus(msg.stamp)),
         frame_id: crate::ros2_bridge::mappers::convert::from_ros_string(msg.frame_id),
     }
 }
 
-pub(crate) fn header_to_ros(bus: crate::std_msgs::msg::v1::Header) -> ros_env::std_msgs::msg::Header {
+pub(crate) fn header_to_ros(
+    bus: crate::std_msgs::msg::v1::Header,
+) -> ros_env::std_msgs::msg::Header {
     ros_env::std_msgs::msg::Header {
-        stamp: crate::ros2_bridge::mappers::builtin_interfaces::time::time_to_ros(bus.stamp.unwrap_or_default()),
+        stamp: crate::ros2_bridge::mappers::builtin_interfaces::time::time_to_ros(
+            bus.stamp.unwrap_or_default(),
+        ),
         frame_id: crate::ros2_bridge::mappers::convert::to_ros_string(bus.frame_id),
     }
 }

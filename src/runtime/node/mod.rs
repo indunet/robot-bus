@@ -46,9 +46,9 @@ use crate::runtime::registrations::MessageCallback;
 use crate::runtime::session::{BrokerSession, ConnectionState, SESSION_CREATE_WAIT};
 use crate::runtime::topic_type_register;
 use crate::runtime::topology_register::TopologyEndpointGuard;
-use crate::zmq_helpers::HighWaterMark;
 #[cfg(feature = "ws")]
 use crate::runtime::ws_runtime::WsRuntime;
+use crate::zmq_helpers::HighWaterMark;
 
 use options::ws_mode_unsupported;
 
@@ -160,13 +160,13 @@ impl Node {
         Self::with_context_options(context, name, NodeOptions::inproc_at(prefix))
     }
 
-    /// WebSocket RPC client node talking to the local broker gateway (`http://127.0.0.1:15570`).
+    /// WebSocket RPC client node talking to the local broker gateway (`http://127.0.0.1:15560`).
     #[cfg(feature = "ws")]
     pub fn ws(name: impl Into<String>) -> Self {
         Self::with_options(name, NodeOptions::ws())
     }
 
-    /// WebSocket RPC client node talking to `url` (e.g. `http://127.0.0.1:15570`).
+    /// WebSocket RPC client node talking to `url` (e.g. `http://127.0.0.1:15560`).
     #[cfg(feature = "ws")]
     pub fn ws_at(name: impl Into<String>, url: impl Into<String>) -> Self {
         Self::with_options(name, NodeOptions::ws_at(url))
@@ -175,7 +175,7 @@ impl Node {
     /// Create a node with explicit broker connection options (private ZMQ context).
     ///
     /// For `tcp` / `ipc` with unset endpoints, auto-discovers via
-    /// `http://{host}:15570/api/v1/discover` (host `localhost` → `127.0.0.1`).
+    /// `http://{host}:15560/api/v1/discover` (host `localhost` → `127.0.0.1`).
     pub fn with_options(name: impl Into<String>, options: NodeOptions) -> Self {
         let context = Context::new();
         Self::with_context_options(&context, name, options)
@@ -798,11 +798,11 @@ ros__parameters:
         {
             assert_eq!(Node::ws("a").options().transport, "ws");
             assert_eq!(
-                Node::ws_at("a", "http://10.0.0.1:15570")
+                Node::ws_at("a", "http://10.0.0.1:15560")
                     .options()
                     .ws_url
                     .as_deref(),
-                Some("http://10.0.0.1:15570")
+                Some("http://10.0.0.1:15560")
             );
             assert!(
                 NodeOptions::ws()

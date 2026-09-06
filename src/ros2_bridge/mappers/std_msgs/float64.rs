@@ -2,16 +2,16 @@
 
 use crate::ros2_bridge::mapper::TypedTopicMapper;
 
-pub(crate) fn float64_to_bus(msg: ros_env::std_msgs::msg::Float64) -> crate::std_msgs::msg::v1::Float64 {
-    crate::std_msgs::msg::v1::Float64 {
-        data: msg.data,
-    }
+pub(crate) fn float64_to_bus(
+    msg: ros_env::std_msgs::msg::Float64,
+) -> crate::std_msgs::msg::v1::Float64 {
+    crate::std_msgs::msg::v1::Float64 { data: msg.data }
 }
 
-pub(crate) fn float64_to_ros(bus: crate::std_msgs::msg::v1::Float64) -> ros_env::std_msgs::msg::Float64 {
-    ros_env::std_msgs::msg::Float64 {
-        data: bus.data,
-    }
+pub(crate) fn float64_to_ros(
+    bus: crate::std_msgs::msg::v1::Float64,
+) -> ros_env::std_msgs::msg::Float64 {
+    ros_env::std_msgs::msg::Float64 { data: bus.data }
 }
 
 #[derive(Clone, Copy, Debug, Default)]

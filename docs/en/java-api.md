@@ -33,7 +33,7 @@ Use the CLI when you need a standalone process:
 
 ```bash
 python -m robot_bus.broker
-# or python -m robot_bus.broker --api-listen 0.0.0.0:15570 --tcp-only
+# or python -m robot_bus.broker --api-listen 0.0.0.0:15560 --tcp-only
 ```
 
 Cross-broker (federation) uses the same string conventions as the CLI:
@@ -56,7 +56,7 @@ BrokerOptions opts =
         true,
         true,
         "broker-a",
-        List.of("tcp://10.0.0.2:15561"),
+        List.of("tcp://10.0.0.2:15581"),
         List.of("broker-b=tcp://10.0.0.2:15663"),
         List.of("broker-b=tcp://10.0.0.2:15665"));
 try (Broker broker = new Broker(opts)) {
@@ -120,7 +120,7 @@ Request `GET /api/v1/discover` on a known API base URL to obtain connectable ZMQ
 
 ```java
 Node node = Node.discover(
-    "talker", "tcp", new DiscoverOpts("http://127.0.0.1:15570"));
+    "talker", "tcp", new DiscoverOpts("http://127.0.0.1:15560"));
 // Optional: brokerId, timeoutSecs; null / 0 → defaults
 // BrokerOptions.noDiscovery / domainId are soft labels for compatibility, not UDP multicast
 ```
@@ -138,7 +138,7 @@ Node node = Node.discover(
 
 ```java
 Node node = Node.ws("web-client");
-// or Node.wsAt("web-client", "http://127.0.0.1:15570");
+// or Node.wsAt("web-client", "http://127.0.0.1:15560");
 ```
 
 ### Service / Action (typed)

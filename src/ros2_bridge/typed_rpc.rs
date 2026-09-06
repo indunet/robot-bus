@@ -55,8 +55,7 @@ pub fn attach_fibonacci(ctx: ActionWireContext<'_>) -> Result<()> {
     {
         let _ = ctx;
         return Err(BusError::Protocol(
-            "example_interfaces/action/Fibonacci is unavailable with feature ros2-shim"
-                .into(),
+            "example_interfaces/action/Fibonacci is unavailable with feature ros2-shim".into(),
         ));
     }
     #[cfg(not(feature = "ros2-shim"))]

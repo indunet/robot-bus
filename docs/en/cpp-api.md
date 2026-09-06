@@ -95,7 +95,7 @@ robot_bus_broker
 跨 broker（federation）通过 `RobotBusBrokerOptions`（与 CLI 同款字符串）：
 
 ```cpp
-const char *message_peers[] = {"tcp://10.0.0.2:15561"};
+const char *message_peers[] = {"tcp://10.0.0.2:15581"};
 const char *service_peers[] = {"broker-b=tcp://10.0.0.2:15663"};
 const char *action_peers[] = {"broker-b=tcp://10.0.0.2:15665"};
 
@@ -129,7 +129,7 @@ Request `GET /api/v1/discover` on a known API base URL to obtain connectable ZMQ
 
 ```cpp
 RobotBusDiscoverOpts d{};
-d.api_url = "http://127.0.0.1:15570";
+d.api_url = "http://127.0.0.1:15560";
 // Optional: broker_id / timeout_secs; nullptr / 0 → defaults
 auto node = robot_bus::Node::discover("talker", "tcp", &d);
 // RobotBusBrokerOptions.no_discovery / domain_id are soft labels, not UDP multicast
@@ -195,7 +195,7 @@ Raw bytes still work via `create_publisher` / `create_subscription` with manual 
 
 ```cpp
 auto node = robot_bus::Node::ws("web-client");
-// 或 robot_bus::Node::ws_at("web-client", "http://127.0.0.1:15570");
+// 或 robot_bus::Node::ws_at("web-client", "http://127.0.0.1:15560");
 ```
 
 本地覆盖见 `bindings/cpp/tests/ws_node.cpp`（`just test-cpp`）。

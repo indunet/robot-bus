@@ -12,9 +12,7 @@ use std::time::Duration;
 use super::action_bus::ActionMetrics;
 use super::message_bus::MessageMetrics;
 use super::service_bus::ServiceMetrics;
-use crate::discovery::{
-    DiscoverResponse, resolve_advertise_host, rewrite_bind_host,
-};
+use crate::discovery::{DiscoverResponse, resolve_advertise_host, rewrite_bind_host};
 use crate::runtime::Context as BusContext;
 use crate::transports::{
     ACTION_BACKEND_CHANNEL, ACTION_FRONTEND_CHANNEL, BindAllOpts, SERVICE_BACKEND_CHANNEL,
@@ -36,13 +34,13 @@ mod bus_handles;
 mod config;
 
 pub use bus_handles::{ActionBusBroker, MessageBusBroker, ServiceBusBroker};
+#[cfg(feature = "console")]
+pub use config::ConsoleBrokerConfig;
 pub use config::RobotBusConfig;
 #[cfg(feature = "ws")]
 pub use config::WsGatewayConfig;
-#[cfg(feature = "console")]
-pub use config::ConsoleBrokerConfig;
 
-use bus_handles::{join_broker_thread, STARTUP_SETTLE};
+use bus_handles::{STARTUP_SETTLE, join_broker_thread};
 
 #[cfg(feature = "ws")]
 fn connect_url_for_listen(listen: SocketAddr) -> String {
@@ -55,7 +53,7 @@ fn connect_url_for_listen(listen: SocketAddr) -> String {
     format!("http://{host}:{}", listen.port())
 }
 
-/// Connectable WebSocket RPC URL (`ws://127.0.0.1:port/ws` when the broker binds `0.0.0.0`).
+/// Connectable WebSocket RPC URL (`ws://127.0.0.1:port/ws-rpc` when the broker binds `0.0.0.0`).
 #[cfg(feature = "ws")]
 fn ws_rpc_url_for_listen(listen: SocketAddr) -> String {
     let http = connect_url_for_listen(listen);
@@ -66,12 +64,7 @@ fn ws_rpc_url_for_listen(listen: SocketAddr) -> String {
     } else {
         http
     };
-    let ws = ws.trim_end_matches('/');
-    if ws.ends_with("/ws") {
-        ws.to_string()
-    } else {
-        format!("{ws}/ws")
-    }
+    crate::discovery::with_ws_rpc_path(&ws)
 }
 
 #[cfg(feature = "ws")]
@@ -320,7 +313,7 @@ impl RobotBusBroker {
             }
             #[cfg(all(not(feature = "ws"), not(feature = "console")))]
             {
-                "0.0.0.0:15570"
+                "0.0.0.0:15560"
                     .parse::<SocketAddr>()
                     .expect("default api listen")
             }
@@ -653,7 +646,7 @@ fn format_startup_banner(discover: &DiscoverResponse) -> String {
     }
     #[cfg(feature = "ws")]
     {
-        let ws_url = discover.api_url.trim_end_matches('/').to_string() + "/ws";
+        let ws_url = crate::discovery::with_ws_rpc_path(discover.api_url.trim_end_matches('/'));
         lines.push(row("ws", ws_url));
     }
     lines.push(row(
@@ -696,7 +689,7 @@ mod tests {
             broker_id: "abc".into(),
             domain_id: 0,
             advertise_host: "127.0.0.1".into(),
-            api_url: "http://127.0.0.1:15570".into(),
+            api_url: "http://127.0.0.1:15560".into(),
             message_xsub: "tcp://127.0.0.1:1".into(),
             message_xpub: "tcp://127.0.0.1:2".into(),
             service_frontend: "tcp://127.0.0.1:3".into(),
@@ -705,7 +698,7 @@ mod tests {
             action_backend: "tcp://127.0.0.1:6".into(),
             ipc_dir: ipc.then(|| "/tmp/robot_bus/abc".into()),
             inproc_prefix: ipc.then(|| "robot_bus".into()),
-            console_url: Some("http://127.0.0.1:15570".into()),
+            console_url: Some("http://127.0.0.1:15560".into()),
         }
     }
 
@@ -722,18 +715,18 @@ mod tests {
         let console_at = text.find("web console").expect("web console row");
         let message_at = text.find("message pub").expect("message row");
         assert!(console_at < message_at);
-        assert!(text.contains("web console     http://127.0.0.1:15570"));
+        assert!(text.contains("web console     http://127.0.0.1:15560"));
         #[cfg(feature = "ws")]
         {
             let ws_at = text.find("  ws ").expect("ws row");
             assert!(console_at < ws_at);
             assert!(ws_at < message_at);
-            assert!(text.contains("http://127.0.0.1:15570/ws"));
+            assert!(text.contains("http://127.0.0.1:15560/ws-rpc"));
         }
         #[cfg(not(feature = "ws"))]
         {
             assert!(!text.contains("  ws "));
-            assert!(!text.contains("/ws"));
+            assert!(!text.contains("/ws-rpc"));
         }
     }
 
@@ -748,9 +741,9 @@ mod tests {
     #[cfg(feature = "ws")]
     #[test]
     fn ws_rpc_url_rewrites_unspecified_bind() {
-        let v4: SocketAddr = "0.0.0.0:15570".parse().unwrap();
-        assert_eq!(ws_rpc_url_for_listen(v4), "ws://127.0.0.1:15570/ws");
-        let v6: SocketAddr = "[::]:15570".parse().unwrap();
-        assert_eq!(ws_rpc_url_for_listen(v6), "ws://[::1]:15570/ws");
+        let v4: SocketAddr = "0.0.0.0:15560".parse().unwrap();
+        assert_eq!(ws_rpc_url_for_listen(v4), "ws://127.0.0.1:15560/ws-rpc");
+        let v6: SocketAddr = "[::]:15560".parse().unwrap();
+        assert_eq!(ws_rpc_url_for_listen(v6), "ws://[::1]:15560/ws-rpc");
     }
 }

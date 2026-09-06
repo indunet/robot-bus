@@ -43,10 +43,10 @@ def test_ws_constructors() -> None:
     node = robot_bus.Node.ws("web")
     assert node.name == "web"
 
-    node2 = robot_bus.Node.ws_at("web2", "http://10.0.0.1:15570")
+    node2 = robot_bus.Node.ws_at("web2", "http://10.0.0.1:15560")
     assert node2.name == "web2"
 
-    node3 = robot_bus.Node("web3", transport="ws", ws_url="http://127.0.0.1:15570")
+    node3 = robot_bus.Node("web3", transport="ws", ws_url="http://127.0.0.1:15560")
     assert node3.name == "web3"
 
 

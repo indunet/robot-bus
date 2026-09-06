@@ -2,7 +2,9 @@
 
 use crate::ros2_bridge::mapper::TypedTopicMapper;
 
-pub(crate) fn odometry_to_bus(msg: ros_env::nav_msgs::msg::Odometry) -> crate::nav_msgs::msg::v1::Odometry {
+pub(crate) fn odometry_to_bus(
+    msg: ros_env::nav_msgs::msg::Odometry,
+) -> crate::nav_msgs::msg::v1::Odometry {
     crate::nav_msgs::msg::v1::Odometry {
         header: Some(crate::ros2_bridge::mappers::std_msgs::header::header_to_bus(msg.header)),
         child_frame_id: crate::ros2_bridge::mappers::convert::from_ros_string(msg.child_frame_id),
@@ -11,7 +13,9 @@ pub(crate) fn odometry_to_bus(msg: ros_env::nav_msgs::msg::Odometry) -> crate::n
     }
 }
 
-pub(crate) fn odometry_to_ros(bus: crate::nav_msgs::msg::v1::Odometry) -> ros_env::nav_msgs::msg::Odometry {
+pub(crate) fn odometry_to_ros(
+    bus: crate::nav_msgs::msg::v1::Odometry,
+) -> ros_env::nav_msgs::msg::Odometry {
     ros_env::nav_msgs::msg::Odometry {
         header: crate::ros2_bridge::mappers::std_msgs::header::header_to_ros(bus.header.unwrap_or_default()),
         child_frame_id: crate::ros2_bridge::mappers::convert::to_ros_string(bus.child_frame_id),

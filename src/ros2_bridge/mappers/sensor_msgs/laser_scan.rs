@@ -2,7 +2,9 @@
 
 use crate::ros2_bridge::mapper::TypedTopicMapper;
 
-pub(crate) fn laser_scan_to_bus(msg: ros_env::sensor_msgs::msg::LaserScan) -> crate::sensor_msgs::msg::v1::LaserScan {
+pub(crate) fn laser_scan_to_bus(
+    msg: ros_env::sensor_msgs::msg::LaserScan,
+) -> crate::sensor_msgs::msg::v1::LaserScan {
     crate::sensor_msgs::msg::v1::LaserScan {
         header: Some(crate::ros2_bridge::mappers::std_msgs::header::header_to_bus(msg.header)),
         angle_min: msg.angle_min,
@@ -17,9 +19,13 @@ pub(crate) fn laser_scan_to_bus(msg: ros_env::sensor_msgs::msg::LaserScan) -> cr
     }
 }
 
-pub(crate) fn laser_scan_to_ros(bus: crate::sensor_msgs::msg::v1::LaserScan) -> ros_env::sensor_msgs::msg::LaserScan {
+pub(crate) fn laser_scan_to_ros(
+    bus: crate::sensor_msgs::msg::v1::LaserScan,
+) -> ros_env::sensor_msgs::msg::LaserScan {
     ros_env::sensor_msgs::msg::LaserScan {
-        header: crate::ros2_bridge::mappers::std_msgs::header::header_to_ros(bus.header.unwrap_or_default()),
+        header: crate::ros2_bridge::mappers::std_msgs::header::header_to_ros(
+            bus.header.unwrap_or_default(),
+        ),
         angle_min: bus.angle_min,
         angle_max: bus.angle_max,
         angle_increment: bus.angle_increment,

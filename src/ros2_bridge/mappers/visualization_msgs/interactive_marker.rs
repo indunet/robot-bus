@@ -2,7 +2,9 @@
 
 use crate::ros2_bridge::mapper::TypedTopicMapper;
 
-pub(crate) fn interactive_marker_to_bus(msg: ros_env::visualization_msgs::msg::InteractiveMarker) -> crate::visualization_msgs::msg::v1::InteractiveMarker {
+pub(crate) fn interactive_marker_to_bus(
+    msg: ros_env::visualization_msgs::msg::InteractiveMarker,
+) -> crate::visualization_msgs::msg::v1::InteractiveMarker {
     crate::visualization_msgs::msg::v1::InteractiveMarker {
         header: Some(crate::ros2_bridge::mappers::std_msgs::header::header_to_bus(msg.header)),
         pose: Some(crate::ros2_bridge::mappers::geometry_msgs::pose::pose_to_bus(msg.pose)),
@@ -14,7 +16,9 @@ pub(crate) fn interactive_marker_to_bus(msg: ros_env::visualization_msgs::msg::I
     }
 }
 
-pub(crate) fn interactive_marker_to_ros(bus: crate::visualization_msgs::msg::v1::InteractiveMarker) -> ros_env::visualization_msgs::msg::InteractiveMarker {
+pub(crate) fn interactive_marker_to_ros(
+    bus: crate::visualization_msgs::msg::v1::InteractiveMarker,
+) -> ros_env::visualization_msgs::msg::InteractiveMarker {
     ros_env::visualization_msgs::msg::InteractiveMarker {
         header: crate::ros2_bridge::mappers::std_msgs::header::header_to_ros(bus.header.unwrap_or_default()),
         pose: crate::ros2_bridge::mappers::geometry_msgs::pose::pose_to_ros(bus.pose.unwrap_or_default()),

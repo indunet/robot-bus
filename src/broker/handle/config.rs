@@ -20,7 +20,7 @@ pub struct WsGatewayConfig {
 impl Default for WsGatewayConfig {
     fn default() -> Self {
         Self {
-            listen: "0.0.0.0:15570".parse().expect("default API listen"),
+            listen: "0.0.0.0:15560".parse().expect("default API listen"),
             cors_origins: Vec::new(),
         }
     }
@@ -29,7 +29,7 @@ impl Default for WsGatewayConfig {
 /// Embedded Web console HTTP options (feature `console`, enabled by default).
 ///
 /// When the `ws` feature is also enabled, the console UI + REST API are served
-/// on [`WsGatewayConfig::listen`] instead — WebSocket RPC (`/ws`) and the console
+/// on [`WsGatewayConfig::listen`] instead — WebSocket RPC (`/ws-rpc`) and the console
 /// share one port. `listen` here only takes effect when `ws` is disabled (or
 /// this crate is built console-only).
 #[cfg(feature = "console")]
@@ -57,7 +57,7 @@ impl Default for ConsoleBrokerConfig {
             enabled: true,
             tank_enabled: true,
             docs_enabled: true,
-            listen: "0.0.0.0:15570".parse().expect("default console listen"),
+            listen: "0.0.0.0:15560".parse().expect("default console listen"),
             cors_origins: Vec::new(),
         }
     }

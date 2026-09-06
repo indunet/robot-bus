@@ -6,7 +6,7 @@ use std::time::Duration;
 use prost::Message;
 
 use crate::robot_bus_interfaces::msg::v1::{BridgeRoute, BridgeSnapshot, ConsoleEvent};
-use crate::ros2_bridge::drop_stats::{unix_ms, RouteHealth};
+use crate::ros2_bridge::drop_stats::{RouteHealth, unix_ms};
 use crate::ros2_bridge::mapper::{Direction, TopicQos};
 
 pub const IDLE_GRACE: Duration = Duration::from_secs(15);

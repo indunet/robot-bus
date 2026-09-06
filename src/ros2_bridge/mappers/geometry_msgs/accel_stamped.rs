@@ -2,17 +2,25 @@
 
 use crate::ros2_bridge::mapper::TypedTopicMapper;
 
-pub(crate) fn accel_stamped_to_bus(msg: ros_env::geometry_msgs::msg::AccelStamped) -> crate::geometry_msgs::msg::v1::AccelStamped {
+pub(crate) fn accel_stamped_to_bus(
+    msg: ros_env::geometry_msgs::msg::AccelStamped,
+) -> crate::geometry_msgs::msg::v1::AccelStamped {
     crate::geometry_msgs::msg::v1::AccelStamped {
         header: Some(crate::ros2_bridge::mappers::std_msgs::header::header_to_bus(msg.header)),
         accel: Some(crate::ros2_bridge::mappers::geometry_msgs::accel::accel_to_bus(msg.accel)),
     }
 }
 
-pub(crate) fn accel_stamped_to_ros(bus: crate::geometry_msgs::msg::v1::AccelStamped) -> ros_env::geometry_msgs::msg::AccelStamped {
+pub(crate) fn accel_stamped_to_ros(
+    bus: crate::geometry_msgs::msg::v1::AccelStamped,
+) -> ros_env::geometry_msgs::msg::AccelStamped {
     ros_env::geometry_msgs::msg::AccelStamped {
-        header: crate::ros2_bridge::mappers::std_msgs::header::header_to_ros(bus.header.unwrap_or_default()),
-        accel: crate::ros2_bridge::mappers::geometry_msgs::accel::accel_to_ros(bus.accel.unwrap_or_default()),
+        header: crate::ros2_bridge::mappers::std_msgs::header::header_to_ros(
+            bus.header.unwrap_or_default(),
+        ),
+        accel: crate::ros2_bridge::mappers::geometry_msgs::accel::accel_to_ros(
+            bus.accel.unwrap_or_default(),
+        ),
     }
 }
 

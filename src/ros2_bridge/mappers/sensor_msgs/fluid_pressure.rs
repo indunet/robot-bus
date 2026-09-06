@@ -2,7 +2,9 @@
 
 use crate::ros2_bridge::mapper::TypedTopicMapper;
 
-pub(crate) fn fluid_pressure_to_bus(msg: ros_env::sensor_msgs::msg::FluidPressure) -> crate::sensor_msgs::msg::v1::FluidPressure {
+pub(crate) fn fluid_pressure_to_bus(
+    msg: ros_env::sensor_msgs::msg::FluidPressure,
+) -> crate::sensor_msgs::msg::v1::FluidPressure {
     crate::sensor_msgs::msg::v1::FluidPressure {
         header: Some(crate::ros2_bridge::mappers::std_msgs::header::header_to_bus(msg.header)),
         fluid_pressure: msg.fluid_pressure,
@@ -10,9 +12,13 @@ pub(crate) fn fluid_pressure_to_bus(msg: ros_env::sensor_msgs::msg::FluidPressur
     }
 }
 
-pub(crate) fn fluid_pressure_to_ros(bus: crate::sensor_msgs::msg::v1::FluidPressure) -> ros_env::sensor_msgs::msg::FluidPressure {
+pub(crate) fn fluid_pressure_to_ros(
+    bus: crate::sensor_msgs::msg::v1::FluidPressure,
+) -> ros_env::sensor_msgs::msg::FluidPressure {
     ros_env::sensor_msgs::msg::FluidPressure {
-        header: crate::ros2_bridge::mappers::std_msgs::header::header_to_ros(bus.header.unwrap_or_default()),
+        header: crate::ros2_bridge::mappers::std_msgs::header::header_to_ros(
+            bus.header.unwrap_or_default(),
+        ),
         fluid_pressure: bus.fluid_pressure,
         variance: bus.variance,
     }

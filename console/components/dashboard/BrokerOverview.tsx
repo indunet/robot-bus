@@ -80,8 +80,8 @@ export function PanelHeader({
 }) {
   const { labelCase } = useI18n()
   return (
-    <div className="flex items-center justify-between gap-2 px-3 h-9 border-b border-bus-border">
-      <div className="flex items-center gap-2 min-w-0">
+    <div className="flex items-center gap-2 px-3 h-9 border-b border-bus-border">
+      <div className="flex items-center gap-2 min-w-0 flex-1">
         {icon ? (
           <span className="text-bus-cyan shrink-0">{icon}</span>
         ) : (
@@ -90,13 +90,13 @@ export function PanelHeader({
         <span className={`font-mono text-xs font-bold text-bus-text tracking-widest truncate ${labelCase}`}>
           {title}
         </span>
-      </div>
-      <div className="flex items-center gap-2 shrink-0">
-        {trailing}
         {sub && (
-          <span className={`font-mono text-xs font-medium tabular-nums ${subClassName}`}>{sub}</span>
+          <span className={`font-mono text-xs font-medium tabular-nums shrink-0 ${subClassName}`}>
+            {sub}
+          </span>
         )}
       </div>
+      {trailing ? <div className="flex items-center gap-2 shrink-0">{trailing}</div> : null}
     </div>
   )
 }

@@ -2,14 +2,18 @@
 
 use crate::ros2_bridge::mapper::TypedTopicMapper;
 
-pub(crate) fn channel_float32_to_bus(msg: ros_env::sensor_msgs::msg::ChannelFloat32) -> crate::sensor_msgs::msg::v1::ChannelFloat32 {
+pub(crate) fn channel_float32_to_bus(
+    msg: ros_env::sensor_msgs::msg::ChannelFloat32,
+) -> crate::sensor_msgs::msg::v1::ChannelFloat32 {
     crate::sensor_msgs::msg::v1::ChannelFloat32 {
         name: crate::ros2_bridge::mappers::convert::from_ros_string(msg.name),
         values: crate::ros2_bridge::mappers::convert::f32_seq(msg.values),
     }
 }
 
-pub(crate) fn channel_float32_to_ros(bus: crate::sensor_msgs::msg::v1::ChannelFloat32) -> ros_env::sensor_msgs::msg::ChannelFloat32 {
+pub(crate) fn channel_float32_to_ros(
+    bus: crate::sensor_msgs::msg::v1::ChannelFloat32,
+) -> ros_env::sensor_msgs::msg::ChannelFloat32 {
     ros_env::sensor_msgs::msg::ChannelFloat32 {
         name: crate::ros2_bridge::mappers::convert::to_ros_string(bus.name),
         values: bus.values,

@@ -51,7 +51,7 @@ int main() {
     ROBOT_BUS_CHECK(node.name() == "web");
   }
   {
-    auto node = robot_bus::Node::ws_at("web2", "http://10.0.0.1:15570");
+    auto node = robot_bus::Node::ws_at("web2", "http://10.0.0.1:15560");
     ROBOT_BUS_CHECK(node.name() == "web2");
   }
 

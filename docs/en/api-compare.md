@@ -1,6 +1,6 @@
 English | [中文](../zh/api-compare.md)
 
-# API compare: ROS 2 Humble (rclrs) ↔ robot-bus
+# API compare: ROS2 Humble (rclrs) ↔ robot-bus
 
 How to write the same classic scenarios on each side. Left is **ROS 2 Humble + [rclrs](https://github.com/ros2-rust/ros2_rust)**, right is **robot-bus**.
 

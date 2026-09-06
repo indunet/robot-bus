@@ -2,14 +2,18 @@
 
 use crate::ros2_bridge::mapper::TypedTopicMapper;
 
-pub(crate) fn mesh_file_to_bus(msg: ros_env::visualization_msgs::msg::MeshFile) -> crate::visualization_msgs::msg::v1::MeshFile {
+pub(crate) fn mesh_file_to_bus(
+    msg: ros_env::visualization_msgs::msg::MeshFile,
+) -> crate::visualization_msgs::msg::v1::MeshFile {
     crate::visualization_msgs::msg::v1::MeshFile {
         filename: crate::ros2_bridge::mappers::convert::from_ros_string(msg.filename),
         data: crate::ros2_bridge::mappers::convert::IntoU8Vec::into_u8_vec(msg.data),
     }
 }
 
-pub(crate) fn mesh_file_to_ros(bus: crate::visualization_msgs::msg::v1::MeshFile) -> ros_env::visualization_msgs::msg::MeshFile {
+pub(crate) fn mesh_file_to_ros(
+    bus: crate::visualization_msgs::msg::v1::MeshFile,
+) -> ros_env::visualization_msgs::msg::MeshFile {
     ros_env::visualization_msgs::msg::MeshFile {
         filename: crate::ros2_bridge::mappers::convert::to_ros_string(bus.filename),
         data: crate::ros2_bridge::mappers::convert::FromByteSeq::from_byte_seq(bus.data),

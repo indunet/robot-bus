@@ -1,7 +1,7 @@
 use std::any::Any;
 use std::collections::{HashMap, HashSet};
-use std::sync::mpsc;
 use std::sync::Arc;
+use std::sync::mpsc;
 use std::thread;
 use std::time::Duration;
 
@@ -17,7 +17,7 @@ use crate::runtime::{Node, NodeOptions, QosProfile};
 
 use super::bridge::Ros2Bridge;
 use super::specs::{
-    reject_bus_reliable, ActionRouteSpec, LazyRos2ToBus, RouteSpec, ServiceRouteSpec,
+    ActionRouteSpec, LazyRos2ToBus, RouteSpec, ServiceRouteSpec, reject_bus_reliable,
 };
 use super::wire::{subscribe_demand, wire_action_route, wire_route, wire_service_route};
 use super::{IntoTopicMapper, TopicQos};

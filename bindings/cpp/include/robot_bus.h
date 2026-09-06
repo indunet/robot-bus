@@ -102,7 +102,7 @@ typedef struct RobotBusBrokerOptions {
 
 /** Client HTTP discovery options (NULL fields / 0 → defaults). */
 typedef struct RobotBusDiscoverOpts {
-  /** Broker API base URL, e.g. http://127.0.0.1:15570 (NULL → default). */
+  /** Broker API base URL, e.g. http://127.0.0.1:15560 (NULL → default). */
   const char *api_url;
   const char *broker_id;
   double timeout_secs;

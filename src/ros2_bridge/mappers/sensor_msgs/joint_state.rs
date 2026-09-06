@@ -2,7 +2,9 @@
 
 use crate::ros2_bridge::mapper::TypedTopicMapper;
 
-pub(crate) fn joint_state_to_bus(msg: ros_env::sensor_msgs::msg::JointState) -> crate::sensor_msgs::msg::v1::JointState {
+pub(crate) fn joint_state_to_bus(
+    msg: ros_env::sensor_msgs::msg::JointState,
+) -> crate::sensor_msgs::msg::v1::JointState {
     crate::sensor_msgs::msg::v1::JointState {
         header: Some(crate::ros2_bridge::mappers::std_msgs::header::header_to_bus(msg.header)),
         name: crate::ros2_bridge::mappers::convert::string_seq(msg.name),
@@ -12,9 +14,13 @@ pub(crate) fn joint_state_to_bus(msg: ros_env::sensor_msgs::msg::JointState) -> 
     }
 }
 
-pub(crate) fn joint_state_to_ros(bus: crate::sensor_msgs::msg::v1::JointState) -> ros_env::sensor_msgs::msg::JointState {
+pub(crate) fn joint_state_to_ros(
+    bus: crate::sensor_msgs::msg::v1::JointState,
+) -> ros_env::sensor_msgs::msg::JointState {
     ros_env::sensor_msgs::msg::JointState {
-        header: crate::ros2_bridge::mappers::std_msgs::header::header_to_ros(bus.header.unwrap_or_default()),
+        header: crate::ros2_bridge::mappers::std_msgs::header::header_to_ros(
+            bus.header.unwrap_or_default(),
+        ),
         name: crate::ros2_bridge::mappers::convert::ros_string_seq(bus.name),
         position: crate::ros2_bridge::mappers::convert::FromF64Seq::from_f64_seq(bus.position),
         velocity: crate::ros2_bridge::mappers::convert::FromF64Seq::from_f64_seq(bus.velocity),

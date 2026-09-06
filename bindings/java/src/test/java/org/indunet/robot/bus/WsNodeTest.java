@@ -20,7 +20,7 @@ class WsNodeTest {
         try (Node node = Node.ws("web")) {
             assertEquals("web", node.name());
         }
-        try (Node node = Node.wsAt("web2", "http://10.0.0.1:15570")) {
+        try (Node node = Node.wsAt("web2", "http://10.0.0.1:15560")) {
             assertEquals("web2", node.name());
         }
         try (Node node =
@@ -29,7 +29,7 @@ class WsNodeTest {
                         new NodeOptions(
                                 null,
                                 "ws",
-                                "http://127.0.0.1:15570",
+                                "http://127.0.0.1:15560",
                                 null,
                                 null,
                                 null,

@@ -3,15 +3,11 @@
 use crate::ros2_bridge::mapper::TypedTopicMapper;
 
 pub(crate) fn bool_to_bus(msg: ros_env::std_msgs::msg::Bool) -> crate::std_msgs::msg::v1::Bool {
-    crate::std_msgs::msg::v1::Bool {
-        data: msg.data,
-    }
+    crate::std_msgs::msg::v1::Bool { data: msg.data }
 }
 
 pub(crate) fn bool_to_ros(bus: crate::std_msgs::msg::v1::Bool) -> ros_env::std_msgs::msg::Bool {
-    ros_env::std_msgs::msg::Bool {
-        data: bus.data,
-    }
+    ros_env::std_msgs::msg::Bool { data: bus.data }
 }
 
 #[derive(Clone, Copy, Debug, Default)]

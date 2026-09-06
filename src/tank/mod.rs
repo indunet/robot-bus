@@ -13,7 +13,7 @@
 use std::collections::HashMap;
 use std::f64::consts::PI;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, Weak};
 use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant};
 
@@ -48,7 +48,8 @@ const POS_TOL: f64 = 0.08;
 const YAW_TOL: f64 = 0.08;
 /// Session lease — frontend should heartbeat more often than this.
 pub const DEFAULT_LEASE: Duration = Duration::from_secs(15);
-/// Delay before stopping the sim after the last session ends.
+/// Delay before stopping the sim after sessions expire without an explicit release
+/// (tab crash / missed DELETE). Explicit last-viewer close stops immediately.
 pub const DEFAULT_STOP_GRACE: Duration = Duration::from_secs(2);
 
 /// Connect endpoints for the message / service / action buses (client-side).
@@ -514,7 +515,8 @@ struct ManagerInner {
     stop_after: Option<Instant>,
 }
 
-/// Ref-counted session manager: first acquire starts sim, last release (+ grace) stops it.
+/// Ref-counted session manager: first acquire starts sim; last explicit release
+/// stops it immediately so topology nodes (`tank` / `tank_viz`) disappear.
 pub struct TankManager {
     endpoints: TankEndpoints,
     lease: Duration,
@@ -532,7 +534,7 @@ impl TankManager {
         lease: Duration,
         stop_grace: Duration,
     ) -> Arc<Self> {
-        Arc::new(Self {
+        let mgr = Arc::new(Self {
             endpoints,
             lease,
             stop_grace,
@@ -541,7 +543,9 @@ impl TankManager {
                 sessions: HashMap::new(),
                 stop_after: None,
             }),
-        })
+        });
+        Self::spawn_watch(Arc::downgrade(&mgr), stop_grace);
+        mgr
     }
 
     pub fn lease(&self) -> Duration {
@@ -549,9 +553,9 @@ impl TankManager {
     }
 
     pub fn acquire(&self) -> Result<TankSession> {
-        let mut inner = self.inner.lock().unwrap_or_else(|e| e.into_inner());
-        self.sweep_locked(&mut inner)?;
+        Self::stop_taken(self.sweep_now());
 
+        let mut inner = self.lock_inner();
         if inner.handle.is_none() {
             let handle = TankHandle::start(self.endpoints.clone())?;
             inner.handle = Some(handle);
@@ -583,39 +587,62 @@ impl TankManager {
     }
 
     pub fn heartbeat(&self, session_id: &str) -> Result<TankSession> {
-        let mut inner = self.inner.lock().unwrap_or_else(|e| e.into_inner());
-        self.sweep_locked(&mut inner)?;
-        match inner.sessions.get_mut(session_id) {
-            Some(last) => {
-                *last = Instant::now();
-                Ok(TankSession {
-                    session_id: session_id.to_string(),
-                    lease: self.lease,
-                    viewers: inner.sessions.len(),
-                })
-            }
-            None => Err(BusError::Protocol(format!(
-                "tank session not found: {session_id}"
-            ))),
-        }
+        let (result, stale) = {
+            let mut inner = self.lock_inner();
+            let stale = self.sweep_take(&mut inner);
+            let result = match inner.sessions.get_mut(session_id) {
+                Some(last) => {
+                    *last = Instant::now();
+                    Ok(TankSession {
+                        session_id: session_id.to_string(),
+                        lease: self.lease,
+                        viewers: inner.sessions.len(),
+                    })
+                }
+                None => Err(BusError::Protocol(format!(
+                    "tank session not found: {session_id}"
+                ))),
+            };
+            (result, stale)
+        };
+        Self::stop_taken(stale);
+        result
     }
 
     pub fn release(&self, session_id: &str) -> Result<TankStatus> {
-        let mut inner = self.inner.lock().unwrap_or_else(|e| e.into_inner());
-        inner.sessions.remove(session_id);
-        if inner.sessions.is_empty() {
-            inner.stop_after = Some(Instant::now() + self.stop_grace);
+        let handle = {
+            let mut inner = self.lock_inner();
+            inner.sessions.remove(session_id);
+            if inner.sessions.is_empty() {
+                // Last viewer closed the window — tear the sim down now.
+                inner.stop_after = None;
+                inner.handle.take()
+            } else {
+                None
+            }
+        };
+        let stopped = handle.is_some();
+        Self::stop_taken(handle);
+        if stopped {
+            return Ok(TankStatus {
+                running: false,
+                viewers: 0,
+            });
         }
-        self.sweep_locked(&mut inner)?;
-        Ok(TankStatus {
-            running: inner.handle.is_some(),
-            viewers: inner.sessions.len(),
-        })
+        Ok(self.status())
     }
 
     pub fn status(&self) -> TankStatus {
-        let mut inner = self.inner.lock().unwrap_or_else(|e| e.into_inner());
-        let _ = self.sweep_locked(&mut inner);
+        let handle = self.sweep_now();
+        let stopped = handle.is_some();
+        Self::stop_taken(handle);
+        if stopped {
+            return TankStatus {
+                running: false,
+                viewers: 0,
+            };
+        }
+        let inner = self.lock_inner();
         TankStatus {
             running: inner.handle.is_some(),
             viewers: inner.sessions.len(),
@@ -624,15 +651,47 @@ impl TankManager {
 
     /// Force-stop the sim and drop all sessions (broker shutdown).
     pub fn shutdown(&self) {
-        let mut inner = self.inner.lock().unwrap_or_else(|e| e.into_inner());
-        inner.sessions.clear();
-        inner.stop_after = None;
-        if let Some(handle) = inner.handle.take() {
+        let handle = {
+            let mut inner = self.lock_inner();
+            inner.sessions.clear();
+            inner.stop_after = None;
+            inner.handle.take()
+        };
+        Self::stop_taken(handle);
+    }
+
+    fn lock_inner(&self) -> std::sync::MutexGuard<'_, ManagerInner> {
+        self.inner.lock().unwrap_or_else(|e| e.into_inner())
+    }
+
+    fn sweep_now(&self) -> Option<TankHandle> {
+        let mut inner = self.lock_inner();
+        self.sweep_take(&mut inner)
+    }
+
+    fn stop_taken(handle: Option<TankHandle>) {
+        if let Some(handle) = handle {
             handle.stop();
         }
     }
 
-    fn sweep_locked(&self, inner: &mut ManagerInner) -> Result<()> {
+    /// Wake up so a crashed viewer (lease expiry) still stops after `stop_grace`.
+    fn spawn_watch(weak: Weak<Self>, interval: Duration) {
+        let interval = interval.max(Duration::from_millis(200));
+        let _ = thread::Builder::new()
+            .name("robot-bus-tank-watch".into())
+            .spawn(move || {
+                loop {
+                    thread::sleep(interval);
+                    let Some(mgr) = weak.upgrade() else { break };
+                    let _ = mgr.status();
+                }
+            });
+    }
+
+    /// Expire leases and take the sim handle when the idle deadline has passed.
+    /// Caller must [`TankHandle::stop`] *after* dropping the mutex.
+    fn sweep_take(&self, inner: &mut ManagerInner) -> Option<TankHandle> {
         let now = Instant::now();
         inner
             .sessions
@@ -642,21 +701,22 @@ impl TankManager {
             let should_stop = match inner.stop_after {
                 Some(deadline) => now >= deadline,
                 None => {
-                    // Lease expiry emptied sessions without an explicit release — stop after grace.
+                    // Lease expiry emptied sessions without an explicit release.
                     if inner.handle.is_some() {
                         inner.stop_after = Some(now + self.stop_grace);
                     }
                     false
                 }
             };
-            if should_stop && let Some(handle) = inner.handle.take() {
-                handle.stop();
+            if should_stop {
                 inner.stop_after = None;
+                return inner.handle.take();
             }
+            None
         } else {
             inner.stop_after = None;
+            None
         }
-        Ok(())
     }
 }
 

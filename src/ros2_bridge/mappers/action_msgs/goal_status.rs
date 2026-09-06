@@ -2,16 +2,24 @@
 
 use crate::ros2_bridge::mapper::TypedTopicMapper;
 
-pub(crate) fn goal_status_to_bus(msg: ros_env::action_msgs::msg::GoalStatus) -> crate::action_msgs::msg::v1::GoalStatus {
+pub(crate) fn goal_status_to_bus(
+    msg: ros_env::action_msgs::msg::GoalStatus,
+) -> crate::action_msgs::msg::v1::GoalStatus {
     crate::action_msgs::msg::v1::GoalStatus {
-        goal_info: Some(crate::ros2_bridge::mappers::action_msgs::goal_info::goal_info_to_bus(msg.goal_info)),
+        goal_info: Some(
+            crate::ros2_bridge::mappers::action_msgs::goal_info::goal_info_to_bus(msg.goal_info),
+        ),
         status: i32::from(msg.status),
     }
 }
 
-pub(crate) fn goal_status_to_ros(bus: crate::action_msgs::msg::v1::GoalStatus) -> ros_env::action_msgs::msg::GoalStatus {
+pub(crate) fn goal_status_to_ros(
+    bus: crate::action_msgs::msg::v1::GoalStatus,
+) -> ros_env::action_msgs::msg::GoalStatus {
     ros_env::action_msgs::msg::GoalStatus {
-        goal_info: crate::ros2_bridge::mappers::action_msgs::goal_info::goal_info_to_ros(bus.goal_info.unwrap_or_default()),
+        goal_info: crate::ros2_bridge::mappers::action_msgs::goal_info::goal_info_to_ros(
+            bus.goal_info.unwrap_or_default(),
+        ),
         status: bus.status as i8,
     }
 }

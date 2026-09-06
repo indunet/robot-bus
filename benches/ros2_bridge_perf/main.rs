@@ -32,14 +32,14 @@ mod run {
 
     use prost::Message as ProstMessage;
     use rclrs::{CreateBasicExecutor, IntoPrimitiveOptions, SpinOptions};
+    use robot_bus::example_interfaces::action::v1::{FibonacciGoal, FibonacciResult};
+    use robot_bus::ros2_bridge::vendor::std_srvs::srv as ros_std_srvs;
     use robot_bus::ros2_bridge::{
-        FibonacciActionMapper, Ros2Bridge, SensorMsgsImageMapper, StdMsgsStringMapper,
-        TopicQos, TriggerServiceMapper,
+        FibonacciActionMapper, Ros2Bridge, SensorMsgsImageMapper, StdMsgsStringMapper, TopicQos,
+        TriggerServiceMapper,
     };
     use robot_bus::std_msgs::msg::v1::String as BusString;
     use robot_bus::std_srvs::srv::v1::{TriggerRequest, TriggerResponse};
-    use robot_bus::example_interfaces::action::v1::{FibonacciGoal, FibonacciResult};
-    use robot_bus::ros2_bridge::vendor::std_srvs::srv as ros_std_srvs;
     use robot_bus::{Context, Node, NodeOptions, QosProfile, RobotBusBroker, ShutdownHandle};
     use ros_env::sensor_msgs::msg::Image as RosImage;
     use ros_env::std_msgs::msg::String as RosString;
@@ -582,9 +582,9 @@ mod run {
         }
         let (_spin, shutdown) = spin_bus(bus);
 
-        let ros_client = match ros_node.create_client::<ros_std_srvs::Trigger>(
-            name.keep_last(MSG_HWM as u32).best_effort(),
-        ) {
+        let ros_client = match ros_node
+            .create_client::<ros_std_srvs::Trigger>(name.keep_last(MSG_HWM as u32).best_effort())
+        {
             Ok(c) => c,
             Err(err) => {
                 shutdown.shutdown();
@@ -701,13 +701,17 @@ mod run {
         }
         let (_spin, shutdown) = spin_bus(bus);
 
-        let ros_client = match ros_node.create_action_client::<ros_env::example_interfaces::action::Fibonacci>(
-            name,
-        ) {
+        let ros_client = match ros_node
+            .create_action_client::<ros_env::example_interfaces::action::Fibonacci>(name)
+        {
             Ok(c) => c,
             Err(err) => {
                 shutdown.shutdown();
-                return ScenarioResult::skipped("inproc", scenario, format!("ros action client: {err}"));
+                return ScenarioResult::skipped(
+                    "inproc",
+                    scenario,
+                    format!("ros action client: {err}"),
+                );
             }
         };
 
@@ -768,24 +772,31 @@ mod run {
         let latencies = Arc::new(Mutex::new(Vec::<u64>::new()));
         let record = Arc::new(AtomicBool::new(true));
 
-        let _ros_server = match ros_node.create_action_server::<
-            ros_env::example_interfaces::action::Fibonacci,
-            _,
-        >(name, |requested| async move {
-            let accepted = requested.accept();
-            let executing = match accepted.begin() {
-                rclrs::BeginAcceptedGoal::Execute(e) => e,
-                rclrs::BeginAcceptedGoal::Cancel(c) => {
-                    return c.cancelled_with(Default::default());
-                }
-            };
-            executing.succeeded_with(ros_env::example_interfaces::action::Fibonacci_Result {
-                sequence: vec![0, 1, 1],
-            })
-        }) {
+        let _ros_server = match ros_node
+            .create_action_server::<ros_env::example_interfaces::action::Fibonacci, _>(
+                name,
+                |requested| async move {
+                    let accepted = requested.accept();
+                    let executing = match accepted.begin() {
+                        rclrs::BeginAcceptedGoal::Execute(e) => e,
+                        rclrs::BeginAcceptedGoal::Cancel(c) => {
+                            return c.cancelled_with(Default::default());
+                        }
+                    };
+                    executing.succeeded_with(
+                        ros_env::example_interfaces::action::Fibonacci_Result {
+                            sequence: vec![0, 1, 1],
+                        },
+                    )
+                },
+            ) {
             Ok(s) => s,
             Err(err) => {
-                return ScenarioResult::skipped("inproc", scenario, format!("ros action server: {err}"));
+                return ScenarioResult::skipped(
+                    "inproc",
+                    scenario,
+                    format!("ros action server: {err}"),
+                );
             }
         };
 
@@ -793,7 +804,11 @@ mod run {
         let client = match bus.create_action_client_raw_with_qos(name, rpc_qos()) {
             Ok(c) => c,
             Err(err) => {
-                return ScenarioResult::skipped("inproc", scenario, format!("bus action client: {err}"));
+                return ScenarioResult::skipped(
+                    "inproc",
+                    scenario,
+                    format!("bus action client: {err}"),
+                );
             }
         };
         let (_spin, shutdown) = spin_bus(bus);

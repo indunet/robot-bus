@@ -2,17 +2,25 @@
 
 use crate::ros2_bridge::mapper::TypedTopicMapper;
 
-pub(crate) fn pose_stamped_to_bus(msg: ros_env::geometry_msgs::msg::PoseStamped) -> crate::geometry_msgs::msg::v1::PoseStamped {
+pub(crate) fn pose_stamped_to_bus(
+    msg: ros_env::geometry_msgs::msg::PoseStamped,
+) -> crate::geometry_msgs::msg::v1::PoseStamped {
     crate::geometry_msgs::msg::v1::PoseStamped {
         header: Some(crate::ros2_bridge::mappers::std_msgs::header::header_to_bus(msg.header)),
         pose: Some(crate::ros2_bridge::mappers::geometry_msgs::pose::pose_to_bus(msg.pose)),
     }
 }
 
-pub(crate) fn pose_stamped_to_ros(bus: crate::geometry_msgs::msg::v1::PoseStamped) -> ros_env::geometry_msgs::msg::PoseStamped {
+pub(crate) fn pose_stamped_to_ros(
+    bus: crate::geometry_msgs::msg::v1::PoseStamped,
+) -> ros_env::geometry_msgs::msg::PoseStamped {
     ros_env::geometry_msgs::msg::PoseStamped {
-        header: crate::ros2_bridge::mappers::std_msgs::header::header_to_ros(bus.header.unwrap_or_default()),
-        pose: crate::ros2_bridge::mappers::geometry_msgs::pose::pose_to_ros(bus.pose.unwrap_or_default()),
+        header: crate::ros2_bridge::mappers::std_msgs::header::header_to_ros(
+            bus.header.unwrap_or_default(),
+        ),
+        pose: crate::ros2_bridge::mappers::geometry_msgs::pose::pose_to_ros(
+            bus.pose.unwrap_or_default(),
+        ),
     }
 }
 

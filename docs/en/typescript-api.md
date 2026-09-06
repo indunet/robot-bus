@@ -13,7 +13,7 @@ Single npm package; entry is chosen automatically by runtime (`package.json` `ex
 | Environment | Entry | Capabilities |
 |------|------|------|
 | Node.js | napi-rs native extension | Full ZMQ Node (publish, service/action server, local broker) |
-| Browser | WebSocket RPC (`/ws`) | Subscribe / publish / call service / action (no server) |
+| Browser | WebSocket RPC (`/ws-rpc`) | Subscribe / publish / call service / action (no server) |
 
 The `console/` Web UI is **not** this SDK.
 
@@ -27,7 +27,7 @@ In-process in Node:
 import { RobotBusBroker } from "robot-bus";
 
 const broker = RobotBusBroker.start({
-  apiListen: "0.0.0.0:15570",
+  apiListen: "0.0.0.0:15560",
   tcpOnly: true,
 });
 // …application…
@@ -39,7 +39,7 @@ Use the CLI when you need a standalone process (`npm install robot-bus`, then):
 ```bash
 npx robot-bus
 npx robot-bus --help
-npx robot-bus --api-listen 0.0.0.0:15570 --tcp-only
+npx robot-bus --api-listen 0.0.0.0:15560 --tcp-only
 ```
 
 Or add `"broker": "robot-bus"` to your `package.json` scripts and run `npm run broker`. Same flags as `python -m robot_bus.broker` / `robot_bus_broker`.
@@ -53,19 +53,19 @@ import { Node } from "robot-bus";
 
 const node = Node.discover("talker", {
   transport: "tcp",
-  apiUrl: "http://127.0.0.1:15570",
+  apiUrl: "http://127.0.0.1:15560",
   // optional: brokerId / timeoutSecs
 });
 ```
 
-The browser entry has no HTTP discover factory; use an explicit `wsUrl` (HTTP origin; the SDK connects to `ws://…/ws`).
+The browser entry has no HTTP discover factory; use an explicit `wsUrl` (HTTP origin; the SDK connects to `ws://…/ws-rpc`).
 
 Cross-broker (federation) uses the same string conventions as the CLI:
 
 ```ts
 const broker = RobotBusBroker.start({
   brokerId: "broker-a",
-  messagePeers: ["tcp://10.0.0.2:15561"],
+  messagePeers: ["tcp://10.0.0.2:15581"],
   servicePeers: ["broker-b=tcp://10.0.0.2:15663"],
   actionPeers: ["broker-b=tcp://10.0.0.2:15665"],
   tcpOnly: true,
@@ -134,7 +134,7 @@ WebSocket RPC client mode (no ZMQ):
 
 ```ts
 const node = Node.ws("web-client");
-// or Node.wsAt("web-client", "http://127.0.0.1:15570");
+// or Node.wsAt("web-client", "http://127.0.0.1:15560");
 ```
 
 | Supported | Not supported (WS mode) |
@@ -147,13 +147,13 @@ const node = Node.ws("web-client");
 
 ## Browser (WebSocket RPC)
 
-Browser clients use the broker’s **`/ws`** (multiplexed V3 WebSocket RPC, **one connection, many streams**), not gRPC-Web.
+Browser clients use the broker’s **`/ws-rpc`** (multiplexed V3 WebSocket RPC, **one connection, many streams**), not gRPC-Web.
 
 ```ts
 import { Node } from "robot-bus";
 // bundler resolves to browser entry automatically
 
-const node = Node.ws("browser-client"); // default http://127.0.0.1:15570 → ws://127.0.0.1:15570/ws
+const node = Node.ws("browser-client"); // default http://127.0.0.1:15560 → ws://127.0.0.1:15560/ws-rpc
 const pub = node.createPublisher("/robot1/cmd");
 await pub.publish(new TextEncoder().encode("go"));
 node.createSubscription("/robot1/imu", (payload) => {
@@ -172,7 +172,7 @@ import { WsNode } from "robot-bus"; // Node entry also exports WsNode
 
 ### WebSocket frames (V3 multiplexed)
 
-Path: `ws://<host>:<port>/ws` (use `wss://` on HTTPS sites). **One connection carries many RPCs** (`stream_id`; clients use odd ids). The session reconnects with 200ms–5s backoff; `connectionState` / `waitForBroker` follow this WebSocket, not an HTTP 200. In-flight Publish / Call / SendGoal **fail that attempt** (no automatic replay); subscriptions Subscribe again on the new socket.
+Path: `ws://<host>:<port>/ws-rpc` (use `wss://` on HTTPS sites). **One connection carries many RPCs** (`stream_id`; clients use odd ids). The session reconnects with 200ms–5s backoff; `connectionState` / `waitForBroker` follow this WebSocket, not an HTTP 200. In-flight Publish / Call / SendGoal **fail that attempt** (no automatic replay); subscriptions Subscribe again on the new socket.
 
 | type | value | meaning |
 |------|----|------|

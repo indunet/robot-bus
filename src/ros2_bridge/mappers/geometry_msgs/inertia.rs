@@ -2,7 +2,9 @@
 
 use crate::ros2_bridge::mapper::TypedTopicMapper;
 
-pub(crate) fn inertia_to_bus(msg: ros_env::geometry_msgs::msg::Inertia) -> crate::geometry_msgs::msg::v1::Inertia {
+pub(crate) fn inertia_to_bus(
+    msg: ros_env::geometry_msgs::msg::Inertia,
+) -> crate::geometry_msgs::msg::v1::Inertia {
     crate::geometry_msgs::msg::v1::Inertia {
         m: msg.m,
         com: Some(crate::ros2_bridge::mappers::geometry_msgs::vector3::vector3_to_bus(msg.com)),
@@ -15,10 +17,14 @@ pub(crate) fn inertia_to_bus(msg: ros_env::geometry_msgs::msg::Inertia) -> crate
     }
 }
 
-pub(crate) fn inertia_to_ros(bus: crate::geometry_msgs::msg::v1::Inertia) -> ros_env::geometry_msgs::msg::Inertia {
+pub(crate) fn inertia_to_ros(
+    bus: crate::geometry_msgs::msg::v1::Inertia,
+) -> ros_env::geometry_msgs::msg::Inertia {
     ros_env::geometry_msgs::msg::Inertia {
         m: bus.m,
-        com: crate::ros2_bridge::mappers::geometry_msgs::vector3::vector3_to_ros(bus.com.unwrap_or_default()),
+        com: crate::ros2_bridge::mappers::geometry_msgs::vector3::vector3_to_ros(
+            bus.com.unwrap_or_default(),
+        ),
         ixx: bus.ixx,
         ixy: bus.ixy,
         ixz: bus.ixz,

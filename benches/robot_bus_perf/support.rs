@@ -557,11 +557,7 @@ fn sysctl_string(key: &str) -> Option<String> {
         return None;
     }
     let v = String::from_utf8_lossy(&out.stdout).trim().to_string();
-    if v.is_empty() {
-        None
-    } else {
-        Some(v)
-    }
+    if v.is_empty() { None } else { Some(v) }
 }
 
 fn sysctl_u64(key: &str) -> Option<u64> {

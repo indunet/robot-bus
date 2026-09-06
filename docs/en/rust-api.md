@@ -1,6 +1,6 @@
 English | [中文](../zh/rust-api.md)
 
-# Rust API examples
+# Rust API
 
 `Cargo.toml`:
 
@@ -12,7 +12,7 @@ robot-bus = "2.3.1"
 
 ## Broker startup
 
-**Prefer starting the broker from your program** (`RobotBusBroker::start`) so it shares a process with the application. The CLI is for demos, multi-process examples, or a standalone long-running broker. By default one startup brings up **message / service / action** buses; each TCP bind defaults to `…:0` (OS assigns a free port), plus **API** (WebSocket RPC `/ws` / `GET /api/v1/discover` / console http), default `0.0.0.0:15570`.
+**Prefer starting the broker from your program** (`RobotBusBroker::start`) so it shares a process with the application. The CLI is for demos, multi-process examples, or a standalone long-running broker. By default one startup brings up **message / service / action** buses; each TCP bind defaults to `…:0` (OS assigns a free port), plus **API** (WebSocket RPC `/ws-rpc` / `GET /api/v1/discover` / console http), default `0.0.0.0:15560`.
 
 ```rust
 use robot_bus::{RobotBusBroker, RobotBusConfig};
@@ -28,9 +28,9 @@ Use the CLI when you need a standalone process:
 cargo run --bin robot_bus_broker
 # See options: cargo run --bin robot_bus_broker -- --help
 # TCP only: add --tcp-only
-# API port: --api-listen 0.0.0.0:15570 (alias --console-listen)
+# API port: --api-listen 0.0.0.0:15560 (alias --console-listen)
 # Externally reachable host: --advertise-host HOST
-# Federation: --peer 10.0.0.2:15570 (peer API port; repeatable)
+# Federation: --peer 10.0.0.2:15560 (peer API port; repeatable)
 # Console sidebar: --no-tank / --no-docs (docs shown by default)
 ```
 
@@ -41,9 +41,9 @@ cargo run --bin robot_bus_broker
 | message XSUB / XPUB | `tcp://0.0.0.0:0` (resolved to actual port after startup) | `ipc:///tmp/robot_bus/<broker_id>/…` | `inproc://robot_bus/…` |
 | service FE / BE | `tcp://0.0.0.0:0` | same as above | same as above |
 | action FE / BE | `tcp://0.0.0.0:0` | same as above | same as above |
-| API (WebSocket RPC + discover + console) | `0.0.0.0:15570` | — | — |
+| API (WebSocket RPC + discover + console) | `0.0.0.0:15560` | — | — |
 
-You can still manually pin bus ports with `--message-xsub-bind` and similar flags. On the SDK side, **prefer** `Context::new` → `Node::with_context` (local tcp); convenience `Node::new` still works (private Context). When endpoints are unset it auto-discovers against `http://127.0.0.1:15570`; `Node::ipc` / `Node::inproc` / `Node::ws` use the corresponding transport.
+You can still manually pin bus ports with `--message-xsub-bind` and similar flags. On the SDK side, **prefer** `Context::new` → `Node::with_context` (local tcp); convenience `Node::new` still works (private Context). When endpoints are unset it auto-discovers against `http://127.0.0.1:15560`; `Node::ipc` / `Node::inproc` / `Node::ws` use the corresponding transport.
 
 ### HTTP discovery (fill addresses, not transport)
 
@@ -53,7 +53,7 @@ Request `GET /api/v1/discover` on a known API port to obtain connectable ZMQ end
 use robot_bus::{DiscoverOpts, Node, NodeOptions};
 
 let opts = NodeOptions::tcp().discover(DiscoverOpts {
-    api_url: "http://127.0.0.1:15570".into(),
+    api_url: "http://127.0.0.1:15560".into(),
     broker_id: None, // optional filter
     ..Default::default()
 })?;
@@ -79,7 +79,7 @@ node.add_on_connection_event(|old, new, reason| {
 });
 ```
 
-`spin` / `start` keep retrying after a broker restart. `create_*` waits a few seconds for discover, then returns an error that names the current state. WebSocket nodes share this session contract; Connected means the `/ws` socket is up.
+`spin` / `start` keep retrying after a broker restart. `create_*` waits a few seconds for discover, then returns an error that names the current state. WebSocket nodes share this session contract; Connected means the `/ws-rpc` socket is up.
 
 **Same-process inproc:** ZeroMQ `inproc://` is context-local. An embedded broker and Node must share the same [`Context`](../../src/runtime/context.rs):
 
@@ -152,7 +152,7 @@ ros__parameters:
 
 Close to ROS 2: `Context` → `Node::with_context` → typed `create_publisher` / `create_subscription` (message type bound at creation, auto encode/decode) → `node.spin()`. Under the hood, gRPC still carries opaque bytes.
 
-Typed `create_publisher::<M>` **best-effort** registers `topic → M::full_name()` (e.g. `sensor_msgs.msg.v1.Imu`) with the broker control plane (service bus service `/robot_bus/topic_type/register`). Registration failure is logged only and does not block publish. `create_publisher_raw` does not register. Inspect with `rbus topic list` / `rbus topic info /path` (HTTP default `http://127.0.0.1:15570`).
+Typed `create_publisher::<M>` **best-effort** registers `topic → M::full_name()` (e.g. `sensor_msgs.msg.v1.Imu`) with the broker control plane (service bus service `/robot_bus/topic_type/register`). Registration failure is logged only and does not block publish. `create_publisher_raw` does not register. Inspect with `rbus topic list` / `rbus topic info /path` (HTTP default `http://127.0.0.1:15560`).
 
 ```rust
 use std::sync::Arc;
@@ -441,7 +441,7 @@ use std::time::Duration;
 use robot_bus::Node;
 
 let mut node = Node::ws("web-client");
-// Or Node::ws_at("web-client", "http://127.0.0.1:15570");
+// Or Node::ws_at("web-client", "http://127.0.0.1:15560");
 
 let pub_ = node.create_publisher_raw("/robot1/cmd")?;
 pub_.publish(b"go")?;
@@ -473,7 +473,7 @@ Under the hood this is multiplexed WebSocket RPC (V3 opcodes: Subscribe / Publis
 
 ## WebSocket RPC gateway
 
-Started together by `RobotBusBroker` / `robot_bus_broker` (feature `ws`, on by default). Native and browser clients share **`/ws`** on the API port (default `0.0.0.0:15570`). **Breaking:** V3 framing; V2 method-string + `TopicMessage` envelopes are not accepted.
+Started together by `RobotBusBroker` / `robot_bus_broker` (feature `ws`, on by default). Native and browser clients share **`/ws-rpc`** on the API port (default `0.0.0.0:15560`). **Breaking:** V3 framing; V2 method-string + `TopicMessage` envelopes are not accepted.
 
 | Opcode | RPC | Request header | DATA payload |
 |--------|-----|----------------|--------------|

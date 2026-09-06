@@ -2,19 +2,27 @@
 
 use crate::ros2_bridge::mapper::TypedTopicMapper;
 
-pub(crate) fn solid_primitive_to_bus(msg: ros_env::shape_msgs::msg::SolidPrimitive) -> crate::shape_msgs::msg::v1::SolidPrimitive {
+pub(crate) fn solid_primitive_to_bus(
+    msg: ros_env::shape_msgs::msg::SolidPrimitive,
+) -> crate::shape_msgs::msg::v1::SolidPrimitive {
     crate::shape_msgs::msg::v1::SolidPrimitive {
         r#type: msg.type_.into(),
         dimensions: crate::ros2_bridge::mappers::convert::f64_seq(msg.dimensions),
-        polygon: Some(crate::ros2_bridge::mappers::geometry_msgs::polygon::polygon_to_bus(msg.polygon)),
+        polygon: Some(
+            crate::ros2_bridge::mappers::geometry_msgs::polygon::polygon_to_bus(msg.polygon),
+        ),
     }
 }
 
-pub(crate) fn solid_primitive_to_ros(bus: crate::shape_msgs::msg::v1::SolidPrimitive) -> ros_env::shape_msgs::msg::SolidPrimitive {
+pub(crate) fn solid_primitive_to_ros(
+    bus: crate::shape_msgs::msg::v1::SolidPrimitive,
+) -> ros_env::shape_msgs::msg::SolidPrimitive {
     ros_env::shape_msgs::msg::SolidPrimitive {
         type_: bus.r#type as _,
         dimensions: crate::ros2_bridge::mappers::convert::FromF64Seq::from_f64_seq(bus.dimensions),
-        polygon: crate::ros2_bridge::mappers::geometry_msgs::polygon::polygon_to_ros(bus.polygon.unwrap_or_default()),
+        polygon: crate::ros2_bridge::mappers::geometry_msgs::polygon::polygon_to_ros(
+            bus.polygon.unwrap_or_default(),
+        ),
     }
 }
 

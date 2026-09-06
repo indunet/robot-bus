@@ -270,7 +270,10 @@ export default function TankPanel({ compact = false, autoFocus = false }: Props)
       }, beatMs)
 
       const url = await resolveGrpcUrl()
-      if (disposed) return
+      if (disposed) {
+        await releaseTankSession(session.sessionId)
+        return
+      }
 
       node = RobotBusNode.wsAt('tank_viz', url)
       const publisher = node.createPublisher(CMD_VEL_TOPIC, Twist)

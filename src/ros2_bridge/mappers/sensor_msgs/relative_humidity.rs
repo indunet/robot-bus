@@ -2,7 +2,9 @@
 
 use crate::ros2_bridge::mapper::TypedTopicMapper;
 
-pub(crate) fn relative_humidity_to_bus(msg: ros_env::sensor_msgs::msg::RelativeHumidity) -> crate::sensor_msgs::msg::v1::RelativeHumidity {
+pub(crate) fn relative_humidity_to_bus(
+    msg: ros_env::sensor_msgs::msg::RelativeHumidity,
+) -> crate::sensor_msgs::msg::v1::RelativeHumidity {
     crate::sensor_msgs::msg::v1::RelativeHumidity {
         header: Some(crate::ros2_bridge::mappers::std_msgs::header::header_to_bus(msg.header)),
         relative_humidity: msg.relative_humidity,
@@ -10,9 +12,13 @@ pub(crate) fn relative_humidity_to_bus(msg: ros_env::sensor_msgs::msg::RelativeH
     }
 }
 
-pub(crate) fn relative_humidity_to_ros(bus: crate::sensor_msgs::msg::v1::RelativeHumidity) -> ros_env::sensor_msgs::msg::RelativeHumidity {
+pub(crate) fn relative_humidity_to_ros(
+    bus: crate::sensor_msgs::msg::v1::RelativeHumidity,
+) -> ros_env::sensor_msgs::msg::RelativeHumidity {
     ros_env::sensor_msgs::msg::RelativeHumidity {
-        header: crate::ros2_bridge::mappers::std_msgs::header::header_to_ros(bus.header.unwrap_or_default()),
+        header: crate::ros2_bridge::mappers::std_msgs::header::header_to_ros(
+            bus.header.unwrap_or_default(),
+        ),
         relative_humidity: bus.relative_humidity,
         variance: bus.variance,
     }

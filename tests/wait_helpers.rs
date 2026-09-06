@@ -10,7 +10,7 @@ use std::time::Duration;
 
 use robot_bus::message_bus::Publisher;
 use robot_bus::{Node, NodeOptions, RobotBusBroker, RobotBusConfig};
-use support::{ephemeral_robot_bus_config, lock_brokers, MessageProxy};
+use support::{MessageProxy, ephemeral_robot_bus_config, lock_brokers};
 
 fn console_on_config() -> RobotBusConfig {
     let mut config = ephemeral_robot_bus_config();
@@ -82,11 +82,7 @@ fn wait_for_service_ready_via_console_workers() {
 
     let mut server = Node::with_options("svc-server", server_opts);
     server
-        .create_service_raw(
-            "/wait/echo",
-            Arc::new(|body| body.to_vec()),
-            None,
-        )
+        .create_service_raw("/wait/echo", Arc::new(|body| body.to_vec()), None)
         .expect("create_service");
     server.start().expect("start server");
     thread::sleep(Duration::from_millis(200));

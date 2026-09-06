@@ -132,10 +132,11 @@ describe("ws-rpc framing V3", () => {
     assert.deepEqual(Array.from(ad.body), [3]);
   });
 
-  it("maps http base URL to /ws", () => {
-    assert.equal(httpUrlToWsRpc("http://127.0.0.1:15570"), "ws://127.0.0.1:15570/ws");
-    assert.equal(httpUrlToWsRpc("https://example.com:443/"), "wss://example.com:443/ws");
-    assert.equal(httpUrlToWsRpc("ws://127.0.0.1:15570/ws"), "ws://127.0.0.1:15570/ws");
+  it("maps http base URL to /ws-rpc", () => {
+    assert.equal(httpUrlToWsRpc("http://127.0.0.1:15560"), "ws://127.0.0.1:15560/ws-rpc");
+    assert.equal(httpUrlToWsRpc("https://example.com:443/"), "wss://example.com:443/ws-rpc");
+    assert.equal(httpUrlToWsRpc("ws://127.0.0.1:15560/ws-rpc"), "ws://127.0.0.1:15560/ws-rpc");
+    assert.equal(httpUrlToWsRpc("ws://127.0.0.1:15560/ws"), "ws://127.0.0.1:15560/ws-rpc");
   });
 
   it("round-trips PING / PONG", () => {
@@ -199,7 +200,7 @@ describe("WsSession reconnect", () => {
 
   it("reconnects after close and fails in-flight unary", async () => {
     __setWebSocketForTests(FakeWebSocket as unknown as typeof WebSocket);
-    const session = new WsSession("http://127.0.0.1:15570", {
+    const session = new WsSession("http://127.0.0.1:15560", {
       backoffInitialMs: 20,
       backoffMaxMs: 50,
       pingIntervalMs: 10_000,
@@ -223,7 +224,7 @@ describe("WsSession reconnect", () => {
 
   it("stop reconnecting after close()", async () => {
     __setWebSocketForTests(FakeWebSocket as unknown as typeof WebSocket);
-    const session = new WsSession("http://127.0.0.1:15570", {
+    const session = new WsSession("http://127.0.0.1:15560", {
       backoffInitialMs: 10,
       backoffMaxMs: 20,
       pingIntervalMs: 10_000,

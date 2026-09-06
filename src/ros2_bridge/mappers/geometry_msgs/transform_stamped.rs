@@ -2,19 +2,29 @@
 
 use crate::ros2_bridge::mapper::TypedTopicMapper;
 
-pub(crate) fn transform_stamped_to_bus(msg: ros_env::geometry_msgs::msg::TransformStamped) -> crate::geometry_msgs::msg::v1::TransformStamped {
+pub(crate) fn transform_stamped_to_bus(
+    msg: ros_env::geometry_msgs::msg::TransformStamped,
+) -> crate::geometry_msgs::msg::v1::TransformStamped {
     crate::geometry_msgs::msg::v1::TransformStamped {
         header: Some(crate::ros2_bridge::mappers::std_msgs::header::header_to_bus(msg.header)),
         child_frame_id: crate::ros2_bridge::mappers::convert::from_ros_string(msg.child_frame_id),
-        transform: Some(crate::ros2_bridge::mappers::geometry_msgs::transform::transform_to_bus(msg.transform)),
+        transform: Some(
+            crate::ros2_bridge::mappers::geometry_msgs::transform::transform_to_bus(msg.transform),
+        ),
     }
 }
 
-pub(crate) fn transform_stamped_to_ros(bus: crate::geometry_msgs::msg::v1::TransformStamped) -> ros_env::geometry_msgs::msg::TransformStamped {
+pub(crate) fn transform_stamped_to_ros(
+    bus: crate::geometry_msgs::msg::v1::TransformStamped,
+) -> ros_env::geometry_msgs::msg::TransformStamped {
     ros_env::geometry_msgs::msg::TransformStamped {
-        header: crate::ros2_bridge::mappers::std_msgs::header::header_to_ros(bus.header.unwrap_or_default()),
+        header: crate::ros2_bridge::mappers::std_msgs::header::header_to_ros(
+            bus.header.unwrap_or_default(),
+        ),
         child_frame_id: crate::ros2_bridge::mappers::convert::to_ros_string(bus.child_frame_id),
-        transform: crate::ros2_bridge::mappers::geometry_msgs::transform::transform_to_ros(bus.transform.unwrap_or_default()),
+        transform: crate::ros2_bridge::mappers::geometry_msgs::transform::transform_to_ros(
+            bus.transform.unwrap_or_default(),
+        ),
     }
 }
 

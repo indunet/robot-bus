@@ -28,6 +28,9 @@ export const WS_BACKOFF_MAX_MS = 5000;
 export const WS_PING_INTERVAL_MS = 3000;
 export const WS_PING_MISS_LIMIT = 2;
 
+/** HTTP path for multiplexed WebSocket RPC on the broker API port. */
+export const WS_RPC_PATH = "/ws-rpc";
+
 export type RequestHeader =
   | { opcode: typeof OPCODE_SUBSCRIBE; topic: string; qosDepth: number }
   | { opcode: typeof OPCODE_PUBLISH; topic: string }
@@ -281,19 +284,22 @@ export function decodeFrame(bytes: Uint8Array): WsFrame {
   throw new Error(`unknown frame type ${ty}`);
 }
 
-/** Convert `http(s)://host:port` → `ws(s)://host:port/ws`. */
+/** Convert `http(s)://host:port` → `ws(s)://host:port/ws-rpc`. */
 export function httpUrlToWsRpc(url: string): string {
   const trimmed = url.replace(/\/$/, "");
+  let asWs: string;
   if (trimmed.startsWith("ws://") || trimmed.startsWith("wss://")) {
-    return trimmed.endsWith("/ws") ? trimmed : `${trimmed}/ws`;
+    asWs = trimmed;
+  } else if (trimmed.startsWith("https://")) {
+    asWs = `wss://${trimmed.slice("https://".length)}`;
+  } else if (trimmed.startsWith("http://")) {
+    asWs = `ws://${trimmed.slice("http://".length)}`;
+  } else {
+    asWs = `ws://${trimmed}`;
   }
-  if (trimmed.startsWith("https://")) {
-    return `wss://${trimmed.slice("https://".length)}/ws`;
-  }
-  if (trimmed.startsWith("http://")) {
-    return `ws://${trimmed.slice("http://".length)}/ws`;
-  }
-  return `ws://${trimmed}/ws`;
+  if (asWs.endsWith(WS_RPC_PATH)) return asWs;
+  if (asWs.endsWith("/ws")) return `${asWs.slice(0, -"/ws".length)}${WS_RPC_PATH}`;
+  return `${asWs}${WS_RPC_PATH}`;
 }
 
 export class WsRpcError extends Error {

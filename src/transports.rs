@@ -5,9 +5,10 @@ use std::fs;
 use std::path::Path;
 use zmq::Socket;
 
-/// Legacy fixed TCP ports (pre-ephemeral). Prefer discover / explicit binds.
-pub const XSUB_PORT: u16 = 15560;
-pub const XPUB_PORT: u16 = 15561;
+/// Legacy fixed TCP ports for client helpers when not using HTTP discover.
+/// Distinct from [`DEFAULT_API_PORT`] (console / WS / discover). Prefer discover / explicit binds.
+pub const XSUB_PORT: u16 = 15580;
+pub const XPUB_PORT: u16 = 15581;
 pub const SERVICE_FRONTEND_PORT: u16 = 15662;
 pub const SERVICE_BACKEND_PORT: u16 = 15663;
 pub const ACTION_FRONTEND_PORT: u16 = 15664;
@@ -24,7 +25,7 @@ pub const ACTION_BACKEND_CHANNEL: &str = "action_bus/backend";
 pub const IPC_DIR: &str = "/tmp/robot_bus";
 
 /// Default API listen port (gRPC + WS + console + discover).
-pub const DEFAULT_API_PORT: u16 = 15570;
+pub const DEFAULT_API_PORT: u16 = 15560;
 
 /// Options for multi-transport bind (tcp + optional inproc/ipc).
 #[derive(Clone, Debug)]
@@ -143,7 +144,7 @@ fn pick_endpoint(
         "tcp" => {
             if port == 0 {
                 return Err(
-                    "tcp endpoint port is 0; discover via the broker API (default http://127.0.0.1:15570/api/v1/discover) or set endpoints explicitly"
+                    "tcp endpoint port is 0; discover via the broker API (default http://127.0.0.1:15560/api/v1/discover) or set endpoints explicitly"
                         .into(),
                 );
             }

@@ -48,9 +48,9 @@ pub use broker::{
     resolve_peer_from_api, robot_bus_broker_help,
 };
 pub use discovery::{
-    BrokerAnnouncement, DEFAULT_API_DISCOVER_PATH, DiscoverOpts, DiscoverResponse,
-    MAGIC as DISCOVERY_MAGIC, SCHEMA_VERSION as DISCOVERY_SCHEMA_VERSION, decode_announce,
-    encode_announce, fetch_discover, wait as discover_wait,
+    BrokerAnnouncement, DEFAULT_API_DISCOVER_PATH, DEFAULT_WS_RPC_PATH, DiscoverOpts,
+    DiscoverResponse, MAGIC as DISCOVERY_MAGIC, SCHEMA_VERSION as DISCOVERY_SCHEMA_VERSION,
+    decode_announce, encode_announce, fetch_discover, wait as discover_wait, with_ws_rpc_path,
 };
 pub use tank::{
     CMD_VEL_TOPIC, MULTI_WAYPOINT_NAV_ACTION, POINT_NAV_ACTION, POSE_TOPIC, RESET_SERVICE,

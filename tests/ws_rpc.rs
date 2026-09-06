@@ -35,7 +35,7 @@ async fn ws_publish_reaches_zmq_subscriber() {
     sub.subscribe("ws.pub").expect("subscribe");
     tokio::time::sleep(Duration::from_millis(200)).await;
 
-    let url = format!("ws://{listen}/ws");
+    let url = format!("ws://{listen}/ws-rpc");
     let (mut ws, _) = connect_async(&url).await.expect("ws connect");
 
     let req = encode_frame(&Frame::Request {
@@ -84,7 +84,7 @@ async fn ws_subscribe_receives_published_payload() {
     let (_guard, broker) = start_bus();
     let listen = broker.api_listen();
 
-    let url = format!("ws://{listen}/ws");
+    let url = format!("ws://{listen}/ws-rpc");
     let (mut ws, _) = connect_async(&url).await.expect("ws connect");
 
     let req = encode_frame(&Frame::Request {
@@ -174,7 +174,7 @@ async fn ws_send_goal_soft_cancel_keeps_connection_for_result() {
     });
     tokio::time::sleep(Duration::from_millis(100)).await;
 
-    let url = format!("ws://{listen}/ws");
+    let url = format!("ws://{listen}/ws-rpc");
     let (mut ws, _) = connect_async(&url).await.expect("ws connect");
     ws.send(Message::Binary(
         encode_frame(&Frame::Request {
@@ -262,7 +262,7 @@ async fn ws_send_goal_disconnect_still_submits_cancel() {
     });
     tokio::time::sleep(Duration::from_millis(100)).await;
 
-    let url = format!("ws://{listen}/ws");
+    let url = format!("ws://{listen}/ws-rpc");
     let (mut ws, _) = connect_async(&url).await.expect("ws connect");
     ws.send(Message::Binary(
         encode_frame(&Frame::Request {
@@ -299,7 +299,7 @@ async fn ws_send_goal_disconnect_still_submits_cancel() {
 async fn ws_multiplex_two_streams_on_one_connection() {
     let (_guard, broker) = start_bus();
     let listen = broker.api_listen();
-    let url = format!("ws://{listen}/ws");
+    let url = format!("ws://{listen}/ws-rpc");
     let (mut ws, _) = connect_async(&url).await.expect("ws connect");
 
     ws.send(Message::Binary(
@@ -370,7 +370,7 @@ async fn ws_multiplex_two_streams_on_one_connection() {
 async fn ws_gateway_echoes_ping_with_pong() {
     let (_guard, broker) = start_bus();
     let listen = broker.api_listen();
-    let url = format!("ws://{listen}/ws");
+    let url = format!("ws://{listen}/ws-rpc");
     let (mut ws, _) = connect_async(&url).await.expect("ws connect");
 
     let req = encode_frame(&Frame::Ping { stream_id: 0 }).unwrap();

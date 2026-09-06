@@ -2,7 +2,9 @@
 
 use crate::ros2_bridge::mapper::TypedTopicMapper;
 
-pub(crate) fn menu_entry_to_bus(msg: ros_env::visualization_msgs::msg::MenuEntry) -> crate::visualization_msgs::msg::v1::MenuEntry {
+pub(crate) fn menu_entry_to_bus(
+    msg: ros_env::visualization_msgs::msg::MenuEntry,
+) -> crate::visualization_msgs::msg::v1::MenuEntry {
     crate::visualization_msgs::msg::v1::MenuEntry {
         id: msg.id.into(),
         parent_id: msg.parent_id.into(),
@@ -12,7 +14,9 @@ pub(crate) fn menu_entry_to_bus(msg: ros_env::visualization_msgs::msg::MenuEntry
     }
 }
 
-pub(crate) fn menu_entry_to_ros(bus: crate::visualization_msgs::msg::v1::MenuEntry) -> ros_env::visualization_msgs::msg::MenuEntry {
+pub(crate) fn menu_entry_to_ros(
+    bus: crate::visualization_msgs::msg::v1::MenuEntry,
+) -> ros_env::visualization_msgs::msg::MenuEntry {
     ros_env::visualization_msgs::msg::MenuEntry {
         id: bus.id as _,
         parent_id: bus.parent_id as _,

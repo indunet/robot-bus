@@ -2,17 +2,31 @@
 
 use crate::ros2_bridge::mapper::TypedTopicMapper;
 
-pub(crate) fn pose_array_to_bus(msg: ros_env::geometry_msgs::msg::PoseArray) -> crate::geometry_msgs::msg::v1::PoseArray {
+pub(crate) fn pose_array_to_bus(
+    msg: ros_env::geometry_msgs::msg::PoseArray,
+) -> crate::geometry_msgs::msg::v1::PoseArray {
     crate::geometry_msgs::msg::v1::PoseArray {
         header: Some(crate::ros2_bridge::mappers::std_msgs::header::header_to_bus(msg.header)),
-        poses: msg.poses.into_iter().map(crate::ros2_bridge::mappers::geometry_msgs::pose::pose_to_bus).collect(),
+        poses: msg
+            .poses
+            .into_iter()
+            .map(crate::ros2_bridge::mappers::geometry_msgs::pose::pose_to_bus)
+            .collect(),
     }
 }
 
-pub(crate) fn pose_array_to_ros(bus: crate::geometry_msgs::msg::v1::PoseArray) -> ros_env::geometry_msgs::msg::PoseArray {
+pub(crate) fn pose_array_to_ros(
+    bus: crate::geometry_msgs::msg::v1::PoseArray,
+) -> ros_env::geometry_msgs::msg::PoseArray {
     ros_env::geometry_msgs::msg::PoseArray {
-        header: crate::ros2_bridge::mappers::std_msgs::header::header_to_ros(bus.header.unwrap_or_default()),
-        poses: bus.poses.into_iter().map(crate::ros2_bridge::mappers::geometry_msgs::pose::pose_to_ros).collect(),
+        header: crate::ros2_bridge::mappers::std_msgs::header::header_to_ros(
+            bus.header.unwrap_or_default(),
+        ),
+        poses: bus
+            .poses
+            .into_iter()
+            .map(crate::ros2_bridge::mappers::geometry_msgs::pose::pose_to_ros)
+            .collect(),
     }
 }
 

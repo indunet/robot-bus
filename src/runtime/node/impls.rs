@@ -18,6 +18,7 @@ use crate::service_bus::ServiceClient as BusServiceClient;
 use crate::typed::{Action, ActionOutcome, Service};
 use crate::zmq_helpers::HighWaterMark;
 
+use super::Node;
 use super::action_clients::{
     ActionClientInner, NodeActionClient, NodeActionClientRaw, NodeActionServer,
 };
@@ -26,7 +27,6 @@ use super::publishers::{TopicPublisher, TopicPublisherBackend, TopicPublisherRaw
 use super::service_clients::{
     NodeService, NodeServiceClient, NodeServiceClientRaw, ServiceClientInner,
 };
-use super::Node;
 
 impl Node {
     /// Create a typed topic publisher (ROS 2 `create_publisher`).
@@ -691,7 +691,12 @@ impl Node {
         handler: ActionGoalLiveHandler,
         callback_group: Option<&CallbackGroup>,
     ) -> Result<NodeActionServer> {
-        self.create_action_server_raw_live_with_qos_inner(action_name, handler, callback_group, None)
+        self.create_action_server_raw_live_with_qos_inner(
+            action_name,
+            handler,
+            callback_group,
+            None,
+        )
     }
 
     /// Live action server with KeepLast depth → DEALER HWM.

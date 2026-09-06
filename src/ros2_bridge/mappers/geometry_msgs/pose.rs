@@ -2,17 +2,31 @@
 
 use crate::ros2_bridge::mapper::TypedTopicMapper;
 
-pub(crate) fn pose_to_bus(msg: ros_env::geometry_msgs::msg::Pose) -> crate::geometry_msgs::msg::v1::Pose {
+pub(crate) fn pose_to_bus(
+    msg: ros_env::geometry_msgs::msg::Pose,
+) -> crate::geometry_msgs::msg::v1::Pose {
     crate::geometry_msgs::msg::v1::Pose {
-        position: Some(crate::ros2_bridge::mappers::geometry_msgs::point::point_to_bus(msg.position)),
-        orientation: Some(crate::ros2_bridge::mappers::geometry_msgs::quaternion::quaternion_to_bus(msg.orientation)),
+        position: Some(
+            crate::ros2_bridge::mappers::geometry_msgs::point::point_to_bus(msg.position),
+        ),
+        orientation: Some(
+            crate::ros2_bridge::mappers::geometry_msgs::quaternion::quaternion_to_bus(
+                msg.orientation,
+            ),
+        ),
     }
 }
 
-pub(crate) fn pose_to_ros(bus: crate::geometry_msgs::msg::v1::Pose) -> ros_env::geometry_msgs::msg::Pose {
+pub(crate) fn pose_to_ros(
+    bus: crate::geometry_msgs::msg::v1::Pose,
+) -> ros_env::geometry_msgs::msg::Pose {
     ros_env::geometry_msgs::msg::Pose {
-        position: crate::ros2_bridge::mappers::geometry_msgs::point::point_to_ros(bus.position.unwrap_or_default()),
-        orientation: crate::ros2_bridge::mappers::geometry_msgs::quaternion::quaternion_to_ros(bus.orientation.unwrap_or_default()),
+        position: crate::ros2_bridge::mappers::geometry_msgs::point::point_to_ros(
+            bus.position.unwrap_or_default(),
+        ),
+        orientation: crate::ros2_bridge::mappers::geometry_msgs::quaternion::quaternion_to_ros(
+            bus.orientation.unwrap_or_default(),
+        ),
     }
 }
 

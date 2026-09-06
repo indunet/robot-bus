@@ -387,7 +387,9 @@ pub(crate) fn run_broker(py: Python<'_>) -> PyResult<()> {
     let flag = Arc::new(AtomicBool::new(false));
     shutdown::install(flag.clone());
 
-    println!("python -m robot_bus.broker starting message + service + action buses + WebSocket + console…");
+    println!(
+        "python -m robot_bus.broker starting message + service + action buses + WebSocket + console…"
+    );
     let broker = RustRobotBusBroker::start(config).map_err(anyhow_err)?;
     let mut broker = PyRobotBusBroker {
         inner: Some(broker),

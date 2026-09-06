@@ -135,13 +135,16 @@ export const EMPTY_BROKER: BrokerInfo = {
   totalErrors: 0,
 }
 
-/** Display a connectable WebSocket RPC URL (`ws://host:port/ws`). */
+/** Display a connectable WebSocket RPC URL (`ws://host:port/ws-rpc`). */
 export function formatWsRpcAddr(addr: string): string {
   const raw = addr.trim()
+  const path = '/ws-rpc'
   if (!raw || raw === '—') return '—'
   if (raw.startsWith('ws://') || raw.startsWith('wss://')) {
     const trimmed = raw.replace(/\/$/, '')
-    return trimmed.endsWith('/ws') ? trimmed : `${trimmed}/ws`
+    if (trimmed.endsWith(path)) return trimmed
+    if (trimmed.endsWith('/ws')) return `${trimmed.slice(0, -'/ws'.length)}${path}`
+    return `${trimmed}${path}`
   }
   if (raw.startsWith('http://') || raw.startsWith('https://')) {
     const trimmed = raw.replace(/\/$/, '')
@@ -149,16 +152,18 @@ export function formatWsRpcAddr(addr: string): string {
       ? trimmed.slice('https://'.length)
       : trimmed.slice('http://'.length)
     const scheme = trimmed.startsWith('https://') ? 'wss' : 'ws'
-    const host = rest.endsWith('/ws') ? rest.slice(0, -3) : rest
-    return `${scheme}://${host}/ws`
+    let host = rest
+    if (host.endsWith(path)) host = host.slice(0, -path.length)
+    else if (host.endsWith('/ws')) host = host.slice(0, -'/ws'.length)
+    return `${scheme}://${host}${path}`
   }
-  let hostport = raw.replace(/\/ws\/?$/, '')
+  let hostport = raw.replace(/\/ws-rpc\/?$/, '').replace(/\/ws\/?$/, '')
   if (hostport.startsWith('[::]:') || hostport.startsWith('[::0]:')) {
     hostport = `[::1]${hostport.slice(hostport.indexOf(']:') + 1)}`
   } else if (hostport.startsWith('0.0.0.0:')) {
     hostport = `127.0.0.1${hostport.slice('0.0.0.0'.length)}`
   }
-  return `ws://${hostport}/ws`
+  return `ws://${hostport}${path}`
 }
 
 export function u64(value: string | number | bigint | undefined | null): number {

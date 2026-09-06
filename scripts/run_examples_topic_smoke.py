@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Ephemeral-broker smoke for examples/topic_imu (Python).
 
-Starts an in-process broker on the default API port (15570) so
+Starts an in-process broker on the default API port (15560) so
 `robot_bus.Node(...)` auto-discover works, then runs listener + talker.
 """
 
@@ -31,7 +31,7 @@ def main() -> int:
 
     try:
         with robot_bus.RobotBusBroker.start(
-            api_listen="127.0.0.1:15570",
+            api_listen="127.0.0.1:15560",
             tcp_only=True,
             no_console=True,
             advertise_host="127.0.0.1",

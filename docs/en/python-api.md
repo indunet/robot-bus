@@ -1,6 +1,6 @@
 English | [中文](../zh/python-api.md)
 
-# Python API examples
+# Python API
 
 ```bash
 pip install robot-bus
@@ -18,13 +18,13 @@ In-process (keyword arguments override default bind / HWM / heartbeat / API):
 import robot_bus
 
 with robot_bus.RobotBusBroker.start(
-    message_xsub_bind="tcp://127.0.0.1:15560",
-    message_xpub_bind="tcp://127.0.0.1:15561",
-    api_listen="0.0.0.0:15570",
+    message_xsub_bind="tcp://127.0.0.1:15580",
+    message_xpub_bind="tcp://127.0.0.1:15581",
+    api_listen="0.0.0.0:15560",
     tcp_only=True,
 ) as broker:
     # broker.message_xsub_bind / message_xpub_bind / api_listen / console_listen
-    # Web console: http://127.0.0.1:15570  (pass no_console=True to disable; no_tank / no_docs hide sidebar entries)
+    # Web console: http://127.0.0.1:15560  (pass no_console=True to disable; no_tank / no_docs hide sidebar entries)
     pass
 ```
 
@@ -33,7 +33,7 @@ Use the CLI when you need a standalone process:
 ```bash
 python -m robot_bus.broker
 python -m robot_bus.broker --help
-python -m robot_bus.broker --api-listen 0.0.0.0:15570 --tcp-only
+python -m robot_bus.broker --api-listen 0.0.0.0:15560 --tcp-only
 ```
 
 Cross-broker (federation) uses the same string conventions as the CLI:
@@ -41,7 +41,7 @@ Cross-broker (federation) uses the same string conventions as the CLI:
 ```python
 with robot_bus.RobotBusBroker.start(
     broker_id="broker-a",
-    message_peers=["tcp://10.0.0.2:15561"],          # peer XPUB; XSUB = port - 1
+    message_peers=["tcp://10.0.0.2:15581"],          # peer XPUB; XSUB = port - 1
     service_peers=["broker-b=tcp://10.0.0.2:15663"],  # optional id=
     action_peers=["broker-b=tcp://10.0.0.2:15665"],
     tcp_only=True,
@@ -56,7 +56,7 @@ Request `GET /api/v1/discover` on a known API base URL. Transport is still speci
 
 ```python
 node = robot_bus.Node.discover(
-    "talker", transport="tcp", api_url="http://127.0.0.1:15570")
+    "talker", transport="tcp", api_url="http://127.0.0.1:15560")
 # Optional: broker_id=..., timeout=...; UDP multicast discovery has been removed
 ```
 
@@ -71,7 +71,7 @@ if not node.wait_for_broker(timeout=5.0):
 node.add_on_connection_event(lambda old, new, reason: print(old, "->", new, reason))
 ```
 
-`spin()` / `start()` keep retrying if the broker restarts. `create_*` waits a few seconds for discover, then raises if still disconnected. WebSocket nodes use the same `connection_state` values; Connected means the `/ws` socket is up (not merely HTTP discover).
+`spin()` / `start()` keep retrying if the broker restarts. `create_*` waits a few seconds for discover, then raises if still disconnected. WebSocket nodes use the same `connection_state` values; Connected means the `/ws-rpc` socket is up (not merely HTTP discover).
 
 Same-process **inproc** requires a shared `Context`:
 
@@ -177,7 +177,7 @@ node.create_subscription("/robot1/imu", on_raw)
 import robot_bus
 
 node = robot_bus.Node.ws("web-client")
-# or robot_bus.Node.ws_at("web-client", "http://127.0.0.1:15570")
+# or robot_bus.Node.ws_at("web-client", "http://127.0.0.1:15560")
 
 pub = node.create_publisher("/robot1/cmd")
 pub.publish(b"go")

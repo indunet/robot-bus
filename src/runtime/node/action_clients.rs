@@ -11,10 +11,10 @@ use crate::action_bus::{ActionClient as BusActionClient, ActionKind, ActionMessa
 use crate::errors::{BusError, Result, parse_error_body};
 use crate::runtime::console_ready::{self, ReadyKind};
 use crate::runtime::topology_register::TopologyEndpointGuard;
-use crate::typed::{Action, ActionOutcome};
-use crate::zmq_helpers::HighWaterMark;
 #[cfg(feature = "ws")]
 use crate::runtime::ws_runtime::WsClientContext;
+use crate::typed::{Action, ActionOutcome};
+use crate::zmq_helpers::HighWaterMark;
 
 /// Action server handle returned by [`Node::create_action_server`] /
 /// [`Node::create_action_server_raw`].

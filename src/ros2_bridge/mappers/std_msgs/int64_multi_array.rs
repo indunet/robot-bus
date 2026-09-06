@@ -2,16 +2,27 @@
 
 use crate::ros2_bridge::mapper::TypedTopicMapper;
 
-pub(crate) fn int64_multi_array_to_bus(msg: ros_env::std_msgs::msg::Int64MultiArray) -> crate::std_msgs::msg::v1::Int64MultiArray {
+pub(crate) fn int64_multi_array_to_bus(
+    msg: ros_env::std_msgs::msg::Int64MultiArray,
+) -> crate::std_msgs::msg::v1::Int64MultiArray {
     crate::std_msgs::msg::v1::Int64MultiArray {
-        layout: Some(crate::ros2_bridge::mappers::std_msgs::multi_array_layout::multi_array_layout_to_bus(msg.layout)),
+        layout: Some(
+            crate::ros2_bridge::mappers::std_msgs::multi_array_layout::multi_array_layout_to_bus(
+                msg.layout,
+            ),
+        ),
         data: crate::ros2_bridge::mappers::convert::i64_seq(msg.data),
     }
 }
 
-pub(crate) fn int64_multi_array_to_ros(bus: crate::std_msgs::msg::v1::Int64MultiArray) -> ros_env::std_msgs::msg::Int64MultiArray {
+pub(crate) fn int64_multi_array_to_ros(
+    bus: crate::std_msgs::msg::v1::Int64MultiArray,
+) -> ros_env::std_msgs::msg::Int64MultiArray {
     ros_env::std_msgs::msg::Int64MultiArray {
-        layout: crate::ros2_bridge::mappers::std_msgs::multi_array_layout::multi_array_layout_to_ros(bus.layout.unwrap_or_default()),
+        layout:
+            crate::ros2_bridge::mappers::std_msgs::multi_array_layout::multi_array_layout_to_ros(
+                bus.layout.unwrap_or_default(),
+            ),
         data: bus.data,
     }
 }

@@ -1,4 +1,4 @@
-//! TANK session API: acquire starts in-process tank; release + grace stops it.
+//! TANK session API: acquire starts in-process tank; last release stops it.
 
 #![cfg(all(feature = "console", feature = "ws"))]
 
@@ -153,8 +153,6 @@ fn tank_session_starts_physics_and_stops_after_release() {
         .call()
         .expect("release");
 
-    // Default stop grace is 2s; sweep on status.
-    thread::sleep(Duration::from_millis(2500));
     let after: serde_json::Value = ureq::get(&format!("{base}/api/v1/tank"))
         .call()
         .expect("status after")

@@ -2,6 +2,8 @@
 
 use anyhow::{Context, Result, bail};
 
+use crate::transports::XPUB_PORT;
+
 /// Remote broker message-bus endpoints (client-facing XSUB/XPUB of the peer).
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct MessagePeer {
@@ -14,7 +16,8 @@ pub struct MessagePeer {
 impl MessagePeer {
     /// Build a peer from its XPUB endpoint; XSUB uses the same host with port − 1.
     ///
-    /// Accepts `tcp://host:port`, `host:port`, or a bare `host` (ports 15561 / 15560).
+    /// Accepts `tcp://host:port`, `host:port`, or a bare `host`
+    /// (XPUB [`XPUB_PORT`] / XSUB = XPUB − 1).
     pub fn from_xpub(xpub: &str) -> Result<Self> {
         let xpub = normalize_tcp_endpoint(xpub);
         let xsub = xsub_from_xpub(&xpub)?;
@@ -28,7 +31,7 @@ fn normalize_tcp_endpoint(addr: &str) -> String {
     } else if addr.contains(':') {
         format!("tcp://{addr}")
     } else {
-        format!("tcp://{addr}:15561")
+        format!("tcp://{addr}:{XPUB_PORT}")
     }
 }
 
@@ -36,7 +39,7 @@ fn xsub_from_xpub(xpub: &str) -> Result<String> {
     let rest = xpub
         .strip_prefix("tcp://")
         .with_context(|| format!("message peer must be tcp://…, got {xpub}"))?;
-    // IPv6: tcp://[::1]:15561
+    // IPv6: tcp://[::1]:15581
     let (host, port_str) = if let Some(bracket) = rest.strip_prefix('[') {
         let end = bracket
             .find("]:")
@@ -62,6 +65,7 @@ fn xsub_from_xpub(xpub: &str) -> Result<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::transports::XSUB_PORT;
 
     #[test]
     fn derives_xsub_port_minus_one() {
@@ -72,15 +76,15 @@ mod tests {
 
     #[test]
     fn accepts_host_port_without_scheme() {
-        let p = MessagePeer::from_xpub("10.0.0.2:15561").unwrap();
-        assert_eq!(p.xpub, "tcp://10.0.0.2:15561");
-        assert_eq!(p.xsub, "tcp://10.0.0.2:15560");
+        let p = MessagePeer::from_xpub(&format!("10.0.0.2:{XPUB_PORT}")).unwrap();
+        assert_eq!(p.xpub, format!("tcp://10.0.0.2:{XPUB_PORT}"));
+        assert_eq!(p.xsub, format!("tcp://10.0.0.2:{XSUB_PORT}"));
     }
 
     #[test]
     fn ipv6_peer() {
-        let p = MessagePeer::from_xpub("tcp://[::1]:15561").unwrap();
-        assert_eq!(p.xpub, "tcp://[::1]:15561");
-        assert_eq!(p.xsub, "tcp://[::1]:15560");
+        let p = MessagePeer::from_xpub(&format!("tcp://[::1]:{XPUB_PORT}")).unwrap();
+        assert_eq!(p.xpub, format!("tcp://[::1]:{XPUB_PORT}"));
+        assert_eq!(p.xsub, format!("tcp://[::1]:{XSUB_PORT}"));
     }
 }

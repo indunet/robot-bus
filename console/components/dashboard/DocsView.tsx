@@ -3,11 +3,15 @@
 import { useMemo, useState, type ReactNode } from 'react'
 import Markdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
+import rehypeHighlight from 'rehype-highlight'
 import { BookOpen } from 'lucide-react'
 import { PanelHeader } from './BrokerOverview'
 import { useI18n, type Locale } from '@/lib/i18n'
 import { bundledDocs } from '@/lib/bundled-docs.generated'
 import { rewriteDocHref, GITHUB_BLOB } from '@/lib/docs-links'
+
+const remarkPlugins = [remarkGfm]
+const rehypePlugins = [rehypeHighlight]
 
 function displayTitle(title: string): string {
   return title.replace(/`/g, '')
@@ -52,7 +56,7 @@ export default function DocsView() {
   return (
     <div className="flex flex-1 min-h-0 gap-3">
       <aside className="w-52 shrink-0 flex flex-col rounded border border-bus-border bg-bus-panel overflow-hidden">
-        <PanelHeader icon={<BookOpen size={14} />} title={t('docsTitle')} sub={t('docsSub')} />
+        <PanelHeader icon={<BookOpen size={14} />} title={t('docsToc')} />
         <nav className="flex-1 overflow-y-auto py-1 bus-scroll">
           {bundledDocs.map((doc) => {
             const label = displayTitle(locale === 'zh' ? doc.titleZh : doc.titleEn)
@@ -78,10 +82,11 @@ export default function DocsView() {
 
       <section className="flex-1 min-w-0 flex flex-col rounded border border-bus-border bg-bus-panel overflow-hidden">
         <PanelHeader title={headerTitle} />
-        <div className="flex-1 overflow-y-auto overflow-x-hidden px-4 py-3 bus-scroll">
-          <div className="doc-md">
+        <div className="flex-1 overflow-y-auto overflow-x-hidden bus-scroll bg-[#0d1117]">
+          <article className="markdown-body docs-md">
             <Markdown
-              remarkPlugins={[remarkGfm]}
+              remarkPlugins={remarkPlugins}
+              rehypePlugins={rehypePlugins}
               components={{
                 a: ({ href, children }) => {
                   const link = rewriteDocHref(href, locale)
@@ -128,7 +133,7 @@ export default function DocsView() {
                 h3: ({ children }) => <h3 id={headingId(children)}>{children}</h3>,
                 h4: ({ children }) => <h4 id={headingId(children)}>{children}</h4>,
                 table: ({ children }) => (
-                  <div className="doc-md-table-wrap bus-scroll">
+                  <div className="docs-md-table-wrap bus-scroll">
                     <table>{children}</table>
                   </div>
                 ),
@@ -136,7 +141,7 @@ export default function DocsView() {
             >
               {markdown}
             </Markdown>
-          </div>
+          </article>
         </div>
       </section>
     </div>

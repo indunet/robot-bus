@@ -2,7 +2,9 @@
 
 use crate::ros2_bridge::mapper::TypedTopicMapper;
 
-pub(crate) fn multi_dof_joint_trajectory_to_bus(msg: ros_env::trajectory_msgs::msg::MultiDOFJointTrajectory) -> crate::trajectory_msgs::msg::v1::MultiDofJointTrajectory {
+pub(crate) fn multi_dof_joint_trajectory_to_bus(
+    msg: ros_env::trajectory_msgs::msg::MultiDOFJointTrajectory,
+) -> crate::trajectory_msgs::msg::v1::MultiDofJointTrajectory {
     crate::trajectory_msgs::msg::v1::MultiDofJointTrajectory {
         header: Some(crate::ros2_bridge::mappers::std_msgs::header::header_to_bus(msg.header)),
         joint_names: crate::ros2_bridge::mappers::convert::string_seq(msg.joint_names),
@@ -10,7 +12,9 @@ pub(crate) fn multi_dof_joint_trajectory_to_bus(msg: ros_env::trajectory_msgs::m
     }
 }
 
-pub(crate) fn multi_dof_joint_trajectory_to_ros(bus: crate::trajectory_msgs::msg::v1::MultiDofJointTrajectory) -> ros_env::trajectory_msgs::msg::MultiDOFJointTrajectory {
+pub(crate) fn multi_dof_joint_trajectory_to_ros(
+    bus: crate::trajectory_msgs::msg::v1::MultiDofJointTrajectory,
+) -> ros_env::trajectory_msgs::msg::MultiDOFJointTrajectory {
     ros_env::trajectory_msgs::msg::MultiDOFJointTrajectory {
         header: crate::ros2_bridge::mappers::std_msgs::header::header_to_ros(bus.header.unwrap_or_default()),
         joint_names: crate::ros2_bridge::mappers::convert::ros_string_seq(bus.joint_names),

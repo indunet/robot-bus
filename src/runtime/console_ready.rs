@@ -11,7 +11,7 @@ use serde::Deserialize;
 use crate::discovery::normalize_api_base;
 
 /// Default console base when [`crate::NodeOptions::console_url`] is unset.
-pub const DEFAULT_CONSOLE_URL: &str = "http://127.0.0.1:15570";
+pub const DEFAULT_CONSOLE_URL: &str = "http://127.0.0.1:15560";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ReadyKind {

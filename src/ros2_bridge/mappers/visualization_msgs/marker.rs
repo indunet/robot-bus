@@ -2,7 +2,9 @@
 
 use crate::ros2_bridge::mapper::TypedTopicMapper;
 
-pub(crate) fn marker_to_bus(msg: ros_env::visualization_msgs::msg::Marker) -> crate::visualization_msgs::msg::v1::Marker {
+pub(crate) fn marker_to_bus(
+    msg: ros_env::visualization_msgs::msg::Marker,
+) -> crate::visualization_msgs::msg::v1::Marker {
     crate::visualization_msgs::msg::v1::Marker {
         header: Some(crate::ros2_bridge::mappers::std_msgs::header::header_to_bus(msg.header)),
         ns: crate::ros2_bridge::mappers::convert::from_ros_string(msg.ns),
@@ -26,7 +28,9 @@ pub(crate) fn marker_to_bus(msg: ros_env::visualization_msgs::msg::Marker) -> cr
     }
 }
 
-pub(crate) fn marker_to_ros(bus: crate::visualization_msgs::msg::v1::Marker) -> ros_env::visualization_msgs::msg::Marker {
+pub(crate) fn marker_to_ros(
+    bus: crate::visualization_msgs::msg::v1::Marker,
+) -> ros_env::visualization_msgs::msg::Marker {
     ros_env::visualization_msgs::msg::Marker {
         header: crate::ros2_bridge::mappers::std_msgs::header::header_to_ros(bus.header.unwrap_or_default()),
         ns: crate::ros2_bridge::mappers::convert::to_ros_string(bus.ns),

@@ -1,6 +1,6 @@
 [English](../en/python-api.md) | 中文
 
-# Python API示例
+# Python API
 
 ```bash
 pip install robot-bus
@@ -18,13 +18,13 @@ pip install robot-bus
 import robot_bus
 
 with robot_bus.RobotBusBroker.start(
-    message_xsub_bind="tcp://127.0.0.1:15560",
-    message_xpub_bind="tcp://127.0.0.1:15561",
-    api_listen="0.0.0.0:15570",
+    message_xsub_bind="tcp://127.0.0.1:15580",
+    message_xpub_bind="tcp://127.0.0.1:15581",
+    api_listen="0.0.0.0:15560",
     tcp_only=True,
 ) as broker:
     # broker.message_xsub_bind / message_xpub_bind / api_listen / console_listen
-    # Web console: http://127.0.0.1:15570（no_console=True可关；no_tank / no_docs可隐藏侧栏菜单）
+    # Web console: http://127.0.0.1:15560（no_console=True可关；no_tank / no_docs可隐藏侧栏菜单）
     pass
 ```
 
@@ -33,7 +33,7 @@ with robot_bus.RobotBusBroker.start(
 ```bash
 python -m robot_bus.broker
 python -m robot_bus.broker --help
-python -m robot_bus.broker --api-listen 0.0.0.0:15570 --tcp-only
+python -m robot_bus.broker --api-listen 0.0.0.0:15560 --tcp-only
 ```
 
 跨 broker（federation）与 CLI同款字符串约定：
@@ -41,7 +41,7 @@ python -m robot_bus.broker --api-listen 0.0.0.0:15570 --tcp-only
 ```python
 with robot_bus.RobotBusBroker.start(
     broker_id="broker-a",
-    message_peers=["tcp://10.0.0.2:15561"],          # peer XPUB；XSUB = 端口 - 1
+    message_peers=["tcp://10.0.0.2:15581"],          # peer XPUB；XSUB = 端口 - 1
     service_peers=["broker-b=tcp://10.0.0.2:15663"],  # 可选 id=
     action_peers=["broker-b=tcp://10.0.0.2:15665"],
     tcp_only=True,
@@ -56,7 +56,7 @@ with robot_bus.RobotBusBroker.start(
 
 ```python
 node = robot_bus.Node.discover(
-    "talker", transport="tcp", api_url="http://127.0.0.1:15570")
+    "talker", transport="tcp", api_url="http://127.0.0.1:15560")
 # 可选：broker_id=...、timeout=...；UDP组播发现已移除
 ```
 
@@ -71,7 +71,7 @@ if not node.wait_for_broker(timeout=5.0):
 node.add_on_connection_event(lambda old, new, reason: print(old, "->", new, reason))
 ```
 
-`spin()` / `start()`期间 broker重启会自动重连。`create_*`会短等 discover，仍未连上则报错。WebSocket节点使用同一套 `connection_state`；Connected表示 `/ws`套接字已连通（不只是 HTTP discover）。
+`spin()` / `start()`期间 broker重启会自动重连。`create_*`会短等 discover，仍未连上则报错。WebSocket节点使用同一套 `connection_state`；Connected表示 `/ws-rpc`套接字已连通（不只是 HTTP discover）。
 
 同进程 **inproc** 时必须共享 `Context`：
 
@@ -177,7 +177,7 @@ node.create_subscription("/robot1/imu", on_raw)
 import robot_bus
 
 node = robot_bus.Node.ws("web-client")
-# 或 robot_bus.Node.ws_at("web-client", "http://127.0.0.1:15570")
+# 或 robot_bus.Node.ws_at("web-client", "http://127.0.0.1:15560")
 
 pub = node.create_publisher("/robot1/cmd")
 pub.publish(b"go")

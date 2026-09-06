@@ -1,6 +1,6 @@
 [English](../en/rust-api.md) | 中文
 
-# Rust API示例
+# Rust API
 
 `Cargo.toml`：
 
@@ -12,7 +12,7 @@ robot-bus = "2.3.1"
 
 ## Broker启动
 
-**更鼓励在程序里启动 broker**（`RobotBusBroker::start`），让 broker 与业务同进程。CLI 适合演示、多进程示例，或单独拉起常驻 broker。默认一次启动 **message / service / action** 三条总线；每条 TCP默认 bind `…:0`（由操作系统分配空闲端口），并启动 **API**（WebSocket RPC `/ws` / `GET /api/v1/discover` / console http），默认 `0.0.0.0:15570`。
+**更鼓励在程序里启动 broker**（`RobotBusBroker::start`），让 broker 与业务同进程。CLI 适合演示、多进程示例，或单独拉起常驻 broker。默认一次启动 **message / service / action** 三条总线；每条 TCP默认 bind `…:0`（由操作系统分配空闲端口），并启动 **API**（WebSocket RPC `/ws-rpc` / `GET /api/v1/discover` / console http），默认 `0.0.0.0:15560`。
 
 ```rust
 use robot_bus::{RobotBusBroker, RobotBusConfig};
@@ -28,9 +28,9 @@ broker.stop()?;
 cargo run --bin robot_bus_broker
 # 查看参数：cargo run --bin robot_bus_broker -- --help
 # 只要 TCP：加 --tcp-only
-# API口：--api-listen 0.0.0.0:15570（别名 --console-listen）
+# API口：--api-listen 0.0.0.0:15560（别名 --console-listen）
 # 对外可达主机：--advertise-host HOST
-# 邦联：--peer 10.0.0.2:15570（对端 API口；可重复）
+# 邦联：--peer 10.0.0.2:15560（对端 API口；可重复）
 # 控制台侧栏：--no-tank / --no-docs（文档默认显示）
 ```
 
@@ -41,9 +41,9 @@ cargo run --bin robot_bus_broker
 | message XSUB / XPUB | `tcp://0.0.0.0:0`（启动后解析为实际端口） | `ipc:///tmp/robot_bus/<broker_id>/…` | `inproc://robot_bus/…` |
 | service FE / BE | `tcp://0.0.0.0:0` | 同上 | 同上 |
 | action FE / BE | `tcp://0.0.0.0:0` | 同上 | 同上 |
-| API（WebSocket RPC + discover + console） | `0.0.0.0:15570` | — | — |
+| API（WebSocket RPC + discover + console） | `0.0.0.0:15560` | — | — |
 
-仍可用 `--message-xsub-bind`等手动固定总线端口。SDK侧**推荐** `Context::new` → `Node::with_context`（本地 tcp）；便捷的 `Node::new`仍可用（私有 Context）。端点未填时自动对 `http://127.0.0.1:15570`做 discover；`Node::ipc` / `Node::inproc` / `Node::ws`分别走对应传输。
+仍可用 `--message-xsub-bind`等手动固定总线端口。SDK侧**推荐** `Context::new` → `Node::with_context`（本地 tcp）；便捷的 `Node::new`仍可用（私有 Context）。端点未填时自动对 `http://127.0.0.1:15560`做 discover；`Node::ipc` / `Node::inproc` / `Node::ws`分别走对应传输。
 
 ### HTTP发现（填地址，不选传输）
 
@@ -53,7 +53,7 @@ cargo run --bin robot_bus_broker
 use robot_bus::{DiscoverOpts, Node, NodeOptions};
 
 let opts = NodeOptions::tcp().discover(DiscoverOpts {
-    api_url: "http://127.0.0.1:15570".into(),
+    api_url: "http://127.0.0.1:15560".into(),
     broker_id: None, // 可选过滤
     ..Default::default()
 })?;
@@ -79,7 +79,7 @@ node.add_on_connection_event(|old, new, reason| {
 });
 ```
 
-`spin` / `start`在 broker重启后会继续重试。`create_*`会短等 discover，仍未连上则返回带当前 state的错误。WebSocket节点共用这套会话合同；Connected表示 `/ws`套接字已连通。
+`spin` / `start`在 broker重启后会继续重试。`create_*`会短等 discover，仍未连上则返回带当前 state的错误。WebSocket节点共用这套会话合同；Connected表示 `/ws-rpc`套接字已连通。
 
 **同进程 inproc：** ZeroMQ的 `inproc://`是 context-local。嵌入式 broker与 Node必须共用同一个 [`Context`](../../src/runtime/context.rs)：
 
@@ -152,7 +152,7 @@ ros__parameters:
 
 接近 ROS2：`Context` → `Node::with_context` → typed `create_publisher` / `create_subscription`（创建时绑定消息类型，自动 encode/decode）→ `node.spin()`。底层与 gRPC仍传 opaque bytes。
 
-Typed `create_publisher::<M>`会向 broker控制面（service bus服务 `/robot_bus/topic_type/register`）**best-effort** 登记 `topic → M::full_name()`（如 `sensor_msgs.msg.v1.Imu`）。登记失败只打日志，不影响 publish。`create_publisher_raw`不登记。可用 `rbus topic list` / `rbus topic info /path`查看（HTTP默认 `http://127.0.0.1:15570`）。
+Typed `create_publisher::<M>`会向 broker控制面（service bus服务 `/robot_bus/topic_type/register`）**best-effort** 登记 `topic → M::full_name()`（如 `sensor_msgs.msg.v1.Imu`）。登记失败只打日志，不影响 publish。`create_publisher_raw`不登记。可用 `rbus topic list` / `rbus topic info /path`查看（HTTP默认 `http://127.0.0.1:15560`）。
 
 ```rust
 use std::sync::Arc;
@@ -441,7 +441,7 @@ use std::time::Duration;
 use robot_bus::Node;
 
 let mut node = Node::ws("web-client");
-// 或 Node::ws_at("web-client", "http://127.0.0.1:15570");
+// 或 Node::ws_at("web-client", "http://127.0.0.1:15560");
 
 let pub_ = node.create_publisher_raw("/robot1/cmd")?;
 pub_.publish(b"go")?;
@@ -473,7 +473,7 @@ node.spin()?;
 
 ## WebSocket RPC网关
 
-由 `RobotBusBroker` / `robot_bus_broker`一并启动（feature `ws`，默认开启）。原生与浏览器客户端共用 API端口上的 **`/ws`**（默认 `0.0.0.0:15570`）。**不兼容旧版：** V3成帧；不再接受 V2的 method字符串和 `TopicMessage`信封。
+由 `RobotBusBroker` / `robot_bus_broker`一并启动（feature `ws`，默认开启）。原生与浏览器客户端共用 API端口上的 **`/ws-rpc`**（默认 `0.0.0.0:15560`）。**不兼容旧版：** V3成帧；不再接受 V2的 method字符串和 `TopicMessage`信封。
 
 | Opcode | RPC | REQUEST头 | DATA payload |
 |--------|-----|------------|--------------|

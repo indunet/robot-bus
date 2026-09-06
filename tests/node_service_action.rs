@@ -2,8 +2,8 @@
 
 mod support;
 
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::thread;
 use std::time::{Duration, Instant};
 
@@ -400,12 +400,7 @@ fn node_service_action_qos_keep_last_maps_to_hwm() {
         executor.add_node(&mut server).expect("add server");
 
         server
-            .create_service_raw_with_qos(
-                "echo",
-                qos,
-                Arc::new(|body| body.to_vec()),
-                None,
-            )
+            .create_service_raw_with_qos("echo", qos, Arc::new(|body| body.to_vec()), None)
             .expect("create_service_raw_with_qos");
         assert_eq!(
             server.rpc_hwm().expect("server default rpc hwm"),

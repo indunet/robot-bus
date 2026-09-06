@@ -3,12 +3,12 @@
 //! Sources live under `benches/robot_bus_perf/`.
 //! Run: `just perf` or `cargo run --release --bin robot_bus_perf`
 
-#[path = "support.rs"]
-mod support;
-#[path = "pacing.rs"]
-mod pacing;
 #[path = "native.rs"]
 mod native;
+#[path = "pacing.rs"]
+mod pacing;
+#[path = "support.rs"]
+mod support;
 #[path = "ws.rs"]
 mod ws;
 
@@ -16,7 +16,7 @@ use std::thread;
 use std::time::Duration;
 
 use robot_bus::{Context, RobotBusBroker};
-use support::{env_summary, lock_broker, perf_broker_config, write_report, ScenarioResult};
+use support::{ScenarioResult, env_summary, lock_broker, perf_broker_config, write_report};
 
 use native::{bench_action, bench_pubsub, bench_service};
 use pacing::{act_iters, svc_iters};
