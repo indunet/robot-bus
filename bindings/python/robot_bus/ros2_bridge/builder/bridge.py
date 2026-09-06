@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import logging
 import threading
 import time
+import uuid
 from typing import Any, Optional
 
 import robot_bus
@@ -23,8 +25,14 @@ from .config import (
     _topic_supports_lazy,
     TOPIC_DEMAND,
     TOPICS_SNAPSHOT,
+    BRIDGES,
+    EVENTS,
+    IDLE_GRACE_S,
+    SNAPSHOT_INTERVAL_S,
+    mapper_type_name,
+    direction_label,
 )
-from .drop_stats import DropStats, forward_bus_to_ros, forward_ros_to_bus
+from .drop_stats import DropStats, RouteHealth, forward_bus_to_ros, forward_ros_to_bus, unix_ms
 
 class Ros2Bridge:
     def __init__(self) -> None:
@@ -41,6 +49,13 @@ class Ros2Bridge:
         self._first_spin_at: Optional[float] = None
         self._callback_group: Any = None
         self._drop_stats = DropStats()
+        self._console_routes: list[dict[str, Any]] = []
+        self._bridge_id = ""
+        self._bridge_name = ""
+        self._bridges_pub: Any = None
+        self._events_pub: Any = None
+        self._last_snapshot_at: Optional[float] = None
+        self._event_seq = 0
 
     @staticmethod
     def new(name: str) -> Ros2BridgeBuilder:
@@ -66,6 +81,8 @@ class Ros2Bridge:
         self._callback_group = ReentrantCallbackGroup()
         self._executor = MultiThreadedExecutor()
         self._executor.add_node(self._ros_node)
+        self._bridge_id = uuid.uuid4().hex
+        self._bridge_name = builder._name
 
         for route in builder._routes:
             self._wire_topic(route)
@@ -73,6 +90,11 @@ class Ros2Bridge:
             self._wire_service(svc)
         for act in builder._actions:
             self._wire_action(act)
+
+        self._log_route_table()
+        self._bridges_pub = self._bus.create_publisher(BRIDGES)
+        self._events_pub = self._bus.create_publisher(EVENTS)
+        self._keep_alive.extend((self._bridges_pub, self._events_pub))
 
         if self._lazy_routes:
             self._subscribe_demand()
@@ -102,6 +124,7 @@ class Ros2Bridge:
             if "nothing registered" not in str(err):
                 raise
         self._apply_lazy()
+        self._publish_observe()
 
     def has_ros_subscription(self, bus_topic: str) -> bool:
         if bus_topic in self._lazy_routes:
@@ -110,6 +133,98 @@ class Ros2Bridge:
 
     def drop_stats(self) -> dict[str, int]:
         return self._drop_stats.snapshot()
+
+    def _log_route_table(self) -> None:
+        log = logging.getLogger("robot_bus.ros2_bridge")
+        lines = [f"ros2_bridge '{self._bridge_name}' routes:"]
+        for row in self._console_routes:
+            ty = row["type_name"] or "-"
+            lazy = "  lazy" if row["lazy"] else ""
+            lines.append(
+                f"  {row['kind']:<7} {row['direction']:<8} {row['ros_name']} → "
+                f"{row['bus_name']}  {ty}  ros={row['ros_qos']}  bus={row['bus_qos']}{lazy}"
+            )
+        log.info("\n".join(lines))
+
+    def _route_enabled(self, row: dict[str, Any]) -> bool:
+        if not row["lazy"]:
+            return True
+        return self.has_ros_subscription(row["bus_name"])
+
+    def _grace_elapsed(self) -> bool:
+        if self._first_spin_at is None:
+            return False
+        return time.monotonic() - self._first_spin_at >= IDLE_GRACE_S
+
+    def _publish_observe(self) -> None:
+        now = time.monotonic()
+        if self._last_snapshot_at is not None and now - self._last_snapshot_at < SNAPSHOT_INTERVAL_S:
+            return
+        self._last_snapshot_at = now
+        if self._bridges_pub is None:
+            return
+        try:
+            from robot_bus.robot_bus_interfaces.msg.v1 import (
+                BridgeSnapshot,
+                ConsoleEvent,
+            )
+        except ImportError:
+            return
+        grace = self._grace_elapsed()
+        snap = BridgeSnapshot()
+        snap.bridge_id = self._bridge_id
+        snap.bridge_name = self._bridge_name
+        for row in self._console_routes:
+            enabled = self._route_enabled(row)
+            health: RouteHealth = row["health"]
+            idle = bool(row["watch_idle"] and health.is_idle(enabled, grace))
+            proto = snap.routes.add()
+            proto.kind = row["kind"]
+            proto.direction = row["direction"]
+            proto.ros_name = row["ros_name"]
+            proto.bus_name = row["bus_name"]
+            proto.type_name = row["type_name"]
+            proto.ros_qos = row["ros_qos"]
+            proto.bus_qos = row["bus_qos"]
+            proto.lazy = row["lazy"]
+            proto.enabled = enabled
+            proto.rx = health.rx
+            proto.tx = health.tx
+            proto.convert_fail = health.convert_fail
+            proto.decode_fail = health.decode_fail
+            proto.publish_fail = health.publish_fail
+            proto.last_rx_ms = health.last_rx_ms
+            proto.idle = idle
+        try:
+            self._bridges_pub.publish(snap.SerializeToString())
+        except Exception:  # noqa: BLE001
+            pass
+        log = logging.getLogger("robot_bus.ros2_bridge")
+        for row in self._console_routes:
+            if not row["watch_idle"]:
+                continue
+            health = row["health"]
+            enabled = self._route_enabled(row)
+            if not health.take_idle_event(enabled, grace):
+                continue
+            msg = (
+                f"no traffic on {row['direction']} {row['ros_name']} for "
+                f"{int(IDLE_GRACE_S)}s; possible wrong direction or ROS QoS mismatch"
+            )
+            log.warning("ros2_bridge/%s: %s", self._bridge_name, msg)
+            if self._events_pub is None:
+                continue
+            self._event_seq += 1
+            ev = ConsoleEvent()
+            ev.id = f"bridge-idle-{self._event_seq}"
+            ev.ts = unix_ms()
+            ev.level = "WARN"
+            ev.source = f"ros2_bridge/{self._bridge_name}"
+            ev.message = msg
+            try:
+                self._events_pub.publish(ev.SerializeToString())
+            except Exception:  # noqa: BLE001
+                pass
 
     def close(self) -> None:
         self._halt.set()
@@ -189,6 +304,21 @@ class Ros2Bridge:
         bus_topic = route["bus_topic"]
         direction = route["direction"]
         lazy = route["lazy"]
+        health = RouteHealth()
+        self._console_routes.append(
+            {
+                "kind": "topic",
+                "direction": direction_label(direction),
+                "ros_name": ros_topic,
+                "bus_name": bus_topic,
+                "type_name": mapper_type_name(mapper),
+                "ros_qos": route["ros_qos"].console_label(),
+                "bus_qos": route["bus_qos"].console_label(),
+                "lazy": lazy,
+                "watch_idle": True,
+                "health": health,
+            }
+        )
 
         if callable(getattr(mapper, "attach", None)) and not _topic_supports_lazy(mapper):
             ctx = TopicWireContext(
@@ -201,6 +331,7 @@ class Ros2Bridge:
                 qos=_ros_qos(route["ros_qos"]),
                 bus_qos_depth=route["bus_qos"].depth,
                 drop_stats=self._drop_stats,
+                health=health,
             )
             mapper.attach(ctx)
             if direction == Direction.Ros2ToBus:
@@ -213,9 +344,9 @@ class Ros2Bridge:
         if direction == Direction.BusToRos2:
             ros_pub = self._ros_node.create_publisher(msg_type, ros_topic, ros_qos)
 
-            def on_bus(payload: bytes, m=mapper, pub=ros_pub) -> None:
+            def on_bus(payload: bytes, m=mapper, pub=ros_pub, h=health) -> None:
                 forward_bus_to_ros(
-                    self._drop_stats, ros_topic, m.bus_to_ros, pub.publish, payload
+                    self._drop_stats, ros_topic, m.bus_to_ros, pub.publish, payload, h
                 )
 
             sub_kw: dict[str, Any] = {"qos_depth": bus_depth}
@@ -228,14 +359,14 @@ class Ros2Bridge:
         lock = threading.Lock()
 
         def create_sub(
-            m=mapper, t=msg_type, rt=ros_topic, pub=bus_pub, mtx=lock, rq=ros_qos
+            m=mapper, t=msg_type, rt=ros_topic, pub=bus_pub, mtx=lock, rq=ros_qos, h=health
         ) -> Any:
-            def on_ros(msg, pub=pub, mtx=mtx, m=m) -> None:
+            def on_ros(msg, pub=pub, mtx=mtx, m=m, h=h) -> None:
                 def publish(payload: bytes) -> None:
                     with mtx:
                         pub.publish(payload)
 
-                forward_ros_to_bus(self._drop_stats, rt, m.ros_to_bus, publish, msg)
+                forward_ros_to_bus(self._drop_stats, rt, m.ros_to_bus, publish, msg, h)
 
             return self._ros_node.create_subscription(t, rt, on_ros, rq)
 
@@ -250,6 +381,20 @@ class Ros2Bridge:
 
     def _wire_service(self, route: dict[str, Any]) -> None:
         mapper = route["mapper"]
+        self._console_routes.append(
+            {
+                "kind": "service",
+                "direction": direction_label(route["direction"]),
+                "ros_name": route["ros_service"],
+                "bus_name": route["bus_service"],
+                "type_name": mapper_type_name(mapper),
+                "ros_qos": route["ros_qos"].console_label(),
+                "bus_qos": route["bus_qos"].console_label(),
+                "lazy": False,
+                "watch_idle": False,
+                "health": RouteHealth(),
+            }
+        )
         if callable(getattr(mapper, "attach", None)) and not callable(
             getattr(mapper, "ros_srv_type", None)
         ):
@@ -333,6 +478,20 @@ class Ros2Bridge:
 
     def _wire_action(self, route: dict[str, Any]) -> None:
         mapper = route["mapper"]
+        self._console_routes.append(
+            {
+                "kind": "action",
+                "direction": direction_label(route["direction"]),
+                "ros_name": route["ros_action"],
+                "bus_name": route["bus_action"],
+                "type_name": mapper_type_name(mapper),
+                "ros_qos": route["ros_qos"].console_label(),
+                "bus_qos": route["bus_qos"].console_label(),
+                "lazy": False,
+                "watch_idle": False,
+                "health": RouteHealth(),
+            }
+        )
         if callable(getattr(mapper, "attach", None)) and not callable(
             getattr(mapper, "ros_action_type", None)
         ):

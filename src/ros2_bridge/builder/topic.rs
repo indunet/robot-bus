@@ -30,6 +30,7 @@ pub struct Ros2ToBusReady {
     bus_topic: String,
     bus_qos: TopicQos,
     mapper: Arc<dyn TopicMapper>,
+    type_name: String,
     lazy: bool,
 }
 
@@ -57,6 +58,7 @@ pub struct BusToRos2Ready {
     bus_topic: String,
     bus_qos: TopicQos,
     mapper: Arc<dyn TopicMapper>,
+    type_name: String,
 }
 
 impl Ros2BridgeBuilder {
@@ -90,14 +92,18 @@ impl FromRos {
 }
 
 impl FromRosToBus {
-    pub fn mapper(self, mapper: impl IntoTopicMapper) -> Ros2ToBusReady {
+    pub fn mapper<M: IntoTopicMapper>(self, mapper: M) -> Ros2ToBusReady {
+        let rust_name = std::any::type_name::<M>();
+        let mapper = mapper.into_topic_mapper();
+        let type_name = super::topic_mapper_label(&*mapper, rust_name);
         Ros2ToBusReady {
             parent: self.parent,
             ros_topic: self.ros_topic,
             ros_qos: self.ros_qos,
             bus_topic: self.bus_topic,
             bus_qos: self.bus_qos,
-            mapper: mapper.into_topic_mapper(),
+            mapper,
+            type_name,
             lazy: false,
         }
     }
@@ -115,6 +121,7 @@ impl Ros2ToBusReady {
             self.ros_topic,
             self.bus_topic,
             self.mapper,
+            self.type_name,
             Direction::Ros2ToBus,
             self.lazy,
             self.ros_qos,
@@ -136,14 +143,18 @@ impl FromBus {
 }
 
 impl FromBusToRos {
-    pub fn mapper(self, mapper: impl IntoTopicMapper) -> BusToRos2Ready {
+    pub fn mapper<M: IntoTopicMapper>(self, mapper: M) -> BusToRos2Ready {
+        let rust_name = std::any::type_name::<M>();
+        let mapper = mapper.into_topic_mapper();
+        let type_name = super::topic_mapper_label(&*mapper, rust_name);
         BusToRos2Ready {
             parent: self.parent,
             ros_topic: self.ros_topic,
             ros_qos: self.ros_qos,
             bus_topic: self.bus_topic,
             bus_qos: self.bus_qos,
-            mapper: mapper.into_topic_mapper(),
+            mapper,
+            type_name,
         }
     }
 }
@@ -154,6 +165,7 @@ impl BusToRos2Ready {
             self.ros_topic,
             self.bus_topic,
             self.mapper,
+            self.type_name,
             Direction::BusToRos2,
             false,
             self.ros_qos,

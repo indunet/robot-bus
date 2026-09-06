@@ -28,6 +28,20 @@ pub use topic::{BusToRos2Ready, FromBus, FromBusToRos, FromRos, FromRosToBus, Ro
 
 pub use super::mapper::TopicQos;
 
+/// Console / log label: `type_name()` if set, else the Rust type's last path segment.
+pub(crate) fn topic_mapper_label(mapper: &dyn TopicMapper, rust_name: &str) -> String {
+    let n = mapper.type_name();
+    if !n.is_empty() {
+        return n.to_string();
+    }
+    rust_name
+        .rsplit("::")
+        .next()
+        .unwrap_or(rust_name)
+        .trim_end_matches(['>', ' '])
+        .to_string()
+}
+
 /// Accept either a concrete [`TopicMapper`] or an [`Arc<dyn TopicMapper>`].
 pub trait IntoTopicMapper {
     fn into_topic_mapper(self) -> Arc<dyn TopicMapper>;

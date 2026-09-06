@@ -17,7 +17,7 @@ use rclrs::IntoPrimitiveOptions;
 use rosidl_runtime_rs::{Action as ActionIdl, Message as RosMessage, Service as ServiceIdl};
 
 use crate::errors::{BusError, Result as BusResult};
-use crate::ros2_bridge::drop_stats::DropStats;
+use crate::ros2_bridge::drop_stats::{DropStats, RouteHealth};
 use crate::runtime::{Node, TopicPublisherRaw};
 
 use super::mappers::BUILTIN_MAPPER_LIST;
@@ -33,6 +33,15 @@ type Result<T> = std::result::Result<T, BusError>;
 pub enum Direction {
     Ros2ToBus,
     BusToRos2,
+}
+
+impl Direction {
+    pub fn console_label(self) -> &'static str {
+        match self {
+            Self::Ros2ToBus => "ros→bus",
+            Self::BusToRos2 => "bus→ros",
+        }
+    }
 }
 
 /// Reliability for [`TopicQos`]. Must be chosen explicitly (no default).
@@ -150,6 +159,20 @@ impl TopicQos {
         matches!(self.durability, TopicDurability::Volatile)
     }
 
+    /// Compact QoS for startup logs and console snapshots.
+    pub fn console_label(self) -> String {
+        let rel = if self.is_best_effort() {
+            "best_effort"
+        } else {
+            "reliable"
+        };
+        let mut s = format!("keep_last({}).{rel}", self.depth);
+        if self.is_transient_local() {
+            s.push_str(".transient_local");
+        }
+        s
+    }
+
     /// ROS `TRANSIENT_LOCAL` (latch). Needed to receive already-published samples
     /// from latched publishers, and to match subscribers that request it.
     pub fn transient_local(self) -> Self {
@@ -225,6 +248,7 @@ pub struct TopicWireContext<'a> {
     pub bus_qos: TopicQos,
     pub ros_entities: &'a mut Vec<Box<dyn Any + Send + Sync>>,
     pub drop_stats: Arc<DropStats>,
+    pub route_health: Arc<RouteHealth>,
 }
 
 /// Typed topic codec: ROS IDL object ↔ bus protobuf object.
@@ -242,6 +266,10 @@ pub trait TypedTopicMapper: Clone + Send + Sync + 'static {
 /// Object-safe topic plugin. Prefer [`TypedTopicMapper`]; the blanket impl
 /// wires typed ROS↔bus endpoints.
 pub trait TopicMapper: Send + Sync {
+    fn type_name(&self) -> &str {
+        ""
+    }
+
     fn create_ros2_to_bus_subscription(
         &self,
         ros_node: &rclrs::Node,
@@ -249,6 +277,7 @@ pub trait TopicMapper: Send + Sync {
         ros_topic: &str,
         qos: TopicQos,
         drop_stats: Arc<DropStats>,
+        route_health: Arc<RouteHealth>,
     ) -> Result<Box<dyn Any + Send + Sync>>;
 
     fn attach_bus_to_ros(&self, ctx: TopicWireContext<'_>) -> Result<()>;
@@ -265,8 +294,17 @@ where
         ros_topic: &str,
         qos: TopicQos,
         drop_stats: Arc<DropStats>,
+        route_health: Arc<RouteHealth>,
     ) -> Result<Box<dyn Any + Send + Sync>> {
-        create_typed_ros2_to_bus_sub(self, ros_node, bus_pub, ros_topic, qos, drop_stats)
+        create_typed_ros2_to_bus_sub(
+            self,
+            ros_node,
+            bus_pub,
+            ros_topic,
+            qos,
+            drop_stats,
+            route_health,
+        )
     }
 
     fn attach_bus_to_ros(&self, ctx: TopicWireContext<'_>) -> Result<()> {
@@ -398,9 +436,16 @@ impl TopicMapper for RefTopicMapper {
         ros_topic: &str,
         qos: TopicQos,
         drop_stats: Arc<DropStats>,
+        route_health: Arc<RouteHealth>,
     ) -> Result<Box<dyn Any + Send + Sync>> {
-        self.0
-            .create_ros2_to_bus_subscription(ros_node, bus_pub, ros_topic, qos, drop_stats)
+        self.0.create_ros2_to_bus_subscription(
+            ros_node,
+            bus_pub,
+            ros_topic,
+            qos,
+            drop_stats,
+            route_health,
+        )
     }
 
     fn attach_bus_to_ros(&self, ctx: TopicWireContext<'_>) -> Result<()> {
@@ -460,7 +505,10 @@ mod tests {
         assert!(latched.is_transient_local());
         assert!(!latched.is_volatile());
         assert!(!TopicQos::keep_last(10).reliable().is_transient_local());
-        assert_eq!(TopicQos::sensor_data(), TopicQos::keep_last(5).best_effort());
+        assert_eq!(
+            TopicQos::sensor_data(),
+            TopicQos::keep_last(5).best_effort()
+        );
         assert_eq!(TopicQos::default(), TopicQos::keep_last(10).reliable());
         assert_eq!(
             TopicQos::latched(),
@@ -468,6 +516,14 @@ mod tests {
         );
         assert_eq!(TopicQos::bus(), TopicQos::keep_last(8).best_effort());
         assert_eq!(TopicQos::bus().depth(), crate::HighWaterMark::STREAM.snd);
+        assert_eq!(
+            TopicQos::keep_last(10).reliable().console_label(),
+            "keep_last(10).reliable"
+        );
+        assert_eq!(
+            TopicQos::latched().console_label(),
+            "keep_last(1).reliable.transient_local"
+        );
     }
 
     #[test]

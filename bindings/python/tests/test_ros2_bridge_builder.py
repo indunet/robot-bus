@@ -68,6 +68,8 @@ def test_topic_qos_presets():
     assert TopicQos.latched().is_transient_local is True
     assert TopicQos.bus().is_best_effort is True
     assert TopicQos.bus().depth == 8
+    assert TopicQos.default().console_label() == "keep_last(10).reliable"
+    assert TopicQos.latched().console_label() == "keep_last(1).reliable.transient_local"
 
 
 def test_topic_qos_requires_reliability():
@@ -374,6 +376,65 @@ def test_drop_stats_helper_counts_convert_decode_publish():
     assert snap == {"convert_fail": 2, "decode_fail": 1, "publish_fail": 1}
 
 
+def test_route_health_idle_and_warn_rate_limit():
+    from robot_bus.ros2_bridge.builder.drop_stats import RouteHealth
+
+    health = RouteHealth()
+    assert health.take_idle_event(True, False) is False
+    assert health.take_idle_event(True, True) is True
+    assert health.take_idle_event(True, True) is False
+    health.record_rx()
+    health.record_tx()
+    assert health.is_idle(True, True) is False
+    assert health.should_log_warn() is True
+    assert health.should_log_warn() is False
+    assert health.rx == 1
+    assert health.tx == 1
+
+
+def test_forward_with_health_counts_route_and_bridge():
+    from robot_bus.ros2_bridge.builder.drop_stats import (
+        DropStats,
+        RouteHealth,
+        forward_ros_to_bus,
+    )
+
+    stats = DropStats()
+    health = RouteHealth()
+
+    def boom(_msg) -> bytes:
+        raise ValueError("bad ros")
+
+    forward_ros_to_bus(stats, "/cam", boom, lambda _p: None, object(), health)
+    assert stats.snapshot()["convert_fail"] == 1
+    assert health.convert_fail == 1
+    assert health.rx == 1
+    assert health.tx == 0
+
+
+def test_bridge_snapshot_proto_roundtrip():
+    from robot_bus.robot_bus_interfaces.msg.v1 import BridgeSnapshot
+
+    snap = BridgeSnapshot()
+    snap.bridge_id = "b1"
+    snap.bridge_name = "cam_bridge"
+    row = snap.routes.add()
+    row.kind = "topic"
+    row.direction = "ros→bus"
+    row.ros_name = "/cam"
+    row.bus_name = "/cam"
+    row.convert_fail = 2
+    row.idle = True
+    out = BridgeSnapshot()
+    out.ParseFromString(snap.SerializeToString())
+    assert out.bridge_id == "b1"
+    assert out.bridge_name == "cam_bridge"
+    assert len(out.routes) == 1
+    assert out.routes[0].ros_name == "/cam"
+    assert out.routes[0].convert_fail == 2
+    assert out.routes[0].idle is True
+
+
 def test_ros2_bridge_drop_stats_starts_zero():
     from robot_bus.ros2_bridge import Ros2Bridge
 
@@ -408,6 +469,9 @@ if __name__ == "__main__":
     test_service_qos_required_on_bus_endpoint()
     test_action_stores_ros_qos()
     test_drop_stats_helper_counts_convert_decode_publish()
+    test_route_health_idle_and_warn_rate_limit()
+    test_forward_with_health_counts_route_and_bridge()
+    test_bridge_snapshot_proto_roundtrip()
     test_ros2_bridge_drop_stats_starts_zero()
     test_ros2_available_checks_rclpy()
     try:

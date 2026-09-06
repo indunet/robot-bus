@@ -8,6 +8,8 @@ export const SERVICES = "/robot_bus/services";
 export const ACTIONS = "/robot_bus/actions";
 export const TOPOLOGY = "/robot_bus/topology";
 export const EVENTS = "/robot_bus/events";
+/** 1 Hz BridgeSnapshot from each Ros2Bridge (not broker SNAPSHOT_PUBLISH). */
+export const BRIDGES = "/robot_bus/bridges";
 
 export const TOPOLOGY_REGISTER = "/robot_bus/topology/register";
 export const TOPOLOGY_UNREGISTER = "/robot_bus/topology/unregister";

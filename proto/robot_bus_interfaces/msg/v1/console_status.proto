@@ -124,3 +124,32 @@ message TopicDemand {
   string topic = 1;
   uint32 subscribers = 2;
 }
+
+// One ROS2 ↔ bus route. Published by the bridge process (not the broker).
+message BridgeRoute {
+  // "topic" | "service" | "action"
+  string kind = 1;
+  // "ros→bus" | "bus→ros"
+  string direction = 2;
+  string ros_name = 3;
+  string bus_name = 4;
+  string type_name = 5;
+  string ros_qos = 6;
+  string bus_qos = 7;
+  bool lazy = 8;
+  bool enabled = 9;
+  uint64 rx = 10;
+  uint64 tx = 11;
+  uint64 convert_fail = 12;
+  uint64 decode_fail = 13;
+  uint64 publish_fail = 14;
+  uint64 last_rx_ms = 15;
+  bool idle = 16;
+}
+
+// One Ros2Bridge process. Console merges by `bridge_id` (multi-bridge).
+message BridgeSnapshot {
+  string bridge_id = 1;
+  string bridge_name = 2;
+  repeated BridgeRoute routes = 3;
+}

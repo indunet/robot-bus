@@ -25,6 +25,7 @@ impl TopicMapper for DummyTopicMapper {
         _ros_topic: &str,
         _qos: TopicQos,
         _drop_stats: std::sync::Arc<DropStats>,
+        _route_health: std::sync::Arc<crate::ros2_bridge::drop_stats::RouteHealth>,
     ) -> std::result::Result<Box<dyn Any + Send + Sync>, BusError> {
         Err(BusError::Protocol("dummy".into()))
     }
@@ -45,12 +46,17 @@ fn per_route_custom_topic_mapper_accepted() {
 
 #[test]
 fn builtin_concrete_mapper() {
-    Ros2Bridge::new("t")
+    let b = Ros2Bridge::new("t")
         .from_ros("/a", ros_qos())
         .to_bus("/a", bus_qos())
         .mapper(crate::ros2_bridge::StdMsgsStringMapper)
         .add()
         .expect("builtin topic mapper object");
+    assert!(
+        b.routes[0].type_name.contains("StdMsgsStringMapper"),
+        "{}",
+        b.routes[0].type_name
+    );
 }
 
 #[test]

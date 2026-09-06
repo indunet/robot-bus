@@ -557,7 +557,7 @@ Same process holds both:
 
 The main loop must drive both sides (`spin` / `spin_once`); implementation details differ per language, semantics are the same: drain ROS↔bus queues and drive the bus.
 
-Topic convert / decode / publish failures are dropped (the bridge stays up). Each bridge keeps atomic counters; `drop_stats()` returns a snapshot (`convert_fail` / `decode_fail` / `publish_fail`). Failures also log a warning. This is not published on a console topic.
+Topic convert / decode / publish failures are dropped (the bridge stays up). Each bridge keeps atomic counters; `drop_stats()` returns the **sum** across routes (`convert_fail` / `decode_fail` / `publish_fail`). Failure logs are rate-limited per route (first plus at most one per second). `build()` prints the route table. Per-topic route counters are published at 1 Hz on `/robot_bus/bridges` (console **BRIDGE** tab). If a topic route has never received a sample 15s after the first `spin`, the bridge warns once and emits a `/robot_bus/events` line that the direction or ROS QoS may be wrong.
 
 ```python
 bridge.drop_stats()  # {"convert_fail": 0, "decode_fail": 0, "publish_fail": 0}

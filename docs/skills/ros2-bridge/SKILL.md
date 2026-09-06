@@ -234,8 +234,8 @@ One process holds:
 
 1. `source` ROS; broker up; `ros2_available()` true where applicable.
 2. `ros2 topic echo` / `ros2 service call` / `ros2 action send_goal` on ROS names.
-3. Bus console `http://127.0.0.1:15570` shows matching bus names with traffic.
-4. Wrong direction → silence on one side; flip `Direction` deliberately.
+3. Bus console `http://127.0.0.1:15570` **BRIDGE** tab shows routes, `drop_stats`, and idle; Topics may mark `bridged`.
+4. Wrong direction or ROS QoS mismatch → idle WARN after ~15s (`possible wrong direction or ROS QoS mismatch`); flip the chain or QoS.
 
 ## Common failures
 

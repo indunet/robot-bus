@@ -20,6 +20,7 @@ describe("coalesceSubscribeFilters", () => {
         "/robot_bus/actions",
         "/robot_bus/topology",
         "/robot_bus/events",
+        "/robot_bus/bridges",
       ]),
       ["/robot_bus/"],
     );

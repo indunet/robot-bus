@@ -7,11 +7,13 @@ use std::time::Duration;
 
 use rclrs::{Context as RosContext, CreateBasicExecutor, SpinOptions};
 
+use crate::console_topics;
 use crate::discovery::DiscoverOpts;
 use crate::errors::{BusError, Result};
-use crate::ros2_bridge::drop_stats::DropStats;
+use crate::ros2_bridge::drop_stats::{DropStats, RouteHealth};
 use crate::ros2_bridge::mapper::{ActionMapper, Direction, ServiceMapper, TopicMapper};
-use crate::runtime::{Node, NodeOptions};
+use crate::ros2_bridge::observe::{self, ConsoleRoute};
+use crate::runtime::{Node, NodeOptions, QosProfile};
 
 use super::bridge::Ros2Bridge;
 use super::specs::{
@@ -93,6 +95,7 @@ impl Ros2BridgeBuilder {
         ros_topic: String,
         bus_topic: String,
         mapper: Arc<dyn TopicMapper>,
+        type_name: String,
         direction: Direction,
         lazy: bool,
         ros_qos: TopicQos,
@@ -108,6 +111,7 @@ impl Ros2BridgeBuilder {
             ros_topic,
             bus_topic,
             mapper,
+            type_name,
             direction,
             lazy,
             ros_qos,
@@ -163,19 +167,23 @@ impl Ros2BridgeBuilder {
     }
 
     /// Add a topic route with an explicit [`TopicMapper`].
-    pub fn add_route_mapper(
+    pub fn add_route_mapper<M: IntoTopicMapper>(
         self,
         ros_topic: impl Into<String>,
         bus_topic: impl Into<String>,
-        mapper: impl IntoTopicMapper,
+        mapper: M,
         direction: Direction,
         ros_qos: TopicQos,
         bus_qos: TopicQos,
     ) -> Result<Self> {
+        let rust_name = std::any::type_name::<M>();
+        let mapper = mapper.into_topic_mapper();
+        let type_name = super::topic_mapper_label(&*mapper, rust_name);
         self.push_route(
             ros_topic.into(),
             bus_topic.into(),
-            mapper.into_topic_mapper(),
+            mapper,
+            type_name,
             direction,
             false,
             ros_qos,
@@ -208,8 +216,10 @@ impl Ros2BridgeBuilder {
         let mut eager_bus_topics = HashSet::new();
         let mut ros_entities: Vec<Box<dyn Any + Send + Sync>> = Vec::new();
         let drop_stats = Arc::new(DropStats::new());
+        let mut console_routes: Vec<ConsoleRoute> = Vec::new();
 
         for route in &self.routes {
+            let health = Arc::new(RouteHealth::new());
             wire_route(
                 &ros_node,
                 &mut bus_node,
@@ -220,16 +230,54 @@ impl Ros2BridgeBuilder {
                 &mut ros_subs,
                 &mut ros_entities,
                 Arc::clone(&drop_stats),
+                Arc::clone(&health),
             )?;
+            console_routes.push(ConsoleRoute::topic(
+                route.ros_topic.clone(),
+                route.bus_topic.clone(),
+                route.direction,
+                route.type_name.clone(),
+                route.ros_qos,
+                route.bus_qos,
+                route.lazy,
+                health,
+            ));
         }
 
         for svc in &self.services {
             wire_service_route(&ros_node, &mut bus_node, svc, &mut ros_entities)?;
+            console_routes.push(ConsoleRoute::rpc(
+                "service",
+                svc.ros_service.clone(),
+                svc.bus_service.clone(),
+                svc.direction,
+                svc.mapper.type_name(),
+                svc.ros_qos,
+                svc.bus_qos,
+            ));
         }
 
         for act in &self.actions {
             wire_action_route(&ros_node, &mut bus_node, act, &mut ros_entities)?;
+            console_routes.push(ConsoleRoute::rpc(
+                "action",
+                act.ros_action.clone(),
+                act.bus_action.clone(),
+                act.direction,
+                act.mapper.type_name(),
+                act.ros_qos,
+                act.bus_qos,
+            ));
         }
+
+        observe::log_route_table(&self.name, &console_routes);
+
+        let bridges_pub = bus_node
+            .create_publisher_raw_with_qos(console_topics::BRIDGES, QosProfile::keep_last(8))?;
+        let events_pub = bus_node
+            .create_publisher_raw_with_qos(console_topics::EVENTS, QosProfile::keep_last(8))?;
+        let bridge_id = uuid::Uuid::new_v4().to_string();
+        let bridge_name = self.name.clone();
 
         let (demand_tx, demand_rx) = mpsc::channel();
         let mut demand_subs = Vec::new();
@@ -261,6 +309,13 @@ impl Ros2BridgeBuilder {
             ros_commands,
             _ros_spin: Some(ros_spin),
             drop_stats,
+            bridge_id,
+            bridge_name,
+            console_routes,
+            bridges_pub,
+            events_pub,
+            last_snapshot_at: None,
+            event_seq: 0,
         })
     }
 }

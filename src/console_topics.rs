@@ -17,6 +17,9 @@ pub const TOPOLOGY: &str = "/robot_bus/topology";
 pub const EVENTS: &str = "/robot_bus/events";
 /// Immediate [`crate::robot_bus_interfaces::msg::v1::TopicDemand`] (subscriber count).
 pub const TOPIC_DEMAND: &str = "/robot_bus/topic_demand";
+/// 1 Hz [`crate::robot_bus_interfaces::msg::v1::BridgeSnapshot`] from each `Ros2Bridge`.
+/// Published by the bridge process, not the broker status loop.
+pub const BRIDGES: &str = "/robot_bus/bridges";
 
 /// Client → broker: [`crate::robot_bus_interfaces::msg::v1::TopologyRegister`].
 pub const TOPOLOGY_REGISTER: &str = "/robot_bus/topology/register";
@@ -58,6 +61,7 @@ mod tests {
     fn reserved_namespace() {
         assert!(is_reserved_name("/robot_bus"));
         assert!(is_reserved_name("/robot_bus/status"));
+        assert!(is_reserved_name("/robot_bus/bridges"));
         assert!(is_reserved_name(" /robot_bus/topology/register "));
         assert!(is_reserved_name("/robot_bus/tank/pose"));
         assert!(!is_reserved_name("/robot_bus_extra"));

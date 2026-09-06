@@ -78,6 +78,31 @@ export interface ActionInfo {
   lastRunAt: number
 }
 
+export interface BridgeRouteInfo {
+  kind: string
+  direction: string
+  rosName: string
+  busName: string
+  typeName: string
+  rosQos: string
+  busQos: string
+  lazy: boolean
+  enabled: boolean
+  rx: number
+  tx: number
+  convertFail: number
+  decodeFail: number
+  publishFail: number
+  lastRxMs: number
+  idle: boolean
+}
+
+export interface BridgeInfo {
+  bridgeId: string
+  bridgeName: string
+  routes: BridgeRouteInfo[]
+}
+
 export type LogLevel = 'INFO' | 'WARN' | 'ERROR' | 'DEBUG'
 
 export interface LogEntry {

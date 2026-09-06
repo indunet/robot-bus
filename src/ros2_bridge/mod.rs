@@ -18,6 +18,7 @@ mod builder;
 mod drop_stats;
 mod dynamic_rpc_spike;
 mod mapper;
+mod observe;
 mod ros_idl;
 mod spin;
 mod typed_rpc;
@@ -50,7 +51,7 @@ pub use builder::{
     Ros2Bridge, Ros2BridgeBuilder, Ros2ToBusReady, Service, ServiceFromBus, ServiceFromRos,
     ServicePair, ServiceReady, ACTION_CALL_TIMEOUT, SERVICE_CALL_TIMEOUT,
 };
-pub use drop_stats::{DropStats, DropStatsSnapshot};
+pub use drop_stats::{DropStats, DropStatsSnapshot, RouteHealth};
 pub use mapper::{
     lookup_topic_mapper, lookup_topic_mapper_arc, registered_topic_types, ActionMapper,
     ActionWireContext, Direction, ServiceMapper, ServiceWireContext, TopicDurability, TopicMapper,

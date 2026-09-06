@@ -12,14 +12,14 @@ use std::time::{Duration, Instant};
 use rclrs::{BeginAcceptedGoal, GoalClient, IntoActionClientOptions, IntoActionServerOptions};
 use rosidl_runtime_rs::{Action as ActionIdl, Service as ServiceIdl};
 
+use crate::action_bus::ActionMessage;
 use crate::errors::{BusError, Result};
-use crate::ros2_bridge::drop_stats::DropStats;
+use crate::ros2_bridge::drop_stats::{DropStats, RouteHealth};
 use crate::ros2_bridge::mapper::{
     ros_action_feedback_qos_profile, ros_service_qos_profile, ros_topic_options, ActionWireContext,
     Direction, ServiceWireContext, TopicQos, TopicWireContext, TypedActionMapper,
     TypedServiceMapper, TypedTopicMapper,
 };
-use crate::action_bus::ActionMessage;
 use crate::runtime::{
     ActionGoalLiveHandler, MessageCallback, QosProfile, RawActionFeedbackCallback, ServiceHandler,
     TopicPublisherRaw,
@@ -34,6 +34,7 @@ pub fn create_typed_ros2_to_bus_sub<M>(
     ros_topic: &str,
     qos: TopicQos,
     drop_stats: Arc<DropStats>,
+    route_health: Arc<RouteHealth>,
 ) -> Result<Box<dyn Any + Send + Sync>>
 where
     M: TypedTopicMapper,
@@ -46,17 +47,26 @@ where
     let topic_cb = topic.clone();
     let sub = ros_node
         .create_subscription(opts, move |msg: M::Ros| {
+            route_health.record_rx();
             let payload = match mapper.ros_to_bus(msg) {
                 Ok(bus) => bus.encode_to_vec(),
                 Err(e) => {
-                    log::warn!("ros→bus {topic_cb} convert: {e}");
                     drop_stats.record_convert_fail();
+                    route_health.record_convert_fail();
+                    if route_health.should_log_warn() {
+                        log::warn!("ros→bus {topic_cb} convert: {e}");
+                    }
                     return;
                 }
             };
             if let Err(e) = bus_pub.publish(&payload) {
-                log::warn!("ros→bus {topic_cb} publish: {e}");
                 drop_stats.record_publish_fail();
+                route_health.record_publish_fail();
+                if route_health.should_log_warn() {
+                    log::warn!("ros→bus {topic_cb} publish: {e}");
+                }
+            } else {
+                route_health.record_tx();
             }
         })
         .map_err(|e| BusError::Protocol(format!("ros typed subscription {topic}: {e}")))?;
@@ -78,35 +88,48 @@ where
     let ros_pub_cb = ros_pub.clone();
     ctx.ros_entities.push(Box::new(ros_pub));
     let drop_stats = Arc::clone(&ctx.drop_stats);
+    let route_health = Arc::clone(&ctx.route_health);
     let cb: MessageCallback = Arc::new(move |payload| {
         use prost::Message as _;
+        route_health.record_rx();
         let bus = match M::Bus::decode(payload) {
             Ok(b) => b,
             Err(e) => {
-                log::warn!("bus→ros {topic} decode: {e}");
                 drop_stats.record_decode_fail();
+                route_health.record_decode_fail();
+                if route_health.should_log_warn() {
+                    log::warn!("bus→ros {topic} decode: {e}");
+                }
                 return;
             }
         };
         match mapper.bus_to_ros(bus) {
             Ok(ros_msg) => {
                 if let Err(e) = ros_pub_cb.publish(ros_msg) {
-                    log::warn!("bus→ros {topic} publish: {e}");
                     drop_stats.record_publish_fail();
+                    route_health.record_publish_fail();
+                    if route_health.should_log_warn() {
+                        log::warn!("bus→ros {topic} publish: {e}");
+                    }
+                } else {
+                    route_health.record_tx();
                 }
             }
             Err(e) => {
-                log::warn!("bus→ros {topic} convert: {e}");
                 drop_stats.record_convert_fail();
+                route_health.record_convert_fail();
+                if route_health.should_log_warn() {
+                    log::warn!("bus→ros {topic} convert: {e}");
+                }
             }
         }
     });
-        ctx.bus_node.create_subscription_raw_with_qos(
-            ctx.bus_topic,
-            QosProfile::keep_last(ctx.bus_qos.depth()),
-            cb,
-            None,
-        )?;
+    ctx.bus_node.create_subscription_raw_with_qos(
+        ctx.bus_topic,
+        QosProfile::keep_last(ctx.bus_qos.depth()),
+        cb,
+        None,
+    )?;
     Ok(())
 }
 
@@ -295,12 +318,10 @@ where
     let mapper = mapper.clone();
     match ctx.direction {
         Direction::Ros2ToBus => {
-            let bus_client = Arc::new(Mutex::new(
-                ctx.bus_node.create_action_client_raw_with_qos(
-                    ctx.bus_action,
-                    QosProfile::keep_last(ctx.bus_qos.depth()),
-                )?,
-            ));
+            let bus_client = Arc::new(Mutex::new(ctx.bus_node.create_action_client_raw_with_qos(
+                ctx.bus_action,
+                QosProfile::keep_last(ctx.bus_qos.depth()),
+            )?));
             let timeout = ctx.timeout;
             let type_name = mapper.type_name().to_string();
             let srv_qos = ros_service_qos_profile(ctx.ros_qos);
@@ -313,84 +334,90 @@ where
                         .cancel_service_qos(srv_qos)
                         .feedback_topic_qos(fb_qos),
                     move |requested| {
-                    let bus_client = Arc::clone(&bus_client);
-                    let mapper = mapper.clone();
-                    async move {
-                        let goal = (**requested.goal()).clone();
-                        let accepted = requested.accept();
-                        let executing = match accepted.begin() {
-                            BeginAcceptedGoal::Execute(e) => e,
-                            BeginAcceptedGoal::Cancel(c) => {
-                                return c.cancelled_with(Default::default());
-                            }
-                        };
-                        let bus_goal = match mapper.ros_goal_to_bus(&goal) {
-                            Ok(b) => b,
-                            Err(e) => {
-                                log::warn!("ros→bus encode goal failed: {e}");
-                                return executing.aborted_with(Default::default());
-                            }
-                        };
-                        let fb_pub = executing.feedback_publisher();
-                        let fb_mapper = mapper.clone();
-                        let feedback_cb: RawActionFeedbackCallback = Arc::new(move |msg: &ActionMessage| {
-                            if msg.kind != ActionKind::Feedback {
-                                return;
-                            }
-                            match fb_mapper.bus_feedback_to_ros(&msg.body) {
-                                Ok(fb) => {
-                                    let _ = fb_pub.publish(fb);
+                        let bus_client = Arc::clone(&bus_client);
+                        let mapper = mapper.clone();
+                        async move {
+                            let goal = (**requested.goal()).clone();
+                            let accepted = requested.accept();
+                            let executing = match accepted.begin() {
+                                BeginAcceptedGoal::Execute(e) => e,
+                                BeginAcceptedGoal::Cancel(c) => {
+                                    return c.cancelled_with(Default::default());
                                 }
-                                Err(e) => log::warn!("ros→bus decode feedback failed: {e}"),
-                            }
-                        });
-                        let bus_handle = {
-                            let guard = match bus_client.lock() {
-                                Ok(g) => g,
+                            };
+                            let bus_goal = match mapper.ros_goal_to_bus(&goal) {
+                                Ok(b) => b,
                                 Err(e) => {
-                                    log::warn!("ros→bus action client lock poisoned: {e}");
+                                    log::warn!("ros→bus encode goal failed: {e}");
                                     return executing.aborted_with(Default::default());
                                 }
                             };
-                            match guard.send_goal(&bus_goal, None, Some(timeout), Some(feedback_cb))
-                            {
-                                Ok(h) => h,
-                                Err(e) => {
-                                    log::warn!("ros→bus send_goal failed: {e}");
-                                    return executing.aborted_with(Default::default());
-                                }
-                            }
-                        };
-                        let wait_handle = bus_handle.clone();
-                        let wait_fut =
-                            tokio::task::spawn_blocking(move || wait_handle.wait_result());
-                        match executing.unless_cancel_requested(wait_fut).await {
-                            Ok(Ok(Ok(result_msg))) => {
-                                match mapper.bus_result_to_ros(&result_msg.body) {
-                                    Ok(result) => executing.succeeded_with(result),
+                            let fb_pub = executing.feedback_publisher();
+                            let fb_mapper = mapper.clone();
+                            let feedback_cb: RawActionFeedbackCallback =
+                                Arc::new(move |msg: &ActionMessage| {
+                                    if msg.kind != ActionKind::Feedback {
+                                        return;
+                                    }
+                                    match fb_mapper.bus_feedback_to_ros(&msg.body) {
+                                        Ok(fb) => {
+                                            let _ = fb_pub.publish(fb);
+                                        }
+                                        Err(e) => log::warn!("ros→bus decode feedback failed: {e}"),
+                                    }
+                                });
+                            let bus_handle = {
+                                let guard = match bus_client.lock() {
+                                    Ok(g) => g,
                                     Err(e) => {
-                                        log::warn!("ros→bus decode result failed: {e}");
-                                        executing.aborted_with(Default::default())
+                                        log::warn!("ros→bus action client lock poisoned: {e}");
+                                        return executing.aborted_with(Default::default());
+                                    }
+                                };
+                                match guard.send_goal(
+                                    &bus_goal,
+                                    None,
+                                    Some(timeout),
+                                    Some(feedback_cb),
+                                ) {
+                                    Ok(h) => h,
+                                    Err(e) => {
+                                        log::warn!("ros→bus send_goal failed: {e}");
+                                        return executing.aborted_with(Default::default());
                                     }
                                 }
-                            }
-                            Ok(Ok(Err(e))) => {
-                                log::warn!("ros→bus action goal failed: {e}");
-                                executing.aborted_with(Default::default())
-                            }
-                            Ok(Err(e)) => {
-                                log::warn!("ros→bus action join failed: {e}");
-                                executing.aborted_with(Default::default())
-                            }
-                            Err(()) => {
-                                let _ = bus_handle.cancel();
-                                executing
-                                    .begin_cancelling()
-                                    .cancelled_with(Default::default())
+                            };
+                            let wait_handle = bus_handle.clone();
+                            let wait_fut =
+                                tokio::task::spawn_blocking(move || wait_handle.wait_result());
+                            match executing.unless_cancel_requested(wait_fut).await {
+                                Ok(Ok(Ok(result_msg))) => {
+                                    match mapper.bus_result_to_ros(&result_msg.body) {
+                                        Ok(result) => executing.succeeded_with(result),
+                                        Err(e) => {
+                                            log::warn!("ros→bus decode result failed: {e}");
+                                            executing.aborted_with(Default::default())
+                                        }
+                                    }
+                                }
+                                Ok(Ok(Err(e))) => {
+                                    log::warn!("ros→bus action goal failed: {e}");
+                                    executing.aborted_with(Default::default())
+                                }
+                                Ok(Err(e)) => {
+                                    log::warn!("ros→bus action join failed: {e}");
+                                    executing.aborted_with(Default::default())
+                                }
+                                Err(()) => {
+                                    let _ = bus_handle.cancel();
+                                    executing
+                                        .begin_cancelling()
+                                        .cancelled_with(Default::default())
+                                }
                             }
                         }
-                    }
-                })
+                    },
+                )
                 .map_err(|e| {
                     BusError::Protocol(format!("ros create_action_server {type_name}: {e}"))
                 })?;

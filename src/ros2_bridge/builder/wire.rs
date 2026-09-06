@@ -8,7 +8,7 @@ use prost::Message;
 use crate::console_topics;
 use crate::errors::Result;
 use crate::robot_bus_interfaces::msg::v1::{TopicDemand, TopicStatsList};
-use crate::ros2_bridge::drop_stats::DropStats;
+use crate::ros2_bridge::drop_stats::{DropStats, RouteHealth};
 use crate::ros2_bridge::mapper::{
     ActionWireContext, Direction, ServiceWireContext, TopicMapper, TopicQos, TopicWireContext,
 };
@@ -36,8 +36,16 @@ pub(super) fn create_ros2_to_bus_sub(
     ros_topic: &str,
     qos: TopicQos,
     drop_stats: Arc<DropStats>,
+    route_health: Arc<RouteHealth>,
 ) -> Result<Box<dyn Any + Send + Sync>> {
-    mapper.create_ros2_to_bus_subscription(ros_node, bus_pub, ros_topic, qos, drop_stats)
+    mapper.create_ros2_to_bus_subscription(
+        ros_node,
+        bus_pub,
+        ros_topic,
+        qos,
+        drop_stats,
+        route_health,
+    )
 }
 
 pub(super) fn subscribe_demand(
@@ -45,32 +53,30 @@ pub(super) fn subscribe_demand(
     demand_tx: Sender<DemandEvent>,
 ) -> Result<Vec<SubscriptionHandle>> {
     let tx_demand = demand_tx.clone();
-    let demand_cb: MessageCallback =
-        Arc::new(move |payload| match TopicDemand::decode(payload) {
-            Ok(msg) => {
-                let _ = tx_demand.send(DemandEvent::Count {
-                    topic: msg.topic,
-                    subscribers: msg.subscribers,
-                });
-            }
-            Err(err) => log::warn!("decode TopicDemand: {err}"),
-        });
+    let demand_cb: MessageCallback = Arc::new(move |payload| match TopicDemand::decode(payload) {
+        Ok(msg) => {
+            let _ = tx_demand.send(DemandEvent::Count {
+                topic: msg.topic,
+                subscribers: msg.subscribers,
+            });
+        }
+        Err(err) => log::warn!("decode TopicDemand: {err}"),
+    });
     let h1 = bus_node.create_subscription_raw(console_topics::TOPIC_DEMAND, demand_cb, None)?;
 
     let tx_topics = demand_tx;
-    let topics_cb: MessageCallback = Arc::new(move |payload| match TopicStatsList::decode(
-        payload,
-    ) {
-        Ok(list) => {
-            let counts = list
-                .topics
-                .into_iter()
-                .map(|t| (t.name, t.subscribers as u32))
-                .collect();
-            let _ = tx_topics.send(DemandEvent::Snapshot { counts });
-        }
-        Err(err) => log::warn!("decode TopicStatsList: {err}"),
-    });
+    let topics_cb: MessageCallback =
+        Arc::new(move |payload| match TopicStatsList::decode(payload) {
+            Ok(list) => {
+                let counts = list
+                    .topics
+                    .into_iter()
+                    .map(|t| (t.name, t.subscribers as u32))
+                    .collect();
+                let _ = tx_topics.send(DemandEvent::Snapshot { counts });
+            }
+            Err(err) => log::warn!("decode TopicStatsList: {err}"),
+        });
     let h2 = bus_node.create_subscription_raw(console_topics::TOPICS, topics_cb, None)?;
     Ok(vec![h1, h2])
 }
@@ -85,6 +91,7 @@ pub(super) fn wire_route(
     ros_subs: &mut Vec<Box<dyn Any + Send + Sync>>,
     ros_entities: &mut Vec<Box<dyn Any + Send + Sync>>,
     drop_stats: Arc<DropStats>,
+    route_health: Arc<RouteHealth>,
 ) -> Result<()> {
     let mapper = Arc::clone(&route.mapper);
     let ros_topic = route.ros_topic.clone();
@@ -103,6 +110,7 @@ pub(super) fn wire_route(
                 bus_qos,
                 ros_entities,
                 drop_stats,
+                route_health,
             })?;
         }
         Direction::Ros2ToBus => {
@@ -116,6 +124,7 @@ pub(super) fn wire_route(
                         mapper,
                         ros_qos,
                         sub: None,
+                        health: Arc::clone(&route_health),
                     },
                 );
             } else {
@@ -126,6 +135,7 @@ pub(super) fn wire_route(
                     &ros_topic,
                     ros_qos,
                     drop_stats,
+                    route_health,
                 )?;
                 ros_subs.push(sub);
                 eager_bus_topics.insert(bus_topic);

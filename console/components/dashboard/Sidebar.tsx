@@ -9,12 +9,14 @@ import {
   Network,
   Bot,
   BookOpen,
+  ArrowLeftRight,
 } from 'lucide-react'
 import { useI18n } from '@/lib/i18n'
 
 export type Tab =
   | 'overview'
   | 'topics'
+  | 'bridges'
   | 'services'
   | 'actions'
   | 'logs'
@@ -47,6 +49,7 @@ export default function Sidebar({
     { id: 'overview', label: t('navOverview'), short: t('navOverviewShort'), icon: <LayoutDashboard size={16} /> },
     { id: 'topology', label: t('navTopology'), short: t('navTopologyShort'), icon: <Network size={16} /> },
     { id: 'topics', label: t('navTopics'), short: t('navTopicsShort'), icon: <Radio size={16} /> },
+    { id: 'bridges', label: t('navBridge'), short: t('navBridgeShort'), icon: <ArrowLeftRight size={16} /> },
     { id: 'services', label: t('navServices'), short: t('navServicesShort'), icon: <Cpu size={16} /> },
     { id: 'actions', label: t('navActions'), short: t('navActionsShort'), icon: <Zap size={16} /> },
     { id: 'logs', label: t('navEvents'), short: t('navEventsShort'), icon: <ScrollText size={16} /> },

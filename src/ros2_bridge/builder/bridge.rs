@@ -8,6 +8,7 @@ use std::time::{Duration, Instant};
 use crate::errors::{BusError, Result};
 use crate::lazy_subscribe::{should_enable_ros_subscription, CONSOLE_DETECT_TIMEOUT};
 use crate::ros2_bridge::drop_stats::{DropStats, DropStatsSnapshot};
+use crate::ros2_bridge::observe::{self, ConsoleRoute, IDLE_GRACE, SNAPSHOT_INTERVAL};
 use crate::runtime::{Node, TopicPublisherRaw};
 
 use super::specs::DemandEvent;
@@ -32,6 +33,13 @@ pub struct Ros2Bridge {
     pub(super) ros_commands: Arc<rclrs::ExecutorCommands>,
     pub(super) _ros_spin: Option<JoinHandle<()>>,
     pub(super) drop_stats: Arc<DropStats>,
+    pub(super) bridge_id: String,
+    pub(super) bridge_name: String,
+    pub(super) console_routes: Vec<ConsoleRoute>,
+    pub(super) bridges_pub: TopicPublisherRaw,
+    pub(super) events_pub: TopicPublisherRaw,
+    pub(super) last_snapshot_at: Option<Instant>,
+    pub(super) event_seq: u64,
 }
 
 impl Drop for Ros2Bridge {
@@ -90,7 +98,57 @@ impl Ros2Bridge {
                 }
             }
         }
+        self.publish_observe();
         spin_result
+    }
+
+    fn route_enabled(&self, route: &ConsoleRoute) -> bool {
+        if !route.lazy {
+            return true;
+        }
+        self.has_ros_subscription(&route.bus_name)
+    }
+
+    fn grace_elapsed(&self) -> bool {
+        self.first_spin_at
+            .is_some_and(|t| t.elapsed() >= IDLE_GRACE)
+    }
+
+    fn publish_observe(&mut self) {
+        let now = Instant::now();
+        if self
+            .last_snapshot_at
+            .is_some_and(|t| now.duration_since(t) < SNAPSHOT_INTERVAL)
+        {
+            return;
+        }
+        self.last_snapshot_at = Some(now);
+        let grace = self.grace_elapsed();
+        let payload = observe::encode_snapshot(
+            &self.bridge_id,
+            &self.bridge_name,
+            &self.console_routes,
+            |r| self.route_enabled(r),
+            grace,
+        );
+        if let Err(err) = self.bridges_pub.publish(&payload) {
+            log::warn!("ros2_bridge snapshot publish: {err}");
+        }
+        for route in &self.console_routes {
+            if !route.watch_idle {
+                continue;
+            }
+            let enabled = self.route_enabled(route);
+            if route.health.take_idle_event(enabled, grace) {
+                self.event_seq += 1;
+                let msg = route.idle_message();
+                log::warn!("ros2_bridge/{}: {msg}", self.bridge_name);
+                let bytes = observe::encode_idle_event(&self.bridge_name, self.event_seq, route);
+                if let Err(err) = self.events_pub.publish(&bytes) {
+                    log::warn!("ros2_bridge idle event publish: {err}");
+                }
+            }
+        }
     }
 
     fn drain_demand(&mut self) {
@@ -148,6 +206,7 @@ impl Ros2Bridge {
                 &route.ros_topic,
                 route.ros_qos,
                 Arc::clone(&self.drop_stats),
+                Arc::clone(&route.health),
             ) {
                 Ok(sub) => route.sub = Some(sub),
                 Err(err) => log::warn!("lazy ros2 subscribe {topic}: {err}"),

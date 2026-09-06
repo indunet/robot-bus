@@ -95,6 +95,15 @@ int test_qos_presets() {
     std::fprintf(stderr, "bus preset mismatch\n");
     return 1;
   }
+  if (robot_bus::qos_console_label(TopicQos::ros_default()) != "keep_last(10).reliable") {
+    std::fprintf(stderr, "qos console label mismatch\n");
+    return 1;
+  }
+  if (robot_bus::qos_console_label(TopicQos::latched()) !=
+      "keep_last(1).reliable.transient_local") {
+    std::fprintf(stderr, "latched qos console label mismatch\n");
+    return 1;
+  }
   std::printf("qos presets ok\n");
   return 0;
 }
@@ -182,6 +191,25 @@ int test_drop_stats_snapshot() {
   auto snap = stats.snapshot();
   if (snap.convert_fail != 1 || snap.decode_fail != 2 || snap.publish_fail != 3) {
     std::fprintf(stderr, "DropStats snapshot mismatch\n");
+    return 1;
+  }
+#endif
+#ifdef ROBOT_BUS_HAS_ROS2
+  robot_bus::RouteHealth health;
+  if (health.take_idle_event(true, false)) {
+    std::fprintf(stderr, "idle should wait for grace\n");
+    return 1;
+  }
+  if (!health.take_idle_event(true, true)) {
+    std::fprintf(stderr, "idle should fire once after grace\n");
+    return 1;
+  }
+  if (health.take_idle_event(true, true)) {
+    std::fprintf(stderr, "idle should latch\n");
+    return 1;
+  }
+  if (!health.should_log_warn() || health.should_log_warn()) {
+    std::fprintf(stderr, "warn rate-limit first then silence\n");
     return 1;
   }
 #endif

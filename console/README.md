@@ -25,8 +25,15 @@ Monitoring data is published by the broker on system topics:
 - `/robot_bus/actions`
 - `/robot_bus/topology`
 - `/robot_bus/events`
+- `/robot_bus/bridges` (published by each `Ros2Bridge`, not the broker 1 Hz loop)
 
 A REST shim remains for CLI tooling (`rbus`): `GET /api/v1/status|topics|services|actions|topology|console` and `SSE /api/v1/events`. `GET /api/v1/console` returns `{ tankEnabled, docsEnabled }` for sidebar flags (`--no-tank` / `--no-docs`).
+
+UI copy supports EN / 中文 (default EN; preference in `localStorage` key `robot-bus-console-locale`).
+
+### ROS 2 Bridge (read-only)
+
+Sidebar **BRIDGE**: route table from 1 Hz `BridgeSnapshot` on `/robot_bus/bridges`. Console merges by `bridge_id` (~3s TTL). Idle / drop warnings also appear in **EVENTS**.
 
 UI copy supports EN / 中文 (default EN; preference in `localStorage` key `robot-bus-console-locale`).
 

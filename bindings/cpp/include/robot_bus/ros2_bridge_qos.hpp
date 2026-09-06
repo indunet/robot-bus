@@ -11,6 +11,7 @@
 
 #ifdef ROBOT_BUS_HAS_ROS2
 #include <atomic>
+#include <chrono>
 #include <mutex>
 #include <rcl_action/action_client.h>
 #include <rcl_action/action_server.h>
@@ -117,6 +118,19 @@ struct DropStatsSnapshot {
   uint64_t publish_fail = 0;
 };
 
+inline std::string qos_console_label(const TopicQos &qos) {
+  std::string s = "keep_last(" + std::to_string(qos.depth()) + ").";
+  s += qos.is_best_effort() ? "best_effort" : "reliable";
+  if (qos.is_transient_local()) {
+    s += ".transient_local";
+  }
+  return s;
+}
+
+inline const char *direction_label(Direction direction) {
+  return direction == Direction::Ros2ToBus ? "ros→bus" : "bus→ros";
+}
+
 #ifdef ROBOT_BUS_HAS_ROS2
 /// Atomic drop counters shared with ROS and bus callbacks.
 struct DropStats {
@@ -133,6 +147,57 @@ struct DropStats {
   }
 };
 
+struct RouteHealth {
+  std::atomic<uint64_t> rx{0};
+  std::atomic<uint64_t> tx{0};
+  std::atomic<uint64_t> convert_fail{0};
+  std::atomic<uint64_t> decode_fail{0};
+  std::atomic<uint64_t> publish_fail{0};
+  std::atomic<uint64_t> last_rx_ms{0};
+  std::atomic<uint64_t> last_warn_ms{0};
+  std::atomic<bool> idle_latched{false};
+
+  static uint64_t unix_ms() {
+    return static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::milliseconds>(
+                                     std::chrono::system_clock::now().time_since_epoch())
+                                     .count());
+  }
+
+  void record_rx() {
+    rx.fetch_add(1, std::memory_order_relaxed);
+    last_rx_ms.store(unix_ms(), std::memory_order_relaxed);
+  }
+  void record_tx() { tx.fetch_add(1, std::memory_order_relaxed); }
+  void record_convert_fail() { convert_fail.fetch_add(1, std::memory_order_relaxed); }
+  void record_decode_fail() { decode_fail.fetch_add(1, std::memory_order_relaxed); }
+  void record_publish_fail() { publish_fail.fetch_add(1, std::memory_order_relaxed); }
+
+  bool should_log_warn() {
+    const uint64_t now = unix_ms();
+    const uint64_t prev = last_warn_ms.load(std::memory_order_relaxed);
+    if (prev != 0 && now - prev < 1000) {
+      return false;
+    }
+    last_warn_ms.store(now, std::memory_order_relaxed);
+    return true;
+  }
+
+  bool is_idle(bool enabled, bool grace_elapsed) const {
+    return enabled && grace_elapsed && last_rx_ms.load(std::memory_order_relaxed) == 0;
+  }
+
+  bool take_idle_event(bool enabled, bool grace_elapsed) {
+    if (last_rx_ms.load(std::memory_order_relaxed) != 0) {
+      idle_latched.store(false, std::memory_order_relaxed);
+      return false;
+    }
+    if (!is_idle(enabled, grace_elapsed)) {
+      return false;
+    }
+    return !idle_latched.exchange(true, std::memory_order_relaxed);
+  }
+};
+
 class BridgeDecodeError : public Error {
  public:
   explicit BridgeDecodeError(std::string msg) : Error(std::move(msg)) {}
@@ -143,69 +208,101 @@ inline rclcpp::Logger ros2_bridge_logger() {
 }
 
 inline void note_convert_fail(const std::shared_ptr<DropStats> &stats, const char *dir,
-                              const std::string &topic, const char *err) {
-  RCLCPP_WARN(ros2_bridge_logger(), "%s %s convert: %s", dir, topic.c_str(), err);
+                              const std::string &topic, const char *err,
+                              const std::shared_ptr<RouteHealth> &health = {}) {
   if (stats) {
     stats->convert_fail.fetch_add(1, std::memory_order_relaxed);
+  }
+  if (health) {
+    health->record_convert_fail();
+  }
+  if (!health || health->should_log_warn()) {
+    RCLCPP_WARN(ros2_bridge_logger(), "%s %s convert: %s", dir, topic.c_str(), err);
   }
 }
 
 inline void note_decode_fail(const std::shared_ptr<DropStats> &stats, const char *dir,
-                             const std::string &topic, const char *err) {
-  RCLCPP_WARN(ros2_bridge_logger(), "%s %s decode: %s", dir, topic.c_str(), err);
+                             const std::string &topic, const char *err,
+                             const std::shared_ptr<RouteHealth> &health = {}) {
   if (stats) {
     stats->decode_fail.fetch_add(1, std::memory_order_relaxed);
+  }
+  if (health) {
+    health->record_decode_fail();
+  }
+  if (!health || health->should_log_warn()) {
+    RCLCPP_WARN(ros2_bridge_logger(), "%s %s decode: %s", dir, topic.c_str(), err);
   }
 }
 
 inline void note_publish_fail(const std::shared_ptr<DropStats> &stats, const char *dir,
-                              const std::string &topic, const char *err) {
-  RCLCPP_WARN(ros2_bridge_logger(), "%s %s publish: %s", dir, topic.c_str(), err);
+                              const std::string &topic, const char *err,
+                              const std::shared_ptr<RouteHealth> &health = {}) {
   if (stats) {
     stats->publish_fail.fetch_add(1, std::memory_order_relaxed);
+  }
+  if (health) {
+    health->record_publish_fail();
+  }
+  if (!health || health->should_log_warn()) {
+    RCLCPP_WARN(ros2_bridge_logger(), "%s %s publish: %s", dir, topic.c_str(), err);
   }
 }
 
 template <typename ConvertFn, typename PublishFn>
 void forward_ros_to_bus(const std::shared_ptr<DropStats> &stats, const std::string &topic,
-                        ConvertFn &&convert, PublishFn &&publish) {
+                        ConvertFn &&convert, PublishFn &&publish,
+                        const std::shared_ptr<RouteHealth> &health = {}) {
+  if (health) {
+    health->record_rx();
+  }
   std::vector<uint8_t> bytes;
   try {
     bytes = std::forward<ConvertFn>(convert)();
   } catch (const std::exception &e) {
-    note_convert_fail(stats, "ros→bus", topic, e.what());
+    note_convert_fail(stats, "ros→bus", topic, e.what(), health);
     return;
   } catch (...) {
-    note_convert_fail(stats, "ros→bus", topic, "unknown");
+    note_convert_fail(stats, "ros→bus", topic, "unknown", health);
     return;
   }
   try {
     std::forward<PublishFn>(publish)(bytes);
+    if (health) {
+      health->record_tx();
+    }
   } catch (const std::exception &e) {
-    note_publish_fail(stats, "ros→bus", topic, e.what());
+    note_publish_fail(stats, "ros→bus", topic, e.what(), health);
   } catch (...) {
-    note_publish_fail(stats, "ros→bus", topic, "unknown");
+    note_publish_fail(stats, "ros→bus", topic, "unknown", health);
   }
 }
 
 template <typename ConvertFn, typename PublishFn>
 void forward_bus_to_ros(const std::shared_ptr<DropStats> &stats, const std::string &topic,
-                        ConvertFn &&convert, PublishFn &&publish) {
+                        ConvertFn &&convert, PublishFn &&publish,
+                        const std::shared_ptr<RouteHealth> &health = {}) {
+  if (health) {
+    health->record_rx();
+  }
   try {
     auto ros_msg = std::forward<ConvertFn>(convert)();
     try {
       std::forward<PublishFn>(publish)(std::move(ros_msg));
+      if (health) {
+        health->record_tx();
+      }
     } catch (const std::exception &e) {
-      note_publish_fail(stats, "bus→ros", topic, e.what());
+      note_publish_fail(stats, "bus→ros", topic, e.what(), health);
     } catch (...) {
-      note_publish_fail(stats, "bus→ros", topic, "unknown");
+      note_publish_fail(stats, "bus→ros", topic, "unknown", health);
     }
   } catch (const BridgeDecodeError &e) {
-    note_decode_fail(stats, "bus→ros", topic, e.what());
+    note_decode_fail(stats, "bus→ros", topic, e.what(), health);
   } catch (const std::exception &e) {
-    note_convert_fail(stats, "bus→ros", topic, e.what());
+    note_convert_fail(stats, "bus→ros", topic, e.what(), health);
   } catch (...) {
-    note_convert_fail(stats, "bus→ros", topic, "unknown");
+    note_convert_fail(stats, "bus→ros", topic, "unknown", health);
   }
 }
 #endif
@@ -265,6 +362,7 @@ struct TopicWireContext {
   /// Keep ROS / bus entities alive for the bridge lifetime.
   std::vector<std::shared_ptr<void>> &keep_alive;
   std::shared_ptr<DropStats> drop_stats;
+  std::shared_ptr<RouteHealth> health;
 
   template <typename T>
   void retain(std::shared_ptr<T> p) {

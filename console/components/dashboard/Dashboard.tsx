@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useMemo } from 'react'
 import {
   EMPTY_BROKER,
   mergeTopics,
@@ -9,6 +9,7 @@ import {
   type LogEntry,
   type ServiceInfo,
   type ActionInfo,
+  type BridgeInfo,
   type TopologyInfo,
 } from '@/lib/mock-data'
 import { startConsoleBus } from '@/lib/console-bus'
@@ -17,6 +18,7 @@ import Sidebar, { type Tab } from './Sidebar'
 import BrokerOverview from './BrokerOverview'
 import OverviewStats from './OverviewStats'
 import TopicTable from './TopicTable'
+import BridgeTable from './BridgeTable'
 import ServiceActionTable from './ServiceActionTable'
 import EventStream from './EventStream'
 import TopologyView from './TopologyView'
@@ -37,6 +39,7 @@ export default function Dashboard() {
   const [topics, setTopics] = useState<TopicInfo[]>([])
   const [services, setServices] = useState<ServiceInfo[]>([])
   const [actions, setActions] = useState<ActionInfo[]>([])
+  const [bridges, setBridges] = useState<BridgeInfo[]>([])
   const [topology, setTopology] = useState<TopologyInfo>({ nodes: [], edges: [] })
   const [logs, setLogs] = useState<LogEntry[]>([])
   const [throughput, setThroughput] = useState(() => generateRateHistory(0, 60))
@@ -81,6 +84,7 @@ export default function Dashboard() {
       },
       onServices: setServices,
       onActions: setActions,
+      onBridges: setBridges,
       onTopology: setTopology,
       onEvent: (entry) => {
         if (seenLogIds.current.has(entry.id)) return
@@ -92,6 +96,16 @@ export default function Dashboard() {
       },
     })
   }, [])
+
+  const bridgedNames = useMemo(() => {
+    const names = new Set<string>()
+    for (const bridge of bridges) {
+      for (const route of bridge.routes) {
+        if (route.busName) names.add(route.busName)
+      }
+    }
+    return names
+  }, [bridges])
 
   return (
     <div className="flex flex-col h-screen bg-bus-bg overflow-hidden">
@@ -118,6 +132,7 @@ export default function Dashboard() {
               throughput={throughput}
               svcRate={svcRate}
               actRate={actRate}
+              bridgedNames={bridgedNames}
             />
           )}
           {activeTab === 'topology' && <TopologyView topology={topology} />}
@@ -127,8 +142,13 @@ export default function Dashboard() {
                 <ThroughputChart data={throughput} />
               </div>
               <div className="flex-1 min-h-[12rem]">
-                <TopicTable topics={topics} />
+                <TopicTable topics={topics} bridgedNames={bridgedNames} />
               </div>
+            </div>
+          )}
+          {activeTab === 'bridges' && (
+            <div className="flex-1 min-h-0">
+              <BridgeTable bridges={bridges} />
             </div>
           )}
           {activeTab === 'services' && (
@@ -177,6 +197,7 @@ function OverviewLayout({
   throughput,
   svcRate,
   actRate,
+  bridgedNames,
 }: {
   broker: BrokerInfo
   topics: TopicInfo[]
@@ -186,6 +207,7 @@ function OverviewLayout({
   throughput: RatePoint[]
   svcRate: RatePoint[]
   actRate: RatePoint[]
+  bridgedNames?: Set<string>
 }) {
   const listMax = '14rem'
 
@@ -202,7 +224,7 @@ function OverviewLayout({
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1.15fr)_minmax(0,0.85fr)] gap-3 items-stretch shrink-0" style={{ minHeight: '16rem' }}>
-        <TopicTable topics={topics} maxBodyHeight={listMax} />
+        <TopicTable topics={topics} maxBodyHeight={listMax} bridgedNames={bridgedNames} />
         <ThroughputChart data={throughput} />
       </div>
 

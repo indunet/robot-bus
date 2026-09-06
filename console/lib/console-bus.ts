@@ -6,12 +6,15 @@ import {
   ActionStatsList,
   TopologySnapshot,
   ConsoleEvent,
+  BridgeSnapshot,
 } from 'robot-bus/robot_bus_interfaces/msg/v1/console_status'
 import {
   EMPTY_BROKER,
   f64,
   u64,
   type ActionInfo,
+  type BridgeInfo,
+  type BridgeRouteInfo,
   type BrokerInfo,
   type LogEntry,
   type ServiceInfo,
@@ -26,6 +29,7 @@ export type ConsoleBusHandlers = {
   onActions: (actions: ActionInfo[]) => void
   onTopology: (topology: TopologyInfo) => void
   onEvent: (entry: LogEntry) => void
+  onBridges: (bridges: BridgeInfo[]) => void
   onOffline?: () => void
 }
 
@@ -125,6 +129,35 @@ function mapEvent(msg: ConsoleEvent): LogEntry {
   }
 }
 
+function mapBridge(msg: BridgeSnapshot): BridgeInfo {
+  return {
+    bridgeId: msg.bridgeId || msg.bridgeName || 'bridge',
+    bridgeName: msg.bridgeName || msg.bridgeId || 'bridge',
+    routes: (msg.routes ?? []).map(
+      (r): BridgeRouteInfo => ({
+        kind: r.kind,
+        direction: r.direction,
+        rosName: r.rosName,
+        busName: r.busName,
+        typeName: r.typeName,
+        rosQos: r.rosQos,
+        busQos: r.busQos,
+        lazy: !!r.lazy,
+        enabled: !!r.enabled,
+        rx: u64(r.rx),
+        tx: u64(r.tx),
+        convertFail: u64(r.convertFail),
+        decodeFail: u64(r.decodeFail),
+        publishFail: u64(r.publishFail),
+        lastRxMs: u64(r.lastRxMs),
+        idle: !!r.idle,
+      }),
+    ),
+  }
+}
+
+const BRIDGE_TTL_MS = 3000
+
 const DEFAULT_BROKER_PORT = '15570'
 /** Next.js `pnpm dev` ports — browser WS RPC should hit the broker directly. */
 const DEV_UI_PORTS = new Set(['3000', '3020'])
@@ -183,6 +216,22 @@ export function startConsoleBus(handlers: ConsoleBusHandlers): () => void {
     handlers.onEvent(mapEvent(msg))
   }, ConsoleEvent)
 
+  const bridges = new Map<string, { info: BridgeInfo; seenAt: number }>()
+  const emitBridges = () => {
+    const now = Date.now()
+    for (const [id, row] of bridges) {
+      if (now - row.seenAt > BRIDGE_TTL_MS) bridges.delete(id)
+    }
+    handlers.onBridges([...bridges.values()].map((row) => row.info))
+  }
+  node.createSubscription(consoleTopics.BRIDGES, (msg) => {
+    const info = mapBridge(msg)
+    bridges.set(info.bridgeId, { info, seenAt: Date.now() })
+    emitBridges()
+  }, BridgeSnapshot)
+
+  const pruneTimer = setInterval(emitBridges, 1000)
+
   try {
     node.start()
   } catch {
@@ -190,6 +239,7 @@ export function startConsoleBus(handlers: ConsoleBusHandlers): () => void {
   }
 
   return () => {
+    clearInterval(pruneTimer)
     try {
       node.shutdown()
     } catch {

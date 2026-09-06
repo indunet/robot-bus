@@ -12,6 +12,10 @@ ACTION_CALL_TIMEOUT = 30.0
 CONSOLE_DETECT_TIMEOUT = 2.0
 TOPIC_DEMAND = "/robot_bus/topic_demand"
 TOPICS_SNAPSHOT = "/robot_bus/topics"
+BRIDGES = "/robot_bus/bridges"
+EVENTS = "/robot_bus/events"
+IDLE_GRACE_S = 15.0
+SNAPSHOT_INTERVAL_S = 1.0
 
 
 class Direction(IntEnum):
@@ -104,6 +108,13 @@ class TopicQos:
     def volatile(self) -> "TopicQos":
         """ROS ``VOLATILE`` (default). New subscribers only see later samples."""
         return TopicQos(self._depth, self._best_effort, False)
+
+    def console_label(self) -> str:
+        rel = "best_effort" if self._best_effort else "reliable"
+        s = f"keep_last({self._depth}).{rel}"
+        if self._transient_local:
+            s += ".transient_local"
+        return s
 
     def __eq__(self, other: object) -> bool:
         if not isinstance(other, TopicQos):
@@ -201,6 +212,27 @@ def _topic_supports_lazy(mapper: Any) -> bool:
     )
 
 
+def mapper_type_name(mapper: Any) -> str:
+    fn = getattr(mapper, "type_name", None)
+    if callable(fn):
+        try:
+            return str(fn())
+        except TypeError:
+            pass
+    ros = getattr(mapper, "ros_msg_type", None)
+    if callable(ros):
+        try:
+            t = ros()
+            return str(getattr(t, "__name__", type(mapper).__name__))
+        except Exception:  # noqa: BLE001
+            pass
+    return type(mapper).__name__
+
+
+def direction_label(direction: Direction) -> str:
+    return "ros→bus" if direction == Direction.Ros2ToBus else "bus→ros"
+
+
 class TopicWireContext:
     def __init__(
         self,
@@ -213,6 +245,7 @@ class TopicWireContext:
         qos: Any = 10,
         bus_qos_depth: Optional[int] = None,
         drop_stats: Any = None,
+        health: Any = None,
     ) -> None:
         self.ros_node = ros_node
         self.bus_node = bus_node
@@ -223,6 +256,7 @@ class TopicWireContext:
         self.qos = qos
         self.bus_qos_depth = bus_qos_depth
         self.drop_stats = drop_stats
+        self.health = health
 
     def retain(self, obj: Any) -> None:
         self.keep_alive.append(obj)

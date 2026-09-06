@@ -13,11 +13,12 @@ interface Props {
   topics: TopicInfo[]
   /** Cap list height (overview split with chart). */
   maxBodyHeight?: string
+  bridgedNames?: Set<string>
 }
 
 const COLS = 'grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)_104px_96px_80px_64px_64px_96px]'
 
-export default function TopicTable({ topics, maxBodyHeight }: Props) {
+export default function TopicTable({ topics, maxBodyHeight, bridgedNames }: Props) {
   const { t, labelCase } = useI18n()
   const [query, setQuery] = useState('')
   const sorted = useMemo(
@@ -76,7 +77,7 @@ export default function TopicTable({ topics, maxBodyHeight }: Props) {
               </div>
             ) : (
               sorted.map((topic) => (
-                <TopicRow key={topic.name} topic={topic} />
+                <TopicRow key={topic.name} topic={topic} bridged={bridgedNames?.has(topic.name) ?? false} />
               ))
             )}
           </div>
@@ -86,7 +87,7 @@ export default function TopicTable({ topics, maxBodyHeight }: Props) {
   )
 }
 
-function TopicRow({ topic }: { topic: TopicInfo }) {
+function TopicRow({ topic, bridged }: { topic: TopicInfo; bridged: boolean }) {
   const { t } = useI18n()
   const isIdle = topicIsIdle(topic.lastSeen, topic.msgPerSec)
   const isHot = topic.msgPerSec > 80
@@ -106,6 +107,11 @@ function TopicRow({ topic }: { topic: TopicInfo }) {
           text={topic.name}
           className={`font-mono text-[13px] font-medium ${isIdle ? 'text-bus-muted' : 'text-bus-text'}`}
         />
+        {bridged ? (
+          <span className="font-mono text-[9px] tracking-wider text-bus-cyan border border-bus-cyan/40 px-1 py-px rounded-sm shrink-0">
+            {t('bridgedMark')}
+          </span>
+        ) : null}
       </div>
 
       <TruncateTip

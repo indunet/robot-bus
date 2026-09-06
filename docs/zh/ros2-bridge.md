@@ -564,7 +564,7 @@ just python-dev-ros2   # 或 just python-dev；需本机有 rclpy
 
 同进程同时持有 ROS 节点（rclrs / rclpy / rclcpp）和 robot-bus `Node`。主循环需推进两侧（`spin` / `spin_once`）：排空 ROS↔bus 队列并驱动 bus。
 
-话题转换 / 解码 / 发出失败会丢掉该帧（桥继续转）。每座桥有原子计数，`drop_stats()` 返回快照（`convert_fail` / `decode_fail` / `publish_fail`），同时打 warn。不发到 console topic。
+话题转换 / 解码 / 发出失败会丢掉该帧（桥继续转）。每座桥有原子计数，`drop_stats()` 返回整桥合计（`convert_fail` / `decode_fail` / `publish_fail`）。失败日志按路由限流（首次 + 每秒至多一条）。`build()` 会打印路由表。每条话题路由另有独立计数，经 `/robot_bus/bridges` 以 1 Hz 发到 console（侧栏 **BRIDGE**）。话题路由若在首次 `spin` 后 15s 仍从未收到样本，会 WARN 一次并往 `/robot_bus/events` 写「可能方向或 QoS 错了」。
 
 ```python
 bridge.drop_stats()  # {"convert_fail": 0, "decode_fail": 0, "publish_fail": 0}

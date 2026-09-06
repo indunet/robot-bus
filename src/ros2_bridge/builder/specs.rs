@@ -16,6 +16,7 @@ pub(crate) struct RouteSpec {
     pub(crate) ros_topic: String,
     pub(crate) bus_topic: String,
     pub(crate) mapper: Arc<dyn TopicMapper>,
+    pub(crate) type_name: String,
     pub(crate) direction: Direction,
     pub(crate) lazy: bool,
     pub(crate) ros_qos: TopicQos,
@@ -27,6 +28,7 @@ pub(crate) struct LazyRos2ToBus {
     pub(crate) mapper: Arc<dyn TopicMapper>,
     pub(crate) ros_qos: TopicQos,
     pub(crate) sub: Option<Box<dyn Any + Send + Sync>>,
+    pub(crate) health: Arc<crate::ros2_bridge::drop_stats::RouteHealth>,
 }
 
 pub(crate) enum DemandEvent {
