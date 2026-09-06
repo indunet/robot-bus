@@ -63,9 +63,22 @@ class TopicQosKeepLast {
 /// **ROS** and **bus** endpoints for topics, services, and actions. ROS honors
 /// depth + reliability + durability. Bus uses depth as ZMQ HWM and must be
 /// `.best_effort()` (no DDS reliability); durability is ignored on bus.
+///
+/// Usual routes use named presets (`sensor_data`, `ros_default`, `latched`,
+/// `bus`). Custom depth still uses `keep_last(n).reliable()` / `.best_effort()`.
+/// C++ uses `ros_default()` because `default` is a keyword (Python/Rust: `default()`).
 class TopicQos {
  public:
   static TopicQosKeepLast keep_last(int32_t depth) { return TopicQosKeepLast(depth); }
+  /// ROS `SensorDataQoS`: KeepLast 5, best effort, volatile.
+  static TopicQos sensor_data() { return keep_last(5).best_effort(); }
+  /// ROS `qos_profile_default` / `ServicesQoS`: KeepLast 10, reliable, volatile.
+  /// Not ROS `SystemDefaultsQoS` (RMW/DDS vendor defaults).
+  static TopicQos ros_default() { return keep_last(10).reliable(); }
+  /// Latched ROS topics such as `/tf_static`: KeepLast 1, reliable, transient local.
+  static TopicQos latched() { return keep_last(1).reliable().transient_local(); }
+  /// Typical bus endpoint: KeepLast 8 (STREAM HWM), best effort.
+  static TopicQos bus() { return keep_last(8).best_effort(); }
   int32_t depth() const { return depth_; }
   bool is_best_effort() const { return best_effort_; }
   bool is_reliable() const { return !best_effort_; }

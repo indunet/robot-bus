@@ -37,6 +37,10 @@ class TopicQos:
     ROS honors depth + reliability + durability. Bus uses depth as ZMQ HWM
     and must be ``.best_effort()`` (no DDS reliability); durability is ignored
     on bus.
+
+    Usual routes use named presets (``sensor_data``, ``default``, ``latched``,
+    ``bus``). Custom depth still uses ``keep_last(n).reliable()`` /
+    ``.best_effort()``.
     """
 
     def __init__(
@@ -49,6 +53,29 @@ class TopicQos:
     @staticmethod
     def keep_last(depth: int) -> TopicQosKeepLast:
         return TopicQosKeepLast(depth)
+
+    @staticmethod
+    def sensor_data() -> "TopicQos":
+        """ROS ``SensorDataQoS``: KeepLast 5, best effort, volatile."""
+        return TopicQos.keep_last(5).best_effort()
+
+    @staticmethod
+    def default() -> "TopicQos":
+        """ROS ``qos_profile_default`` / ``ServicesQoS``: KeepLast 10, reliable, volatile.
+
+        Not ROS ``SystemDefaultsQoS`` (RMW/DDS vendor defaults).
+        """
+        return TopicQos.keep_last(10).reliable()
+
+    @staticmethod
+    def latched() -> "TopicQos":
+        """Latched ROS topics such as ``/tf_static``: KeepLast 1, reliable, transient local."""
+        return TopicQos.keep_last(1).reliable().transient_local()
+
+    @staticmethod
+    def bus() -> "TopicQos":
+        """Typical bus endpoint: KeepLast 8 (STREAM HWM), best effort."""
+        return TopicQos.keep_last(8).best_effort()
 
     @property
     def depth(self) -> int:
@@ -155,7 +182,7 @@ def _ros_service_qos(qos: TopicQos) -> Any:
 def _require_topic_qos(qos: Any, who: str) -> TopicQos:
     if not isinstance(qos, TopicQos):
         raise TypeError(
-            f"{who} requires TopicQos.keep_last(n).reliable() or .best_effort()"
+            f"{who} requires TopicQos (preset or keep_last(n).reliable() / .best_effort())"
         )
     return qos
 

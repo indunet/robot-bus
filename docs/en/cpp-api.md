@@ -243,13 +243,13 @@ Supported distros for **prebuilt** packages: **Humble** and **Jazzy** (**Linux D
 
 auto bridge = robot_bus::Ros2Bridge::New("ros_bridge")
     .bus_tcp("localhost")
-    .from_ros("/chatter", robot_bus::TopicQos::keep_last(10).reliable())
-    .to_bus("/chatter", robot_bus::TopicQos::keep_last(8).best_effort())
+    .from_ros("/chatter", robot_bus::TopicQos::ros_default())
+    .to_bus("/chatter", robot_bus::TopicQos::bus())
     .mapper(robot_bus::StdMsgsStringMapper{})
     .add()
     .service()
-    .from_ros("/reset", robot_bus::TopicQos::keep_last(10).reliable())
-    .to_bus("/reset", robot_bus::TopicQos::keep_last(8).best_effort())
+    .from_ros("/reset", robot_bus::TopicQos::ros_default())
+    .to_bus("/reset", robot_bus::TopicQos::bus())
     .mapper(robot_bus::TriggerServiceMapper{})
     .add()
     .build();

@@ -16,19 +16,19 @@ use robot_bus::ros2_bridge::{
 fn main() -> robot_bus::Result<()> {
     let mut bridge = Ros2Bridge::new("examples_ros2_bridge_builtin")
         .bus_tcp("localhost")
-        .from_ros("/examples/chatter", TopicQos::keep_last(10).reliable())
-        .to_bus("/examples/chatter", TopicQos::keep_last(8).best_effort())
+        .from_ros("/examples/chatter", TopicQos::default())
+        .to_bus("/examples/chatter", TopicQos::bus())
         .mapper(StdMsgsStringMapper)
         .add()?
         .service()
-        .from_ros("/examples/reset", TopicQos::keep_last(10).reliable())
-        .to_bus("/examples/reset", TopicQos::keep_last(8).best_effort())
+        .from_ros("/examples/reset", TopicQos::default())
+        .to_bus("/examples/reset", TopicQos::bus())
         .mapper(TriggerServiceMapper)
         .timeout(Duration::from_secs(5))
         .add()?
         .action()
-        .from_ros("/examples/fibonacci", TopicQos::keep_last(10).reliable())
-        .to_bus("/examples/fibonacci", TopicQos::keep_last(8).best_effort())
+        .from_ros("/examples/fibonacci", TopicQos::default())
+        .to_bus("/examples/fibonacci", TopicQos::bus())
         .mapper(FibonacciActionMapper)
         .add()?
         .build()?;

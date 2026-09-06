@@ -82,6 +82,10 @@ impl TopicQosKeepLast {
 /// ROS honors depth + reliability + durability. Bus uses depth as ZMQ HWM
 /// (PUB/SUB or DEALER) and must be [`.best_effort()`](TopicQosKeepLast::best_effort)
 /// (no DDS reliability); durability is ignored on bus.
+///
+/// Usual routes use named presets ([`sensor_data`](Self::sensor_data),
+/// [`default`](Self::default), [`latched`](Self::latched), [`bus`](Self::bus)).
+/// Custom depth still uses [`keep_last`](Self::keep_last).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct TopicQos {
     depth: i32,
@@ -92,6 +96,30 @@ pub struct TopicQos {
 impl TopicQos {
     pub fn keep_last(depth: i32) -> TopicQosKeepLast {
         TopicQosKeepLast { depth }
+    }
+
+    /// ROS `SensorDataQoS`: KeepLast 5, best effort, volatile.
+    pub fn sensor_data() -> Self {
+        Self::keep_last(5).best_effort()
+    }
+
+    /// ROS topic/service default (`qos_profile_default` / `ServicesQoS`):
+    /// KeepLast 10, reliable, volatile.
+    ///
+    /// Not ROS `SystemDefaultsQoS` (RMW/DDS vendor defaults).
+    #[allow(clippy::should_implement_trait)]
+    pub fn default() -> Self {
+        Self::keep_last(10).reliable()
+    }
+
+    /// Latched ROS topics such as `/tf_static`: KeepLast 1, reliable, transient local.
+    pub fn latched() -> Self {
+        Self::keep_last(1).reliable().transient_local()
+    }
+
+    /// Typical bus endpoint: KeepLast [`crate::HighWaterMark::STREAM`] (8), best effort.
+    pub fn bus() -> Self {
+        Self::keep_last(crate::HighWaterMark::STREAM.snd).best_effort()
     }
 
     pub fn depth(self) -> i32 {
@@ -432,6 +460,14 @@ mod tests {
         assert!(latched.is_transient_local());
         assert!(!latched.is_volatile());
         assert!(!TopicQos::keep_last(10).reliable().is_transient_local());
+        assert_eq!(TopicQos::sensor_data(), TopicQos::keep_last(5).best_effort());
+        assert_eq!(TopicQos::default(), TopicQos::keep_last(10).reliable());
+        assert_eq!(
+            TopicQos::latched(),
+            TopicQos::keep_last(1).reliable().transient_local()
+        );
+        assert_eq!(TopicQos::bus(), TopicQos::keep_last(8).best_effort());
+        assert_eq!(TopicQos::bus().depth(), crate::HighWaterMark::STREAM.snd);
     }
 
     #[test]

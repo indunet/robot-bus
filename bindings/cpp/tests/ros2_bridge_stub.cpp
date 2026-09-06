@@ -12,8 +12,13 @@
 
 namespace {
 
-robot_bus::TopicQos ros_qos() { return robot_bus::TopicQos::keep_last(10).reliable(); }
-robot_bus::TopicQos bus_qos() { return robot_bus::TopicQos::keep_last(8).best_effort(); }
+robot_bus::TopicQos ros_qos() { return robot_bus::TopicQos::ros_default(); }
+robot_bus::TopicQos bus_qos() { return robot_bus::TopicQos::bus(); }
+
+bool qos_eq(const robot_bus::TopicQos &a, const robot_bus::TopicQos &b) {
+  return a.depth() == b.depth() && a.is_best_effort() == b.is_best_effort() &&
+         a.is_transient_local() == b.is_transient_local();
+}
 
 struct AttachOnlyMapper : robot_bus::TopicMapper {};
 
@@ -69,6 +74,28 @@ int test_lazy_builder() {
   }
 
   std::printf("lazy builder checks ok\n");
+  return 0;
+}
+
+int test_qos_presets() {
+  using robot_bus::TopicQos;
+  if (!qos_eq(TopicQos::sensor_data(), TopicQos::keep_last(5).best_effort())) {
+    std::fprintf(stderr, "sensor_data preset mismatch\n");
+    return 1;
+  }
+  if (!qos_eq(TopicQos::ros_default(), TopicQos::keep_last(10).reliable())) {
+    std::fprintf(stderr, "ros_default preset mismatch\n");
+    return 1;
+  }
+  if (!qos_eq(TopicQos::latched(), TopicQos::keep_last(1).reliable().transient_local())) {
+    std::fprintf(stderr, "latched preset mismatch\n");
+    return 1;
+  }
+  if (!qos_eq(TopicQos::bus(), TopicQos::keep_last(8).best_effort())) {
+    std::fprintf(stderr, "bus preset mismatch\n");
+    return 1;
+  }
+  std::printf("qos presets ok\n");
   return 0;
 }
 
@@ -169,6 +196,9 @@ int main() {
     return rc;
   }
   if (int rc = test_generated_topic_mapper()) {
+    return rc;
+  }
+  if (int rc = test_qos_presets()) {
     return rc;
   }
   if (int rc = test_qos_builder()) {

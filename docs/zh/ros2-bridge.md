@@ -33,7 +33,7 @@ cargo run --bin robot_bus_broker    # 或 python -m robot_bus.broker
 
 `ros2_available()`：Python 看能否 `import rclpy`；C++ 看是否以 `ROBOT_BUS_HAS_ROS2` 链了 `robot_bus_ros2_bridge`；Rust FFI / 默认 C ABI 恒为 false（桥不在 FFI 里）。
 
-两端都写 **名字 + `TopicQos`**。`TopicQos.keep_last(n)` 之后必须 `.reliable()` 或 `.best_effort()`。ROS 端两者都行；**bus 端只能 `.best_effort()`**（没有 DDS reliability，depth 只变成 HWM）。ROS 端还可以再接 `.transient_local()`（默认 volatile），用来订 `/tf_static` 这类 latch 话题。
+两端都写 **名字 + `TopicQos`**。常用命名预设：`default()`（C++ 为 `ros_default()`，因为 `default` 是关键字）、`sensor_data()`、`latched()`、`bus()`。自定义深度仍用 `keep_last(n).reliable()` / `.best_effort()`。ROS 端 reliable / best-effort 都行；**bus 端只能 `.best_effort()`**（没有 DDS reliability，depth 只变成 HWM），因此 `default()` / `latched()` 不能写在 bus 端。`default()` 对应 ROS `qos_profile_default` / `ServicesQoS`，**不是** ROS `SystemDefaultsQoS`。
 
 ---
 
@@ -47,8 +47,8 @@ from robot_bus.ros2_bridge import Ros2Bridge, StdMsgsStringMapper, TopicQos
 bridge = (
     Ros2Bridge.new("ros_bridge")
     .bus_tcp("localhost")
-    .from_ros("/chatter", TopicQos.keep_last(10).reliable())
-    .to_bus("/chatter", TopicQos.keep_last(8).best_effort())
+    .from_ros("/chatter", TopicQos.default())
+    .to_bus("/chatter", TopicQos.bus())
     .mapper(StdMsgsStringMapper())
     .add()
     .build()
@@ -61,8 +61,8 @@ use robot_bus::ros2_bridge::{Ros2Bridge, StdMsgsStringMapper, TopicQos};
 
 let mut bridge = Ros2Bridge::new("ros_bridge")
     .bus_tcp("localhost")
-    .from_ros("/chatter", TopicQos::keep_last(10).reliable())
-    .to_bus("/chatter", TopicQos::keep_last(8).best_effort())
+    .from_ros("/chatter", TopicQos::default())
+    .to_bus("/chatter", TopicQos::bus())
     .mapper(StdMsgsStringMapper)
     .add()?
     .build()?;
@@ -74,8 +74,8 @@ bridge.spin()?;
 
 auto bridge = robot_bus::Ros2Bridge::New("ros_bridge")
     .bus_tcp("localhost")
-    .from_ros("/chatter", robot_bus::TopicQos::keep_last(10).reliable())
-    .to_bus("/chatter", robot_bus::TopicQos::keep_last(8).best_effort())
+    .from_ros("/chatter", robot_bus::TopicQos::ros_default())
+    .to_bus("/chatter", robot_bus::TopicQos::bus())
     .mapper(robot_bus::StdMsgsStringMapper{})
     .add()
     .build();
@@ -87,48 +87,48 @@ bridge.spin();
 一条桥里连续挂多条话题：每条各自 `.from_ros` / `.to_bus`（或反过来）→ `.mapper(...)` → `.add()`，再开下一条。第二条话题**不用** `.service()` / `.action()`（那是切种类）。方向可以混。
 
 ```python
-.from_ros("/chatter", TopicQos.keep_last(10).reliable())
-.to_bus("/chatter", TopicQos.keep_last(8).best_effort())
+.from_ros("/chatter", TopicQos.default())
+.to_bus("/chatter", TopicQos.bus())
 .mapper(StdMsgsStringMapper())
 .add()
-.from_ros("/pose", TopicQos.keep_last(10).reliable())
-.to_bus("/pose", TopicQos.keep_last(8).best_effort())
+.from_ros("/pose", TopicQos.default())
+.to_bus("/pose", TopicQos.bus())
 .mapper(GeometryMsgsPoseStampedMapper())
 .add()
 ```
 
 ```rust
-.from_ros("/chatter", TopicQos::keep_last(10).reliable())
-.to_bus("/chatter", TopicQos::keep_last(8).best_effort())
+.from_ros("/chatter", TopicQos::default())
+.to_bus("/chatter", TopicQos::bus())
 .mapper(StdMsgsStringMapper)
 .add()?
-.from_ros("/pose", TopicQos::keep_last(10).reliable())
-.to_bus("/pose", TopicQos::keep_last(8).best_effort())
+.from_ros("/pose", TopicQos::default())
+.to_bus("/pose", TopicQos::bus())
 .mapper(GeometryMsgsPoseStampedMapper)
 .add()?
 ```
 
 ```cpp
-.from_ros("/chatter", robot_bus::TopicQos::keep_last(10).reliable())
-.to_bus("/chatter", robot_bus::TopicQos::keep_last(8).best_effort())
+.from_ros("/chatter", robot_bus::TopicQos::ros_default())
+.to_bus("/chatter", robot_bus::TopicQos::bus())
 .mapper(robot_bus::StdMsgsStringMapper{})
 .add()
-.from_ros("/pose", robot_bus::TopicQos::keep_last(10).reliable())
-.to_bus("/pose", robot_bus::TopicQos::keep_last(8).best_effort())
+.from_ros("/pose", robot_bus::TopicQos::ros_default())
+.to_bus("/pose", robot_bus::TopicQos::bus())
 .mapper(robot_bus::GeometryMsgsPoseStampedMapper{})
 .add()
 ```
 
-相机要对上 ROS 图上的 best-effort KeepLast(5) 时，两端都写 `keep_last(5).best_effort()`。
+相机 / lidar 对上 ROS `SensorDataQoS` 时用 `TopicQos.sensor_data()`（KeepLast 5, best effort）。bus 端也可以写 `TopicQos.bus()`，或同样用 `sensor_data()` 让 HWM=5。
 
-`/tf_static` 这类 latch 话题，ROS 端要加 `.transient_local()`，否则默认 volatile 订不到已经发过的样本：
+`/tf_static` 这类 latch 话题用 `TopicQos.latched()`（KeepLast 1, reliable, transient local），否则默认 volatile 订不到已经发过的样本：
 
 ```python
-.from_ros("/tf_static", TopicQos.keep_last(1).reliable().transient_local())
-.to_bus("/tf_static", TopicQos.keep_last(1).best_effort())
+.from_ros("/tf_static", TopicQos.latched())
+.to_bus("/tf_static", TopicQos.bus())
 ```
 
-Rust / C++ 同样在 reliability 后面接 `.transient_local()`（C++ 若要改回默认，方法名是 `.durability_volatile()`，因为 `volatile` 是关键字）。bus 端没有 DDS durability，写了也会被忽略。
+自定义深度仍可手写 `keep_last(n)…`，两端可以混用预设和手写。C++ 若要把 latch 改回 volatile，方法名是 `.durability_volatile()`（`volatile` 是关键字）。bus 端没有 DDS durability，写了也会被忽略。
 
 Topic mapper 三语言同一套目录（Humble/Jazzy **发行版常见自带**接口包，约 125 个类型）：Rust `src/ros2_bridge/mappers/`，Python `from robot_bus.ros2_bridge import GeometryMsgsPoseStampedMapper`，C++ `#include <robot_bus/ros2_bridge.hpp>`（伞头文件 `ros2_bridge_topic_mappers.hpp`）。包集合见 `scripts/generate_topic_mappers.py` 的 `CORE_BRIDGE_PACKAGES`。改 proto 后跑 `just gen-topic-mappers`。挂路由直接 `.mapper(GeometryMsgsPoseStampedMapper())` / `.mapper(GeometryMsgsPoseStampedMapper{})`。
 
@@ -147,8 +147,8 @@ Rust 另有 `lookup_topic_mapper` / `registered_topic_types`（仅核心集）�
 默认 eager：`build()` 立刻建 ROS subscription，ROS 图上能看到这座桥。相机、雷达等大流量才在 `from_ros → to_bus` 上加 `.lazy()`：没人订 bus 时，ROS 图上这座桥不是该 topic 的 subscriber。
 
 ```python
-.from_ros("/camera/image", TopicQos.keep_last(5).best_effort())
-.to_bus("/camera/image", TopicQos.keep_last(5).best_effort())
+.from_ros("/camera/image", TopicQos.sensor_data())
+.to_bus("/camera/image", TopicQos.sensor_data())
 .mapper(SensorMsgsImageMapper())
 .lazy()
 .add()
@@ -211,14 +211,14 @@ impl TypedTopicMapper for MyStringMapper {
 
 ## 服务
 
-先 `.service()`，再写两端名字 + QoS。ROS 对上 `services_default` 写 `keep_last(10).reliable()`；bus 常用 `keep_last(8).best_effort()`（depth → DEALER HWM）。默认超时 **5s**，要用 `.timeout(...)` 改。
+先 `.service()`，再写两端名字 + QoS。ROS 对上 `services_default` 写 `TopicQos.default()`（C++ `ros_default()`）；bus 写 `TopicQos.bus()`（depth → DEALER HWM）。默认超时 **5s**，要用 `.timeout(...)` 改。
 
 ROS 提供服务、bus 客户端去调：`.from_ros → .to_bus`。bus 提供服务、ROS 客户端去调：`.from_bus → .to_ros`。
 
 ```python
 .service()
-.from_ros("/reset", TopicQos.keep_last(10).reliable())
-.to_bus("/reset", TopicQos.keep_last(8).best_effort())
+.from_ros("/reset", TopicQos.default())
+.to_bus("/reset", TopicQos.bus())
 .mapper(TriggerServiceMapper())
 .timeout(5.0)
 .add()
@@ -226,8 +226,8 @@ ROS 提供服务、bus 客户端去调：`.from_ros → .to_bus`。bus 提供服
 
 ```rust
 .service()
-    .from_ros("/reset", TopicQos::keep_last(10).reliable())
-    .to_bus("/reset", TopicQos::keep_last(8).best_effort())
+    .from_ros("/reset", TopicQos::default())
+    .to_bus("/reset", TopicQos::bus())
     .mapper(TriggerServiceMapper)
     .timeout(std::time::Duration::from_secs(5))
     .add()?
@@ -235,8 +235,8 @@ ROS 提供服务、bus 客户端去调：`.from_ros → .to_bus`。bus 提供服
 
 ```cpp
 .service()
-    .from_ros("/reset", robot_bus::TopicQos::keep_last(10).reliable())
-    .to_bus("/reset", robot_bus::TopicQos::keep_last(8).best_effort())
+    .from_ros("/reset", robot_bus::TopicQos::ros_default())
+    .to_bus("/reset", robot_bus::TopicQos::bus())
     .mapper(robot_bus::TriggerServiceMapper{})
     .add()
 ```
@@ -334,8 +334,8 @@ bridge = (
     Ros2Bridge.new("bridge")
     .bus_tcp("localhost")
     .service()
-    .from_ros("/examples/add_two_ints", TopicQos.keep_last(10).reliable())
-    .to_bus("/examples/add_two_ints", TopicQos.keep_last(8).best_effort())
+    .from_ros("/examples/add_two_ints", TopicQos.default())
+    .to_bus("/examples/add_two_ints", TopicQos.bus())
     .mapper(AddTwoIntsServiceMapper())
     .timeout(5.0)
     .add()
@@ -380,8 +380,8 @@ impl TypedServiceMapper for AddTwoIntsServiceMapper {
     }
 }
 
-// .service().from_ros("/examples/add_two_ints", TopicQos::keep_last(10).reliable())
-//     .to_bus("/examples/add_two_ints", TopicQos::keep_last(8).best_effort())
+// .service().from_ros("/examples/add_two_ints", TopicQos::default())
+//     .to_bus("/examples/add_two_ints", TopicQos::bus())
 //     .mapper(AddTwoIntsServiceMapper)
 //     .add()?
 ```
@@ -446,24 +446,24 @@ ROS 是 action server、bus 客户端去发 goal：`.from_ros → .to_bus`。bus
 
 ```python
 .action()
-.from_ros("/fibonacci", TopicQos.keep_last(10).reliable())
-.to_bus("/fibonacci", TopicQos.keep_last(8).best_effort())
+.from_ros("/fibonacci", TopicQos.default())
+.to_bus("/fibonacci", TopicQos.bus())
 .mapper(FibonacciActionMapper())
 .add()
 ```
 
 ```rust
 .action()
-    .from_ros("/fibonacci", TopicQos::keep_last(10).reliable())
-    .to_bus("/fibonacci", TopicQos::keep_last(8).best_effort())
+    .from_ros("/fibonacci", TopicQos::default())
+    .to_bus("/fibonacci", TopicQos::bus())
     .mapper(FibonacciActionMapper)
     .add()?
 ```
 
 ```cpp
 .action()
-    .from_ros("/fibonacci", robot_bus::TopicQos::keep_last(10).reliable())
-    .to_bus("/fibonacci", robot_bus::TopicQos::keep_last(8).best_effort())
+    .from_ros("/fibonacci", robot_bus::TopicQos::ros_default())
+    .to_bus("/fibonacci", robot_bus::TopicQos::bus())
     .mapper(robot_bus::FibonacciActionMapper{})
     .add()
 ```

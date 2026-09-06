@@ -56,6 +56,20 @@ class Dummy:
         return None
 
 
+def test_topic_qos_presets():
+    from robot_bus.ros2_bridge import TopicQos
+
+    assert TopicQos.sensor_data() == TopicQos.keep_last(5).best_effort()
+    assert TopicQos.default() == TopicQos.keep_last(10).reliable()
+    assert TopicQos.latched() == TopicQos.keep_last(1).reliable().transient_local()
+    assert TopicQos.bus() == TopicQos.keep_last(8).best_effort()
+    assert TopicQos.sensor_data().is_best_effort is True
+    assert TopicQos.default().is_reliable is True
+    assert TopicQos.latched().is_transient_local is True
+    assert TopicQos.bus().is_best_effort is True
+    assert TopicQos.bus().depth == 8
+
+
 def test_topic_qos_requires_reliability():
     from robot_bus.ros2_bridge import TopicQos
 
@@ -379,6 +393,7 @@ def test_ros2_available_checks_rclpy():
 
 
 if __name__ == "__main__":
+    test_topic_qos_presets()
     test_topic_qos_requires_reliability()
     test_incomplete_topic_qos_rejected()
     test_lazy_defaults_off()

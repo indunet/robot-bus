@@ -166,7 +166,7 @@ Ros2Bridge.new(name)
 
 Rules (from [ros2-bridge.md](../zh/ros2-bridge.md)):
 
-- Topic endpoints are **name + `TopicQos`**: `keep_last(n).reliable()` or `.best_effort()`, plus `.transient_local()` on ROS for latched topics. Bus must be `.best_effort()`.
+- Topic endpoints are **name + `TopicQos`**: prefer presets (`default` / `sensor_data` / `latched` / `bus`; C++ `ros_default()`), or `keep_last(n).reliable()` / `.best_effort()` for custom depth. Bus must be `.best_effort()`.
 - Service / action: `TopicQos` on both names (`from_ros` / `to_ros` / `from_bus` / `to_bus`); bus must be `.best_effort()`. **no `both`**.
 - Mount with **concrete mapper objects**, not type-name strings
 - Built-in topic mappers: Humble/Jazzy core catalog (~125 types, e.g. `StdMsgsStringMapper`, `GeometryMsgsPoseStampedMapper`). Service/action builtins remain hand-written: `TriggerServiceMapper`, `SetBoolServiceMapper`, `FibonacciActionMapper`

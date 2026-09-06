@@ -40,8 +40,8 @@ struct TopicRouteSpec {
   TopicBuiltin builtin = TopicBuiltin::StdMsgsString;
   std::shared_ptr<TopicMapper> custom;
   bool lazy = false;
-  TopicQos ros_qos = TopicQos::keep_last(10).reliable();
-  TopicQos bus_qos = TopicQos::keep_last(8).best_effort();
+  TopicQos ros_qos = TopicQos::ros_default();
+  TopicQos bus_qos = TopicQos::bus();
   bool is_custom() const { return static_cast<bool>(custom); }
 };
 
@@ -52,8 +52,8 @@ struct ServiceRouteSpec {
   double timeout_secs = kServiceCallTimeoutSecs;
   ServiceBuiltin builtin = ServiceBuiltin::Trigger;
   std::shared_ptr<ServiceMapper> custom;
-  TopicQos ros_qos = TopicQos::keep_last(10).reliable();
-  TopicQos bus_qos = TopicQos::keep_last(8).best_effort();
+  TopicQos ros_qos = TopicQos::ros_default();
+  TopicQos bus_qos = TopicQos::bus();
   bool is_custom() const { return static_cast<bool>(custom); }
 };
 
@@ -64,8 +64,8 @@ struct ActionRouteSpec {
   double timeout_secs = kActionCallTimeoutSecs;
   ActionBuiltin builtin = ActionBuiltin::Fibonacci;
   std::shared_ptr<ActionMapper> custom;
-  TopicQos ros_qos = TopicQos::keep_last(10).reliable();
-  TopicQos bus_qos = TopicQos::keep_last(8).best_effort();
+  TopicQos ros_qos = TopicQos::ros_default();
+  TopicQos bus_qos = TopicQos::bus();
   bool is_custom() const { return static_cast<bool>(custom); }
 };
 
@@ -386,8 +386,8 @@ class Ros2BridgeServiceReady {
   std::string ros_service_;
   std::string bus_service_;
   Direction direction_;
-  TopicQos ros_qos_ = TopicQos::keep_last(10).reliable();
-  TopicQos bus_qos_ = TopicQos::keep_last(8).best_effort();
+  TopicQos ros_qos_ = TopicQos::ros_default();
+  TopicQos bus_qos_ = TopicQos::bus();
   double timeout_secs_ = kServiceCallTimeoutSecs;
   detail::ServiceBuiltin builtin_ = detail::ServiceBuiltin::Trigger;
   std::shared_ptr<ServiceMapper> custom_;
@@ -510,8 +510,8 @@ class Ros2BridgeActionReady {
   std::string ros_action_;
   std::string bus_action_;
   Direction direction_;
-  TopicQos ros_qos_ = TopicQos::keep_last(10).reliable();
-  TopicQos bus_qos_ = TopicQos::keep_last(8).best_effort();
+  TopicQos ros_qos_ = TopicQos::ros_default();
+  TopicQos bus_qos_ = TopicQos::bus();
   double timeout_secs_ = kActionCallTimeoutSecs;
   detail::ActionBuiltin builtin_ = detail::ActionBuiltin::Fibonacci;
   std::shared_ptr<ActionMapper> custom_;

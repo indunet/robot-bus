@@ -21,7 +21,7 @@ This is **not** full package migration — for that use **ros2-to-robot-bus** /
 
 | Do | Do not |
 |----|--------|
-| Every endpoint: name + `TopicQos.keep_last(n).reliable()` / `.best_effort()`; ROS may add `.transient_local()` | Native `rclpy`/`rclcpp` QoS as the bridge second arg |
+| Every endpoint: name + `TopicQos` preset (`default` / `sensor_data` / `latched` / `bus`) or `keep_last(n).reliable()` / `.best_effort()` | Native `rclpy`/`rclcpp` QoS as the bridge second arg |
 | ROS service/action: same `TopicQos` on `from_ros` / `to_ros` | Silent default ROS service QoS |
 | Bus `TopicQos` on topics, services, and actions; must be `.best_effort()` | Silent drop of `.reliable()` on bus |
 | Mount with `.mapper(concrete object)` | Type-name string lookup to mount routes |
@@ -39,7 +39,7 @@ Direction is the chain (`from_ros → to_bus` vs `from_bus → to_ros`) for topi
 | ROS publishes / serves → bus clients consume | `from_ros(...).to_bus(...)` |
 | Bus publishes / serves → ROS subscribers / clients | `from_bus(...).to_ros(...)` |
 
-Start services with `.service()` and actions with `.action()`. Pass `TopicQos` on every name (`from_ros` / `to_ros` / `from_bus` / `to_bus`). Same logical name on both sides is fine (`/chatter`, `/chatter`); names need not match. After `TopicQos.keep_last(n)` call `.reliable()` or `.best_effort()`. ROS accepts either; bus endpoints must be `.best_effort()`. ROS durability defaults to volatile; chain `.transient_local()` on ROS endpoints for latched topics (`/tf_static`). Typical ROS service QoS: `TopicQos.keep_last(10).reliable()`. Typical bus RPC QoS: `TopicQos.keep_last(8).best_effort()`.
+Start services with `.service()` and actions with `.action()`. Pass `TopicQos` on every name (`from_ros` / `to_ros` / `from_bus` / `to_bus`). Same logical name on both sides is fine (`/chatter`, `/chatter`); names need not match. Prefer presets: `TopicQos.default()` (C++ `ros_default()`) for ordinary ROS topics/services/actions, `sensor_data()` for camera/lidar, `latched()` for `/tf_static`, `bus()` on every bus endpoint. Custom depth still uses `keep_last(n).reliable()` / `.best_effort()`. ROS accepts reliable or best-effort; bus endpoints must be `.best_effort()` (`default()` / `latched()` are rejected on bus).
 
 ## Prerequisites
 
@@ -78,7 +78,7 @@ Progress:
 .action().from_ros(ros, TopicQos).to_bus(bus, TopicQos).mapper(...).timeout(...).add()
 ```
 
-`TopicQos.keep_last(n)` then **must** `.reliable()` or `.best_effort()`. Bus endpoints (topic, service, action) must be `.best_effort()`. ROS endpoints may chain `.transient_local()` (default volatile). Direction is the chain. **No `both`**. Action applies the ROS profile to goal/result/cancel + feedback; status stays ROS default. Bus RPC depth → DEALER HWM. Defaults: service timeout **5s**, action goal **30s**. Topic routes are **eager** at `build()`; `.lazy()` is opt-in on `from_ros → to_bus` topics only (camera/lidar). No-console brokers fall back to eager. `from_bus → to_ros` and service/action have no `.lazy()`.
+Usual `TopicQos`: `default()` / `sensor_data()` / `latched()` / `bus()` (C++ `ros_default()` instead of `default()`). Custom depth: `keep_last(n)` then **must** `.reliable()` or `.best_effort()`. Bus endpoints (topic, service, action) must be `.best_effort()`. Direction is the chain. **No `both`**. Action applies the ROS profile to goal/result/cancel + feedback; status stays ROS default. Bus RPC depth → DEALER HWM. Defaults: service timeout **5s**, action goal **30s**. Topic routes are **eager** at `build()`; `.lazy()` is opt-in on `from_ros → to_bus` topics only (camera/lidar). No-console brokers fall back to eager. `from_bus → to_ros` and service/action have no `.lazy()`.
 
 ### Built-in mappers (objects, not strings)
 
@@ -114,13 +114,13 @@ assert robot_bus.ros2_available()
 bridge = (
     Ros2Bridge.new("ros_bridge")
     .bus_tcp("localhost")
-    .from_ros("/chatter", TopicQos.keep_last(10).reliable())
-    .to_bus("/chatter", TopicQos.keep_last(8).best_effort())
+    .from_ros("/chatter", TopicQos.default())
+    .to_bus("/chatter", TopicQos.bus())
     .mapper(StdMsgsStringMapper())
     .add()
     .service()
-    .from_ros("/reset", TopicQos.keep_last(10).reliable())
-    .to_bus("/reset", TopicQos.keep_last(8).best_effort())
+    .from_ros("/reset", TopicQos.default())
+    .to_bus("/reset", TopicQos.bus())
     .mapper(TriggerServiceMapper())
     .add()
     .build()
@@ -138,13 +138,13 @@ use robot_bus::ros2_bridge::{
 fn main() -> robot_bus::Result<()> {
     let mut bridge = Ros2Bridge::new("ros_bridge")
         .bus_tcp("localhost")
-        .from_ros("/chatter", TopicQos::keep_last(10).reliable())
-            .to_bus("/chatter", TopicQos::keep_last(8).best_effort())
+        .from_ros("/chatter", TopicQos::default())
+            .to_bus("/chatter", TopicQos::bus())
             .mapper(StdMsgsStringMapper)
             .add()?
         .service()
-            .from_ros("/reset", TopicQos::keep_last(10).reliable())
-            .to_bus("/reset", TopicQos::keep_last(8).best_effort())
+            .from_ros("/reset", TopicQos::default())
+            .to_bus("/reset", TopicQos::bus())
             .mapper(TriggerServiceMapper)
             .timeout(std::time::Duration::from_secs(3))
             .add()?
@@ -161,13 +161,13 @@ fn main() -> robot_bus::Result<()> {
 
 auto bridge = robot_bus::Ros2Bridge::New("ros_bridge")
     .bus_tcp("localhost")
-    .from_ros("/chatter", robot_bus::TopicQos::keep_last(10).reliable())
-    .to_bus("/chatter", robot_bus::TopicQos::keep_last(8).best_effort())
+    .from_ros("/chatter", robot_bus::TopicQos::ros_default())
+    .to_bus("/chatter", robot_bus::TopicQos::bus())
     .mapper(robot_bus::StdMsgsStringMapper{})
     .add()
     .service()
-    .from_ros("/reset", robot_bus::TopicQos::keep_last(10).reliable())
-    .to_bus("/reset", robot_bus::TopicQos::keep_last(8).best_effort())
+    .from_ros("/reset", robot_bus::TopicQos::ros_default())
+    .to_bus("/reset", robot_bus::TopicQos::bus())
     .mapper(robot_bus::TriggerServiceMapper{})
     .add()
     .build();
