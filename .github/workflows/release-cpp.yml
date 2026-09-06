@@ -21,6 +21,8 @@ env:
   PROTOC_VERSION: "35.1"
 
 jobs:
+  # Core SDK (no ROS). One artifact per arch, both on 22.04 so glibc works
+  # on Humble/22.04 and newer (24.04 can load a 22.04 binary; not vice versa).
   linux:
     strategy:
       fail-fast: false
@@ -29,7 +31,7 @@ jobs:
           - runner: ubuntu-22.04
             arch: amd64
             protoc_zip: protoc-35.1-linux-x86_64.zip
-          - runner: ubuntu-24.04-arm
+          - runner: ubuntu-22.04-arm
             arch: arm64
             protoc_zip: protoc-35.1-linux-aarch_64.zip
     runs-on: ${{ matrix.runner }}

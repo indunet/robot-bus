@@ -35,6 +35,8 @@ jobs:
           echo "Py=$(sed -n 's/^version = \"\\(.*\\)\"/\\1/p' bindings/python/pyproject.toml | head -n1)"
           echo "Npm=$(node -p "require('./bindings/typescript/package.json').version")"
 
+  # Linux gnu addons compile on the runner (not manylinux). Both arches on
+  # 22.04 so the .node glibc matches Humble/22.04 and still loads on 24.04.
   build:
     needs: [version-check]
     strategy:
@@ -44,7 +46,7 @@ jobs:
           - host: ubuntu-22.04
             target: x86_64-unknown-linux-gnu
             protoc_zip: protoc-35.1-linux-x86_64.zip
-          - host: ubuntu-24.04-arm
+          - host: ubuntu-22.04-arm
             target: aarch64-unknown-linux-gnu
             protoc_zip: protoc-35.1-linux-aarch_64.zip
           - host: macos-14
