@@ -4,7 +4,7 @@ build-backend = "maturin"
 
 [project]
 name = "robot-bus"
-version = "2.3.0"
+version = "2.3.1"
 description = "ZeroMQ message bus: broker routing and participant SDK"
 readme = "../../README.md"
 requires-python = ">=3.9"
