@@ -919,6 +919,21 @@ fn ws_action_kind(kind: u8) -> Result<ActionKind> {
 
 fn map_rpc_status(status: u32, message: &str) -> BusError {
     match Code::from_u32(status) {
+        Code::ResourceExhausted => BusError::Busy {
+            name: message
+                .strip_prefix("busy ")
+                .unwrap_or(message)
+                .trim_matches('\'')
+                .to_string(),
+        },
+        Code::Internal if message.starts_with("handler panicked for ") => {
+            BusError::HandlerPanicked {
+                name: message
+                    .trim_start_matches("handler panicked for ")
+                    .trim_matches('\'')
+                    .to_string(),
+            }
+        }
         Code::DeadlineExceeded => BusError::Timeout(message.to_string()),
         Code::NotFound => {
             if let Some(rest) = message.strip_prefix("no goal ") {
@@ -943,5 +958,20 @@ fn map_rpc_status(status: u32, message: &str) -> BusError {
             }
         }
         _ => BusError::Protocol(format!("rpc {status}: {message}")),
+    }
+}
+
+#[cfg(test)]
+mod status_tests {
+    use super::*;
+
+    #[test]
+    fn callback_errors_remain_typed_across_websocket() {
+        assert!(
+            matches!(map_rpc_status(8, "busy 'echo'"), BusError::Busy { name } if name == "echo")
+        );
+        assert!(
+            matches!(map_rpc_status(13, "handler panicked for 'echo'"), BusError::HandlerPanicked { name } if name == "echo")
+        );
     }
 }

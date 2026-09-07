@@ -21,11 +21,13 @@ use crate::runtime::node::{Node, NodeOptions};
 #[derive(Clone)]
 pub struct ExecutorHandle {
     inner: Arc<Mutex<Executor>>,
+    shutdown: ShutdownHandle,
 }
 
 impl ExecutorHandle {
     fn new(executor: Executor) -> Self {
         Self {
+            shutdown: executor.shutdown_handle(),
             inner: Arc::new(Mutex::new(executor)),
         }
     }
@@ -71,11 +73,11 @@ impl ExecutorHandle {
     }
 
     pub fn shutdown_handle(&self) -> Result<ShutdownHandle> {
-        Ok(self.lock()?.shutdown_handle())
+        Ok(self.shutdown.clone())
     }
 
     pub fn shutdown(&self) -> Result<()> {
-        self.lock()?.shutdown();
+        self.shutdown.shutdown();
         Ok(())
     }
 
@@ -96,6 +98,7 @@ impl ExecutorHandle {
     }
 
     pub fn stop(&self) -> Result<()> {
+        self.shutdown.shutdown();
         self.lock()?.stop();
         Ok(())
     }

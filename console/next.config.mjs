@@ -9,9 +9,6 @@ const nextConfig = {
   ...(isProd ? { output: 'export' } : {}),
   // The local SDK package contains generated protobuf TypeScript sources.
   transpilePackages: ['robot-bus'],
-  typescript: {
-    ignoreBuildErrors: true,
-  },
   webpack(config) {
     // The workspace maps robot-bus to TypeScript sources whose ESM imports use
     // emitted `.js` suffixes. Resolve those suffixes back to source files.

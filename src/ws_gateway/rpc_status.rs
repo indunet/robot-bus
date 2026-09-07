@@ -40,6 +40,7 @@ impl Code {
             3 => Code::InvalidArgument,
             4 => Code::DeadlineExceeded,
             5 => Code::NotFound,
+            8 => Code::ResourceExhausted,
             12 => Code::Unimplemented,
             13 => Code::Internal,
             14 => Code::Unavailable,

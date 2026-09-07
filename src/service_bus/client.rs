@@ -4,15 +4,15 @@
 //! Sync` and safe to call from multiple threads (calls are serialised; one
 //! in-flight REQ at a time per handle).
 
-use std::sync::Mutex;
-use std::time::Duration;
+use std::sync::{Mutex, MutexGuard, TryLockError};
+use std::time::{Duration, Instant};
 
 use uuid::Uuid;
 use zmq::{Context, Socket, SocketType};
 
 use crate::errors::{BusError, Result, parse_error_body};
 use crate::transports;
-use crate::zmq_helpers::{HighWaterMark, apply_rpc_options_with, poll_readable};
+use crate::zmq_helpers::{HighWaterMark, apply_rpc_options_with};
 
 pub struct ServiceClient {
     context: Context,
@@ -80,6 +80,33 @@ impl ServiceClient {
         Ok(())
     }
 
+    fn lock_socket_until(
+        &self,
+        deadline: Option<Instant>,
+        service: &str,
+    ) -> Result<MutexGuard<'_, Socket>> {
+        let Some(deadline) = deadline else {
+            return self.lock_socket();
+        };
+        loop {
+            let remaining = deadline
+                .checked_duration_since(Instant::now())
+                .filter(|duration| !duration.is_zero())
+                .ok_or_else(|| timeout_error(service))?;
+            match self.socket.try_lock() {
+                Ok(socket) => return Ok(socket),
+                Err(TryLockError::Poisoned(_)) => {
+                    return Err(BusError::Protocol(
+                        "service client socket mutex poisoned".into(),
+                    ));
+                }
+                Err(TryLockError::WouldBlock) => {
+                    std::thread::sleep(remaining.min(Duration::from_millis(1)))
+                }
+            }
+        }
+    }
+
     pub fn endpoint(&self) -> &str {
         &self.endpoint
     }
@@ -103,36 +130,47 @@ impl ServiceClient {
         request_id: Option<&str>,
         timeout: Option<Duration>,
     ) -> Result<Vec<u8>> {
+        let deadline = timeout
+            .map(|duration| {
+                Instant::now()
+                    .checked_add(duration)
+                    .ok_or_else(|| BusError::Protocol("service timeout is too large".into()))
+            })
+            .transpose()?;
+        self.call_with_deadline(service_name, body, request_id, deadline)
+    }
+
+    /// Share one deadline across gateway queuing, socket locking, send and receive.
+    pub(crate) fn call_with_deadline(
+        &self,
+        service_name: &str,
+        body: &[u8],
+        request_id: Option<&str>,
+        deadline: Option<Instant>,
+    ) -> Result<Vec<u8>> {
         let req_id = request_id
             .map(str::to_string)
             .unwrap_or_else(|| Uuid::new_v4().simple().to_string());
-
-        // Hold the socket for the full REQ round-trip so concurrent callers
-        // cannot interleave frames on the same REQ socket.
-        let mut sock = self.lock_socket()?;
-
-        if let Some(duration) = timeout {
-            let ms = duration.as_millis().min(i32::MAX as u128) as i32;
-            sock.set_sndtimeo(ms)?;
-        }
-        sock.send_multipart([service_name.as_bytes(), req_id.as_bytes(), body], 0)?;
-
-        if let Some(duration) = timeout {
-            let ms = duration.as_millis().min(i64::MAX as u128) as i64;
-            if !poll_readable(&sock, ms)? {
+        // A concurrent call must not spend an unlimited time waiting for this lock.
+        let mut sock = self.lock_socket_until(deadline, service_name)?;
+        let exchange = (|| -> Result<Vec<Vec<u8>>> {
+            // Always reset both timeouts, including finite -> unlimited reuse.
+            sock.set_sndtimeo(remaining_ms(deadline, service_name)?)?;
+            sock.send_multipart([service_name.as_bytes(), req_id.as_bytes(), body], 0)?;
+            sock.set_rcvtimeo(remaining_ms(deadline, service_name)?)?;
+            Ok(sock.recv_multipart(0)?)
+        })();
+        let frames = match exchange {
+            Ok(frames) => frames,
+            Err(err) => {
+                // Send failures as well as receive failures can leave REQ mid-exchange.
                 let _ = self.reset_socket_locked(&mut sock);
-                return Err(BusError::Timeout(format!(
-                    "service '{service_name}' timed out after {}s",
-                    duration.as_secs_f64()
-                )));
-            }
-        }
-
-        let frames = match sock.recv_multipart(0) {
-            Ok(f) => f,
-            Err(e) => {
-                let _ = self.reset_socket_locked(&mut sock);
-                return Err(e.into());
+                return Err(match err {
+                    BusError::Zmq(zmq::Error::EAGAIN) if deadline.is_some() => {
+                        timeout_error(service_name)
+                    }
+                    other => other,
+                });
             }
         };
         if frames.len() != 3 {
@@ -163,6 +201,23 @@ impl ServiceClient {
     }
 }
 
+fn timeout_error(service: &str) -> BusError {
+    BusError::Timeout(format!("service '{service}' timed out"))
+}
+
+fn remaining_ms(deadline: Option<Instant>, service: &str) -> Result<i32> {
+    match deadline {
+        None => Ok(-1),
+        Some(deadline) => {
+            let remaining = deadline
+                .checked_duration_since(Instant::now())
+                .filter(|duration| !duration.is_zero())
+                .ok_or_else(|| timeout_error(service))?;
+            Ok(remaining.as_millis().clamp(1, i32::MAX as u128) as i32)
+        }
+    }
+}
+
 impl Drop for ServiceClient {
     fn drop(&mut self) {
         if let Ok(sock) = self.socket.get_mut() {
@@ -180,5 +235,106 @@ mod sync_assert {
     #[test]
     fn service_client_is_send_sync() {
         assert_send_sync::<ServiceClient>();
+    }
+}
+
+#[cfg(test)]
+mod deadline_tests {
+    use super::*;
+    use std::sync::{Arc, mpsc};
+    use std::thread;
+
+    fn server() -> (Socket, String) {
+        let context = Context::new();
+        let server = context.socket(SocketType::REP).unwrap();
+        server.set_linger(1000).unwrap();
+        server.set_rcvtimeo(2000).unwrap();
+        server.bind("tcp://127.0.0.1:*").unwrap();
+        let endpoint = server.get_last_endpoint().unwrap().unwrap();
+        (server, endpoint)
+    }
+
+    #[test]
+    fn timeout_while_waiting_for_socket_does_not_send_or_reset_active_call() {
+        let (server, endpoint) = server();
+        let client = Arc::new(ServiceClient::new(Some(&endpoint)).unwrap());
+        let (received_tx, received_rx) = mpsc::channel();
+        let (release_tx, release_rx) = mpsc::channel();
+        let worker = thread::spawn(move || {
+            let frames = server.recv_multipart(0).unwrap();
+            received_tx.send(()).unwrap();
+            release_rx.recv_timeout(Duration::from_secs(2)).unwrap();
+            server.send_multipart(frames, 0).unwrap();
+            server // keep the peer connected until the caller has received the reply
+        });
+        let first_client = Arc::clone(&client);
+        let first = thread::spawn(move || {
+            first_client.call("echo", b"first", None, Some(Duration::from_secs(2)))
+        });
+        received_rx.recv_timeout(Duration::from_secs(2)).unwrap();
+        let start = Instant::now();
+        let second = client.call("echo", b"second", None, Some(Duration::from_millis(40)));
+        let elapsed = start.elapsed();
+        release_tx.send(()).unwrap();
+        let first_result = first.join().unwrap();
+        worker.join().unwrap();
+        assert!(matches!(second, Err(BusError::Timeout(_))));
+        assert!(elapsed < Duration::from_millis(500));
+        assert_eq!(first_result.unwrap(), b"first");
+    }
+
+    #[test]
+    fn send_timeout_is_typed_and_socket_can_be_reused() {
+        let context = Context::new();
+        let reservation = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let endpoint = format!("tcp://{}", reservation.local_addr().unwrap());
+        let client = ServiceClient::new(Some(&endpoint)).unwrap();
+        let result = client.call("echo", b"expired", None, Some(Duration::from_millis(40)));
+        assert!(matches!(result, Err(BusError::Timeout(_))), "{result:?}");
+        drop(reservation);
+        let server = context.socket(SocketType::REP).unwrap();
+        server.set_linger(1000).unwrap();
+        server.set_rcvtimeo(2000).unwrap();
+        server.bind(&endpoint).unwrap();
+        let worker = thread::spawn(move || {
+            let frames = server.recv_multipart(0).unwrap();
+            assert_eq!(frames[2], b"retry");
+            server.send_multipart(frames, 0).unwrap();
+            server // keep the peer connected until the caller has received the reply
+        });
+        let reply = client.call("echo", b"retry", None, Some(Duration::from_secs(2)));
+        worker.join().unwrap();
+        assert_eq!(reply.unwrap(), b"retry");
+    }
+
+    #[test]
+    fn unlimited_call_resets_previous_socket_timeouts() {
+        let (server, endpoint) = server();
+        let client = ServiceClient::new(Some(&endpoint)).unwrap();
+        let worker = thread::spawn(move || {
+            for index in 0..2 {
+                let frames = server.recv_multipart(0).unwrap();
+                if index == 1 {
+                    thread::sleep(Duration::from_millis(150));
+                }
+                server.send_multipart(frames, 0).unwrap();
+            }
+            server
+        });
+        client
+            .call("echo", b"finite", None, Some(Duration::from_secs(1)))
+            .unwrap();
+        // Simulate short timeout values left over by a prior successful call.
+        {
+            let socket = client.lock_socket().unwrap();
+            socket.set_sndtimeo(10).unwrap();
+            socket.set_rcvtimeo(10).unwrap();
+        }
+        let reply = client.call("echo", b"unlimited", None, None);
+        worker.join().unwrap();
+        assert_eq!(reply.unwrap(), b"unlimited");
+        let socket = client.lock_socket().unwrap();
+        assert_eq!(socket.get_sndtimeo().unwrap(), -1);
+        assert_eq!(socket.get_rcvtimeo().unwrap(), -1);
     }
 }

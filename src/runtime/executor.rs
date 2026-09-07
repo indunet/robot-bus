@@ -174,6 +174,12 @@ impl Executor {
         ShutdownHandle::from_flag(self.running.clone())
     }
 
+    /// Waiting callback jobs and rejected submissions for the resident pool.
+    /// Mutually exclusive groups expose their own additional waiting queues.
+    pub fn worker_queue_stats(&self) -> Option<super::QueueStats> {
+        self.worker_pool.as_ref().map(WorkerPool::queue_stats)
+    }
+
     /// Defaults used for newly connected PUB/SUB sockets.
     pub fn stream_hwm(&self) -> HighWaterMark {
         self.stream_hwm

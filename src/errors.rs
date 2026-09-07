@@ -5,6 +5,12 @@ use thiserror::Error;
 /// Base error type for the robot-bus SDK.
 #[derive(Debug, Error)]
 pub enum BusError {
+    #[error("busy '{name}': callback queue is full")]
+    Busy { name: String },
+
+    #[error("handler panicked for '{name}'")]
+    HandlerPanicked { name: String },
+
     #[error("no worker for '{name}'")]
     NoWorker { name: String },
 
@@ -50,6 +56,16 @@ pub type Result<T> = std::result::Result<T, BusError>;
 
 /// Map broker error prefixes to typed errors.
 pub fn parse_error_body(body: &[u8]) -> Option<BusError> {
+    if let Some(name) = strip_prefix(body, b"BUSY") {
+        return Some(BusError::Busy {
+            name: decode_field(name),
+        });
+    }
+    if let Some(name) = strip_prefix(body, b"HANDLER_PANICKED") {
+        return Some(BusError::HandlerPanicked {
+            name: decode_field(name),
+        });
+    }
     if let Some(name) = strip_prefix(body, b"NO_WORKER") {
         return Some(BusError::NoWorker {
             name: decode_field(name),

@@ -14,7 +14,7 @@ use crate::runtime::registrations::{
     RegistrationKind, ServiceRegistration, SubRegistration,
 };
 use crate::runtime::topic_callbacks::for_each_matching_callback;
-use crate::runtime::worker_pool::WorkerPool;
+use crate::runtime::worker_pool::{WorkerPool, run_callback};
 
 pub fn dispatch_registration(
     reg: &mut Registration,
@@ -103,10 +103,21 @@ pub fn dispatch_service_request(
 
     let handler = Arc::clone(&reg.handler);
     let service_name = reg.service_name.clone();
+    let error_tx = reply_tx.clone();
+    let busy_reply = ReplyMessage::Service {
+        service_name: service_name.clone(),
+        reply: ServiceReply {
+            client_id: client_id.clone(),
+            service: svc.clone(),
+            request_id: req_id.clone(),
+            body: format!("BUSY\0{service_name}").into_bytes(),
+        },
+    };
     let reply_tx = reply_tx.clone();
     let group = reg.callback_group.clone();
-    group.run(worker_pool, move || {
-        let reply_body = handler(&body);
+    if let Err(err) = group.try_run(worker_pool, move || {
+        let reply_body = run_callback(|| handler(&body))
+            .unwrap_or_else(|_| format!("HANDLER_PANICKED\0{service_name}").into_bytes());
         let _ = reply_tx.send(ReplyMessage::Service {
             service_name,
             reply: ServiceReply {
@@ -116,7 +127,10 @@ pub fn dispatch_service_request(
                 body: reply_body,
             },
         });
-    });
+    }) {
+        log::warn!("service callback rejected: {err}");
+        let _ = error_tx.send(busy_reply);
+    }
 }
 
 pub fn dispatch_action_message(
@@ -187,8 +201,20 @@ pub fn dispatch_action_message(
         }),
     );
 
+    let error_tx = reply_tx.clone();
+    let rejected_goal_id = goal_id_str.clone();
+    let busy_reply = ReplyMessage::Action {
+        action_name: action_name.clone(),
+        reply: ActionReply {
+            client_id: client_id.clone(),
+            goal_id: goal_id.clone(),
+            kind: b"RESULT".to_vec(),
+            body: format!("BUSY\0{action_name}").into_bytes(),
+        },
+    };
     let job = move || {
-        let result = handler(&body, &ctx);
+        let result = run_callback(|| handler(&body, &ctx))
+            .unwrap_or_else(|_| format!("HANDLER_PANICKED\0{action_name}").into_bytes());
         let _ = reply_tx.send(ReplyMessage::Action {
             action_name,
             reply: ActionReply {
@@ -205,7 +231,13 @@ pub fn dispatch_action_message(
 
     // Live FEEDBACK/CANCEL need the poll thread free. Offload even without a pool.
     if worker_pool.is_some() {
-        group.run(worker_pool, job);
+        if let Err(err) = group.try_run(worker_pool, job) {
+            log::warn!("action callback rejected: {err}");
+            if let Ok(mut map) = reg.inflight.lock() {
+                map.remove(&rejected_goal_id);
+            }
+            let _ = error_tx.send(busy_reply);
+        }
     } else {
         thread::spawn(job);
     }
@@ -239,7 +271,7 @@ pub fn dispatch_action_client_message(reg: &mut ActionClientRegistration) {
         body,
     };
     if let Some(callback) = reg.goal_callbacks.get(&goal_id) {
-        callback(&message);
+        let _ = run_callback(|| callback(&message));
     } else {
         log::warn!("no callback registered for goal {goal_id:?}");
     }
@@ -393,4 +425,165 @@ fn send_action_reply(
         ],
         0,
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::errors::{BusError, parse_error_body};
+    use crate::runtime::{CallbackGroup, CallbackGroupType};
+    use std::sync::{Mutex, mpsc};
+    use std::time::{Duration, Instant};
+
+    fn wire_pair() -> (zmq::Socket, zmq::Socket) {
+        let context = zmq::Context::new();
+        let receiver = context.socket(zmq::PAIR).unwrap();
+        let sender = context.socket(zmq::PAIR).unwrap();
+        for socket in [&receiver, &sender] {
+            socket.set_linger(0).unwrap();
+            socket.set_rcvtimeo(2000).unwrap();
+            socket.set_sndtimeo(2000).unwrap();
+        }
+        receiver.bind("inproc://dispatch-regression").unwrap();
+        sender.connect("inproc://dispatch-regression").unwrap();
+        (receiver, sender)
+    }
+
+    #[test]
+    fn service_overload_and_panic_reply_without_stranding_the_group() {
+        let (socket, wire) = wire_pair();
+        let pool = WorkerPool::new(1);
+        let (started_tx, started_rx) = mpsc::channel();
+        let (release_tx, release_rx) = mpsc::channel();
+        let release_rx = Mutex::new(release_rx);
+        let reg = ServiceRegistration {
+            id: 1,
+            socket,
+            service_name: "echo".into(),
+            handler: Arc::new(move |body| {
+                if body == b"hold" {
+                    started_tx.send(()).unwrap();
+                    release_rx
+                        .lock()
+                        .unwrap()
+                        .recv_timeout(Duration::from_secs(2))
+                        .unwrap();
+                }
+                assert_ne!(body, b"panic", "simulated handler failure");
+                body.to_vec()
+            }),
+            callback_group: CallbackGroup::with_queue_capacity(
+                CallbackGroupType::MutuallyExclusive,
+                1,
+            ),
+            identity: vec![],
+            heartbeat_interval: Duration::from_secs(1),
+            last_heartbeat: Instant::now(),
+        };
+        let (tx, rx) = mpsc::channel();
+        let send = |id: &[u8], body: &[u8]| {
+            wire.send_multipart([b"client".as_slice(), b"echo", id, body], 0)
+                .unwrap();
+            dispatch_service_request(&reg, &tx, Some(&pool));
+        };
+        send(b"1", b"hold");
+        started_rx.recv_timeout(Duration::from_secs(2)).unwrap();
+        send(b"2", b"panic");
+        send(b"3", b"overflow");
+        let busy = rx.recv_timeout(Duration::from_secs(2)).unwrap();
+        release_tx.send(()).unwrap();
+        let ReplyMessage::Service { reply, .. } = busy else {
+            panic!("service reply")
+        };
+        assert_eq!(reply.request_id, b"3");
+        assert!(matches!(
+            parse_error_body(&reply.body),
+            Some(BusError::Busy { .. })
+        ));
+        for expected in [b"hold".as_slice(), b"HANDLER_PANICKED\0echo"] {
+            let ReplyMessage::Service { reply, .. } =
+                rx.recv_timeout(Duration::from_secs(2)).unwrap()
+            else {
+                panic!("service reply")
+            };
+            assert_eq!(reply.body, expected);
+        }
+        send(b"4", b"recovered");
+        let ReplyMessage::Service { reply, .. } = rx.recv_timeout(Duration::from_secs(2)).unwrap()
+        else {
+            panic!("service reply")
+        };
+        assert_eq!(reply.body, b"recovered");
+    }
+
+    #[test]
+    fn action_overload_and_panic_release_inflight_goals() {
+        let (socket, wire) = wire_pair();
+        let pool = WorkerPool::new(1);
+        let (started_tx, started_rx) = mpsc::channel();
+        let (release_tx, release_rx) = mpsc::channel();
+        let release_rx = Mutex::new(release_rx);
+        let reg = ActionRegistration {
+            id: 1,
+            socket,
+            action_name: "echo".into(),
+            handler: Arc::new(move |body, _ctx| {
+                if body == b"hold" {
+                    started_tx.send(()).unwrap();
+                    release_rx
+                        .lock()
+                        .unwrap()
+                        .recv_timeout(Duration::from_secs(2))
+                        .unwrap();
+                }
+                assert_ne!(body, b"panic", "simulated handler failure");
+                body.to_vec()
+            }),
+            inflight: Arc::new(Mutex::new(HashMap::new())),
+            callback_group: CallbackGroup::with_queue_capacity(
+                CallbackGroupType::MutuallyExclusive,
+                1,
+            ),
+            identity: vec![],
+            heartbeat_interval: Duration::from_secs(1),
+            last_heartbeat: Instant::now(),
+        };
+        let (tx, rx) = mpsc::channel();
+        let send = |id: &[u8], body: &[u8]| {
+            wire.send_multipart([b"client".as_slice(), b"echo", id, b"GOAL", body], 0)
+                .unwrap();
+            dispatch_action_message(&reg, &tx, Some(&pool));
+        };
+        send(b"1", b"hold");
+        started_rx.recv_timeout(Duration::from_secs(2)).unwrap();
+        send(b"2", b"panic");
+        send(b"3", b"overflow");
+        let busy = rx.recv_timeout(Duration::from_secs(2)).unwrap();
+        release_tx.send(()).unwrap();
+        let ReplyMessage::Action { reply, .. } = busy else {
+            panic!("action reply")
+        };
+        assert_eq!(reply.goal_id, b"3");
+        assert!(matches!(
+            parse_error_body(&reply.body),
+            Some(BusError::Busy { .. })
+        ));
+        for expected in [b"hold".as_slice(), b"HANDLER_PANICKED\0echo"] {
+            let ReplyMessage::Action { reply, .. } =
+                rx.recv_timeout(Duration::from_secs(2)).unwrap()
+            else {
+                panic!("action reply")
+            };
+            assert_eq!(reply.kind, b"RESULT");
+            assert_eq!(reply.body, expected);
+        }
+        send(b"4", b"recovered");
+        let ReplyMessage::Action { reply, .. } = rx.recv_timeout(Duration::from_secs(2)).unwrap()
+        else {
+            panic!("action reply")
+        };
+        assert_eq!(reply.body, b"recovered");
+        drop(pool); // joins the runner, including completion bookkeeping
+        assert!(reg.inflight.lock().unwrap().is_empty());
+    }
 }

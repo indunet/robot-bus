@@ -262,6 +262,14 @@ node.create_timer(
 ```
 
 
+### 回调异常、过载与停止
+
+启用 Rust panic 展开时，回调 panic 会被记录并隔离。订阅或定时器异常不会导致工作线程退出或回调组停止调度。服务和动作处理函数异常时，原生总线返回 `BusError::HandlerPanicked`（`HANDLER_PANICKED\0name`），WebSocket 网关返回 Internal 状态。
+
+常驻线程池在等待任务达到 1024 个时停止接受新任务，并为每个工作线程保留一个内部续执行名额，避免繁忙回调组长期占用线程；每个互斥回调组也默认最多等待 1024 个回调，可用 `CallbackGroup::with_queue_capacity(kind, capacity)` 调整组容量。队列满时立即拒绝新任务，不阻塞消息接收线程：订阅和定时器回调被丢弃并记录日志；服务和动作请求返回 `BusError::Busy`（`BUSY\0name`，WebSocket 为 ResourceExhausted）。已接受的同组回调按先后顺序执行。这些执行器限制独立于传输层 HWM，不提供“覆盖为最新值”的策略。
+
+`CallbackGroup::queue_stats()` 提供组内等待数和拒绝数，`Executor::worker_queue_stats()` 提供常驻线程池队列统计。`executor.shutdown()` 和 `executor.shutdown_handle()` 不需要获取 spin 循环的锁，可在其他线程运行 spin 时调用。停止信号用于退出轮询，不会强制终止已经执行的用户回调。
+
 ### 高水位（HWM）与 QoS
 
 `QosProfile::keep_last(depth)`映射为 ZMQ HWM。Topic用 PUB/SUB HWM；service / action用 DEALER HWM（`snd` / `rcv`都等于 depth）。reliability固定 best-effort（RPC也没有 DDS reliability）。不传 QoS则用节点默认（topic 8/8，service 4/4，action 8/8）。
@@ -504,6 +512,8 @@ let ep = message_xpub_endpoint("localhost", "tcp")?;
 ```
 
 ---
+
+服务调用的超时共用一个截止时间，覆盖等待共享客户端套接字、发送和接收。网关调用还包括等待空闲客户端和阻塞工作线程的调度时间。网关最多提供 8 个活动客户端和 256 个额外调用名额；过载返回 ResourceExhausted。派发前已过期的请求不会发送。已经送达服务端的请求可能在调用方超时后继续执行；超时不意味着撤销服务端操作。
 
 ## 错误类型
 

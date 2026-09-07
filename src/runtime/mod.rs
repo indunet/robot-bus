@@ -44,3 +44,4 @@ pub use registrations::{
 };
 pub use session::ConnectionState;
 pub use timers::{SubscriptionHandle, TimerCallback, TimerHandle};
+pub use worker_pool::QueueStats;

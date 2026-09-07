@@ -262,6 +262,14 @@ node.create_timer(
 ```
 
 
+### Callback failures, overload and shutdown
+
+Callback panics are logged and isolated when Rust panic unwinding is enabled. A panicking subscription or timer does not remove a worker or strand its callback group. Service and action handlers return `BusError::HandlerPanicked` over the native bus (`HANDLER_PANICKED\0name`); the WebSocket gateway reports Internal status.
+
+The resident worker pool stops admitting new jobs at 1024 waiting jobs, with one reserved continuation slot per worker so busy groups can yield fairly. Each mutually exclusive group also defaults to 1024 waiting callbacks; customize that limit with `CallbackGroup::with_queue_capacity(kind, capacity)`. Full queues reject new work without blocking the poll thread: subscription/timer callbacks are dropped and logged; service/action requests receive `BusError::Busy` (`BUSY\0name`, WebSocket ResourceExhausted). Previously accepted callbacks keep their FIFO order within a group. These executor limits are separate from transport HWM and do not implement latest-value replacement.
+
+`CallbackGroup::queue_stats()` reports its pending and rejected counts; `Executor::worker_queue_stats()` reports the resident pool queue. `executor.shutdown()` and `executor.shutdown_handle()` do not need the spin-loop lock and can be called while another thread is spinning. Shutdown requests stop polling; it does not forcibly terminate a user callback already running.
+
 ### High water mark (HWM) and QoS
 
 `QosProfile::keep_last(depth)` maps to ZMQ HWM. Topics use PUB/SUB HWM; service and action use DEALER HWM (`snd` / `rcv` both = depth). Reliability is fixed best-effort (RPC has no DDS reliability either). Omit QoS to keep the node default (topic 8/8, service 4/4, action 8/8).
@@ -504,6 +512,8 @@ let ep = message_xpub_endpoint("localhost", "tcp")?;
 ```
 
 ---
+
+Service call timeouts cover waiting for the shared client socket, sending, and receiving under one deadline. Gateway calls also include waiting for a pooled client and blocking-worker scheduling. The gateway allows 8 active clients and up to 256 additional calls; overload returns ResourceExhausted. A request that expires before dispatch is not sent. A request already delivered to a service can still finish on the server after its caller times out; timeout is not a rollback.
 
 ## Error types
 

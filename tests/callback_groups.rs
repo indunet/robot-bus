@@ -234,3 +234,37 @@ fn multi_threaded_callbacks_run_off_the_poll_thread() {
         "callback must run on a worker thread, not the poll thread"
     );
 }
+
+#[test]
+fn public_shutdown_interrupts_spin_without_waiting_for_executor_lock() {
+    use robot_bus::SingleThreadedExecutor;
+    use std::sync::mpsc;
+    let executor = SingleThreadedExecutor::new();
+    let mut node = executor.create_node("shutdown-regression").unwrap();
+    let (started_tx, started_rx) = mpsc::channel();
+    node.create_timer(
+        Duration::from_millis(10),
+        Arc::new(move || {
+            let _ = started_tx.send(());
+        }),
+        None,
+    )
+    .unwrap();
+    let emergency_stop = executor.shutdown_handle().unwrap();
+    let spinning = executor.clone();
+    let spin_thread = thread::spawn(move || spinning.spin().unwrap());
+    started_rx.recv_timeout(Duration::from_secs(2)).unwrap();
+    let (stopped_tx, stopped_rx) = mpsc::channel();
+    let stopping = executor.clone();
+    let stop_thread = thread::spawn(move || {
+        // Getting a handle while spin is running must also be lock-free.
+        let _ = stopping.shutdown_handle().unwrap();
+        stopping.shutdown().unwrap();
+        stopped_tx.send(()).unwrap();
+    });
+    let stopped = stopped_rx.recv_timeout(Duration::from_secs(1));
+    emergency_stop.shutdown(); // ensure a regression cannot hang the test suite
+    spin_thread.join().unwrap();
+    stop_thread.join().unwrap();
+    stopped.expect("shutdown was blocked by spin's executor lock");
+}

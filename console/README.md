@@ -41,6 +41,10 @@ UI copy supports EN / 中文 (default EN; preference in `localStorage` key `robo
 
 Sidebar **TOPOLOGY**: pub/sub graph from best-effort control-plane service registration on `Node::create_publisher` / `create_subscription` (`/robot_bus/topology/register` and `/robot_bus/topic_type/register`). Endpoints expire after ~30s without refresh; crashed processes rely on TTL cleanup.
 
+## Validation
+
+Run `pnpm typecheck` to check the console and its imported SDK sources. Production builds also enforce TypeScript errors. `scripts/build_console.sh`, used by CI and release packaging, runs the standalone check before building the embedded assets.
+
 ## Development (recommended)
 
 Start the broker, then hot-reload the frontend. `pnpm dev` proxies `/api/*` to the broker;

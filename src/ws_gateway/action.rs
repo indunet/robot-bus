@@ -91,6 +91,10 @@ pub struct SendGoalSession {
 
 fn bus_status(err: BusError) -> RpcStatus {
     match err {
+        BusError::Busy { name } => RpcStatus::new(
+            super::rpc_status::Code::ResourceExhausted,
+            format!("busy '{name}'"),
+        ),
         BusError::Timeout(msg) => RpcStatus::deadline_exceeded(msg),
         BusError::NoWorker { name } => RpcStatus::unavailable(format!("no worker for '{name}'")),
         BusError::WorkerDied { name } => {

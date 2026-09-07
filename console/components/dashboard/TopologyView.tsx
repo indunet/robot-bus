@@ -342,10 +342,10 @@ function buildWireEdges(wires: Wire[]): Edge[] {
       id: w.id,
       source: w.source,
       target: w.target,
-      sourceHandle: rpc
+      sourceHandle: w.channel !== 'topic'
         ? rpcHandleId(w.channel, 'out', w.name)
         : portHandleId('out', w.name),
-      targetHandle: rpc
+      targetHandle: w.channel !== 'topic'
         ? rpcHandleId(w.channel, 'in', w.name)
         : portHandleId('in', w.name),
       label: shortTopic(w.name),

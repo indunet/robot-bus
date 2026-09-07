@@ -47,6 +47,7 @@ python3 "$root/scripts/generate_typescript_msgs.py"
 (
   cd "$root/console"
   pnpm install --frozen-lockfile
+  pnpm typecheck
   pnpm build
 )
 
