@@ -21,7 +21,7 @@ Cargo feature 是叠加关系。要构建精简版本，必须加 `--no-default-
 精简 Rust 依赖示例：
 
 ```toml
-robot-bus = { version = "2.3.1", default-features = false }
+robot-bus = { version = "2.3.2", default-features = false }
 ```
 
 默认 Cargo 构建和官方 Python、Node、C++/Java/Android 发行包继续保留完整功能。原来显式使用 `--no-default-features --features ws,console` 的构建若需要坦克，应加上 `demo-tank`。运行参数 `--no-console`、`--no-tank` 用于关闭行为，编译 feature 用于移除组件。
