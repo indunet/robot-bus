@@ -1,6 +1,6 @@
 use std::any::Any;
 use std::collections::{HashMap, HashSet};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::sync::mpsc;
 use std::thread;
 use std::time::Duration;
@@ -13,7 +13,7 @@ use crate::errors::{BusError, Result};
 use crate::ros2_bridge::drop_stats::{DropStats, RouteHealth};
 use crate::ros2_bridge::mapper::{ActionMapper, Direction, ServiceMapper, TopicMapper};
 use crate::ros2_bridge::observe::{self, ConsoleRoute};
-use crate::runtime::{Node, NodeOptions, QosProfile};
+use crate::runtime::{Node, NodeOptions, QosProfile, MultiThreadedExecutor};
 
 use super::bridge::Ros2Bridge;
 use super::specs::{
@@ -208,7 +208,9 @@ impl Ros2BridgeBuilder {
             .create_node(self.name.as_str())
             .map_err(|e| BusError::Protocol(format!("rclrs create_node: {e}")))?;
 
-        let mut bus_node = Node::with_options(format!("{}_bus", self.name), self.bus_options);
+        let mut bus_node = Node::with_options(format!("{}_bus", self.name), self.bus_options.clone());
+        let rpc_executor = MultiThreadedExecutor::new(4);
+        let mut rpc_node = rpc_executor.create_node_with_options(format!("{}_rpc", self.name), self.bus_options)?;
 
         let mut ros_subs = Vec::new();
         let mut bus_pubs = HashMap::new();
@@ -245,7 +247,14 @@ impl Ros2BridgeBuilder {
         }
 
         for svc in &self.services {
-            wire_service_route(&ros_node, &mut bus_node, svc, &mut ros_entities)?;
+            let health = Arc::new(RouteHealth::new());
+            wire_service_route(
+                &ros_node,
+                &mut rpc_node,
+                svc,
+                &mut ros_entities,
+                Arc::clone(&health),
+            )?;
             console_routes.push(ConsoleRoute::rpc(
                 "service",
                 svc.ros_service.clone(),
@@ -254,11 +263,19 @@ impl Ros2BridgeBuilder {
                 svc.mapper.type_name(),
                 svc.ros_qos,
                 svc.bus_qos,
+                health,
             ));
         }
 
         for act in &self.actions {
-            wire_action_route(&ros_node, &mut bus_node, act, &mut ros_entities)?;
+            let health = Arc::new(RouteHealth::new());
+            wire_action_route(
+                &ros_node,
+                &mut rpc_node,
+                act,
+                &mut ros_entities,
+                Arc::clone(&health),
+            )?;
             console_routes.push(ConsoleRoute::rpc(
                 "action",
                 act.ros_action.clone(),
@@ -267,6 +284,7 @@ impl Ros2BridgeBuilder {
                 act.mapper.type_name(),
                 act.ros_qos,
                 act.bus_qos,
+                health,
             ));
         }
 
@@ -286,15 +304,27 @@ impl Ros2BridgeBuilder {
         }
 
         let ros_commands = Arc::clone(ros_executor.commands());
+        let executor_error = Arc::new(Mutex::new(None));
+        let thread_error = Arc::clone(&executor_error);
         let ros_spin = thread::Builder::new()
             .name("ros2_bridge_spin".into())
             .spawn(move || {
-                let _ = ros_executor.spin(SpinOptions::default());
+                let outcome = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                    ros_executor.spin(SpinOptions::default())
+                }));
+                let message = match outcome {
+                    Ok(errors) => format!("ROS executor stopped: {errors:?}"),
+                    Err(_) => "ROS executor panicked".to_string(),
+                };
+                *thread_error.lock().unwrap_or_else(|e| e.into_inner()) = Some(message);
             })
             .map_err(|e| BusError::Protocol(format!("spawn ros2 spin thread: {e}")))?;
 
         Ok(Ros2Bridge {
             bus_node,
+            rpc_node,
+            rpc_executor,
+            executor_error,
             ros_node,
             bus_pubs,
             lazy_routes,

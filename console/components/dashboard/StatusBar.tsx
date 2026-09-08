@@ -56,7 +56,7 @@ export default function StatusBar({ broker }: StatusBarProps) {
 
       <div className="flex items-center gap-1.5 shrink-0">
         <span className={`w-2.5 h-2.5 rounded-full ${statusPulse}`} />
-        <span className={`font-mono text-xs font-semibold min-w-[7.5rem] ${statusColor}`}>
+        <span className={`font-mono text-xs font-semibold whitespace-nowrap ${statusColor}`}>
           {statusLabel}
           {connecting && (
             <span className="connecting-dots inline-block w-4 text-left" data-phase={dotPhase} />
@@ -186,7 +186,7 @@ function LiveClock({ dateLocale }: { dateLocale: string }) {
   }, [dateLocale])
   return (
     <span className="flex items-center gap-1.5 shrink-0">
-      <Clock size={13} className="text-bus-muted" />
+      <Clock size={13} className="text-bus-cyan" />
       <span className="font-mono text-xs text-bus-muted tabular-nums">{time || '--:--:--'}</span>
     </span>
   )

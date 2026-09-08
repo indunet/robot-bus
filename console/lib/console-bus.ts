@@ -151,6 +151,13 @@ function mapBridge(msg: BridgeSnapshot): BridgeInfo {
         publishFail: u64(r.publishFail),
         lastRxMs: u64(r.lastRxMs),
         idle: !!r.idle,
+        calls: u64(r.calls),
+        failures: u64(r.failures),
+        timeouts: u64(r.timeouts),
+        cancelled: u64(r.cancelled),
+        rejected: u64(r.rejected),
+        lastError: r.lastError || '',
+        lastStatus: r.lastStatus || '',
       }),
     ),
   }

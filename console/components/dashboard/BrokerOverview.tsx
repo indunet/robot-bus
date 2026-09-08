@@ -69,6 +69,7 @@ export function PanelHeader({
   sub,
   subClassName = 'text-bus-muted',
   trailing,
+  subAfterTrailing = false,
 }: {
   icon?: React.ReactNode
   title: string
@@ -77,8 +78,16 @@ export function PanelHeader({
   subClassName?: string
   /** Optional controls on the right (e.g. window picker). */
   trailing?: React.ReactNode
+  /** Place count after trailing (search box), with a gap. */
+  subAfterTrailing?: boolean
 }) {
   const { labelCase } = useI18n()
+  const subEl = sub ? (
+    <span className={`font-mono text-xs font-medium tabular-nums shrink-0 ${subClassName}`}>
+      {sub}
+    </span>
+  ) : null
+
   return (
     <div className="flex items-center gap-2 px-3 h-9 border-b border-bus-border">
       <div className="flex items-center gap-2 min-w-0 flex-1">
@@ -90,13 +99,14 @@ export function PanelHeader({
         <span className={`font-mono text-xs font-bold text-bus-text tracking-widest truncate ${labelCase}`}>
           {title}
         </span>
-        {sub && (
-          <span className={`font-mono text-xs font-medium tabular-nums shrink-0 ${subClassName}`}>
-            {sub}
-          </span>
-        )}
+        {!subAfterTrailing && subEl}
       </div>
-      {trailing ? <div className="flex items-center gap-2 shrink-0">{trailing}</div> : null}
+      {trailing || (subAfterTrailing && subEl) ? (
+        <div className={`flex items-center shrink-0 ${subAfterTrailing ? 'gap-3' : 'gap-2'}`}>
+          {trailing}
+          {subAfterTrailing ? subEl : null}
+        </div>
+      ) : null}
     </div>
   )
 }

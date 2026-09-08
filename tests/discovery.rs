@@ -19,7 +19,7 @@ use std::time::Duration;
 #[cfg(feature = "ws")]
 use support::{free_ports, lock_brokers};
 
-/// HTTP discover needs the gRPC gateway listener (`GET /api/v1/discover`).
+/// HTTP discover needs the WebSocket RPC server listener (`GET /api/v1/discover`).
 /// Skip under `cargo test --no-default-features` where no API server is started.
 #[cfg(feature = "ws")]
 #[test]
@@ -39,7 +39,7 @@ fn discover_tcp_then_pubsub() {
     config.action.bind_all_transports = false;
     #[cfg(feature = "console-api")]
     {
-        // Discover is served from the gateway when console UI is off.
+        // Discover is served from the server when console UI is off.
         config.console.enabled = false;
     }
     config.ws.listen = format!("127.0.0.1:{api_port}").parse().unwrap();

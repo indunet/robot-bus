@@ -14,7 +14,7 @@ interface Props {
 }
 
 const COLS =
-  'grid-cols-[72px_88px_minmax(0,1fr)_minmax(0,1fr)_minmax(0,0.9fr)_minmax(0,1.1fr)_72px_88px_64px]'
+  'grid-cols-[72px_88px_minmax(0,1fr)_minmax(0,1fr)_minmax(0,0.9fr)_minmax(0,1.1fr)_72px_88px_88px]'
 
 export default function BridgeTable({ bridges, maxBodyHeight }: Props) {
   const { t, labelCase } = useI18n()
@@ -52,8 +52,8 @@ export default function BridgeTable({ bridges, maxBodyHeight }: Props) {
     t('colType'),
     t('colQos'),
     t('colRxTx'),
-    t('colDrops'),
-    t('colIdle'),
+    t('bridgeErrorCount'),
+    t('bridgeState'),
   ]
 
   return (
@@ -103,39 +103,66 @@ export default function BridgeTable({ bridges, maxBodyHeight }: Props) {
 function BridgeRow({ bridge, route }: { bridge: string; route: BridgeRouteInfo }) {
   const { t } = useI18n()
   const drops = route.convertFail + route.decodeFail + route.publishFail
-  const alert = route.idle || drops > 0
+  const rpc = route.kind === 'service' || route.kind === 'action'
+  const errorCount = rpc ? route.failures : drops
+  const active = Math.max(0, route.calls - route.tx - route.failures - route.cancelled)
+  const statuses: Record<string, string> = {
+    succeeded: t('bridgeSucceeded'), failed: t('bridgeFailed'), aborted: t('bridgeAborted'),
+    timeout: t('bridgeTimeout'), cancelled: t('bridgeCancelled'), rejected: t('bridgeRejected'),
+  }
+  const state = rpc
+    ? active > 0 ? t('bridgeRunning') : statuses[route.lastStatus] || t('bridgePending')
+    : route.idle ? t(route.lastRxMs > 0 ? 'bridgeStalled' : 'bridgeIdle')
+      : route.lazy && !route.enabled ? t('bridgeLazy') : '—'
+  const alert = route.idle || errorCount > 0
   const rowClass = alert ? 'bg-bus-amber/5' : ''
 
   return (
-    <div
-      className={`grid ${COLS} items-center px-3 h-9 border-b border-[#1f2428] transition-colors cursor-default hover:bg-[#1f2428] ${rowClass}`}
-    >
-      <span className="font-mono text-[12px] text-bus-muted truncate">{route.kind}</span>
-      <span className="font-mono text-[12px] text-bus-cyan truncate">{route.direction}</span>
-      <TruncateTip text={route.rosName} className="font-mono text-[13px] text-bus-text" />
-      <TruncateTip text={route.busName} className="font-mono text-[13px] text-bus-text" />
-      <TruncateTip
-        text={route.typeName || undefined}
-        className="font-mono text-[12px] text-[#6b8294]"
-      />
-      <TruncateTip
-        text={`ros=${route.rosQos} bus=${route.busQos}`}
-        className="font-mono text-[11px] text-bus-muted"
-      />
-      <span className="font-mono text-[13px] text-bus-text tabular-nums text-right">
-        {fmtNum(route.rx)}/{fmtNum(route.tx)}
-      </span>
-      <span
-        className={`font-mono text-[13px] tabular-nums text-right ${drops > 0 ? 'text-bus-amber' : 'text-bus-muted'}`}
+    <div className={`border-b border-bus-border ${rowClass}`}>
+      <div
+        className={`grid ${COLS} items-center px-3 h-9 transition-colors cursor-default hover:bg-[#1f2428]`}
       >
-        {drops > 0 ? fmtNum(drops) : '—'}
-      </span>
-      <span
-        className={`font-mono text-[11px] text-right ${route.idle ? 'text-bus-amber' : 'text-bus-muted'}`}
-        title={bridge}
-      >
-        {route.idle ? t('bridgeIdle') : route.lazy && !route.enabled ? t('bridgeLazy') : '—'}
-      </span>
+        <span className="font-mono text-[12px] text-bus-muted truncate">{route.kind}</span>
+        <span className="font-mono text-[12px] text-bus-cyan truncate">{route.direction}</span>
+        <TruncateTip text={route.rosName} className="font-mono text-[13px] text-bus-text" />
+        <TruncateTip text={route.busName} className="font-mono text-[13px] text-bus-text" />
+        <TruncateTip
+          text={route.typeName || undefined}
+          className="font-mono text-[12px] text-[#6b8294]"
+        />
+        <TruncateTip
+          text={`ros=${route.rosQos} bus=${route.busQos}`}
+          className="font-mono text-[11px] text-bus-muted"
+        />
+        <span title={rpc ? t('bridgeRpcTraffic') : undefined} className="font-mono text-[13px] text-bus-text tabular-nums text-right">
+          {fmtNum(rpc ? route.calls : route.rx)}/{fmtNum(route.tx)}
+        </span>
+        <span
+          className={`font-mono text-[13px] tabular-nums text-right ${errorCount > 0 ? 'text-bus-amber' : 'text-bus-muted'}`}
+        >
+          {errorCount > 0 ? fmtNum(errorCount) : '—'}
+        </span>
+        <span
+          className={`font-mono text-[11px] text-right ${route.idle ? 'text-bus-amber' : 'text-bus-muted'}`}
+          title={bridge}
+        >
+          {state}
+        </span>
+      </div>
+      {rpc && (
+        <div className="px-3 pb-2 text-xs text-bus-muted" title={t('bridgeRpcTraffic')}>
+          {bridge} · {t('bridgeRpcCounts', {
+            calls: fmtNum(route.calls), success: fmtNum(route.tx), active: fmtNum(active),
+            failures: fmtNum(route.failures), timeouts: fmtNum(route.timeouts),
+            rejected: fmtNum(route.rejected), cancelled: fmtNum(route.cancelled),
+          })}
+        </div>
+      )}
+      {rpc && route.lastError && (
+        <div className="px-3 pb-2 text-xs text-bus-amber break-words whitespace-normal">
+          {t('bridgeLastError')}: {route.lastError}
+        </div>
+      )}
     </div>
   )
 }

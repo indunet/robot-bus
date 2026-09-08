@@ -34,7 +34,7 @@ int main() {
                     .build();
 
   std::cout << "builtin bridge: /examples/chatter, /examples/reset, "
-               "/examples/fibonacci (Ros2ToBus; Ctrl+C to stop)\n";
+               "/examples/fibonacci (ROS publishes topics; ROS clients call bus services/actions; Ctrl+C to stop)\n";
   bridge.spin();
   return 0;
 }

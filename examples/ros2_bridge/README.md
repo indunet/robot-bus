@@ -24,3 +24,16 @@ Runnable programs still smoke against system
 `ros2 service call` without `colcon build` of `my_pkg`. In production both
 the `.srv` and the `.proto` would be your package, and `type_name()` /
 `ros_srv_type()` would point at `my_pkg/srv/AddTwoInts`.
+
+## Direction in these examples
+
+All `builtin` and `custom_add_two_ints` routes use `from_ros → to_bus`.
+For topics, run a ROS publisher and a bus subscriber. For services and actions,
+run the **server on bus** and the **client on ROS**: the bridge exposes the ROS
+proxy that forwards requests/goals to bus. Responses/feedback/results return to ROS.
+The `custom_add_two_ints` programs already host their bus server in-process.
+Start one of them, then call
+`ros2 service call /examples/add_two_ints example_interfaces/srv/AddTwoInts "{a: 2, b: 3}"`.
+To call an existing ROS server from bus, reverse the chain to
+`from_bus(..., TopicQos.bus()).to_ros(..., TopicQos.default())`
+(C++ uses `ros_default()`).

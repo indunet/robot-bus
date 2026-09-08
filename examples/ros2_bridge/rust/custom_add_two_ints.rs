@@ -88,7 +88,7 @@ fn main() -> robot_bus::Result<()> {
 
     println!(
         "custom my_pkg AddTwoInts bridge on /examples/add_two_ints \
-         (Ros2ToBus + in-process bus server; Ctrl+C to stop)"
+         (ROS client -> in-process bus server; Ctrl+C to stop)"
     );
     loop {
         let _ = bus.spin_once(Some(Duration::from_millis(10)));

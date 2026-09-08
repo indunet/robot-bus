@@ -33,15 +33,15 @@ gen-android:
 gen-rust:
 	python3 scripts/generate_rust_msgs.py
 
-# Core SDK, no HTTP gateway, web assets, or demo
+# Native ZMQ SDK, without WS, web assets, or demo
 build-sdk: gen-rust
 	cargo build --release --no-default-features --lib
 
-# WS gateway without the monitoring control plane or web assets
-build-gateway: gen-rust
+# WebSocket communication without the monitoring control plane or web assets
+build-ws: gen-rust
 	cargo build --release --no-default-features --features ws --bin robot_bus_broker
 
-# WS gateway and monitoring API, without web assets or demo
+# WS server and monitoring API, without web assets or demo
 build-monitoring: gen-rust
 	cargo build --release --no-default-features --features ws,console-api --bin robot_bus_broker
 
@@ -127,6 +127,7 @@ test-cpp:
 	./bindings/cpp/build/federation_opts
 	./bindings/cpp/build/node_parameters
 	./bindings/cpp/build/ros2_bridge_stub
+	./bindings/cpp/build/ros2_bridge_diagnostics
 
 # --- examples/ (see examples/README.md) ---
 
@@ -196,6 +197,7 @@ test-python: proto
 	PYTHONPATH=bindings/python python3 bindings/python/tests/test_msgs_roundtrip.py
 	PYTHONPATH=bindings/python python3 bindings/python/tests/test_typed_api.py
 	PYTHONPATH=bindings/python python3 bindings/python/tests/test_ros2_bridge_builder.py
+	PYTHONPATH=bindings/python python3 bindings/python/tests/test_ros2_bridge_rpc_wait.py
 	PYTHONPATH=bindings/python python3 bindings/python/tests/test_ros2_bridge_image_mapper.py
 	PYTHONPATH=bindings/python python3 bindings/python/tests/test_ros2_bridge_topic_mappers.py
 

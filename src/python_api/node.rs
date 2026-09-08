@@ -174,7 +174,7 @@ impl PyNode {
         }
     }
 
-    /// WebSocket RPC client node talking to the local broker gateway (`http://127.0.0.1:15560`).
+    /// WebSocket RPC client node talking to the local broker server (`http://127.0.0.1:15560`).
     #[cfg(feature = "ws")]
     #[classmethod]
     #[pyo3(signature = (name,))]
@@ -187,7 +187,7 @@ impl PyNode {
     /// Discover a broker via HTTP `GET /api/v1/discover`, then connect with `transport`.
     ///
     /// Transport is still chosen by the caller (`tcp` / `ipc` / `inproc` / `ws`).
-    /// Discovery only fills host / paths / gateway URL.
+    /// Discovery only fills host / paths / server URL.
     #[classmethod]
     #[pyo3(signature = (
         name,

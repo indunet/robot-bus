@@ -7,8 +7,10 @@ import {
   OPCODE_SEND_GOAL,
   OPCODE_SUBSCRIBE,
   OPCODE_SUBSCRIBE_WITH_POLICY,
+  WsRpcError,
   WsSession,
   __setWebSocketForTests,
+  actionErrorFromBody,
   decodeActionData,
   decodeFrame,
   decodeSubscribeData,
@@ -16,6 +18,7 @@ import {
   encodeFrame,
   encodeSubscribeData,
   httpUrlToWsRpc,
+  rpcCodeFromStatus,
 } from "../src/ws-rpc.js";
 
 describe("ws-rpc framing V3", () => {
@@ -259,5 +262,27 @@ describe("WsSession reconnect", () => {
     FakeWebSocket.instances.at(-1)?.close();
     await sleep(80);
     assert.equal(FakeWebSocket.instances.length, n);
+  });
+});
+
+describe("action terminal errors", () => {
+  it("classifies trailer status codes", () => {
+    assert.equal(rpcCodeFromStatus(1, "cancelled 'motion'"), "cancelled");
+    assert.equal(rpcCodeFromStatus(10, "action aborted: stopped"), "aborted");
+    assert.equal(rpcCodeFromStatus(9, "action rejected: invalid"), "rejected");
+    assert.equal(rpcCodeFromStatus(13, "cancelled 'motion'"), "cancelled");
+    const err = new WsRpcError(1, "cancelled 'motion'");
+    assert.equal(err.code, "cancelled");
+    assert.equal(err.status, 1);
+  });
+
+  it("parses RESULT error bodies instead of treating them as payloads", () => {
+    const body = Uint8Array.from([...new TextEncoder().encode("CANCELLED"), 0, ...new TextEncoder().encode("motion")]);
+    const err = actionErrorFromBody(body);
+    assert.ok(err);
+    assert.equal(err.code, "cancelled");
+    assert.equal(err.status, 1);
+    assert.equal(err.message, "motion");
+    assert.equal(actionErrorFromBody(new Uint8Array([1, 2, 3])), undefined);
   });
 });

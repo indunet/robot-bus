@@ -54,6 +54,7 @@ struct ServiceRouteSpec {
   std::shared_ptr<ServiceMapper> custom;
   TopicQos ros_qos = TopicQos::ros_default();
   TopicQos bus_qos = TopicQos::bus();
+  std::shared_ptr<RouteHealth> health;
   bool is_custom() const { return static_cast<bool>(custom); }
 };
 
@@ -66,6 +67,7 @@ struct ActionRouteSpec {
   std::shared_ptr<ActionMapper> custom;
   TopicQos ros_qos = TopicQos::ros_default();
   TopicQos bus_qos = TopicQos::bus();
+  std::shared_ptr<RouteHealth> health;
   bool is_custom() const { return static_cast<bool>(custom); }
 };
 

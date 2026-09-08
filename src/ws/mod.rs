@@ -1,4 +1,4 @@
-//! Multiplexed WebSocket RPC gateway over the ZeroMQ buses.
+//! WebSocket communication: multiplexed RPC, framing, and server-side bus integration.
 //!
 //! Enabled with `--features ws`. Covers message Subscribe / Publish, service
 //! Call, and action SendGoal (one GOAL request → FEEDBACK / RESULT stream).
@@ -14,7 +14,7 @@ pub mod subscription_queue;
 pub mod ws;
 pub mod ws_frame;
 
-pub use action::ActionGatewayService;
-pub use message::MessageGatewayService;
-pub use server::{GatewayConfig, serve, serve_on_listener, serve_with_shutdown};
-pub use service::ServiceGatewayService;
+pub use action::WsActionHandler;
+pub use message::WsMessageService;
+pub use server::{WsServerConfig, serve, serve_on_listener, serve_with_shutdown};
+pub use service::WsServiceHandler;

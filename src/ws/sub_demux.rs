@@ -1,4 +1,4 @@
-//! Shared ZMQ SUB demux for the message gateway (one reader thread, many watchers).
+//! Shared ZMQ SUB demux for the message server (one reader thread, many watchers).
 
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -105,7 +105,7 @@ impl SubDemux {
         topic: String,
         qos_depth: i32,
     ) -> Result<SubscriptionReceiver, RpcStatus> {
-        self.open_subscribe_with_policy(topic, qos_depth, SubscriptionOverflowPolicy::DropNewest)
+        self.open_subscribe_with_policy(topic, qos_depth, SubscriptionOverflowPolicy::DropOldest)
     }
 
     pub fn snapshot(&self) -> SubscriptionSnapshot {

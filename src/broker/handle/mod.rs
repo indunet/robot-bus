@@ -27,7 +27,7 @@ use crate::console::{BrokerEndpoints, ConsoleState, ControlPlaneHandle, StatusPu
 #[cfg(all(feature = "console-api", feature = "demo-tank"))]
 use crate::tank::{TankEndpoints, TankManager};
 #[cfg(feature = "ws")]
-use crate::ws_gateway::{GatewayConfig, serve_on_listener};
+use crate::ws::{WsServerConfig, serve_on_listener};
 use std::net::SocketAddr;
 
 mod bus_handles;
@@ -38,7 +38,7 @@ pub use bus_handles::{ActionBusBroker, MessageBusBroker, ServiceBusBroker};
 pub use config::ConsoleBrokerConfig;
 pub use config::RobotBusConfig;
 #[cfg(feature = "ws")]
-pub use config::WsGatewayConfig;
+pub use config::WsConfig;
 
 use bus_handles::{STARTUP_SETTLE, join_broker_thread};
 
@@ -68,15 +68,15 @@ fn ws_rpc_url_for_listen(listen: SocketAddr) -> String {
 }
 
 #[cfg(feature = "ws")]
-struct WsGatewayHandle {
+struct WsServerHandle {
     pub listen: SocketAddr,
     shutdown_tx: Option<tokio::sync::watch::Sender<bool>>,
     handle: Option<JoinHandle<Result<()>>>,
 }
 
 #[cfg(feature = "ws")]
-impl WsGatewayHandle {
-    fn start(mut config: GatewayConfig) -> Result<Self> {
+impl WsServerHandle {
+    fn start(mut config: WsServerConfig) -> Result<Self> {
         let requested = config.listen;
         // Bind on the calling thread so EADDRINUSE fails at start(), not only at stop().
         let std_listener = std::net::TcpListener::bind(requested)
@@ -103,7 +103,7 @@ impl WsGatewayHandle {
             let rt = tokio::runtime::Builder::new_multi_thread()
                 .enable_all()
                 .build()
-                .context("create tokio runtime for WebSocket RPC gateway")?;
+                .context("create tokio runtime for WebSocket RPC server")?;
             rt.block_on(async move {
                 let listener = tokio::net::TcpListener::from_std(std_listener)
                     .context("tokio API listener")?;
@@ -117,7 +117,7 @@ impl WsGatewayHandle {
                 let mut force_rx = shutdown_rx;
                 let force = async move {
                     let _ = force_rx.wait_for(|shutdown| *shutdown).await;
-                    // Open client streams can block tonic's graceful drain forever;
+                    // Open client streams can block the server's graceful drain forever;
                     // after a short grace period, drop the server future and free the port.
                     tokio::time::sleep(Duration::from_millis(500)).await;
                 };
@@ -140,14 +140,14 @@ impl WsGatewayHandle {
             let _ = tx.send(true);
         }
         if let Some(handle) = self.handle.take() {
-            join_broker_thread("grpc_gateway", handle)?;
+            join_broker_thread("ws_server", handle)?;
         }
         Ok(())
     }
 }
 
 #[cfg(feature = "ws")]
-impl Drop for WsGatewayHandle {
+impl Drop for WsServerHandle {
     fn drop(&mut self) {
         if let Some(tx) = self.shutdown_tx.take() {
             let _ = tx.send(true);
@@ -158,8 +158,8 @@ impl Drop for WsGatewayHandle {
     }
 }
 
-/// Console-only HTTP server (no `grpc` feature) — otherwise the console shares
-/// the gRPC gateway's listener (see [`GatewayConfig::console`]).
+/// Console-only HTTP server (no `ws` feature) — otherwise the console shares
+/// the WebSocket RPC server's listener (see [`WsServerConfig::console`]).
 #[cfg(all(feature = "console-api", not(feature = "ws")))]
 struct ConsoleHttpHandle {
     shutdown_tx: Option<tokio::sync::watch::Sender<bool>>,
@@ -238,8 +238,8 @@ pub struct RobotBusBroker {
     pub service: ServiceBusBroker,
     pub action: ActionBusBroker,
     #[cfg(feature = "ws")]
-    ws: WsGatewayHandle,
-    /// Console-only HTTP server; `None` when `grpc` is enabled (console shares its port)
+    ws: WsServerHandle,
+    /// Console-only HTTP server; `None` when `ws` is enabled (console shares its port)
     /// or the console is disabled.
     #[cfg(all(feature = "console-api", not(feature = "ws")))]
     console: Option<ConsoleHttpHandle>,
@@ -369,7 +369,7 @@ impl RobotBusBroker {
             },
         };
 
-        // Build console state before starting the gRPC gateway — when both features
+        // Build console state before starting the WebSocket RPC server — when both features
         // are enabled, REST + static UI routes merge onto the same listener below.
         #[cfg(feature = "console-api")]
         let console_state: Option<Arc<ConsoleState>> = if config.console.enabled {
@@ -428,7 +428,7 @@ impl RobotBusBroker {
 
         #[cfg(feature = "ws")]
         let ws = {
-            let gateway = GatewayConfig {
+            let ws_config = WsServerConfig {
                 listen: config.ws.listen,
                 message_xpub: bind_to_connect(&message.xpub_bind),
                 message_xsub: bind_to_connect(&message.xsub_bind),
@@ -453,7 +453,7 @@ impl RobotBusBroker {
                 #[cfg(feature = "console-api")]
                 console: console_state.clone(),
             };
-            WsGatewayHandle::start(gateway)?
+            WsServerHandle::start(ws_config)?
         };
         #[cfg(feature = "ws")]
         {
@@ -464,8 +464,8 @@ impl RobotBusBroker {
             }
         }
 
-        // Console-only HTTP server — only needed when `grpc` is disabled; otherwise
-        // the console shares the gRPC gateway's listener started above.
+        // Console-only HTTP server — only needed when `ws` is disabled; otherwise
+        // the console shares the WebSocket RPC server's listener started above.
         #[cfg(all(feature = "console-api", not(feature = "ws")))]
         let console = match &console_state {
             Some(state) => Some(ConsoleHttpHandle::start(
@@ -561,7 +561,7 @@ impl RobotBusBroker {
     /// Stop all buses (and gRPC / console) and join their threads.
     pub fn stop(self) -> Result<()> {
         // Ask the console background threads to wind down before tearing down
-        // the gateway they publish/subscribe through; give them a moment to
+        // the server they publish/subscribe through; give them a moment to
         // notice before we start joining anything.
         #[cfg(all(feature = "console-api", feature = "demo-tank"))]
         if let Some(tank) = self.tank.as_ref() {

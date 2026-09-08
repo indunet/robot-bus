@@ -52,6 +52,7 @@ export default function TopicTable({ topics, maxBodyHeight, bridgedNames }: Prop
         }
         subClassName="text-bus-cyan"
         trailing={<NameFilter value={query} onChange={setQuery} />}
+        subAfterTrailing
       />
 
       <div className="overflow-x-auto bus-scroll flex-1 min-h-0">

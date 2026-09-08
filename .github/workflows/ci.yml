@@ -30,6 +30,8 @@ jobs:
           cargo test --no-default-features --features ws --lib --test ws_node --test ws_rpc
           cargo test --no-default-features --features console-api --lib --test feature_boundaries --test wait_helpers
           cargo test --no-default-features --features ws,console-api --lib --test feature_boundaries --test console_metrics_smoke --test topic_demand --test topic_type_registry --test rbus_cli_smoke
+      - name: Typecheck ROS bridge without ROS runtime
+        run: RUSTFLAGS='--cfg ros_distro="humble"' cargo check --no-default-features --features ros2-shim --lib
       - name: Setup pnpm
         uses: pnpm/action-setup@v6
         with:
@@ -82,6 +84,7 @@ jobs:
         run: |
           PYTHONPATH=bindings/python python3 bindings/python/tests/test_msgs_roundtrip.py
           PYTHONPATH=bindings/python python3 bindings/python/tests/test_typed_api.py
+          PYTHONPATH=bindings/python python3 bindings/python/tests/test_ros2_bridge_rpc_wait.py
       - name: Setup pnpm
         uses: pnpm/action-setup@v6
         with:
@@ -209,6 +212,7 @@ jobs:
           ./bindings/cpp/build/node_parameters
           ./bindings/cpp/build/typed_api
           ./bindings/cpp/build/ros2_bridge_stub
+          ./bindings/cpp/build/ros2_bridge_diagnostics
 
   java:
     runs-on: ubuntu-22.04

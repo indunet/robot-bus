@@ -45,7 +45,7 @@ def main() -> None:
     )
     print(
         "builtin bridge: /examples/chatter, /examples/reset, /examples/fibonacci "
-        "(Ros2ToBus; Ctrl+C to stop)"
+        "(ROS publishes topics; ROS clients call bus services/actions; Ctrl+C to stop)"
     )
     bridge.spin()
 

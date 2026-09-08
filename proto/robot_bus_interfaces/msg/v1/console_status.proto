@@ -145,6 +145,15 @@ message BridgeRoute {
   uint64 publish_fail = 14;
   uint64 last_rx_ms = 15;
   bool idle = 16;
+  // RPC counters cover bridge/transport outcomes, not application response fields.
+  uint64 calls = 17;
+  uint64 failures = 18;
+  uint64 timeouts = 19;
+  uint64 cancelled = 20;
+  uint64 rejected = 21;
+  string last_error = 22;
+  // "succeeded" | "failed" | "aborted" | "timeout" | "cancelled" | "rejected"
+  string last_status = 23;
 }
 
 // One Ros2Bridge process. Console merges by `bridge_id` (multi-bridge).

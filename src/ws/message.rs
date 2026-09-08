@@ -1,4 +1,4 @@
-//! `MessageGateway` — Subscribe (SUB→XPUB) and Publish (PUB→XSUB).
+//! `WsMessageService` — Subscribe (SUB→XPUB) and Publish (PUB→XSUB).
 
 use std::sync::{Arc, Mutex};
 
@@ -90,12 +90,12 @@ fn pub_loop(xsub: String, rx: std::sync::mpsc::Receiver<PubCmd>) {
 }
 
 #[derive(Clone)]
-pub struct MessageGatewayService {
+pub struct WsMessageService {
     pub_worker: Arc<PubWorker>,
     demux: SubDemux,
 }
 
-impl MessageGatewayService {
+impl WsMessageService {
     pub fn new(message_xpub: impl Into<String>, message_xsub: impl Into<String>) -> Self {
         let message_xpub = message_xpub.into();
         let message_xsub = message_xsub.into();

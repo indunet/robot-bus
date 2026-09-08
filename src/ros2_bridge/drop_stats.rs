@@ -1,5 +1,7 @@
 //! Per-bridge drop counters and per-route health (console snapshots / idle).
 
+use crate::errors::BusError;
+use std::sync::Mutex;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -66,6 +68,19 @@ pub struct RouteHealth {
     last_rx_ms: AtomicU64,
     last_warn_ms: AtomicU64,
     idle_latched: AtomicBool,
+    pub(crate) latched: AtomicBool,
+    rpc: Mutex<RpcStats>,
+}
+
+#[derive(Debug, Default, Clone)]
+pub struct RpcStats {
+    pub calls: u64,
+    pub failures: u64,
+    pub timeouts: u64,
+    pub cancelled: u64,
+    pub rejected: u64,
+    pub last_error: String,
+    pub last_status: String,
 }
 
 impl RouteHealth {
@@ -76,6 +91,7 @@ impl RouteHealth {
     pub fn record_rx(&self) {
         self.rx.fetch_add(1, Ordering::Relaxed);
         self.last_rx_ms.store(unix_ms(), Ordering::Relaxed);
+        self.idle_latched.store(false, Ordering::Relaxed);
     }
 
     pub fn record_tx(&self) {
@@ -129,17 +145,64 @@ impl RouteHealth {
         self.last_rx_ms.load(Ordering::Relaxed)
     }
 
-    pub fn is_idle(&self, enabled: bool, grace_elapsed: bool) -> bool {
-        enabled && grace_elapsed && self.last_rx_ms.load(Ordering::Relaxed) == 0
+    pub fn rpc_start(&self) {
+        self.rpc.lock().unwrap_or_else(|e| e.into_inner()).calls += 1;
+        self.record_rx();
     }
 
-    /// True once when an enabled topic route has never received after grace.
-    pub fn take_idle_event(&self, enabled: bool, grace_elapsed: bool) -> bool {
-        if self.last_rx_ms.load(Ordering::Relaxed) != 0 {
-            self.idle_latched.store(false, Ordering::Relaxed);
-            return false;
+    pub fn rpc_finish(&self, error: Option<&BusError>) {
+        let mut stats = self.rpc.lock().unwrap_or_else(|e| e.into_inner());
+        let status = match error {
+            None => {
+                self.record_tx();
+                "succeeded"
+            }
+            Some(BusError::Cancelled { .. }) => {
+                stats.cancelled += 1;
+                "cancelled"
+            }
+            Some(err) => {
+                stats.failures += 1;
+                match err {
+                    BusError::Timeout(_) => {
+                        stats.timeouts += 1;
+                        "timeout"
+                    }
+                    BusError::ActionRejected(_) => {
+                        stats.rejected += 1;
+                        "rejected"
+                    }
+                    BusError::ActionAborted(_) => "aborted",
+                    _ => "failed",
+                }
+            }
+        };
+        stats.last_status = status.into();
+        if let Some(error) = error {
+            stats.last_error = error.to_string().chars().take(512).collect();
+            if self.should_log_warn() {
+                log::warn!("ROS bridge RPC {status}: {error}");
+            }
         }
+    }
+
+    pub fn rpc_snapshot(&self) -> RpcStats {
+        self.rpc.lock().unwrap_or_else(|e| e.into_inner()).clone()
+    }
+
+    pub fn is_idle(&self, enabled: bool, grace_elapsed: bool) -> bool {
+        let last = self.last_rx_ms.load(Ordering::Relaxed);
+        enabled
+            && grace_elapsed
+            && (last == 0
+                || (!self.latched.load(Ordering::Relaxed)
+                    && unix_ms().saturating_sub(last) >= 15_000))
+    }
+
+    /// One event per idle episode; receiving traffic rearms the warning.
+    pub fn take_idle_event(&self, enabled: bool, grace_elapsed: bool) -> bool {
         if !self.is_idle(enabled, grace_elapsed) {
+            self.idle_latched.store(false, Ordering::Relaxed);
             return false;
         }
         !self.idle_latched.swap(true, Ordering::Relaxed)
@@ -149,6 +212,53 @@ impl RouteHealth {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn detects_stall_after_traffic_and_rearms_after_recovery() {
+        let h = RouteHealth::new();
+        h.record_rx();
+        assert!(!h.is_idle(true, true));
+        h.last_rx_ms.store(unix_ms() - 16_000, Ordering::Relaxed);
+        assert!(h.take_idle_event(true, true));
+        assert!(!h.take_idle_event(true, true));
+        h.record_rx();
+        h.last_rx_ms.store(unix_ms() - 16_000, Ordering::Relaxed);
+        assert!(h.take_idle_event(true, true));
+        assert!(!h.is_idle(false, true));
+        h.latched.store(true, Ordering::Relaxed);
+        assert!(!h.is_idle(true, true));
+    }
+
+    #[test]
+    fn rpc_counters_separate_terminal_outcomes() {
+        let h = RouteHealth::new();
+        h.rpc_start();
+        h.rpc_finish(None);
+        for error in [
+            BusError::Timeout("late".into()),
+            BusError::ActionRejected("rejected".into()),
+            BusError::ActionAborted("aborted".into()),
+            BusError::Cancelled {
+                name: "cancelled".into(),
+            },
+        ] {
+            h.rpc_start();
+            h.rpc_finish(Some(&error));
+        }
+        let stats = h.rpc_snapshot();
+        assert_eq!(
+            (
+                stats.calls,
+                stats.failures,
+                stats.timeouts,
+                stats.rejected,
+                stats.cancelled
+            ),
+            (5, 3, 1, 1, 1)
+        );
+        assert_eq!((h.rx(), h.tx()), (5, 1));
+        assert_eq!(stats.last_status, "cancelled");
+    }
 
     #[test]
     fn snapshot_starts_zero_and_counts() {

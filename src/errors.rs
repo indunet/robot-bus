@@ -20,6 +20,12 @@ pub enum BusError {
     #[error("cancelled '{name}'")]
     Cancelled { name: String },
 
+    #[error("action aborted: {0}")]
+    ActionAborted(String),
+
+    #[error("action rejected: {0}")]
+    ActionRejected(String),
+
     #[error("no goal '{goal_id}'")]
     NoGoal { goal_id: String },
 
@@ -56,6 +62,18 @@ pub type Result<T> = std::result::Result<T, BusError>;
 
 /// Map broker error prefixes to typed errors.
 pub fn parse_error_body(body: &[u8]) -> Option<BusError> {
+    if let Some(message) = strip_prefix(body, b"ACTION_ABORTED") {
+        return Some(BusError::ActionAborted(decode_field(message)));
+    }
+    if let Some(message) = strip_prefix(body, b"ACTION_REJECTED") {
+        return Some(BusError::ActionRejected(decode_field(message)));
+    }
+    if let Some(message) = strip_prefix(body, b"RPC_TIMEOUT") {
+        return Some(BusError::Timeout(decode_field(message)));
+    }
+    if let Some(message) = strip_prefix(body, b"RPC_FAILED") {
+        return Some(BusError::Protocol(decode_field(message)));
+    }
     if let Some(name) = strip_prefix(body, b"BUSY") {
         return Some(BusError::Busy {
             name: decode_field(name),
@@ -87,6 +105,18 @@ pub fn parse_error_body(body: &[u8]) -> Option<BusError> {
         });
     }
     None
+}
+
+/// Encode a bridge RPC failure using the bus RESULT error convention.
+pub fn rpc_error_body(error: &BusError) -> Vec<u8> {
+    let (prefix, message) = match error {
+        BusError::ActionAborted(message) => ("ACTION_ABORTED", message.clone()),
+        BusError::ActionRejected(message) => ("ACTION_REJECTED", message.clone()),
+        BusError::Cancelled { name } => ("CANCELLED", name.clone()),
+        BusError::Timeout(message) => ("RPC_TIMEOUT", message.clone()),
+        other => ("RPC_FAILED", other.to_string()),
+    };
+    format!("{prefix}\0{message}").into_bytes()
 }
 
 fn strip_prefix<'a>(body: &'a [u8], prefix: &[u8]) -> Option<&'a [u8]> {

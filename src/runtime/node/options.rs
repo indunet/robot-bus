@@ -15,13 +15,13 @@ use crate::transports::{
 /// every endpoint by hand. Explicit endpoint fields still override derived
 /// `transports::*` addresses when set.
 ///
-/// For gateway-only clients, use [`NodeOptions::ws`] / [`Node::ws`]
-/// (`transport = "ws"`, `ws_url` points at the broker gRPC listen address).
+/// For WebSocket clients, use [`NodeOptions::ws`] / [`Node::ws`]
+/// (`transport = "ws"`, `ws_url` points at the broker WebSocket listen address).
 #[derive(Debug, Clone)]
 pub struct NodeOptions {
     pub host: String,
     pub transport: String,
-    /// WebSocket RPC gateway base URL when `transport == "ws"` (e.g. `http://127.0.0.1:15560`).
+    /// WebSocket RPC server base URL when `transport == "ws"` (e.g. `http://127.0.0.1:15560`).
     pub ws_url: Option<String>,
     /// Embedded console HTTP base URL (same origin as the API listen when co-located).
     /// Filled by discovery when the broker announces it. Used by `rbus` / introspection
@@ -117,13 +117,13 @@ impl NodeOptions {
         }
     }
 
-    /// WebSocket RPC gateway (native + browser `/ws-rpc`) on the local broker (`http://127.0.0.1:15560`).
+    /// WebSocket RPC server (native + browser `/ws-rpc`) on the local broker (`http://127.0.0.1:15560`).
     #[cfg(feature = "ws")]
     pub fn ws() -> Self {
         Self::ws_at(WsRuntime::default_url())
     }
 
-    /// WebSocket RPC gateway at `url` (e.g. `http://127.0.0.1:15560`); browsers use `ws(s)://…/ws-rpc`.
+    /// WebSocket RPC server at `url` (e.g. `http://127.0.0.1:15560`); browsers use `ws(s)://…/ws-rpc`.
     #[cfg(feature = "ws")]
     pub fn ws_at(url: impl Into<String>) -> Self {
         let url = url.into();

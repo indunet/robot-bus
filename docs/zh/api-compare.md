@@ -9,7 +9,7 @@
 | 运行时 | DDS（需 `ros2` / daemon） | 先起 `robot_bus_broker`（或进程内嵌入） |
 | 入口 | `Context` → `Node` → `rclrs::spin` | **推荐** `Context` → `Node::with_context`；tcp/ipc仍可用便捷的 `Node::new`（私有 Context） |
 | 消息 | `.msg` / `.srv` / `.action`生成类型 | crate内 protobuf（如 `sensor_msgs::msg::v1::Imu`） |
-| QoS | `QOS_PROFILE_DEFAULT`等 | `QosProfile::keep_last(depth)` → ZMQ上为 HWM（各语言可选 `qos_depth` / `qosDepth`）；固定 best-effort。Topic：PUB/SUB HWM。Service / action：DEALER HWM。WebSocket订阅用同一 depth作为网关到客户端的队列；WS发布忽略 QoS（共用网关 PUB）。WS的 service / action忽略 HWM（没有 ZMQ socket） |
+| QoS | `QOS_PROFILE_DEFAULT`等 | `QosProfile::keep_last(depth)` → ZMQ上为 HWM（各语言可选 `qos_depth` / `qosDepth`）；固定 best-effort。Topic：PUB/SUB HWM。Service / action：DEALER HWM。WebSocket订阅用同一 depth作为服务端到客户端的队列；WS发布忽略 QoS（共用服务端 PUB）。WS的 service / action忽略 HWM（没有 ZMQ socket） |
 | 回调组 | Worker / callback group（较新 API） | `CallbackGroupType::MutuallyExclusive` / `Reentrant` |
 | 参数 | `declare_parameter` / `get_parameter` → Parameter；`set_parameter(Parameter)`；`list_parameters(prefixes, depth)`（可远程 / YAML / CLI） | 同形本地 API（`Parameter` + `as_*` + 批量 get/set）；`list_parameters` → `{names, prefixes}`，便利 API `list_all_parameters`；`undeclare_parameter`；YAML加载；无远程 / CLI |
 | 就绪等待 | `wait_for_message` / `wait_for_service` / `wait_for_action_server` | 同名辅助：`wait_for_message`；service/action通过 console `workers > 0`轮询（best-effort，非 DDS discovery）。另有与 broker的会话：`connection_state` / `wait_for_broker`（构造不阻塞；TCP/WS自动重连） |
@@ -124,7 +124,7 @@ fn main() -> robot_bus::Result<()> {
 }
 ```
 
-要点：rclrs创建时要带完整 QoS；robot-bus的 `QosProfile`只兑现 KeepLast depth（topic → PUB/SUB HWM；service / action → DEALER HWM；WebSocket订阅 → 网关队列）。reliability固定 best-effort。WS **发布** QoS忽略（共用网关 PUB）。不传 QoS的 `create_publisher` / `create_subscription` / `create_service` / `create_client` / `create_action_*`仍可用（不改动已有 HWM）。服务端最后一个参数是 callback group。topic名按传入原样使用（建议写全路径）。
+要点：rclrs创建时要带完整 QoS；robot-bus的 `QosProfile`只兑现 KeepLast depth（topic → PUB/SUB HWM；service / action → DEALER HWM；WebSocket订阅 → 服务端队列）。reliability固定 best-effort。WS **发布** QoS忽略（共用服务端 PUB）。不传 QoS的 `create_publisher` / `create_subscription` / `create_service` / `create_client` / `create_action_*`仍可用（不改动已有 HWM）。服务端最后一个参数是 callback group。topic名按传入原样使用（建议写全路径）。
 
 ---
 

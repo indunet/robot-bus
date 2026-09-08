@@ -92,14 +92,14 @@ fn ws_node_subscribe_with_qos_receives_published_payload() {
 }
 
 #[test]
-fn ws_node_passes_latest_policy_and_rejects_conflicts() {
+fn ws_node_passes_keep_last_one_and_rejects_conflicting_depths() {
     let (_guard, broker) = start_bus();
     let mut node = Node::ws_at("ws-latest", &ws_url(&broker));
     let received = Arc::new(Mutex::new(None));
     let slot = received.clone();
     node.create_subscription_raw_with_qos(
         "ws.latest",
-        QosProfile::latest(),
+        QosProfile::keep_last(1),
         Arc::new(move |data| {
             *slot.lock().unwrap() = Some(data.to_vec());
         }),
@@ -137,9 +137,9 @@ fn ws_node_passes_latest_policy_and_rejects_conflicts() {
         .iter()
         .find(|r| r["filter"] == "ws.latest")
         .unwrap();
-    assert_eq!(row["policy"], "latest");
+    assert_eq!(row["policy"], "drop_oldest");
     assert_eq!(row["capacity"], 1);
-    node.shutdown();
+    node.shutdown().unwrap();
     broker.stop().unwrap();
 }
 

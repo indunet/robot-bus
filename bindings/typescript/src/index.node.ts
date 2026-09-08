@@ -23,10 +23,13 @@ export {
   WsGoalHandle,
   TypedWsServiceClient,
   TypedWsActionClient,
+  WsRpcError,
+  actionErrorFromBody,
+  rpcCodeFromStatus,
   DEFAULT_WS_URL,
   type WsActionEvent,
   type WsSendGoalOptions,
-  type WsSubscriptionOptions,
+  type WsRpcCode,
 } from "./ws-node.js";
 
 const native = loadNative();

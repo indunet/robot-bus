@@ -1,4 +1,4 @@
-//! `ServiceGateway` — unary Call bridged to a ZMQ service-bus REQ client.
+//! `WsServiceHandler` — handles Call requests using a ZMQ service-bus REQ client.
 
 use std::collections::VecDeque;
 use std::sync::{Arc, Mutex};
@@ -80,20 +80,20 @@ impl Drop for ClientLease {
 }
 
 #[derive(Clone)]
-pub struct ServiceGatewayService {
+pub struct WsServiceHandler {
     pool: Arc<ServiceClientPool>,
 }
 
-impl std::fmt::Debug for ServiceGatewayService {
+impl std::fmt::Debug for WsServiceHandler {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("ServiceGatewayService")
+        f.debug_struct("WsServiceHandler")
             .field("frontend", &self.pool.frontend)
             .field("pool_size", &SERVICE_CLIENT_POOL_SIZE)
             .finish()
     }
 }
 
-impl ServiceGatewayService {
+impl WsServiceHandler {
     pub fn new(service_frontend: impl Into<String>) -> Self {
         let frontend = service_frontend.into();
         let pool = ServiceClientPool::new(frontend)
@@ -196,31 +196,31 @@ fn remaining_time(deadline: Option<Instant>) -> Result<Option<Duration>, RpcStat
 mod tests {
     use super::*;
 
-    fn gateway() -> (ServiceGatewayService, zmq::Socket) {
+    fn handler() -> (WsServiceHandler, zmq::Socket) {
         let context = Context::new();
         let server = context.socket(zmq::REP).unwrap();
         server.set_linger(0).unwrap();
         server.bind("tcp://127.0.0.1:*").unwrap();
         let endpoint = server.get_last_endpoint().unwrap().unwrap();
-        (ServiceGatewayService::new(endpoint), server)
+        (WsServiceHandler::new(endpoint), server)
     }
 
     #[tokio::test]
     async fn deadline_includes_waiting_for_a_pool_client() {
-        let (gateway, server) = gateway();
-        let held = Arc::clone(&gateway.pool.available)
+        let (handler, server) = handler();
+        let held = Arc::clone(&handler.pool.available)
             .acquire_many_owned(SERVICE_CLIENT_POOL_SIZE as u32)
             .await
             .unwrap();
         let start = Instant::now();
-        let result = gateway
+        let result = handler
             .call_service("echo".into(), vec![], "expired".into(), 40)
             .await;
         drop(held);
         assert_eq!(result.unwrap_err().code(), Code::DeadlineExceeded);
         assert!(start.elapsed() < Duration::from_millis(500));
         assert_eq!(
-            gateway.pool.admission.available_permits(),
+            handler.pool.admission.available_permits(),
             SERVICE_CLIENT_POOL_SIZE + MAX_PENDING_CALLS
         );
         assert!(
@@ -231,12 +231,12 @@ mod tests {
 
     #[tokio::test]
     async fn full_admission_queue_fails_immediately() {
-        let (gateway, _server) = gateway();
-        let _held = Arc::clone(&gateway.pool.admission)
+        let (handler, _server) = handler();
+        let _held = Arc::clone(&handler.pool.admission)
             .acquire_many_owned((SERVICE_CLIENT_POOL_SIZE + MAX_PENDING_CALLS) as u32)
             .await
             .unwrap();
-        let result = gateway
+        let result = handler
             .call_service("echo".into(), vec![], String::new(), 0)
             .await;
         assert_eq!(result.unwrap_err().code(), Code::ResourceExhausted);
@@ -249,7 +249,7 @@ mod tests {
             .max_blocking_threads(1)
             .build()
             .unwrap();
-        let (gateway, server) = gateway();
+        let (handler, server) = handler();
         let (started_tx, started_rx) = std::sync::mpsc::channel();
         let (release_tx, release_rx) = std::sync::mpsc::channel();
         let blocker = runtime.spawn_blocking(move || {
@@ -258,17 +258,17 @@ mod tests {
         });
         started_rx.recv_timeout(Duration::from_secs(2)).unwrap();
         let result =
-            runtime.block_on(gateway.call_service("echo".into(), vec![], String::new(), 40));
+            runtime.block_on(handler.call_service("echo".into(), vec![], String::new(), 40));
         release_tx.send(()).unwrap();
         runtime.block_on(blocker).unwrap();
         runtime.shutdown_timeout(Duration::from_secs(2));
         assert_eq!(result.unwrap_err().code(), Code::DeadlineExceeded);
         assert_eq!(
-            gateway.pool.available.available_permits(),
+            handler.pool.available.available_permits(),
             SERVICE_CLIENT_POOL_SIZE
         );
         assert_eq!(
-            gateway.pool.admission.available_permits(),
+            handler.pool.admission.available_permits(),
             SERVICE_CLIENT_POOL_SIZE + MAX_PENDING_CALLS
         );
         assert!(

@@ -10,14 +10,14 @@ use crate::discovery::DiscoveryConfig;
 /// WebSocket RPC listen options (feature `ws`, enabled by default).
 #[cfg(feature = "ws")]
 #[derive(Clone, Debug)]
-pub struct WsGatewayConfig {
+pub struct WsConfig {
     pub listen: SocketAddr,
     /// When empty, allow any origin (local-dev default).
     pub cors_origins: Vec<String>,
 }
 
 #[cfg(feature = "ws")]
-impl Default for WsGatewayConfig {
+impl Default for WsConfig {
     fn default() -> Self {
         Self {
             listen: "0.0.0.0:15560".parse().expect("default API listen"),
@@ -29,7 +29,7 @@ impl Default for WsGatewayConfig {
 /// Embedded Web console HTTP options (feature `console`, enabled by default).
 ///
 /// When the `ws` feature is also enabled, the console UI + REST API are served
-/// on [`WsGatewayConfig::listen`] instead — WebSocket RPC (`/ws-rpc`) and the console
+/// on [`WsConfig::listen`] instead — WebSocket RPC (`/ws-rpc`) and the console
 /// share one port. `listen` here only takes effect when `ws` is disabled (or
 /// this crate is built console-only).
 #[cfg(feature = "console-api")]
@@ -71,7 +71,7 @@ pub struct RobotBusConfig {
     pub action: ActionBusConfig,
     pub discovery: DiscoveryConfig,
     #[cfg(feature = "ws")]
-    pub ws: WsGatewayConfig,
+    pub ws: WsConfig,
     #[cfg(feature = "console-api")]
     pub console: ConsoleBrokerConfig,
 }

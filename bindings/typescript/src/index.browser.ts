@@ -13,10 +13,13 @@ export {
   TypedWsTopicPublisher,
   TypedWsServiceClient,
   TypedWsActionClient,
+  WsRpcError,
+  actionErrorFromBody,
+  rpcCodeFromStatus,
   DEFAULT_WS_URL,
   type WsActionEvent,
   type WsSendGoalOptions,
-  type WsSubscriptionOptions,
+  type WsRpcCode,
 } from "./ws-node.js";
 
 export { encode, decode, type MessageType } from "./typed.js";

@@ -15,6 +15,7 @@
 //! (see [`dynamic_rpc`]).
 
 mod builder;
+mod deadline;
 mod drop_stats;
 mod dynamic_rpc_spike;
 mod mapper;
@@ -51,7 +52,7 @@ pub use builder::{
     IntoServiceMapper, IntoTopicMapper, Ros2Bridge, Ros2BridgeBuilder, Ros2ToBusReady,
     SERVICE_CALL_TIMEOUT, Service, ServiceFromBus, ServiceFromRos, ServicePair, ServiceReady,
 };
-pub use drop_stats::{DropStats, DropStatsSnapshot, RouteHealth};
+pub use drop_stats::{DropStats, DropStatsSnapshot, RouteHealth, RpcStats};
 pub use mapper::{
     ActionMapper, ActionWireContext, Direction, ServiceMapper, ServiceWireContext, TopicDurability,
     TopicMapper, TopicQos, TopicQosKeepLast, TopicReliability, TopicWireContext, TypedActionMapper,

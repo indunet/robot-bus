@@ -96,7 +96,7 @@ def main() -> None:
 
     print(
         "custom my_pkg AddTwoInts bridge on /examples/add_two_ints "
-        "(Ros2ToBus + in-process bus server; Ctrl+C to stop)"
+        "(ROS client -> in-process bus server; Ctrl+C to stop)"
     )
     try:
         # Bridge spins ROS on a background thread. Drive the bus *server* here;

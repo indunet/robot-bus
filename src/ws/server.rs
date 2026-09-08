@@ -11,17 +11,17 @@ use http::Method;
 use tokio::net::TcpListener;
 use tower_http::cors::{AllowOrigin, Any, CorsLayer};
 
-use super::action::ActionGatewayService;
-use super::message::MessageGatewayService;
-use super::service::ServiceGatewayService;
-use super::ws::{WsGatewayState, ws_upgrade};
+use super::action::WsActionHandler;
+use super::message::WsMessageService;
+use super::service::WsServiceHandler;
+use super::ws::{WsServerState, ws_upgrade};
 
 #[cfg(feature = "console-api")]
 use crate::console::{self, ConsoleState};
 use crate::discovery::DiscoverResponse;
 
 #[derive(Clone)]
-pub struct GatewayConfig {
+pub struct WsServerConfig {
     pub listen: SocketAddr,
     pub message_xpub: String,
     pub message_xsub: String,
@@ -36,7 +36,7 @@ pub struct GatewayConfig {
     pub console: Option<Arc<ConsoleState>>,
 }
 
-impl Default for GatewayConfig {
+impl Default for WsServerConfig {
     fn default() -> Self {
         Self {
             listen: format!("0.0.0.0:{}", crate::transports::DEFAULT_API_PORT)
@@ -54,13 +54,13 @@ impl Default for GatewayConfig {
     }
 }
 
-pub async fn serve(config: GatewayConfig) -> Result<()> {
+pub async fn serve(config: WsServerConfig) -> Result<()> {
     serve_with_shutdown(config, std::future::pending::<()>()).await
 }
 
 /// Serve until `shutdown` completes, then drain and exit.
 pub async fn serve_with_shutdown(
-    config: GatewayConfig,
+    config: WsServerConfig,
     shutdown: impl Future<Output = ()> + Send + 'static,
 ) -> Result<()> {
     let listen = config.listen;
@@ -72,14 +72,13 @@ pub async fn serve_with_shutdown(
 
 /// Serve on an already-bound listener (caller owns the bind / fail-fast).
 pub async fn serve_on_listener(
-    config: GatewayConfig,
+    config: WsServerConfig,
     listener: TcpListener,
     shutdown: impl Future<Output = ()> + Send + 'static,
 ) -> Result<()> {
-    let message =
-        MessageGatewayService::new(config.message_xpub.clone(), config.message_xsub.clone());
-    let service = ServiceGatewayService::new(config.service_frontend.clone());
-    let action = ActionGatewayService::new(config.action_frontend.clone());
+    let message = WsMessageService::new(config.message_xpub.clone(), config.message_xsub.clone());
+    let service = WsServiceHandler::new(config.service_frontend.clone());
+    let action = WsActionHandler::new(config.action_frontend.clone());
     let cors = build_cors(&config.cors_origins)?;
 
     #[cfg(feature = "console-api")]
@@ -88,7 +87,7 @@ pub async fn serve_on_listener(
     let with_console = false;
 
     log::info!(
-        "robot_bus WebSocket RPC gateway listening on http://{} (/ws-rpc{}); \
+        "robot_bus WebSocket RPC server listening on http://{} (/ws-rpc{}); \
          message XPUB {}; message XSUB {}; service frontend {}; action frontend {}",
         config.listen,
         if with_console { " + console" } else { "" },
@@ -98,7 +97,7 @@ pub async fn serve_on_listener(
         config.action_frontend
     );
 
-    let ws_state = Arc::new(WsGatewayState {
+    let ws_state = Arc::new(WsServerState {
         message,
         service,
         action,
@@ -143,7 +142,7 @@ pub async fn serve_on_listener(
     axum::serve(listener, app)
         .with_graceful_shutdown(shutdown)
         .await
-        .context("gateway server")?;
+        .context("WebSocket server")?;
     Ok(())
 }
 

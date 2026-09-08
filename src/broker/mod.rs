@@ -19,7 +19,7 @@ pub use parse_config::{
 pub use service_bus::ServicePeer;
 
 #[cfg(feature = "ws")]
-pub use handle::WsGatewayConfig;
+pub use handle::WsConfig;
 
 #[cfg(feature = "console-api")]
 pub use handle::ConsoleBrokerConfig;

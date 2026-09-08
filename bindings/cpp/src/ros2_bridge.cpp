@@ -201,10 +201,6 @@ std::vector<uint8_t> fibonacci_result_ros_to_bus(
   return encode_pb(bus);
 }
 
-std::vector<uint8_t> fibonacci_empty_result() {
-  return encode_pb(example_interfaces::action::v1::FibonacciResult{});
-}
-
 Node make_bus_node(const BuilderState &state) {
   const std::string bus_name = state.name + "_bus";
   switch (state.bus.kind) {
@@ -309,7 +305,9 @@ ConsoleRoute make_topic_console_route(const TopicRouteSpec &route,
 void log_route_table(const std::string &name, const std::vector<ConsoleRoute> &routes) {
   std::string block = "ros2_bridge '" + name + "' routes:";
   for (const auto &r : routes) {
-    block += "\n  " + r.kind + "  " + r.direction + "  " + r.ros_name + " → " + r.bus_name +
+    const auto &source = r.direction == "ros→bus" ? r.ros_name : r.bus_name;
+    const auto &target = r.direction == "ros→bus" ? r.bus_name : r.ros_name;
+    block += "\n  " + r.kind + "  " + r.direction + "  " + source + " → " + target +
              "  " + (r.type_name.empty() ? "-" : r.type_name) + "  ros=" + r.ros_qos +
              "  bus=" + r.bus_qos + (r.lazy ? "  lazy" : "");
   }
@@ -503,377 +501,68 @@ void wire_topic(rclcpp::Node::SharedPtr ros_node, Node &bus_node, const TopicRou
                      keep_alive, lazy_routes, eager_bus_topics, stats, health);
 }
 
-void wire_trigger(rclcpp::Node::SharedPtr ros_node, Node &bus_node, const ServiceRouteSpec &route,
-                  rclcpp::CallbackGroup::SharedPtr group,
-                  std::vector<rclcpp::ServiceBase::SharedPtr> &ros_srvs,
-                  std::vector<rclcpp::ClientBase::SharedPtr> &ros_clients,
-                  std::vector<std::shared_ptr<ServiceClient>> &bus_clients,
-                  std::vector<std::shared_ptr<void>> &keep_alive) {
-  const double timeout = route.timeout_secs;
-  if (route.direction == Direction::Ros2ToBus) {
-    auto bus_client =
-        std::make_shared<ServiceClient>(bus_node.create_client(route.bus_service.c_str(),
-                                                              route.bus_qos.depth()));
-    auto mtx = std::make_shared<std::mutex>();
-    auto srv = ros_node->create_service<std_srvs::srv::Trigger>(
-        route.ros_service,
-        [bus_client, mtx, timeout](const std::shared_ptr<std_srvs::srv::Trigger::Request>,
-                                   std::shared_ptr<std_srvs::srv::Trigger::Response> response) {
-          try {
-            auto req_bytes = trigger_req_to_bus();
-            std::vector<uint8_t> resp_bytes;
-            {
-              std::lock_guard<std::mutex> lock(*mtx);
-              resp_bytes = bus_client->call(req_bytes, timeout);
-            }
-            *response = trigger_resp_bus_to_ros(resp_bytes);
-          } catch (const std::exception &e) {
-            response->success = false;
-            response->message = std::string("bus call failed: ") + e.what();
-          } catch (...) {
-            response->success = false;
-            response->message = "bus call failed";
-          }
-        },
-        service_rmw_qos(route.ros_qos), group);
-    bus_clients.push_back(std::move(bus_client));
-    ros_srvs.push_back(std::move(srv));
-  } else {
-    auto ros_client = ros_node->create_client<std_srvs::srv::Trigger>(
-        route.ros_service, service_rmw_qos(route.ros_qos), group);
-    ros_clients.push_back(ros_client);
-    keep_alive.push_back(std::make_shared<ServiceHandle>(bus_node.create_service(
-        route.bus_service.c_str(),
-        [ros_client, timeout](BytesView body) -> std::vector<uint8_t> {
-          (void)body;
-          if (!ros_client->wait_for_service(std::chrono::duration<double>(timeout))) {
-            std_srvs::srv::Trigger::Response err;
-            err.success = false;
-            err.message = "timed out waiting for ROS service";
-            return trigger_resp_ros_to_bus(err);
-          }
-          auto req = std::make_shared<std_srvs::srv::Trigger::Request>();
-          auto future = ros_client->async_send_request(req);
-          const auto status = future.wait_for(std::chrono::duration<double>(timeout));
-          if (status != std::future_status::ready) {
-            std_srvs::srv::Trigger::Response err;
-            err.success = false;
-            err.message = "timed out waiting for ROS response";
-            return trigger_resp_ros_to_bus(err);
-          }
-          return trigger_resp_ros_to_bus(*future.get());
-        },
-        nullptr, route.bus_qos.depth())));
+struct BuiltinTrigger : TypedServiceMapper<BuiltinTrigger, std_srvs::srv::Trigger> {
+  const char *type_name() const override { return "std_srvs/srv/Trigger"; }
+  auto ros_req_to_bus(const Request &) const { return trigger_req_to_bus(); }
+  Request bus_req_to_ros(BytesView body) const {
+    (void)parse_pb<std_srvs::srv::v1::TriggerRequest>(body);
+    return Request{};
   }
-}
-
-void wire_set_bool(rclcpp::Node::SharedPtr ros_node, Node &bus_node, const ServiceRouteSpec &route,
-                   rclcpp::CallbackGroup::SharedPtr group,
-                   std::vector<rclcpp::ServiceBase::SharedPtr> &ros_srvs,
-                   std::vector<rclcpp::ClientBase::SharedPtr> &ros_clients,
-                   std::vector<std::shared_ptr<ServiceClient>> &bus_clients,
-                   std::vector<std::shared_ptr<void>> &keep_alive) {
-  const double timeout = route.timeout_secs;
-  if (route.direction == Direction::Ros2ToBus) {
-    auto bus_client =
-        std::make_shared<ServiceClient>(bus_node.create_client(route.bus_service.c_str(),
-                                                              route.bus_qos.depth()));
-    auto mtx = std::make_shared<std::mutex>();
-    auto srv = ros_node->create_service<std_srvs::srv::SetBool>(
-        route.ros_service,
-        [bus_client, mtx, timeout](const std::shared_ptr<std_srvs::srv::SetBool::Request> request,
-                                   std::shared_ptr<std_srvs::srv::SetBool::Response> response) {
-          try {
-            auto req_bytes = set_bool_req_ros_to_bus(*request);
-            std::vector<uint8_t> resp_bytes;
-            {
-              std::lock_guard<std::mutex> lock(*mtx);
-              resp_bytes = bus_client->call(req_bytes, timeout);
-            }
-            *response = set_bool_resp_bus_to_ros(resp_bytes);
-          } catch (const std::exception &e) {
-            response->success = false;
-            response->message = std::string("bus call failed: ") + e.what();
-          } catch (...) {
-            response->success = false;
-            response->message = "bus call failed";
-          }
-        },
-        service_rmw_qos(route.ros_qos), group);
-    bus_clients.push_back(std::move(bus_client));
-    ros_srvs.push_back(std::move(srv));
-  } else {
-    auto ros_client = ros_node->create_client<std_srvs::srv::SetBool>(
-        route.ros_service, service_rmw_qos(route.ros_qos), group);
-    ros_clients.push_back(ros_client);
-    keep_alive.push_back(std::make_shared<ServiceHandle>(bus_node.create_service(
-        route.bus_service.c_str(),
-        [ros_client, timeout](BytesView body) -> std::vector<uint8_t> {
-          if (!ros_client->wait_for_service(std::chrono::duration<double>(timeout))) {
-            std_srvs::srv::SetBool::Response err;
-            err.success = false;
-            err.message = "timed out waiting for ROS service";
-            return set_bool_resp_ros_to_bus(err);
-          }
-          auto req = std::make_shared<std_srvs::srv::SetBool::Request>(set_bool_req_bus_to_ros(body));
-          auto future = ros_client->async_send_request(req);
-          const auto status = future.wait_for(std::chrono::duration<double>(timeout));
-          if (status != std::future_status::ready) {
-            std_srvs::srv::SetBool::Response err;
-            err.success = false;
-            err.message = "timed out waiting for ROS response";
-            return set_bool_resp_ros_to_bus(err);
-          }
-          return set_bool_resp_ros_to_bus(*future.get());
-        },
-        nullptr, route.bus_qos.depth())));
+  auto ros_resp_to_bus(const Response &value) const { return trigger_resp_ros_to_bus(value); }
+  auto bus_resp_to_ros(BytesView value) const { return trigger_resp_bus_to_ros(value); }
+  Response error_response(const std::string &message) const {
+    Response out; out.success = false; out.message = message; return out;
   }
-}
-
-void wire_service_builtin(rclcpp::Node::SharedPtr ros_node, Node &bus_node,
-                          const ServiceRouteSpec &route, rclcpp::CallbackGroup::SharedPtr group,
-                          std::vector<rclcpp::ServiceBase::SharedPtr> &ros_srvs,
-                          std::vector<rclcpp::ClientBase::SharedPtr> &ros_clients,
-                          std::vector<std::shared_ptr<ServiceClient>> &bus_clients,
-                          std::vector<std::shared_ptr<void>> &keep_alive) {
-  switch (route.builtin) {
-    case ServiceBuiltin::Trigger:
-      wire_trigger(ros_node, bus_node, route, group, ros_srvs, ros_clients, bus_clients,
-                   keep_alive);
-      break;
-    case ServiceBuiltin::SetBool:
-      wire_set_bool(ros_node, bus_node, route, group, ros_srvs, ros_clients, bus_clients,
-                    keep_alive);
-      break;
+};
+struct BuiltinSetBool : TypedServiceMapper<BuiltinSetBool, std_srvs::srv::SetBool> {
+  const char *type_name() const override { return "std_srvs/srv/SetBool"; }
+  auto ros_req_to_bus(const Request &value) const { return set_bool_req_ros_to_bus(value); }
+  auto bus_req_to_ros(BytesView value) const { return set_bool_req_bus_to_ros(value); }
+  auto ros_resp_to_bus(const Response &value) const { return set_bool_resp_ros_to_bus(value); }
+  auto bus_resp_to_ros(BytesView value) const { return set_bool_resp_bus_to_ros(value); }
+  Response error_response(const std::string &message) const {
+    Response out; out.success = false; out.message = message; return out;
   }
-}
+};
+struct BuiltinFibonacci : TypedActionMapper<BuiltinFibonacci, example_interfaces::action::Fibonacci> {
+  const char *type_name() const override { return "example_interfaces/action/Fibonacci"; }
+  auto ros_goal_to_bus(const Goal &value) const { return fibonacci_goal_ros_to_bus(value); }
+  auto bus_goal_to_ros(BytesView value) const { return fibonacci_goal_bus_to_ros(value); }
+  auto ros_feedback_to_bus(const Feedback &value) const { return fibonacci_feedback_ros_to_bus(value); }
+  auto bus_feedback_to_ros(BytesView value) const { return fibonacci_feedback_bus_to_ros(value); }
+  auto ros_result_to_bus(const Result &value) const { return fibonacci_result_ros_to_bus(value); }
+  auto bus_result_to_ros(BytesView value) const { return fibonacci_result_bus_to_ros(value); }
+};
 
 void wire_service(rclcpp::Node::SharedPtr ros_node, Node &bus_node, const ServiceRouteSpec &route,
                   rclcpp::CallbackGroup::SharedPtr group,
-                  std::vector<rclcpp::ServiceBase::SharedPtr> &ros_srvs,
-                  std::vector<rclcpp::ClientBase::SharedPtr> &ros_clients,
-                  std::vector<std::shared_ptr<ServiceClient>> &bus_clients,
+                  std::vector<rclcpp::ServiceBase::SharedPtr> &,
+                  std::vector<rclcpp::ClientBase::SharedPtr> &,
+                  std::vector<std::shared_ptr<ServiceClient>> &,
                   std::vector<std::shared_ptr<void>> &keep_alive) {
-  if (route.is_custom()) {
-    keep_alive.push_back(std::shared_ptr<void>(route.custom));
-    ServiceWireContext ctx{ros_node,        bus_node,           route.ros_service, route.bus_service,
-                           route.direction, route.timeout_secs, route.ros_qos,     route.bus_qos,
-                           group,           keep_alive};
-    route.custom->attach(ctx);
-    return;
+  std::shared_ptr<ServiceMapper> mapper = route.custom;
+  if (!mapper) {
+    if (route.builtin == ServiceBuiltin::Trigger) mapper = std::make_shared<BuiltinTrigger>();
+    else mapper = std::make_shared<BuiltinSetBool>();
   }
-  wire_service_builtin(ros_node, bus_node, route, group, ros_srvs, ros_clients, bus_clients,
-                       keep_alive);
-}
-
-using Fibonacci = example_interfaces::action::Fibonacci;
-using GoalHandleFibonacci = rclcpp_action::ServerGoalHandle<Fibonacci>;
-
-void wire_fibonacci_ros_to_bus(
-    rclcpp::Node::SharedPtr ros_node, Node &bus_node, const ActionRouteSpec &route,
-    rclcpp::CallbackGroup::SharedPtr group,
-    std::vector<std::shared_ptr<rclcpp_action::ServerBase>> &ros_actions,
-    std::vector<std::shared_ptr<ActionClient>> &bus_action_clients) {
-  auto bus_client =
-      std::make_shared<ActionClient>(
-          bus_node.create_action_client(route.bus_action.c_str(), route.bus_qos.depth()));
-  auto mtx = std::make_shared<std::mutex>();
-  auto live = std::make_shared<std::mutex>();
-  auto bus_goals = std::make_shared<
-      std::unordered_map<const void *, std::shared_ptr<ActionGoalHandle>>>();
-  const double timeout = route.timeout_secs;
-
-  auto handle_goal = [](const rclcpp_action::GoalUUID &,
-                        std::shared_ptr<const Fibonacci::Goal>) {
-    return rclcpp_action::GoalResponse::ACCEPT_AND_EXECUTE;
-  };
-  auto handle_cancel = [live, bus_goals](const std::shared_ptr<GoalHandleFibonacci> gh) {
-    std::lock_guard<std::mutex> lock(*live);
-    auto it = bus_goals->find(gh.get());
-    if (it != bus_goals->end() && it->second) {
-      try {
-        it->second->cancel();
-      } catch (...) {
-      }
-    }
-    return rclcpp_action::CancelResponse::ACCEPT;
-  };
-  auto handle_accepted = [bus_client, mtx, timeout, live, bus_goals](
-                             const std::shared_ptr<GoalHandleFibonacci> goal_handle) {
-    std::thread([bus_client, mtx, timeout, live, bus_goals, goal_handle]() {
-      const auto goal = goal_handle->get_goal();
-      try {
-        auto goal_bytes = fibonacci_goal_ros_to_bus(*goal);
-        auto handle = std::make_shared<ActionGoalHandle>([&]() {
-          std::lock_guard<std::mutex> lock(*mtx);
-          return bus_client->send_goal(
-              goal_bytes,
-              [goal_handle](const ActionMessage &message) {
-                if (message.kind != "FEEDBACK") {
-                  return;
-                }
-                try {
-                  auto feedback = std::make_shared<Fibonacci::Feedback>(
-                      fibonacci_feedback_bus_to_ros(message.body));
-                  goal_handle->publish_feedback(feedback);
-                } catch (...) {
-                }
-              },
-              nullptr, timeout);
-        }());
-        {
-          std::lock_guard<std::mutex> lock(*live);
-          (*bus_goals)[goal_handle.get()] = handle;
-        }
-        auto result_msg = handle->wait_result(timeout);
-        if (result_msg.kind != "RESULT") {
-          if (goal_handle->is_canceling()) {
-            goal_handle->canceled(std::make_shared<Fibonacci::Result>());
-          } else {
-            goal_handle->abort(std::make_shared<Fibonacci::Result>());
-          }
-        } else {
-          auto result =
-              std::make_shared<Fibonacci::Result>(fibonacci_result_bus_to_ros(result_msg.body));
-          if (goal_handle->is_canceling()) {
-            goal_handle->canceled(result);
-          } else {
-            goal_handle->succeed(result);
-          }
-        }
-      } catch (...) {
-        if (goal_handle->is_canceling()) {
-          goal_handle->canceled(std::make_shared<Fibonacci::Result>());
-        } else {
-          goal_handle->abort(std::make_shared<Fibonacci::Result>());
-        }
-      }
-      std::lock_guard<std::mutex> lock(*live);
-      bus_goals->erase(goal_handle.get());
-    }).detach();
-  };
-
-  auto server = rclcpp_action::create_server<Fibonacci>(
-      ros_node, route.ros_action, handle_goal, handle_cancel, handle_accepted,
-      action_server_qos(route.ros_qos), group);
-  bus_action_clients.push_back(std::move(bus_client));
-  ros_actions.push_back(std::move(server));
-}
-
-void wire_fibonacci_bus_to_ros(
-    rclcpp::Node::SharedPtr ros_node, Node &bus_node, const ActionRouteSpec &route,
-    rclcpp::CallbackGroup::SharedPtr group,
-    std::vector<std::shared_ptr<rclcpp_action::ClientBase>> &ros_action_clients,
-    std::vector<std::shared_ptr<void>> &keep_alive) {
-  auto ros_client = rclcpp_action::create_client<Fibonacci>(
-      ros_node, route.ros_action, group, action_client_qos(route.ros_qos));
-  auto mtx = std::make_shared<std::mutex>();
-  const double timeout = route.timeout_secs;
-  ros_action_clients.push_back(ros_client);
-
-  keep_alive.push_back(std::make_shared<ActionServerHandle>(bus_node.create_action_server_live(
-      route.bus_action.c_str(),
-      [ros_client, mtx, timeout](BytesView body, const ActionGoalContext &actx)
-          -> std::vector<uint8_t> {
-        Fibonacci::Goal goal;
-        try {
-          goal = fibonacci_goal_bus_to_ros(body);
-        } catch (...) {
-          return fibonacci_empty_result();
-        }
-
-        if (!ros_client->wait_for_action_server(std::chrono::duration<double>(timeout))) {
-          return fibonacci_empty_result();
-        }
-
-        typename rclcpp_action::Client<Fibonacci>::SendGoalOptions opts;
-        opts.feedback_callback =
-            [actx](rclcpp_action::ClientGoalHandle<Fibonacci>::SharedPtr,
-                   const std::shared_ptr<const Fibonacci::Feedback> feedback) {
-              try {
-                actx.publish_feedback(fibonacci_feedback_ros_to_bus(*feedback));
-              } catch (...) {
-              }
-            };
-
-        std::shared_future<rclcpp_action::ClientGoalHandle<Fibonacci>::SharedPtr> goal_future;
-        {
-          std::lock_guard<std::mutex> lock(*mtx);
-          goal_future = ros_client->async_send_goal(goal, opts);
-        }
-        if (goal_future.wait_for(std::chrono::duration<double>(timeout)) !=
-            std::future_status::ready) {
-          return fibonacci_empty_result();
-        }
-        auto goal_handle = goal_future.get();
-        if (!goal_handle) {
-          return fibonacci_empty_result();
-        }
-
-        auto result_future = ros_client->async_get_result(goal_handle);
-        const auto deadline =
-            std::chrono::steady_clock::now() + std::chrono::duration<double>(timeout);
-        bool cancel_sent = false;
-        while (result_future.wait_for(std::chrono::milliseconds(20)) !=
-               std::future_status::ready) {
-          if (actx.cancel_requested() && !cancel_sent) {
-            ros_client->async_cancel_goal(goal_handle);
-            cancel_sent = true;
-          }
-          if (std::chrono::steady_clock::now() >= deadline) {
-            return fibonacci_empty_result();
-          }
-        }
-
-        try {
-          auto wrapped = result_future.get();
-          if (wrapped.result) {
-            return fibonacci_result_ros_to_bus(*wrapped.result);
-          }
-          return fibonacci_empty_result();
-        } catch (...) {
-          return fibonacci_empty_result();
-        }
-      },
-      nullptr, route.bus_qos.depth())));
-}
-
-void wire_action_builtin(
-    rclcpp::Node::SharedPtr ros_node, Node &bus_node, const ActionRouteSpec &route,
-    rclcpp::CallbackGroup::SharedPtr group,
-    std::vector<std::shared_ptr<rclcpp_action::ServerBase>> &ros_actions,
-    std::vector<std::shared_ptr<rclcpp_action::ClientBase>> &ros_action_clients,
-    std::vector<std::shared_ptr<ActionClient>> &bus_action_clients,
-    std::vector<std::shared_ptr<void>> &keep_alive) {
-  switch (route.builtin) {
-    case ActionBuiltin::Fibonacci:
-      if (route.direction == Direction::Ros2ToBus) {
-        wire_fibonacci_ros_to_bus(ros_node, bus_node, route, group, ros_actions,
-                                  bus_action_clients);
-      } else {
-        wire_fibonacci_bus_to_ros(ros_node, bus_node, route, group, ros_action_clients,
-                                  keep_alive);
-      }
-      break;
-  }
+  keep_alive.push_back(mapper);
+  ServiceWireContext ctx{ros_node, bus_node, route.ros_service, route.bus_service,
+      route.direction, route.timeout_secs, route.ros_qos, route.bus_qos, group, keep_alive, route.health};
+  mapper->attach(ctx);
 }
 
 void wire_action(rclcpp::Node::SharedPtr ros_node, Node &bus_node, const ActionRouteSpec &route,
                  rclcpp::CallbackGroup::SharedPtr group,
-                 std::vector<std::shared_ptr<rclcpp_action::ServerBase>> &ros_actions,
-                 std::vector<std::shared_ptr<rclcpp_action::ClientBase>> &ros_action_clients,
-                 std::vector<std::shared_ptr<ActionClient>> &bus_action_clients,
+                 std::vector<std::shared_ptr<rclcpp_action::ServerBase>> &,
+                 std::vector<std::shared_ptr<rclcpp_action::ClientBase>> &,
+                 std::vector<std::shared_ptr<ActionClient>> &,
                  std::vector<std::shared_ptr<void>> &keep_alive) {
-  if (route.is_custom()) {
-    keep_alive.push_back(std::shared_ptr<void>(route.custom));
-    ActionWireContext ctx{ros_node,        bus_node,           route.ros_action,  route.bus_action,
-                          route.direction, route.timeout_secs, route.ros_qos,     route.bus_qos,
-                          group,           keep_alive};
-    route.custom->attach(ctx);
-    return;
-  }
-  wire_action_builtin(ros_node, bus_node, route, group, ros_actions, ros_action_clients,
-                      bus_action_clients, keep_alive);
+  std::shared_ptr<ActionMapper> mapper = route.custom;
+  if (!mapper) mapper = std::make_shared<BuiltinFibonacci>();
+  keep_alive.push_back(mapper);
+  ActionWireContext ctx{ros_node, bus_node, route.ros_action, route.bus_action,
+      route.direction, route.timeout_secs, route.ros_qos, route.bus_qos, group, keep_alive, route.health};
+  mapper->attach(ctx);
 }
 
 }  // namespace
@@ -1053,6 +742,11 @@ struct Ros2Bridge::Impl {
         proto->set_publish_fail(health->publish_fail.load(std::memory_order_relaxed));
         proto->set_last_rx_ms(health->last_rx_ms.load(std::memory_order_relaxed));
         proto->set_idle(route.watch_idle && health->is_idle(enabled, grace));
+        const auto rpc = health->rpc_snapshot();
+        proto->set_calls(rpc.calls); proto->set_failures(rpc.failures);
+        proto->set_timeouts(rpc.timeouts); proto->set_cancelled(rpc.cancelled);
+        proto->set_rejected(rpc.rejected); proto->set_last_error(rpc.last_error);
+        proto->set_last_status(rpc.last_status);
       }
     }
     const auto bytes = snap.SerializeAsString();
@@ -1070,7 +764,7 @@ struct Ros2Bridge::Impl {
       }
       const std::string msg =
           "no traffic on " + route.direction + " " + route.ros_name +
-          " for 15s; possible wrong direction or ROS QoS mismatch";
+          " for 15s; check source traffic, connection, direction and ROS QoS";
       RCLCPP_WARN(ros2_bridge_logger(), "ros2_bridge/%s: %s", bridge_name.c_str(), msg.c_str());
       if (!events_pub) {
         continue;
@@ -1166,12 +860,14 @@ Ros2Bridge Ros2BridgeBuilder::build() && {
 
   for (const auto &route : state->routes) {
     auto health = std::make_shared<RouteHealth>();
+    health->latched = route.ros_qos.is_transient_local();
     wire_topic(impl->ros_node, impl->bus_node, route, impl->ros_subs, impl->ros_pubs,
                impl->bus_pubs, impl->bus_pub_mutexes, impl->keep_alive, impl->lazy_routes,
                impl->eager_bus_topics, impl->drop_stats, health);
     impl->console_routes.push_back(make_topic_console_route(route, health));
   }
-  for (const auto &svc : state->services) {
+  for (auto svc : state->services) {
+    svc.health = std::make_shared<RouteHealth>();
     wire_service(impl->ros_node, impl->bus_node, svc, impl->callback_group, impl->ros_srvs,
                  impl->ros_clients, impl->bus_clients, impl->keep_alive);
     impl->console_routes.push_back(ConsoleRoute{
@@ -1184,9 +880,10 @@ Ros2Bridge Ros2BridgeBuilder::build() && {
         qos_console_label(svc.bus_qos),
         false,
         false,
-        std::make_shared<RouteHealth>()});
+        svc.health});
   }
-  for (const auto &act : state->actions) {
+  for (auto act : state->actions) {
+    act.health = std::make_shared<RouteHealth>();
     wire_action(impl->ros_node, impl->bus_node, act, impl->callback_group, impl->ros_actions,
                 impl->ros_action_clients, impl->bus_action_clients, impl->keep_alive);
     impl->console_routes.push_back(ConsoleRoute{
@@ -1199,7 +896,7 @@ Ros2Bridge Ros2BridgeBuilder::build() && {
         qos_console_label(act.bus_qos),
         false,
         false,
-        std::make_shared<RouteHealth>()});
+        act.health});
   }
 
   log_route_table(state->name, impl->console_routes);

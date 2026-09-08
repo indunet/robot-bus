@@ -37,6 +37,10 @@ impl ConsoleRoute {
         lazy: bool,
         health: Arc<RouteHealth>,
     ) -> Self {
+        health.latched.store(
+            ros_qos.durability() == super::mapper::TopicDurability::TransientLocal,
+            std::sync::atomic::Ordering::Relaxed,
+        );
         Self {
             kind: "topic",
             direction,
@@ -59,6 +63,7 @@ impl ConsoleRoute {
         type_name: impl Into<String>,
         ros_qos: TopicQos,
         bus_qos: TopicQos,
+        health: Arc<RouteHealth>,
     ) -> Self {
         Self {
             kind,
@@ -70,7 +75,7 @@ impl ConsoleRoute {
             bus_qos: bus_qos.console_label(),
             lazy: false,
             watch_idle: false,
-            health: Arc::new(RouteHealth::new()),
+            health,
         }
     }
 
@@ -85,8 +90,16 @@ impl ConsoleRoute {
             "{:<7} {:<8} {} → {}  {}  ros={}  bus={}{lazy}",
             self.kind,
             self.direction.console_label(),
-            self.ros_name,
-            self.bus_name,
+            if self.direction == Direction::Ros2ToBus {
+                &self.ros_name
+            } else {
+                &self.bus_name
+            },
+            if self.direction == Direction::Ros2ToBus {
+                &self.bus_name
+            } else {
+                &self.ros_name
+            },
             ty,
             self.ros_qos,
             self.bus_qos,
@@ -95,6 +108,7 @@ impl ConsoleRoute {
 
     pub fn to_proto(&self, enabled: bool, grace_elapsed: bool) -> BridgeRoute {
         let idle = self.watch_idle && self.health.is_idle(enabled, grace_elapsed);
+        let rpc = self.health.rpc_snapshot();
         BridgeRoute {
             kind: self.kind.to_string(),
             direction: self.direction.console_label().to_string(),
@@ -112,12 +126,19 @@ impl ConsoleRoute {
             publish_fail: self.health.publish_fail(),
             last_rx_ms: self.health.last_rx_ms(),
             idle,
+            calls: rpc.calls,
+            failures: rpc.failures,
+            timeouts: rpc.timeouts,
+            cancelled: rpc.cancelled,
+            rejected: rpc.rejected,
+            last_error: rpc.last_error,
+            last_status: rpc.last_status,
         }
     }
 
     pub fn idle_message(&self) -> String {
         format!(
-            "no traffic on {} {} for {}s; possible wrong direction or ROS QoS mismatch",
+            "no traffic on {} {} for {}s; check source traffic, connection, direction and ROS QoS",
             self.direction.console_label(),
             self.ros_name,
             IDLE_GRACE.as_secs(),

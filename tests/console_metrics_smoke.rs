@@ -16,7 +16,7 @@ use robot_bus::broker::action_bus::ActionBusConfig;
 use robot_bus::broker::message_bus::BusConfig;
 use robot_bus::broker::service_bus::ServiceBusConfig;
 use robot_bus::broker::{
-    ConsoleBrokerConfig, DiscoveryConfig, RobotBusBroker, RobotBusConfig, WsGatewayConfig,
+    ConsoleBrokerConfig, DiscoveryConfig, RobotBusBroker, RobotBusConfig, WsConfig,
 };
 use robot_bus::message_bus::{Publisher, Subscriber};
 use robot_bus::service_bus::ServiceClient;
@@ -81,9 +81,9 @@ fn test_broker_config(
             enabled: false,
             ..DiscoveryConfig::default()
         },
-        ws: WsGatewayConfig {
+        ws: WsConfig {
             listen: format!("127.0.0.1:{http}").parse().unwrap(),
-            ..WsGatewayConfig::default()
+            ..WsConfig::default()
         },
         console: ConsoleBrokerConfig {
             enabled: true,
@@ -157,11 +157,20 @@ fn message_metrics_count_published_topics() {
         .output()
         .map(|o| String::from_utf8_lossy(&o.stdout).into_owned())
         .unwrap_or_default();
-    // HTML5 doctype is case-insensitive; built console may emit lowercase.
-    assert!(
-        index.to_ascii_lowercase().contains("<!doctype html>"),
-        "index={index}"
-    );
+    // Headless `console-api` (CI before `just console`) serves API only.
+    // Embedded `console` returns the Next.js static index.
+    #[cfg(feature = "console")]
+    {
+        // HTML5 doctype is case-insensitive; built console may emit lowercase.
+        assert!(
+            index.to_ascii_lowercase().contains("<!doctype html>"),
+            "index={index}"
+        );
+    }
+    #[cfg(not(feature = "console"))]
+    {
+        assert!(index.contains("web UI not included"), "index={index}");
+    }
 
     // Keep sub alive until after snapshot (drop order).
     drop(sub);

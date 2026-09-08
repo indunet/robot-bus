@@ -1,4 +1,4 @@
-//! `ActionGateway` — unary goal requests with server-streaming action events.
+//! `WsActionHandler` — unary goal requests with server-streaming action events.
 //!
 //! Intentional cancel (WebSocket `CANCEL` frame / explicit cancel channel) submits
 //! cancel on the action bus and **keeps** streaming until `RESULT`.
@@ -37,20 +37,20 @@ pub struct ActionWireEvent {
 }
 
 #[derive(Clone)]
-pub struct ActionGatewayService {
+pub struct WsActionHandler {
     action_frontend: String,
     context: Arc<Context>,
 }
 
-impl std::fmt::Debug for ActionGatewayService {
+impl std::fmt::Debug for WsActionHandler {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("ActionGatewayService")
+        f.debug_struct("WsActionHandler")
             .field("action_frontend", &self.action_frontend)
             .finish()
     }
 }
 
-impl ActionGatewayService {
+impl WsActionHandler {
     pub fn new(action_frontend: impl Into<String>) -> Self {
         Self {
             action_frontend: action_frontend.into(),
@@ -96,6 +96,14 @@ fn bus_status(err: BusError) -> RpcStatus {
             format!("busy '{name}'"),
         ),
         BusError::Timeout(msg) => RpcStatus::deadline_exceeded(msg),
+        BusError::ActionAborted(msg) => RpcStatus::new(
+            super::rpc_status::Code::Aborted,
+            format!("action aborted: {msg}"),
+        ),
+        BusError::ActionRejected(msg) => RpcStatus::new(
+            super::rpc_status::Code::FailedPrecondition,
+            format!("action rejected: {msg}"),
+        ),
         BusError::NoWorker { name } => RpcStatus::unavailable(format!("no worker for '{name}'")),
         BusError::WorkerDied { name } => {
             RpcStatus::unavailable(format!("worker died for '{name}'"))

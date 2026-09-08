@@ -346,7 +346,7 @@ pub fn parse_robot_bus_config(args: &[String]) -> Result<Option<RobotBusConfig>>
 
 /// Help text for `python -m robot_bus.broker` / `npx robot-bus` / `cargo run --bin robot_bus_broker` / `robot_bus_broker`.
 pub fn robot_bus_broker_help() -> &'static str {
-    "robot-bus broker — start all ZeroMQ buses + API gateway + Web console in one process\n\n\
+    "robot-bus broker — start all ZeroMQ buses + WebSocket server + Web console in one process\n\n\
 Usage:\n  \
 python -m robot_bus.broker [options]\n  \
 npx robot-bus [options]\n  \

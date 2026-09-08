@@ -1,6 +1,6 @@
 use std::any::Any;
 use std::collections::{HashMap, HashSet};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::sync::mpsc::Receiver;
 use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
@@ -17,6 +17,9 @@ use super::wire::create_ros2_to_bus_sub;
 /// In-process dual-stack bridge (ROS 2 + robot-bus).
 pub struct Ros2Bridge {
     pub(super) bus_node: Node,
+    pub(super) rpc_node: Node,
+    pub(super) rpc_executor: crate::runtime::MultiThreadedExecutor,
+    pub(super) executor_error: Arc<Mutex<Option<String>>>,
     pub(super) ros_node: rclrs::Node,
     pub(super) bus_pubs: HashMap<String, TopicPublisherRaw>,
     pub(super) lazy_routes: HashMap<String, super::specs::LazyRos2ToBus>,
@@ -44,6 +47,7 @@ pub struct Ros2Bridge {
 
 impl Drop for Ros2Bridge {
     fn drop(&mut self) {
+        let _ = self.rpc_executor.shutdown();
         self.ros_commands.halt_spinning();
         if let Some(h) = self._ros_spin.take() {
             let _ = h.join();
@@ -80,6 +84,9 @@ impl Ros2Bridge {
     }
 
     fn spin_once_inner(&mut self, timeout: Option<Duration>) -> Result<()> {
+        self.check_executor()?;
+        let _ = self.rpc_node.spin_once(Some(Duration::ZERO));
+        let timeout = Some(timeout.unwrap_or(Duration::from_millis(10)).min(Duration::from_millis(10)));
         // ROS executor runs on a background thread so Bus→ROS service/action handlers
         // can wait on client Promises without nested-spin deadlocks.
         if self.first_spin_at.is_none() {
@@ -89,6 +96,7 @@ impl Ros2Bridge {
             Err(BusError::Protocol(msg)) if msg.contains("nothing registered") => Ok(()),
             other => other.map(|_| ()),
         };
+        self.check_executor()?;
         self.drain_demand();
         if self.console_live.is_none() {
             if let Some(started) = self.first_spin_at {
@@ -100,6 +108,14 @@ impl Ros2Bridge {
         }
         self.publish_observe();
         spin_result
+    }
+
+    fn check_executor(&self) -> Result<()> {
+        if let Some(error) = self.executor_error.lock().unwrap_or_else(|e| e.into_inner()).as_ref() {
+            log::error!("ros2_bridge: {error}");
+            return Err(BusError::Protocol(error.clone()));
+        }
+        Ok(())
     }
 
     fn route_enabled(&self, route: &ConsoleRoute) -> bool {

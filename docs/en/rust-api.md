@@ -7,7 +7,7 @@ English | [中文](../zh/rust-api.md)
 ```toml
 robot-bus = "2.3.1"
 # Local: robot-bus = { path = "../robot-bus" }
-# WebSocket RPC gateway (`ws` feature) is on by default; to disable: robot-bus = { version = "2.3.1", default-features = false }
+# WebSocket RPC server (`ws` feature) is on by default; to disable: robot-bus = { version = "2.3.1", default-features = false }
 ```
 
 ## Broker startup
@@ -97,7 +97,7 @@ broker.stop()?;
 
 Cross-broker (federation): prefer `--peer HOST:PORT` (peer API port; internally `GET /api/v1/discover` fills ZMQ peers), or set `broker_id` and `peers` on `RobotBusConfig` (`MessagePeer` / `ServicePeer` / `ActionPeer`), or CLI `--broker-id` / `--message-peer` / `--service-peer` / `--action-peer`. Embedded start APIs in other languages use the same string conventions (see the corresponding `*-api.md`). Message federation **does not** forward the reserved namespace `/robot_bus` (including `/robot_bus/status`, topology, bot, and other console system topics), avoiding status snapshot overwrites when multiple brokers are bridged; user business topics are still pushed as needed.
 
-Typical flow: `Context` → `Node::with_context` → `create_*` → `node.spin()` (or convenience `Node::new`). For multiple nodes or parallelism, use `executor.add_node` + `executor.spin`. For the WebSocket RPC gateway only, use `Node::ws` / `Node::ws_at` (see “WebSocket RPC mode Node” below).
+Typical flow: `Context` → `Node::with_context` → `create_*` → `node.spin()` (or convenience `Node::new`). For multiple nodes or parallelism, use `executor.add_node` + `executor.spin`. For WebSocket communication, use `Node::ws` / `Node::ws_at` (see “WebSocket RPC mode Node” below).
 
 ---
 
@@ -264,7 +264,7 @@ node.create_timer(
 
 ### Callback failures, overload and shutdown
 
-Callback panics are logged and isolated when Rust panic unwinding is enabled. A panicking subscription or timer does not remove a worker or strand its callback group. Service and action handlers return `BusError::HandlerPanicked` over the native bus (`HANDLER_PANICKED\0name`); the WebSocket gateway reports Internal status.
+Callback panics are logged and isolated when Rust panic unwinding is enabled. A panicking subscription or timer does not remove a worker or strand its callback group. Service and action handlers return `BusError::HandlerPanicked` over the native bus (`HANDLER_PANICKED\0name`); the WebSocket server reports Internal status.
 
 The resident worker pool stops admitting new jobs at 1024 waiting jobs, with one reserved continuation slot per worker so busy groups can yield fairly. Each mutually exclusive group also defaults to 1024 waiting callbacks; customize that limit with `CallbackGroup::with_queue_capacity(kind, capacity)`. Full queues reject new work without blocking the poll thread: subscription/timer callbacks are dropped and logged; service/action requests receive `BusError::Busy` (`BUSY\0name`, WebSocket ResourceExhausted). Previously accepted callbacks keep their FIFO order within a group. These executor limits are separate from transport HWM and do not implement latest-value replacement.
 
@@ -274,23 +274,15 @@ The resident worker pool stops admitting new jobs at 1024 waiting jobs, with one
 
 `QosProfile::keep_last(depth)` maps to ZMQ HWM. Topics use PUB/SUB HWM; service and action use DEALER HWM (`snd` / `rcv` both = depth). Reliability is fixed best-effort (RPC has no DDS reliability either). Omit QoS to keep the node default (topic 8/8, service 4/4, action 8/8).
 
-On a **WebSocket** Node, KeepLast applies to **subscribe** only: it sizes the gateway→client queue (discard incoming on full; omitted depth keeps the gateway default of 64). Publish QoS is ignored (all WS publishers share one gateway PUB). WS service / action clients have no ZMQ socket, so HWM is ignored.
+On a **WebSocket** Node, `QosProfile::keep_last(N)` retains the newest N pending server messages. When full, it evicts the oldest before enqueueing the new message. `keep_last(1)` retains only the latest pending message. There is one depth-based API, with no separate recent/latest profiles.
 
-WS subscriptions can explicitly select an overflow policy:
+Pass the profile to `create_subscription_with_qos` or `create_subscription_raw_with_qos` on `Node::ws` / `Node::ws_at`. For example: `node.create_subscription_raw_with_qos("/pose", QosProfile::keep_last(1), std::sync::Arc::new(|_bytes| {}), None)?;`. Omitted depth or depth ≤ 0 uses 64; depth above 1,048,576 is capped. Same-filter callbacks share a queue and must agree on its effective depth.
 
-| Rust profile | Pending messages retained on overflow |
-| --- | --- |
-| `QosProfile::keep_last(n)` | Keep the existing queue; discard the incoming message (legacy default) |
-| `QosProfile::keep_recent(n)` | Evict the oldest; retain the most recent N |
-| `QosProfile::latest()` | Retain only the newest pending message |
+KeepLast covers **unsent server messages per subscription filter**, not client callback queues, ZeroMQ queues, or network buffers. A prefix filter shares one queue across matched topics. Already dequeued/network-buffered messages cannot be recalled. Delivery remains best-effort. **Native ZMQ still maps depth to HWM only; HWM does not guarantee oldest-message replacement, and implementing that transport's KeepLast history remains outstanding.** WS publish and RPC depth are ignored.
 
-Pass the profile to `create_subscription_with_qos` or `create_subscription_raw_with_qos` on `Node::ws` / `Node::ws_at`. For example: `node.create_subscription_raw_with_qos("/pose", QosProfile::latest(), std::sync::Arc::new(|_bytes| {}), None)?;`. Native ZMQ subscriptions reject the replacement profiles. Other language native bindings retain their existing depth-only API.
+`GET /api/v1/subscriptions` is available with `ws`, even without the console. The console Topics tab displays KeepLast depth, pending/capacity, and overflow drops. API rows additionally expose `received` and `dequeued`; dequeueing is not confirmed delivery. Rows disappear on cancellation; `totalDropped` includes closed subscriptions and resets on server restart. Counts exclude native transport loss; snapshots may change while read.
 
-These policies govern **unsent gateway messages per subscription filter**, not client callback queues, ZeroMQ queues, or network buffers. A prefix filter shares one queue across its matched topics. A slow callback alone does not ensure gateway replacement occurs. Already dequeued/network-buffered messages cannot be recalled, and no policy guarantees delivery or reliable events. Queue depth ≤ 0 uses 64, depth above 1,048,576 is capped, and `latest` always uses 1. Multiple callbacks for the same filter share a queue; conflicting policies (or replacement depths) are rejected. Legacy duplicate subscriptions still keep the first depth.
-
-`GET /api/v1/subscriptions` is available whenever `ws` is enabled, even without the console. The console Topics tab displays active subscriptions: `id`, `filter`, `policy`, `capacity`, `pending`, `received`, `dequeued`, `dropped`. `dequeued` counts removal for sending, not confirmed delivery. `dropped` counts queue overflow only. Rows disappear on cancellation; `totalDropped` survives closed subscriptions and resets when the gateway restarts. Native transport loss is not included. REST snapshots are observational and may change while read.
-
-Wire compatibility: legacy subscriptions still use V3 opcode 1 with the original layout. Explicit replacement uses additive opcode 5 (`topic:str`, `qos_depth:i32`, `policy:u8`: 0 discard incoming, 1 discard oldest, 2 latest). Upgrade the broker before using the new policies; old V3 brokers reject opcode 5, and clients do not silently downgrade. See [build profiles](build-profiles.md) for optional gateway and console components.
+Compatibility: this corrects the previous drop-newest behavior. The server still accepts the original V3 opcode 1 layout, now with KeepLast/drop-oldest semantics. Updated Rust/TypeScript WS clients explicitly request drop-oldest via opcode 5 so an old server rejects unsupported behavior rather than silently dropping new messages. Upgrade the broker first. Wire policies 0 and 2 remain readable for compatibility; the public QoS API uses only KeepLast(N). See [build profiles](build-profiles.md).
 
 ```rust
 use robot_bus::{Node, QosProfile, Publisher, HighWaterMark};
@@ -428,7 +420,7 @@ fn main() -> anyhow::Result<()> {
 
 ## Protobuf messages (`robot_bus::<pkg>`)
 
-The bus and gRPC gateway still carry opaque bytes (gRPC typically has no business proto—binary is preserved). The Node SDK binds types at create time and auto encode/decodes, e.g. `create_publisher::<Imu>` / `create_subscription::<Imu, _>`. Message types live under the crate namespace: `robot_bus::sensor_msgs::msg::v1::Imu`. Other messages likewise, for example:
+The bus and WebSocket RPC server carry opaque bytes without interpreting business message schemas. The Node SDK binds types at create time and auto encode/decodes, e.g. `create_publisher::<Imu>` / `create_subscription::<Imu, _>`. Message types live under the crate namespace: `robot_bus::sensor_msgs::msg::v1::Imu`. Other messages likewise, for example:
 
 Type names follow the protobuf full name (`prost::Name::full_name()`, e.g. `sensor_msgs.msg.v1.Imu`), registered via the console control plane—not written into every message frame.
 
@@ -449,7 +441,7 @@ Service / Action likewise (e.g. `create_client::<SetBool>`, `create_action_clien
 
 ## WebSocket RPC mode Node (client)
 
-`Node::ws` / `NodeOptions::ws` reach the bus through the broker WebSocket RPC gateway and **do not create ZMQ sockets**. The API is still `create_subscription` / `create_publisher` / `create_client` / `create_action_client` + `spin`, transparent to callers.
+`Node::ws` / `NodeOptions::ws` reach the bus through the broker WebSocket RPC server and **do not create ZMQ sockets**. The API is still `create_subscription` / `create_publisher` / `create_client` / `create_action_client` + `spin`, transparent to callers.
 
 | Supported | Not supported |
 |-----------|---------------|
@@ -495,7 +487,9 @@ Under the hood this is multiplexed WebSocket RPC (V3 opcodes: Subscribe / Publis
 
 ---
 
-## WebSocket RPC gateway
+## WebSocket RPC server
+
+The Rust WebSocket module is `robot_bus::ws`. Broker listen options use `robot_bus::WsConfig`; standalone server setup uses `robot_bus::ws::WsServerConfig`. Request handling types are `WsMessageService`, `WsServiceHandler`, and `WsActionHandler`. When updating existing Rust integrations, update imports and type names to these names. The `/ws-rpc` endpoint, frame format, `ws` feature, and client APIs are unchanged.
 
 Started together by `RobotBusBroker` / `robot_bus_broker` (feature `ws`, on by default). Native and browser clients share **`/ws-rpc`** on the API port (default `0.0.0.0:15560`). **Breaking:** V3 framing; V2 method-string + `TopicMessage` envelopes are not accepted.
 
@@ -529,7 +523,7 @@ let ep = message_xpub_endpoint("localhost", "tcp")?;
 
 ---
 
-Service call timeouts cover waiting for the shared client socket, sending, and receiving under one deadline. Gateway calls also include waiting for a pooled client and blocking-worker scheduling. The gateway allows 8 active clients and up to 256 additional calls; overload returns ResourceExhausted. A request that expires before dispatch is not sent. A request already delivered to a service can still finish on the server after its caller times out; timeout is not a rollback.
+Service call timeouts cover waiting for the shared client socket, sending, and receiving under one deadline. Server calls also include waiting for a pooled client and blocking-worker scheduling. The server allows 8 active clients and up to 256 additional calls; overload returns ResourceExhausted. A request that expires before dispatch is not sent. A request already delivered to a service can still finish on the server after its caller times out; timeout is not a rollback.
 
 ## Error types
 
@@ -540,7 +534,9 @@ match result {
     Err(BusError::Timeout(_)) => { /* client poll timeout; service REQ auto-rebuilds socket, call again */ }
     Err(BusError::NoWorker { name }) => { /* no worker / pending queue timeout */ }
     Err(BusError::WorkerDied { name }) => { /* in-flight worker/peer died, broker synthesized error */ }
-    Err(BusError::Cancelled { name }) => { /* action: goal on pending was CANCELled */ }
+    Err(BusError::Cancelled { name }) => { /* action: CANCELED */ }
+    Err(BusError::ActionAborted(_)) => { /* action: ABORTED */ }
+    Err(BusError::ActionRejected(_)) => { /* action: goal rejected before execute */ }
     Err(BusError::NoGoal { goal_id }) => { /* action: unknown goal / duplicate goal_id */ }
     Err(e) => eprintln!("{e}"),
     Ok(v) => { /* ... */ }

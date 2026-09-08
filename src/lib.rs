@@ -31,7 +31,7 @@ pub use generated::{
 pub use typed::{Action, ActionOutcome, Service};
 
 #[cfg(feature = "ws")]
-pub mod ws_gateway;
+pub mod ws;
 
 #[cfg(feature = "console-api")]
 pub mod console;
@@ -63,7 +63,7 @@ pub use tank::{
 pub use discovery::{DEFAULT_DISCOVERY_PORT, DEFAULT_MULTICAST_ADDR};
 
 #[cfg(feature = "ws")]
-pub use broker::WsGatewayConfig;
+pub use broker::WsConfig;
 
 #[cfg(feature = "console-api")]
 pub use broker::ConsoleBrokerConfig;

@@ -213,7 +213,7 @@ impl TypedTopicMapper for MyStringMapper {
 
 先 `.service()`，再写两端名字 + QoS。ROS 对上 `services_default` 写 `TopicQos.default()`（C++ `ros_default()`）；bus 写 `TopicQos.bus()`（depth → DEALER HWM）。默认超时 **5s**，要用 `.timeout(...)` 改。
 
-ROS 提供服务、bus 客户端去调：`.from_ros → .to_bus`。bus 提供服务、ROS 客户端去调：`.from_bus → .to_ros`。
+方向表示**请求的流向**：ROS 客户端调用 bus 服务，用 `.from_ros → .to_bus`（桥在 ROS 侧提供代理服务）；bus 客户端调用 ROS 服务，用 `.from_bus → .to_ros`（桥在 bus 侧提供代理服务）。响应沿相反方向返回。
 
 ```python
 .service()
@@ -442,7 +442,7 @@ struct AddTwoIntsServiceMapper
 
 先 `.action()`，再写两端名字 + QoS。ROS 这份 profile 用在 goal / result / cancel 三个 service 以及 feedback topic；status topic 保持 ROS action-status 默认。默认 goal 超时 **30s**。
 
-ROS 是 action server、bus 客户端去发 goal：`.from_ros → .to_bus`。bus 是 action server、ROS 客户端去发 goal：`.from_bus → .to_ros`。
+方向表示 **goal 请求的流向**：ROS 客户端调用 bus action server，用 `.from_ros → .to_bus`；bus 客户端调用 ROS action server，用 `.from_bus → .to_ros`。反馈和结果沿相反方向返回。
 
 ```python
 .action()
@@ -564,7 +564,7 @@ just python-dev-ros2   # 或 just python-dev；需本机有 rclpy
 
 同进程同时持有 ROS 节点（rclrs / rclpy / rclcpp）和 robot-bus `Node`。主循环需推进两侧（`spin` / `spin_once`）：排空 ROS↔bus 队列并驱动 bus。
 
-话题转换 / 解码 / 发出失败会丢掉该帧（桥继续转）。每座桥有原子计数，`drop_stats()` 返回整桥合计（`convert_fail` / `decode_fail` / `publish_fail`）。失败日志按路由限流（首次 + 每秒至多一条）。`build()` 会打印路由表。每条话题路由另有独立计数，经 `/robot_bus/bridges` 以 1 Hz 发到 console（侧栏 **BRIDGE**）。话题路由若在首次 `spin` 后 15s 仍从未收到样本，会 WARN 一次并往 `/robot_bus/events` 写「可能方向或 QoS 错了」。
+话题转换 / 解码 / 发出失败会丢掉该帧（桥继续转）。每座桥有原子计数，`drop_stats()` 返回整桥合计（`convert_fail` / `decode_fail` / `publish_fail`）。失败日志按路由限流（首次 + 每秒至多一条）。`build()` 会打印路由表。每条话题路由另有独立计数，经 `/robot_bus/bridges` 以 1 Hz 发到 console（侧栏 **BRIDGE**）。话题路由在首次 `spin` 后 15s 仍未收到样本，或收到过样本后连续 15s 无新数据，会往 `/robot_bus/events` 发 WARN。每次静默只提醒一次；恢复收数后重新布防。lazy 未启用时不提醒；transient-local 静态话题收到首帧后不做持续断流告警。低频/事件型话题的静默也可能是正常行为，请结合消息源判断。
 
 ```python
 bridge.drop_stats()  # {"convert_fail": 0, "decode_fail": 0, "publish_fail": 0}
@@ -577,6 +577,22 @@ let snap = bridge.drop_stats(); // snap.convert_fail / decode_fail / publish_fai
 ```cpp
 auto snap = bridge.drop_stats();  // snap.convert_fail / decode_fail / publish_fail
 ```
+
+---
+
+## Action 结束状态与调用诊断
+
+bus 客户端调用 ROS Action 时，成功才返回 mapper 编码的结果。ROS 拒绝目标、ABORTED、CANCELED、等待超时及桥接异常分别返回可区分的 bus 错误；不再用空结果代替失败。Rust 分别得到 `BusError::ActionRejected`、`ActionAborted`、`Cancelled`、`Timeout` 或 `Protocol`。Python/C++ 客户端通过异常信息区分；WebSocket 客户端分别收到状态码 9、10、1、4 或 13。等待结果超时后会尽力请求取消 ROS 目标；取消请求不等于对端已经停止。
+
+ROS 客户端调用 bus Action 时，成功映射为 ROS SUCCEEDED，取消映射为 CANCELED，其他错误映射为 ABORTED。C++ 的 `rclcpp` 要求目标先进入取消中状态；若 bus 主动返回取消但 ROS 端没有请求取消，则以 ABORTED 结束，桥诊断仍记录取消。桥已接受 ROS goal 后，bus 返回的拒绝无法再改变此前的接受答复，因此按 ABORTED 结束，并在桥诊断中保留拒绝原因。错误路径不返回部分结果 payload。
+
+服务与 Action 的控制台行显示调用总数、成功、进行中、失败、超时、拒绝、取消、最近结束状态及最近错误。超时和拒绝包含在失败总数中；取消单独统计。这里统计桥接/通信结果，不推断自定义响应中 `success=false` 等业务字段。最近错误在后续成功后仍保留，当前状态显示最近一次结束结果。
+
+内置及 Typed mapper 自动采集调用统计。自定义 `attach` 需通过接线上下文里的 `route_health`（Rust）或 `health`（Python/C++）记录调用开始/结束。ROS 自定义服务若需要在响应中表达故障，仍需实现 `error_response`。
+
+部署时同时升级桥、bus 客户端 SDK 和 WebSocket 服务端：新增错误标记 `ACTION_REJECTED` / `ACTION_ABORTED` / `RPC_TIMEOUT` / `RPC_FAILED`；成功结果格式不变，取消沿用 `CANCELLED`。旧版客户端不具备新增错误的分类能力。
+
+Humble／Jazzy 上的真实 ROS 实测（服务调用、Action 反馈/结果/超时/取消）仍待补；当前覆盖的是模拟单测和 bus 侧回归，尚未在已 source 的发行版上跑通。
 
 ---
 

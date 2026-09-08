@@ -70,6 +70,7 @@ function ServicesPanel({
         }
         subClassName="text-bus-amber"
         trailing={<NameFilter value={query} onChange={setQuery} />}
+        subAfterTrailing
       />
       <ColHeader
         cols={[t('colService'), t('colCallsS'), t('colCalls'), t('colWorkers'), t('colErr'), t('colP99'), t('colLast')]}
@@ -138,6 +139,7 @@ function ActionsPanel({
         }
         subClassName="text-bus-green"
         trailing={<NameFilter value={query} onChange={setQuery} />}
+        subAfterTrailing
       />
       <ColHeader
         cols={[t('colAction'), t('colRunsS'), t('colRuns'), t('colActive'), t('colErr'), t('colAvgDur'), t('colLast')]}

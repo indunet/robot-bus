@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import threading
 import time
 from typing import Any, Callable, Optional
 
@@ -47,7 +48,8 @@ class RouteHealth:
         "publish_fail",
         "last_rx_ms",
         "last_warn_s",
-        "idle_latched",
+        "idle_latched", "watch_stale", "calls", "failures", "timeouts",
+        "cancelled", "rejected", "last_error", "last_status", "_lock",
     )
 
     def __init__(self) -> None:
@@ -59,10 +61,15 @@ class RouteHealth:
         self.last_rx_ms = 0
         self.last_warn_s = 0.0
         self.idle_latched = False
+        self.watch_stale = True
+        self.calls = self.failures = self.timeouts = self.cancelled = self.rejected = 0
+        self.last_error = self.last_status = ""
+        self._lock = threading.Lock()
 
     def record_rx(self) -> None:
         self.rx += 1
         self.last_rx_ms = unix_ms()
+        self.idle_latched = False
 
     def record_tx(self) -> None:
         self.tx += 1
@@ -84,18 +91,46 @@ class RouteHealth:
         return True
 
     def is_idle(self, enabled: bool, grace_elapsed: bool) -> bool:
-        return bool(enabled and grace_elapsed and self.last_rx_ms == 0)
+        return bool(enabled and grace_elapsed and (self.last_rx_ms == 0 or (
+            self.watch_stale and unix_ms() - self.last_rx_ms >= IDLE_GRACE_S * 1000
+        )))
 
     def take_idle_event(self, enabled: bool, grace_elapsed: bool) -> bool:
-        if self.last_rx_ms != 0:
-            self.idle_latched = False
-            return False
         if not self.is_idle(enabled, grace_elapsed):
+            self.idle_latched = False
             return False
         if self.idle_latched:
             return False
         self.idle_latched = True
         return True
+
+
+    def rpc_start(self) -> None:
+        with self._lock:
+            self.calls += 1
+            self.record_rx()
+
+    def rpc_finish(self, status: str = "succeeded", message: str = "") -> None:
+        with self._lock:
+            self.last_status = status
+            if status == "succeeded":
+                self.record_tx()
+            elif status == "cancelled":
+                self.cancelled += 1
+            else:
+                self.failures += 1
+                self.timeouts += int(status == "timeout")
+                self.rejected += int(status == "rejected")
+            if message:
+                self.last_error = message[:512]
+        if message and self.should_log_warn():
+            LOG.warning("ROS bridge RPC %s: %s", status, message)
+
+    def rpc_snapshot(self) -> dict[str, Any]:
+        with self._lock:
+            return {name: getattr(self, name) for name in (
+                "calls", "failures", "timeouts", "cancelled", "rejected", "last_error", "last_status"
+            )}
 
 
 def forward_ros_to_bus(

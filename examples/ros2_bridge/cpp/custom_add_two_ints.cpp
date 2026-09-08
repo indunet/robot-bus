@@ -98,7 +98,7 @@ int main() {
           .build();
 
   std::cout << "custom my_pkg AddTwoInts bridge on /examples/add_two_ints "
-               "(Ros2ToBus + in-process bus server; Ctrl+C to stop)\n";
+               "(ROS client -> in-process bus server; Ctrl+C to stop)\n";
   while (true) {
     bus.spin_once(0.01);
     bridge.spin_once(0.01);

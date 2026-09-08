@@ -82,7 +82,7 @@ export default function DocsView() {
 
       <section className="flex-1 min-w-0 flex flex-col rounded border border-bus-border bg-bus-panel overflow-hidden">
         <PanelHeader title={headerTitle} />
-        <div className="flex-1 overflow-y-auto overflow-x-hidden docs-md-scroll bg-white">
+        <div className="flex-1 overflow-y-auto overflow-x-hidden bus-scroll bg-bus-panel">
           <article className="markdown-body docs-md">
             <Markdown
               remarkPlugins={remarkPlugins}

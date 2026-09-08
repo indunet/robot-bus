@@ -29,7 +29,7 @@ export type TankStatusInfo = {
   viewers: number
 }
 
-/** Same-origin WebSocket RPC + REST (single-port console + gateway). */
+/** Same-origin WebSocket RPC + REST (single-port console + server). */
 export async function resolveGrpcUrl(): Promise<string> {
   return resolveBusUrl()
 }

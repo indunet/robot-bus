@@ -92,7 +92,7 @@ impl Node {
         let topology = Some(self.start_topology_guard("publisher", &topic));
         #[cfg(feature = "ws")]
         if self.options.is_ws() {
-            let _ = hwm; // shared gateway PUB; KeepLast is not per-client on WS publish
+            let _ = hwm; // shared server PUB; KeepLast is not per-client on WS publish
             let grpc = self.ensure_ws()?;
             return Ok(TopicPublisherRaw {
                 backend: TopicPublisherBackend::Ws(grpc.client_context()),
@@ -252,7 +252,7 @@ impl Node {
     ///
     /// Topic reliability is always best-effort. On ZMQ, multiple subscriptions on
     /// one node share one SUB socket — the last explicit QoS depth wins for that
-    /// socket. On WebSocket, depth sizes that topic's gateway→client queue.
+    /// socket. On WebSocket, depth sizes that topic's server→client queue.
     pub fn create_subscription_with_qos<M, F>(
         &mut self,
         topic: &str,
@@ -290,7 +290,7 @@ impl Node {
     /// Subscribe with a raw-bytes callback and topic QoS (KeepLast depth).
     ///
     /// ZMQ: applies to the shared SUB socket HWM. WebSocket: sizes this topic's
-    /// gateway→client queue.
+    /// server→client queue.
     pub fn create_subscription_raw_with_qos(
         &mut self,
         topic: &str,
@@ -308,15 +308,6 @@ impl Node {
         callback: MessageCallback,
         callback_group: Option<&CallbackGroup>,
     ) -> Result<SubscriptionHandle> {
-        if !self.options.is_ws()
-            && qos.is_some_and(|q| {
-                q.overflow_policy() != crate::SubscriptionOverflowPolicy::DropNewest
-            })
-        {
-            return Err(BusError::Protocol(
-                "subscription replacement policies require WebSocket transport".into(),
-            ));
-        }
         let group = callback_group
             .cloned()
             .unwrap_or_else(|| self.default_callback_group.clone());

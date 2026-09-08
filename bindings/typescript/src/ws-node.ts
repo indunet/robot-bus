@@ -25,12 +25,16 @@ import {
   OPCODE_CALL,
   OPCODE_PUBLISH,
   OPCODE_SEND_GOAL,
-  OPCODE_SUBSCRIBE,
   OPCODE_SUBSCRIBE_WITH_POLICY,
+  WsRpcError,
   WsSession,
+  actionErrorFromBody,
   decodeActionData,
   decodeSubscribeData,
 } from "./ws-rpc.js";
+
+export { WsRpcError, actionErrorFromBody, rpcCodeFromStatus } from "./ws-rpc.js";
+export type { WsRpcCode } from "./ws-rpc.js";
 
 /** Test-only hook (session factory). */
 let sessionFactory: ((url: string) => WsSession) | null = null;
@@ -43,17 +47,11 @@ export function __setWsRpcForTests(factory?: ((url: string) => WsSession) | null
 export const DEFAULT_WS_URL = "http://127.0.0.1:15560";
 const DEFAULT_TOPOLOGY_REFRESH_MS = 10_000;
 
-export interface WsSubscriptionOptions {
-  depth?: number;
-  /** Applies to pending messages for this gateway filter, not bytes already sent. */
-  overflow?: "drop_newest" | "drop_oldest" | "latest";
-}
-
 export interface WsNodeOptions {
   /**
    * When `null`, disables topology and topic-type registration.
    * Otherwise registration uses the broker control-plane services via WebSocket
-   * RPC (same gateway host as this node). The option name is retained for API compat.
+   * RPC (same server host as this node). The option name is retained for API compat.
    */
   consoleUrl?: string | null;
   /** Topology lease refresh interval. Defaults to 10 seconds. */
@@ -268,7 +266,7 @@ export class TypedWsActionClient<
 
 type SubCallback = (payload: Uint8Array) => void;
 
-/** Raw (bytes) publisher over MessageGateway.Publish. */
+/** Raw (bytes) publisher over Publish. */
 export class WsTopicPublisher {
   constructor(
     private readonly node: WsNode,
@@ -303,9 +301,8 @@ export class WsNode {
   readonly name: string;
   readonly url: string;
   private readonly subscriptions = new Map<string, SubCallback[]>();
-  /** KeepLast depth per topic (`0` = gateway default). First subscribe wins for that topic. */
+  /** KeepLast depth per filter (`0` = server default); callbacks share its queue. */
   private readonly subscriptionQos = new Map<string, number>();
-  private readonly subscriptionPolicies = new Map<string, NonNullable<WsSubscriptionOptions["overflow"]>>();
   private readonly topologyEnabled: boolean;
   private readonly topologyRefreshMs: number;
   private readonly topologyEndpoints = new Map<string, TopologyEndpoint>();
@@ -433,25 +430,27 @@ export class WsNode {
 
   /**
    * Subscribe to a topic prefix. Callbacks fire after `spin()` / `start()` begins.
+   * KeepLast(qos) evicts the oldest pending server message on overflow.
+   * Use depth 1 for the latest pending value; omitted depth uses 64.
    */
-  createSubscription(topic: string, callback: SubCallback, qos?: number | WsSubscriptionOptions): void;
-  createSubscription<T extends object>(topic: string, callback: (msg: T) => void, msgType: MessageType<T>, qos?: number | WsSubscriptionOptions): void;
+  createSubscription(topic: string, callback: SubCallback, qos?: number): void;
+  createSubscription<T extends object>(topic: string, callback: (msg: T) => void, msgType: MessageType<T>, qos?: number): void;
   createSubscription<T extends object>(
     topic: string,
     callback: SubCallback | ((msg: T) => void),
-    msgTypeOrDepth?: MessageType<T> | number | WsSubscriptionOptions,
-    maybeDepth?: number | WsSubscriptionOptions,
+    msgTypeOrDepth?: MessageType<T> | number,
+    maybeDepth?: number,
   ): void {
     const msgType = typeof msgTypeOrDepth === "object" && "typeName" in msgTypeOrDepth ? msgTypeOrDepth : undefined;
-    const options = msgType ? maybeDepth : msgTypeOrDepth as number | WsSubscriptionOptions | undefined;
-    const policy = typeof options === "object" ? options.overflow ?? "drop_newest" : "drop_newest";
-    if (!["drop_newest", "drop_oldest", "latest"].includes(policy)) throw new Error("invalid subscription overflow policy");
-    const qosDepth = policy === "latest" ? 1 : typeof options === "number" ? options : options?.depth ?? 0;
-    const prior = this.subscriptionPolicies.get(topic);
-    if (prior !== undefined && (prior !== policy || (policy !== "drop_newest" && this.subscriptionQos.get(topic) !== qosDepth))) {
-      throw new Error(`conflicting subscription policy for '${topic}'`);
+    const depth = msgType ? maybeDepth : msgTypeOrDepth as number | undefined;
+    if (depth !== undefined && (typeof depth !== "number" || !Number.isFinite(depth) || !Number.isInteger(depth))) {
+      throw new Error("KeepLast depth must be an integer");
     }
-    this.subscriptionPolicies.set(topic, policy);
+    const qosDepth = depth !== undefined && depth > 0 ? Math.min(Math.trunc(depth), 1_048_576) : 0;
+    const prior = this.subscriptionQos.get(topic);
+    if (prior !== undefined && (prior || 64) !== (qosDepth || 64)) {
+      throw new Error(`conflicting KeepLast depth for '${topic}'`);
+    }
     const wrapped: SubCallback = msgType
       ? (payload) => {
           const decoded = decode(msgType, payload);
@@ -572,6 +571,7 @@ export class WsNode {
     const result = (async (): Promise<WsActionEvent> => {
       try {
         let resultEvent: WsActionEvent | undefined;
+        let resultError: WsRpcError | undefined;
         const { control, done } = await this.session.serverStream(
           {
             opcode: OPCODE_SEND_GOAL,
@@ -600,7 +600,8 @@ export class WsNode {
                 }
               }
               if (kind === ACTION_KIND_RESULT) {
-                resultEvent = event;
+                resultError = actionErrorFromBody(eventBody);
+                if (!resultError) resultEvent = event;
               }
             },
           },
@@ -616,6 +617,7 @@ export class WsNode {
         };
         if (pendingSoftCancel) softCancel();
         await done;
+        if (resultError) throw resultError;
         if (!resultEvent) {
           throw new Error(
             `action '${actionName}' goal '${id}' completed without a result`,
@@ -653,14 +655,10 @@ export class WsNode {
     this.session.start();
     this.startTopologyRegistration();
     this.abort = new AbortController();
-    // Explicit policies stay on separate streams; coalescing could replace one
-    // topic's latest state with a different topic or mix incompatible policies.
-    const separate = [...this.subscriptionPolicies.values()].some((policy) => policy !== "drop_newest");
-    const filters = separate ? [...this.subscriptions.keys()] : coalesceSubscribeFilters([...this.subscriptions.keys()]);
-    for (const filter of filters) {
-      void this.pumpTopic(filter, this.abort.signal,
-        separate ? this.subscriptionQos.get(filter) ?? 0 : qosDepthForFilter(filter, this.subscriptionQos),
-        this.subscriptionPolicies.get(filter) ?? "drop_newest", separate);
+    // Each filter owns its KeepLast queue; combining filters can evict an
+    // unrelated topic's latest value, especially with depth 1.
+    for (const filter of this.subscriptions.keys()) {
+      void this.pumpTopic(filter, this.abort.signal, this.subscriptionQos.get(filter) ?? 0);
     }
   }
 
@@ -831,41 +829,20 @@ export class WsNode {
     });
   }
 
-  private async pumpTopic(filter: string, signal: AbortSignal, qosDepth = 0, policy: NonNullable<WsSubscriptionOptions["overflow"]> = "drop_newest", separate = false): Promise<void> {
+  private async pumpTopic(filter: string, signal: AbortSignal, qosDepth = 0): Promise<void> {
     let backoffMs = 200;
     while (!signal.aborted) {
       try {
         const { control, done } = await this.session.serverStream(
-          policy === "drop_newest" ? { opcode: OPCODE_SUBSCRIBE, topic: filter, qosDepth } : { opcode: OPCODE_SUBSCRIBE_WITH_POLICY, topic: filter, qosDepth, overflow: policy === "latest" ? 2 : 1 },
+          { opcode: OPCODE_SUBSCRIBE_WITH_POLICY, topic: filter, qosDepth, overflow: 1 },
           new Uint8Array(),
           {
             onData: (payload) => {
               const msg = decodeSubscribeData(payload);
-              const cbs: SubCallback[] = [];
-              if (separate) {
-                if (msg.topic === filter || (filter.endsWith("/") && msg.topic.startsWith(filter))) {
-                  for (const cb of this.subscriptions.get(filter) ?? []) {
-                    try { cb(msg.payload); } catch (err) { console.error("robot-bus subscription callback error", err); }
-                  }
-                }
-                return;
-              }
-              const exact = this.subscriptions.get(msg.topic);
-              if (exact) cbs.push(...exact);
-              for (const [key, list] of this.subscriptions) {
-                if (
-                  key !== msg.topic &&
-                  key.endsWith("/") &&
-                  msg.topic.startsWith(key)
-                ) {
-                  cbs.push(...list);
-                }
-              }
-              for (const cb of cbs) {
-                try {
-                  cb(msg.payload);
-                } catch (err) {
-                  console.error("robot-bus subscription callback error", err);
+              if (msg.topic === filter || (filter.endsWith("/") && msg.topic.startsWith(filter))) {
+                for (const cb of this.subscriptions.get(filter) ?? []) {
+                  try { cb(msg.payload); }
+                  catch (err) { console.error("robot-bus subscription callback error", err); }
                 }
               }
             },
@@ -892,7 +869,7 @@ export class WsNode {
 
 /**
  * KeepLast depth for a (possibly coalesced) subscribe filter: max of matching topics.
- * `0` means the gateway default.
+ * `0` means the server default.
  */
 export function qosDepthForFilter(
   filter: string,

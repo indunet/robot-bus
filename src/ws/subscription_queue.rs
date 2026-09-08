@@ -195,13 +195,31 @@ mod tests {
         }
     }
 
+    #[test]
+    fn keep_last_retains_newest_n_in_order_including_depth_one() {
+        for (depth, expected) in [(3, vec![7, 8, 9]), (1, vec![9])] {
+            let demux = super::super::sub_demux::SubDemux::new("tcp://127.0.0.1:1");
+            let receiver = demux.open_subscribe("sensor".into(), depth).unwrap();
+            let queue = &receiver.queue;
+            for n in 0..10 {
+                queue.push(message(n));
+            }
+            assert_eq!(queue.stats().policy, SubscriptionOverflowPolicy::DropOldest);
+            assert_eq!(queue.stats().dropped, 10 - depth as u64);
+            let actual: Vec<_> = std::iter::from_fn(|| queue.pop())
+                .map(|m| m.payload[0])
+                .collect();
+            assert_eq!(actual, expected);
+        }
+    }
+
     #[tokio::test]
     async fn readiness_does_not_freeze_a_stale_payload_while_writer_is_busy() {
         let queue = SubscriptionQueue::new(
             1,
             "sensor".into(),
-            64,
-            SubscriptionOverflowPolicy::Latest,
+            1,
+            SubscriptionOverflowPolicy::default(),
             Arc::default(),
         );
         queue.push(message(1));
@@ -220,7 +238,7 @@ mod tests {
             1,
             "sensor".into(),
             1,
-            SubscriptionOverflowPolicy::Latest,
+            SubscriptionOverflowPolicy::default(),
             total.clone(),
         );
         let receiver = SubscriptionReceiver {

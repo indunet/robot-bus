@@ -1,4 +1,4 @@
-// WebSocket-mode Node: guards + subscribe / service / action via broker gateway.
+// WebSocket-mode Node: guards + subscribe / service / action via broker server.
 #include "harness.hpp"
 
 #include <atomic>

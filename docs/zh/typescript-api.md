@@ -159,7 +159,7 @@ const pub = node.createPublisher("/robot1/cmd");
 await pub.publish(new TextEncoder().encode("go"));
 node.createSubscription("/robot1/imu", (payload) => {
   console.log(payload);
-}, 10); // 可选 KeepLast depth → 网关订阅队列
+}, 10); // 可选 KeepLast depth → 服务端订阅队列
 node.start(); // 或 node.spin()
 ```
 
@@ -214,6 +214,28 @@ const goal = action.sendGoal(goalMessage, {
 const result = await goal.result();
 ```
 
+WebSocket 上的 Action 失败是 `WsRpcError`，不会当成成功空结果。用 `err.code` / `err.status` 区分：
+
+| 结局 | `code` | TRAILER 状态码 |
+|------|------|------|
+| 取消 | `cancelled` | 1 |
+| 拒绝 | `rejected` | 9 |
+| 中止 | `aborted` | 10 |
+| 超时 | `timeout` | 4 |
+| 其他桥接/传输失败 | `failed` | 13 |
+
+```ts
+import { WsRpcError } from "robot-bus";
+
+try {
+  const result = await goal.result();
+} catch (err) {
+  if (err instanceof WsRpcError && err.code === "cancelled") {
+    // ROS CANCELED / 显式取消
+  }
+}
+```
+
 `goal.cancel()`传输行为：
 
 - **WebSocket RPC（浏览器）**：在同一条连接上发显式 **CANCEL** 帧，连接保持打开，继续收 `FEEDBACK` / `RESULT`（与 ZMQ显式取消同语义）。若连接**真正断开**，服务端仍会提交 cancel并放弃会话。
@@ -237,7 +259,7 @@ import { Imu } from "robot-bus/sensor_msgs/msg/v1/imu.js";
 | Rust | `robot_bus::sensor_msgs::msg::v1::Imu` |
 | TypeScript | `import { Imu } from "robot-bus/sensor_msgs/msg/v1/imu.js"` |
 
-网关 stub：`robot-bus/robot_bus_interfaces/grpc/v1/*.client.js`。
+WebSocket 帧协议和 RPC 调用由 SDK 实现，无需生成 RPC 客户端 stub。
 
 改 `proto/`后：
 
@@ -258,21 +280,20 @@ just test-typescript
 
 在 GitHub上写 Release说明并 Publish（tag版本须与 `Cargo.toml`、`bindings/python/pyproject.toml`、`bindings/typescript/package.json`一致）后，[`.github/workflows/publish-npm.yml`](../../.github/workflows/publish-npm.yml) 用 `secrets.NPM_TOKEN`发布到 npm。
 
-## WebSocket 订阅积压策略
+## WebSocket KeepLast
 
-`WsNode`（浏览器入口也导出为 `Node`）可以用配置对象替代数字深度。原生 `Node` 继续使用原有数字参数。
+`WsNode`（浏览器入口也导出为 `Node`）使用原有数字深度参数表示 KeepLast(N)。队列满时移除最旧消息，保留最新 N 条；深度为 1 就只保留最新一条待发送消息。
 
 ```typescript
 const node = WsNode.ws("viewer");
-node.createSubscription("/pose", bytes => {}, { overflow: "latest" });
-node.createSubscription("/samples", bytes => {}, { overflow: "drop_oldest", depth: 20 });
-node.createSubscription("/events", bytes => {}, { overflow: "drop_newest", depth: 64 });
-// 类型化重载：node.createSubscription(topic, callback, MessageType, options)
+node.createSubscription("/pose", bytes => {}, 1);
+node.createSubscription("/samples", bytes => {}, 20);
+// 类型化重载：node.createSubscription(topic, callback, MessageType, depth)
 node.start();
 ```
 
-`latest` 保留一条最新待发送消息；`drop_oldest` 保留最近 N 条；`drop_newest` 保留队列原有消息，满时丢弃新到消息。原有数字参数和不传参数的用法继续保留原行为和 opcode 1。新增替换策略需要支持 opcode 5 的 broker，客户端不会自动降级。
+不需要额外的 recent/latest 配置。不传或传非正深度时使用 64。同一过滤器的多个回调必须使用相同有效深度。各过滤器采用独立流，避免自动合并订阅后，某个 topic 的消息挤掉另一个 topic 的最新值。请在 `start()` 前注册订阅。
 
-策略只影响网关待发送队列，不影响已经发送的消息或客户端回调积压，也不保证可靠送达。前缀过滤器匹配的多个 topic 共用一个队列。同一过滤器的多个回调必须使用相同策略和替换深度。选择替换策略时，各订阅使用独立流，不再自动合并过滤器，避免不同策略共用队列。请在 `start()` 前注册订阅。
+KeepLast 仅影响服务端待发送队列，不影响网络缓冲或客户端回调，也不保证可靠送达。前缀过滤器匹配的多个 topic 共用一个队列。原生 ZMQ 目前仍只把深度映射为 HWM，尚不保证移除最旧消息。新版 WS 客户端使用 opcode 5 显式请求丢旧，请先升级 broker。
 
-控制台 Topics 页和 `GET /api/v1/subscriptions` 提供待发送数量、容量和溢出丢弃统计。详细范围见 [Rust QoS 指南](rust-api.md#高水位hwm与-qos)；无网页网关见[按需构建](build-profiles.md)。
+控制台 Topics 页和 `GET /api/v1/subscriptions` 提供待发送数量、容量和溢出丢弃统计。详细范围见 [Rust QoS 指南](rust-api.md#高水位hwm与-qos)；无网页服务端见[按需构建](build-profiles.md)。

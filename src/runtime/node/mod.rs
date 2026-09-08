@@ -10,7 +10,7 @@
 //! broker: `RobotBusBroker::start_with_context` + [`Node::inproc_with_context`].
 //!
 //! WebSocket RPC client mode (feature `ws`): [`Node::ws`] connects to the
-//! broker gateway (subscribe / publish / call service / call action). No ZMQ
+//! broker server (subscribe / publish / call service / call action). No ZMQ
 //! sockets; service and action **server** APIs return an error.
 //!
 //! Topic / service / action names are used as given (pass full paths yourself).
@@ -160,7 +160,7 @@ impl Node {
         Self::with_context_options(context, name, NodeOptions::inproc_at(prefix))
     }
 
-    /// WebSocket RPC client node talking to the local broker gateway (`http://127.0.0.1:15560`).
+    /// WebSocket RPC client node talking to the local broker server (`http://127.0.0.1:15560`).
     #[cfg(feature = "ws")]
     pub fn ws(name: impl Into<String>) -> Self {
         Self::with_options(name, NodeOptions::ws())
@@ -587,7 +587,7 @@ impl Node {
     /// Lazily creates a [`SingleThreadedExecutor`] when none was attached via
     /// `add_node`. Same as `executor.spin()` on the attached / owned executor.
     ///
-    /// In WebSocket RPC mode, drives subscription callbacks and timers over the gateway.
+    /// In WebSocket RPC mode, drives subscription callbacks and timers over the server.
     pub fn spin_once(&mut self, timeout: Option<Duration>) -> Result<bool> {
         #[cfg(feature = "ws")]
         if self.options.is_ws() {

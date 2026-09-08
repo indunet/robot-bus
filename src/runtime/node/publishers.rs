@@ -13,7 +13,7 @@ use crate::zmq_helpers::HighWaterMark;
 /// Raw (opaque bytes) publisher from [`Node::create_publisher_raw`].
 ///
 /// ZMQ mode shares one underlying bus PUB socket per node; WebSocket RPC mode issues
-/// unary `MessageGateway.Publish` RPCs. Each handle remembers its topic.
+/// unary `Publish` RPCs. Each handle remembers its topic.
 ///
 /// Topology registration is shared across clones and unregistered when the last
 /// handle drops.

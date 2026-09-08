@@ -117,7 +117,7 @@ node.load_parameters_from_yaml_file("config/pilot.yaml")
 
 Close to ROS 2: `Node(...)` → `create_publisher` / `create_subscription` → `node.spin()`. With a single node you do not need to hand-write an Executor (it auto-attaches `SingleThreadedExecutor` internally).
 
-For the WebSocket RPC gateway only, use `Node.ws` / `Node.ws_at` (or `transport="ws"`): you can subscribe, publish, and call service / action, but cannot act as a server; see “WebSocket RPC mode Node” below.
+For WebSocket communication, use `Node.ws` / `Node.ws_at` (or `transport="ws"`): you can subscribe, publish, and call service / action, but cannot act as a server; see “WebSocket RPC mode Node” below.
 
 Python recommends **typed** usage (pass a protobuf class at creation for automatic `SerializeToString` / `ParseFromString`); omit the type for raw bytes. Under the hood it is the same as Rust with opaque bytes (thin Python wrapper; PyO3 cannot map Rust generics).
 
@@ -163,7 +163,7 @@ node.create_subscription("/robot1/imu", on_raw)
 
 ### WebSocket RPC mode Node (client)
 
-`Node.ws` / `Node.ws_at` (or `Node(..., transport="ws", ws_url=...)`) connect via the broker WebSocket RPC gateway and do not create ZMQ sockets.
+`Node.ws` / `Node.ws_at` (or `Node(..., transport="ws", ws_url=...)`) connect via the broker WebSocket RPC server and do not create ZMQ sockets.
 
 | Supported | Not supported |
 |------|--------|
@@ -418,7 +418,7 @@ print(robot_bus.__version__)
 | Symbol | Description |
 |------|------|
 | `Node(name, host=..., transport=..., ws_url=..., message_xsub=..., …)` | Create a node; auto-attaches `SingleThreadedExecutor` on first `create_*` / `spin` |
-| `Node.tcp` / `Node.ipc` / `Node.inproc` / `Node.inproc_with_context` / `Node.with_context` / `Node.ws` / `Node.ws_at` / `Node.discover` | Transport presets (prefer `Context` + `with_context`; WebSocket RPC gateway is client mode; same-process inproc uses `inproc_with_context`; `discover` only fills addresses) |
+| `Node.tcp` / `Node.ipc` / `Node.inproc` / `Node.inproc_with_context` / `Node.with_context` / `Node.ws` / `Node.ws_at` / `Node.discover` | Transport presets (prefer `Context` + `with_context`; WebSocket Nodes operate in client mode; same-process inproc uses `inproc_with_context`; `discover` only fills addresses) |
 | `Node.declare_parameter` / `get_parameter` / `set_parameter` / `has_parameter` / `list_parameters` | Local node parameters (`bool` / `int` / `float` / `str`) |
 | `Node.load_parameters_from_yaml_str` / `load_parameters_from_yaml_file` | Load / override parameters from YAML |
 | `node.spin()` / `spin_once` / `shutdown` | Drive callbacks (ROS 2–style simple path) |
@@ -431,7 +431,7 @@ print(robot_bus.__version__)
 | `node.create_publisher(topic, msg_type=None, qos_depth=None)` | typed → `TypedTopicPublisher`; omit type → raw; `qos_depth>0` → KeepLast HWM (ignored on WS publish) |
 | `node.create_timer(period, callback)` → `TimerHandle` | Timer (attached to Node like topic) |
 | `CallbackGroupType` / `create_callback_group` | `MutuallyExclusive` / `Reentrant` |
-| `create_subscription(..., msg_type=, callback_group=, qos_depth=)` | typed: `callback(Message)`; omit type: `callback(bytes)`; WS: `qos_depth` sizes the gateway subscribe queue |
+| `create_subscription(..., msg_type=, callback_group=, qos_depth=)` | typed: `callback(Message)`; omit type: `callback(bytes)`; WS: `qos_depth` sizes the server subscribe queue |
 | `create_service(..., request_type=, response_type=, qos_depth=)` | typed: `handler(Request) -> Response`; otherwise raw bytes; `qos_depth>0` → KeepLast DEALER HWM |
 | `create_client(..., request_type=, response_type=, qos_depth=)` | typed → `TypedServiceClient`; `service_is_ready` / `wait_for_service` (console workers); `qos_depth>0` → KeepLast DEALER HWM |
 | `create_action_server(..., goal_type=, feedback_type=, result_type=, qos_depth=)` | typed handler publishes feedback in real time via context and returns result; otherwise raw bytes; `qos_depth>0` → KeepLast DEALER HWM |
@@ -443,4 +443,4 @@ print(robot_bus.__version__)
 | `RobotBusBroker.start(...)` / `python -m robot_bus.broker` | In-process `start`; standalone `python -m robot_bus.broker` (same CLI flags); pass `context` for same-process inproc; peers use CLI-style string lists |
 | `ShutdownHandle` / `TimerHandle` | Spin and timer control |
 
-WebSocket RPC mode Node: see previous section; low-level gateway RPC can also use the Rust tonic client directly ([rust-api.md](rust-api.md)).
+WebSocket RPC mode Node: see previous section; for the low-level WebSocket RPC frame protocol, see the Rust guide ([rust-api.md](rust-api.md)).

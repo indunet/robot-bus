@@ -159,7 +159,8 @@ if(ROBOT_BUS_BUILD_TESTS)
     node_parameters
     typed_api
     interop_peer
-    ros2_bridge_stub)
+    ros2_bridge_stub
+    ros2_bridge_diagnostics)
 
   set(ROBOT_BUS_TEST_TARGETS)
   foreach(t ${ROBOT_BUS_TEST_SOURCES})

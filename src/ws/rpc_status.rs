@@ -1,4 +1,4 @@
-//! RPC status codes for the WebSocket gateway (wire-compatible with historical gRPC codes).
+//! RPC status codes for the WebSocket server (wire-compatible with historical gRPC codes).
 
 use std::fmt;
 
@@ -9,7 +9,7 @@ pub struct RpcStatus {
     message: String,
 }
 
-/// Subset of gRPC status codes used by the gateway.
+/// Subset of gRPC status codes used by the server.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[repr(u32)]
 pub enum Code {
@@ -41,6 +41,8 @@ impl Code {
             4 => Code::DeadlineExceeded,
             5 => Code::NotFound,
             8 => Code::ResourceExhausted,
+            9 => Code::FailedPrecondition,
+            10 => Code::Aborted,
             12 => Code::Unimplemented,
             13 => Code::Internal,
             14 => Code::Unavailable,

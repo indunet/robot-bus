@@ -158,7 +158,7 @@ const pub = node.createPublisher("/robot1/cmd");
 await pub.publish(new TextEncoder().encode("go"));
 node.createSubscription("/robot1/imu", (payload) => {
   console.log(payload);
-}, 10); // optional KeepLast depth → gateway subscribe queue
+}, 10); // optional KeepLast depth → server subscribe queue
 node.start(); // or node.spin()
 ```
 
@@ -213,6 +213,28 @@ const goal = action.sendGoal(goalMessage, {
 const result = await goal.result();
 ```
 
+WebSocket action failures are `WsRpcError`, not a successful empty result. Check `err.code` / `err.status`:
+
+| Outcome | `code` | TRAILER status |
+|------|------|------|
+| Cancelled | `cancelled` | 1 |
+| Rejected | `rejected` | 9 |
+| Aborted | `aborted` | 10 |
+| Timeout | `timeout` | 4 |
+| Other bridge/transport failure | `failed` | 13 |
+
+```ts
+import { WsRpcError } from "robot-bus";
+
+try {
+  const result = await goal.result();
+} catch (err) {
+  if (err instanceof WsRpcError && err.code === "cancelled") {
+    // ROS CANCELED / explicit cancel
+  }
+}
+```
+
 `goal.cancel()` transport behavior:
 
 - **WebSocket RPC (browser)**: send an explicit **CANCEL** frame on the same connection; the connection stays open and continues receiving `FEEDBACK` / `RESULT` (same semantics as ZMQ explicit cancel). If the connection **actually drops**, the server still submits cancel and abandons the session.
@@ -236,7 +258,7 @@ import { Imu } from "robot-bus/sensor_msgs/msg/v1/imu.js";
 | Rust | `robot_bus::sensor_msgs::msg::v1::Imu` |
 | TypeScript | `import { Imu } from "robot-bus/sensor_msgs/msg/v1/imu.js"` |
 
-Gateway stubs: `robot-bus/robot_bus_interfaces/grpc/v1/*.client.js`.
+WebSocket framing and RPC handling are implemented by the SDK; no generated RPC client stubs are required.
 
 After changing `proto/`:
 
@@ -257,21 +279,20 @@ just test-typescript
 
 After writing Release notes on GitHub and publishing (tag version must match `Cargo.toml`, `bindings/python/pyproject.toml`, `bindings/typescript/package.json`), [`.github/workflows/publish-npm.yml`](../../.github/workflows/publish-npm.yml) publishes to npm using `secrets.NPM_TOKEN`.
 
-## WebSocket subscription overflow
+## WebSocket KeepLast
 
-`WsNode` (also exported as `Node` in the browser entry) accepts an options object in place of the numeric depth. Native `Node` keeps its existing numeric API.
+`WsNode` (also exported as `Node` in the browser entry) uses its existing numeric depth parameter as KeepLast(N). A full queue evicts the oldest message and retains the newest N; depth 1 keeps only the latest pending message.
 
 ```typescript
 const node = WsNode.ws("viewer");
-node.createSubscription("/pose", bytes => {}, { overflow: "latest" });
-node.createSubscription("/samples", bytes => {}, { overflow: "drop_oldest", depth: 20 });
-node.createSubscription("/events", bytes => {}, { overflow: "drop_newest", depth: 64 });
-// Typed overload: node.createSubscription(topic, callback, MessageType, options)
+node.createSubscription("/pose", bytes => {}, 1);
+node.createSubscription("/samples", bytes => {}, 20);
+// Typed overload: node.createSubscription(topic, callback, MessageType, depth)
 node.start();
 ```
 
-`latest` keeps one pending gateway message; `drop_oldest` keeps the most recent N; `drop_newest` preserves queued messages and discards incoming messages when full. Existing numeric calls and omitted options retain the old behavior and opcode 1. New replacement policies require a broker supporting opcode 5; no silent fallback occurs.
+No separate recent/latest options are needed. Omitted/nonpositive depth uses 64. Same-filter callbacks must agree on effective depth. Filters use separate streams so another topic cannot evict a filter's last value through automatic coalescing. Register subscriptions before `start()`.
 
-The policy covers gateway pending messages per filter, not messages already sent or client callback backlog, and does not guarantee delivery. A prefix filter shares a queue across matched topics. Same-filter callbacks must agree on policy and replacement depth. When any replacement policy is selected, WS subscriptions use separate streams rather than automatically coalescing filters, preventing unlike policies from sharing a queue. Register subscriptions before `start()`.
+KeepLast covers pending server messages per filter, not network buffers or client callbacks, and does not guarantee delivery. A prefix filter shares one queue across its matched topics. Native ZMQ currently uses depth as HWM only, without guaranteed oldest-message replacement. Updated WS clients explicitly request drop-oldest (opcode 5); upgrade the broker first.
 
-The console Topics tab and `GET /api/v1/subscriptions` expose pending/capacity and overflow drops. See the [Rust QoS guide](rust-api.md#high-water-mark-hwm-and-qos) for metric scope and the [build profiles](build-profiles.md) for headless gateways.
+The console Topics tab and `GET /api/v1/subscriptions` expose pending/capacity and overflow drops. See the [Rust QoS guide](rust-api.md#high-water-mark-hwm-and-qos) for scope and [build profiles](build-profiles.md) for headless servers.

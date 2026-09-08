@@ -7,7 +7,7 @@
 ```toml
 robot-bus = "2.3.1"
 # 本地：robot-bus = { path = "../robot-bus" }
-# 默认已启用 WebSocket RPC网关（`ws` feature）；若需关闭：robot-bus = { version = "2.3.1", default-features = false }
+# 默认已启用 WebSocket RPC服务端（`ws` feature）；若需关闭：robot-bus = { version = "2.3.1", default-features = false }
 ```
 
 ## Broker启动
@@ -97,7 +97,7 @@ broker.stop()?;
 
 跨 broker（federation）：优先 `--peer HOST:PORT`（对端 API口，内部会 `GET /api/v1/discover`填齐 ZMQ peers），或在 `RobotBusConfig`上设置 `broker_id`与 `peers`（`MessagePeer` / `ServicePeer` / `ActionPeer`），或 CLI `--broker-id` / `--message-peer` / `--service-peer` / `--action-peer`。各语言嵌入式 start API使用同款字符串约定（见对应 `*-api.md`）。Message federation **不会**转发保留命名空间 `/robot_bus`（含 `/robot_bus/status`、topology、bot等 console系统 topic），避免多 broker帮连时状态快照互相覆盖；用户业务 topic仍按需推送。
 
-典型流程：`Context` → `Node::with_context` → `create_*` → `node.spin()`（或便捷 `Node::new`）。多节点或需并行时再 `executor.add_node` + `executor.spin`。仅连 WebSocket RPC网关时用 `Node::ws` / `Node::ws_at`（见下文「WebSocket RPC模式 Node」）。
+典型流程：`Context` → `Node::with_context` → `create_*` → `node.spin()`（或便捷 `Node::new`）。多节点或需并行时再 `executor.add_node` + `executor.spin`。仅连 WebSocket RPC服务端时用 `Node::ws` / `Node::ws_at`（见下文「WebSocket RPC模式 Node」）。
 
 ---
 
@@ -264,7 +264,7 @@ node.create_timer(
 
 ### 回调异常、过载与停止
 
-启用 Rust panic 展开时，回调 panic 会被记录并隔离。订阅或定时器异常不会导致工作线程退出或回调组停止调度。服务和动作处理函数异常时，原生总线返回 `BusError::HandlerPanicked`（`HANDLER_PANICKED\0name`），WebSocket 网关返回 Internal 状态。
+启用 Rust panic 展开时，回调 panic 会被记录并隔离。订阅或定时器异常不会导致工作线程退出或回调组停止调度。服务和动作处理函数异常时，原生总线返回 `BusError::HandlerPanicked`（`HANDLER_PANICKED\0name`），WebSocket 服务端返回 Internal 状态。
 
 常驻线程池在等待任务达到 1024 个时停止接受新任务，并为每个工作线程保留一个内部续执行名额，避免繁忙回调组长期占用线程；每个互斥回调组也默认最多等待 1024 个回调，可用 `CallbackGroup::with_queue_capacity(kind, capacity)` 调整组容量。队列满时立即拒绝新任务，不阻塞消息接收线程：订阅和定时器回调被丢弃并记录日志；服务和动作请求返回 `BusError::Busy`（`BUSY\0name`，WebSocket 为 ResourceExhausted）。已接受的同组回调按先后顺序执行。这些执行器限制独立于传输层 HWM，不提供“覆盖为最新值”的策略。
 
@@ -274,23 +274,15 @@ node.create_timer(
 
 `QosProfile::keep_last(depth)`映射为 ZMQ HWM。Topic用 PUB/SUB HWM；service / action用 DEALER HWM（`snd` / `rcv`都等于 depth）。reliability固定 best-effort（RPC也没有 DDS reliability）。不传 QoS则用节点默认（topic 8/8，service 4/4，action 8/8）。
 
-**WebSocket** Node 上 KeepLast 只作用于订阅侧：设置网关待发送队列深度，满时丢弃新到消息；不传则使用网关默认 64。发布侧 QoS 忽略，WS service / action 客户端的 HWM 也忽略。
+**WebSocket** Node 的 `QosProfile::keep_last(N)` 保留最新 N 条服务端待发送消息。队列满时先移除最旧消息，再放入新消息；`keep_last(1)` 就是只留最新一条。统一使用深度参数，不另外提供 recent/latest 配置接口。
 
-WS 订阅可以显式选择积压策略：
+在 `Node::ws` / `Node::ws_at` 上，将配置传给 `create_subscription_with_qos` 或 `create_subscription_raw_with_qos`。例如：`node.create_subscription_raw_with_qos("/pose", QosProfile::keep_last(1), std::sync::Arc::new(|_bytes| {}), None)?;`。不传深度或 depth ≤ 0 使用 64，上限为 1,048,576。同一过滤器的多个回调共享队列，有效深度必须一致。
 
-| Rust 配置 | 队列满时的行为 |
-| --- | --- |
-| `QosProfile::keep_last(n)` | 保留已排队消息，丢弃新到消息（原默认行为） |
-| `QosProfile::keep_recent(n)` | 移除最旧消息，保留最近 N 条 |
-| `QosProfile::latest()` | 只保留最新一条待发送消息 |
+KeepLast 仅影响**每个订阅过滤器在服务端的待发送队列**，不影响客户端回调队列、ZMQ 队列或网络缓冲。前缀订阅匹配的所有 topic 共用一个队列；已取出发送的消息无法撤回，也不保证可靠送达。**原生 ZMQ 目前仍只将深度映射为 HWM；HWM 不保证移除最旧消息，该传输上的 KeepLast 历史语义仍待实现。** WS 发布和 RPC 的深度参数忽略。
 
-在 `Node::ws` / `Node::ws_at` 上，把配置传给 `create_subscription_with_qos` 或 `create_subscription_raw_with_qos`。例如：`node.create_subscription_raw_with_qos("/pose", QosProfile::latest(), std::sync::Arc::new(|_bytes| {}), None)?;`。原生 ZMQ 订阅会拒绝后两种替换策略；其他语言的原生绑定暂时保留原有的 depth 参数。
+启用 `ws` 即提供 `GET /api/v1/subscriptions`，无需控制台。控制台 Topics 页显示 KeepLast 深度、待发送数量/容量和溢出丢弃数。API 还返回 `received`（入队尝试）、`dequeued`（取出发送，不代表送达）。取消后移除该行；`totalDropped` 保留已关闭订阅的溢出计数，服务端重启归零。统计不包含原生传输丢包，读取期间队列仍可变化。
 
-策略仅影响**每个订阅过滤器在网关的待发送队列**，不影响客户端回调队列、ZMQ 队列或网络缓冲。前缀订阅匹配的所有 topic 共用一个队列。只有回调慢，不一定触发网关替换；已经取出发送的消息无法撤回，也不保证可靠送达。depth ≤ 0 使用 64，上限为 1,048,576；`latest` 固定容量为 1。同一过滤器的多个回调共享队列，不同策略或不同替换深度会报错；旧式重复订阅仍使用第一次设置的深度。
-
-启用 `ws` 即提供 `GET /api/v1/subscriptions`，无需控制台。控制台 Topics 页面显示活跃订阅的策略、容量、待发送数量和溢出丢弃数。API 还返回 `received`（入队尝试）、`dequeued`（取出发送，不代表送达）。取消后移除该行；`totalDropped` 保留已关闭订阅的溢出计数，网关重启归零。统计不包含原生传输丢包，读取期间队列仍可变化。
-
-协议兼容：旧订阅继续使用 V3 opcode 1 和原始布局；显式替换策略使用新增 opcode 5（`topic:str`、`qos_depth:i32`、`policy:u8`，0=丢新，1=丢旧，2=最新）。使用新策略前先升级 broker；旧版 V3 broker 会拒绝 opcode 5，客户端不会自动降级。可选网关和控制台构建见[按需构建](build-profiles.md)。
+兼容说明：这里修正了原先“满时丢新”的行为。服务端继续接受原始 V3 opcode 1 布局，但现在执行 KeepLast/丢旧语义。新版 Rust/TypeScript WS 客户端使用 opcode 5 显式请求丢旧，避免旧服务端悄悄执行丢新；请先升级 broker。协议层保留策略 0 和 2 的兼容解码，公共 QoS 接口统一为 KeepLast(N)。构建选项见[按需构建](build-profiles.md)。
 
 ```rust
 use robot_bus::{Node, QosProfile, Publisher, HighWaterMark};
@@ -428,7 +420,7 @@ fn main() -> anyhow::Result<()> {
 
 ## Protobuf消息（`robot_bus::<pkg>`）
 
-总线与 gRPC网关仍传 opaque bytes（gRPC侧通常拿不到业务 proto，保持二进制）。Node SDK在 create时绑定类型并自动 encode/decode，例如 `create_publisher::<Imu>` / `create_subscription::<Imu, _>`。消息类型挂在 crate命名空间下：`robot_bus::sensor_msgs::msg::v1::Imu`。其它消息同理，例如：
+总线与 WebSocket RPC 服务端传递 opaque bytes，不解析业务消息结构。Node SDK在 create时绑定类型并自动 encode/decode，例如 `create_publisher::<Imu>` / `create_subscription::<Imu, _>`。消息类型挂在 crate命名空间下：`robot_bus::sensor_msgs::msg::v1::Imu`。其它消息同理，例如：
 
 类型名约定为 protobuf全名（`prost::Name::full_name()`，如 `sensor_msgs.msg.v1.Imu`），经 console控制面登记，**不**写入每条消息帧。
 
@@ -449,7 +441,7 @@ Service / Action同理（如 `create_client::<SetBool>`、`create_action_client:
 
 ## WebSocket RPC模式 Node（客户端）
 
-`Node::ws` / `NodeOptions::ws`通过 broker的 WebSocket RPC网关接入总线，**不创建 ZMQ socket**。API仍是 `create_subscription` / `create_publisher` / `create_client` / `create_action_client` + `spin`，对调用方透明。
+`Node::ws` / `NodeOptions::ws`通过 broker的 WebSocket RPC服务端接入总线，**不创建 ZMQ socket**。API仍是 `create_subscription` / `create_publisher` / `create_client` / `create_action_client` + `spin`，对调用方透明。
 
 | 支持 | 不支持 |
 |------|--------|
@@ -495,7 +487,9 @@ node.spin()?;
 
 ---
 
-## WebSocket RPC网关
+## WebSocket RPC服务端
+
+Rust WebSocket 模块为 `robot_bus::ws`。Broker 监听配置使用 `robot_bus::WsConfig`；独立服务端配置使用 `robot_bus::ws::WsServerConfig`。请求处理类型为 `WsMessageService`、`WsServiceHandler` 和 `WsActionHandler`。更新已有 Rust 集成时，需将模块导入和类型引用同步改为这些名称。`/ws-rpc` 地址、帧格式、`ws` feature 和客户端 API 保持不变。
 
 由 `RobotBusBroker` / `robot_bus_broker`一并启动（feature `ws`，默认开启）。原生与浏览器客户端共用 API端口上的 **`/ws-rpc`**（默认 `0.0.0.0:15560`）。**不兼容旧版：** V3成帧；不再接受 V2的 method字符串和 `TopicMessage`信封。
 
@@ -529,7 +523,7 @@ let ep = message_xpub_endpoint("localhost", "tcp")?;
 
 ---
 
-服务调用的超时共用一个截止时间，覆盖等待共享客户端套接字、发送和接收。网关调用还包括等待空闲客户端和阻塞工作线程的调度时间。网关最多提供 8 个活动客户端和 256 个额外调用名额；过载返回 ResourceExhausted。派发前已过期的请求不会发送。已经送达服务端的请求可能在调用方超时后继续执行；超时不意味着撤销服务端操作。
+服务调用的超时共用一个截止时间，覆盖等待共享客户端套接字、发送和接收。服务端调用还包括等待空闲客户端和阻塞工作线程的调度时间。服务端最多提供 8 个活动客户端和 256 个额外调用名额；过载返回 ResourceExhausted。派发前已过期的请求不会发送。已经送达服务端的请求可能在调用方超时后继续执行；超时不意味着撤销服务端操作。
 
 ## 错误类型
 
@@ -540,7 +534,9 @@ match result {
     Err(BusError::Timeout(_)) => { /* client poll超时；service REQ会自动重建 socket，可直接再 call */ }
     Err(BusError::NoWorker { name }) => { /* 无 worker / pending排队超时 */ }
     Err(BusError::WorkerDied { name }) => { /* 飞中 worker/peer挂掉，broker合成错误 */ }
-    Err(BusError::Cancelled { name }) => { /* action：pending上的 goal被 CANCEL */ }
+    Err(BusError::Cancelled { name }) => { /* action：CANCELED */ }
+    Err(BusError::ActionAborted(_)) => { /* action：ABORTED */ }
+    Err(BusError::ActionRejected(_)) => { /* action：执行前被拒绝 */ }
     Err(BusError::NoGoal { goal_id }) => { /* action：未知 goal / 重复 goal_id */ }
     Err(e) => eprintln!("{e}"),
     Ok(v) => { /* ... */ }

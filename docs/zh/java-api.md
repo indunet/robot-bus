@@ -128,7 +128,7 @@ Node node = Node.discover(
 ```
 
 ### WebSocket RPC模式 Node（客户端）
-`Node.ws` / `Node.wsAt`经 broker WebSocket RPC网关接入，不创建 ZMQ socket。
+`Node.ws` / `Node.wsAt`经 broker WebSocket RPC服务端接入，不创建 ZMQ socket。
 
 | 支持 | 不支持 |
 |------|--------|

@@ -43,7 +43,7 @@ full = ["ws", "console", "demo-tank"]
 demo-tank = []
 # Enable with maturin / `cargo build --features extension-module` for the Python module.
 extension-module = ["dep:pyo3", "pyo3/extension-module"]
-# Multiplexed WebSocket RPC gateway (started with RobotBusBroker; on by default).
+# Multiplexed WebSocket RPC server (started with RobotBusBroker; on by default).
 # Payload stubs are pre-generated (`just gen-rust`); no protoc at compile time.
 # axum shares one listener with the console when both features are enabled.
 ws = [
@@ -56,7 +56,7 @@ ws = [
     "dep:futures-util",
     "dep:tokio-tungstenite",
 ]
-# Embedded Web console (static UI + REST shim; same port as WS gateway when both enabled).
+# Embedded Web console (static UI + REST shim; same port as WS server when both enabled).
 console = ["console-api", "dep:rust-embed", "dep:mime_guess"]
 # Monitoring/control-plane API without embedded web assets or a Node.js build.
 console-api = [
@@ -69,7 +69,7 @@ console-api = [
 # In-process ROS 2 ↔ robot-bus topic/service/action bridge (requires sourced ROS + linking rcl).
 # Not enabled by default — keep core SDK / maturin builds free of ROS.
 # Typed msgs come from ros-env 0.2 re-exporting share/<pkg>/rust/ on AMENT_PREFIX_PATH.
-ros2 = ["dep:rclrs", "dep:rosidl_runtime_rs", "dep:ros-env"]
+ros2 = ["dep:rclrs", "dep:rosidl_runtime_rs", "dep:ros-env", "dep:futures-channel"]
 # Typecheck without a real ROS install (rclrs stub).
 ros2-shim = ["ros2", "rclrs/use_ros_shim", "rosidl_runtime_rs/use_ros_shim", "ros-env/use_ros_shim"]
 
@@ -80,6 +80,7 @@ rosidl_runtime_rs = { version = "0.6", optional = true }
 ros-env = { version = "0.2", optional = true }
 axum = { version = "0.8", optional = true, default-features = false, features = ["http1", "tokio", "query", "json"] }
 clap = { version = "4", features = ["derive"] }
+futures-channel = { version = "0.3", optional = true }
 futures-util = { version = "0.3", optional = true, default-features = false, features = ["sink"] }
 http = { version = "1", optional = true }
 log = "0.4"

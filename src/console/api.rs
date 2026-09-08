@@ -402,7 +402,7 @@ pub async fn tank_session(Extension(state): Extension<Arc<ConsoleState>>) -> imp
             .into_response();
     }
     // `acquire` may block briefly while tank publishes the first pose — keep it
-    // off the async worker so long-lived gateway streams stay responsive.
+    // off the async worker so long-lived server streams stay responsive.
     let acquired = tokio::task::spawn_blocking({
         let tank = Arc::clone(&state.tank);
         move || tank.acquire()

@@ -140,7 +140,7 @@ impl ServiceClient {
         self.call_with_deadline(service_name, body, request_id, deadline)
     }
 
-    /// Share one deadline across gateway queuing, socket locking, send and receive.
+    /// Share one deadline across server queuing, socket locking, send and receive.
     pub(crate) fn call_with_deadline(
         &self,
         service_name: &str,

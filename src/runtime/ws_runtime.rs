@@ -28,8 +28,8 @@ use crate::runtime::timers::{
     SubscriptionHandle, Timer, TimerCallback, TimerHandle, effective_poll_timeout_ms, tick_timers,
 };
 use crate::runtime::topic_callbacks::for_each_matching_callback;
-use crate::ws_gateway::rpc_status::Code;
-use crate::ws_gateway::ws_frame::{
+use crate::ws::rpc_status::Code;
+use crate::ws::ws_frame::{
     ACTION_KIND_CANCEL, ACTION_KIND_FEEDBACK, ACTION_KIND_GOAL, ACTION_KIND_RESULT, Frame,
     RequestHeader, decode_action_data, decode_frame, decode_subscribe_data, encode_frame,
 };
@@ -241,7 +241,7 @@ impl WsClientContext {
 struct WsState {
     topic_callbacks: HashMap<String, Vec<SubscriptionCallback>>,
     active_topics: HashSet<String>,
-    /// KeepLast depth sent on Subscribe REQUEST (`0` = gateway default).
+    /// KeepLast depth sent on Subscribe REQUEST (`0` = server default).
     topic_qos: HashMap<String, QosProfile>,
     /// Latest WS stream id for each active topic (for Cancel on destroy).
     topic_stream_ids: HashMap<String, u32>,
@@ -335,12 +335,11 @@ impl WsRuntime {
         let mut state = self.lock_state()?;
         let requested = qos.unwrap_or(QosProfile::keep_last(0));
         if let Some(existing) = state.topic_qos.get(topic) {
-            if existing.overflow_policy() != requested.overflow_policy()
-                || (requested.overflow_policy() != crate::SubscriptionOverflowPolicy::DropNewest
-                    && existing.depth() != requested.depth())
+            if crate::runtime::ws_subscribe_queue_capacity(existing.depth())
+                != crate::runtime::ws_subscribe_queue_capacity(requested.depth())
             {
                 return Err(BusError::Protocol(format!(
-                    "conflicting subscription policy for {topic}"
+                    "conflicting KeepLast depth for {topic}"
                 )));
             }
         }
@@ -531,19 +530,11 @@ impl WsRuntime {
                         .copied()
                         .unwrap_or(QosProfile::keep_last(0))
                 };
-                let header = if qos_depth.overflow_policy()
-                    == crate::SubscriptionOverflowPolicy::DropNewest
-                {
-                    RequestHeader::Subscribe {
-                        topic: topic.clone(),
-                        qos_depth: qos_depth.depth(),
-                    }
-                } else {
-                    RequestHeader::SubscribeWithPolicy {
-                        topic: topic.clone(),
-                        qos_depth: qos_depth.depth(),
-                        overflow: qos_depth.overflow_policy(),
-                    }
+                // Explicit opcode prevents an older server silently using drop-newest.
+                let header = RequestHeader::SubscribeWithPolicy {
+                    topic: topic.clone(),
+                    qos_depth: qos_depth.depth(),
+                    overflow: crate::SubscriptionOverflowPolicy::DropOldest,
                 };
                 let (reply_tx, reply_rx) = tokio::sync::oneshot::channel();
                 let (done_tx, done_rx) = tokio::sync::oneshot::channel();
@@ -950,6 +941,14 @@ fn ws_action_kind(kind: u8) -> Result<ActionKind> {
     }
 }
 
+fn cancelled_name(message: &str) -> String {
+    message
+        .strip_prefix("cancelled ")
+        .unwrap_or(message)
+        .trim_matches('\'')
+        .to_string()
+}
+
 fn map_rpc_status(status: u32, message: &str) -> BusError {
     match Code::from_u32(status) {
         Code::ResourceExhausted => BusError::Busy {
@@ -959,15 +958,17 @@ fn map_rpc_status(status: u32, message: &str) -> BusError {
                 .trim_matches('\'')
                 .to_string(),
         },
-        Code::Internal if message.starts_with("handler panicked for ") => {
-            BusError::HandlerPanicked {
-                name: message
-                    .trim_start_matches("handler panicked for ")
-                    .trim_matches('\'')
-                    .to_string(),
-            }
-        }
         Code::DeadlineExceeded => BusError::Timeout(message.to_string()),
+        Code::Cancelled => BusError::Cancelled {
+            name: cancelled_name(message),
+        },
+        Code::Aborted if message.starts_with("action aborted: ") => {
+            BusError::ActionAborted(message["action aborted: ".len()..].to_string())
+        }
+        Code::FailedPrecondition if message.starts_with("action rejected: ") => {
+            BusError::ActionRejected(message["action rejected: ".len()..].to_string())
+        }
+        Code::Internal => map_internal_rpc_status(status, message),
         Code::NotFound => {
             if let Some(rest) = message.strip_prefix("no goal ") {
                 BusError::NoGoal {
@@ -994,12 +995,56 @@ fn map_rpc_status(status: u32, message: &str) -> BusError {
     }
 }
 
+fn map_internal_rpc_status(status: u32, message: &str) -> BusError {
+    if message.starts_with("handler panicked for ") {
+        BusError::HandlerPanicked {
+            name: message
+                .trim_start_matches("handler panicked for ")
+                .trim_matches('\'')
+                .to_string(),
+        }
+    } else if message.starts_with("cancelled ") || message.starts_with("cancelled '") {
+        BusError::Cancelled {
+            name: cancelled_name(message),
+        }
+    } else if let Some(rest) = message.strip_prefix("action aborted: ") {
+        BusError::ActionAborted(rest.to_string())
+    } else if let Some(rest) = message.strip_prefix("action rejected: ") {
+        BusError::ActionRejected(rest.to_string())
+    } else {
+        BusError::Protocol(format!("rpc {status}: {message}"))
+    }
+}
+
 #[cfg(test)]
 mod status_tests {
     use super::*;
 
     #[test]
     fn callback_errors_remain_typed_across_websocket() {
+        assert!(
+            matches!(map_rpc_status(1, "cancelled 'motion'"), BusError::Cancelled { name } if name == "motion")
+        );
+        assert!(
+            matches!(map_rpc_status(13, "cancelled 'motion'"), BusError::Cancelled { name } if name == "motion")
+        );
+        assert!(matches!(
+            map_rpc_status(9, "action rejected: invalid"),
+            BusError::ActionRejected(_)
+        ));
+        assert!(matches!(
+            map_rpc_status(10, "action aborted: stopped"),
+            BusError::ActionAborted(_)
+        ));
+        assert!(matches!(
+            map_rpc_status(13, "action aborted: stopped"),
+            BusError::ActionAborted(_)
+        ));
+        assert!(matches!(
+            map_rpc_status(13, "action rejected: invalid"),
+            BusError::ActionRejected(_)
+        ));
+
         assert!(
             matches!(map_rpc_status(8, "busy 'echo'"), BusError::Busy { name } if name == "echo")
         );

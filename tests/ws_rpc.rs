@@ -10,7 +10,7 @@ use std::thread;
 use std::time::Duration;
 
 use futures_util::{SinkExt, StreamExt};
-use robot_bus::ws_gateway::ws_frame::{
+use robot_bus::ws::ws_frame::{
     ACTION_KIND_RESULT, Frame, RequestHeader, decode_action_data, decode_frame,
     decode_subscribe_data, encode_frame,
 };
@@ -48,16 +48,35 @@ async fn subscription_policies_are_registered_observable_and_removed_on_cancel()
             .await
             .unwrap();
     }
+    // Original opcode 1 now has the same KeepLast semantics as the SDK.
+    ws.send(Message::Binary(
+        encode_frame(&Frame::Request {
+            stream_id: 7,
+            header: RequestHeader::Subscribe {
+                topic: "policy.test".into(),
+                qos_depth: 3,
+            },
+            body: vec![],
+        })
+        .unwrap()
+        .into(),
+    ))
+    .await
+    .unwrap();
     let mut snapshot = serde_json::Value::Null;
     for _ in 0..30 {
         snapshot = ureq::get(&metrics_url).call().unwrap().into_json().unwrap();
-        if snapshot["subscriptions"].as_array().unwrap().len() == 3 {
+        if snapshot["subscriptions"].as_array().unwrap().len() == 4 {
             break;
         }
         tokio::time::sleep(Duration::from_millis(50)).await;
     }
     let rows = snapshot["subscriptions"].as_array().unwrap();
-    assert_eq!(rows.len(), 3);
+    assert_eq!(rows.len(), 4);
+    assert_eq!(
+        rows.iter().filter(|r| r["policy"] == "drop_oldest").count(),
+        2
+    );
     for (policy, capacity) in [("drop_newest", 3), ("drop_oldest", 3), ("latest", 1)] {
         let row = rows.iter().find(|r| r["policy"] == policy).unwrap();
         assert_eq!(row["capacity"], capacity);
@@ -76,12 +95,12 @@ async fn subscription_policies_are_registered_observable_and_removed_on_cancel()
                 delivered.insert(stream_id);
             }
         }
-        if delivered.len() == 3 {
+        if delivered.len() == 4 {
             break;
         }
     }
-    assert_eq!(delivered.len(), 3);
-    for stream_id in [1, 3, 5] {
+    assert_eq!(delivered.len(), 4);
+    for stream_id in [1, 3, 5, 7] {
         ws.send(Message::Binary(
             encode_frame(&Frame::Cancel { stream_id }).unwrap().into(),
         ))
@@ -310,6 +329,104 @@ async fn ws_send_goal_soft_cancel_keeps_connection_for_result() {
 }
 
 #[tokio::test]
+async fn ws_send_goal_terminal_errors_keep_distinct_status_codes() {
+    for (label, body, want_status) in [
+        ("cancel", b"CANCELLED\0motion".as_slice(), 1u32),
+        ("abort", b"ACTION_ABORTED\0stopped".as_slice(), 10),
+        ("reject", b"ACTION_REJECTED\0invalid".as_slice(), 9),
+    ] {
+        let (_guard, broker) = start_bus();
+        let listen = broker.api_listen();
+        let backend = broker.action.backend_bind.clone();
+        let action_name = format!("act.ws_terminal_{label}");
+        let worker_action = action_name.clone();
+        let reply_body = body.to_vec();
+        let worker = thread::spawn(move || {
+            let context = ZmqContext::new();
+            let socket = context.socket(SocketType::DEALER).expect("create worker");
+            socket
+                .set_identity(format!("ws-terminal-{label}-worker").as_bytes())
+                .expect("identity");
+            socket.connect(&backend).expect("connect backend");
+            socket
+                .send_multipart([b"READY".as_ref(), worker_action.as_bytes()], 0)
+                .expect("send ready");
+            socket.set_rcvtimeo(5_000).expect("receive timeout");
+            while let Ok(frames) = socket.recv_multipart(0) {
+                if frames.len() == 5 && frames[3] == b"GOAL" {
+                    let _ = socket.send_multipart(
+                        [
+                            frames[0].as_slice(),
+                            frames[1].as_slice(),
+                            frames[2].as_slice(),
+                            b"RESULT".as_ref(),
+                            reply_body.as_slice(),
+                        ],
+                        0,
+                    );
+                    break;
+                }
+            }
+        });
+        tokio::time::sleep(Duration::from_millis(100)).await;
+
+        let url = format!("ws://{listen}/ws-rpc");
+        let (mut ws, _) = connect_async(&url).await.expect("ws connect");
+        ws.send(Message::Binary(
+            encode_frame(&Frame::Request {
+                stream_id: 1,
+                header: RequestHeader::SendGoal {
+                    action_name,
+                    goal_id: format!("{label}-goal"),
+                    timeout_ms: 10_000,
+                },
+                body: b"go".to_vec(),
+            })
+            .unwrap()
+            .into(),
+        ))
+        .await
+        .expect("send goal");
+
+        let mut got_status = None;
+        let mut got_result_data = false;
+        for _ in 0..40 {
+            let msg = tokio::time::timeout(Duration::from_secs(2), ws.next())
+                .await
+                .expect("timeout")
+                .expect("ws closed")
+                .expect("ws error");
+            let Message::Binary(bin) = msg else {
+                continue;
+            };
+            match decode_frame(&bin).expect("decode") {
+                Frame::Data { payload, .. } => {
+                    let (kind, _) = decode_action_data(&payload).expect("event");
+                    if kind == ACTION_KIND_RESULT {
+                        got_result_data = true;
+                    }
+                }
+                Frame::Trailer {
+                    status, message, ..
+                } => {
+                    assert_eq!(status, want_status, "{label}: {message}");
+                    got_status = Some(status);
+                    break;
+                }
+                other => panic!("unexpected {other:?}"),
+            }
+        }
+        assert_eq!(got_status, Some(want_status), "{label} trailer");
+        assert!(
+            !got_result_data,
+            "{label} must not deliver a successful RESULT payload"
+        );
+        worker.join().expect("join worker");
+        broker.stop().expect("stop");
+    }
+}
+
+#[tokio::test]
 async fn ws_send_goal_disconnect_still_submits_cancel() {
     let (_guard, broker) = start_bus();
     let listen = broker.api_listen();
@@ -441,7 +558,7 @@ async fn ws_multiplex_two_streams_on_one_connection() {
 }
 
 #[tokio::test]
-async fn ws_gateway_echoes_ping_with_pong() {
+async fn ws_echoes_ping_with_pong() {
     let (_guard, broker) = start_bus();
     let listen = broker.api_listen();
     let url = format!("ws://{listen}/ws-rpc");

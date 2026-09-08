@@ -12,7 +12,7 @@ use std::time::Duration;
 #[cfg(feature = "console-api")]
 use robot_bus::ConsoleBrokerConfig;
 #[cfg(feature = "ws")]
-use robot_bus::WsGatewayConfig;
+use robot_bus::WsConfig;
 use robot_bus::broker::action_bus::ActionBusConfig;
 use robot_bus::broker::message_bus::BusConfig;
 use robot_bus::broker::service_bus::ServiceBusConfig;
@@ -120,7 +120,7 @@ pub fn ephemeral_robot_bus_config() -> RobotBusConfig {
             ..ActionBusConfig::default()
         },
         #[cfg(feature = "ws")]
-        ws: WsGatewayConfig {
+        ws: WsConfig {
             listen: "127.0.0.1:0".parse().expect("grpc listen"),
             cors_origins: Vec::new(),
         },

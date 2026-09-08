@@ -50,7 +50,7 @@ fn shutdown_emits_connection_event() {
     );
 }
 
-/// HTTP discover needs the API gateway (`ws` feature).
+/// HTTP discover needs the API server (`ws` feature).
 #[cfg(feature = "ws")]
 #[test]
 fn wait_for_broker_after_late_start() {

@@ -2,11 +2,19 @@ import {
   WsNode,
   WsTopicPublisher,
   TypedWsTopicPublisher,
+  WsRpcError,
   coalesceSubscribeFilters,
   qosDepthForFilter,
 } from "../src/ws-node.js";
 import { encode, type MessageType } from "../src/typed.js";
-import { __setWebSocketForTests, decodeFrame, encodeFrame, encodeSubscribeData } from "../src/ws-rpc.js";
+import {
+  ACTION_KIND_RESULT,
+  __setWebSocketForTests,
+  decodeFrame,
+  encodeActionData,
+  encodeFrame,
+  encodeSubscribeData,
+} from "../src/ws-rpc.js";
 import assert from "node:assert/strict";
 import { afterEach, describe, it } from "node:test";
 
@@ -54,6 +62,16 @@ describe("qosDepthForFilter", () => {
 });
 
 describe("WsNode capability guards", () => {
+  it("accepts only a numeric KeepLast depth and shares equivalent default depths", () => {
+    const node = WsNode.ws("keep-last");
+    node.createSubscription("/same", () => {});
+    node.createSubscription("/same", () => {}, 64);
+    node.createSubscription("/same", () => {}, -1);
+    assert.throws(() => node.createSubscription("/same", () => {}, 1), /conflicting KeepLast/);
+    for (const depth of [NaN, Infinity, 1.5, { overflow: "latest" }, { depth: 3 }]) {
+      assert.throws(() => node.createSubscription("/invalid", () => {}, depth as number), /KeepLast depth must be an integer/);
+    }
+  });
   it("rejects service / action servers", () => {
     const node = WsNode.ws("test");
     assert.throws(() => node.createService("/s", () => new Uint8Array()), /not available/);
@@ -113,12 +131,12 @@ describe("WsNode connectionState", () => {
     FakeWebSocket.instances = [];
   });
 
-  it("keeps distinct policies on separate streams and dispatches overlapping filters once", async () => {
+  it("keeps numeric KeepLast depths on separate streams and dispatches overlapping filters once", async () => {
     __setWebSocketForTests(FakeWebSocket as unknown as typeof WebSocket);
     const node = WsNode.ws("policies");
     const received: string[] = [];
-    node.createSubscription("/robot_bus/", () => received.push("prefix"), { overflow: "drop_oldest", depth: 3 });
-    node.createSubscription("/robot_bus/pose", () => received.push("pose"), { overflow: "latest", depth: 100 });
+    node.createSubscription("/robot_bus/", () => received.push("prefix"), 3);
+    node.createSubscription("/robot_bus/pose", () => received.push("pose"), 1);
     node.createSubscription("/legacy", () => {}, 8);
     assert.throws(() => node.createSubscription("/robot_bus/pose", () => {}, 8), /conflicting/);
     try {
@@ -129,8 +147,8 @@ describe("WsNode connectionState", () => {
       assert.equal(requests.length, 3);
       assert.deepEqual(requests.map(r => r.header), [
         { opcode: 5, topic: "/robot_bus/", qosDepth: 3, overflow: 1 },
-        { opcode: 5, topic: "/robot_bus/pose", qosDepth: 1, overflow: 2 },
-        { opcode: 1, topic: "/legacy", qosDepth: 8 },
+        { opcode: 5, topic: "/robot_bus/pose", qosDepth: 1, overflow: 1 },
+        { opcode: 5, topic: "/legacy", qosDepth: 8, overflow: 1 },
       ]);
       for (const request of requests.slice(0, 2)) {
         const bytes = encodeFrame({ type: "data", streamId: request.streamId, payload: encodeSubscribeData("/robot_bus/pose", new Uint8Array([1])) });
@@ -153,6 +171,58 @@ describe("WsNode connectionState", () => {
     assert.equal(node.connectionState(), "reconnecting");
     assert.ok(states.includes("connected"));
     assert.ok(states.includes("reconnecting"));
+    node.shutdown();
+  });
+});
+
+describe("WsNode action terminal errors", () => {
+  afterEach(() => {
+    __setWebSocketForTests(undefined);
+    FakeWebSocket.instances = [];
+  });
+
+  it("surfaces cancel trailers as WsRpcError instead of a generic missing result", async () => {
+    __setWebSocketForTests(FakeWebSocket as unknown as typeof WebSocket);
+    const node = WsNode.ws("act");
+    const handle = node.sendGoal("/navigate", new Uint8Array([1]), { goalId: "g1" });
+    await new Promise((r) => setTimeout(r, 30));
+    const socket = FakeWebSocket.instances[0];
+    assert.ok(socket);
+    const request = socket.sent.map(decodeFrame).find((f) => f.type === "request");
+    assert.equal(request?.type, "request");
+    const streamId = request && request.type === "request" ? request.streamId : 1;
+    const pending = handle.result();
+    const bytes = encodeFrame({ type: "trailer", streamId, status: 1, message: "cancelled 'motion'" });
+    socket.onmessage?.({ data: bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer });
+    await assert.rejects(pending, (err: unknown) => {
+      assert.ok(err instanceof WsRpcError);
+      assert.equal(err.code, "cancelled");
+      assert.equal(err.status, 1);
+      return true;
+    });
+    node.shutdown();
+  });
+
+  it("treats CANCELLED result bodies as errors even if the trailer is OK", async () => {
+    __setWebSocketForTests(FakeWebSocket as unknown as typeof WebSocket);
+    const node = WsNode.ws("act-body");
+    const handle = node.sendGoal("/navigate", new Uint8Array([1]), { goalId: "g2" });
+    await new Promise((r) => setTimeout(r, 30));
+    const socket = FakeWebSocket.instances[0];
+    assert.ok(socket);
+    const request = socket.sent.map(decodeFrame).find((f) => f.type === "request");
+    const streamId = request && request.type === "request" ? request.streamId : 1;
+    const pending = handle.result();
+    const body = Uint8Array.from([...new TextEncoder().encode("ACTION_ABORTED"), 0, ...new TextEncoder().encode("stopped")]);
+    const data = encodeFrame({ type: "data", streamId, payload: encodeActionData(ACTION_KIND_RESULT, body) });
+    socket.onmessage?.({ data: data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength) as ArrayBuffer });
+    const trailer = encodeFrame({ type: "trailer", streamId, status: 0, message: "" });
+    socket.onmessage?.({ data: trailer.buffer.slice(trailer.byteOffset, trailer.byteOffset + trailer.byteLength) as ArrayBuffer });
+    await assert.rejects(pending, (err: unknown) => {
+      assert.ok(err instanceof WsRpcError);
+      assert.equal(err.code, "aborted");
+      return true;
+    });
     node.shutdown();
   });
 });

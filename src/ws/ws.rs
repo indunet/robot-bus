@@ -1,4 +1,4 @@
-//! Multiplexed WebSocket RPC gateway (V3: one connection, many streams).
+//! Multiplexed WebSocket RPC server (V3: one connection, many streams).
 
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -9,25 +9,25 @@ use axum::response::IntoResponse;
 use futures_util::{SinkExt, StreamExt};
 use tokio::sync::mpsc;
 
-use super::action::{ActionGatewayService, GoalSpec, SendGoalSession};
-use super::message::MessageGatewayService;
+use super::action::{GoalSpec, SendGoalSession, WsActionHandler};
+use super::message::WsMessageService;
 use super::rpc_status::{Code, RpcStatus};
-use super::service::ServiceGatewayService;
+use super::service::WsServiceHandler;
 use super::ws_frame::{
     ACTION_KIND_RESULT, Frame, Opcode, RequestHeader, decode_frame, encode_action_data,
     encode_frame, encode_subscribe_data,
 };
 
 #[derive(Clone)]
-pub struct WsGatewayState {
-    pub message: MessageGatewayService,
-    pub service: ServiceGatewayService,
-    pub action: ActionGatewayService,
+pub struct WsServerState {
+    pub message: WsMessageService,
+    pub service: WsServiceHandler,
+    pub action: WsActionHandler,
 }
 
 pub async fn ws_upgrade(
     ws: WebSocketUpgrade,
-    State(state): State<Arc<WsGatewayState>>,
+    State(state): State<Arc<WsServerState>>,
 ) -> impl IntoResponse {
     ws.on_upgrade(move |socket| handle_socket(socket, state))
 }
@@ -50,7 +50,7 @@ struct LiveStream {
     cmd_tx: mpsc::Sender<StreamCmd>,
 }
 
-async fn handle_socket(socket: WebSocket, state: Arc<WsGatewayState>) {
+async fn handle_socket(socket: WebSocket, state: Arc<WsServerState>) {
     let (mut sink, mut stream) = socket.split();
     let (out_tx, mut out_rx) = mpsc::channel::<Outbound>(256);
     let mut live: HashMap<u32, LiveStream> = HashMap::new();
@@ -162,7 +162,7 @@ async fn run_rpc(
     stream_id: u32,
     header: RequestHeader,
     body: Vec<u8>,
-    state: Arc<WsGatewayState>,
+    state: Arc<WsServerState>,
     out_tx: mpsc::Sender<Outbound>,
     mut cmd_rx: mpsc::Receiver<StreamCmd>,
 ) {
@@ -191,7 +191,7 @@ async fn run_rpc(
 
 async fn run_subscribe(
     stream_id: u32,
-    state: &WsGatewayState,
+    state: &WsServerState,
     header: RequestHeader,
     out_tx: &mpsc::Sender<Outbound>,
     cmd_rx: &mut mpsc::Receiver<StreamCmd>,
@@ -200,7 +200,7 @@ async fn run_subscribe(
         RequestHeader::Subscribe { topic, qos_depth } => (
             topic,
             qos_depth,
-            crate::SubscriptionOverflowPolicy::DropNewest,
+            crate::SubscriptionOverflowPolicy::DropOldest,
         ),
         RequestHeader::SubscribeWithPolicy {
             topic,
@@ -242,7 +242,7 @@ async fn run_subscribe(
 }
 
 async fn run_publish(
-    state: &WsGatewayState,
+    state: &WsServerState,
     header: RequestHeader,
     body: Vec<u8>,
 ) -> Result<(), RpcStatus> {
@@ -254,7 +254,7 @@ async fn run_publish(
 
 async fn run_call(
     stream_id: u32,
-    state: &WsGatewayState,
+    state: &WsServerState,
     header: RequestHeader,
     body: Vec<u8>,
     out_tx: &mpsc::Sender<Outbound>,
@@ -283,7 +283,7 @@ async fn run_call(
 
 async fn run_send_goal(
     stream_id: u32,
-    state: &WsGatewayState,
+    state: &WsServerState,
     header: RequestHeader,
     body: Vec<u8>,
     out_tx: &mpsc::Sender<Outbound>,

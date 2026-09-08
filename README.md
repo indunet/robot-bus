@@ -24,7 +24,7 @@ SDKs: **Rust**, **Python**, **TypeScript**, **C++**, **Java**, **Android**.
 
 The Node programming model — `Context` / `Node`, topic pub-sub, service, action, and `spin` — is the stable public API.
 
-Need a smaller build? See [build profiles](docs/en/build-profiles.md) for core SDK, WS gateway, monitoring API, embedded console, and the optional tank demo. WS subscription overflow policies and queue metrics are documented in the [Rust QoS guide](docs/en/rust-api.md#high-water-mark-hwm-and-qos).
+Need a smaller build? See [build profiles](docs/en/build-profiles.md) for native ZMQ SDK, WebSocket communication, monitoring API, embedded console, and the optional tank demo. WS subscription overflow policies and queue metrics are documented in the [Rust QoS guide](docs/en/rust-api.md#high-water-mark-hwm-and-qos).
 
 ### *Install*
 
@@ -212,7 +212,7 @@ The broker ships with an embedded monitoring UI (Overview, Topics, Services, Act
 
 *Tank demo* — sidebar **TANK**. Click the panel, then drive with **arrow keys**; or switch to point navigation and **click on the map** to send a goal.
 
-For a hands-on walkthrough, try the [Tank demo](#12-tank-demo) from the sidebar **TANK** entry. Sidebar **DOCS** is shown by default (`--no-docs` to hide). Same port as the API / WebSocket gateway. Disable the UI with `--no-console` if needed. Frontend source: [`console/`](console/); local UI development: [`console/README.md`](console/README.md).
+For a hands-on walkthrough, try the [Tank demo](#12-tank-demo) from the sidebar **TANK** entry. Sidebar **DOCS** is shown by default (`--no-docs` to hide). Same port as the API / WebSocket server. Disable the UI with `--no-console` if needed. Frontend source: [`console/`](console/); local UI development: [`console/README.md`](console/README.md).
 
 ## *3. ROS 2 bridge*
 

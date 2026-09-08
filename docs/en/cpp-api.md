@@ -183,7 +183,7 @@ Raw bytes still work via `create_publisher` / `create_subscription` with manual 
 
 ### WebSocket RPC mode Node (client)
 
-`Node::ws` / `Node::ws_at` connect through the broker WebSocket RPC gateway and do not create ZMQ sockets.
+`Node::ws` / `Node::ws_at` connect through the broker WebSocket RPC server and do not create ZMQ sockets.
 
 | Supported | Not supported |
 |-----------|---------------|

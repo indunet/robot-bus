@@ -151,6 +151,7 @@ pub(super) fn wire_service_route(
     bus_node: &mut Node,
     route: &ServiceRouteSpec,
     ros_entities: &mut Vec<Box<dyn Any + Send + Sync>>,
+    route_health: Arc<RouteHealth>,
 ) -> Result<()> {
     route.mapper.attach(ServiceWireContext {
         ros_node,
@@ -162,6 +163,7 @@ pub(super) fn wire_service_route(
         ros_qos: route.ros_qos,
         bus_qos: route.bus_qos,
         ros_entities,
+        route_health,
     })
 }
 
@@ -170,6 +172,7 @@ pub(super) fn wire_action_route(
     bus_node: &mut Node,
     route: &ActionRouteSpec,
     ros_entities: &mut Vec<Box<dyn Any + Send + Sync>>,
+    route_health: Arc<RouteHealth>,
 ) -> Result<()> {
     route.mapper.attach(ActionWireContext {
         ros_node,
@@ -181,5 +184,6 @@ pub(super) fn wire_action_route(
         ros_qos: route.ros_qos,
         bus_qos: route.bus_qos,
         ros_entities,
+        route_health,
     })
 }

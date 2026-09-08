@@ -126,7 +126,7 @@ Node node = Node.discover(
 ```
 
 ### WebSocket RPC mode Node (client)
-`Node.ws` / `Node.wsAt` connect through the broker WebSocket RPC gateway and do not create ZMQ sockets.
+`Node.ws` / `Node.wsAt` connect through the broker WebSocket RPC server and do not create ZMQ sockets.
 
 | Supported | Not supported |
 |------|--------|

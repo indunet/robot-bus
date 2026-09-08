@@ -191,7 +191,7 @@ impl ConsoleState {
             state.events.emit(
                 "INFO",
                 "ws",
-                format!("WebSocket RPC (/ws-rpc) gateway at {}", state.endpoints.ws),
+                format!("WebSocket RPC (/ws-rpc) server at {}", state.endpoints.ws),
             );
         }
         if !state.tank_enabled {

@@ -10,7 +10,7 @@ use std::time::{Duration, Instant};
 #[cfg(feature = "console-api")]
 use robot_bus::ConsoleBrokerConfig;
 #[cfg(feature = "ws")]
-use robot_bus::WsGatewayConfig;
+use robot_bus::WsConfig;
 use robot_bus::action_bus::{ActionClient, ActionKind};
 use robot_bus::broker::action_bus::{ActionBusConfig, ActionPeer};
 use robot_bus::broker::message_bus::BusConfig;
@@ -80,7 +80,7 @@ fn federated_action_config(
             ..ActionBusConfig::default()
         },
         #[cfg(feature = "ws")]
-        ws: WsGatewayConfig {
+        ws: WsConfig {
             listen: format!("127.0.0.1:{}", other[4])
                 .parse()
                 .expect("ws listen"),

@@ -323,6 +323,7 @@ pub struct ServiceWireContext<'a> {
     pub ros_qos: TopicQos,
     pub bus_qos: TopicQos,
     pub ros_entities: &'a mut Vec<Box<dyn Any + Send + Sync>>,
+    pub route_health: Arc<RouteHealth>,
 }
 
 /// Custom service codec: convert methods only; library calls [`wire_typed_service`].
@@ -382,6 +383,7 @@ pub struct ActionWireContext<'a> {
     pub ros_qos: TopicQos,
     pub bus_qos: TopicQos,
     pub ros_entities: &'a mut Vec<Box<dyn Any + Send + Sync>>,
+    pub route_health: Arc<RouteHealth>,
 }
 
 /// Custom action codec: convert methods only; library calls [`wire_typed_action`].

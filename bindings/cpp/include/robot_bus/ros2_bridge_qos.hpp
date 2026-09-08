@@ -1,6 +1,7 @@
 #pragma once
 
 #include <robot_bus/node.hpp>
+#include <robot_bus/ros2_bridge_health.hpp>
 
 #include <cstdint>
 #include <memory>
@@ -147,56 +148,6 @@ struct DropStats {
   }
 };
 
-struct RouteHealth {
-  std::atomic<uint64_t> rx{0};
-  std::atomic<uint64_t> tx{0};
-  std::atomic<uint64_t> convert_fail{0};
-  std::atomic<uint64_t> decode_fail{0};
-  std::atomic<uint64_t> publish_fail{0};
-  std::atomic<uint64_t> last_rx_ms{0};
-  std::atomic<uint64_t> last_warn_ms{0};
-  std::atomic<bool> idle_latched{false};
-
-  static uint64_t unix_ms() {
-    return static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::milliseconds>(
-                                     std::chrono::system_clock::now().time_since_epoch())
-                                     .count());
-  }
-
-  void record_rx() {
-    rx.fetch_add(1, std::memory_order_relaxed);
-    last_rx_ms.store(unix_ms(), std::memory_order_relaxed);
-  }
-  void record_tx() { tx.fetch_add(1, std::memory_order_relaxed); }
-  void record_convert_fail() { convert_fail.fetch_add(1, std::memory_order_relaxed); }
-  void record_decode_fail() { decode_fail.fetch_add(1, std::memory_order_relaxed); }
-  void record_publish_fail() { publish_fail.fetch_add(1, std::memory_order_relaxed); }
-
-  bool should_log_warn() {
-    const uint64_t now = unix_ms();
-    const uint64_t prev = last_warn_ms.load(std::memory_order_relaxed);
-    if (prev != 0 && now - prev < 1000) {
-      return false;
-    }
-    last_warn_ms.store(now, std::memory_order_relaxed);
-    return true;
-  }
-
-  bool is_idle(bool enabled, bool grace_elapsed) const {
-    return enabled && grace_elapsed && last_rx_ms.load(std::memory_order_relaxed) == 0;
-  }
-
-  bool take_idle_event(bool enabled, bool grace_elapsed) {
-    if (last_rx_ms.load(std::memory_order_relaxed) != 0) {
-      idle_latched.store(false, std::memory_order_relaxed);
-      return false;
-    }
-    if (!is_idle(enabled, grace_elapsed)) {
-      return false;
-    }
-    return !idle_latched.exchange(true, std::memory_order_relaxed);
-  }
-};
 
 class BridgeDecodeError : public Error {
  public:
@@ -383,6 +334,8 @@ struct ServiceWireContext {
   rclcpp::CallbackGroup::SharedPtr callback_group;
   std::vector<std::shared_ptr<void>> &keep_alive;
 
+  std::shared_ptr<RouteHealth> health;
+
   template <typename T>
   void retain(std::shared_ptr<T> p) {
     keep_alive.push_back(std::shared_ptr<void>(std::move(p)));
@@ -401,6 +354,8 @@ struct ActionWireContext {
   TopicQos bus_qos;
   rclcpp::CallbackGroup::SharedPtr callback_group;
   std::vector<std::shared_ptr<void>> &keep_alive;
+
+  std::shared_ptr<RouteHealth> health;
 
   template <typename T>
   void retain(std::shared_ptr<T> p) {

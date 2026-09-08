@@ -91,6 +91,7 @@ class TypedServiceMapper : public ServiceMapper {
   void attach(ServiceWireContext &ctx) override {
     auto *self = static_cast<Derived *>(this);
     const double timeout = ctx.timeout_secs;
+    auto health = ctx.health;
     if (ctx.direction == Direction::Ros2ToBus) {
       auto bus_client =
           std::make_shared<ServiceClient>(
@@ -98,8 +99,9 @@ class TypedServiceMapper : public ServiceMapper {
       auto mtx = std::make_shared<std::mutex>();
       auto srv = ctx.ros_node->template create_service<RosSrv>(
           ctx.ros_service,
-          [self, bus_client, mtx, timeout](const std::shared_ptr<Request> request,
+          [self, bus_client, mtx, timeout, health](const std::shared_ptr<Request> request,
                                            std::shared_ptr<Response> response) {
+            RpcObservation call(health);
             try {
               auto req_bytes = self->ros_req_to_bus(*request);
               std::vector<uint8_t> resp_bytes;
@@ -108,9 +110,12 @@ class TypedServiceMapper : public ServiceMapper {
                 resp_bytes = bus_client->call(req_bytes, timeout);
               }
               *response = self->bus_resp_to_ros(resp_bytes);
+              call.finish();
             } catch (const std::exception &e) {
+              call.finish(rpc_failure_status(e), e.what());
               *response = self->error_response(std::string("bus call failed: ") + e.what());
             } catch (...) {
+              call.finish("failed", "bus call failed");
               *response = self->error_response("bus call failed");
             }
           },
@@ -124,19 +129,28 @@ class TypedServiceMapper : public ServiceMapper {
       ctx.retain(ros_client);
       ctx.retain(std::make_shared<ServiceHandle>(ctx.bus_node.create_service(
           ctx.bus_service.c_str(),
-          [self, ros_client, timeout](BytesView body) -> std::vector<uint8_t> {
-            if (!ros_client->wait_for_service(std::chrono::duration<double>(timeout))) {
-              return self->ros_resp_to_bus(
-                  self->error_response("timed out waiting for ROS service"));
+          [self, ros_client, timeout, health](BytesView body) -> std::vector<uint8_t> {
+            RpcObservation call(health);
+            try {
+              if (!ros_client->wait_for_service(std::chrono::duration<double>(timeout)))
+                throw BridgeRpcError("timeout", "timed out waiting for ROS service");
+              auto req = std::make_shared<Request>(self->bus_req_to_ros(body));
+              auto future = ros_client->async_send_request(req);
+              if (future.wait_for(std::chrono::duration<double>(timeout)) != std::future_status::ready) {
+                ros_client->remove_pending_request(future);
+                throw BridgeRpcError("timeout", "timed out waiting for ROS response");
+              }
+              auto out = self->ros_resp_to_bus(*future.get());
+              call.finish();
+              return out;
+            } catch (const std::exception &e) {
+              auto status = rpc_failure_status(e);
+              call.finish(status, e.what());
+              return bridge_rpc_error_body(status, e.what());
+            } catch (...) {
+              call.finish("failed", "ROS service failed");
+              return bridge_rpc_error_body("failed", "ROS service failed");
             }
-            auto req = std::make_shared<Request>(self->bus_req_to_ros(body));
-            auto future = ros_client->async_send_request(req);
-            const auto status = future.wait_for(std::chrono::duration<double>(timeout));
-            if (status != std::future_status::ready) {
-              return self->ros_resp_to_bus(
-                  self->error_response("timed out waiting for ROS response"));
-            }
-            return self->ros_resp_to_bus(*future.get());
           },
           nullptr, ctx.bus_qos.depth())));
     }
@@ -159,6 +173,7 @@ class TypedActionMapper : public ActionMapper {
   void attach(ActionWireContext &ctx) override {
     auto *self = static_cast<Derived *>(this);
     const double timeout = ctx.timeout_secs;
+    auto health = ctx.health;
     if (ctx.direction == Direction::Ros2ToBus) {
       auto bus_client = std::make_shared<ActionClient>(
           ctx.bus_node.create_action_client(ctx.bus_action.c_str(), ctx.bus_qos.depth()));
@@ -182,9 +197,10 @@ class TypedActionMapper : public ActionMapper {
         }
         return rclcpp_action::CancelResponse::ACCEPT;
       };
-      auto handle_accepted = [self, bus_client, mtx, timeout, live, bus_goals](
+      auto handle_accepted = [self, bus_client, mtx, timeout, live, bus_goals, health](
                                  const std::shared_ptr<GoalHandle> goal_handle) {
-        std::thread([self, bus_client, mtx, timeout, live, bus_goals, goal_handle]() {
+        std::thread([self, bus_client, mtx, timeout, live, bus_goals, goal_handle, health]() {
+          RpcObservation call(health);
           const auto goal = goal_handle->get_goal();
           try {
             auto goal_bytes = self->ros_goal_to_bus(*goal);
@@ -209,22 +225,37 @@ class TypedActionMapper : public ActionMapper {
               std::lock_guard<std::mutex> lock(*live);
               (*bus_goals)[goal_handle.get()] = handle;
             }
+            if (goal_handle->is_canceling()) handle->cancel();
             auto result_msg = handle->wait_result(timeout);
             if (result_msg.kind != "RESULT") {
               if (goal_handle->is_canceling()) {
+                call.finish("cancelled");
                 goal_handle->canceled(std::make_shared<Result>());
               } else {
+                call.finish("failed", "missing bus action result");
                 goal_handle->abort(std::make_shared<Result>());
               }
             } else {
               auto result = std::make_shared<Result>(self->bus_result_to_ros(result_msg.body));
               if (goal_handle->is_canceling()) {
+                call.finish("cancelled");
                 goal_handle->canceled(result);
               } else {
+                call.finish();
                 goal_handle->succeed(result);
               }
             }
+          } catch (const std::exception &e) {
+            auto status = rpc_failure_status(e);
+            call.finish(status, e.what());
+            // rclcpp permits canceled() only after a ROS cancellation request.
+            if (goal_handle->is_canceling()) {
+              goal_handle->canceled(std::make_shared<Result>());
+            } else {
+              goal_handle->abort(std::make_shared<Result>());
+            }
           } catch (...) {
+            call.finish("failed", "bus action failed");
             if (goal_handle->is_canceling()) {
               goal_handle->canceled(std::make_shared<Result>());
             } else {
@@ -250,62 +281,64 @@ class TypedActionMapper : public ActionMapper {
       ctx.retain(mtx);
       ctx.retain(std::make_shared<ActionServerHandle>(ctx.bus_node.create_action_server_live(
           ctx.bus_action.c_str(),
-          [self, ros_client, mtx, timeout](BytesView body, const ActionGoalContext &actx)
+          [self, ros_client, mtx, timeout, health](BytesView body, const ActionGoalContext &actx)
               -> std::vector<uint8_t> {
-            Goal goal;
+            RpcObservation call(health);
+            typename rclcpp_action::ClientGoalHandle<RosAction>::SharedPtr goal_handle;
             try {
-              goal = self->bus_goal_to_ros(body);
-            } catch (...) {
-              return self->ros_result_to_bus(Result{});
-            }
-            if (!ros_client->wait_for_action_server(std::chrono::duration<double>(timeout))) {
-              return self->ros_result_to_bus(Result{});
-            }
-            typename rclcpp_action::Client<RosAction>::SendGoalOptions opts;
-            opts.feedback_callback =
-                [self, actx](typename rclcpp_action::ClientGoalHandle<RosAction>::SharedPtr,
-                             const std::shared_ptr<const Feedback> feedback) {
-                  try {
-                    actx.publish_feedback(self->ros_feedback_to_bus(*feedback));
-                  } catch (...) {
-                  }
-                };
-            std::shared_future<typename rclcpp_action::ClientGoalHandle<RosAction>::SharedPtr>
-                goal_future;
-            {
-              std::lock_guard<std::mutex> lock(*mtx);
-              goal_future = ros_client->async_send_goal(goal, opts);
-            }
-            if (goal_future.wait_for(std::chrono::duration<double>(timeout)) !=
-                std::future_status::ready) {
-              return self->ros_result_to_bus(Result{});
-            }
-            auto goal_handle = goal_future.get();
-            if (!goal_handle) {
-              return self->ros_result_to_bus(Result{});
-            }
-            auto result_future = ros_client->async_get_result(goal_handle);
-            const auto deadline =
-                std::chrono::steady_clock::now() + std::chrono::duration<double>(timeout);
-            bool cancel_sent = false;
-            while (result_future.wait_for(std::chrono::milliseconds(20)) !=
-                   std::future_status::ready) {
-              if (actx.cancel_requested() && !cancel_sent) {
-                ros_client->async_cancel_goal(goal_handle);
-                cancel_sent = true;
+              auto goal = self->bus_goal_to_ros(body);
+              if (!ros_client->wait_for_action_server(std::chrono::duration<double>(timeout)))
+                throw BridgeRpcError("timeout", "timed out waiting for ROS action server");
+              typename rclcpp_action::Client<RosAction>::SendGoalOptions opts;
+              opts.feedback_callback =
+                  [self, actx, health](typename rclcpp_action::ClientGoalHandle<RosAction>::SharedPtr,
+                               const std::shared_ptr<const Feedback> feedback) {
+                    try { actx.publish_feedback(self->ros_feedback_to_bus(*feedback)); }
+                    catch (...) { if (health) health->record_convert_fail(); }
+                  };
+              std::shared_future<typename rclcpp_action::ClientGoalHandle<RosAction>::SharedPtr> goal_future;
+              {
+                std::lock_guard<std::mutex> lock(*mtx);
+                goal_future = ros_client->async_send_goal(goal, opts);
               }
-              if (std::chrono::steady_clock::now() >= deadline) {
-                return self->ros_result_to_bus(Result{});
+              if (goal_future.wait_for(std::chrono::duration<double>(timeout)) != std::future_status::ready)
+                throw BridgeRpcError("timeout", "timed out waiting for ROS goal acceptance");
+              goal_handle = goal_future.get();
+              if (!goal_handle) throw BridgeRpcError("rejected", "ROS action rejected goal");
+              auto result_future = ros_client->async_get_result(goal_handle);
+              const auto deadline = std::chrono::steady_clock::now() + std::chrono::duration<double>(timeout);
+              bool cancel_sent = false;
+              while (result_future.wait_for(std::chrono::milliseconds(20)) != std::future_status::ready) {
+                if (actx.cancel_requested() && !cancel_sent) {
+                  ros_client->async_cancel_goal(goal_handle);
+                  cancel_sent = true;
+                }
+                if (std::chrono::steady_clock::now() >= deadline)
+                  throw BridgeRpcError("timeout", "timed out waiting for ROS action result");
               }
-            }
-            try {
               auto wrapped = result_future.get();
-              if (wrapped.result) {
-                return self->ros_result_to_bus(*wrapped.result);
+              switch (wrapped.code) {
+                case rclcpp_action::ResultCode::SUCCEEDED: break;
+                case rclcpp_action::ResultCode::CANCELED:
+                  throw BridgeRpcError("cancelled", "ROS action cancelled");
+                case rclcpp_action::ResultCode::ABORTED:
+                  throw BridgeRpcError("aborted", "ROS action aborted");
+                default: throw BridgeRpcError("failed", "unknown ROS action result status");
               }
-              return self->ros_result_to_bus(Result{});
+              if (!wrapped.result) throw BridgeRpcError("failed", "missing ROS action result");
+              auto out = self->ros_result_to_bus(*wrapped.result);
+              call.finish();
+              return out;
+            } catch (const std::exception &e) {
+              auto status = rpc_failure_status(e);
+              if (status == "timeout" && goal_handle) {
+                try { ros_client->async_cancel_goal(goal_handle); } catch (...) {}
+              }
+              call.finish(status, e.what());
+              return bridge_rpc_error_body(status, e.what());
             } catch (...) {
-              return self->ros_result_to_bus(Result{});
+              call.finish("failed", "ROS action failed");
+              return bridge_rpc_error_body("failed", "ROS action failed");
             }
           },
           nullptr, ctx.bus_qos.depth())));

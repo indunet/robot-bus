@@ -62,7 +62,7 @@ Each topic, service, and action endpoint is a **name + `TopicQos`**:
 .action().from_bus(bus_name, TopicQos).to_ros(ros_name, TopicQos).mapper(...).timeout()?.add()
 ```
 
-Prefer named `TopicQos` presets (`default()`, `sensor_data()`, `latched()`, `bus()`; C++ uses `ros_default()` because `default` is a keyword). Custom depth still uses `keep_last(n).reliable()` / `.best_effort()`. ROS endpoints accept either reliability; **bus** endpoints (topic, service, action) must be `.best_effort()` (no DDS reliability) — so `default()` / `latched()` are rejected on bus. Direction is the `from_ros → to_bus` / `from_bus → to_ros` chain. **`both` is not allowed**. Typical ROS service QoS (matching `services_default`) is `TopicQos.default()`. Typical bus RPC QoS is `TopicQos.bus()` (depth → DEALER HWM). Action applies the ROS profile to goal / result / cancel services and the feedback topic; the status topic stays the ROS action-status default.
+Prefer named `TopicQos` presets (`default()`, `sensor_data()`, `latched()`, `bus()`; C++ uses `ros_default()` because `default` is a keyword). Custom depth still uses `keep_last(n).reliable()` / `.best_effort()`. ROS endpoints accept either reliability; **bus** endpoints (topic, service, action) must be `.best_effort()` (no DDS reliability) — so `default()` / `latched()` are rejected on bus. Direction is the `from_ros → to_bus` / `from_bus → to_ros` chain. For services and actions this is the **request / goal direction**: `from_ros → to_bus` exposes a ROS proxy server backed by a bus server; `from_bus → to_ros` exposes a bus proxy server backed by a ROS server. Responses, feedback, and results travel back to the caller. **`both` is not allowed**. Typical ROS service QoS (matching `services_default`) is `TopicQos.default()`. Typical bus RPC QoS is `TopicQos.bus()` (depth → DEALER HWM). Action applies the ROS profile to goal / result / cancel services and the feedback topic; the status topic stays the ROS action-status default.
 
 Mount several topics on one bridge by `.add()` then starting the next route. A second topic is another `.from_ros` / `.from_bus`, **not** `.service()` / `.action()` (those switch kind). Directions may mix.
 
@@ -557,7 +557,7 @@ Same process holds both:
 
 The main loop must drive both sides (`spin` / `spin_once`); implementation details differ per language, semantics are the same: drain ROS↔bus queues and drive the bus.
 
-Topic convert / decode / publish failures are dropped (the bridge stays up). Each bridge keeps atomic counters; `drop_stats()` returns the **sum** across routes (`convert_fail` / `decode_fail` / `publish_fail`). Failure logs are rate-limited per route (first plus at most one per second). `build()` prints the route table. Per-topic route counters are published at 1 Hz on `/robot_bus/bridges` (console **BRIDGE** tab). If a topic route has never received a sample 15s after the first `spin`, the bridge warns once and emits a `/robot_bus/events` line that the direction or ROS QoS may be wrong.
+Topic convert / decode / publish failures are dropped (the bridge stays up). Each bridge keeps atomic counters; `drop_stats()` returns the **sum** across routes (`convert_fail` / `decode_fail` / `publish_fail`). Failure logs are rate-limited per route (first plus at most one per second). `build()` prints the route table. Per-topic route counters are published at 1 Hz on `/robot_bus/bridges` (console **BRIDGE** tab). After 15s without topic traffic the bridge warns once per quiet episode on `/robot_bus/events`; receiving traffic rearms the warning. Transient-local topics are exempt after their first sample. See the diagnostics section for counters and interpretation.
 
 ```python
 bridge.drop_stats()  # {"convert_fail": 0, "decode_fail": 0, "publish_fail": 0}
@@ -587,3 +587,41 @@ auto snap = bridge.drop_stats();  // snap.convert_fail / decode_fail / publish_f
 - C++ packages and local build: [cpp-api.md](cpp-api.md)
 - Python SDK: [python-api.md](python-api.md)
 - API comparison: [api-compare.md](api-compare.md)
+
+
+## Terminal outcomes and diagnostics
+
+For bus clients calling ROS actions, only SUCCEEDED returns the mapped result.
+Rejected goals, ABORTED, CANCELED, timeouts and bridge exceptions become distinct
+bus errors: Rust `ActionRejected`, `ActionAborted`, `Cancelled`, `Timeout` and
+`Protocol`; Python/C++ receive exceptions with the corresponding messages.
+WebSocket statuses are 9, 10, 1, 4 and 13 respectively. Result timeout requests ROS
+cancellation on a best-effort basis; this does not confirm that execution stopped.
+For ROS clients calling bus actions, success/cancel/failure map to
+SUCCEEDED/CANCELED/ABORTED. In C++, `rclcpp` requires the goal to be cancelling
+before reporting CANCELED. An unsolicited bus cancellation without a ROS cancel
+request therefore ends as ABORTED, while diagnostics retain the cancellation.
+A downstream rejection after the bridge has accepted
+the ROS goal ends as ABORTED, with the rejection retained in bridge diagnostics.
+Error outcomes do not carry a partial result payload.
+
+The bridge console includes RPC calls, successful completions, active calls,
+failures (including timeout/rejection subtotals), cancellations, last terminal
+status and last error. These measure bridge/transport outcomes, not application
+fields such as `success=false`. Last error is retained after later success.
+Builtin and Typed mappers record them automatically; custom `attach` implementations
+can use `ctx.route_health` (Rust) or `ctx.health` (Python/C++) to record start/finish.
+Custom ROS service responses still need `error_response` to express a failure.
+
+Topic warnings now detect both missing first traffic after 15 seconds and a
+15-second gap after receiving data. One warning is emitted per quiet episode;
+new traffic rearms it. Disabled lazy routes are exempt, and transient-local
+static topics stop being watched after their first sample. Quiet event/low-rate
+topics may be healthy; inspect the source before treating a warning as a fault.
+
+Upgrade the bridge, client SDK and WebSocket server together for the new
+`ACTION_REJECTED`, `ACTION_ABORTED`, `RPC_TIMEOUT` and `RPC_FAILED` error markers.
+Successful result payloads are unchanged; cancellation uses existing `CANCELLED`.
+Older SDKs cannot classify the new errors.
+
+Humble/Jazzy live ROS verification of service calls, action feedback/result/timeout/cancel is still pending. Current coverage is simulated unit tests plus bus-side regression without a sourced ROS distro.

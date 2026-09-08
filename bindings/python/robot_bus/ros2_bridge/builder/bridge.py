@@ -6,7 +6,7 @@ import logging
 import threading
 import time
 import uuid
-from typing import Any, Optional
+from typing import Any, Callable, Optional
 
 import robot_bus
 
@@ -34,9 +34,72 @@ from .config import (
 )
 from .drop_stats import DropStats, RouteHealth, forward_bus_to_ros, forward_ros_to_bus, unix_ms
 
+
+def _wait_ros_future(
+    future: Any, timeout: float, on_wait: Optional[Callable[[], None]] = None
+) -> Any:
+    """Wait while the background ROS executor progresses an rclpy Future."""
+    deadline = time.monotonic() + timeout
+    completed = threading.Event()
+    # rclpy result() does not wait and has no timeout argument.
+    future.add_done_callback(lambda _future: completed.set())
+    while not future.done():
+        if future.cancelled():
+            raise RuntimeError("ROS future cancelled")
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            raise TimeoutError("timed out waiting for ROS future")
+        if on_wait is not None:
+            on_wait()
+        completed.wait(min(0.05, remaining) if on_wait is not None else remaining)
+    return future.result()
+
+
+class _Deadline:
+    """One monotonic budget, including discovery, locking and response waits."""
+    def __init__(self, timeout: float):
+        self.end = time.monotonic() + timeout
+
+    def remaining(self) -> float:
+        remaining = self.end - time.monotonic()
+        if remaining <= 0:
+            raise TimeoutError("ROS bridge RPC deadline exceeded")
+        return remaining
+
+
+class _RpcFailure(Exception):
+    def __init__(self, status: str, message: str):
+        super().__init__(message)
+        self.status = status
+
+
+def _failure_status(err: Exception) -> str:
+    if isinstance(err, _RpcFailure):
+        return err.status
+    message = str(err).lower()
+    if isinstance(err, TimeoutError) or "timed out" in message or "timeout" in message:
+        return "timeout"
+    if "cancelled" in message or "canceled" in message:
+        return "cancelled"
+    if "action rejected" in message:
+        return "rejected"
+    if "action aborted" in message:
+        return "aborted"
+    return "failed"
+
+
+def _rpc_error_body(status: str, message: str) -> bytes:
+    prefix = {"timeout": "RPC_TIMEOUT", "cancelled": "CANCELLED",
+              "rejected": "ACTION_REJECTED", "aborted": "ACTION_ABORTED"}.get(status, "RPC_FAILED")
+    return prefix.encode() + b"\0" + message.encode("utf-8", errors="replace")
+
+
 class Ros2Bridge:
     def __init__(self) -> None:
         self._bus: Any = None
+        self._rpc_bus: Any = None
+        self._bus_executor: Any = None
+        self._executor_error: Optional[Exception] = None
         self._ros_node: Any = None
         self._executor: Any = None
         self._spin_thread: Optional[threading.Thread] = None
@@ -77,6 +140,9 @@ class Ros2Bridge:
 
         self = cls()
         self._bus = builder._bus_factory(f"{builder._name}_bus")
+        self._rpc_bus = builder._bus_factory(f"{builder._name}_rpc")
+        self._bus_executor = robot_bus.MultiThreadedExecutor(num_threads=4)
+        self._bus_executor.add_node(self._rpc_bus)
         self._ros_node = rclpy.create_node(builder._name)
         self._callback_group = ReentrantCallbackGroup()
         self._executor = MultiThreadedExecutor()
@@ -108,21 +174,36 @@ class Ros2Bridge:
     def _ros_spin(self) -> None:
         try:
             self._executor.spin()
-        except Exception:  # noqa: BLE001
-            pass
+        except Exception as err:
+            if not self._halt.is_set():
+                self._executor_error = err
+                logging.getLogger("robot_bus.ros2_bridge").exception("ROS executor failed")
+        else:
+            if not self._halt.is_set():
+                self._executor_error = RuntimeError("ROS executor stopped unexpectedly")
+
+    def _check_executor(self) -> None:
+        if self._executor_error is not None:
+            raise RuntimeError(f"ROS executor failed: {self._executor_error}") from self._executor_error
 
     def spin(self) -> None:
         while True:
             self.spin_once(None)
 
     def spin_once(self, timeout: Optional[float] = 0.01) -> None:
+        self._check_executor()
         if self._first_spin_at is None:
             self._first_spin_at = time.monotonic()
+        # Bound idle polling so executor failures and RPC replies remain observable.
+        poll = min(timeout, 0.01) if timeout is not None and timeout >= 0 else 0.01
+        if self._rpc_bus is not None:
+            self._rpc_bus.spin_once(0.0)
         try:
-            self._bus.spin_once(timeout)
+            self._bus.spin_once(poll)
         except Exception as err:  # noqa: BLE001
             if "nothing registered" not in str(err):
                 raise
+        self._check_executor()
         self._apply_lazy()
         self._publish_observe()
 
@@ -140,9 +221,10 @@ class Ros2Bridge:
         for row in self._console_routes:
             ty = row["type_name"] or "-"
             lazy = "  lazy" if row["lazy"] else ""
+            source, target = (row["ros_name"], row["bus_name"]) if row["direction"] == "ros→bus" else (row["bus_name"], row["ros_name"])
             lines.append(
-                f"  {row['kind']:<7} {row['direction']:<8} {row['ros_name']} → "
-                f"{row['bus_name']}  {ty}  ros={row['ros_qos']}  bus={row['bus_qos']}{lazy}"
+                f"  {row['kind']:<7} {row['direction']:<8} {source} → "
+                f"{target}  {ty}  ros={row['ros_qos']}  bus={row['bus_qos']}{lazy}"
             )
         log.info("\n".join(lines))
 
@@ -195,6 +277,8 @@ class Ros2Bridge:
             proto.publish_fail = health.publish_fail
             proto.last_rx_ms = health.last_rx_ms
             proto.idle = idle
+            for key, value in health.rpc_snapshot().items():
+                setattr(proto, key, value)
         try:
             self._bridges_pub.publish(snap.SerializeToString())
         except Exception:  # noqa: BLE001
@@ -209,7 +293,7 @@ class Ros2Bridge:
                 continue
             msg = (
                 f"no traffic on {row['direction']} {row['ros_name']} for "
-                f"{int(IDLE_GRACE_S)}s; possible wrong direction or ROS QoS mismatch"
+                f"{int(IDLE_GRACE_S)}s; check source traffic, connection, direction and ROS QoS"
             )
             log.warning("ros2_bridge/%s: %s", self._bridge_name, msg)
             if self._events_pub is None:
@@ -228,6 +312,10 @@ class Ros2Bridge:
 
     def close(self) -> None:
         self._halt.set()
+        if self._bus_executor is not None:
+            self._bus_executor.shutdown()
+            self._rpc_bus = None
+            self._bus_executor = None
         if self._executor is not None:
             try:
                 self._executor.shutdown()
@@ -305,6 +393,7 @@ class Ros2Bridge:
         direction = route["direction"]
         lazy = route["lazy"]
         health = RouteHealth()
+        health.watch_stale = not route["ros_qos"].is_transient_local
         self._console_routes.append(
             {
                 "kind": "topic",
@@ -381,6 +470,7 @@ class Ros2Bridge:
 
     def _wire_service(self, route: dict[str, Any]) -> None:
         mapper = route["mapper"]
+        health = RouteHealth()
         self._console_routes.append(
             {
                 "kind": "service",
@@ -392,7 +482,7 @@ class Ros2Bridge:
                 "bus_qos": route["bus_qos"].console_label(),
                 "lazy": False,
                 "watch_idle": False,
-                "health": RouteHealth(),
+                "health": health,
             }
         )
         if callable(getattr(mapper, "attach", None)) and not callable(
@@ -409,6 +499,7 @@ class Ros2Bridge:
                 self._keep_alive,
                 _ros_service_qos(route["ros_qos"]),
                 bus_qos_depth=route["bus_qos"].depth,
+                health=health,
             )
             mapper.attach(ctx)
             return
@@ -417,19 +508,27 @@ class Ros2Bridge:
         timeout = route["timeout"]
         ros_qos = _ros_service_qos(route["ros_qos"])
         if route["direction"] == Direction.Ros2ToBus:
-            bus_client = self._bus.create_client(
+            bus_client = (self._rpc_bus or self._bus).create_client(
                 route["bus_service"], qos_depth=route["bus_qos"].depth
             )
             lock = threading.Lock()
 
             def on_ros(request, response, m=mapper, client=bus_client, mtx=lock) -> Any:
+                health.rpc_start()
+                deadline = _Deadline(timeout)
                 try:
                     req_bytes = m.ros_req_to_bus(request)
-                    with mtx:
-                        resp_bytes = client.call(req_bytes, timeout)
+                    if not mtx.acquire(timeout=deadline.remaining()):
+                        raise TimeoutError("timed out waiting for bridge service lock")
+                    try:
+                        resp_bytes = client.call(req_bytes, deadline.remaining())
+                    finally:
+                        mtx.release()
                     out = m.bus_resp_to_ros(resp_bytes)
                     _copy_msg(out, response)
+                    health.rpc_finish()
                 except Exception as err:  # noqa: BLE001
+                    health.rpc_finish(_failure_status(err), str(err))
                     err_fn = getattr(m, "error_response", None)
                     if callable(err_fn):
                         _copy_msg(err_fn(f"bus call failed: {err}"), response)
@@ -453,24 +552,27 @@ class Ros2Bridge:
         )
 
         def on_bus(payload: bytes, m=mapper, client=ros_client) -> bytes:
-            if not client.wait_for_service(timeout_sec=timeout):
-                err_fn = getattr(m, "error_response", None)
-                if callable(err_fn):
-                    return m.ros_resp_to_bus(err_fn("timed out waiting for ROS service"))
-                return b""
-            req = m.bus_req_to_ros(payload)
-            future = client.call_async(req)
+            health.rpc_start()
+            deadline = _Deadline(timeout)
+            future = None
             try:
-                resp = future.result(timeout=timeout)
-            except Exception:
-                err_fn = getattr(m, "error_response", None)
-                if callable(err_fn):
-                    return m.ros_resp_to_bus(err_fn("timed out waiting for ROS response"))
-                return b""
-            return m.ros_resp_to_bus(resp)
+                if not client.wait_for_service(timeout_sec=deadline.remaining()):
+                    raise TimeoutError("timed out waiting for ROS service")
+                req = m.bus_req_to_ros(payload)
+                future = client.call_async(req)
+                resp = _wait_ros_future(future, deadline.remaining())
+                out = m.ros_resp_to_bus(resp)
+                health.rpc_finish()
+                return out
+            except Exception as err:
+                if future is not None and not future.done():
+                    client.remove_pending_request(future)
+                status = _failure_status(err)
+                health.rpc_finish(status, str(err))
+                return _rpc_error_body(status, str(err))
 
         self._keep_alive.append(
-            self._bus.create_service(
+            (self._rpc_bus or self._bus).create_service(
                 route["bus_service"], on_bus, qos_depth=route["bus_qos"].depth
             )
         )
@@ -478,6 +580,7 @@ class Ros2Bridge:
 
     def _wire_action(self, route: dict[str, Any]) -> None:
         mapper = route["mapper"]
+        health = RouteHealth()
         self._console_routes.append(
             {
                 "kind": "action",
@@ -489,7 +592,7 @@ class Ros2Bridge:
                 "bus_qos": route["bus_qos"].console_label(),
                 "lazy": False,
                 "watch_idle": False,
-                "health": RouteHealth(),
+                "health": health,
             }
         )
         if callable(getattr(mapper, "attach", None)) and not callable(
@@ -506,6 +609,7 @@ class Ros2Bridge:
                 self._keep_alive,
                 route["ros_qos"],
                 bus_qos_depth=route["bus_qos"].depth,
+                health=health,
             )
             mapper.attach(ctx)
             return
@@ -517,7 +621,7 @@ class Ros2Bridge:
         srv_qos = _ros_service_qos(route["ros_qos"])
         fb_qos = _ros_qos(route["ros_qos"])
         if route["direction"] == Direction.Ros2ToBus:
-            bus_client = self._bus.create_action_client(
+            bus_client = (self._rpc_bus or self._bus).create_action_client(
                 route["bus_action"], qos_depth=route["bus_qos"].depth
             )
             lock = threading.Lock()
@@ -543,6 +647,8 @@ class Ros2Bridge:
                 goals_mtx=live_lock,
             ):
                 goal = goal_handle.request
+                health.rpc_start()
+                deadline = _Deadline(timeout)
                 handle = None
                 try:
                     goal_bytes = m.ros_goal_to_bus(goal)
@@ -554,21 +660,30 @@ class Ros2Bridge:
                         except Exception:
                             pass
 
-                    with mtx:
+                    if not mtx.acquire(timeout=deadline.remaining()):
+                        raise TimeoutError("timed out waiting for bridge action lock")
+                    try:
                         handle = client.send_goal(
-                            goal_bytes, timeout=timeout, feedback_callback=on_fb
+                            goal_bytes, timeout=deadline.remaining(), feedback_callback=on_fb
                         )
+                    finally:
+                        mtx.release()
                     with goals_mtx:
                         goals[id(goal_handle)] = handle
-                    result_bytes = handle.result(timeout=timeout)
+                    if goal_handle.is_cancel_requested:
+                        handle.cancel()
+                    result_bytes = handle.result(timeout=deadline.remaining())
                     result = m.bus_result_to_ros(result_bytes)
                     if goal_handle.is_cancel_requested:
                         goal_handle.canceled()
                     else:
                         goal_handle.succeed()
+                    health.rpc_finish("cancelled" if goal_handle.is_cancel_requested else "succeeded")
                     return result
-                except Exception:
-                    if goal_handle.is_cancel_requested:
+                except Exception as err:
+                    status = _failure_status(err)
+                    health.rpc_finish(status, str(err))
+                    if goal_handle.is_cancel_requested or status == "cancelled":
                         goal_handle.canceled()
                     else:
                         goal_handle.abort()
@@ -605,49 +720,56 @@ class Ros2Bridge:
         )
 
         def on_bus(payload: bytes, ctx, m=mapper, client=ros_client) -> bytes:
-            goal = m.bus_goal_to_ros(payload)
-            if not client.wait_for_server(timeout_sec=timeout):
-                return m.ros_result_to_bus(act_type.Result())
-
-            def on_fb(fb_msg, mm=m) -> None:
-                try:
-                    ctx.publish_feedback(mm.ros_feedback_to_bus(fb_msg.feedback))
-                except Exception:
-                    pass
-
-            send_future = client.send_goal_async(goal, feedback_callback=on_fb)
+            health.rpc_start()
+            goal_handle = None
+            deadline = _Deadline(timeout)
             try:
-                goal_handle = send_future.result(timeout=timeout)
-            except Exception:
-                return m.ros_result_to_bus(act_type.Result())
-            if goal_handle is None:
-                return m.ros_result_to_bus(act_type.Result())
-            result_future = goal_handle.get_result_async()
-            deadline = time.monotonic() + timeout
-            cancel_sent = False
-            while not result_future.done():
-                if ctx.cancel_requested() and not cancel_sent:
+                goal = m.bus_goal_to_ros(payload)
+                if not client.wait_for_server(timeout_sec=deadline.remaining()):
+                    raise TimeoutError("timed out waiting for ROS action server")
+
+                def on_fb(fb_msg, mm=m) -> None:
+                    try:
+                        ctx.publish_feedback(mm.ros_feedback_to_bus(fb_msg.feedback))
+                    except Exception as err:
+                        health.record_convert_fail()
+                        if health.should_log_warn():
+                            logging.getLogger("robot_bus.ros2_bridge").warning("action feedback: %s", err)
+
+                send_future = client.send_goal_async(goal, feedback_callback=on_fb)
+                goal_handle = _wait_ros_future(send_future, deadline.remaining())
+                if goal_handle is None or not goal_handle.accepted:
+                    raise _RpcFailure("rejected", "ROS action rejected goal")
+                result_future = goal_handle.get_result_async()
+                cancel_sent = False
+
+                def forward_cancel() -> None:
+                    nonlocal cancel_sent
+                    if ctx.cancel_requested() and not cancel_sent:
+                        goal_handle.cancel_goal_async()
+                        cancel_sent = True
+
+                wrapped = _wait_ros_future(result_future, deadline.remaining(), forward_cancel)
+                # action_msgs/GoalStatus: SUCCEEDED=4, CANCELED=5, ABORTED=6.
+                status = getattr(wrapped, "status", None)
+                if status != 4:
+                    outcome = {5: "cancelled", 6: "aborted"}.get(status, "failed")
+                    raise _RpcFailure(outcome, f"ROS action ended with status {status}")
+                out = m.ros_result_to_bus(wrapped.result)
+                health.rpc_finish()
+                return out
+            except Exception as err:
+                status = _failure_status(err)
+                if status == "timeout" and goal_handle is not None:
                     try:
                         goal_handle.cancel_goal_async()
                     except Exception:
                         pass
-                    cancel_sent = True
-                remaining = deadline - time.monotonic()
-                if remaining <= 0:
-                    break
-                try:
-                    result_future.result(timeout=min(0.05, remaining))
-                except Exception:
-                    pass
-            try:
-                wrapped = result_future.result(timeout=max(0.0, deadline - time.monotonic()))
-            except Exception:
-                return m.ros_result_to_bus(act_type.Result())
-            result = wrapped.result if wrapped is not None else act_type.Result()
-            return m.ros_result_to_bus(result)
+                health.rpc_finish(status, str(err))
+                return _rpc_error_body(status, str(err))
 
         self._keep_alive.append(
-            self._bus.create_action_server(
+            (self._rpc_bus or self._bus).create_action_server(
                 route["bus_action"],
                 on_bus,
                 qos_depth=route["bus_qos"].depth,

@@ -1,8 +1,8 @@
 @import 'tailwindcss';
 @import 'tw-animate-css';
 @import 'shadcn/tailwind.css';
-@import 'github-markdown-css/github-markdown-light.css';
-@import 'highlight.js/styles/github.css';
+@import 'github-markdown-css/github-markdown-dark.css';
+@import 'highlight.js/styles/github-dark.css';
 
 @custom-variant dark (&:is(.dark *));
 
@@ -243,37 +243,24 @@
   background: #141618;
 }
 
-/* Docs page: GitHub markdown (default light) inside the console chrome */
-.docs-md-scroll {
-  scrollbar-width: thin;
-  scrollbar-color: #d0d7de #ffffff;
-}
-.docs-md-scroll::-webkit-scrollbar {
-  width: 10px;
-  height: 10px;
-}
-.docs-md-scroll::-webkit-scrollbar-track {
-  background: #ffffff;
-}
-.docs-md-scroll::-webkit-scrollbar-thumb {
-  background: #d0d7de;
-  border-radius: 2px;
-  border: 2px solid #ffffff;
-}
-.docs-md-scroll::-webkit-scrollbar-thumb:hover {
-  background: #afb8c1;
-}
-.docs-md-scroll::-webkit-scrollbar-corner {
-  background: #ffffff;
-}
-
+/* Docs page: GitHub markdown dark, blended into console chrome */
 .docs-md.markdown-body {
   box-sizing: border-box;
   min-width: 0;
   max-width: 1012px;
   margin: 0 auto;
   padding: 32px 40px 48px;
-  color-scheme: light;
+  color-scheme: dark;
+  background-color: transparent;
+  color: #e6edf3;
+}
+
+.docs-md.markdown-body a {
+  color: #00d4ff;
+}
+
+.docs-md.markdown-body a:hover {
+  text-decoration: underline;
 }
 
 .docs-md.markdown-body h1,
@@ -283,6 +270,25 @@
 .docs-md.markdown-body h5,
 .docs-md.markdown-body h6 {
   scroll-margin-top: 0.5rem;
+  color: #f0f6fc;
+}
+
+.docs-md.markdown-body table tr {
+  background-color: transparent;
+}
+
+.docs-md.markdown-body table tr:nth-child(2n) {
+  background-color: rgb(255 255 255 / 0.03);
+}
+
+.docs-md.markdown-body table th,
+.docs-md.markdown-body table td {
+  border-color: #2a2f35;
+}
+
+.docs-md.markdown-body pre {
+  background-color: #141618;
+  border: 1px solid #2a2f35;
 }
 
 .docs-md.markdown-body pre code.hljs {

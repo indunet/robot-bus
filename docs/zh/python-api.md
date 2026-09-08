@@ -117,7 +117,7 @@ node.load_parameters_from_yaml_file("config/pilot.yaml")
 
 接近 ROS2：`Node(...)` → `create_publisher` / `create_subscription` → `node.spin()`。单节点时无需手写 Executor（内部自动挂 `SingleThreadedExecutor`）。
 
-仅走 WebSocket RPC网关时用 `Node.ws` / `Node.ws_at`（或 `transport="ws"`）：可订阅、publish、调 service / action，不能当 server；见下文「WebSocket RPC模式 Node」。
+使用 WebSocket 通信时用 `Node.ws` / `Node.ws_at`（或 `transport="ws"`）：可订阅、publish、调 service / action，不能当 server；见下文「WebSocket RPC模式 Node」。
 
 Python主推 **typed**（创建时传入 protobuf类，自动 `SerializeToString` / `ParseFromString`）；不传类型则仍为 raw bytes。底层与 Rust一样走 opaque bytes（纯 Python薄封装，因 PyO3无法映射 Rust泛型）。
 
@@ -163,7 +163,7 @@ node.create_subscription("/robot1/imu", on_raw)
 
 ### WebSocket RPC模式 Node（客户端）
 
-`Node.ws` / `Node.ws_at`（或 `Node(..., transport="ws", ws_url=...)`）经 broker WebSocket RPC网关接入，不创建 ZMQ socket。
+`Node.ws` / `Node.ws_at`（或 `Node(..., transport="ws", ws_url=...)`）经 broker WebSocket RPC服务端接入，不创建 ZMQ socket。
 
 | 支持 | 不支持 |
 |------|--------|
@@ -418,7 +418,7 @@ print(robot_bus.__version__)
 | 符号 | 说明 |
 |------|------|
 | `Node(name, host=..., transport=..., ws_url=..., message_xsub=..., …)` | 建节点；首次 `create_*` / `spin`时自动挂 `SingleThreadedExecutor` |
-| `Node.tcp` / `Node.ipc` / `Node.inproc` / `Node.inproc_with_context` / `Node.with_context` / `Node.ws` / `Node.ws_at` / `Node.discover` | 传输预设（推荐 `Context` + `with_context`；WebSocket RPC网关为客户端模式；同进程 inproc用 `inproc_with_context`；`discover`只填地址） |
+| `Node.tcp` / `Node.ipc` / `Node.inproc` / `Node.inproc_with_context` / `Node.with_context` / `Node.ws` / `Node.ws_at` / `Node.discover` | 传输预设（推荐 `Context` + `with_context`；WebSocket Node 为客户端模式；同进程 inproc用 `inproc_with_context`；`discover`只填地址） |
 | `Node.declare_parameter` / `get_parameter` / `set_parameter` / `has_parameter` / `list_parameters` | 本节点本地参数（`bool` / `int` / `float` / `str`） |
 | `Node.load_parameters_from_yaml_str` / `load_parameters_from_yaml_file` | 从 YAML加载 / 覆盖参数 |
 | `node.spin()` / `spin_once` / `shutdown` | 驱动回调（ROS2式简单路径） |
@@ -431,7 +431,7 @@ print(robot_bus.__version__)
 | `node.create_publisher(topic, msg_type=None, qos_depth=None)` | typed → `TypedTopicPublisher.publish(Message)`；省略类型 → raw；`qos_depth>0` → KeepLast HWM（WS发布忽略） |
 | `node.create_timer(period, callback)` → `TimerHandle` | 定时器（与 topic一样挂在 Node） |
 | `CallbackGroupType` / `create_callback_group` | `MutuallyExclusive` / `Reentrant` |
-| `create_subscription(..., msg_type=, callback_group=, qos_depth=)` | typed：`callback(Message)`；省略类型：`callback(bytes)`；WS：`qos_depth`为网关订阅队列深度 |
+| `create_subscription(..., msg_type=, callback_group=, qos_depth=)` | typed：`callback(Message)`；省略类型：`callback(bytes)`；WS：`qos_depth`为服务端订阅队列深度 |
 | `create_service(..., request_type=, response_type=, qos_depth=)` | typed：`handler(Request) -> Response`；否则 raw bytes；`qos_depth>0` → KeepLast DEALER HWM |
 | `create_client(..., request_type=, response_type=, qos_depth=)` | typed → `TypedServiceClient`；`service_is_ready` / `wait_for_service`（console workers）；`qos_depth>0` → KeepLast DEALER HWM |
 | `create_action_server(..., goal_type=, feedback_type=, result_type=, qos_depth=)` | typed handler通过 context实时发布 feedback，并返回 result；否则 raw bytes；`qos_depth>0` → KeepLast DEALER HWM |
@@ -443,4 +443,4 @@ print(robot_bus.__version__)
 | `RobotBusBroker.start(...)` / `python -m robot_bus.broker` | 进程内 `start`；独立进程 `python -m robot_bus.broker`（同款 CLI flags）；同进程 inproc传 `context`；peers为 CLI同款字符串列表 |
 | `ShutdownHandle` / `TimerHandle` | spin与定时器控制 |
 
-WebSocket RPC模式 Node见上一节；底层网关 RPC也可直接用 Rust tonic客户端（[rust-api.md](rust-api.md)）。
+WebSocket RPC模式 Node见上一节；底层 WebSocket RPC 帧协议见 Rust 指南（[rust-api.md](rust-api.md)）。

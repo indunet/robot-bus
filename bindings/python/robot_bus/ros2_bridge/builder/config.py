@@ -275,6 +275,7 @@ class ServiceWireContext:
         keep_alive: list,
         ros_qos: Any = None,
         bus_qos_depth: Optional[int] = None,
+        health: Any = None,
     ) -> None:
         self.ros_node = ros_node
         self.bus_node = bus_node
@@ -286,6 +287,7 @@ class ServiceWireContext:
         self.keep_alive = keep_alive
         self.ros_qos = ros_qos
         self.bus_qos_depth = bus_qos_depth
+        self.health = health
 
     def retain(self, obj: Any) -> None:
         self.keep_alive.append(obj)
@@ -304,6 +306,7 @@ class ActionWireContext:
         keep_alive: list,
         ros_qos: Any = None,
         bus_qos_depth: Optional[int] = None,
+        health: Any = None,
     ) -> None:
         self.ros_node = ros_node
         self.bus_node = bus_node
@@ -315,6 +318,7 @@ class ActionWireContext:
         self.keep_alive = keep_alive
         self.ros_qos = ros_qos
         self.bus_qos_depth = bus_qos_depth
+        self.health = health
 
     def retain(self, obj: Any) -> None:
         self.keep_alive.append(obj)

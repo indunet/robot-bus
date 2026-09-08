@@ -41,7 +41,7 @@ Default console / discover API: `http://127.0.0.1:15560`.
 | tcp (default `Node::new` / `Node("name")`) | Cross-process; discover fills addresses |
 | ipc | Same machine |
 | inproc | **Must** share one `Context` with embedded broker |
-| ws gateway | Client: pub/sub + call service/action; **cannot** be service/action server |
+| ws | Client: pub/sub + call service/action; **cannot** be service/action server |
 
 Prefer **typed** APIs (protobuf bound at create). Use `*_raw` only for opaque payloads.
 
@@ -72,7 +72,7 @@ Progress:
 | Action server | `create_action_server` / `create_action_server_with_qos` |
 | Action client | `create_action_client` / `create_action_client_with_qos` → `send_goal` → GoalHandle (`result` / `cancel`) |
 | Timer | `create_timer(period, cb, group?)` |
-| QoS | `QosProfile::keep_last(depth)` → ZMQ HWM (topic PUB/SUB; service / action DEALER); WS subscribe → gateway queue; WS publish ignored; reliability **best-effort** |
+| QoS | `QosProfile::keep_last(depth)` → ZMQ HWM (topic PUB/SUB; service / action DEALER); WS subscribe → server queue; WS publish ignored; reliability **best-effort** |
 | Groups | `MutuallyExclusive` (default) / `Reentrant` (+ MultiThreadedExecutor) |
 
 Topic / service / action **names are used as given** — prefer absolute paths like `/robot1/imu`.

@@ -95,6 +95,13 @@ export interface BridgeRouteInfo {
   publishFail: number
   lastRxMs: number
   idle: boolean
+  calls: number
+  failures: number
+  timeouts: number
+  cancelled: number
+  rejected: number
+  lastError: string
+  lastStatus: string
 }
 
 export interface BridgeInfo {

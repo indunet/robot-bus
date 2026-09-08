@@ -24,7 +24,7 @@ SDK：**Rust**、**Python**、**TypeScript**、**C++**、**Java**、**Android**�
 
 Node编程模型——`Context` / `Node`、topic pub-sub、service、action以及 `spin`——为稳定的公开 API。
 
-需要精简构建？参见[按需构建](docs/zh/build-profiles.md)，可选择核心 SDK、WS 网关、监控 API、内嵌控制台和坦克演示。订阅积压策略与统计见 [Rust QoS 指南](docs/zh/rust-api.md#高水位hwm与-qos)。
+需要精简构建？参见[按需构建](docs/zh/build-profiles.md)，可选择原生 ZMQ SDK、WebSocket 通信、监控 API、内嵌控制台和坦克演示。订阅积压策略与统计见 [Rust QoS 指南](docs/zh/rust-api.md#高水位hwm与-qos)。
 
 ### *安装*
 
@@ -212,7 +212,7 @@ Broker内嵌监控界面（Overview、Topics、Services、Actions、Topology、�
 
 *小坦克示例* — 侧栏 **TANK**。点击面板后，用 **方向键** 遥控；也可切换到点选导航，在地图上 **鼠标点击** 下发目标点。
 
-上手可先试侧栏 **TANK**的 [小坦克示例](#12-小坦克示例)。侧栏 **文档** 默认显示，可用 `--no-docs`隐藏。与 API / WebSocket网关同端口。可用 `--no-console`关闭整个 UI。前端源码在 [`console/`](console/)；本地改 UI见 [`console/README.md`](console/README.md)。
+上手可先试侧栏 **TANK**的 [小坦克示例](#12-小坦克示例)。侧栏 **文档** 默认显示，可用 `--no-docs`隐藏。与 API / WebSocket服务端同端口。可用 `--no-console`关闭整个 UI。前端源码在 [`console/`](console/)；本地改 UI见 [`console/README.md`](console/README.md)。
 
 ## *3. ROS2桥*
 

@@ -1,7 +1,7 @@
 /**
  * Multiplexed WebSocket RPC (V3: one connection, many streams).
  *
- * Frame layout matches Rust `src/ws_gateway/ws_frame.rs` (little-endian):
+ * Frame layout matches Rust `src/ws/ws_frame.rs` (little-endian):
  * - REQUEST: type | stream_id | opcode | opcode-specific header | body
  * - DATA/CANCEL/TRAILER: type | stream_id | …
  */
@@ -310,14 +310,66 @@ export function httpUrlToWsRpc(url: string): string {
   return `${asWs}${WS_RPC_PATH}`;
 }
 
+export type WsRpcCode =
+  | "ok"
+  | "cancelled"
+  | "timeout"
+  | "rejected"
+  | "aborted"
+  | "busy"
+  | "failed";
+
+export function rpcCodeFromStatus(status: number, message = ""): WsRpcCode {
+  switch (status) {
+    case 0:
+      return "ok";
+    case 1:
+      return "cancelled";
+    case 4:
+      return "timeout";
+    case 8:
+      return "busy";
+    case 9:
+      return "rejected";
+    case 10:
+      return "aborted";
+    default:
+      if (message.startsWith("cancelled")) return "cancelled";
+      if (message.startsWith("action aborted:")) return "aborted";
+      if (message.startsWith("action rejected:")) return "rejected";
+      return "failed";
+  }
+}
+
 export class WsRpcError extends Error {
+  readonly code: WsRpcCode;
   constructor(
     readonly status: number,
     message: string,
   ) {
     super(message || `rpc status ${status}`);
     this.name = "WsRpcError";
+    this.code = rpcCodeFromStatus(status, message);
   }
+}
+
+const ACTION_ERROR_PREFIXES: Record<string, { status: number; code: WsRpcCode }> = {
+  CANCELLED: { status: 1, code: "cancelled" },
+  ACTION_ABORTED: { status: 10, code: "aborted" },
+  ACTION_REJECTED: { status: 9, code: "rejected" },
+  RPC_TIMEOUT: { status: 4, code: "timeout" },
+  RPC_FAILED: { status: 13, code: "failed" },
+};
+
+/** Map a bus RESULT error body (`PREFIX\\0message`) to a typed WebSocket error. */
+export function actionErrorFromBody(body: Uint8Array): WsRpcError | undefined {
+  const nul = body.indexOf(0);
+  if (nul <= 0) return undefined;
+  const prefix = new TextDecoder().decode(body.subarray(0, nul));
+  const mapped = ACTION_ERROR_PREFIXES[prefix];
+  if (!mapped) return undefined;
+  const message = new TextDecoder().decode(body.subarray(nul + 1));
+  return new WsRpcError(mapped.status, message);
 }
 
 type StreamHandlers = {

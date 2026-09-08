@@ -49,7 +49,6 @@ export default function SubscriptionQueues() {
     return () => { controller.abort(); clearTimeout(timer) }
   }, [])
 
-  const policyLabels = { drop_newest: t('queueDropNewest'), drop_oldest: t('queueDropOldest'), latest: t('queueLatest') }
   return (
     <section className="border border-bus-border bg-bus-panel rounded-sm shrink-0 min-w-0">
       <PanelHeader icon={<ListFilter size={14} />} title={t('queueTitle')} sub={snapshot ? t('queueTotal', { n: snapshot.totalDropped }) : '—'} />
@@ -62,7 +61,7 @@ export default function SubscriptionQueues() {
             </tr></thead>
             <tbody>{snapshot.subscriptions.map(row => <tr key={row.id} className="border-t border-bus-border">
               <td className="px-3 py-2 break-all text-bus-text">#{row.id} {row.filter || '*'}</td>
-              <td className="px-3 py-2 text-bus-cyan">{policyLabels[row.policy] ?? row.policy}</td>
+              <td className="px-3 py-2 text-bus-cyan">{row.policy === 'drop_newest' ? t('queueDropNewest') : t('queueKeepLast', { n: row.capacity })}</td>
               <td className="px-3 py-2 text-bus-text">{row.pending} / {row.capacity}</td>
               <td className={`px-3 py-2 ${row.dropped > 0 ? 'text-bus-amber' : 'text-bus-muted'}`}>{row.dropped}</td>
             </tr>)}</tbody>
