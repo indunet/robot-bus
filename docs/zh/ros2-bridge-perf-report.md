@@ -2,6 +2,8 @@
 
 # ROS2 Bridge性能测试报告
 
+> **未获得性能结果。** 以下保留 2026-08-31 的环境与失败记录，不是当前提交的重新验证。目标支持范围见[支持状态](support.md)，补测要求见[性能说明](performance.md)。
+
 由 `just perf-ros2-bridge`（`ros2_bridge_perf`）生成，**不进 CI**。
 
 ## 环境

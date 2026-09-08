@@ -11,7 +11,7 @@ description: >-
 # Create ROS 2 Bridge (`ros2_bridge`)
 
 In-process bridge: **ROS 2 ↔ robot-bus** for Topic / Service / Action.
-Authoritative doc: [ros2-bridge.md](../zh/ros2-bridge.md) ([en](../en/ros2-bridge.md)).
+Authoritative doc: [ros2-bridge.md](../../zh/ros2-bridge.md) ([en](../../en/ros2-bridge.md)).
 
 This is **not** full package migration — for that use **ros2-to-robot-bus** /
 **robot-bus-to-ros2**. For pure bus pub/sub/service/action/timer use
@@ -179,7 +179,7 @@ bridge.spin();
 
 Start from a **bus `.proto`** whose fields match the ROS `.srv` / `.action`. Generate stubs with
 `protoc` (or `prost-build`), then convert **fields ↔ protobuf**. The library wires
-`create_service` / clients. Full listing: [ros2-bridge.md](../zh/ros2-bridge.md).
+`create_service` / clients. Full listing: [ros2-bridge.md](../../zh/ros2-bridge.md).
 
 ```protobuf
 syntax = "proto3";
@@ -252,4 +252,4 @@ One process holds:
 3. Proto ↔ ROS field mapping for any custom interfaces
 4. Run steps: source ROS + start broker + run bridge + smoke commands
 
-Do not expand full mapper listings here — open [ros2-bridge.md](../zh/ros2-bridge.md) and language API docs.
+Do not expand full mapper listings here — open [ros2-bridge.md](../../zh/ros2-bridge.md) and language API docs.

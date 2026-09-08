@@ -12,9 +12,9 @@ description: >-
 
 Port robot-bus code onto ROS 2, or keep the bus process and join the ROS graph
 via the bridge. Prefer project docs over guessed APIs:
-[api-compare.md](../zh/api-compare.md), [ros2-bridge.md](../zh/ros2-bridge.md),
-[rust-api.md](../zh/rust-api.md), [python-api.md](../zh/python-api.md),
-[cpp-api.md](../zh/cpp-api.md).
+[api-compare.md](../../zh/api-compare.md), [ros2-bridge.md](../../zh/ros2-bridge.md),
+[rust-api.md](../../zh/rust-api.md), [python-api.md](../../zh/python-api.md),
+[cpp-api.md](../../zh/cpp-api.md).
 
 Official ROS targets for bridge/interop in this repo: **Humble**, **Jazzy**.
 
@@ -86,7 +86,7 @@ Remove bus-only pieces: `RobotBusBroker`, `NodeOptions::tcp/discover`, gRPC/WS N
 
 ## 3. API rewrite map
 
-Reverse of [api-compare.md](../zh/api-compare.md).
+Reverse of [api-compare.md](../../zh/api-compare.md).
 
 | Concern | robot-bus | ROS 2 |
 |---------|-----------|-------|
@@ -163,7 +163,7 @@ Ros2Bridge.new(name)
   .spin()
 ```
 
-From [ros2-bridge.md](../zh/ros2-bridge.md):
+From [ros2-bridge.md](../../zh/ros2-bridge.md):
 
 - Topic endpoints are **name + `TopicQos`** (presets `default` / `sensor_data` / `latched` / `bus`, or `keep_last(n)…`; bus must be `.best_effort()`)
 - Service / action: same `from_ros → to_bus` / `from_bus → to_ros` chain; `TopicQos` on the ROS name only; **no `both`**

@@ -75,26 +75,17 @@ sudo apt install ./robot-bus_2.3.1_linux_amd64.deb
 
 **更鼓励在程序里启动 broker**（`RobotBusBroker.start()` / 各语言等价 API），让 broker 与业务同进程、生命周期一起管理。CLI 适合演示、多进程联调，或需要单独拉起一个常驻 broker 的场合。
 
-```python
-import robot_bus
-
-with robot_bus.RobotBusBroker.start() as broker:
-    # 业务代码 …
-    pass
-```
-
-Rust / C++ / TypeScript / Java / Android 同样提供进程内 API，见各语言文档。
-
-默认 API / Web控制台 / WebSocket监听：`http://0.0.0.0:15560`。broker启动后，用浏览器打开 [Web控制台](#2-web控制台) 即可查看。
-
-可运行示例（topic、service、action，Rust / Python / C++）：[`examples/`](examples/)。这些示例是多进程的，可用下面命令单独起 broker：
+为了先跑通下面三个示例，在终端 1 启动 broker，并保持运行：
 
 ```bash
-python -m robot_bus.broker
-# npx robot-bus          # npm install robot-bus 之后
-# cargo run --bin robot_bus_broker
-# robot_bus_broker   # C++ DEB / MSI / PKG
+python -m robot_bus.broker --api-listen 127.0.0.1:15560 --tcp-only
 ```
+
+打开 **http://127.0.0.1:15560** 应看到控制台。`0.0.0.0` 是监听地址，浏览器和客户端应使用 `127.0.0.1` 或服务器的实际地址。
+
+在终端 2，将 1.3–1.5 的任意完整代码块保存为 `demo.py`，运行 `python demo.py`；每段都可独立运行，成功后自动退出。可用环境变量 `ROBOT_BUS_API_URL` 指定其他 broker 的 HTTP 地址。
+
+应用内嵌 broker 的生命周期与多机部署见[部署与排障](docs/zh/deployment.md)。Rust / Python / C++ 多进程示例见 [`examples/`](examples/)。
 
 ### *1.2 小坦克示例*
 
@@ -108,85 +99,144 @@ python -m robot_bus.broker
 
 ### *1.3 Topic（发布 / 订阅）*
 
+<!-- runnable: topic -->
 ```python
+import os
+import time
+from threading import Event
+
 import robot_bus
 from robot_bus.sensor_msgs.msg.v1 import Imu
 from robot_bus.geometry_msgs.msg.v1 import Vector3
 
+api_url = os.environ.get("ROBOT_BUS_API_URL", "http://127.0.0.1:15560")
+node = robot_bus.Node.discover("pilot", transport="tcp", api_url=api_url)
+received = Event()
+
 def on_imu(imu: Imu):
-    print(imu.linear_acceleration)
+    if not received.is_set():
+        print(f"acceleration.z: {imu.linear_acceleration.z}")
+    received.set()
 
-node = robot_bus.Node("pilot")
-
-imu_pub = node.create_publisher("/robot1/imu", Imu)
-node.create_subscription("/robot1/imu", on_imu, msg_type=Imu)
-imu_pub.publish(Imu(linear_acceleration=Vector3(x=0.0, y=0.0, z=9.8)))
-# node.spin()
+try:
+    node.create_subscription("/robot1/imu", on_imu, msg_type=Imu)
+    pub = node.create_publisher("/robot1/imu", Imu)
+    node.start()
+    deadline = time.monotonic() + 5.0
+    while not received.is_set() and time.monotonic() < deadline:
+        pub.publish(Imu(linear_acceleration=Vector3(z=9.8)))
+        received.wait(0.05)
+    if not received.is_set():
+        raise TimeoutError("No IMU received within 5 seconds")
+finally:
+    node.shutdown()
+    node.stop()
+    node.wait()
 ```
+
+预期输出包含：`acceleration.z: 9.8`。
+
 
 ### *1.4 Service*
 
+<!-- runnable: service -->
 ```python
+import os
 import robot_bus
 from robot_bus.std_srvs.srv.v1 import SetBoolRequest, SetBoolResponse
+
+api_url = os.environ.get("ROBOT_BUS_API_URL", "http://127.0.0.1:15560")
+server = robot_bus.Node.discover("worker", transport="tcp", api_url=api_url)
+client = robot_bus.Node.discover("caller", transport="tcp", api_url=api_url)
 
 def on_set_bool(req: SetBoolRequest) -> SetBoolResponse:
     return SetBoolResponse(success=True, message=f"set:{req.data}")
 
-server = robot_bus.Node("worker")
-client = robot_bus.Node("caller")
-
-server.create_service(
-    "/set_bool", on_set_bool,
-    request_type=SetBoolRequest, response_type=SetBoolResponse,
-)
-svc = client.create_client(
-    "/set_bool",
-    request_type=SetBoolRequest, response_type=SetBoolResponse,
-)
-# reply = svc.call(SetBoolRequest(data=True), timeout=5.0)
-# server.spin()
+try:
+    server.create_service(
+        "/set_bool", on_set_bool,
+        request_type=SetBoolRequest, response_type=SetBoolResponse,
+    )
+    server.start()
+    svc = client.create_client(
+        "/set_bool", request_type=SetBoolRequest, response_type=SetBoolResponse,
+    )
+    if not svc.wait_for_service(timeout=5.0):
+        raise TimeoutError("Service /set_bool is not ready")
+    reply = svc.call(SetBoolRequest(data=True), timeout=5.0)
+    assert reply.success and reply.message == "set:True"
+    print(f"service: {reply.success}, {reply.message}")
+finally:
+    client.shutdown()
+    server.shutdown()
+    server.stop()
+    server.wait()
 ```
+
+预期输出包含：`service: True, set:True`。
+
 
 ### *1.5 Action*
 
+<!-- runnable: action -->
 ```python
+import os
 import robot_bus
 from robot_bus.example_interfaces.action.v1 import (
     FibonacciGoal, FibonacciFeedback, FibonacciResult,
 )
 
-def on_fibonacci(goal: FibonacciGoal, context):
-    seq = list(range(goal.order))
-    context.publish_feedback(FibonacciFeedback(sequence=seq[:1]))
-    return FibonacciResult(sequence=seq)
+api_url = os.environ.get("ROBOT_BUS_API_URL", "http://127.0.0.1:15560")
+server = robot_bus.Node.discover("worker", transport="tcp", api_url=api_url)
+client = robot_bus.Node.discover("caller", transport="tcp", api_url=api_url)
 
-server = robot_bus.Node("worker")
-client = robot_bus.Node("caller")
+def on_fibonacci(goal: FibonacciGoal):
+    seq = []
+    for i in range(max(0, goal.order)):
+        seq.append(i if i < 2 else seq[-1] + seq[-2])
+    return [
+        ("FEEDBACK", FibonacciFeedback(sequence=seq[:-1])),
+        ("RESULT", FibonacciResult(sequence=seq)),
+    ]
 
-server.create_action_server(
-    "/fibonacci", on_fibonacci,
-    goal_type=FibonacciGoal,
-    feedback_type=FibonacciFeedback,
-    result_type=FibonacciResult,
-)
-act = client.create_action_client(
-    "/fibonacci",
-    goal_type=FibonacciGoal,
-    feedback_type=FibonacciFeedback,
-    result_type=FibonacciResult,
-)
-goal = act.send_goal(
-    FibonacciGoal(order=5),
-    feedback_callback=lambda fb: print(fb.sequence),
-)
-# result = goal.result(timeout=10.0)
-# server.spin()
+try:
+    server.create_action_server(
+        "/fibonacci", on_fibonacci,
+        goal_type=FibonacciGoal,
+        feedback_type=FibonacciFeedback,
+        result_type=FibonacciResult,
+    )
+    server.start()
+    act = client.create_action_client(
+        "/fibonacci", goal_type=FibonacciGoal,
+        feedback_type=FibonacciFeedback, result_type=FibonacciResult,
+    )
+    if not act.wait_for_action_server(timeout=5.0):
+        raise TimeoutError("Action /fibonacci is not ready")
+    goal = act.send_goal(
+        FibonacciGoal(order=5),
+        feedback_callback=lambda fb: print(f"feedback: {list(fb.sequence)}"),
+    )
+    result = goal.result(timeout=10.0)
+    assert list(result.sequence) == [0, 1, 1, 2, 3]
+    print(f"result: {list(result.sequence)}")
+finally:
+    client.shutdown()
+    server.shutdown()
+    server.stop()
+    server.wait()
 ```
+
+预期输出包含：`result: [0, 1, 1, 2, 3]`。
+
 
 更多说明见 [`docs/zh/python-api.md`](docs/zh/python-api.md)。
 
+订阅建立是异步的，因此 Topic 示例在有限时间内重复发布；`start()` 在后台驱动回调，主线程才能同时等待 service/action 结果。生产中的请求重试需另行设计幂等性。
+
 ### *1.6 文档*
+
+阅读路径：[支持与验证状态](docs/zh/support.md) → [部署与排障](docs/zh/deployment.md) → 各语言 API；参与开发见[贡献指南](CONTRIBUTING.md)。
 
 | 语言 | 包 / 产物 | 文档 |
 |------|-----------|------|
@@ -216,7 +266,7 @@ Broker内嵌监控界面（Overview、Topics、Services、Actions、Topology、�
 
 ## *3. ROS2桥*
 
-进程内在 robot-bus与 ROS2之间桥接 topic / service / action。各语言使用原生客户端（`rclrs` / `rclpy` / `rclcpp`）。官方支持：**Humble**、**Jazzy**。未启用桥时，核心 SDK不依赖 ROS。
+进程内在 robot-bus与 ROS2之间桥接 topic / service / action。各语言使用原生客户端（`rclrs` / `rclpy` / `rclcpp`）。目标发行版：**Humble**、**Jazzy**；各语言和功能的验证程度见[支持状态](docs/zh/support.md)。未启用桥时，核心 SDK不依赖 ROS。
 
 需要已 source的 ROS2发行版与 `rclpy`，以及正在运行的 broker（应用代码更鼓励进程内 `RobotBusBroker.start()`；下面 CLI 适合单独起 broker）：
 
@@ -336,6 +386,8 @@ robot-bus轻量、环境简单，适合先完成节点原型与联调验证，�
 迁移手册（给开发者 / Agent用）：[`docs/skills/ros2-to-robot-bus`](docs/skills/ros2-to-robot-bus/SKILL.md) 与 [`docs/skills/robot-bus-to-ros2`](docs/skills/robot-bus-to-ros2/SKILL.md)。在 Cursor里 `@` 这两个文件，或直接说「把某包迁到 robot-bus / ROS2」。
 
 ## *6. 贡献*
+
+源码环境、按语言验证与文档检查见[贡献指南](CONTRIBUTING.md)。
 
 如果你对本项目感兴趣并希望参与（开发/测试/文档），欢迎通过邮箱联系：<deng_ran@aliyun.com>
 

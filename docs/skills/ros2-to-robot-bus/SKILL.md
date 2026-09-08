@@ -11,9 +11,9 @@ description: >-
 
 Migrate ROS 2 code to robot-bus, or keep ROS 2 and interconnect via the bridge.
 Read project docs under `docs/zh/` (or `docs/en/`) before inventing APIs:
-[api-compare.md](../zh/api-compare.md), [ros2-bridge.md](../zh/ros2-bridge.md),
-[rust-api.md](../zh/rust-api.md), [python-api.md](../zh/python-api.md),
-[cpp-api.md](../zh/cpp-api.md).
+[api-compare.md](../../zh/api-compare.md), [ros2-bridge.md](../../zh/ros2-bridge.md),
+[rust-api.md](../../zh/rust-api.md), [python-api.md](../../zh/python-api.md),
+[cpp-api.md](../../zh/cpp-api.md).
 
 ## Decide path first
 
@@ -81,7 +81,7 @@ Default API / console: `http://127.0.0.1:15560`. `Node` defaults to tcp + discov
 
 ## 3. API rewrite map
 
-Canonical side-by-side examples: [api-compare.md](../zh/api-compare.md).
+Canonical side-by-side examples: [api-compare.md](../../zh/api-compare.md).
 
 | Concern | ROS 2 (typical) | robot-bus |
 |---------|-----------------|-----------|
@@ -134,7 +134,7 @@ node.spin()
 
 ### C++
 
-Follow [cpp-api.md](../zh/cpp-api.md). ROS bridge package: `robot-bus-ros2-humble` / `robot-bus-ros2-jazzy` or `just cpp-dev-ros2`.
+Follow [cpp-api.md](../../zh/cpp-api.md). ROS bridge package: `robot-bus-ros2-humble` / `robot-bus-ros2-jazzy` or `just cpp-dev-ros2`.
 
 ## 4. Message types
 
@@ -164,7 +164,7 @@ Ros2Bridge.new(name)
   .spin()
 ```
 
-Rules (from [ros2-bridge.md](../zh/ros2-bridge.md)):
+Rules (from [ros2-bridge.md](../../zh/ros2-bridge.md)):
 
 - Topic endpoints are **name + `TopicQos`**: prefer presets (`default` / `sensor_data` / `latched` / `bus`; C++ `ros_default()`), or `keep_last(n).reliable()` / `.best_effort()` for custom depth. Bus must be `.best_effort()`.
 - Service / action: `TopicQos` on both names (`from_ros` / `to_ros` / `from_bus` / `to_bus`); bus must be `.best_effort()`. **no `both`**.

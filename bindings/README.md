@@ -8,7 +8,7 @@ language-facing package (metadata, stubs, tests, packaging).
 
 | Path | Status |
 |------|--------|
-| [`python/`](python/) | Python binding (maturin / PyO3; FFI in core `src/python_api.rs`) |
+| [`python/`](python/) | Python binding (maturin / PyO3; FFI in core `src/python_api/`) |
 | [`typescript/`](typescript/) | TypeScript hybrid npm SDK (napi-rs Node + WebSocket RPC browser) |
 | [`cpp/`](cpp/) | C++ SDK (C ABI `robot_bus_c` + CMake; DEB/MSI/PKG via GitHub Releases) |
 | [`java/`](java/) | Java JVM JAR via Maven (`org.indunet:robot-bus`, Java 11+) |

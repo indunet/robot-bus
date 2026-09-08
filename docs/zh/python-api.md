@@ -121,36 +121,53 @@ node.load_parameters_from_yaml_file("config/pilot.yaml")
 
 Python主推 **typed**（创建时传入 protobuf类，自动 `SerializeToString` / `ParseFromString`）；不传类型则仍为 raw bytes。底层与 Rust一样走 opaque bytes（纯 Python薄封装，因 PyO3无法映射 Rust泛型）。
 
+先按 [README 快速开始](../../README-zh.md) 启动 broker。下面是可独立运行的完整程序；`start()` 在 Rust 后台线程驱动回调，请勿把 Python Node 移交给另一个 Python 线程。
+
+<!-- runnable: topic -->
 ```python
+import os
+import time
+from threading import Event
+
 import robot_bus
 from robot_bus.sensor_msgs.msg.v1 import Imu
 from robot_bus.geometry_msgs.msg.v1 import Vector3
 
+api_url = os.environ.get("ROBOT_BUS_API_URL", "http://127.0.0.1:15560")
+node = robot_bus.Node.discover("pilot", transport="tcp", api_url=api_url)
+received = Event()
+
 def on_imu(imu: Imu):
-    print(imu.angular_velocity)
+    if not received.is_set():
+        print(f"acceleration.z: {imu.linear_acceleration.z}")
+    received.set()
 
-node = robot_bus.Node("pilot")
-# 可选：Node(..., host=..., transport=..., message_xsub=..., message_xpub=...)
-
-imu_pub = node.create_publisher("/robot1/imu", Imu)
-node.create_subscription("/robot1/imu", on_imu, msg_type=Imu)
-
-imu_pub.publish(
-    Imu(
-        angular_velocity=Vector3(x=0.0, y=0.0, z=0.1),
-        linear_acceleration=Vector3(x=0.0, y=0.0, z=9.8),
-    )
-)
-
-# 阻塞直到 node.shutdown() 或 shutdown_handle().shutdown()
-# node.spin()
+try:
+    node.create_subscription("/robot1/imu", on_imu, msg_type=Imu)
+    pub = node.create_publisher("/robot1/imu", Imu)
+    node.start()
+    deadline = time.monotonic() + 5.0
+    while not received.is_set() and time.monotonic() < deadline:
+        pub.publish(Imu(linear_acceleration=Vector3(z=9.8)))
+        received.wait(0.05)
+    if not received.is_set():
+        raise TimeoutError("No IMU received within 5 seconds")
+finally:
+    node.shutdown()
+    node.stop()
+    node.wait()
 ```
+
+预期输出包含：`acceleration.z: 9.8`。
+
 
 完整可运行程序：[`examples/topic_imu/`](../../examples/topic_imu/)。
 
-Raw bytes（与旧用法兼容）：
+Raw bytes 接口片段（另建尚未关闭的节点，并驱动其回调循环；不要复用上面已退出的节点）：
 
 ```python
+node = robot_bus.Node("raw-pilot")
+imu = Imu(linear_acceleration=Vector3(z=9.8))
 imu_pub = node.create_publisher("/robot1/imu")  # → TopicPublisher
 imu_pub.publish(imu.SerializeToString())
 
@@ -226,56 +243,97 @@ node.create_action_server("navigate", on_goal, callback_group=group)
 
 与 topic / timer一样挂在 Node上。可传 protobuf类型做自动编解码，或省略走 raw bytes。Action client采用 ROS2风格 `GoalHandle`：`send_goal`立即返回，feedback到达时实时调用回调，result由 handle独立等待。
 
+Python typed Action 服务端接收单个 `goal` 参数，返回 `[("FEEDBACK", message), ("RESULT", message)]`；反馈在处理函数返回后发出。需要执行中反馈或取消检查时，使用 raw bytes 的 `streaming=True` 接口：`handler(payload, context) -> bytes`，不要同时传 typed 类型参数。
+
+以下两个程序分别运行，均需先启动 broker。先启动服务端回调循环，再在主线程等待结果；仅把 `spin()` 放在阻塞调用之后无法推进服务端。
+
+<!-- runnable: service -->
 ```python
+import os
+import robot_bus
 from robot_bus.std_srvs.srv.v1 import SetBoolRequest, SetBoolResponse
-from robot_bus.example_interfaces.action.v1 import (
-    FibonacciGoal,
-    FibonacciFeedback,
-    FibonacciResult,
-)
+
+api_url = os.environ.get("ROBOT_BUS_API_URL", "http://127.0.0.1:15560")
+server = robot_bus.Node.discover("worker", transport="tcp", api_url=api_url)
+client = robot_bus.Node.discover("caller", transport="tcp", api_url=api_url)
 
 def on_set_bool(req: SetBoolRequest) -> SetBoolResponse:
     return SetBoolResponse(success=True, message=f"set:{req.data}")
 
-def on_fibonacci(goal: FibonacciGoal, context):
-    seq = list(range(goal.order))
-    context.publish_feedback(FibonacciFeedback(sequence=seq[:1]))
-    return FibonacciResult(sequence=seq)
-
-server_node = robot_bus.Node("worker")
-cli_node = robot_bus.Node("caller")
-
-server_node.create_service(
-    "/set_bool", on_set_bool,
-    request_type=SetBoolRequest, response_type=SetBoolResponse,
-)
-server_node.create_action_server(
-    "/fibonacci", on_fibonacci,
-    goal_type=FibonacciGoal,
-    feedback_type=FibonacciFeedback,
-    result_type=FibonacciResult,
-)
-
-svc = cli_node.create_client(
-    "/set_bool",
-    request_type=SetBoolRequest, response_type=SetBoolResponse,
-)
-# reply = svc.call(SetBoolRequest(data=True), timeout=5.0)
-
-act = cli_node.create_action_client(
-    "/fibonacci",
-    goal_type=FibonacciGoal,
-    feedback_type=FibonacciFeedback,
-    result_type=FibonacciResult,
-)
-goal = act.send_goal(
-    FibonacciGoal(order=5),
-    feedback_callback=lambda feedback: print(feedback.sequence),
-)
-result = goal.result(timeout=10.0)
-# goal.cancel()  # best-effort；不代表服务端已确认
-# server_node.spin()
+try:
+    server.create_service(
+        "/set_bool", on_set_bool,
+        request_type=SetBoolRequest, response_type=SetBoolResponse,
+    )
+    server.start()
+    svc = client.create_client(
+        "/set_bool", request_type=SetBoolRequest, response_type=SetBoolResponse,
+    )
+    if not svc.wait_for_service(timeout=5.0):
+        raise TimeoutError("Service /set_bool is not ready")
+    reply = svc.call(SetBoolRequest(data=True), timeout=5.0)
+    assert reply.success and reply.message == "set:True"
+    print(f"service: {reply.success}, {reply.message}")
+finally:
+    client.shutdown()
+    server.shutdown()
+    server.stop()
+    server.wait()
 ```
+
+预期输出包含：`service: True, set:True`。
+
+<!-- runnable: action -->
+```python
+import os
+import robot_bus
+from robot_bus.example_interfaces.action.v1 import (
+    FibonacciGoal, FibonacciFeedback, FibonacciResult,
+)
+
+api_url = os.environ.get("ROBOT_BUS_API_URL", "http://127.0.0.1:15560")
+server = robot_bus.Node.discover("worker", transport="tcp", api_url=api_url)
+client = robot_bus.Node.discover("caller", transport="tcp", api_url=api_url)
+
+def on_fibonacci(goal: FibonacciGoal):
+    seq = []
+    for i in range(max(0, goal.order)):
+        seq.append(i if i < 2 else seq[-1] + seq[-2])
+    return [
+        ("FEEDBACK", FibonacciFeedback(sequence=seq[:-1])),
+        ("RESULT", FibonacciResult(sequence=seq)),
+    ]
+
+try:
+    server.create_action_server(
+        "/fibonacci", on_fibonacci,
+        goal_type=FibonacciGoal,
+        feedback_type=FibonacciFeedback,
+        result_type=FibonacciResult,
+    )
+    server.start()
+    act = client.create_action_client(
+        "/fibonacci", goal_type=FibonacciGoal,
+        feedback_type=FibonacciFeedback, result_type=FibonacciResult,
+    )
+    if not act.wait_for_action_server(timeout=5.0):
+        raise TimeoutError("Action /fibonacci is not ready")
+    goal = act.send_goal(
+        FibonacciGoal(order=5),
+        feedback_callback=lambda fb: print(f"feedback: {list(fb.sequence)}"),
+    )
+    result = goal.result(timeout=10.0)
+    assert list(result.sequence) == [0, 1, 1, 2, 3]
+    print(f"result: {list(result.sequence)}")
+finally:
+    client.shutdown()
+    server.shutdown()
+    server.stop()
+    server.wait()
+```
+
+预期输出包含：`result: [0, 1, 1, 2, 3]`。
+
 
 完整可运行程序：[`examples/service_set_bool/`](../../examples/service_set_bool/)、[`examples/action_fibonacci/`](../../examples/action_fibonacci/)。
 
@@ -283,7 +341,7 @@ Raw action的 `feedback_callback(body: bytes)`、`ActionGoalHandle.result(timeou
 Raw service：`handler(body: bytes) -> bytes` / `call(bytes)`。
 endpoint默认本机 broker；也可用 `Node(..., service_frontend=..., service_backend=..., action_backend=..., action_frontend=...)`覆盖。
 
-取消语义随 transport不同：gRPC取消对应 goal的 server stream；ZMQ发送显式 `CANCEL`帧。两者都不承诺服务端确认取消。
+取消语义随 transport不同：WebSocket 发送显式 CANCEL 帧；ZMQ 发送显式 `CANCEL` 帧。两者都不承诺服务端确认取消。
 
 ### 定时器
 
@@ -434,7 +492,7 @@ print(robot_bus.__version__)
 | `create_subscription(..., msg_type=, callback_group=, qos_depth=)` | typed：`callback(Message)`；省略类型：`callback(bytes)`；WS：`qos_depth`为服务端订阅队列深度 |
 | `create_service(..., request_type=, response_type=, qos_depth=)` | typed：`handler(Request) -> Response`；否则 raw bytes；`qos_depth>0` → KeepLast DEALER HWM |
 | `create_client(..., request_type=, response_type=, qos_depth=)` | typed → `TypedServiceClient`；`service_is_ready` / `wait_for_service`（console workers）；`qos_depth>0` → KeepLast DEALER HWM |
-| `create_action_server(..., goal_type=, feedback_type=, result_type=, qos_depth=)` | typed handler通过 context实时发布 feedback，并返回 result；否则 raw bytes；`qos_depth>0` → KeepLast DEALER HWM |
+| `create_action_server(..., goal_type=, feedback_type=, result_type=, qos_depth=)` | typed `handler(goal)` 返回 phase/message 列表，返回后发送反馈与结果；实时 raw handler 使用 `streaming=True` 且不传 typed 类型；`qos_depth>0` → KeepLast DEALER HWM |
 | `create_action_client(..., goal_type=, feedback_type=, result_type=, qos_depth=)` | typed → `TypedActionClient`；`wait_for_action_server`；`send_goal` → GoalHandle；`qos_depth>0` → KeepLast DEALER HWM |
 | `ActionGoalHandle` / `TypedActionGoalHandle` | goal标识、action名称、阻塞等待 result与 best-effort cancel |
 | `Publisher(endpoint=None)` | 低层连 XSUB（不经 Node） |

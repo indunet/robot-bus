@@ -121,36 +121,53 @@ For WebSocket communication, use `Node.ws` / `Node.ws_at` (or `transport="ws"`):
 
 Python recommends **typed** usage (pass a protobuf class at creation for automatic `SerializeToString` / `ParseFromString`); omit the type for raw bytes. Under the hood it is the same as Rust with opaque bytes (thin Python wrapper; PyO3 cannot map Rust generics).
 
+Start a broker as shown in the [README quick start](../../README.md). This complete program runs independently. `start()` drives callbacks on a Rust background thread; do not move a Python Node to another Python thread.
+
+<!-- runnable: topic -->
 ```python
+import os
+import time
+from threading import Event
+
 import robot_bus
 from robot_bus.sensor_msgs.msg.v1 import Imu
 from robot_bus.geometry_msgs.msg.v1 import Vector3
 
+api_url = os.environ.get("ROBOT_BUS_API_URL", "http://127.0.0.1:15560")
+node = robot_bus.Node.discover("pilot", transport="tcp", api_url=api_url)
+received = Event()
+
 def on_imu(imu: Imu):
-    print(imu.angular_velocity)
+    if not received.is_set():
+        print(f"acceleration.z: {imu.linear_acceleration.z}")
+    received.set()
 
-node = robot_bus.Node("pilot")
-# Optional: Node(..., host=..., transport=..., message_xsub=..., message_xpub=...)
-
-imu_pub = node.create_publisher("/robot1/imu", Imu)
-node.create_subscription("/robot1/imu", on_imu, msg_type=Imu)
-
-imu_pub.publish(
-    Imu(
-        angular_velocity=Vector3(x=0.0, y=0.0, z=0.1),
-        linear_acceleration=Vector3(x=0.0, y=0.0, z=9.8),
-    )
-)
-
-# Blocks until node.shutdown() or shutdown_handle().shutdown()
-# node.spin()
+try:
+    node.create_subscription("/robot1/imu", on_imu, msg_type=Imu)
+    pub = node.create_publisher("/robot1/imu", Imu)
+    node.start()
+    deadline = time.monotonic() + 5.0
+    while not received.is_set() and time.monotonic() < deadline:
+        pub.publish(Imu(linear_acceleration=Vector3(z=9.8)))
+        received.wait(0.05)
+    if not received.is_set():
+        raise TimeoutError("No IMU received within 5 seconds")
+finally:
+    node.shutdown()
+    node.stop()
+    node.wait()
 ```
+
+Expected output includes: `acceleration.z: 9.8`.
+
 
 Full runnable programs: [`examples/topic_imu/`](../../examples/topic_imu/).
 
-Raw bytes (compatible with older usage):
+Raw bytes interface fragment (use a separate active node and drive its callback loop; do not reuse the node already shut down above):
 
 ```python
+node = robot_bus.Node("raw-pilot")
+imu = Imu(linear_acceleration=Vector3(z=9.8))
 imu_pub = node.create_publisher("/robot1/imu")  # → TopicPublisher
 imu_pub.publish(imu.SerializeToString())
 
@@ -226,56 +243,97 @@ By default, without `callback_group`, the node’s mutually exclusive group is u
 
 Same as topic / timer: attached to the Node. Pass protobuf types for automatic encode/decode, or omit for raw bytes. The action client uses ROS 2–style `GoalHandle`: `send_goal` returns immediately, the feedback callback runs as feedback arrives, and `result` is waited on independently via the handle.
 
+Python typed Action servers take one `goal` argument and return `[("FEEDBACK", message), ("RESULT", message)]`; feedback is emitted after the handler returns. For feedback or cancellation checks during execution, use the raw bytes `streaming=True` API: `handler(payload, context) -> bytes`, without typed message arguments.
+
+Run the following programs separately with a broker already running. Start the server callback loop before waiting for results on the main thread; putting `spin()` after a blocking call cannot drive the server.
+
+<!-- runnable: service -->
 ```python
+import os
+import robot_bus
 from robot_bus.std_srvs.srv.v1 import SetBoolRequest, SetBoolResponse
-from robot_bus.example_interfaces.action.v1 import (
-    FibonacciGoal,
-    FibonacciFeedback,
-    FibonacciResult,
-)
+
+api_url = os.environ.get("ROBOT_BUS_API_URL", "http://127.0.0.1:15560")
+server = robot_bus.Node.discover("worker", transport="tcp", api_url=api_url)
+client = robot_bus.Node.discover("caller", transport="tcp", api_url=api_url)
 
 def on_set_bool(req: SetBoolRequest) -> SetBoolResponse:
     return SetBoolResponse(success=True, message=f"set:{req.data}")
 
-def on_fibonacci(goal: FibonacciGoal, context):
-    seq = list(range(goal.order))
-    context.publish_feedback(FibonacciFeedback(sequence=seq[:1]))
-    return FibonacciResult(sequence=seq)
-
-server_node = robot_bus.Node("worker")
-cli_node = robot_bus.Node("caller")
-
-server_node.create_service(
-    "/set_bool", on_set_bool,
-    request_type=SetBoolRequest, response_type=SetBoolResponse,
-)
-server_node.create_action_server(
-    "/fibonacci", on_fibonacci,
-    goal_type=FibonacciGoal,
-    feedback_type=FibonacciFeedback,
-    result_type=FibonacciResult,
-)
-
-svc = cli_node.create_client(
-    "/set_bool",
-    request_type=SetBoolRequest, response_type=SetBoolResponse,
-)
-# reply = svc.call(SetBoolRequest(data=True), timeout=5.0)
-
-act = cli_node.create_action_client(
-    "/fibonacci",
-    goal_type=FibonacciGoal,
-    feedback_type=FibonacciFeedback,
-    result_type=FibonacciResult,
-)
-goal = act.send_goal(
-    FibonacciGoal(order=5),
-    feedback_callback=lambda feedback: print(feedback.sequence),
-)
-result = goal.result(timeout=10.0)
-# goal.cancel()  # best-effort; does not mean the server confirmed
-# server_node.spin()
+try:
+    server.create_service(
+        "/set_bool", on_set_bool,
+        request_type=SetBoolRequest, response_type=SetBoolResponse,
+    )
+    server.start()
+    svc = client.create_client(
+        "/set_bool", request_type=SetBoolRequest, response_type=SetBoolResponse,
+    )
+    if not svc.wait_for_service(timeout=5.0):
+        raise TimeoutError("Service /set_bool is not ready")
+    reply = svc.call(SetBoolRequest(data=True), timeout=5.0)
+    assert reply.success and reply.message == "set:True"
+    print(f"service: {reply.success}, {reply.message}")
+finally:
+    client.shutdown()
+    server.shutdown()
+    server.stop()
+    server.wait()
 ```
+
+Expected output includes: `service: True, set:True`.
+
+<!-- runnable: action -->
+```python
+import os
+import robot_bus
+from robot_bus.example_interfaces.action.v1 import (
+    FibonacciGoal, FibonacciFeedback, FibonacciResult,
+)
+
+api_url = os.environ.get("ROBOT_BUS_API_URL", "http://127.0.0.1:15560")
+server = robot_bus.Node.discover("worker", transport="tcp", api_url=api_url)
+client = robot_bus.Node.discover("caller", transport="tcp", api_url=api_url)
+
+def on_fibonacci(goal: FibonacciGoal):
+    seq = []
+    for i in range(max(0, goal.order)):
+        seq.append(i if i < 2 else seq[-1] + seq[-2])
+    return [
+        ("FEEDBACK", FibonacciFeedback(sequence=seq[:-1])),
+        ("RESULT", FibonacciResult(sequence=seq)),
+    ]
+
+try:
+    server.create_action_server(
+        "/fibonacci", on_fibonacci,
+        goal_type=FibonacciGoal,
+        feedback_type=FibonacciFeedback,
+        result_type=FibonacciResult,
+    )
+    server.start()
+    act = client.create_action_client(
+        "/fibonacci", goal_type=FibonacciGoal,
+        feedback_type=FibonacciFeedback, result_type=FibonacciResult,
+    )
+    if not act.wait_for_action_server(timeout=5.0):
+        raise TimeoutError("Action /fibonacci is not ready")
+    goal = act.send_goal(
+        FibonacciGoal(order=5),
+        feedback_callback=lambda fb: print(f"feedback: {list(fb.sequence)}"),
+    )
+    result = goal.result(timeout=10.0)
+    assert list(result.sequence) == [0, 1, 1, 2, 3]
+    print(f"result: {list(result.sequence)}")
+finally:
+    client.shutdown()
+    server.shutdown()
+    server.stop()
+    server.wait()
+```
+
+Expected output includes: `result: [0, 1, 1, 2, 3]`.
+
 
 Full runnable programs: [`examples/service_set_bool/`](../../examples/service_set_bool/), [`examples/action_fibonacci/`](../../examples/action_fibonacci/).
 
@@ -283,7 +341,7 @@ Raw action: `feedback_callback(body: bytes)`, `ActionGoalHandle.result(timeout=N
 Raw service: `handler(body: bytes) -> bytes` / `call(bytes)`.
 The endpoint defaults to the local broker; override with `Node(..., service_frontend=..., service_backend=..., action_backend=..., action_frontend=...)`.
 
-Cancel semantics vary by transport: gRPC cancel targets the goal’s server stream; ZMQ sends an explicit `CANCEL` frame. Neither guarantees the server acknowledged cancel.
+WebSocket and ZMQ both send an explicit `CANCEL` frame. Neither guarantees the server acknowledged cancellation.
 
 ### Timers
 
@@ -434,7 +492,7 @@ print(robot_bus.__version__)
 | `create_subscription(..., msg_type=, callback_group=, qos_depth=)` | typed: `callback(Message)`; omit type: `callback(bytes)`; WS: `qos_depth` sizes the server subscribe queue |
 | `create_service(..., request_type=, response_type=, qos_depth=)` | typed: `handler(Request) -> Response`; otherwise raw bytes; `qos_depth>0` → KeepLast DEALER HWM |
 | `create_client(..., request_type=, response_type=, qos_depth=)` | typed → `TypedServiceClient`; `service_is_ready` / `wait_for_service` (console workers); `qos_depth>0` → KeepLast DEALER HWM |
-| `create_action_server(..., goal_type=, feedback_type=, result_type=, qos_depth=)` | typed handler publishes feedback in real time via context and returns result; otherwise raw bytes; `qos_depth>0` → KeepLast DEALER HWM |
+| `create_action_server(..., goal_type=, feedback_type=, result_type=, qos_depth=)` | typed `handler(goal)` returns phase/message pairs, emitted after return; live raw handlers use `streaming=True` without typed arguments; `qos_depth>0` → KeepLast DEALER HWM |
 | `create_action_client(..., goal_type=, feedback_type=, result_type=, qos_depth=)` | typed → `TypedActionClient`; `wait_for_action_server`; `send_goal` → GoalHandle; `qos_depth>0` → KeepLast DEALER HWM |
 | `ActionGoalHandle` / `TypedActionGoalHandle` | Goal id, action name, blocking wait for result, best-effort cancel |
 | `Publisher(endpoint=None)` | Low-level XSUB connection (without Node) |

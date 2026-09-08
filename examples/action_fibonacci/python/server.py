@@ -10,7 +10,7 @@ from robot_bus.example_interfaces.action.v1 import (
 )
 
 
-def on_fibonacci(goal: FibonacciGoal, context) -> FibonacciResult:
+def on_fibonacci(goal: FibonacciGoal):
     order = max(goal.order, 0)
     seq: list[int] = []
     for i in range(order):
@@ -18,8 +18,12 @@ def on_fibonacci(goal: FibonacciGoal, context) -> FibonacciResult:
             seq.append(i)
         else:
             seq.append(seq[i - 1] + seq[i - 2])
-    context.publish_feedback(FibonacciFeedback(sequence=seq[:-1] if len(seq) > 1 else seq))
-    return FibonacciResult(sequence=seq)
+    # Typed Python handlers return phase/message pairs. Feedback is emitted
+    # after this handler returns; live raw handlers use streaming=True.
+    return [
+        ("FEEDBACK", FibonacciFeedback(sequence=seq[:-1] if len(seq) > 1 else seq)),
+        ("RESULT", FibonacciResult(sequence=seq)),
+    ]
 
 
 def main() -> None:

@@ -10,7 +10,7 @@
 | **Python** | `rclpy` | `robot_bus.ros2_bridge` |
 | **C++** | `rclcpp` | `<robot_bus/ros2_bridge.hpp>` + `robot_bus_ros2_bridge` |
 
-官方发行版：**Humble**、**Jazzy**。一条桥进程里可以同时挂多条话题 / 服务 / action。方向只能单向：`from_ros → to_bus` 或 `from_bus → to_ros`，没有 `both`。
+目标发行版：**Humble**、**Jazzy**。各语言的 CI、打包与真实运行验证范围见[支持与验证状态](support.md)；不能把 shim 检查或发行包构建视为完整运行验收。一条桥进程里可以同时挂多条话题 / 服务 / action。方向只能单向：`from_ros → to_bus` 或 `from_bus → to_ros`，没有 `both`。
 
 可运行示例：[`examples/ros2_bridge/`](../../examples/ros2_bridge/)（`builtin` 为内置 mapper，`custom_add_two_ints` 为自定义服务）。
 
@@ -539,7 +539,7 @@ class MyFibonacciMapper:
 
 ### Rust（`rclrs`）
 
-`feature = "ros2"` 需要 `AMENT_PREFIX_PATH` 上有核心桥包的 rust IDL（`share/<pkg>/rust/`）。Humble 上 `common_interfaces` 等常见包通常已自带；`source /opt/ros/humble` 后应对 **默认内置** mapper 足够。扩展栈（nav2 / control / foxglove / apriltag）**不是**桥内置，不必为它们建 overlay。
+`feature = "ros2"` 需要 `AMENT_PREFIX_PATH` 上有核心桥包的 rust IDL（`share/<pkg>/rust/`），并且生成字段类型与 mapper 匹配。source ROS 是必要步骤，但不能保证本机 IDL 兼容；[历史构建记录](ros2-bridge-perf-report.md)包含类型不匹配的实例。请在实际环境构建并运行所需路由。扩展栈（nav2 / control / foxglove / apriltag）**不是**桥内置，需要自定义 mapper。
 
 无 ROS 环境时可用 `just check-ros2-shim`。`rclrs` 走 `ros_env::*`，crates.io 的 `ros-env` shim 是空的，本仓库用 [`third_party/ros-env-shim`](../../third_party/ros-env-shim) 通过 `[patch.crates-io]` 提供 **typed 字段桩**（按核心 mapper proto 生成）。我们自己的 `std_srvs` vendor 仍走系统 C typesupport，不依赖 rust IDL。
 

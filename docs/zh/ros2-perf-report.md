@@ -2,6 +2,8 @@
 
 # ROS2性能测试报告
 
+> 本报告未建立与 Robot Bus 结果同机、同资源限制的对比证据，不能直接计算性能倍数。测试结果为历史记录，本轮未重跑；见[性能报告说明](performance.md)。
+
 由 `benches/ros2_perf/run.sh`（容器内 `ros2_perf_bench`）生成，方法对齐 [`perf-report.md`](perf-report.md)。
 
 ## 环境

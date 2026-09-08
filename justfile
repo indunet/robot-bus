@@ -7,6 +7,14 @@
 
 set shell := ["bash", "-eu", "-o", "pipefail", "-c"]
 
+# Local Markdown file links and paired English/Chinese guides (no SDK required).
+check-docs:
+	python3 scripts/check_docs.py
+
+# Execute the actual README/API Python snippets (run just python-dev first).
+test-doc-examples:
+	python3 scripts/test_doc_examples.py
+
 # Generate Python protobuf modules from proto/ (gitignored; needed before test/pack)
 proto:
 	python3 scripts/generate_python_msgs.py

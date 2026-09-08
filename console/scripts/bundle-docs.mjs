@@ -8,6 +8,9 @@ import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const SLUGS = [
+  'support',
+  'deployment',
+  'build-profiles',
   'rust-api',
   'python-api',
   'typescript-api',
@@ -16,8 +19,10 @@ const SLUGS = [
   'android-api',
   'api-compare',
   'ros2-bridge',
+  'performance',
   'perf-report',
   'ros2-perf-report',
+  'ros2-bridge-perf-report',
 ]
 
 const here = dirname(fileURLToPath(import.meta.url))

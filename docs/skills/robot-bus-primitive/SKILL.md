@@ -11,10 +11,10 @@ description: >-
 
 Guide for implementing graph entities on **robot-bus** only. Prefer project docs
 over inventing signatures:
-[api-compare.md](../zh/api-compare.md), [rust-api.md](../zh/rust-api.md),
-[python-api.md](../zh/python-api.md), [cpp-api.md](../zh/cpp-api.md).
+[api-compare.md](../../zh/api-compare.md), [rust-api.md](../../zh/rust-api.md),
+[python-api.md](../../zh/python-api.md), [cpp-api.md](../../zh/cpp-api.md).
 
-For ROS ↔ bus interconnect, use skill **ros2-bridge** / [ros2-bridge.md](../zh/ros2-bridge.md).
+For ROS ↔ bus interconnect, use skill **ros2-bridge** / [ros2-bridge.md](../../zh/ros2-bridge.md).
 For full ROS package migration, use **ros2-to-robot-bus** or **robot-bus-to-ros2**.
 
 ## Prerequisites

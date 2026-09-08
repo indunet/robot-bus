@@ -496,6 +496,7 @@ Started together by `RobotBusBroker` / `robot_bus_broker` (feature `ws`, on by d
 | Opcode | RPC | Request header | DATA payload |
 |--------|-----|----------------|--------------|
 | 1 | Subscribe | topic prefix + `qos_depth` | `u16 topic_len` + topic + raw bus bytes |
+| 5 | SubscribeWithPolicy | topic prefix + `qos_depth` + overflow policy byte; current KeepLast uses 1 (drop oldest) | Same as Subscribe |
 | 2 | Publish | topic; body = raw bus bytes | none (success is TRAILER only) |
 | 3 | Call | service name + timeout + request id; body = raw request | raw response |
 | 4 | SendGoal | action name + goal id + timeout; body = raw goal | `u8 kind` + raw body (`FEEDBACK` then `RESULT`) |

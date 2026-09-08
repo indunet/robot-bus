@@ -184,7 +184,7 @@ import { WsNode } from "robot-bus"; // Node入口也导出 WsNode
 | PING | 5 | 应用层心跳（`stream_id = 0`） |
 | PONG | 6 | 心跳应答 |
 
-opcode：`1=Subscribe`、`2=Publish`、`3=Call`、`4=SendGoal`。Publish成功只回 TRAILER（无 DATA ack）。**不兼容旧版：** 不再接受 V2 method字符串和 `TopicMessage` protobuf信封。
+opcode：`1=Subscribe`、`2=Publish`、`3=Call`、`4=SendGoal`、`5=SubscribeWithPolicy`（显式溢出策略；新版 KeepLast 使用此操作）。Publish成功只回 TRAILER（无 DATA ack）。**不兼容旧版：** 不再接受 V2 method字符串和 `TopicMessage` protobuf信封。
 
 Node会话合同（`connection_state` / `wait_for_broker` / 自动重连）与传输无关；浏览器补的是 WebSocket实现，不是另一套业务语义。
 

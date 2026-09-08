@@ -2,6 +2,8 @@
 
 # robot-bus性能测试报告
 
+> **历史采样，尚未完整验证。** IPC/service/action 缺少结果，WS Subscribe 出现接收数大于发送数（100.1%）。环境信息也不足以支持跨项目排名。原始数字保留待核对；使用前阅读[性能报告说明](performance.md)。本轮文档修改未重跑性能测试。
+
 由 `just perf`（`cargo run --release --bin robot_bus_perf`）生成。
 
 ## 环境

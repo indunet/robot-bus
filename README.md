@@ -75,26 +75,17 @@ sudo apt install ./robot-bus_2.3.1_linux_amd64.deb
 
 **Prefer starting the broker from your program** (`RobotBusBroker.start()` / the equivalent API in each language) so it shares a process and lifecycle with your application. The CLI is for demos, multi-process bring-up, or a standalone long-running broker.
 
-```python
-import robot_bus
-
-with robot_bus.RobotBusBroker.start() as broker:
-    # application code …
-    pass
-```
-
-Rust / C++ / TypeScript / Java / Android expose the same in-process API; see the language guides.
-
-Default API / Web console / WebSocket listen: `http://0.0.0.0:15560`. After the broker is up, open the [Web console](#2-web-console) in a browser.
-
-Runnable demos (topic, service, action) for Rust / Python / C++: [`examples/`](examples/). Those examples are multi-process, so they use a standalone broker:
+To run the three examples below, start a broker in terminal 1 and leave it running:
 
 ```bash
-python -m robot_bus.broker
-# npx robot-bus          # after npm install robot-bus
-# cargo run --bin robot_bus_broker
-# robot_bus_broker   # C++ DEB / MSI / PKG
+python -m robot_bus.broker --api-listen 127.0.0.1:15560 --tcp-only
 ```
+
+Open **http://127.0.0.1:15560** to see the console. `0.0.0.0` is a listen address; browsers and clients use `127.0.0.1` or the server's reachable address.
+
+In terminal 2, save any complete code block from 1.3–1.5 as `demo.py` and run `python demo.py`. Each runs independently and exits on success. Set `ROBOT_BUS_API_URL` to use another broker's HTTP address.
+
+See [deployment and troubleshooting](docs/en/deployment.md) for embedded broker lifecycles and multi-host deployment. Rust / Python / C++ multi-process examples: [`examples/`](examples/).
 
 ### *1.2 Tank demo*
 
@@ -108,85 +99,144 @@ Opening the panel starts the in-process tank node. It subscribes to `/robot_bus/
 
 ### *1.3 Topic (publish / subscribe)*
 
+<!-- runnable: topic -->
 ```python
+import os
+import time
+from threading import Event
+
 import robot_bus
 from robot_bus.sensor_msgs.msg.v1 import Imu
 from robot_bus.geometry_msgs.msg.v1 import Vector3
 
+api_url = os.environ.get("ROBOT_BUS_API_URL", "http://127.0.0.1:15560")
+node = robot_bus.Node.discover("pilot", transport="tcp", api_url=api_url)
+received = Event()
+
 def on_imu(imu: Imu):
-    print(imu.linear_acceleration)
+    if not received.is_set():
+        print(f"acceleration.z: {imu.linear_acceleration.z}")
+    received.set()
 
-node = robot_bus.Node("pilot")
-
-imu_pub = node.create_publisher("/robot1/imu", Imu)
-node.create_subscription("/robot1/imu", on_imu, msg_type=Imu)
-imu_pub.publish(Imu(linear_acceleration=Vector3(x=0.0, y=0.0, z=9.8)))
-# node.spin()
+try:
+    node.create_subscription("/robot1/imu", on_imu, msg_type=Imu)
+    pub = node.create_publisher("/robot1/imu", Imu)
+    node.start()
+    deadline = time.monotonic() + 5.0
+    while not received.is_set() and time.monotonic() < deadline:
+        pub.publish(Imu(linear_acceleration=Vector3(z=9.8)))
+        received.wait(0.05)
+    if not received.is_set():
+        raise TimeoutError("No IMU received within 5 seconds")
+finally:
+    node.shutdown()
+    node.stop()
+    node.wait()
 ```
+
+Expected output includes: `acceleration.z: 9.8`.
+
 
 ### *1.4 Service*
 
+<!-- runnable: service -->
 ```python
+import os
 import robot_bus
 from robot_bus.std_srvs.srv.v1 import SetBoolRequest, SetBoolResponse
+
+api_url = os.environ.get("ROBOT_BUS_API_URL", "http://127.0.0.1:15560")
+server = robot_bus.Node.discover("worker", transport="tcp", api_url=api_url)
+client = robot_bus.Node.discover("caller", transport="tcp", api_url=api_url)
 
 def on_set_bool(req: SetBoolRequest) -> SetBoolResponse:
     return SetBoolResponse(success=True, message=f"set:{req.data}")
 
-server = robot_bus.Node("worker")
-client = robot_bus.Node("caller")
-
-server.create_service(
-    "/set_bool", on_set_bool,
-    request_type=SetBoolRequest, response_type=SetBoolResponse,
-)
-svc = client.create_client(
-    "/set_bool",
-    request_type=SetBoolRequest, response_type=SetBoolResponse,
-)
-# reply = svc.call(SetBoolRequest(data=True), timeout=5.0)
-# server.spin()
+try:
+    server.create_service(
+        "/set_bool", on_set_bool,
+        request_type=SetBoolRequest, response_type=SetBoolResponse,
+    )
+    server.start()
+    svc = client.create_client(
+        "/set_bool", request_type=SetBoolRequest, response_type=SetBoolResponse,
+    )
+    if not svc.wait_for_service(timeout=5.0):
+        raise TimeoutError("Service /set_bool is not ready")
+    reply = svc.call(SetBoolRequest(data=True), timeout=5.0)
+    assert reply.success and reply.message == "set:True"
+    print(f"service: {reply.success}, {reply.message}")
+finally:
+    client.shutdown()
+    server.shutdown()
+    server.stop()
+    server.wait()
 ```
+
+Expected output includes: `service: True, set:True`.
+
 
 ### *1.5 Action*
 
+<!-- runnable: action -->
 ```python
+import os
 import robot_bus
 from robot_bus.example_interfaces.action.v1 import (
     FibonacciGoal, FibonacciFeedback, FibonacciResult,
 )
 
-def on_fibonacci(goal: FibonacciGoal, context):
-    seq = list(range(goal.order))
-    context.publish_feedback(FibonacciFeedback(sequence=seq[:1]))
-    return FibonacciResult(sequence=seq)
+api_url = os.environ.get("ROBOT_BUS_API_URL", "http://127.0.0.1:15560")
+server = robot_bus.Node.discover("worker", transport="tcp", api_url=api_url)
+client = robot_bus.Node.discover("caller", transport="tcp", api_url=api_url)
 
-server = robot_bus.Node("worker")
-client = robot_bus.Node("caller")
+def on_fibonacci(goal: FibonacciGoal):
+    seq = []
+    for i in range(max(0, goal.order)):
+        seq.append(i if i < 2 else seq[-1] + seq[-2])
+    return [
+        ("FEEDBACK", FibonacciFeedback(sequence=seq[:-1])),
+        ("RESULT", FibonacciResult(sequence=seq)),
+    ]
 
-server.create_action_server(
-    "/fibonacci", on_fibonacci,
-    goal_type=FibonacciGoal,
-    feedback_type=FibonacciFeedback,
-    result_type=FibonacciResult,
-)
-act = client.create_action_client(
-    "/fibonacci",
-    goal_type=FibonacciGoal,
-    feedback_type=FibonacciFeedback,
-    result_type=FibonacciResult,
-)
-goal = act.send_goal(
-    FibonacciGoal(order=5),
-    feedback_callback=lambda fb: print(fb.sequence),
-)
-# result = goal.result(timeout=10.0)
-# server.spin()
+try:
+    server.create_action_server(
+        "/fibonacci", on_fibonacci,
+        goal_type=FibonacciGoal,
+        feedback_type=FibonacciFeedback,
+        result_type=FibonacciResult,
+    )
+    server.start()
+    act = client.create_action_client(
+        "/fibonacci", goal_type=FibonacciGoal,
+        feedback_type=FibonacciFeedback, result_type=FibonacciResult,
+    )
+    if not act.wait_for_action_server(timeout=5.0):
+        raise TimeoutError("Action /fibonacci is not ready")
+    goal = act.send_goal(
+        FibonacciGoal(order=5),
+        feedback_callback=lambda fb: print(f"feedback: {list(fb.sequence)}"),
+    )
+    result = goal.result(timeout=10.0)
+    assert list(result.sequence) == [0, 1, 1, 2, 3]
+    print(f"result: {list(result.sequence)}")
+finally:
+    client.shutdown()
+    server.shutdown()
+    server.stop()
+    server.wait()
 ```
+
+Expected output includes: `result: [0, 1, 1, 2, 3]`.
+
 
 More detail: [`docs/en/python-api.md`](docs/en/python-api.md).
 
+Subscription setup is asynchronous, so the Topic example publishes repeatedly within a deadline. `start()` drives callbacks in the background while the main thread waits for service/action results. Retrying application requests requires a separate idempotency design.
+
 ### *1.6 Documentation*
+
+Reading path: [support and verification](docs/en/support.md) → [deployment and troubleshooting](docs/en/deployment.md) → language APIs. For development, see [contributing](CONTRIBUTING.md).
 
 | Language | Package / artifact | Guide |
 |----------|--------------------|-------|
@@ -216,7 +266,7 @@ For a hands-on walkthrough, try the [Tank demo](#12-tank-demo) from the sidebar 
 
 ## *3. ROS 2 bridge*
 
-In-process topic / service / action bridging between robot-bus and ROS 2. Each language uses its native client (`rclrs` / `rclpy` / `rclcpp`). Official support: **Humble** and **Jazzy**. The core SDK stays ROS-free unless the bridge is enabled.
+In-process topic / service / action bridging between robot-bus and ROS 2. Each language uses its native client (`rclrs` / `rclpy` / `rclcpp`). Target distributions: **Humble** and **Jazzy**; see [support status](docs/en/support.md) for verification by language and feature. The core SDK stays ROS-free unless the bridge is enabled.
 
 Requires a sourced ROS 2 distro and `rclpy`, plus a running broker (prefer `RobotBusBroker.start()` in application code; the CLI below is for a standalone broker):
 
@@ -336,6 +386,8 @@ Because robot-bus is lightweight and quick to bring up, teams can prototype and 
 Migration playbooks for Agent / developers: [`docs/skills/ros2-to-robot-bus`](docs/skills/ros2-to-robot-bus/SKILL.md) and [`docs/skills/robot-bus-to-ros2`](docs/skills/robot-bus-to-ros2/SKILL.md). In Cursor, `@` those files or ask to migrate a package either way.
 
 ## *6. Contribution*
+
+See [contributing](CONTRIBUTING.md) for source setup, checks by language and documentation validation.
 
 If you are interested in this project and want to join and undertake part of the work (development/testing/documentation),
 please feel free to contact me via email <deng_ran@aliyun.com>

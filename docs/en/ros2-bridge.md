@@ -20,7 +20,7 @@ Rust:    rclrs  ──mapper──► robot_bus::Node
 
 **Why per language:** Topic / service / action all need compile-time concrete types (`create_subscription<T>`, `create_service<T>`, etc.). Each language creates ROS entities with concrete types on its side, then forwards via its own bus `Node`.
 
-Official releases: **Humble**, **Jazzy**. Mount routes with `.mapper(concrete object)`; custom mappers are field converters in that language.
+Target distributions: **Humble**, **Jazzy**. See [support and verification status](support.md) for CI, packaging and live runtime boundaries; shim checks and package builds are not full runtime acceptance. Mount routes with `.mapper(concrete object)`; custom mappers are field converters in that language.
 
 ---
 
@@ -32,7 +32,7 @@ source /opt/ros/humble/setup.bash   # or jazzy
 cargo run --bin robot_bus_broker    # or python -m robot_bus.broker
 ```
 
-**Rust `feature = "ros2"`** uses crates.io **`rclrs`**. Typed messages come from **`ros-env`**, which re-exports `share/<pkg>/rust/` on `AMENT_PREFIX_PATH`. Builtin topic mappers cover **Humble/Jazzy distro-common** interface packages only (`CORE_BRIDGE_PACKAGES` in `scripts/generate_topic_mappers.py`). Sourcing `/opt/ros/humble` (or jazzy) is enough for that core set. Extension stacks (`nav2_msgs` / `control_msgs` / `foxglove_msgs` / `apriltag_msgs`) are **not** bridge builtins — write a Typed*Mapper (protos may still exist for bus-native use). See **Rust messages** below.
+**Rust `feature = "ros2"`** uses crates.io **`rclrs`**. Typed messages come from **`ros-env`**, which re-exports `share/<pkg>/rust/` on `AMENT_PREFIX_PATH`. Builtin topic mappers cover **Humble/Jazzy distro-common** interface packages only (`CORE_BRIDGE_PACKAGES` in `scripts/generate_topic_mappers.py`). Sourcing ROS is necessary but does not guarantee compatible rust IDL; verify generated field types and build in the target environment. Extension stacks (`nav2_msgs` / `control_msgs` / `foxglove_msgs` / `apriltag_msgs`) are **not** bridge builtins — write a Typed*Mapper (protos may still exist for bus-native use). See **Rust messages** below.
 
 | Language | Dependencies |
 |----------|--------------|
@@ -469,7 +469,7 @@ fn main() -> robot_bus::Result<()> {
 
 The client is crates.io **`rclrs`**. Message types come from **`ros-env`** re-exporting `share/<pkg>/rust/`, not from rclrs itself.
 
-On Humble/Jazzy, distro-common packages used by the **core** bridge mapper set typically already ship rust IDL. After `source /opt/ros/<distro>`, `cargo build --features ros2` should see `ros_env::<pkg>::msg` for those packages. Extension stacks are not builtins — do not expect nav2/control/foxglove/apriltag overlay to unlock in-tree mappers (write TypedTopicMapper instead).
+The **core** bridge mapper set needs rust IDL on `AMENT_PREFIX_PATH` with field types matching the mappers. After sourcing ROS, build and run the routes in the target environment; sourcing alone does not establish compatibility. The [historical build record](ros2-bridge-perf-report.md) includes a field-type mismatch. Extension stacks are not builtins — do not expect nav2/control/foxglove/apriltag overlay to unlock in-tree mappers (write TypedTopicMapper instead).
 
 Without ROS, use `just check-ros2-shim`. crates.io `ros-env` empties its shim; this repo patches it with **typed field stubs** in [`third_party/ros-env-shim`](../../third_party/ros-env-shim) (generated from core mapper protos). Our `std_srvs` vendor still uses system C typesupport and does not need rust IDL.
 

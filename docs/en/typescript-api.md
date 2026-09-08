@@ -183,7 +183,7 @@ Path: `ws://<host>:<port>/ws-rpc` (use `wss://` on HTTPS sites). **One connectio
 | PING | 5 | Application heartbeat (`stream_id = 0`) |
 | PONG | 6 | Heartbeat reply |
 
-Opcodes: `1=Subscribe`, `2=Publish`, `3=Call`, `4=SendGoal`. Publish success is TRAILER only (no DATA ack). **Breaking:** V2 method strings and `TopicMessage` protobuf envelopes are not accepted.
+Opcodes: `1=Subscribe`, `2=Publish`, `3=Call`, `4=SendGoal`, `5=SubscribeWithPolicy` (explicit overflow policy, used by current KeepLast clients). Publish success is TRAILER only (no DATA ack). **Breaking:** V2 method strings and `TopicMessage` protobuf envelopes are not accepted.
 
 The Node session contract (`connection_state` / `wait_for_broker` / auto-reconnect) is transport-agnostic; the browser client implements that contract over WebSocket.
 

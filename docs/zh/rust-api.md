@@ -496,6 +496,7 @@ Rust WebSocket 模块为 `robot_bus::ws`。Broker 监听配置使用 `robot_bus:
 | Opcode | RPC | REQUEST头 | DATA payload |
 |--------|-----|------------|--------------|
 | 1 | Subscribe | topic前缀 + `qos_depth` | `u16 topic_len` + topic + 原始总线字节 |
+| 5 | SubscribeWithPolicy | topic前缀 + `qos_depth` + overflow策略字节；新版 KeepLast 使用 1（丢旧） | 与 Subscribe 相同 |
 | 2 | Publish | topic；body = 原始总线字节 | 无（成功只回 TRAILER） |
 | 3 | Call | 服务名 + timeout + request id；body = 原始请求 | 原始响应 |
 | 4 | SendGoal | action名 + goal id + timeout；body = 原始 goal | `u8 kind` + 原始 body（`FEEDBACK`后接 `RESULT`） |
