@@ -1,6 +1,6 @@
 {
   "name": "robot-bus-console",
-  "version": "2.3.1",
+  "version": "2.3.2",
   "private": true,
   "scripts": {
     "bundle-docs": "node ./scripts/bundle-docs.mjs",

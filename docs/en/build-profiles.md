@@ -21,7 +21,7 @@ Convenience commands: `just build-sdk`, `just build-ws`, `just build-monitoring`
 For a small Rust dependency:
 
 ```toml
-robot-bus = { version = "2.3.1", default-features = false }
+robot-bus = { version = "2.3.2", default-features = false }
 ```
 
 Existing default Cargo builds and official Python, Node, C++/Java/Android distributions retain the full bundle. Existing explicit `--no-default-features --features ws,console` builds must add `demo-tank` if they need the demo. Runtime `--no-console` and `--no-tank` flags disable behavior; compile-time features remove components from the build.
