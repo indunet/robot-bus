@@ -1,7 +1,7 @@
 use std::any::Any;
 use std::collections::{HashMap, HashSet};
-use std::sync::{Arc, Mutex};
 use std::sync::mpsc::Receiver;
+use std::sync::{Arc, Mutex};
 use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
 
@@ -86,7 +86,11 @@ impl Ros2Bridge {
     fn spin_once_inner(&mut self, timeout: Option<Duration>) -> Result<()> {
         self.check_executor()?;
         let _ = self.rpc_node.spin_once(Some(Duration::ZERO));
-        let timeout = Some(timeout.unwrap_or(Duration::from_millis(10)).min(Duration::from_millis(10)));
+        let timeout = Some(
+            timeout
+                .unwrap_or(Duration::from_millis(10))
+                .min(Duration::from_millis(10)),
+        );
         // ROS executor runs on a background thread so Bus→ROS service/action handlers
         // can wait on client Promises without nested-spin deadlocks.
         if self.first_spin_at.is_none() {
@@ -111,7 +115,12 @@ impl Ros2Bridge {
     }
 
     fn check_executor(&self) -> Result<()> {
-        if let Some(error) = self.executor_error.lock().unwrap_or_else(|e| e.into_inner()).as_ref() {
+        if let Some(error) = self
+            .executor_error
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .as_ref()
+        {
             log::error!("ros2_bridge: {error}");
             return Err(BusError::Protocol(error.clone()));
         }

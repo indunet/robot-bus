@@ -100,7 +100,9 @@ if(ROBOT_BUS_ROS2)
   find_package(visualization_msgs REQUIRED)
   message(STATUS "robot_bus: native ROS 2 bridge enabled (core distro pkgs; source ROS 2 before build)")
 
-  add_library(robot_bus_ros2_bridge SHARED src/ros2_bridge.cpp)
+  add_library(robot_bus_ros2_bridge SHARED
+    src/ros2_bridge.cpp
+    src/ros2_bridge_wire.cpp)
   add_library(robot_bus::ros2_bridge ALIAS robot_bus_ros2_bridge)
   target_compile_definitions(robot_bus_ros2_bridge PUBLIC ROBOT_BUS_HAS_ROS2)
   target_include_directories(robot_bus_ros2_bridge

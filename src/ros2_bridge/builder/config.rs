@@ -1,7 +1,7 @@
 use std::any::Any;
 use std::collections::{HashMap, HashSet};
-use std::sync::{Arc, Mutex};
 use std::sync::mpsc;
+use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Duration;
 
@@ -13,7 +13,7 @@ use crate::errors::{BusError, Result};
 use crate::ros2_bridge::drop_stats::{DropStats, RouteHealth};
 use crate::ros2_bridge::mapper::{ActionMapper, Direction, ServiceMapper, TopicMapper};
 use crate::ros2_bridge::observe::{self, ConsoleRoute};
-use crate::runtime::{Node, NodeOptions, QosProfile, MultiThreadedExecutor};
+use crate::runtime::{MultiThreadedExecutor, Node, NodeOptions, QosProfile};
 
 use super::bridge::Ros2Bridge;
 use super::specs::{
@@ -208,9 +208,11 @@ impl Ros2BridgeBuilder {
             .create_node(self.name.as_str())
             .map_err(|e| BusError::Protocol(format!("rclrs create_node: {e}")))?;
 
-        let mut bus_node = Node::with_options(format!("{}_bus", self.name), self.bus_options.clone());
+        let mut bus_node =
+            Node::with_options(format!("{}_bus", self.name), self.bus_options.clone());
         let rpc_executor = MultiThreadedExecutor::new(4);
-        let mut rpc_node = rpc_executor.create_node_with_options(format!("{}_rpc", self.name), self.bus_options)?;
+        let mut rpc_node = rpc_executor
+            .create_node_with_options(format!("{}_rpc", self.name), self.bus_options)?;
 
         let mut ros_subs = Vec::new();
         let mut bus_pubs = HashMap::new();

@@ -13,16 +13,16 @@ use rclrs::{BeginAcceptedGoal, GoalClient, IntoActionClientOptions, IntoActionSe
 use rosidl_runtime_rs::{Action as ActionIdl, Service as ServiceIdl};
 
 use crate::ActionKind;
-use crate::ros2_bridge::deadline::Deadline;
-use crate::runtime::CallbackGroup;
 use crate::action_bus::ActionMessage;
 use crate::errors::{BusError, Result, rpc_error_body};
+use crate::ros2_bridge::deadline::Deadline;
 use crate::ros2_bridge::drop_stats::{DropStats, RouteHealth};
 use crate::ros2_bridge::mapper::{
     ActionWireContext, Direction, ServiceWireContext, TopicQos, TopicWireContext,
     TypedActionMapper, TypedServiceMapper, TypedTopicMapper, ros_action_feedback_qos_profile,
     ros_service_qos_profile, ros_topic_options,
 };
+use crate::runtime::CallbackGroup;
 use crate::runtime::{
     ActionGoalLiveHandler, MessageCallback, QosProfile, RawActionFeedbackCallback, ServiceHandler,
     TopicPublisherRaw,
@@ -159,7 +159,10 @@ where
     S::Response: Send + 'static,
 {
     let deadline = Deadline::new(timeout);
-    wait_service_ready(|| client.service_is_ready().unwrap_or(false), deadline.remaining().map_err(|e| e.to_string())?)?;
+    wait_service_ready(
+        || client.service_is_ready().unwrap_or(false),
+        deadline.remaining().map_err(|e| e.to_string())?,
+    )?;
     let (tx, rx) = mpsc::sync_channel(1);
     let _promise = client
         .call_then(ros_req, move |resp: S::Response| {
@@ -188,36 +191,43 @@ where
                 QosProfile::keep_last(ctx.bus_qos.depth()),
             )?));
             let timeout = ctx.timeout;
-            let pool = crate::runtime::worker_pool::WorkerPool::with_queue_capacity(2, 64);
-            let srv = ctx.ros_node.create_async_service::<M::Ros, _>(
-                ros_topic_options(ctx.ros_service, ctx.ros_qos),
-                move |req: <M::Ros as ServiceIdl>::Request| {
-                    health.rpc_start();
-                    let deadline = Deadline::new(timeout);
-                    let mapper = mapper.clone();
-                    let worker_mapper = mapper.clone();
-                    let client = Arc::clone(&bus_client);
-                    let health = Arc::clone(&health);
-                    let (tx, rx) = futures_channel::oneshot::channel();
-                    let submitted = pool.try_submit(move || {
-                        let result = (|| {
-                            let body = worker_mapper.ros_req_to_bus(&req)?;
-                            let guard = deadline.lock(&client)?;
-                            let response = guard.call(&body, Some(deadline.remaining()?))?;
-                            worker_mapper.bus_resp_to_ros(&response)
-                        })();
-                        let _ = tx.send(result);
-                    });
-                    async move {
-                        let result = match submitted {
-                            Ok(()) => rx.await.unwrap_or_else(|_| Err(BusError::Protocol("bridge service worker stopped".into()))),
-                            Err(e) => Err(BusError::Protocol(format!("bridge service queue: {e}"))),
-                        };
-                        health.rpc_finish(result.as_ref().err());
-                        result.unwrap_or_else(|e| mapper.error_response(&e.to_string()))
-                    }
-                },
-            ).map_err(|e| BusError::Protocol(format!("ros create_async_service: {e}")))?;
+            let pool = crate::runtime::WorkerPool::with_queue_capacity(2, 64);
+            let srv = ctx
+                .ros_node
+                .create_async_service::<M::Ros, _>(
+                    ros_topic_options(ctx.ros_service, ctx.ros_qos),
+                    move |req: <M::Ros as ServiceIdl>::Request| {
+                        health.rpc_start();
+                        let deadline = Deadline::new(timeout);
+                        let mapper = mapper.clone();
+                        let worker_mapper = mapper.clone();
+                        let client = Arc::clone(&bus_client);
+                        let health = Arc::clone(&health);
+                        let (tx, rx) = futures_channel::oneshot::channel();
+                        let submitted = pool.try_submit(move || {
+                            let result = (|| {
+                                let body = worker_mapper.ros_req_to_bus(&req)?;
+                                let guard = deadline.lock(&client)?;
+                                let response = guard.call(&body, Some(deadline.remaining()?))?;
+                                worker_mapper.bus_resp_to_ros(&response)
+                            })();
+                            let _ = tx.send(result);
+                        });
+                        async move {
+                            let result = match submitted {
+                                Ok(()) => rx.await.unwrap_or_else(|_| {
+                                    Err(BusError::Protocol("bridge service worker stopped".into()))
+                                }),
+                                Err(e) => {
+                                    Err(BusError::Protocol(format!("bridge service queue: {e}")))
+                                }
+                            };
+                            health.rpc_finish(result.as_ref().err());
+                            result.unwrap_or_else(|e| mapper.error_response(&e.to_string()))
+                        }
+                    },
+                )
+                .map_err(|e| BusError::Protocol(format!("ros create_async_service: {e}")))?;
             ctx.ros_entities.push(Box::new(srv));
         }
         Direction::BusToRos2 => {
@@ -238,11 +248,12 @@ where
                 health.rpc_finish(result.as_ref().err());
                 result.unwrap_or_else(|e| rpc_error_body(&e))
             });
+            let callback_group = CallbackGroup::mutually_exclusive();
             ctx.bus_node.create_service_raw_with_qos(
                 ctx.bus_service,
                 QosProfile::keep_last(ctx.bus_qos.depth()),
                 handler,
-                Some(CallbackGroup::mutually_exclusive()),
+                Some(&callback_group),
             )?;
         }
     }
@@ -391,7 +402,10 @@ where
                                     None,
                                     Some(match deadline.remaining() {
                                         Ok(t) => t,
-                                        Err(e) => { health.rpc_finish(Some(&e)); return executing.aborted_with(Default::default()); }
+                                        Err(e) => {
+                                            health.rpc_finish(Some(&e));
+                                            return executing.aborted_with(Default::default());
+                                        }
                                     }),
                                     Some(feedback_cb),
                                 ) {
@@ -515,14 +529,15 @@ where
     let requested = client
         .try_request_goal(ros_goal)
         .map_err(|e| BusError::Protocol(format!("ros action request_goal: {e}")))?;
-    let goal_client = match await_with_timeout(requested, budget.remaining()?).map_err(rpc_call_error)? {
-        Some(gc) => gc,
-        None => {
-            return Err(BusError::ActionRejected(
-                "ROS action server rejected goal".into(),
-            ));
-        }
-    };
+    let goal_client =
+        match await_with_timeout(requested, budget.remaining()?).map_err(rpc_call_error)? {
+            Some(gc) => gc,
+            None => {
+                return Err(BusError::ActionRejected(
+                    "ROS action server rejected goal".into(),
+                ));
+            }
+        };
     let GoalClient {
         mut feedback,
         result,
