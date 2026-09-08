@@ -18,6 +18,7 @@ import Sidebar, { type Tab } from './Sidebar'
 import BrokerOverview from './BrokerOverview'
 import OverviewStats from './OverviewStats'
 import TopicTable from './TopicTable'
+import SubscriptionQueues from './SubscriptionQueues'
 import BridgeTable from './BridgeTable'
 import ServiceActionTable from './ServiceActionTable'
 import EventStream from './EventStream'
@@ -141,6 +142,7 @@ export default function Dashboard() {
               <div className="h-[16rem] shrink-0">
                 <ThroughputChart data={throughput} />
               </div>
+              <SubscriptionQueues />
               <div className="flex-1 min-h-[12rem]">
                 <TopicTable topics={topics} bridgedNames={bridgedNames} />
               </div>

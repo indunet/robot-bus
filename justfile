@@ -33,6 +33,22 @@ gen-android:
 gen-rust:
 	python3 scripts/generate_rust_msgs.py
 
+# Core SDK, no HTTP gateway, web assets, or demo
+build-sdk: gen-rust
+	cargo build --release --no-default-features --lib
+
+# WS gateway without the monitoring control plane or web assets
+build-gateway: gen-rust
+	cargo build --release --no-default-features --features ws --bin robot_bus_broker
+
+# WS gateway and monitoring API, without web assets or demo
+build-monitoring: gen-rust
+	cargo build --release --no-default-features --features ws,console-api --bin robot_bus_broker
+
+# Full distribution including embedded console and tank demo
+build-full: gen-rust console
+	cargo build --release --bin robot_bus_broker
+
 # Typed ROS↔protobuf topic mappers (Rust + Python + C++) + ros-env-shim stubs
 gen-topic-mappers:
 	python3 scripts/generate_topic_mappers.py
@@ -43,12 +59,12 @@ gen-all: gen-rust proto gen-typescript gen-cpp gen-java gen-android
 # Build and install the Python binding into the active venv (includes Web console)
 python-dev: proto gen-rust
 	if [[ ! -f assets/console/index.html ]]; then just console; fi
-	cd bindings/python && maturin develop --features extension-module,ws,console --no-default-features
+	cd bindings/python && maturin develop --features extension-module,ws,console,demo-tank --no-default-features
 
 # Same as python-dev; Ros2Bridge is pure Python (rclpy). Source Humble/Jazzy first.
 python-dev-ros2: proto gen-rust
 	if [[ ! -f assets/console/index.html ]]; then just console; fi
-	cd bindings/python && maturin develop --features extension-module,ws,console --no-default-features
+	cd bindings/python && maturin develop --features extension-module,ws,console,demo-tank --no-default-features
 
 # Build TypeScript native addon + JS bundle (includes Web console)
 ts-dev: gen-typescript gen-rust

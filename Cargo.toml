@@ -36,13 +36,18 @@ name = "robot_bus"
 crate-type = ["cdylib", "rlib"]
 
 [features]
-default = ["ws", "console"]
+default = ["full"]
+# Compatibility preset: the official distribution keeps all existing features.
+full = ["ws", "console", "demo-tank"]
+# Optional in-process tank demo. Independent of the communication SDK.
+demo-tank = []
 # Enable with maturin / `cargo build --features extension-module` for the Python module.
 extension-module = ["dep:pyo3", "pyo3/extension-module"]
 # Multiplexed WebSocket RPC gateway (started with RobotBusBroker; on by default).
 # Payload stubs are pre-generated (`just gen-rust`); no protoc at compile time.
 # axum shares one listener with the console when both features are enabled.
 ws = [
+    "axum/ws",
     "dep:tokio",
     "dep:tower-http",
     "dep:tokio-stream",
@@ -52,12 +57,12 @@ ws = [
     "dep:tokio-tungstenite",
 ]
 # Embedded Web console (static UI + REST shim; same port as WS gateway when both enabled).
-console = [
+console = ["console-api", "dep:rust-embed", "dep:mime_guess"]
+# Monitoring/control-plane API without embedded web assets or a Node.js build.
+console-api = [
     "dep:tokio",
     "dep:tokio-stream",
     "dep:axum",
-    "dep:rust-embed",
-    "dep:mime_guess",
     "dep:tower-http",
     "dep:http",
 ]
@@ -73,7 +78,7 @@ anyhow = "1"
 rclrs = { version = "0.7", optional = true }
 rosidl_runtime_rs = { version = "0.6", optional = true }
 ros-env = { version = "0.2", optional = true }
-axum = { version = "0.8", optional = true, default-features = false, features = ["http1", "tokio", "query", "json", "ws"] }
+axum = { version = "0.8", optional = true, default-features = false, features = ["http1", "tokio", "query", "json"] }
 clap = { version = "4", features = ["derive"] }
 futures-util = { version = "0.3", optional = true, default-features = false, features = ["sink"] }
 http = { version = "1", optional = true }
@@ -116,22 +121,22 @@ required-features = ["ws"]
 [[test]]
 name = "console_metrics_smoke"
 path = "tests/console_metrics_smoke.rs"
-required-features = ["console", "ws"]
+required-features = ["console-api", "ws"]
 
 [[test]]
 name = "rbus_cli_smoke"
 path = "tests/rbus_cli_smoke.rs"
-required-features = ["console", "ws"]
+required-features = ["console-api", "ws"]
 
 [[test]]
 name = "topic_type_registry"
 path = "tests/topic_type_registry.rs"
-required-features = ["console", "ws"]
+required-features = ["console-api", "ws"]
 
 [[test]]
 name = "topic_demand"
 path = "tests/topic_demand.rs"
-required-features = ["console", "ws"]
+required-features = ["console-api", "ws"]
 
 [[test]]
 name = "ros2_bridge_lazy"
@@ -146,7 +151,7 @@ required-features = ["ws", "ros2"]
 [[test]]
 name = "tank_session"
 path = "tests/tank_session.rs"
-required-features = ["console", "ws"]
+required-features = ["console", "ws", "demo-tank"]
 
 [[bin]]
 name = "robot_bus_broker"

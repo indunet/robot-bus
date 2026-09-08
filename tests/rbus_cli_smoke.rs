@@ -2,7 +2,7 @@
 //!
 //! Topic list only shows topics with real subscriber traffic (same as metrics).
 
-#![cfg(feature = "console")]
+#![cfg(feature = "console-api")]
 
 mod support;
 

@@ -16,6 +16,7 @@ export {
   DEFAULT_WS_URL,
   type WsActionEvent,
   type WsSendGoalOptions,
+  type WsSubscriptionOptions,
 } from "./ws-node.js";
 
 export { encode, decode, type MessageType } from "./typed.js";

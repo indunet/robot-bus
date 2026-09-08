@@ -9,7 +9,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::thread::{self, JoinHandle};
 use std::time::Duration;
 
-#[cfg(feature = "console")]
+#[cfg(feature = "console-api")]
 use robot_bus::ConsoleBrokerConfig;
 #[cfg(feature = "ws")]
 use robot_bus::WsGatewayConfig;
@@ -128,7 +128,7 @@ pub fn ephemeral_robot_bus_config() -> RobotBusConfig {
             enabled: false,
             ..DiscoveryConfig::default()
         },
-        #[cfg(feature = "console")]
+        #[cfg(feature = "console-api")]
         console: ConsoleBrokerConfig {
             enabled: false,
             tank_enabled: false,

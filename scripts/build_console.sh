@@ -4,6 +4,8 @@
 # Console imports the in-repo TypeScript SDK (`robot-bus`). Both
 # `bindings/typescript/generated/` and `bindings/typescript/dist/` are
 # gitignored, so codegen + `build:ts` must run before `next build`.
+# `console/lib/bundled-docs.generated.ts` is also gitignored; `pnpm typecheck`
+# / `pnpm build` run `pretypecheck` / `prebuild` to generate it.
 #
 # Requires: protoc 35.1 on PATH, Node/npm, pnpm.
 set -euo pipefail

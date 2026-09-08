@@ -1,6 +1,6 @@
 //! Immediate `/robot_bus/topic_demand` events from topology register/unregister.
 
-#![cfg(feature = "console")]
+#![cfg(feature = "console-api")]
 
 mod support;
 

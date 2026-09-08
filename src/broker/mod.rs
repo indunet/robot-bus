@@ -21,5 +21,5 @@ pub use service_bus::ServicePeer;
 #[cfg(feature = "ws")]
 pub use handle::WsGatewayConfig;
 
-#[cfg(feature = "console")]
+#[cfg(feature = "console-api")]
 pub use handle::ConsoleBrokerConfig;

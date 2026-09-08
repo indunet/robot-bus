@@ -37,7 +37,7 @@ pub use node::{
 };
 pub use parameters::{ListParametersResult, PARAMETER_DEPTH_RECURSIVE, Parameter, ParameterValue};
 pub(crate) use qos::ws_subscribe_queue_capacity;
-pub use qos::{QOS_PROFILE_DEFAULT, QosProfile};
+pub use qos::{QOS_PROFILE_DEFAULT, QosProfile, SubscriptionOverflowPolicy};
 pub use queues::ActionMessageCallback;
 pub use registrations::{
     ActionGoalContext, ActionGoalHandler, ActionGoalLiveHandler, MessageCallback, ServiceHandler,

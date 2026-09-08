@@ -7,7 +7,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::thread;
 use std::time::{Duration, Instant};
 
-#[cfg(feature = "console")]
+#[cfg(feature = "console-api")]
 use robot_bus::ConsoleBrokerConfig;
 #[cfg(feature = "ws")]
 use robot_bus::WsGatewayConfig;
@@ -90,7 +90,7 @@ fn federated_action_config(
             enabled: false,
             ..DiscoveryConfig::default()
         },
-        #[cfg(feature = "console")]
+        #[cfg(feature = "console-api")]
         console: ConsoleBrokerConfig {
             enabled: false,
             tank_enabled: false,

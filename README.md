@@ -24,6 +24,8 @@ SDKs: **Rust**, **Python**, **TypeScript**, **C++**, **Java**, **Android**.
 
 The Node programming model — `Context` / `Node`, topic pub-sub, service, action, and `spin` — is the stable public API.
 
+Need a smaller build? See [build profiles](docs/en/build-profiles.md) for core SDK, WS gateway, monitoring API, embedded console, and the optional tank demo. WS subscription overflow policies and queue metrics are documented in the [Rust QoS guide](docs/en/rust-api.md#high-water-mark-hwm-and-qos).
+
 ### *Install*
 
 * Python

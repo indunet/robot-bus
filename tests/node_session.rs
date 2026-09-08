@@ -63,7 +63,7 @@ fn wait_for_broker_after_late_start() {
 
     let mut config = ephemeral_robot_bus_config();
     config.ws.listen = format!("127.0.0.1:{api_port}").parse().unwrap();
-    #[cfg(feature = "console")]
+    #[cfg(feature = "console-api")]
     {
         config.console.enabled = false;
     }

@@ -16,7 +16,7 @@ use super::message::MessageGatewayService;
 use super::service::ServiceGatewayService;
 use super::ws::{WsGatewayState, ws_upgrade};
 
-#[cfg(feature = "console")]
+#[cfg(feature = "console-api")]
 use crate::console::{self, ConsoleState};
 use crate::discovery::DiscoverResponse;
 
@@ -32,7 +32,7 @@ pub struct GatewayConfig {
     /// Broker endpoint map for `GET /api/v1/discover` (always served when set).
     pub discover: Option<Arc<DiscoverResponse>>,
     /// When set (feature `console`), serve REST + static UI on the same listener.
-    #[cfg(feature = "console")]
+    #[cfg(feature = "console-api")]
     pub console: Option<Arc<ConsoleState>>,
 }
 
@@ -48,7 +48,7 @@ impl Default for GatewayConfig {
             action_frontend: "tcp://127.0.0.1:15664".to_string(),
             cors_origins: Vec::new(),
             discover: None,
-            #[cfg(feature = "console")]
+            #[cfg(feature = "console-api")]
             console: None,
         }
     }
@@ -82,9 +82,9 @@ pub async fn serve_on_listener(
     let action = ActionGatewayService::new(config.action_frontend.clone());
     let cors = build_cors(&config.cors_origins)?;
 
-    #[cfg(feature = "console")]
+    #[cfg(feature = "console-api")]
     let with_console = config.console.is_some();
-    #[cfg(not(feature = "console"))]
+    #[cfg(not(feature = "console-api"))]
     let with_console = false;
 
     log::info!(
@@ -105,6 +105,16 @@ pub async fn serve_on_listener(
     });
 
     let app = Router::new()
+        .route(
+            "/api/v1/subscriptions",
+            get({
+                let message = ws_state.message.clone();
+                move || {
+                    let message = message.clone();
+                    async move { axum::Json(message.subscription_stats()) }
+                }
+            }),
+        )
         .route(crate::discovery::DEFAULT_WS_RPC_PATH, get(ws_upgrade))
         .with_state(ws_state);
 
@@ -120,7 +130,7 @@ pub async fn serve_on_listener(
         app
     };
 
-    #[cfg(feature = "console")]
+    #[cfg(feature = "console-api")]
     let app = match config.console {
         Some(state) => app
             .merge(console::api_router(state))

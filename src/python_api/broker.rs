@@ -207,7 +207,7 @@ impl PyRobotBusBroker {
             let _ = cors_origins;
         }
 
-        #[cfg(feature = "console")]
+        #[cfg(feature = "console-api")]
         {
             if no_console {
                 config.console.enabled = false;
@@ -225,7 +225,7 @@ impl PyRobotBusBroker {
                 config.console.enabled = true;
             }
         }
-        #[cfg(not(feature = "console"))]
+        #[cfg(not(feature = "console-api"))]
         {
             let _ = (console_listen, no_console, no_tank, no_docs);
         }
@@ -260,7 +260,7 @@ impl PyRobotBusBroker {
                     config.ws.listen = v
                         .parse()
                         .map_err(|e| PyRuntimeError::new_err(format!("invalid api_listen: {e}")))?;
-                    #[cfg(feature = "console")]
+                    #[cfg(feature = "console-api")]
                     {
                         config.console.listen = config.ws.listen;
                     }
@@ -340,7 +340,7 @@ impl PyRobotBusBroker {
         self.with_broker(|b| b.api_listen().to_string())
     }
 
-    #[cfg(feature = "console")]
+    #[cfg(feature = "console-api")]
     #[getter]
     fn console_listen(&self) -> PyResult<Option<String>> {
         self.with_broker(|b| b.console_listen().map(|a| a.to_string()))

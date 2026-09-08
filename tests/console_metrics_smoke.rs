@@ -3,7 +3,7 @@
 //! Message metrics only observe traffic that real subscribers receive (no
 //! internal blanket SUB — communication efficiency comes first).
 
-#![cfg(feature = "console")]
+#![cfg(feature = "console-api")]
 
 mod support;
 

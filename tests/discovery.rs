@@ -37,7 +37,7 @@ fn discover_tcp_then_pubsub() {
     config.message.bind_all_transports = false;
     config.service.bind_all_transports = false;
     config.action.bind_all_transports = false;
-    #[cfg(feature = "console")]
+    #[cfg(feature = "console-api")]
     {
         // Discover is served from the gateway when console UI is off.
         config.console.enabled = false;

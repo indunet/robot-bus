@@ -5,7 +5,7 @@ use std::path::PathBuf;
 use std::sync::{Mutex, MutexGuard};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
-#[cfg(feature = "console")]
+#[cfg(feature = "console-api")]
 use robot_bus::ConsoleBrokerConfig;
 use robot_bus::{Context, Node, NodeOptions, RobotBusConfig};
 
@@ -28,7 +28,7 @@ pub fn perf_broker_config() -> RobotBusConfig {
     config.service.rcv_hwm = 64;
     config.action.snd_hwm = 64;
     config.action.rcv_hwm = 64;
-    #[cfg(feature = "console")]
+    #[cfg(feature = "console-api")]
     {
         config.console = ConsoleBrokerConfig {
             enabled: false,

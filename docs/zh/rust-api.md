@@ -274,7 +274,23 @@ node.create_timer(
 
 `QosProfile::keep_last(depth)`映射为 ZMQ HWM。Topic用 PUB/SUB HWM；service / action用 DEALER HWM（`snd` / `rcv`都等于 depth）。reliability固定 best-effort（RPC也没有 DDS reliability）。不传 QoS则用节点默认（topic 8/8，service 4/4，action 8/8）。
 
-**WebSocket** Node上 KeepLast **只兑现订阅侧**：作为网关到客户端的队列深度（满则丢；不传则用网关默认 64）。发布侧 QoS忽略（所有 WS发布者共用网关的一个 PUB）。WS的 service / action客户端没有 ZMQ socket，HWM被忽略。
+**WebSocket** Node 上 KeepLast 只作用于订阅侧：设置网关待发送队列深度，满时丢弃新到消息；不传则使用网关默认 64。发布侧 QoS 忽略，WS service / action 客户端的 HWM 也忽略。
+
+WS 订阅可以显式选择积压策略：
+
+| Rust 配置 | 队列满时的行为 |
+| --- | --- |
+| `QosProfile::keep_last(n)` | 保留已排队消息，丢弃新到消息（原默认行为） |
+| `QosProfile::keep_recent(n)` | 移除最旧消息，保留最近 N 条 |
+| `QosProfile::latest()` | 只保留最新一条待发送消息 |
+
+在 `Node::ws` / `Node::ws_at` 上，把配置传给 `create_subscription_with_qos` 或 `create_subscription_raw_with_qos`。例如：`node.create_subscription_raw_with_qos("/pose", QosProfile::latest(), std::sync::Arc::new(|_bytes| {}), None)?;`。原生 ZMQ 订阅会拒绝后两种替换策略；其他语言的原生绑定暂时保留原有的 depth 参数。
+
+策略仅影响**每个订阅过滤器在网关的待发送队列**，不影响客户端回调队列、ZMQ 队列或网络缓冲。前缀订阅匹配的所有 topic 共用一个队列。只有回调慢，不一定触发网关替换；已经取出发送的消息无法撤回，也不保证可靠送达。depth ≤ 0 使用 64，上限为 1,048,576；`latest` 固定容量为 1。同一过滤器的多个回调共享队列，不同策略或不同替换深度会报错；旧式重复订阅仍使用第一次设置的深度。
+
+启用 `ws` 即提供 `GET /api/v1/subscriptions`，无需控制台。控制台 Topics 页面显示活跃订阅的策略、容量、待发送数量和溢出丢弃数。API 还返回 `received`（入队尝试）、`dequeued`（取出发送，不代表送达）。取消后移除该行；`totalDropped` 保留已关闭订阅的溢出计数，网关重启归零。统计不包含原生传输丢包，读取期间队列仍可变化。
+
+协议兼容：旧订阅继续使用 V3 opcode 1 和原始布局；显式替换策略使用新增 opcode 5（`topic:str`、`qos_depth:i32`、`policy:u8`，0=丢新，1=丢旧，2=最新）。使用新策略前先升级 broker；旧版 V3 broker 会拒绝 opcode 5，客户端不会自动降级。可选网关和控制台构建见[按需构建](build-profiles.md)。
 
 ```rust
 use robot_bus::{Node, QosProfile, Publisher, HighWaterMark};

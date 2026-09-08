@@ -25,7 +25,7 @@ fn run(config: RobotBusConfig) -> Result<()> {
     let shutdown = Arc::new(AtomicBool::new(false));
     shutdown::install(shutdown.clone());
 
-    println!("robot_bus_broker starting message + service + action buses + WebSocket + console…");
+    println!("robot_bus_broker starting…");
     let broker = RobotBusBroker::start(config)?;
 
     while !shutdown.load(Ordering::Acquire) {

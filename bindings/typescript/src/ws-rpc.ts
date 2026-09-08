@@ -17,6 +17,7 @@ export const OPCODE_SUBSCRIBE = 1;
 export const OPCODE_PUBLISH = 2;
 export const OPCODE_CALL = 3;
 export const OPCODE_SEND_GOAL = 4;
+export const OPCODE_SUBSCRIBE_WITH_POLICY = 5;
 
 export const ACTION_KIND_GOAL = 1;
 export const ACTION_KIND_FEEDBACK = 2;
@@ -32,6 +33,7 @@ export const WS_PING_MISS_LIMIT = 2;
 export const WS_RPC_PATH = "/ws-rpc";
 
 export type RequestHeader =
+  | { opcode: typeof OPCODE_SUBSCRIBE_WITH_POLICY; topic: string; qosDepth: number; overflow: number }
   | { opcode: typeof OPCODE_SUBSCRIBE; topic: string; qosDepth: number }
   | { opcode: typeof OPCODE_PUBLISH; topic: string }
   | {
@@ -99,6 +101,9 @@ function encodeRequestHeader(header: RequestHeader, body: Uint8Array): Uint8Arra
         encodeStr(header.topic),
         i32le(header.qosDepth),
       ]);
+    case OPCODE_SUBSCRIBE_WITH_POLICY:
+      if (![0, 1, 2].includes(header.overflow)) throw new Error("invalid subscription overflow policy");
+      return concatBytes([new Uint8Array([OPCODE_SUBSCRIBE_WITH_POLICY]), encodeStr(header.topic), i32le(header.qosDepth), new Uint8Array([header.overflow])]);
     case OPCODE_PUBLISH:
       return concatBytes([
         new Uint8Array([OPCODE_PUBLISH]),
@@ -220,12 +225,15 @@ export function decodeFrame(bytes: Uint8Array): WsFrame {
       return s;
     };
     let header: RequestHeader;
-    if (opcode === OPCODE_SUBSCRIBE) {
+    if (opcode === OPCODE_SUBSCRIBE || opcode === OPCODE_SUBSCRIBE_WITH_POLICY) {
       const topic = readStr();
       if (bytes.length < off + 4) throw new Error("truncated Subscribe qos");
       const qosDepth = view.getInt32(off, true);
       off += 4;
-      header = { opcode: OPCODE_SUBSCRIBE, topic, qosDepth };
+      if (opcode === OPCODE_SUBSCRIBE_WITH_POLICY) {
+        if (bytes.length !== off + 1 || ![0, 1, 2].includes(bytes[off]!)) throw new Error("invalid subscription overflow policy");
+        header = { opcode, topic, qosDepth, overflow: bytes[off++]! };
+      } else { header = { opcode: OPCODE_SUBSCRIBE, topic, qosDepth }; }
     } else if (opcode === OPCODE_PUBLISH) {
       header = { opcode: OPCODE_PUBLISH, topic: readStr() };
     } else if (opcode === OPCODE_CALL) {
@@ -591,6 +599,12 @@ export class WsSession {
       return;
     }
     if (frame.type === "trailer" && frame.streamId === 0) {
+      // Older V3 brokers reject the additive subscribe opcode at connection
+      // scope. Surface the rejection instead of leaving streams pending forever.
+      if (frame.status !== 0 && frame.message === "unknown opcode 5") {
+        this.failStreams(new WsRpcError(frame.status, frame.message));
+        return;
+      }
       this.heartbeat = false;
       this.awaitingPong = false;
       return;

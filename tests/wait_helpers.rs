@@ -1,6 +1,6 @@
 //! wait_for_message / wait_for_service / wait_for_action_server helpers.
 
-#![cfg(feature = "console")]
+#![cfg(feature = "console-api")]
 
 mod support;
 
@@ -27,7 +27,7 @@ fn node_options_from_broker(broker: &RobotBusBroker) -> NodeOptions {
         service_backend: Some(broker.service.backend_bind.clone()),
         action_frontend: Some(broker.action.frontend_bind.clone()),
         action_backend: Some(broker.action.backend_bind.clone()),
-        console_url: Some(broker.api_url()),
+        console_url: Some(format!("http://{}", broker.console_listen().unwrap())),
         ..NodeOptions::default()
     }
 }

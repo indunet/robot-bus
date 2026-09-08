@@ -6,7 +6,7 @@ use std::sync::Arc;
 use std::thread;
 use std::time::Duration;
 
-#[cfg(feature = "console")]
+#[cfg(feature = "console-api")]
 use robot_bus::ConsoleBrokerConfig;
 #[cfg(feature = "ws")]
 use robot_bus::WsGatewayConfig;
@@ -86,7 +86,7 @@ fn federated_service_config(
             enabled: false,
             ..DiscoveryConfig::default()
         },
-        #[cfg(feature = "console")]
+        #[cfg(feature = "console-api")]
         console: ConsoleBrokerConfig {
             enabled: false,
             tank_enabled: false,

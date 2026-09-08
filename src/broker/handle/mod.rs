@@ -20,11 +20,11 @@ use crate::transports::{
     ipc_endpoint_in,
 };
 
-#[cfg(all(feature = "console", not(feature = "ws")))]
-use crate::console::serve_with_shutdown as serve_console_with_shutdown;
-#[cfg(feature = "console")]
+#[cfg(all(feature = "console-api", not(feature = "ws")))]
+use crate::console::serve_on_listener as serve_console_on_listener;
+#[cfg(feature = "console-api")]
 use crate::console::{BrokerEndpoints, ConsoleState, ControlPlaneHandle, StatusPublisherHandle};
-#[cfg(feature = "console")]
+#[cfg(all(feature = "console-api", feature = "demo-tank"))]
 use crate::tank::{TankEndpoints, TankManager};
 #[cfg(feature = "ws")]
 use crate::ws_gateway::{GatewayConfig, serve_on_listener};
@@ -34,7 +34,7 @@ mod bus_handles;
 mod config;
 
 pub use bus_handles::{ActionBusBroker, MessageBusBroker, ServiceBusBroker};
-#[cfg(feature = "console")]
+#[cfg(feature = "console-api")]
 pub use config::ConsoleBrokerConfig;
 pub use config::RobotBusConfig;
 #[cfg(feature = "ws")]
@@ -91,7 +91,7 @@ impl WsGatewayHandle {
         if let Some(disc) = config.discover.as_mut() {
             let mut d = (**disc).clone();
             d.api_url = connect_url_for_listen(listen);
-            #[cfg(feature = "console")]
+            #[cfg(feature = "console-api")]
             if d.console_url.is_some() {
                 d.console_url = Some(d.api_url.clone());
             }
@@ -160,16 +160,16 @@ impl Drop for WsGatewayHandle {
 
 /// Console-only HTTP server (no `grpc` feature) — otherwise the console shares
 /// the gRPC gateway's listener (see [`GatewayConfig::console`]).
-#[cfg(all(feature = "console", not(feature = "ws")))]
+#[cfg(all(feature = "console-api", not(feature = "ws")))]
 struct ConsoleHttpHandle {
     shutdown_tx: Option<tokio::sync::watch::Sender<bool>>,
     handle: Option<JoinHandle<Result<()>>>,
 }
 
-#[cfg(all(feature = "console", not(feature = "ws")))]
+#[cfg(all(feature = "console-api", not(feature = "ws")))]
 impl ConsoleHttpHandle {
     fn start(
-        listen: SocketAddr,
+        listener: std::net::TcpListener,
         state: Arc<ConsoleState>,
         cors_origins: Vec<String>,
     ) -> Result<Self> {
@@ -187,7 +187,8 @@ impl ConsoleHttpHandle {
                         }
                     }
                 };
-                serve_console_with_shutdown(listen, state, cors_origins, shutdown).await
+                let listener = tokio::net::TcpListener::from_std(listener)?;
+                serve_console_on_listener(listener, state, cors_origins, shutdown).await
             })
         });
         thread::sleep(STARTUP_SETTLE);
@@ -208,7 +209,7 @@ impl ConsoleHttpHandle {
     }
 }
 
-#[cfg(all(feature = "console", not(feature = "ws")))]
+#[cfg(all(feature = "console-api", not(feature = "ws")))]
 impl Drop for ConsoleHttpHandle {
     fn drop(&mut self) {
         if let Some(tx) = self.shutdown_tx.take() {
@@ -240,15 +241,15 @@ pub struct RobotBusBroker {
     ws: WsGatewayHandle,
     /// Console-only HTTP server; `None` when `grpc` is enabled (console shares its port)
     /// or the console is disabled.
-    #[cfg(all(feature = "console", not(feature = "ws")))]
+    #[cfg(all(feature = "console-api", not(feature = "ws")))]
     console: Option<ConsoleHttpHandle>,
-    #[cfg(feature = "console")]
+    #[cfg(feature = "console-api")]
     status_pub: Option<StatusPublisherHandle>,
-    #[cfg(feature = "console")]
+    #[cfg(feature = "console-api")]
     control_plane: Option<ControlPlaneHandle>,
-    #[cfg(feature = "console")]
+    #[cfg(feature = "console-api")]
     console_listen: Option<SocketAddr>,
-    #[cfg(feature = "console")]
+    #[cfg(all(feature = "console-api", feature = "demo-tank"))]
     tank: Option<Arc<TankManager>>,
     /// Snapshot served at `GET /api/v1/discover`.
     pub discover: DiscoverResponse,
@@ -275,28 +276,39 @@ impl RobotBusBroker {
         config.service.bind_opts = bind_opts.clone();
         config.action.bind_opts = bind_opts.clone();
 
+        #[cfg(all(feature = "console-api", not(feature = "ws")))]
+        let console_listener = if config.console.enabled {
+            let listener = std::net::TcpListener::bind(config.console.listen)
+                .context("bind monitoring API")?;
+            listener.set_nonblocking(true)?;
+            config.console.listen = listener.local_addr()?;
+            Some(listener)
+        } else {
+            None
+        };
+
         let advertise_host = resolve_advertise_host(&config.discovery);
         let zmq = context.clone_zmq();
         // Capture metrics only when the console will read them — otherwise keep
         // the message bus on a plain proxy_steerable with zero monitoring overhead.
-        #[cfg(feature = "console")]
+        #[cfg(feature = "console-api")]
         let message_metrics = if config.console.enabled {
             Some(MessageMetrics::new())
         } else {
             None
         };
-        #[cfg(not(feature = "console"))]
+        #[cfg(not(feature = "console-api"))]
         let message_metrics = None;
 
         let message =
             MessageBusBroker::start_with_zmq(zmq.clone(), config.message.clone(), message_metrics)?;
-        #[cfg(feature = "console")]
+        #[cfg(feature = "console-api")]
         let (service_metrics, action_metrics) = if config.console.enabled {
             (Some(ServiceMetrics::new()), Some(ActionMetrics::new()))
         } else {
             (None, None)
         };
-        #[cfg(not(feature = "console"))]
+        #[cfg(not(feature = "console-api"))]
         let (service_metrics, action_metrics) = (None, None);
         let service =
             ServiceBusBroker::start_with_zmq(zmq.clone(), config.service.clone(), service_metrics)?;
@@ -307,11 +319,11 @@ impl RobotBusBroker {
             {
                 config.ws.listen
             }
-            #[cfg(all(not(feature = "ws"), feature = "console"))]
+            #[cfg(all(not(feature = "ws"), feature = "console-api"))]
             {
                 config.console.listen
             }
-            #[cfg(all(not(feature = "ws"), not(feature = "console")))]
+            #[cfg(all(not(feature = "ws"), not(feature = "console-api")))]
             {
                 "0.0.0.0:15560"
                     .parse::<SocketAddr>()
@@ -359,7 +371,7 @@ impl RobotBusBroker {
 
         // Build console state before starting the gRPC gateway — when both features
         // are enabled, REST + static UI routes merge onto the same listener below.
-        #[cfg(feature = "console")]
+        #[cfg(feature = "console-api")]
         let console_state: Option<Arc<ConsoleState>> = if config.console.enabled {
             let grpc_addr = {
                 #[cfg(feature = "ws")]
@@ -392,6 +404,7 @@ impl RobotBusBroker {
                 web: web_addr,
                 discover: discover.clone(),
             };
+            #[cfg(feature = "demo-tank")]
             let tank = TankManager::new(TankEndpoints {
                 message_xsub: bind_to_connect(&message.xsub_bind),
                 message_xpub: bind_to_connect(&message.xpub_bind),
@@ -404,6 +417,7 @@ impl RobotBusBroker {
                 message.metrics.clone(),
                 service.metrics.clone(),
                 action.metrics.clone(),
+                #[cfg(feature = "demo-tank")]
                 tank,
                 config.console.tank_enabled,
                 config.console.docs_enabled,
@@ -423,7 +437,7 @@ impl RobotBusBroker {
                 cors_origins: config.ws.cors_origins.clone(),
                 // When console is on, discover is served from console api_router.
                 discover: {
-                    #[cfg(feature = "console")]
+                    #[cfg(feature = "console-api")]
                     {
                         if console_state.is_none() {
                             Some(Arc::new(discover.clone()))
@@ -431,12 +445,12 @@ impl RobotBusBroker {
                             None
                         }
                     }
-                    #[cfg(not(feature = "console"))]
+                    #[cfg(not(feature = "console-api"))]
                     {
                         Some(Arc::new(discover.clone()))
                     }
                 },
-                #[cfg(feature = "console")]
+                #[cfg(feature = "console-api")]
                 console: console_state.clone(),
             };
             WsGatewayHandle::start(gateway)?
@@ -444,7 +458,7 @@ impl RobotBusBroker {
         #[cfg(feature = "ws")]
         {
             discover.api_url = connect_url_for_listen(ws.listen);
-            #[cfg(feature = "console")]
+            #[cfg(feature = "console-api")]
             if discover.console_url.is_some() {
                 discover.console_url = Some(discover.api_url.clone());
             }
@@ -452,10 +466,10 @@ impl RobotBusBroker {
 
         // Console-only HTTP server — only needed when `grpc` is disabled; otherwise
         // the console shares the gRPC gateway's listener started above.
-        #[cfg(all(feature = "console", not(feature = "ws")))]
+        #[cfg(all(feature = "console-api", not(feature = "ws")))]
         let console = match &console_state {
             Some(state) => Some(ConsoleHttpHandle::start(
-                config.console.listen,
+                console_listener.expect("enabled console has a bound listener"),
                 state.clone(),
                 config.console.cors_origins.clone(),
             )?),
@@ -464,7 +478,7 @@ impl RobotBusBroker {
 
         // Control-plane subscriber + 1 Hz status publisher (feature `console`),
         // regardless of whether the console shares the gRPC port or has its own.
-        #[cfg(feature = "console")]
+        #[cfg(feature = "console-api")]
         let (status_pub, control_plane) = match &console_state {
             Some(state) => {
                 let control_plane = ControlPlaneHandle::start(
@@ -484,7 +498,7 @@ impl RobotBusBroker {
             None => (None, None),
         };
 
-        #[cfg(feature = "console")]
+        #[cfg(feature = "console-api")]
         let console_listen: Option<SocketAddr> = if console_state.is_some() {
             #[cfg(feature = "ws")]
             {
@@ -498,7 +512,7 @@ impl RobotBusBroker {
             None
         };
 
-        #[cfg(feature = "console")]
+        #[cfg(all(feature = "console-api", feature = "demo-tank"))]
         let tank = console_state.as_ref().map(|s| Arc::clone(&s.tank));
 
         println!("{}", format_startup_banner(&discover));
@@ -509,15 +523,15 @@ impl RobotBusBroker {
             action,
             #[cfg(feature = "ws")]
             ws,
-            #[cfg(all(feature = "console", not(feature = "ws")))]
+            #[cfg(all(feature = "console-api", not(feature = "ws")))]
             console,
-            #[cfg(feature = "console")]
+            #[cfg(feature = "console-api")]
             status_pub,
-            #[cfg(feature = "console")]
+            #[cfg(feature = "console-api")]
             control_plane,
-            #[cfg(feature = "console")]
+            #[cfg(feature = "console-api")]
             console_listen,
-            #[cfg(feature = "console")]
+            #[cfg(all(feature = "console-api", feature = "demo-tank"))]
             tank,
             discover,
         })
@@ -539,7 +553,7 @@ impl RobotBusBroker {
     ///
     /// This is the API listen address when `ws` is also enabled (single port),
     /// or the console's own listen address otherwise.
-    #[cfg(feature = "console")]
+    #[cfg(feature = "console-api")]
     pub fn console_listen(&self) -> Option<SocketAddr> {
         self.console_listen
     }
@@ -549,22 +563,22 @@ impl RobotBusBroker {
         // Ask the console background threads to wind down before tearing down
         // the gateway they publish/subscribe through; give them a moment to
         // notice before we start joining anything.
-        #[cfg(feature = "console")]
+        #[cfg(all(feature = "console-api", feature = "demo-tank"))]
         if let Some(tank) = self.tank.as_ref() {
             tank.shutdown();
         }
-        #[cfg(feature = "console")]
+        #[cfg(feature = "console-api")]
         if let Some(status_pub) = self.status_pub.as_ref() {
             status_pub.request_stop();
         }
-        #[cfg(feature = "console")]
+        #[cfg(feature = "console-api")]
         if let Some(control_plane) = self.control_plane.as_ref() {
             control_plane.request_stop();
         }
-        #[cfg(feature = "console")]
+        #[cfg(feature = "console-api")]
         thread::sleep(Duration::from_millis(50));
 
-        #[cfg(all(feature = "console", not(feature = "ws")))]
+        #[cfg(all(feature = "console-api", not(feature = "ws")))]
         let console = match self.console {
             Some(c) => c.stop(),
             None => Ok(()),
@@ -572,11 +586,11 @@ impl RobotBusBroker {
         #[cfg(feature = "ws")]
         let ws_handle = self.ws.stop();
 
-        #[cfg(feature = "console")]
+        #[cfg(feature = "console-api")]
         if let Some(status_pub) = self.status_pub {
             status_pub.stop();
         }
-        #[cfg(feature = "console")]
+        #[cfg(feature = "console-api")]
         if let Some(control_plane) = self.control_plane {
             control_plane.stop();
         }
@@ -585,19 +599,19 @@ impl RobotBusBroker {
         let service = self.service.stop();
         let message = self.message.stop();
 
-        #[cfg(all(feature = "ws", feature = "console"))]
+        #[cfg(all(feature = "ws", feature = "console-api"))]
         {
             return ws_handle.and(action).and(service).and(message);
         }
-        #[cfg(all(feature = "ws", not(feature = "console")))]
+        #[cfg(all(feature = "ws", not(feature = "console-api")))]
         {
             return ws_handle.and(action).and(service).and(message);
         }
-        #[cfg(all(feature = "console", not(feature = "ws")))]
+        #[cfg(all(feature = "console-api", not(feature = "ws")))]
         {
             return console.and(action).and(service).and(message);
         }
-        #[cfg(not(any(feature = "ws", feature = "console")))]
+        #[cfg(not(any(feature = "ws", feature = "console-api")))]
         {
             action.and(service).and(message)
         }

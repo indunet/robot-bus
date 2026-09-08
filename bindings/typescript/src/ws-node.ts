@@ -26,6 +26,7 @@ import {
   OPCODE_PUBLISH,
   OPCODE_SEND_GOAL,
   OPCODE_SUBSCRIBE,
+  OPCODE_SUBSCRIBE_WITH_POLICY,
   WsSession,
   decodeActionData,
   decodeSubscribeData,
@@ -41,6 +42,12 @@ export function __setWsRpcForTests(factory?: ((url: string) => WsSession) | null
 
 export const DEFAULT_WS_URL = "http://127.0.0.1:15560";
 const DEFAULT_TOPOLOGY_REFRESH_MS = 10_000;
+
+export interface WsSubscriptionOptions {
+  depth?: number;
+  /** Applies to pending messages for this gateway filter, not bytes already sent. */
+  overflow?: "drop_newest" | "drop_oldest" | "latest";
+}
 
 export interface WsNodeOptions {
   /**
@@ -298,6 +305,7 @@ export class WsNode {
   private readonly subscriptions = new Map<string, SubCallback[]>();
   /** KeepLast depth per topic (`0` = gateway default). First subscribe wins for that topic. */
   private readonly subscriptionQos = new Map<string, number>();
+  private readonly subscriptionPolicies = new Map<string, NonNullable<WsSubscriptionOptions["overflow"]>>();
   private readonly topologyEnabled: boolean;
   private readonly topologyRefreshMs: number;
   private readonly topologyEndpoints = new Map<string, TopologyEndpoint>();
@@ -426,25 +434,24 @@ export class WsNode {
   /**
    * Subscribe to a topic prefix. Callbacks fire after `spin()` / `start()` begins.
    */
-  createSubscription(topic: string, callback: SubCallback, qosDepth?: number): void;
-  createSubscription<T extends object>(
-    topic: string,
-    callback: (msg: T) => void,
-    msgType: MessageType<T>,
-    qosDepth?: number,
-  ): void;
+  createSubscription(topic: string, callback: SubCallback, qos?: number | WsSubscriptionOptions): void;
+  createSubscription<T extends object>(topic: string, callback: (msg: T) => void, msgType: MessageType<T>, qos?: number | WsSubscriptionOptions): void;
   createSubscription<T extends object>(
     topic: string,
     callback: SubCallback | ((msg: T) => void),
-    msgTypeOrDepth?: MessageType<T> | number,
-    maybeDepth?: number,
+    msgTypeOrDepth?: MessageType<T> | number | WsSubscriptionOptions,
+    maybeDepth?: number | WsSubscriptionOptions,
   ): void {
-    const msgType =
-      typeof msgTypeOrDepth === "number" || msgTypeOrDepth === undefined
-        ? undefined
-        : msgTypeOrDepth;
-    const qosDepth =
-      typeof msgTypeOrDepth === "number" ? msgTypeOrDepth : maybeDepth;
+    const msgType = typeof msgTypeOrDepth === "object" && "typeName" in msgTypeOrDepth ? msgTypeOrDepth : undefined;
+    const options = msgType ? maybeDepth : msgTypeOrDepth as number | WsSubscriptionOptions | undefined;
+    const policy = typeof options === "object" ? options.overflow ?? "drop_newest" : "drop_newest";
+    if (!["drop_newest", "drop_oldest", "latest"].includes(policy)) throw new Error("invalid subscription overflow policy");
+    const qosDepth = policy === "latest" ? 1 : typeof options === "number" ? options : options?.depth ?? 0;
+    const prior = this.subscriptionPolicies.get(topic);
+    if (prior !== undefined && (prior !== policy || (policy !== "drop_newest" && this.subscriptionQos.get(topic) !== qosDepth))) {
+      throw new Error(`conflicting subscription policy for '${topic}'`);
+    }
+    this.subscriptionPolicies.set(topic, policy);
     const wrapped: SubCallback = msgType
       ? (payload) => {
           const decoded = decode(msgType, payload);
@@ -646,11 +653,14 @@ export class WsNode {
     this.session.start();
     this.startTopologyRegistration();
     this.abort = new AbortController();
-    // Optional prefix coalesce reduces ZMQ SUB sockets; each filter is one WS.
-    for (const filter of coalesceSubscribeFilters([
-      ...this.subscriptions.keys(),
-    ])) {
-      void this.pumpTopic(filter, this.abort.signal, qosDepthForFilter(filter, this.subscriptionQos));
+    // Explicit policies stay on separate streams; coalescing could replace one
+    // topic's latest state with a different topic or mix incompatible policies.
+    const separate = [...this.subscriptionPolicies.values()].some((policy) => policy !== "drop_newest");
+    const filters = separate ? [...this.subscriptions.keys()] : coalesceSubscribeFilters([...this.subscriptions.keys()]);
+    for (const filter of filters) {
+      void this.pumpTopic(filter, this.abort.signal,
+        separate ? this.subscriptionQos.get(filter) ?? 0 : qosDepthForFilter(filter, this.subscriptionQos),
+        this.subscriptionPolicies.get(filter) ?? "drop_newest", separate);
     }
   }
 
@@ -821,17 +831,25 @@ export class WsNode {
     });
   }
 
-  private async pumpTopic(filter: string, signal: AbortSignal, qosDepth = 0): Promise<void> {
+  private async pumpTopic(filter: string, signal: AbortSignal, qosDepth = 0, policy: NonNullable<WsSubscriptionOptions["overflow"]> = "drop_newest", separate = false): Promise<void> {
     let backoffMs = 200;
     while (!signal.aborted) {
       try {
         const { control, done } = await this.session.serverStream(
-          { opcode: OPCODE_SUBSCRIBE, topic: filter, qosDepth },
+          policy === "drop_newest" ? { opcode: OPCODE_SUBSCRIBE, topic: filter, qosDepth } : { opcode: OPCODE_SUBSCRIBE_WITH_POLICY, topic: filter, qosDepth, overflow: policy === "latest" ? 2 : 1 },
           new Uint8Array(),
           {
             onData: (payload) => {
               const msg = decodeSubscribeData(payload);
               const cbs: SubCallback[] = [];
+              if (separate) {
+                if (msg.topic === filter || (filter.endsWith("/") && msg.topic.startsWith(filter))) {
+                  for (const cb of this.subscriptions.get(filter) ?? []) {
+                    try { cb(msg.payload); } catch (err) { console.error("robot-bus subscription callback error", err); }
+                  }
+                }
+                return;
+              }
               const exact = this.subscriptions.get(msg.topic);
               if (exact) cbs.push(...exact);
               for (const [key, list] of this.subscriptions) {

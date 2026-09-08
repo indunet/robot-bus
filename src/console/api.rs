@@ -355,6 +355,7 @@ struct ConsoleUiResponse {
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
+#[cfg(feature = "demo-tank")]
 struct TankStatusResponse {
     /// False when broker was started with `--no-tank` (menu hidden / acquire rejected).
     enabled: bool,
@@ -364,6 +365,7 @@ struct TankStatusResponse {
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
+#[cfg(feature = "demo-tank")]
 struct TankSessionResponse {
     session_id: String,
     lease_ms: u64,
@@ -377,6 +379,7 @@ pub async fn console_ui(Extension(state): Extension<Arc<ConsoleState>>) -> impl 
     })
 }
 
+#[cfg(feature = "demo-tank")]
 pub async fn tank_status(Extension(state): Extension<Arc<ConsoleState>>) -> impl IntoResponse {
     let st = state.tank.status();
     Json(TankStatusResponse {
@@ -386,6 +389,7 @@ pub async fn tank_status(Extension(state): Extension<Arc<ConsoleState>>) -> impl
     })
 }
 
+#[cfg(feature = "demo-tank")]
 pub async fn tank_session(Extension(state): Extension<Arc<ConsoleState>>) -> impl IntoResponse {
     if !state.tank_enabled {
         return (
@@ -449,6 +453,7 @@ pub async fn tank_session(Extension(state): Extension<Arc<ConsoleState>>) -> imp
     }
 }
 
+#[cfg(feature = "demo-tank")]
 pub async fn tank_heartbeat(
     Extension(state): Extension<Arc<ConsoleState>>,
     Path(id): Path<String>,
@@ -471,6 +476,7 @@ pub async fn tank_heartbeat(
     }
 }
 
+#[cfg(feature = "demo-tank")]
 pub async fn tank_release(
     Extension(state): Extension<Arc<ConsoleState>>,
     Path(id): Path<String>,
@@ -501,4 +507,16 @@ pub async fn tank_release(
         )
             .into_response(),
     }
+}
+
+#[cfg(not(feature = "demo-tank"))]
+pub async fn tank_status() -> impl IntoResponse {
+    Json(serde_json::json!({"enabled": false, "running": false, "viewers": 0}))
+}
+#[cfg(not(feature = "demo-tank"))]
+pub async fn tank_session() -> impl IntoResponse {
+    (
+        StatusCode::FORBIDDEN,
+        Json(serde_json::json!({"error": "tank demo not included in this build"})),
+    )
 }

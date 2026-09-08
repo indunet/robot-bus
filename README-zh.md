@@ -24,6 +24,8 @@ SDK：**Rust**、**Python**、**TypeScript**、**C++**、**Java**、**Android**�
 
 Node编程模型——`Context` / `Node`、topic pub-sub、service、action以及 `spin`——为稳定的公开 API。
 
+需要精简构建？参见[按需构建](docs/zh/build-profiles.md)，可选择核心 SDK、WS 网关、监控 API、内嵌控制台和坦克演示。订阅积压策略与统计见 [Rust QoS 指南](docs/zh/rust-api.md#高水位hwm与-qos)。
+
 ### *安装*
 
 * Python

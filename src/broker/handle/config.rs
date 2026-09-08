@@ -32,7 +32,7 @@ impl Default for WsGatewayConfig {
 /// on [`WsGatewayConfig::listen`] instead — WebSocket RPC (`/ws-rpc`) and the console
 /// share one port. `listen` here only takes effect when `ws` is disabled (or
 /// this crate is built console-only).
-#[cfg(feature = "console")]
+#[cfg(feature = "console-api")]
 #[derive(Clone, Debug)]
 pub struct ConsoleBrokerConfig {
     /// When false, the console is not started.
@@ -50,12 +50,12 @@ pub struct ConsoleBrokerConfig {
     pub cors_origins: Vec<String>,
 }
 
-#[cfg(feature = "console")]
+#[cfg(feature = "console-api")]
 impl Default for ConsoleBrokerConfig {
     fn default() -> Self {
         Self {
             enabled: true,
-            tank_enabled: true,
+            tank_enabled: cfg!(feature = "demo-tank"),
             docs_enabled: true,
             listen: "0.0.0.0:15560".parse().expect("default console listen"),
             cors_origins: Vec::new(),
@@ -72,6 +72,6 @@ pub struct RobotBusConfig {
     pub discovery: DiscoveryConfig,
     #[cfg(feature = "ws")]
     pub ws: WsGatewayConfig,
-    #[cfg(feature = "console")]
+    #[cfg(feature = "console-api")]
     pub console: ConsoleBrokerConfig,
 }

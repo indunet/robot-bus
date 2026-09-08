@@ -10,6 +10,7 @@ pub mod message_bus;
 pub mod runtime;
 pub mod service_bus;
 pub mod shutdown;
+#[cfg(feature = "demo-tank")]
 pub mod tank;
 pub mod transports;
 pub mod typed;
@@ -32,7 +33,7 @@ pub use typed::{Action, ActionOutcome, Service};
 #[cfg(feature = "ws")]
 pub mod ws_gateway;
 
-#[cfg(feature = "console")]
+#[cfg(feature = "console-api")]
 pub mod console;
 
 #[cfg(feature = "ros2")]
@@ -52,6 +53,7 @@ pub use discovery::{
     DiscoverResponse, MAGIC as DISCOVERY_MAGIC, SCHEMA_VERSION as DISCOVERY_SCHEMA_VERSION,
     decode_announce, encode_announce, fetch_discover, wait as discover_wait, with_ws_rpc_path,
 };
+#[cfg(feature = "demo-tank")]
 pub use tank::{
     CMD_VEL_TOPIC, MULTI_WAYPOINT_NAV_ACTION, POINT_NAV_ACTION, POSE_TOPIC, RESET_SERVICE,
     TankEndpoints, TankHandle, TankManager, TankSession, TankStatus, WORLD_SIZE,
@@ -63,7 +65,7 @@ pub use discovery::{DEFAULT_DISCOVERY_PORT, DEFAULT_MULTICAST_ADDR};
 #[cfg(feature = "ws")]
 pub use broker::WsGatewayConfig;
 
-#[cfg(feature = "console")]
+#[cfg(feature = "console-api")]
 pub use broker::ConsoleBrokerConfig;
 pub use errors::{BusError, Result, parse_error_body};
 pub use lazy_subscribe::{CONSOLE_DETECT_TIMEOUT, should_enable_ros_subscription};
@@ -75,8 +77,8 @@ pub use runtime::{
     NodeActionServer, NodeOptions, NodeService, NodeServiceClient, NodeServiceClientRaw,
     PARAMETER_DEPTH_RECURSIVE, Parameter, ParameterValue, QOS_PROFILE_DEFAULT, QosProfile,
     RawActionFeedbackCallback, RawGoalHandle, ServiceHandler, ShutdownHandle,
-    SingleThreadedExecutor, SubscriptionHandle, TimerCallback, TimerHandle, TopicPublisher,
-    TopicPublisherRaw,
+    SingleThreadedExecutor, SubscriptionHandle, SubscriptionOverflowPolicy, TimerCallback,
+    TimerHandle, TopicPublisher, TopicPublisherRaw,
 };
 pub use service_bus::{ServiceClient, ServiceWorker};
 pub use transports::{

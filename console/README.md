@@ -43,7 +43,7 @@ Sidebar **TOPOLOGY**: pub/sub graph from best-effort control-plane service regis
 
 ## Validation
 
-Run `pnpm typecheck` to check the console and its imported SDK sources. Production builds also enforce TypeScript errors. `scripts/build_console.sh`, used by CI and release packaging, runs the standalone check before building the embedded assets.
+Run `pnpm typecheck` to check the console and its imported SDK sources. That command (and `pnpm build` / `pnpm dev`) first generates `lib/bundled-docs.generated.ts` from `docs/`. Production builds also enforce TypeScript errors. `scripts/build_console.sh`, used by CI and release packaging, runs the standalone check before building the embedded assets.
 
 ## Development (recommended)
 

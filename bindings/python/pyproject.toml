@@ -27,7 +27,7 @@ urls = { Repository = "https://github.com/indunet/robot-bus" }
 manifest-path = "../../Cargo.toml"
 python-source = "."
 module-name = "robot_bus._native"
-features = ["extension-module", "ws", "console"]
+features = ["extension-module", "ws", "console", "demo-tank"]
 # Embed the Web console (same as C++ / TypeScript native). Keep other extras off.
 # Note: `cargo-extra-args` was removed in maturin 0.13; use this flag instead.
 no-default-features = true

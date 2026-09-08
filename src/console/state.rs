@@ -11,6 +11,7 @@ use tokio::sync::broadcast;
 use crate::broker::action_bus::{ActionMetrics, ActionMetricsSnapshot};
 use crate::broker::message_bus::{MessageMetrics, MessageMetricsSnapshot};
 use crate::broker::service_bus::{ServiceMetrics, ServiceMetricsSnapshot};
+#[cfg(feature = "demo-tank")]
 use crate::tank::TankManager;
 
 use super::topic_registry::TopicTypeRegistry;
@@ -130,6 +131,7 @@ pub struct ConsoleState {
     pub topology: Arc<TopologyRegistry>,
     pub events: EventLog,
     /// Lazy tank singleton (started on first console TANK session).
+    #[cfg(feature = "demo-tank")]
     pub tank: Arc<TankManager>,
     /// When false, tank UI/API acquire is disabled (`--no-tank`).
     pub tank_enabled: bool,
@@ -146,7 +148,7 @@ impl ConsoleState {
         metrics: Arc<MessageMetrics>,
         service_metrics: Arc<ServiceMetrics>,
         action_metrics: Arc<ActionMetrics>,
-        tank: Arc<TankManager>,
+        #[cfg(feature = "demo-tank")] tank: Arc<TankManager>,
         tank_enabled: bool,
         docs_enabled: bool,
     ) -> Arc<Self> {
@@ -161,8 +163,9 @@ impl ConsoleState {
             topic_types: TopicTypeRegistry::new(),
             topology: TopologyRegistry::new(),
             events: EventLog::new(),
+            #[cfg(feature = "demo-tank")]
             tank,
-            tank_enabled,
+            tank_enabled: tank_enabled && cfg!(feature = "demo-tank"),
             docs_enabled,
             msg_rate: Mutex::new(None),
             svc_rate: Mutex::new(None),

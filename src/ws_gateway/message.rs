@@ -2,13 +2,14 @@
 
 use std::sync::{Arc, Mutex};
 
-use tokio::sync::mpsc;
+use super::subscription_queue::SubscriptionReceiver;
+use crate::runtime::SubscriptionOverflowPolicy;
 
 use crate::errors::BusError;
 use crate::message_bus::Publisher;
 
 use super::rpc_status::RpcStatus;
-use super::sub_demux::{BusMsg, SubDemux};
+use super::sub_demux::{SubDemux, SubscriptionSnapshot};
 
 enum PubCmd {
     Publish {
@@ -109,8 +110,21 @@ impl MessageGatewayService {
         &self,
         topic: String,
         qos_depth: i32,
-    ) -> Result<mpsc::Receiver<Result<BusMsg, RpcStatus>>, RpcStatus> {
+    ) -> Result<SubscriptionReceiver, RpcStatus> {
         self.demux.open_subscribe(topic, qos_depth)
+    }
+
+    pub fn subscription_stats(&self) -> SubscriptionSnapshot {
+        self.demux.snapshot()
+    }
+
+    pub fn open_subscribe_with_policy(
+        &self,
+        topic: String,
+        depth: i32,
+        policy: SubscriptionOverflowPolicy,
+    ) -> Result<SubscriptionReceiver, RpcStatus> {
+        self.demux.open_subscribe_with_policy(topic, depth, policy)
     }
 
     pub async fn publish_message(&self, topic: String, payload: Vec<u8>) -> Result<(), RpcStatus> {

@@ -18,6 +18,19 @@ const DEFAULT_LOCALE: Locale = 'en'
 type MessageKey = keyof typeof en
 
 const en = {
+  queueTitle: 'WS SUBSCRIPTION QUEUES',
+  queueTotal: '{n} overflow drops since gateway start',
+  queueScope: 'Pending at the gateway only; excludes network and client queues. Each row is one subscription filter.',
+  queueFilter: 'Filter',
+  queuePolicy: 'Overflow policy',
+  queuePending: 'Pending / capacity',
+  queueDropped: 'Overflow drops',
+  queueDropNewest: 'Discard incoming',
+  queueDropOldest: 'Keep recent N',
+  queueLatest: 'Latest only',
+  queueUnavailable: 'Subscription metrics unavailable',
+  queueEmpty: 'No active WebSocket subscriptions',
+  queueLoading: 'Loading subscription metrics…',
   navOverview: 'OVERVIEW',
   navOverviewShort: 'OVE',
   navTopics: 'TOPICS',
@@ -245,6 +258,19 @@ const en = {
 } as const
 
 const zh: Record<MessageKey, string> = {
+  queueTitle: 'WS 订阅队列',
+  queueTotal: '网关启动以来溢出丢弃 {n} 条',
+  queueScope: '仅统计网关待发送队列，不含网络和客户端积压。每行对应一个订阅过滤器。',
+  queueFilter: '订阅过滤器',
+  queuePolicy: '积压策略',
+  queuePending: '待发送 / 容量',
+  queueDropped: '溢出丢弃',
+  queueDropNewest: '丢弃新到消息',
+  queueDropOldest: '保留最近 N 条',
+  queueLatest: '只保留最新一条',
+  queueUnavailable: '订阅统计暂不可用',
+  queueEmpty: '暂无活跃的 WebSocket 订阅',
+  queueLoading: '正在读取订阅统计…',
   navOverview: '概览',
   navOverviewShort: '概览',
   navTopics: '话题',

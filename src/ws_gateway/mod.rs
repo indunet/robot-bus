@@ -10,6 +10,7 @@ pub mod rpc_status;
 pub mod server;
 pub mod service;
 pub mod sub_demux;
+pub mod subscription_queue;
 pub mod ws;
 pub mod ws_frame;
 

@@ -7,7 +7,7 @@ use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::{Duration, Instant};
 
-#[cfg(feature = "console")]
+#[cfg(feature = "console-api")]
 use robot_bus::ConsoleBrokerConfig;
 use robot_bus::{
     ActionKind, ActionMessage, Context, HighWaterMark, Node, NodeOptions, Publisher,
@@ -22,7 +22,7 @@ fn inproc_broker_config() -> RobotBusConfig {
     config.message.bind_all_transports = true;
     config.service.bind_all_transports = true;
     config.action.bind_all_transports = true;
-    #[cfg(feature = "console")]
+    #[cfg(feature = "console-api")]
     {
         config.console = ConsoleBrokerConfig {
             enabled: false,

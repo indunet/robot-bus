@@ -6,7 +6,7 @@ import {
   qosDepthForFilter,
 } from "../src/ws-node.js";
 import { encode, type MessageType } from "../src/typed.js";
-import { __setWebSocketForTests } from "../src/ws-rpc.js";
+import { __setWebSocketForTests, decodeFrame, encodeFrame, encodeSubscribeData } from "../src/ws-rpc.js";
 import assert from "node:assert/strict";
 import { afterEach, describe, it } from "node:test";
 
@@ -91,7 +91,8 @@ class FakeWebSocket {
   onopen: (() => void) | null = null;
   onclose: (() => void) | null = null;
   onerror: (() => void) | null = null;
-  onmessage: (() => void) | null = null;
+  onmessage: ((ev: { data: ArrayBuffer }) => void) | null = null;
+  sent: Uint8Array[] = [];
   constructor(readonly url: string) {
     FakeWebSocket.instances.push(this);
     queueMicrotask(() => {
@@ -103,13 +104,41 @@ class FakeWebSocket {
     this.readyState = 3;
     this.onclose?.();
   }
-  send(_data: Uint8Array): void {}
+  send(data: Uint8Array): void { this.sent.push(data); }
 }
 
 describe("WsNode connectionState", () => {
   afterEach(() => {
     __setWebSocketForTests(undefined);
     FakeWebSocket.instances = [];
+  });
+
+  it("keeps distinct policies on separate streams and dispatches overlapping filters once", async () => {
+    __setWebSocketForTests(FakeWebSocket as unknown as typeof WebSocket);
+    const node = WsNode.ws("policies");
+    const received: string[] = [];
+    node.createSubscription("/robot_bus/", () => received.push("prefix"), { overflow: "drop_oldest", depth: 3 });
+    node.createSubscription("/robot_bus/pose", () => received.push("pose"), { overflow: "latest", depth: 100 });
+    node.createSubscription("/legacy", () => {}, 8);
+    assert.throws(() => node.createSubscription("/robot_bus/pose", () => {}, 8), /conflicting/);
+    try {
+      node.start();
+      await new Promise(resolve => setTimeout(resolve, 30));
+      const socket = FakeWebSocket.instances[0];
+      const requests = socket.sent.map(decodeFrame).filter(f => f.type === "request" && (f.header.opcode === 1 || f.header.opcode === 5));
+      assert.equal(requests.length, 3);
+      assert.deepEqual(requests.map(r => r.header), [
+        { opcode: 5, topic: "/robot_bus/", qosDepth: 3, overflow: 1 },
+        { opcode: 5, topic: "/robot_bus/pose", qosDepth: 1, overflow: 2 },
+        { opcode: 1, topic: "/legacy", qosDepth: 8 },
+      ]);
+      for (const request of requests.slice(0, 2)) {
+        const bytes = encodeFrame({ type: "data", streamId: request.streamId, payload: encodeSubscribeData("/robot_bus/pose", new Uint8Array([1])) });
+        socket.onmessage?.({ data: bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer });
+      }
+      await new Promise(resolve => setTimeout(resolve, 10));
+      assert.deepEqual(received, ["prefix", "pose"]);
+    } finally { node.shutdown(); }
   });
 
   it("tracks reconnecting when the socket closes", async () => {

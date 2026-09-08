@@ -6,6 +6,7 @@ import {
   OPCODE_PUBLISH,
   OPCODE_SEND_GOAL,
   OPCODE_SUBSCRIBE,
+  OPCODE_SUBSCRIBE_WITH_POLICY,
   WsSession,
   __setWebSocketForTests,
   decodeActionData,
@@ -18,6 +19,19 @@ import {
 } from "../src/ws-rpc.js";
 
 describe("ws-rpc framing V3", () => {
+  it("matches Rust policy fixtures and preserves the legacy subscribe frame", () => {
+    const legacy = encodeFrame({ type: "request", streamId: 1, header: { opcode: OPCODE_SUBSCRIBE, topic: "x", qosDepth: 3 }, body: new Uint8Array() });
+    assert.deepEqual([...legacy], [1,1,0,0,0,1,1,0,120,3,0,0,0]);
+    for (const overflow of [0,1,2]) {
+      const frame = { type: "request" as const, streamId: 1, header: { opcode: OPCODE_SUBSCRIBE_WITH_POLICY, topic: "x", qosDepth: 3, overflow }, body: new Uint8Array() };
+      const bytes = encodeFrame(frame);
+      assert.deepEqual([...bytes], [1,1,0,0,0,5,1,0,120,3,0,0,0,overflow]);
+      assert.deepEqual(decodeFrame(bytes), frame);
+      bytes[13] = 99;
+      assert.throws(() => decodeFrame(bytes), /policy/);
+      assert.throws(() => decodeFrame(bytes.slice(0,13)), /policy|truncated/);
+    }
+  });
   it("round-trips REQUEST opcodes / DATA / CANCEL / TRAILER", () => {
     const req = encodeFrame({
       type: "request",
@@ -193,6 +207,16 @@ function sleep(ms: number): Promise<void> {
 }
 
 describe("WsSession reconnect", () => {
+  it("surfaces an old broker's connection-level policy rejection", async () => {
+    __setWebSocketForTests(FakeWebSocket as unknown as typeof WebSocket);
+    const session = new WsSession("http://localhost:15560");
+    try {
+      const { done } = await session.serverStream({ opcode: OPCODE_SUBSCRIBE_WITH_POLICY, topic: "x", qosDepth: 1, overflow: 2 }, new Uint8Array(), { onData: () => {} });
+      const rejected = assert.rejects(done, /unknown opcode 5/);
+      FakeWebSocket.instances.at(-1)!.reply(encodeFrame({ type: "trailer", streamId: 0, status: 3, message: "unknown opcode 5" }));
+      await rejected;
+    } finally { session.close(); }
+  });
   afterEach(() => {
     __setWebSocketForTests(undefined);
     FakeWebSocket.instances = [];

@@ -3,6 +3,7 @@
 //! One WebSocket connection per node carries all subscribe / publish / service /
 //! action RPCs (V3 framing with `stream_id`).
 
+use crate::QosProfile;
 use std::collections::{HashMap, HashSet};
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::sync::mpsc::{self, Receiver, Sender, TryRecvError};
@@ -241,7 +242,7 @@ struct WsState {
     topic_callbacks: HashMap<String, Vec<SubscriptionCallback>>,
     active_topics: HashSet<String>,
     /// KeepLast depth sent on Subscribe REQUEST (`0` = gateway default).
-    topic_qos: HashMap<String, i32>,
+    topic_qos: HashMap<String, QosProfile>,
     /// Latest WS stream id for each active topic (for Cancel on destroy).
     topic_stream_ids: HashMap<String, u32>,
     timers: Vec<Timer>,
@@ -332,6 +333,17 @@ impl WsRuntime {
         qos: Option<crate::QosProfile>,
     ) -> Result<SubscriptionHandle> {
         let mut state = self.lock_state()?;
+        let requested = qos.unwrap_or(QosProfile::keep_last(0));
+        if let Some(existing) = state.topic_qos.get(topic) {
+            if existing.overflow_policy() != requested.overflow_policy()
+                || (requested.overflow_policy() != crate::SubscriptionOverflowPolicy::DropNewest
+                    && existing.depth() != requested.depth())
+            {
+                return Err(BusError::Protocol(format!(
+                    "conflicting subscription policy for {topic}"
+                )));
+            }
+        }
         let id = state.next_subscription_id;
         state.next_subscription_id += 1;
         state
@@ -345,8 +357,7 @@ impl WsRuntime {
             });
 
         if state.active_topics.insert(topic.to_string()) {
-            let depth = qos.map(|q| q.depth()).filter(|d| *d > 0).unwrap_or(0);
-            state.topic_qos.insert(topic.to_string(), depth);
+            state.topic_qos.insert(topic.to_string(), requested);
             self.spawn_subscription(topic.to_string());
         }
         Ok(SubscriptionHandle { id })
@@ -514,11 +525,25 @@ impl WsRuntime {
                     let Ok(guard) = state.lock() else {
                         break;
                     };
-                    guard.topic_qos.get(&topic).copied().unwrap_or(0)
+                    guard
+                        .topic_qos
+                        .get(&topic)
+                        .copied()
+                        .unwrap_or(QosProfile::keep_last(0))
                 };
-                let header = RequestHeader::Subscribe {
-                    topic: topic.clone(),
-                    qos_depth,
+                let header = if qos_depth.overflow_policy()
+                    == crate::SubscriptionOverflowPolicy::DropNewest
+                {
+                    RequestHeader::Subscribe {
+                        topic: topic.clone(),
+                        qos_depth: qos_depth.depth(),
+                    }
+                } else {
+                    RequestHeader::SubscribeWithPolicy {
+                        topic: topic.clone(),
+                        qos_depth: qos_depth.depth(),
+                        overflow: qos_depth.overflow_policy(),
+                    }
                 };
                 let (reply_tx, reply_rx) = tokio::sync::oneshot::channel();
                 let (done_tx, done_rx) = tokio::sync::oneshot::channel();
@@ -753,6 +778,14 @@ async fn run_ws_connection(
                                     if sink.send(WsMessage::Binary(bytes.into())).await.is_err() {
                                         break WsLoopExit::Disconnected;
                                     }
+                                }
+                            }
+                            Frame::Trailer { stream_id: 0, status, message }
+                                if *status != 0 && message == "unknown opcode 5" => {
+                                log::warn!("broker does not support subscription overflow policies: {message}");
+                                let ids: Vec<_> = streams.keys().copied().collect();
+                                for stream_id in ids {
+                                    handle_inbound_frame(&mut streams, Frame::Trailer { stream_id, status: *status, message: message.clone() });
                                 }
                             }
                             Frame::Trailer { stream_id: 0, .. } => {

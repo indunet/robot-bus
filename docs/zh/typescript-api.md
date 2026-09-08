@@ -257,3 +257,22 @@ just test-typescript
 ## 发布
 
 在 GitHub上写 Release说明并 Publish（tag版本须与 `Cargo.toml`、`bindings/python/pyproject.toml`、`bindings/typescript/package.json`一致）后，[`.github/workflows/publish-npm.yml`](../../.github/workflows/publish-npm.yml) 用 `secrets.NPM_TOKEN`发布到 npm。
+
+## WebSocket 订阅积压策略
+
+`WsNode`（浏览器入口也导出为 `Node`）可以用配置对象替代数字深度。原生 `Node` 继续使用原有数字参数。
+
+```typescript
+const node = WsNode.ws("viewer");
+node.createSubscription("/pose", bytes => {}, { overflow: "latest" });
+node.createSubscription("/samples", bytes => {}, { overflow: "drop_oldest", depth: 20 });
+node.createSubscription("/events", bytes => {}, { overflow: "drop_newest", depth: 64 });
+// 类型化重载：node.createSubscription(topic, callback, MessageType, options)
+node.start();
+```
+
+`latest` 保留一条最新待发送消息；`drop_oldest` 保留最近 N 条；`drop_newest` 保留队列原有消息，满时丢弃新到消息。原有数字参数和不传参数的用法继续保留原行为和 opcode 1。新增替换策略需要支持 opcode 5 的 broker，客户端不会自动降级。
+
+策略只影响网关待发送队列，不影响已经发送的消息或客户端回调积压，也不保证可靠送达。前缀过滤器匹配的多个 topic 共用一个队列。同一过滤器的多个回调必须使用相同策略和替换深度。选择替换策略时，各订阅使用独立流，不再自动合并过滤器，避免不同策略共用队列。请在 `start()` 前注册订阅。
+
+控制台 Topics 页和 `GET /api/v1/subscriptions` 提供待发送数量、容量和溢出丢弃统计。详细范围见 [Rust QoS 指南](rust-api.md#高水位hwm与-qos)；无网页网关见[按需构建](build-profiles.md)。

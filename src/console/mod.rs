@@ -19,20 +19,25 @@ use std::sync::Arc;
 
 use anyhow::{Context, Result};
 use axum::Router;
+#[cfg(feature = "console")]
 use axum::body::Body;
 use axum::extract::Extension;
 use axum::http::{StatusCode, Uri, header};
 use axum::response::{IntoResponse, Response};
-use axum::routing::{delete, get, post};
+#[cfg(feature = "demo-tank")]
+use axum::routing::delete;
+use axum::routing::{get, post};
+#[cfg(feature = "console")]
 use rust_embed::Embed;
 use tokio::net::TcpListener;
 
 use api::{
-    actions, console_ui, discover, events, services, status, tank_heartbeat, tank_release,
-    tank_session, tank_status, topic_info, topics, topology,
+    actions, console_ui, discover, events, services, status, tank_session, tank_status, topic_info,
+    topics, topology,
 };
 
 /// Compile-time embedded `assets/console/` (Next.js static export).
+#[cfg(feature = "console")]
 #[derive(Embed)]
 #[folder = "assets/console/"]
 struct Assets;
@@ -40,7 +45,7 @@ struct Assets;
 /// REST routes only (no static fallback). Uses [`Extension`] for state so this
 /// `Router<()>` can merge with tonic gRPC routes.
 pub fn api_router(state: Arc<ConsoleState>) -> Router {
-    Router::new()
+    let router = Router::new()
         .route("/api/v1/status", get(status))
         .route("/api/v1/discover", get(discover))
         .route("/api/v1/topics", get(topics))
@@ -51,13 +56,19 @@ pub fn api_router(state: Arc<ConsoleState>) -> Router {
         .route("/api/v1/events", get(events))
         .route("/api/v1/console", get(console_ui))
         .route("/api/v1/tank", get(tank_status))
-        .route("/api/v1/tank/session", post(tank_session))
-        .route("/api/v1/tank/session/{id}/heartbeat", post(tank_heartbeat))
-        .route("/api/v1/tank/session/{id}", delete(tank_release))
-        .layer(Extension(state))
+        .route("/api/v1/tank/session", post(tank_session));
+    #[cfg(feature = "demo-tank")]
+    let router = router
+        .route(
+            "/api/v1/tank/session/{id}/heartbeat",
+            post(api::tank_heartbeat),
+        )
+        .route("/api/v1/tank/session/{id}", delete(api::tank_release));
+    router.layer(Extension(state))
 }
 
 /// SPA / static asset fallback for unmatched non-gRPC paths.
+#[cfg(feature = "console")]
 pub async fn static_handler(uri: Uri) -> Response {
     let path = uri.path().trim_start_matches('/');
 
@@ -101,6 +112,19 @@ pub async fn serve_with_shutdown(
     cors_origins: Vec<String>,
     shutdown: impl Future<Output = ()> + Send + 'static,
 ) -> Result<()> {
+    let listener = TcpListener::bind(listen)
+        .await
+        .with_context(|| format!("bind console HTTP on {listen}"))?;
+    serve_on_listener(listener, state, cors_origins, shutdown).await
+}
+
+/// Serve a listener already bound by the broker, including an assigned ephemeral port.
+pub async fn serve_on_listener(
+    listener: TcpListener,
+    state: Arc<ConsoleState>,
+    cors_origins: Vec<String>,
+    shutdown: impl Future<Output = ()> + Send + 'static,
+) -> Result<()> {
     let mut app = api_router(state).fallback(get(static_handler));
 
     if !cors_origins.is_empty() {
@@ -120,10 +144,7 @@ pub async fn serve_with_shutdown(
         }
     }
 
-    let listener = TcpListener::bind(listen)
-        .await
-        .with_context(|| format!("bind console HTTP on {listen}"))?;
-
+    let listen = listener.local_addr()?;
     log::info!("robot_bus console listening on http://{listen}");
 
     axum::serve(listener, app)
@@ -133,6 +154,7 @@ pub async fn serve_with_shutdown(
     Ok(())
 }
 
+#[cfg(feature = "console")]
 fn try_asset(path: &str) -> Option<Response> {
     Assets::get(path).map(|file| {
         let mime = mime_guess::from_path(path)
@@ -146,12 +168,13 @@ fn try_asset(path: &str) -> Option<Response> {
     })
 }
 
+#[cfg(feature = "console")]
 fn asset_response(path: &str) -> Response {
     try_asset(path)
         .unwrap_or_else(|| (StatusCode::NOT_FOUND, "console asset not found").into_response())
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "console"))]
 mod tests {
     use super::*;
 
@@ -162,4 +185,13 @@ mod tests {
             "assets/console/index.html must exist (run: just console)"
         );
     }
+}
+
+#[cfg(not(feature = "console"))]
+pub async fn static_handler(_uri: Uri) -> Response {
+    (
+        StatusCode::NOT_FOUND,
+        "web UI not included; monitoring API is available under /api/v1",
+    )
+        .into_response()
 }

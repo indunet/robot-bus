@@ -274,7 +274,23 @@ The resident worker pool stops admitting new jobs at 1024 waiting jobs, with one
 
 `QosProfile::keep_last(depth)` maps to ZMQ HWM. Topics use PUB/SUB HWM; service and action use DEALER HWM (`snd` / `rcv` both = depth). Reliability is fixed best-effort (RPC has no DDS reliability either). Omit QoS to keep the node default (topic 8/8, service 4/4, action 8/8).
 
-On a **WebSocket** Node, KeepLast applies to **subscribe** only: it sizes the gateway→client queue (drop-on-full; omitted depth keeps the gateway default of 64). Publish QoS is ignored (all WS publishers share one gateway PUB). WS service / action clients have no ZMQ socket, so HWM is ignored.
+On a **WebSocket** Node, KeepLast applies to **subscribe** only: it sizes the gateway→client queue (discard incoming on full; omitted depth keeps the gateway default of 64). Publish QoS is ignored (all WS publishers share one gateway PUB). WS service / action clients have no ZMQ socket, so HWM is ignored.
+
+WS subscriptions can explicitly select an overflow policy:
+
+| Rust profile | Pending messages retained on overflow |
+| --- | --- |
+| `QosProfile::keep_last(n)` | Keep the existing queue; discard the incoming message (legacy default) |
+| `QosProfile::keep_recent(n)` | Evict the oldest; retain the most recent N |
+| `QosProfile::latest()` | Retain only the newest pending message |
+
+Pass the profile to `create_subscription_with_qos` or `create_subscription_raw_with_qos` on `Node::ws` / `Node::ws_at`. For example: `node.create_subscription_raw_with_qos("/pose", QosProfile::latest(), std::sync::Arc::new(|_bytes| {}), None)?;`. Native ZMQ subscriptions reject the replacement profiles. Other language native bindings retain their existing depth-only API.
+
+These policies govern **unsent gateway messages per subscription filter**, not client callback queues, ZeroMQ queues, or network buffers. A prefix filter shares one queue across its matched topics. A slow callback alone does not ensure gateway replacement occurs. Already dequeued/network-buffered messages cannot be recalled, and no policy guarantees delivery or reliable events. Queue depth ≤ 0 uses 64, depth above 1,048,576 is capped, and `latest` always uses 1. Multiple callbacks for the same filter share a queue; conflicting policies (or replacement depths) are rejected. Legacy duplicate subscriptions still keep the first depth.
+
+`GET /api/v1/subscriptions` is available whenever `ws` is enabled, even without the console. The console Topics tab displays active subscriptions: `id`, `filter`, `policy`, `capacity`, `pending`, `received`, `dequeued`, `dropped`. `dequeued` counts removal for sending, not confirmed delivery. `dropped` counts queue overflow only. Rows disappear on cancellation; `totalDropped` survives closed subscriptions and resets when the gateway restarts. Native transport loss is not included. REST snapshots are observational and may change while read.
+
+Wire compatibility: legacy subscriptions still use V3 opcode 1 with the original layout. Explicit replacement uses additive opcode 5 (`topic:str`, `qos_depth:i32`, `policy:u8`: 0 discard incoming, 1 discard oldest, 2 latest). Upgrade the broker before using the new policies; old V3 brokers reject opcode 5, and clients do not silently downgrade. See [build profiles](build-profiles.md) for optional gateway and console components.
 
 ```rust
 use robot_bus::{Node, QosProfile, Publisher, HighWaterMark};

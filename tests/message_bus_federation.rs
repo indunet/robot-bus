@@ -5,7 +5,7 @@ mod support;
 use std::thread;
 use std::time::{Duration, Instant};
 
-#[cfg(feature = "console")]
+#[cfg(feature = "console-api")]
 use robot_bus::ConsoleBrokerConfig;
 #[cfg(feature = "ws")]
 use robot_bus::WsGatewayConfig;
@@ -82,7 +82,7 @@ fn federated_bus_config(
             enabled: false,
             ..DiscoveryConfig::default()
         },
-        #[cfg(feature = "console")]
+        #[cfg(feature = "console-api")]
         console: ConsoleBrokerConfig {
             enabled: false,
             tank_enabled: false,
@@ -319,7 +319,7 @@ fn federation_peer_via_api_discover() {
     let mut cfg_b = federated_bus_config("api-peer-b", Vec::new(), b);
     cfg_a.discovery.advertise_host = Some("127.0.0.1".into());
     cfg_b.discovery.advertise_host = Some("127.0.0.1".into());
-    #[cfg(feature = "console")]
+    #[cfg(feature = "console-api")]
     {
         cfg_a.console.enabled = false;
         cfg_b.console.enabled = false;

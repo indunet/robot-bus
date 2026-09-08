@@ -26,6 +26,7 @@ export {
   DEFAULT_WS_URL,
   type WsActionEvent,
   type WsSendGoalOptions,
+  type WsSubscriptionOptions,
 } from "./ws-node.js";
 
 const native = loadNative();

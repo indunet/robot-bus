@@ -308,6 +308,15 @@ impl Node {
         callback: MessageCallback,
         callback_group: Option<&CallbackGroup>,
     ) -> Result<SubscriptionHandle> {
+        if !self.options.is_ws()
+            && qos.is_some_and(|q| {
+                q.overflow_policy() != crate::SubscriptionOverflowPolicy::DropNewest
+            })
+        {
+            return Err(BusError::Protocol(
+                "subscription replacement policies require WebSocket transport".into(),
+            ));
+        }
         let group = callback_group
             .cloned()
             .unwrap_or_else(|| self.default_callback_group.clone());

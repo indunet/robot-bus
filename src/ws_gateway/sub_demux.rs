@@ -7,10 +7,11 @@ use std::thread;
 use std::time::Duration;
 
 use super::rpc_status::RpcStatus;
-use tokio::sync::mpsc;
+use super::subscription_queue::{SubscriptionQueue, SubscriptionReceiver, SubscriptionStats};
+use serde::Serialize;
 
 use crate::message_bus::Subscriber;
-use crate::runtime::ws_subscribe_queue_capacity;
+use crate::runtime::SubscriptionOverflowPolicy;
 
 const POLL_TIMEOUT: Duration = Duration::from_millis(200);
 
@@ -21,7 +22,14 @@ pub struct BusMsg {
     pub payload: Arc<[u8]>,
 }
 
-type WatcherTx = mpsc::Sender<Result<BusMsg, RpcStatus>>;
+type WatcherTx = Arc<SubscriptionQueue>;
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SubscriptionSnapshot {
+    pub total_dropped: u64,
+    pub subscriptions: Vec<SubscriptionStats>,
+}
 
 struct Watcher {
     id: u64,
@@ -51,6 +59,7 @@ pub struct SubDemux {
 
 struct SubDemuxInner {
     next_id: AtomicU64,
+    total_dropped: Arc<AtomicU64>,
     control_tx: Mutex<Option<std::sync::mpsc::Sender<Control>>>,
     state: Arc<Mutex<DemuxState>>,
     xpub: String,
@@ -61,6 +70,7 @@ impl SubDemux {
         Self {
             inner: Arc::new(SubDemuxInner {
                 next_id: AtomicU64::new(1),
+                total_dropped: Arc::new(AtomicU64::new(0)),
                 control_tx: Mutex::new(None),
                 state: Arc::new(Mutex::new(DemuxState {
                     filters: HashMap::new(),
@@ -94,10 +104,44 @@ impl SubDemux {
         &self,
         topic: String,
         qos_depth: i32,
-    ) -> Result<mpsc::Receiver<Result<BusMsg, RpcStatus>>, RpcStatus> {
+    ) -> Result<SubscriptionReceiver, RpcStatus> {
+        self.open_subscribe_with_policy(topic, qos_depth, SubscriptionOverflowPolicy::DropNewest)
+    }
+
+    pub fn snapshot(&self) -> SubscriptionSnapshot {
+        let state = self.inner.state.lock().unwrap();
+        let mut subscriptions: Vec<_> = state
+            .filters
+            .values()
+            .flatten()
+            .filter(|w| !w.tx.is_closed())
+            .map(|w| w.tx.stats())
+            .collect();
+        subscriptions.sort_by_key(|s| s.id);
+        SubscriptionSnapshot {
+            total_dropped: self.inner.total_dropped.load(Ordering::Relaxed),
+            subscriptions,
+        }
+    }
+
+    pub fn open_subscribe_with_policy(
+        &self,
+        topic: String,
+        qos_depth: i32,
+        policy: SubscriptionOverflowPolicy,
+    ) -> Result<SubscriptionReceiver, RpcStatus> {
         self.ensure_started()?;
-        let (tx, rx) = mpsc::channel(ws_subscribe_queue_capacity(qos_depth));
         let id = self.inner.next_id.fetch_add(1, Ordering::Relaxed);
+        let tx = SubscriptionQueue::new(
+            id,
+            topic.clone(),
+            qos_depth,
+            policy,
+            Arc::clone(&self.inner.total_dropped),
+        );
+        let rx = SubscriptionReceiver {
+            queue: Arc::clone(&tx),
+        };
         let control = {
             let guard = self
                 .inner
@@ -145,15 +189,21 @@ fn demux_loop(
         Err(err) => {
             log::error!("sub demux failed to connect: {err}");
             while let Ok(cmd) = control_rx.recv() {
-                if let Control::Add { tx, .. } = cmd {
-                    let _ = tx.blocking_send(Err(RpcStatus::unavailable(err.to_string())));
+                match cmd {
+                    Control::Add { tx, .. } => tx.fail(RpcStatus::unavailable(err.to_string())),
+                    Control::Shutdown => return,
                 }
             }
             return;
         }
     };
 
+    let mut last_sweep = std::time::Instant::now();
     loop {
+        if last_sweep.elapsed() >= POLL_TIMEOUT {
+            sweep_closed(&sub, &state);
+            last_sweep = std::time::Instant::now();
+        }
         while let Ok(cmd) = control_rx.try_recv() {
             match cmd {
                 Control::Shutdown => return,
@@ -191,14 +241,10 @@ fn demux_loop(
                             topic: msg_topic.clone(),
                             payload: Arc::clone(&payload),
                         };
-                        match w.tx.try_send(Ok(msg)) {
-                            Ok(()) => {}
-                            Err(mpsc::error::TrySendError::Full(_)) => {
-                                // Drop for slow consumer; keep shared loop moving.
-                            }
-                            Err(mpsc::error::TrySendError::Closed(_)) => {
-                                dead.push((filter.clone(), w.id));
-                            }
+                        if w.tx.is_closed() {
+                            dead.push((filter.clone(), w.id));
+                        } else {
+                            w.tx.push(msg);
                         }
                     }
                 }
@@ -217,7 +263,7 @@ fn demux_loop(
                 };
                 for watchers in guard.filters.values() {
                     for w in watchers {
-                        let _ = w.tx.try_send(Err(RpcStatus::internal(err.to_string())));
+                        w.tx.fail(RpcStatus::internal(err.to_string()));
                     }
                 }
                 guard.filters.clear();

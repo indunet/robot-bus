@@ -92,6 +92,58 @@ fn ws_node_subscribe_with_qos_receives_published_payload() {
 }
 
 #[test]
+fn ws_node_passes_latest_policy_and_rejects_conflicts() {
+    let (_guard, broker) = start_bus();
+    let mut node = Node::ws_at("ws-latest", &ws_url(&broker));
+    let received = Arc::new(Mutex::new(None));
+    let slot = received.clone();
+    node.create_subscription_raw_with_qos(
+        "ws.latest",
+        QosProfile::latest(),
+        Arc::new(move |data| {
+            *slot.lock().unwrap() = Some(data.to_vec());
+        }),
+        None,
+    )
+    .unwrap();
+    assert!(
+        node.create_subscription_raw_with_qos(
+            "ws.latest",
+            QosProfile::keep_last(3),
+            Arc::new(|_| {}),
+            None
+        )
+        .is_err()
+    );
+    let publisher = Publisher::new(Some(&broker.message.xsub_bind)).unwrap();
+    let deadline = std::time::Instant::now() + Duration::from_secs(4);
+    while received.lock().unwrap().is_none() && std::time::Instant::now() < deadline {
+        publisher.publish("ws.latest", b"latest").unwrap();
+        node.spin_once(Some(Duration::from_millis(50))).unwrap();
+    }
+    assert_eq!(
+        received.lock().unwrap().as_deref(),
+        Some(b"latest".as_slice())
+    );
+    let snapshot: serde_json::Value =
+        ureq::get(&format!("{}/api/v1/subscriptions", ws_url(&broker)))
+            .call()
+            .unwrap()
+            .into_json()
+            .unwrap();
+    let row = snapshot["subscriptions"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|r| r["filter"] == "ws.latest")
+        .unwrap();
+    assert_eq!(row["policy"], "latest");
+    assert_eq!(row["capacity"], 1);
+    node.shutdown();
+    broker.stop().unwrap();
+}
+
+#[test]
 fn ws_node_service_call_echoes_payload() {
     let (_guard, broker) = start_bus();
     let url = ws_url(&broker);

@@ -9,7 +9,7 @@ use super::action_bus::ActionPeer;
 use super::message_bus::MessagePeer;
 use super::service_bus::ServicePeer;
 
-#[cfg(any(feature = "ws", feature = "console"))]
+#[cfg(any(feature = "ws", feature = "console-api"))]
 use std::net::SocketAddr;
 
 fn normalize_tcp_bind(addr: &str) -> String {
@@ -253,7 +253,7 @@ pub fn parse_robot_bus_config(args: &[String]) -> Result<Option<RobotBusConfig>>
                 config.ws.listen = value
                     .parse::<SocketAddr>()
                     .with_context(|| format!("invalid {arg} {value}"))?;
-                #[cfg(feature = "console")]
+                #[cfg(feature = "console-api")]
                 {
                     config.console.listen = config.ws.listen;
                 }
@@ -266,13 +266,29 @@ pub fn parse_robot_bus_config(args: &[String]) -> Result<Option<RobotBusConfig>>
                     .cors_origins
                     .push(require_arg(args, i, arg)?.to_string());
             }
-            #[cfg(not(feature = "ws"))]
+            #[cfg(all(not(feature = "ws"), feature = "console-api"))]
+            "--api-listen" | "--listen" => {
+                i += 1;
+                let value = require_arg(args, i, arg)?;
+                config.console.listen = value
+                    .parse::<SocketAddr>()
+                    .with_context(|| format!("invalid {arg} {value}"))?;
+            }
+            #[cfg(all(not(feature = "ws"), feature = "console-api"))]
+            "--cors-origin" => {
+                i += 1;
+                config
+                    .console
+                    .cors_origins
+                    .push(require_arg(args, i, arg)?.to_string());
+            }
+            #[cfg(not(any(feature = "ws", feature = "console-api")))]
             "--api-listen" | "--listen" | "--cors-origin" => {
-                bail!("{arg} requires the `ws` feature");
+                bail!("{arg} requires the `ws` or `console-api` feature");
             }
 
             // --- console ---
-            #[cfg(feature = "console")]
+            #[cfg(feature = "console-api")]
             "--console-listen" => {
                 i += 1;
                 let value = require_arg(args, i, arg)?;
@@ -287,19 +303,19 @@ pub fn parse_robot_bus_config(args: &[String]) -> Result<Option<RobotBusConfig>>
                     config.ws.listen = addr;
                 }
             }
-            #[cfg(feature = "console")]
+            #[cfg(feature = "console-api")]
             "--no-console" => {
                 config.console.enabled = false;
             }
-            #[cfg(feature = "console")]
+            #[cfg(feature = "console-api")]
             "--no-tank" => {
                 config.console.tank_enabled = false;
             }
-            #[cfg(feature = "console")]
+            #[cfg(feature = "console-api")]
             "--no-docs" => {
                 config.console.docs_enabled = false;
             }
-            #[cfg(feature = "console")]
+            #[cfg(feature = "console-api")]
             "--console-cors-origin" => {
                 i += 1;
                 config
@@ -307,7 +323,7 @@ pub fn parse_robot_bus_config(args: &[String]) -> Result<Option<RobotBusConfig>>
                     .cors_origins
                     .push(require_arg(args, i, arg)?.to_string());
             }
-            #[cfg(not(feature = "console"))]
+            #[cfg(not(feature = "console-api"))]
             "--console-listen"
             | "--no-console"
             | "--no-tank"
@@ -509,7 +525,7 @@ mod tests {
         }
     }
 
-    #[cfg(feature = "console")]
+    #[cfg(feature = "console-api")]
     #[test]
     fn parses_console_flags() {
         let config = parse_robot_bus_config(&args(&["--console-listen", "127.0.0.1:25771"]))
@@ -536,7 +552,7 @@ mod tests {
             .unwrap()
             .expect("config");
         assert!(config.console.enabled);
-        assert!(config.console.tank_enabled);
+        assert_eq!(config.console.tank_enabled, cfg!(feature = "demo-tank"));
         assert!(!config.console.docs_enabled);
     }
 
@@ -590,10 +606,18 @@ mod tests {
             let config = result.unwrap().expect("config");
             assert_eq!(config.ws.listen.to_string(), "127.0.0.1:15771");
         }
-        #[cfg(not(feature = "ws"))]
+        #[cfg(all(not(feature = "ws"), feature = "console-api"))]
         {
-            let err = result.expect_err("--api-listen requires ws");
-            assert!(err.to_string().contains("requires the `ws` feature"));
+            let config = result.unwrap().expect("config");
+            assert_eq!(config.console.listen.to_string(), "127.0.0.1:15771");
+        }
+        #[cfg(not(any(feature = "ws", feature = "console-api")))]
+        {
+            let err = result.expect_err("--api-listen requires an HTTP feature");
+            assert!(
+                err.to_string()
+                    .contains("requires the `ws` or `console-api` feature")
+            );
         }
     }
 

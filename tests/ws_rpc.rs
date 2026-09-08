@@ -27,6 +27,80 @@ fn start_bus() -> (support::BrokerLockGuard, RobotBusBroker) {
 }
 
 #[tokio::test]
+async fn subscription_policies_are_registered_observable_and_removed_on_cancel() {
+    use robot_bus::SubscriptionOverflowPolicy::{DropNewest, DropOldest, Latest};
+    let (_guard, broker) = start_bus();
+    let (mut ws, _) = connect_async(format!("ws://{}/ws-rpc", broker.api_listen()))
+        .await
+        .unwrap();
+    let metrics_url = format!("http://{}/api/v1/subscriptions", broker.api_listen());
+    for (stream_id, policy) in [(1, DropNewest), (3, DropOldest), (5, Latest)] {
+        let request = Frame::Request {
+            stream_id,
+            header: RequestHeader::SubscribeWithPolicy {
+                topic: "policy.test".into(),
+                qos_depth: 3,
+                overflow: policy,
+            },
+            body: vec![],
+        };
+        ws.send(Message::Binary(encode_frame(&request).unwrap().into()))
+            .await
+            .unwrap();
+    }
+    let mut snapshot = serde_json::Value::Null;
+    for _ in 0..30 {
+        snapshot = ureq::get(&metrics_url).call().unwrap().into_json().unwrap();
+        if snapshot["subscriptions"].as_array().unwrap().len() == 3 {
+            break;
+        }
+        tokio::time::sleep(Duration::from_millis(50)).await;
+    }
+    let rows = snapshot["subscriptions"].as_array().unwrap();
+    assert_eq!(rows.len(), 3);
+    for (policy, capacity) in [("drop_newest", 3), ("drop_oldest", 3), ("latest", 1)] {
+        let row = rows.iter().find(|r| r["policy"] == policy).unwrap();
+        assert_eq!(row["capacity"], capacity);
+        assert_eq!(row["pending"], 0);
+        assert_eq!(row["dropped"], 0);
+    }
+    let publisher = Publisher::new(Some(&broker.message.xsub_bind)).unwrap();
+    let mut delivered = std::collections::HashSet::new();
+    for _ in 0..30 {
+        publisher.publish("policy.test", b"sample").unwrap();
+        if let Ok(Some(Ok(Message::Binary(bytes)))) =
+            tokio::time::timeout(Duration::from_millis(100), ws.next()).await
+        {
+            if let Frame::Data { stream_id, payload } = decode_frame(&bytes).unwrap() {
+                assert_eq!(decode_subscribe_data(&payload).unwrap().1, b"sample");
+                delivered.insert(stream_id);
+            }
+        }
+        if delivered.len() == 3 {
+            break;
+        }
+    }
+    assert_eq!(delivered.len(), 3);
+    for stream_id in [1, 3, 5] {
+        ws.send(Message::Binary(
+            encode_frame(&Frame::Cancel { stream_id }).unwrap().into(),
+        ))
+        .await
+        .unwrap();
+    }
+    for _ in 0..30 {
+        snapshot = ureq::get(&metrics_url).call().unwrap().into_json().unwrap();
+        if snapshot["subscriptions"].as_array().unwrap().is_empty() {
+            break;
+        }
+        tokio::time::sleep(Duration::from_millis(50)).await;
+    }
+    assert!(snapshot["subscriptions"].as_array().unwrap().is_empty());
+    ws.close(None).await.unwrap();
+    broker.stop().unwrap();
+}
+
+#[tokio::test]
 async fn ws_publish_reaches_zmq_subscriber() {
     let (_guard, broker) = start_bus();
     let listen = broker.api_listen();

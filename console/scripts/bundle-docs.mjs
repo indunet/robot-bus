@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * Bake docs/zh + docs/en Markdown into a TS module for the console help page.
- * Runs as `prebuild` before `next build` (just console / pnpm build).
+ * Runs as `prebuild` / `predev` / `pretypecheck` (the generated module is gitignored).
  */
 import { readFileSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'

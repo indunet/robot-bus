@@ -1,6 +1,6 @@
 //! Topic type registry: typed create_publisher registers before any traffic.
 
-#![cfg(feature = "console")]
+#![cfg(feature = "console-api")]
 
 mod support;
 

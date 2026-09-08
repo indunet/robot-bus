@@ -35,6 +35,11 @@ pub async fn ws_upgrade(
 enum Outbound {
     Frame(Frame),
     Bytes(Vec<u8>),
+    Subscription {
+        stream_id: u32,
+        queue: Arc<super::subscription_queue::SubscriptionQueue>,
+        sent: tokio::sync::oneshot::Sender<()>,
+    },
 }
 
 enum StreamCmd {
@@ -64,6 +69,13 @@ async fn handle_socket(socket: WebSocket, state: Arc<WsGatewayState>) {
                         if sink.send(Message::Binary(bytes.into())).await.is_err() {
                             break;
                         }
+                    }
+                    Some(Outbound::Subscription { stream_id, queue, sent }) => {
+                        if let Some(msg) = queue.pop() {
+                            let Ok(bytes) = encode_subscribe_data(stream_id, &msg.topic, &msg.payload) else { break; };
+                            if sink.send(Message::Binary(bytes.into())).await.is_err() { break; }
+                        }
+                        let _ = sent.send(());
                     }
                     None => break,
                 }
@@ -155,7 +167,9 @@ async fn run_rpc(
     mut cmd_rx: mpsc::Receiver<StreamCmd>,
 ) {
     let result = match header.opcode() {
-        Opcode::Subscribe => run_subscribe(stream_id, &state, header, &out_tx, &mut cmd_rx).await,
+        Opcode::Subscribe | Opcode::SubscribeWithPolicy => {
+            run_subscribe(stream_id, &state, header, &out_tx, &mut cmd_rx).await
+        }
         Opcode::Publish => run_publish(&state, header, body).await,
         Opcode::Call => run_call(stream_id, &state, header, body, &out_tx).await,
         Opcode::SendGoal => {
@@ -182,31 +196,46 @@ async fn run_subscribe(
     out_tx: &mpsc::Sender<Outbound>,
     cmd_rx: &mut mpsc::Receiver<StreamCmd>,
 ) -> Result<(), RpcStatus> {
-    let RequestHeader::Subscribe { topic, qos_depth } = header else {
-        return Err(RpcStatus::internal("subscribe header mismatch"));
+    let (topic, depth, policy) = match header {
+        RequestHeader::Subscribe { topic, qos_depth } => (
+            topic,
+            qos_depth,
+            crate::SubscriptionOverflowPolicy::DropNewest,
+        ),
+        RequestHeader::SubscribeWithPolicy {
+            topic,
+            qos_depth,
+            overflow,
+        } => (topic, qos_depth, overflow),
+        _ => return Err(RpcStatus::internal("subscribe header mismatch")),
     };
-    let mut rx = state.message.open_subscribe(topic, qos_depth)?;
+    let rx = state
+        .message
+        .open_subscribe_with_policy(topic, depth, policy)?;
     loop {
+        let forward = async {
+            if !rx.queue.wait_ready().await? {
+                return Ok(false);
+            }
+            // Queue a readiness token, not a frozen payload. The socket writer
+            // takes the newest eligible message only when it can actually send.
+            let (sent, done) = tokio::sync::oneshot::channel();
+            out_tx
+                .send(Outbound::Subscription {
+                    stream_id,
+                    queue: Arc::clone(&rx.queue),
+                    sent,
+                })
+                .await
+                .map_err(|_| RpcStatus::internal("subscription connection closed"))?;
+            done.await
+                .map_err(|_| RpcStatus::internal("subscription writer closed"))?;
+            Ok::<_, RpcStatus>(true)
+        };
         tokio::select! {
             biased;
-            cmd = cmd_rx.recv() => {
-                match cmd {
-                    Some(StreamCmd::Cancel) | None => break,
-                }
-            }
-            item = rx.recv() => {
-                match item {
-                    Some(Ok(msg)) => {
-                        let bytes = encode_subscribe_data(stream_id, &msg.topic, &msg.payload)
-                            .map_err(|err| RpcStatus::internal(err.to_string()))?;
-                        if out_tx.send(Outbound::Bytes(bytes)).await.is_err() {
-                            break;
-                        }
-                    }
-                    Some(Err(status)) => return Err(status),
-                    None => break,
-                }
-            }
+            _ = cmd_rx.recv() => break,
+            result = forward => if !result? { break; },
         }
     }
     Ok(())

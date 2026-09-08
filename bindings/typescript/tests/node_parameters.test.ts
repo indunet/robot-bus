@@ -34,31 +34,32 @@ describe("node parameters", () => {
     node.declareParameter("enabled", true);
     node.declareParameter("count", 3);
 
-    assert.equal(node.getParameter("max_speed"), 1.5);
-    assert.equal(node.getParameter("frame_id"), "base_link");
-    assert.equal(node.getParameter("enabled"), true);
-    assert.equal(node.getParameter("count"), 3);
+    assert.deepEqual(node.getParameter("max_speed"), { name: "max_speed", value: 1.5 });
+    assert.deepEqual(node.getParameter("frame_id"), { name: "frame_id", value: "base_link" });
+    assert.deepEqual(node.getParameter("enabled"), { name: "enabled", value: true });
+    assert.deepEqual(node.getParameter("count"), { name: "count", value: 3 });
     assert.equal(node.hasParameter("frame_id"), true);
     assert.equal(node.hasParameter("missing"), false);
 
     node.setParameter("max_speed", 2.0);
-    assert.equal(node.getParameter("max_speed"), 2.0);
+    assert.deepEqual(node.getParameter("max_speed"), { name: "max_speed", value: 2.0 });
 
     const listed = node.listParameters();
-    assert.equal(listed.length, 4);
+    assert.deepEqual([...listed.names].sort(), ["count", "enabled", "frame_id", "max_speed"]);
+    assert.deepEqual(listed.prefixes, []);
 
     node.loadParametersFromYamlStr(
       "ros__parameters:\n  max_speed: 3.25\n  extra: hello\n",
     );
-    assert.equal(node.getParameter("max_speed"), 3.25);
-    assert.equal(node.getParameter("extra"), "hello");
+    assert.deepEqual(node.getParameter("max_speed"), { name: "max_speed", value: 3.25 });
+    assert.deepEqual(node.getParameter("extra"), { name: "extra", value: "hello" });
 
     const dir = await mkdtemp(join(tmpdir(), "robot-bus-params-"));
     const path = join(dir, "p.yaml");
     try {
       await writeFile(path, "count: 9\n");
       node.loadParametersFromYamlFile(path);
-      assert.equal(node.getParameter("count"), 9);
+      assert.deepEqual(node.getParameter("count"), { name: "count", value: 9 });
     } finally {
       await rm(dir, { recursive: true, force: true });
     }

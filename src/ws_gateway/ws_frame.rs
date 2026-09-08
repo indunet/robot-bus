@@ -3,6 +3,7 @@
 //! Frame layout (little-endian):
 //! - REQUEST: `u8 type` | `u32 stream_id` | `u8 opcode` | opcode-specific header | body
 //!   - Subscribe (1): `u16 topic_len` | topic UTF-8 | `i32 qos_depth`
+//!   - SubscribeWithPolicy (5): Subscribe header + `u8 overflow` (0 drop newest, 1 drop oldest, 2 latest)
 //!   - Publish (2): `u16 topic_len` | topic UTF-8 | body = raw bus payload
 //!   - Call (3): `u16 name_len` | name | `u32 timeout_ms` | `u16 id_len` | request_id | body
 //!   - SendGoal (4): `u16 name_len` | name | `u16 goal_id_len` | goal_id | `u32 timeout_ms` | body
@@ -17,6 +18,8 @@
 //! Publish success is TRAILER only (no DATA ack). Status codes match historical
 //! gRPC / tonic codes (0 = OK).
 
+use crate::runtime::SubscriptionOverflowPolicy;
+
 pub const FRAME_REQUEST: u8 = 1;
 pub const FRAME_DATA: u8 = 2;
 pub const FRAME_CANCEL: u8 = 3;
@@ -28,6 +31,7 @@ pub const OPCODE_SUBSCRIBE: u8 = 1;
 pub const OPCODE_PUBLISH: u8 = 2;
 pub const OPCODE_CALL: u8 = 3;
 pub const OPCODE_SEND_GOAL: u8 = 4;
+pub const OPCODE_SUBSCRIBE_WITH_POLICY: u8 = 5;
 
 pub const ACTION_KIND_GOAL: u8 = 1;
 pub const ACTION_KIND_FEEDBACK: u8 = 2;
@@ -38,6 +42,7 @@ pub const ACTION_KIND_CANCEL: u8 = 4;
 #[repr(u8)]
 pub enum Opcode {
     Subscribe = OPCODE_SUBSCRIBE,
+    SubscribeWithPolicy = OPCODE_SUBSCRIBE_WITH_POLICY,
     Publish = OPCODE_PUBLISH,
     Call = OPCODE_CALL,
     SendGoal = OPCODE_SEND_GOAL,
@@ -47,6 +52,7 @@ impl Opcode {
     pub fn from_u8(v: u8) -> Result<Self, FrameError> {
         match v {
             OPCODE_SUBSCRIBE => Ok(Self::Subscribe),
+            OPCODE_SUBSCRIBE_WITH_POLICY => Ok(Self::SubscribeWithPolicy),
             OPCODE_PUBLISH => Ok(Self::Publish),
             OPCODE_CALL => Ok(Self::Call),
             OPCODE_SEND_GOAL => Ok(Self::SendGoal),
@@ -57,6 +63,11 @@ impl Opcode {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum RequestHeader {
+    SubscribeWithPolicy {
+        topic: String,
+        qos_depth: i32,
+        overflow: SubscriptionOverflowPolicy,
+    },
     Subscribe {
         topic: String,
         qos_depth: i32,
@@ -80,6 +91,7 @@ impl RequestHeader {
     pub fn opcode(&self) -> Opcode {
         match self {
             Self::Subscribe { .. } => Opcode::Subscribe,
+            Self::SubscribeWithPolicy { .. } => Opcode::SubscribeWithPolicy,
             Self::Publish { .. } => Opcode::Publish,
             Self::Call { .. } => Opcode::Call,
             Self::SendGoal { .. } => Opcode::SendGoal,
@@ -135,6 +147,10 @@ pub enum FrameError {
     UnknownType(u8),
     #[error("unknown opcode {0}")]
     UnknownOpcode(u8),
+    #[error("invalid subscription overflow policy {0}")]
+    InvalidOverflowPolicy(u8),
+    #[error("unexpected trailing bytes in frame")]
+    TrailingBytes,
     #[error("invalid utf-8 in frame")]
     InvalidUtf8,
     #[error("string too long")]
@@ -236,6 +252,15 @@ fn encode_request(
             push_str(&mut out, topic)?;
             out.extend_from_slice(&qos_depth.to_le_bytes());
         }
+        RequestHeader::SubscribeWithPolicy {
+            topic,
+            qos_depth,
+            overflow,
+        } => {
+            push_str(&mut out, topic)?;
+            out.extend_from_slice(&qos_depth.to_le_bytes());
+            out.push(*overflow as u8);
+        }
         RequestHeader::Publish { topic } => {
             push_str(&mut out, topic)?;
             out.extend_from_slice(body);
@@ -336,6 +361,24 @@ fn decode_request(stream_id: u32, rest: &[u8]) -> Result<Frame, FrameError> {
             let qos_depth = read_i32(&mut cur)?;
             (RequestHeader::Subscribe { topic, qos_depth }, Vec::new())
         }
+        Opcode::SubscribeWithPolicy => {
+            let topic = read_str(&mut cur)?;
+            let qos_depth = read_i32(&mut cur)?;
+            let value = *cur.first().ok_or(FrameError::Truncated)?;
+            let overflow = SubscriptionOverflowPolicy::from_wire(value)
+                .ok_or(FrameError::InvalidOverflowPolicy(value))?;
+            if cur.len() != 1 {
+                return Err(FrameError::TrailingBytes);
+            }
+            (
+                RequestHeader::SubscribeWithPolicy {
+                    topic,
+                    qos_depth,
+                    overflow,
+                },
+                Vec::new(),
+            )
+        }
         Opcode::Publish => {
             let topic = read_str(&mut cur)?;
             (RequestHeader::Publish { topic }, cur.to_vec())
@@ -419,6 +462,61 @@ fn read_len_prefixed(bytes: &[u8]) -> Result<Vec<u8>, FrameError> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn subscribe_policy_wire_fixture_and_legacy_compatibility() {
+        let legacy = Frame::Request {
+            stream_id: 1,
+            header: RequestHeader::Subscribe {
+                topic: "x".into(),
+                qos_depth: 3,
+            },
+            body: vec![],
+        };
+        assert_eq!(
+            encode_frame(&legacy).unwrap(),
+            vec![1, 1, 0, 0, 0, 1, 1, 0, 120, 3, 0, 0, 0]
+        );
+        for (policy, value) in [
+            (SubscriptionOverflowPolicy::DropNewest, 0),
+            (SubscriptionOverflowPolicy::DropOldest, 1),
+            (SubscriptionOverflowPolicy::Latest, 2),
+        ] {
+            let frame = Frame::Request {
+                stream_id: 1,
+                header: RequestHeader::SubscribeWithPolicy {
+                    topic: "x".into(),
+                    qos_depth: 3,
+                    overflow: policy,
+                },
+                body: vec![],
+            };
+            let mut bytes = vec![1, 1, 0, 0, 0, 5, 1, 0, 120, 3, 0, 0, 0, value];
+            assert_eq!(encode_frame(&frame).unwrap(), bytes);
+            let Frame::Request {
+                header:
+                    RequestHeader::SubscribeWithPolicy {
+                        topic,
+                        qos_depth,
+                        overflow,
+                    },
+                ..
+            } = decode_frame(&bytes).unwrap()
+            else {
+                panic!("expected subscribe policy");
+            };
+            assert_eq!(topic, "x");
+            assert_eq!(qos_depth, 3);
+            assert_eq!(overflow, policy);
+            bytes[13] = 99;
+            assert!(matches!(
+                decode_frame(&bytes),
+                Err(FrameError::InvalidOverflowPolicy(99))
+            ));
+            bytes.pop();
+            assert!(matches!(decode_frame(&bytes), Err(FrameError::Truncated)));
+        }
+    }
 
     #[test]
     fn roundtrip_all_opcodes() {
