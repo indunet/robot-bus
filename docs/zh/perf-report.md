@@ -27,12 +27,12 @@
 
 message为 **max goodput**（丢包阈值内的最大可持续订阅速率）；括号为该档实测投递率。service/action为完成速率。
 
-| 场景 | tcp | ipc | inproc | ws |
-|------|-----|-----|--------|------|
-| message发布 | 401123/s | — | 803213/s | 2659/s |
-| message max goodput | 397953/s (99.2% delivered) | — | 796263/s (99.1% delivered) | 138793/s (100.1% delivered) |
-| service call | — | — | — | — |
-| action send_goal | — | — | — | — |
+| 场景 | tcp | ipc | inproc | ws | federation |
+|------|-----|-----|--------|------|------------|
+| message发布 | 401123/s | — | 803213/s | 2659/s | — |
+| message max goodput | 397953/s (99.2% delivered) | — | 796263/s (99.1% delivered) | 138793/s (100.1% delivered) | — |
+| service call | — | — | — | — | — |
+| action send_goal | — | — | — | — | — |
 
 ## tcp
 
@@ -59,6 +59,14 @@ message为 **max goodput**（丢包阈值内的最大可持续订阅速率）；
 | message Publish | 2660 | 2640 | 1.000s | 2659 | 2639 | 99.2 | 564 | 702 | 809 | 474 |
 | message Subscribe | 151447 | 151595 | 1.000s | 151446 | 138793 | 100.1 | 6764 | 7359 | 7628 | 6717 |
 
+## federation
+
+| 场景 | 发送 | 接收 | 耗时 | 发布/s | 订阅/s | 投递% | p50 (µs) | p95 (µs) | p99 (µs) | mean (µs) |
+|------|------|------|------|--------|--------|-------|----------|----------|----------|-----------|
+| message pub/sub | — | — | — | — | — | — | — | — | — | — |
+| service call | — | — | — | — | — | — | — | — | — | — |
+| action send_goal | — | — | — | — | — | — | — | — | — | — |
+
 ## 复现
 
 ```bash
@@ -66,4 +74,5 @@ just perf
 # 或
 cargo run --release --bin robot_bus_perf
 # 仅 message：ROBOT_BUS_PERF_ONLY=message cargo run --release --bin robot_bus_perf --features ws
+# 仅邦联：ROBOT_BUS_PERF_ONLY=federation cargo run --release --bin robot_bus_perf --features ws
 ```

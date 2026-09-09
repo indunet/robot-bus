@@ -262,6 +262,10 @@ ci: gen-all
 perf: gen-rust
 	cargo run --release --bin robot_bus_perf --features ws
 
+# Federation-only (two TCP brokers); same report files
+perf-federation: gen-rust
+	ROBOT_BUS_PERF_ONLY=federation cargo run --release --bin robot_bus_perf --features ws
+
 # ROS 2 comparison benches (Docker container `ros2`); writes docs/{zh,en}/ros2-perf-report.md
 perf-ros2:
 	./benches/ros2_perf/run.sh

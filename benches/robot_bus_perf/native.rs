@@ -6,7 +6,7 @@ use std::thread;
 use std::time::{Duration, Instant};
 
 use crate::support::{LatencyStats, ScenarioResult, node_for, now_ns};
-use robot_bus::{Context, HighWaterMark, Publisher};
+use robot_bus::{Context, HighWaterMark, Node, Publisher};
 
 use crate::pacing::{
     GoodputTrial, MSG_HWM, WARMUP, find_max_goodput, goodput_settle, goodput_trial_secs,
@@ -16,6 +16,47 @@ use crate::pacing::{
 
 pub fn bench_pubsub(ctx: &Context, transport: &str) -> ScenarioResult {
     let scenario = "message pub/sub";
+    let sub = node_for(ctx, format!("perf-sub-{transport}"), transport);
+    if !sub.wait_for_broker(Some(Duration::from_secs(5))) {
+        return ScenarioResult::skipped(transport, scenario, "wait_for_broker timed out");
+    }
+    let xsub = match sub.options().message_xsub_endpoint() {
+        Ok(ep) => ep,
+        Err(err) => {
+            return ScenarioResult::skipped(transport, scenario, format!("xsub endpoint: {err}"));
+        }
+    };
+    let hwm = HighWaterMark {
+        snd: MSG_HWM,
+        rcv: MSG_HWM,
+    };
+    let publisher = match Publisher::with_shared_context(ctx, Some(&xsub), hwm) {
+        Ok(p) => p,
+        Err(err) => {
+            return ScenarioResult::skipped(
+                transport,
+                scenario,
+                format!("publisher failed: {err}"),
+            );
+        }
+    };
+    run_pubsub(
+        transport,
+        scenario,
+        sub,
+        publisher,
+        Duration::from_millis(250),
+    )
+}
+
+/// Pub on `publisher` (one broker) and sub on `sub` (possibly another broker).
+pub fn run_pubsub(
+    transport: &str,
+    scenario: &'static str,
+    mut sub: Node,
+    publisher: Publisher,
+    after_subscribe: Duration,
+) -> ScenarioResult {
     let transport = transport.to_string();
     let topic = format!("perf/{transport}/msg");
 
@@ -23,16 +64,6 @@ pub fn bench_pubsub(ctx: &Context, transport: &str) -> ScenarioResult {
     let count = Arc::new(AtomicUsize::new(0));
     let record_latency = Arc::new(AtomicBool::new(true));
 
-    let mut sub = node_for(ctx, format!("perf-sub-{transport}"), &transport);
-    if !sub.wait_for_broker(Some(Duration::from_secs(5))) {
-        return ScenarioResult::skipped(&transport, scenario, "wait_for_broker timed out");
-    }
-    let xsub = match sub.options().message_xsub_endpoint() {
-        Ok(ep) => ep,
-        Err(err) => {
-            return ScenarioResult::skipped(&transport, scenario, format!("xsub endpoint: {err}"));
-        }
-    };
     let hwm = HighWaterMark {
         snd: MSG_HWM,
         rcv: MSG_HWM,
@@ -72,17 +103,6 @@ pub fn bench_pubsub(ctx: &Context, transport: &str) -> ScenarioResult {
         }
     };
 
-    let publisher = match Publisher::with_shared_context(ctx, Some(&xsub), hwm) {
-        Ok(p) => p,
-        Err(err) => {
-            return ScenarioResult::skipped(
-                &transport,
-                scenario,
-                format!("publisher failed: {err}"),
-            );
-        }
-    };
-
     let count_pub = Arc::clone(&count);
     let lat_pub = Arc::clone(&latencies);
     let rec_pub = Arc::clone(&record_latency);
@@ -91,7 +111,7 @@ pub fn bench_pubsub(ctx: &Context, transport: &str) -> ScenarioResult {
     let latency_samples = msg_latency_samples();
     let settle = goodput_settle();
     let worker = thread::spawn(move || {
-        thread::sleep(Duration::from_millis(250));
+        thread::sleep(after_subscribe);
         for _ in 0..WARMUP {
             let _ = publisher.publish(&topic_pub, &make_payload(now_ns()));
         }
@@ -172,10 +192,42 @@ pub fn bench_pubsub(ctx: &Context, transport: &str) -> ScenarioResult {
 
 pub fn bench_service(ctx: &Context, transport: &str, n: usize) -> ScenarioResult {
     let scenario = "service call";
-    let transport = transport.to_string();
     let name = format!("perf.{transport}.echo");
+    let server = node_for(ctx, format!("perf-svc-srv-{transport}"), transport);
+    let ctx_cli = ctx.clone();
+    let transport_cli = transport.to_string();
+    run_service(
+        transport,
+        scenario,
+        &name,
+        server,
+        Duration::from_millis(200),
+        n,
+        move || {
+            node_for(
+                &ctx_cli,
+                format!("perf-svc-cli-{transport_cli}"),
+                &transport_cli,
+            )
+        },
+    )
+}
 
-    let mut server = node_for(ctx, format!("perf-svc-srv-{transport}"), &transport);
+/// Server on one node; client factory may pin a different broker (federation).
+pub fn run_service<F>(
+    transport: &str,
+    scenario: &'static str,
+    name: &str,
+    mut server: Node,
+    advertise_wait: Duration,
+    n: usize,
+    make_client: F,
+) -> ScenarioResult
+where
+    F: FnOnce() -> Node + Send + 'static,
+{
+    let transport = transport.to_string();
+    let name = name.to_string();
     if let Err(err) = server.create_service_raw(&name, Arc::new(|body| body.to_vec()), None) {
         return ScenarioResult::skipped(&transport, scenario, format!("create_service: {err}"));
     }
@@ -192,14 +244,9 @@ pub fn bench_service(ctx: &Context, transport: &str, n: usize) -> ScenarioResult
     };
 
     let transport_cli = transport.clone();
-    let ctx_cli = ctx.clone();
     let worker = thread::spawn(move || {
-        thread::sleep(Duration::from_millis(200));
-        let mut client_node = node_for(
-            &ctx_cli,
-            format!("perf-svc-cli-{transport_cli}"),
-            &transport_cli,
-        );
+        thread::sleep(advertise_wait);
+        let mut client_node = make_client();
         let client = match client_node.create_client_raw(&name) {
             Ok(c) => c,
             Err(err) => {
@@ -214,7 +261,7 @@ pub fn bench_service(ctx: &Context, transport: &str, n: usize) -> ScenarioResult
 
         let payload = make_payload(0);
         // Fail fast: one probe before full warmup.
-        if let Err(err) = client.call(&payload, Some(Duration::from_millis(500))) {
+        if let Err(err) = client.call(&payload, Some(Duration::from_secs(2))) {
             shutdown.shutdown();
             return ScenarioResult::skipped(
                 &transport_cli,
@@ -272,10 +319,42 @@ pub fn bench_service(ctx: &Context, transport: &str, n: usize) -> ScenarioResult
 
 pub fn bench_action(ctx: &Context, transport: &str, n: usize) -> ScenarioResult {
     let scenario = "action send_goal";
-    let transport = transport.to_string();
     let name = format!("perf.{transport}.act");
+    let server = node_for(ctx, format!("perf-act-srv-{transport}"), transport);
+    let ctx_cli = ctx.clone();
+    let transport_cli = transport.to_string();
+    run_action(
+        transport,
+        scenario,
+        &name,
+        server,
+        Duration::from_millis(200),
+        n,
+        move || {
+            node_for(
+                &ctx_cli,
+                format!("perf-act-cli-{transport_cli}"),
+                &transport_cli,
+            )
+        },
+    )
+}
 
-    let mut server = node_for(ctx, format!("perf-act-srv-{transport}"), &transport);
+/// Action server on one node; client factory may pin a different broker (federation).
+pub fn run_action<F>(
+    transport: &str,
+    scenario: &'static str,
+    name: &str,
+    mut server: Node,
+    advertise_wait: Duration,
+    n: usize,
+    make_client: F,
+) -> ScenarioResult
+where
+    F: FnOnce() -> Node + Send + 'static,
+{
+    let transport = transport.to_string();
+    let name = name.to_string();
     if let Err(err) = server.create_action_server_raw(
         &name,
         Arc::new(|body| {
@@ -305,14 +384,9 @@ pub fn bench_action(ctx: &Context, transport: &str, n: usize) -> ScenarioResult 
     };
 
     let transport_cli = transport.clone();
-    let ctx_cli = ctx.clone();
     let worker = thread::spawn(move || {
-        thread::sleep(Duration::from_millis(200));
-        let mut client_node = node_for(
-            &ctx_cli,
-            format!("perf-act-cli-{transport_cli}"),
-            &transport_cli,
-        );
+        thread::sleep(advertise_wait);
+        let mut client_node = make_client();
         let client = match client_node.create_action_client_raw(&name) {
             Ok(c) => c,
             Err(err) => {

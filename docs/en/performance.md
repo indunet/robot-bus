@@ -10,7 +10,7 @@ This is the state reviewed on 2026-09-08, not a new measurement.
 
 | Report | Available information | Gaps and limits |
 | --- | --- | --- |
-| [Robot Bus](perf-report.md) | Some TCP/inproc/WS 64B single-host results, methodology and commands | Environment records only version and logical CPU count; CPU model, OS, commit, run date, full configuration and repeated-run variation are missing; IPC/service/action have no results |
+| [Robot Bus](perf-report.md) | Some TCP/inproc/WS 64B single-host results, methodology and commands | Environment records only version and logical CPU count; CPU model, OS, commit, run date, full configuration and repeated-run variation are missing; IPC/service/action/federation have no results |
 | [ROS 2](ros2-perf-report.md) | Humble, Fast DDS, SHM/UDP configuration and results | No established evidence of matching hardware, time or resource limits with the bus report; direct speed ratios are unsupported |
 | [ROS 2 bridge](ros2-bridge-perf-report.md) | The 2026-08-31 non-execution/build-failure record and methodology | No usable throughput or latency results; rerun with a matching live ROS environment |
 
@@ -42,6 +42,10 @@ See [contributing](../../CONTRIBUTING.md) for source-build prerequisites. These 
 just perf
 # Message only; this configuration cannot establish service/action performance.
 ROBOT_BUS_PERF_ONLY=message cargo run --release --bin robot_bus_perf
+# Federation only (two TCP brokers, A→B).
+ROBOT_BUS_PERF_ONLY=federation cargo run --release --bin robot_bus_perf
+# or
+just perf-federation
 ```
 
 ROS benches additionally need ROS. Default tasks use a container named `ros2`; do not assume it exists on every machine. Dependencies and optional local execution are documented in the [ROS bench](../../benches/ros2_perf/README.md) and [bridge bench](../../benches/ros2_bridge_perf/README.md).

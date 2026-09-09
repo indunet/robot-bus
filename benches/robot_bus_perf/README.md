@@ -1,18 +1,22 @@
 # robot_bus_perf
 
-robot-bus本机性能压测：进程内 `RobotBusBroker`，覆盖 **tcp / ipc / inproc / ws** 的 pub/sub、service、action。
+robot-bus本机性能压测：进程内 `RobotBusBroker`，覆盖 **tcp / ipc / inproc / ws** 的 pub/sub、service、action，以及 **federation**（两个 TCP broker，A→B）。
 
 方法与 `benches/ros2_perf`对齐，报告写入 [`docs/zh/perf-report.md`](../../docs/zh/perf-report.md) / [`docs/en/perf-report.md`](../../docs/en/perf-report.md)：
 
 - **延迟**：限速抽样（发一条等收到再发）
 - **吞吐（主指标）**：在目标速率下限速发送，**二分搜索**丢包 ≤ 1% 的最大可持续速率（max goodput）
 - **Action**：ws场景名为 `action SendGoal`，对应一元 goal请求 + server-stream `FEEDBACK` / `RESULT`
+- **Federation**：独立一对 broker（各自私有 ZMQ context），publisher/client 在 A、subscriber/server 在 B
 
 ## 结构
 
 ```
 benches/robot_bus_perf/
   main.rs       # cargo bin `robot_bus_perf`
+  native.rs     # tcp / ipc / inproc
+  federation.rs # two-broker TCP federation
+  ws.rs         # WebSocket RPC
   support.rs    # 报告 / 环境 / ScenarioResult
 ```
 
@@ -24,10 +28,24 @@ just perf
 cargo run --release --bin robot_bus_perf --features ws
 ```
 
-仅 message：
+仅 message（含 federation message）：
 
 ```bash
 ROBOT_BUS_PERF_ONLY=message cargo run --release --bin robot_bus_perf --features ws
+```
+
+仅邦联：
+
+```bash
+just perf-federation
+# 或
+ROBOT_BUS_PERF_ONLY=federation cargo run --release --bin robot_bus_perf --features ws
+```
+
+仅本机（跳过邦联）：
+
+```bash
+ROBOT_BUS_PERF_ONLY=local cargo run --release --bin robot_bus_perf --features ws
 ```
 
 常用环境变量：
@@ -41,6 +59,7 @@ ROBOT_BUS_PERF_ONLY=message cargo run --release --bin robot_bus_perf --features 
 | `ROBOT_BUS_PERF_MSG_LATENCY_SAMPLES` | `5000` | 限速延迟抽样次数 |
 | `ROBOT_BUS_PERF_SVC_ITERS` | `10000` | service call次数 |
 | `ROBOT_BUS_PERF_ACT_ITERS` | `5000` | action send_goal次数 |
+| `ROBOT_BUS_PERF_SKIP_REPORT` | （空） | 设为非空且非 `0` 时不覆盖 `docs/*perf-report.md` |
 
 ## 说明
 

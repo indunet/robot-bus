@@ -271,7 +271,7 @@ fn render_perf_report(
         ReportLang::Zh => {
             md.push_str("## 方法\n\n");
             md.push_str(
-                "- 进程内 `RobotBusBroker`，`bind_all_transports = true`（tcp + ipc + inproc + ws）。\n",
+                "- 进程内 `RobotBusBroker`：本机场景 `bind_all_transports = true`（tcp + ipc + inproc + ws）；**federation** 为另一对独立 TCP broker（A→B，`bind_all` 关闭）。\n",
             );
             md.push_str(
                 "- Console HTTP 关闭；message HWM=2048（仅 bench）；service/action HWM=64。\n",
@@ -289,20 +289,20 @@ fn render_perf_report(
                 "- Service / action：各 {svc_iters} / {act_iters} 次（`ROBOT_BUS_PERF_SVC_ITERS` / `ROBOT_BUS_PERF_ACT_ITERS`）；延迟为每次 call / send_goal 本地计时。\n"
             ));
             md.push_str(
-                "- ZMQ：共享 `Context` + `Node::tcp` / `ipc` / `inproc`；WebSocket RPC：`Node::ws_at`。\n",
+                "- ZMQ：共享 `Context` + `Node::tcp` / `ipc` / `inproc`；WebSocket RPC：`Node::ws_at`；federation 节点钉在对端 broker 的 TCP 口。\n",
             );
             md.push_str(
-                "- inproc 与嵌入式 broker 必须共用同一 `Context`（ZeroMQ inproc 是 context-local）。\n",
+                "- inproc 与嵌入式 broker 必须共用同一 `Context`（ZeroMQ inproc 是 context-local）。两个 federation broker 各自私有 Context，避免 inproc 控制口冲突。\n",
             );
             md.push_str("- 指标为单机本机回环，机器相关，不作为 CI 门槛。\n\n");
             md.push_str("## 横比\n\n");
-            md.push_str("message 为 **max goodput**（丢包阈值内的最大可持续订阅速率）；括号为该档实测投递率。service/action 为完成速率。\n\n");
-            md.push_str("| 场景 | tcp | ipc | inproc | ws |\n");
+            md.push_str("message 为 **max goodput**（丢包阈值内的最大可持续订阅速率）；括号为该档实测投递率。service/action 为完成速率。federation 为跨两个 TCP broker 的 A→B 路径。\n\n");
+            md.push_str("| 场景 | tcp | ipc | inproc | ws | federation |\n");
         }
         ReportLang::En => {
             md.push_str("## Method\n\n");
             md.push_str(
-                "- In-process `RobotBusBroker` with `bind_all_transports = true` (tcp + ipc + inproc + ws).\n",
+                "- In-process `RobotBusBroker`: local scenarios use `bind_all_transports = true` (tcp + ipc + inproc + ws); **federation** is a separate TCP broker pair (A→B, `bind_all` off).\n",
             );
             md.push_str(
                 "- Console HTTP off; message HWM=2048 (bench only); service/action HWM=64.\n",
@@ -320,51 +320,55 @@ fn render_perf_report(
                 "- Service / action: {svc_iters} / {act_iters} iters (`ROBOT_BUS_PERF_SVC_ITERS` / `ROBOT_BUS_PERF_ACT_ITERS`); latency timed per call / send_goal.\n"
             ));
             md.push_str(
-                "- ZMQ: shared `Context` + `Node::tcp` / `ipc` / `inproc`; WebSocket RPC: `Node::ws_at`.\n",
+                "- ZMQ: shared `Context` + `Node::tcp` / `ipc` / `inproc`; WebSocket RPC: `Node::ws_at`; federation nodes pin the peer broker's TCP endpoints.\n",
             );
             md.push_str(
-                "- inproc and the embedded broker must share one `Context` (ZeroMQ inproc is context-local).\n",
+                "- inproc and the embedded broker must share one `Context` (ZeroMQ inproc is context-local). The two federation brokers each use a private context so inproc control sockets do not collide.\n",
             );
             md.push_str(
                 "- Numbers are single-host loopback and machine-dependent; not CI gates.\n\n",
             );
             md.push_str("## Cross-compare\n\n");
-            md.push_str("message is **max goodput** (max sustainable subscribe rate within the loss budget); parentheses show measured delivery at that rate. service/action are completion rates.\n\n");
-            md.push_str("| Scenario | tcp | ipc | inproc | ws |\n");
+            md.push_str("message is **max goodput** (max sustainable subscribe rate within the loss budget); parentheses show measured delivery at that rate. service/action are completion rates. federation is the A→B path across two TCP brokers.\n\n");
+            md.push_str("| Scenario | tcp | ipc | inproc | ws | federation |\n");
         }
     }
-    md.push_str("|------|-----|-----|--------|------|\n");
+    md.push_str("|------|-----|-----|--------|------|------------|\n");
     let pub_label = match lang {
         ReportLang::Zh => "message 发布",
         ReportLang::En => "message publish",
     };
     md.push_str(&format!(
-        "| {pub_label} | {} | {} | {} | {} |\n",
+        "| {pub_label} | {} | {} | {} | {} | {} |\n",
         cell_pub(results, "tcp", "message pub/sub"),
         cell_pub(results, "ipc", "message pub/sub"),
         cell_pub(results, "inproc", "message pub/sub"),
         cell_pub(results, "ws", "message Publish"),
+        cell_pub(results, "federation", "message pub/sub"),
     ));
     md.push_str(&format!(
-        "| message max goodput | {} | {} | {} | {} |\n",
+        "| message max goodput | {} | {} | {} | {} | {} |\n",
         cell_sub(results, "tcp", "message pub/sub"),
         cell_sub(results, "ipc", "message pub/sub"),
         cell_sub(results, "inproc", "message pub/sub"),
         cell_sub(results, "ws", "message Subscribe"),
+        cell_sub(results, "federation", "message pub/sub"),
     ));
     md.push_str(&format!(
-        "| service call | {} | {} | {} | {} |\n",
+        "| service call | {} | {} | {} | {} | {} |\n",
         cell_rpc(results, "tcp", "service call"),
         cell_rpc(results, "ipc", "service call"),
         cell_rpc(results, "inproc", "service call"),
         cell_rpc(results, "ws", "service Call"),
+        cell_rpc(results, "federation", "service call"),
     ));
     md.push_str(&format!(
-        "| action send_goal | {} | {} | {} | {} |\n\n",
+        "| action send_goal | {} | {} | {} | {} | {} |\n\n",
         cell_rpc(results, "tcp", "action send_goal"),
         cell_rpc(results, "ipc", "action send_goal"),
         cell_rpc(results, "inproc", "action send_goal"),
         cell_rpc(results, "ws", "action SendGoal"),
+        cell_rpc(results, "federation", "action send_goal"),
     ));
 
     let detail_header = match lang {
@@ -375,7 +379,7 @@ fn render_perf_report(
             "| Scenario | Sent | Recv | Time | Pub/s | Sub/s | Delivery% | p50 (µs) | p95 (µs) | p99 (µs) | mean (µs) |\n"
         }
     };
-    for group in ["tcp", "ipc", "inproc", "ws"] {
+    for group in ["tcp", "ipc", "inproc", "ws", "federation"] {
         md.push_str(&format!("## {group}\n\n"));
         md.push_str(detail_header);
         md.push_str(
@@ -412,12 +416,14 @@ fn render_perf_report(
             md.push_str("## 复现\n\n");
             md.push_str("```bash\njust perf\n# 或\ncargo run --release --bin robot_bus_perf\n");
             md.push_str("# 仅 message：ROBOT_BUS_PERF_ONLY=message cargo run --release --bin robot_bus_perf --features ws\n");
+            md.push_str("# 仅邦联：ROBOT_BUS_PERF_ONLY=federation cargo run --release --bin robot_bus_perf --features ws\n");
             md.push_str("```\n");
         }
         ReportLang::En => {
             md.push_str("## Reproduce\n\n");
             md.push_str("```bash\njust perf\n# or\ncargo run --release --bin robot_bus_perf\n");
             md.push_str("# message only: ROBOT_BUS_PERF_ONLY=message cargo run --release --bin robot_bus_perf --features ws\n");
+            md.push_str("# federation only: ROBOT_BUS_PERF_ONLY=federation cargo run --release --bin robot_bus_perf --features ws\n");
             md.push_str("```\n");
         }
     }

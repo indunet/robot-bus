@@ -10,7 +10,7 @@
 
 | 报告 | 可读取的内容 | 缺口与限制 |
 | --- | --- | --- |
-| [Robot Bus](perf-report.md) | 部分 TCP/inproc/WS 的 64B 单机结果，以及方法与命令 | 环境仅有版本和逻辑 CPU 数；缺 CPU 型号、OS、提交、测试日期、完整运行配置和重复试验波动；IPC/service/action 为缺失数据 |
+| [Robot Bus](perf-report.md) | 部分 TCP/inproc/WS 的 64B 单机结果，以及方法与命令 | 环境仅有版本和逻辑 CPU 数；缺 CPU 型号、OS、提交、测试日期、完整运行配置和重复试验波动；IPC/service/action/federation 为缺失数据 |
 | [ROS2](ros2-perf-report.md) | Humble、Fast DDS、SHM/UDP 配置及结果 | 未建立与 bus 报告的同机、同时间、同资源限制证据，不能直接比较倍数 |
 | [ROS2 桥](ros2-bridge-perf-report.md) | 2026-08-31 的未执行/构建失败记录与测试方法 | 没有可用吞吐或延迟结果；需要匹配的真实 ROS 环境重新验证 |
 
@@ -42,6 +42,10 @@ WS Publish 的约 2,659/s 与 WS Subscribe 的约 138,793/s 来自不同方向�
 just perf
 # 仅测 message；该配置不能用于报告 service/action 性能
 ROBOT_BUS_PERF_ONLY=message cargo run --release --bin robot_bus_perf
+# 仅测邦联（两个 TCP broker，A→B）
+ROBOT_BUS_PERF_ONLY=federation cargo run --release --bin robot_bus_perf
+# 或
+just perf-federation
 ```
 
 ROS 测试额外依赖 ROS 环境；默认任务使用名为 `ros2` 的容器，不能假定每台开发机都有该容器。具体依赖和可选本机路径见 [ROS bench](../../benches/ros2_perf/README.md) 与 [bridge bench](../../benches/ros2_bridge_perf/README.md)。
