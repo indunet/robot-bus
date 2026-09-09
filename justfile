@@ -241,9 +241,13 @@ test-interop: gen-rust console
 	if [[ -x .venv/bin/python ]]; then PY=.venv/bin/python; else PY=python3; fi
 	"$PY" tests/interop/run.py
 
-# TypeScript smoke tests (msgs + WsNode guards; inproc skips without native addon)
+# TypeScript smoke (msgs + WsNode). napi tests skip unless the addon is built.
 test-typescript: gen-typescript
 	cd bindings/typescript && npm test
+
+# Same tests with ROBOT_BUS_REQUIRE_NATIVE=1 (needs `just ts-dev` / npm run build:native)
+test-typescript-native: gen-typescript
+	cd bindings/typescript && ROBOT_BUS_REQUIRE_NATIVE=1 npm test
 
 # Local checks aligned with CI smoke (codegen then rust + python/ts).
 # Native Python / Java / interop gates: just python-dev && just test-python-native;

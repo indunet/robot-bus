@@ -1,11 +1,11 @@
 /**
  * In-process Node broker start (needs napi addon: `npm run build:native`).
- * Skips when the native binary is missing.
+ * Skips when the native binary is missing. Set ROBOT_BUS_REQUIRE_NATIVE=1 to fail.
  */
 
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import type { NativeBinding } from "../src/native.js";
+import { loadNativeOrSkip } from "./load-native.js";
 
 const ephemeralTcp = {
   messageXsubBind: "tcp://127.0.0.1:0",
@@ -17,19 +17,10 @@ const ephemeralTcp = {
   apiListen: "127.0.0.1:0",
 };
 
-async function tryLoadNative(): Promise<NativeBinding | null> {
-  try {
-    const { loadNative } = await import("../src/native.js");
-    return loadNative();
-  } catch {
-    return null;
-  }
-}
-
 describe("RobotBusBroker.start", () => {
-  it("honors apiListen and serves the web console", async () => {
-    const native = await tryLoadNative();
-    if (!native?.RobotBusBroker) {
+  it("honors apiListen and serves the web console", async (t) => {
+    const native = await loadNativeOrSkip(t, ["RobotBusBroker"]);
+    if (!native) {
       return;
     }
 

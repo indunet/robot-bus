@@ -153,6 +153,7 @@ jobs:
         run: npm ci
       - name: Generate TypeScript protobuf stubs
         run: python3 scripts/generate_typescript_msgs.py
+      # Pure JS/TS only. napi tests call t.skip unless the addon is present.
       - name: Smoke test TypeScript
         working-directory: bindings/typescript
         run: npm test
@@ -415,6 +416,11 @@ jobs:
           npm ci
           npm run build:native
           npm run build:ts
+      - name: Test TypeScript including napi addon
+        working-directory: bindings/typescript
+        env:
+          ROBOT_BUS_REQUIRE_NATIVE: "1"
+        run: npm test
       - name: Run interop matrix
         env:
           ROBOT_BUS_NATIVE_DIR: ${{ github.workspace }}/bindings/cpp/native/target/release

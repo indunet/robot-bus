@@ -2,7 +2,7 @@
  * Node local parameters + YAML load.
  *
  * Needs the napi addon: `npm run build:native` (or `just ts-dev`).
- * Skips cleanly when the native binary is missing.
+ * Skips when the native binary is missing. Set ROBOT_BUS_REQUIRE_NATIVE=1 to fail.
  */
 
 import assert from "node:assert/strict";
@@ -10,21 +10,12 @@ import { mkdtemp, writeFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, it } from "node:test";
-import type { NativeBinding } from "../src/native.js";
-
-async function tryLoadNative(): Promise<NativeBinding | null> {
-  try {
-    const { loadNative } = await import("../src/native.js");
-    return loadNative();
-  } catch {
-    return null;
-  }
-}
+import { loadNativeOrSkip } from "./load-native.js";
 
 describe("node parameters", () => {
-  it("declare/get/set/list and yaml", async () => {
-    const native = await tryLoadNative();
-    if (!native?.Node) {
+  it("declare/get/set/list and yaml", async (t) => {
+    const native = await loadNativeOrSkip(t, ["Node"]);
+    if (!native) {
       return;
     }
 

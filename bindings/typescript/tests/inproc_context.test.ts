@@ -2,13 +2,13 @@
  * Same-process inproc requires a shared Context with the embedded broker.
  *
  * Needs the napi addon: `npm run build:native` (or `just ts-dev`).
- * Skips cleanly when the native binary is missing (CI smoke without ZMQ).
+ * Skips when the native binary is missing. Set ROBOT_BUS_REQUIRE_NATIVE=1 to fail.
  */
 
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { setTimeout as sleep } from "node:timers/promises";
-import type { NativeBinding } from "../src/native.js";
+import { loadNativeOrSkip } from "./load-native.js";
 
 const ephemeralTcp = {
   messageXsubBind: "tcp://127.0.0.1:0",
@@ -20,19 +20,10 @@ const ephemeralTcp = {
   apiListen: "127.0.0.1:0",
 };
 
-async function tryLoadNative(): Promise<NativeBinding | null> {
-  try {
-    const { loadNative } = await import("../src/native.js");
-    return loadNative();
-  } catch {
-    return null;
-  }
-}
-
 describe("inproc shared Context", () => {
-  it("pubsub with shared context", async () => {
-    const native = await tryLoadNative();
-    if (!native?.Context || !native.RobotBusBroker || !native.Node) {
+  it("pubsub with shared context", async (t) => {
+    const native = await loadNativeOrSkip(t, ["Context", "RobotBusBroker", "Node"]);
+    if (!native) {
       return;
     }
 
@@ -76,9 +67,9 @@ describe("inproc shared Context", () => {
     }
   });
 
-  it("returns an action handle and streams feedback", async () => {
-    const native = await tryLoadNative();
-    if (!native?.Context || !native.RobotBusBroker || !native.Node) {
+  it("returns an action handle and streams feedback", async (t) => {
+    const native = await loadNativeOrSkip(t, ["Context", "RobotBusBroker", "Node"]);
+    if (!native) {
       return;
     }
 
