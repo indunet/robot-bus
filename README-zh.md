@@ -305,6 +305,8 @@ bridge.spin()
 
 完整说明与示例（Rust / Python / C++）：[`docs/zh/ros2-bridge.md`](docs/zh/ros2-bridge.md)。若要做整包迁移（而不只是桥接），见 [`docs/skills/`](docs/skills/)。
 
+浏览器 → Python 桥 → 真实 ROS2 的完整示例，以及 Chromium 自动验收入口，见 [ROS2 桥接实验台](docs/zh/ros2-web.md)。
+
 ## *4. Protobuf消息*
 
 robot-bus的全部载荷——**topic**、**service**、**action**——均以 **Protocol Buffers**定义与序列化。线上是 protobuf字节流（不是 ROS CDR）。typed API在创建时绑定 protobuf消息类型并自动编解码；省略类型则按原始字节收发。

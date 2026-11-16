@@ -49,7 +49,7 @@ jobs:
           - host: ubuntu-22.04-arm
             target: aarch64-unknown-linux-gnu
             protoc_zip: protoc-35.1-linux-aarch_64.zip
-          - host: macos-14
+          - host: macos-15
             target: aarch64-apple-darwin
             protoc_zip: protoc-35.1-osx-aarch_64.zip
           - host: windows-latest

@@ -464,7 +464,7 @@ jobs:
 
   macos:
     # Apple Silicon only (M-series / macos_arm64).
-    runs-on: macos-14
+    runs-on: macos-15
     steps:
       - uses: actions/checkout@v6
 

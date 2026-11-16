@@ -305,6 +305,8 @@ bridge.spin()
 
 Full guide and examples (Rust / Python / C++): [`docs/en/ros2-bridge.md`](docs/en/ros2-bridge.md). For full package migration (not just bridging), see [`docs/skills/`](docs/skills/).
 
+For a complete browser → Python bridge → real ROS2 example with automated Chromium acceptance, see the [ROS2 bridge lab](docs/en/ros2-web.md).
+
 ## *4. Protobuf messages*
 
 All robot-bus payloads — **topics**, **services**, and **actions** — are defined and serialized with **Protocol Buffers**. The wire format is protobuf bytes (not ROS CDR). Typed APIs bind a protobuf message class at create time and encode/decode automatically; omit the type to work with raw bytes.

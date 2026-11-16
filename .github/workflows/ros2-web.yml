@@ -1,0 +1,35 @@
+name: ROS2 browser acceptance
+
+on:
+  push:
+    branches: [master, main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  humble-python-chromium:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v6
+      - name: Build real Humble environment and SDKs from this checkout
+        run: docker build -f examples/ros2_web/Dockerfile -t robot-bus-ros2-web:test .
+      - name: Run browser through Python bridge to a real ROS peer
+        run: |
+          docker run --name ros2-web-acceptance --init \
+            -e ROBOT_BUS_TEST_COMMIT="${{ github.sha }}" \
+            robot-bus-ros2-web:test bash test.sh
+      - name: Collect runtime evidence even after failure
+        if: always()
+        run: |
+          mkdir -p artifacts
+          if docker container inspect ros2-web-acceptance >/dev/null 2>&1; then
+            docker logs ros2-web-acceptance > artifacts/container.log 2>&1
+            docker cp ros2-web-acceptance:/workspace/examples/ros2_web/test-results artifacts/ros2-web
+          fi
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: humble-python-chromium-evidence
+          path: artifacts/
+          retention-days: 14

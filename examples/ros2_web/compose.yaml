@@ -1,0 +1,10 @@
+services:
+  demo:
+    build:
+      context: ../..
+      dockerfile: examples/ros2_web/Dockerfile
+    init: true
+    ports:
+      - "127.0.0.1:8080:8080"
+      - "127.0.0.1:15560:15560"
+    stop_grace_period: 20s

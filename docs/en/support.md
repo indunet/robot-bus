@@ -4,6 +4,10 @@ English | [中文](../zh/support.md)
 
 This page describes the implementation and traceable verification evidence for repository version **2.3.1** (documentation reviewed 2026-09-08). A configured CI check does not mean a particular commit passed. For a release, inspect the matching tag's build results and actual artifacts.
 
+The 2.3.2 working tree adds a [real Humble browser acceptance workflow](ros2-web.md)
+for the Python bridge. This is a separate, scoped check; consult its run artifacts
+before treating a commit as verified. The older matrix below remains historical.
+
 ## Core SDKs
 
 Core SDKs need no ROS installation unless the bridge is enabled. The table reflects the [regular CI configuration](../../.github/workflows/ci.yml), not certification of every OS, architecture, or language version.

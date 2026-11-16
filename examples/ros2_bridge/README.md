@@ -1,5 +1,8 @@
 # Custom Ros2Bridge example (`my_pkg`)
 
+For an end-to-end browser example with a real Humble peer and automated
+Chromium acceptance, see the [ROS2 bridge lab](../ros2_web/README.md).
+
 A custom bridge needs **two** interface definitions with matching fields, then
 a mapper that converts between them.
 
