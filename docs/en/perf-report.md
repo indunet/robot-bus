@@ -4,6 +4,8 @@ English | [中文](../zh/perf-report.md)
 
 The 2026-11-20 single-host retest covered TCP, IPC, inproc, WebSocket and two-broker federation, with three rounds per scenario. The release build used Robot Bus 2.4.0, Rust 1.100.0 and ZeroMQ 4.3.4. The measured source was based on commit `b9b414e` with the archived benchmark revisions applied. See the [performance guide](performance.md) for the shared hardware and container configuration.
 
+The Topic results here use Robot Bus's raw 64 B byte path. See the [matched pre-encoded CDR workload](performance.md#matched-pre-encoded-cdr-topic-workload) for the run with ROS 2 using the same application byte layout.
+
 ## Method
 
 - Message runs used a 64 B payload, one publisher and one subscriber, and a single-host, in-process setup. Native message HWM and the WS Subscribe server queue depth were both 2048. WS Publish sent from WebSocket to a native subscriber, WS Subscribe sent from a native publisher to WebSocket, and federation sent from broker A to broker B.

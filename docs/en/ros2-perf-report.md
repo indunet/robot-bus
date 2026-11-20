@@ -4,6 +4,8 @@ English | [中文](../zh/ros2-perf-report.md)
 
 On 2026-11-20, Fast DDS SHM and UDPv4 each ran three rounds with corrected profiles in the same host, container and resource limits used for Robot Bus. This was a separate ROS 2 run. The release build used ROS 2 Humble, `rmw_fastrtps_cpp` 6.2.10, Fast DDS 2.6.12, `rclcpp` 16.0.21 and GCC 11.4. The archive retains both the original diagnostic data and the new samples. [Performance guide](performance.md)
 
+The Topic results here use typed `UInt8MultiArray` and include ROS message encoding and decoding. See the [matched pre-encoded CDR workload](performance.md#matched-pre-encoded-cdr-topic-workload) for direct serialized publication and subscription.
+
 ## Method
 
 - Multiple nodes ran in one process with a two-thread `MultiThreadedExecutor`. Message runs used `UInt8MultiArray` with a 64 B application payload, one publisher, one subscriber, and best-effort `KeepLast(2048)` QoS.

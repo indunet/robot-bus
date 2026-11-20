@@ -171,7 +171,12 @@ fn wait_for_topic(node: &mut Node, rx: &Receiver<Vec<u8>>, publisher: &Publisher
     wait_until("subscription to deliver a fresh marker", TIMEOUT, || {
         publisher.publish(TOPIC, marker).unwrap();
         node.spin_once(Some(PULSE)).unwrap();
-        rx.try_iter().any(|payload| payload == marker)
+        // `any` stops at the first match and would leave later copies queued.
+        let mut matched = false;
+        while let Ok(payload) = rx.try_recv() {
+            matched |= payload == marker;
+        }
+        matched
     });
 }
 
@@ -400,7 +405,34 @@ fn slow_subscription_retains_only_newest_and_other_client_keeps_receiving() {
             .as_u64()
     };
     wait_for_topic(&mut slow, &prefix_rx, &publisher, b"prefix warm-up");
-    slow_rx.try_iter().for_each(drop);
+    // The marker loop can deliver several copies in one spin, and the last
+    // publish can still be sitting in the broker or client queue. Drain both
+    // before the burst so keep_last is measured only on the numbered sequence.
+    let pending = |filter: &str, depth: u64| -> Option<u64> {
+        broker_http(&url, "/api/v1/subscriptions")?["subscriptions"]
+            .as_array()?
+            .iter()
+            .find(|row| row["filter"] == filter && row["capacity"] == depth)?["pending"]
+            .as_u64()
+    };
+    let mut quiet_dequeued = None;
+    wait_until("slow client to finish warm-up", TIMEOUT, || {
+        slow.spin_once(Some(PULSE)).unwrap();
+        let leftover = slow_rx.try_iter().count() + prefix_rx.try_iter().count();
+        let counts = match (dequeued(TOPIC, 3), dequeued(prefix, 1)) {
+            (Some(topic), Some(prefix_count)) => Some((topic, prefix_count)),
+            _ => None,
+        };
+        let quiet = leftover == 0
+            && counts.is_some()
+            && pending(TOPIC, 3) == Some(0)
+            && pending(prefix, 1) == Some(0);
+        // One empty sample can race the last marker publish. Require the
+        // broker counters to stay unchanged across another spin.
+        let stable = quiet && quiet_dequeued == counts;
+        quiet_dequeued = if quiet { counts } else { None };
+        stable
+    });
     let baseline = dequeued(TOPIC, 3).expect("slow subscription metrics");
     let prefix_baseline = dequeued(prefix, 1).expect("slow prefix metrics");
     for seq in 1u64..=128 {

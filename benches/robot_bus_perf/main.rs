@@ -36,15 +36,23 @@ fn perf_only() -> String {
 fn main() {
     let _guard = lock_broker();
     let only = perf_only();
-    let only_message = matches!(only.as_str(), "message" | "msg" | "pubsub" | "pub/sub");
+    let cdr = only == "cdr-topic";
+    let only_message = cdr || matches!(only.as_str(), "message" | "msg" | "pubsub" | "pub/sub");
     let only_federation = matches!(only.as_str(), "federation" | "fed" | "federated");
     let only_local = matches!(only.as_str(), "local");
     let skip_rpc = only_message;
     let run_local = !only_federation;
-    let run_federation = !only_local;
+    let run_federation = !only_local && !cdr;
     let svc_iters = svc_iters();
     let act_iters = act_iters();
-    if skip_rpc {
+    if cdr {
+        println!(
+            "RAW payload {}",
+            serde_json::json!({
+                "format": "cdr", "data_bytes": pacing::PAYLOAD_LEN, "prefix": pacing::CDR_PREFIX,
+            })
+        );
+    } else if skip_rpc {
         println!("ROBOT_BUS_PERF_ONLY=message — skipping service/action");
     } else {
         println!("service iters={svc_iters} action iters={act_iters}");
@@ -62,7 +70,7 @@ fn main() {
             println!("=== {transport} ===");
             match options_for(&broker, transport) {
                 Ok(options) => {
-                    record_result(&mut results, bench_pubsub(&ctx, transport, &options));
+                    record_result(&mut results, bench_pubsub(&ctx, transport, &options, cdr));
                     if !skip_rpc {
                         record_result(
                             &mut results,
@@ -87,13 +95,15 @@ fn main() {
             }
         }
 
-        let ws_url = broker.api_url();
-        println!("=== ws ({ws_url}) ===");
-        record_result(&mut results, bench_ws_publish(&broker, &ws_url));
-        record_result(&mut results, bench_ws_subscribe(&broker, &ws_url));
-        if !skip_rpc {
-            record_result(&mut results, bench_ws_service(&broker, &ws_url, svc_iters));
-            record_result(&mut results, bench_ws_action(&broker, &ws_url, act_iters));
+        if !cdr {
+            let ws_url = broker.api_url();
+            println!("=== ws ({ws_url}) ===");
+            record_result(&mut results, bench_ws_publish(&broker, &ws_url));
+            record_result(&mut results, bench_ws_subscribe(&broker, &ws_url));
+            if !skip_rpc {
+                record_result(&mut results, bench_ws_service(&broker, &ws_url, svc_iters));
+                record_result(&mut results, bench_ws_action(&broker, &ws_url, act_iters));
+            }
         }
 
         broker.stop().expect("stop broker");
@@ -108,9 +118,10 @@ fn main() {
         }
     }
 
-    if std::env::var("ROBOT_BUS_PERF_SKIP_REPORT")
-        .map(|v| !v.is_empty() && v != "0")
-        .unwrap_or(false)
+    if cdr
+        || std::env::var("ROBOT_BUS_PERF_SKIP_REPORT")
+            .map(|v| !v.is_empty() && v != "0")
+            .unwrap_or(false)
     {
         println!("ROBOT_BUS_PERF_SKIP_REPORT set — not writing docs/*perf-report.md");
         return;

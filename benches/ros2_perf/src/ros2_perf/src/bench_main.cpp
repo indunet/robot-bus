@@ -1,4 +1,5 @@
 #include <algorithm>
+#include <array>
 #include <atomic>
 #include <cctype>
 #include <chrono>
@@ -13,11 +14,14 @@
 #include <mutex>
 #include <numeric>
 #include <sstream>
+#include <stdexcept>
 #include <string>
 #include <thread>
+#include <tuple>
 #include <vector>
 
 #include "rclcpp/rclcpp.hpp"
+#include "rclcpp/serialization.hpp"
 #include "rclcpp_action/rclcpp_action.hpp"
 #include "std_msgs/msg/u_int8_multi_array.hpp"
 
@@ -39,6 +43,8 @@ constexpr size_t kDefaultGoodputRateHi = 500000;
 constexpr size_t kDefaultGoodputSettleMs = 100;
 constexpr double kDefaultMaxLossPct = 1.0;
 constexpr size_t kMsgHistory = 2048;
+constexpr std::array<uint8_t, 16> kCdrPrefix{0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 64, 0, 0, 0};
+constexpr size_t kCdrLatencyStride = 16;
 
 struct LatencyStats {
   std::vector<uint64_t> samples_ns;
@@ -71,19 +77,24 @@ uint64_t now_ns()
       .count());
 }
 
-std::vector<uint8_t> make_payload(uint64_t ts_ns, uint64_t epoch = 0, uint64_t sequence = 0)
+void write_payload(uint8_t * buf, uint64_t ts_ns, uint64_t epoch, uint64_t sequence)
 {
-  std::vector<uint8_t> buf(kPayloadLen, 0);
   const uint64_t values[] = {ts_ns, epoch, sequence};
   for (size_t field = 0; field < 3; ++field) {
     for (size_t byte = 0; byte < 8; ++byte) {
       buf[field * 8 + byte] = static_cast<uint8_t>(values[field] >> (8 * byte));
     }
   }
+}
+
+std::vector<uint8_t> make_payload(uint64_t ts_ns, uint64_t epoch = 0, uint64_t sequence = 0)
+{
+  std::vector<uint8_t> buf(kPayloadLen, 0);
+  write_payload(buf.data(), ts_ns, epoch, sequence);
   return buf;
 }
 
-uint64_t read_u64(const std::vector<uint8_t> & payload, size_t offset)
+uint64_t read_u64(const uint8_t * payload, size_t offset)
 {
   uint64_t value = 0;
   for (size_t byte = 0; byte < 8; ++byte) {
@@ -239,18 +250,46 @@ size_t trial_msg_count_fixed()
 class PubSubBench
 {
 public:
-  explicit PubSubBench(const std::string & transport)
-  : transport_(transport)
+  explicit PubSubBench(const std::string & transport, bool cdr)
+  : transport_(transport), cdr_(cdr)
   {
     sub_node_ = std::make_shared<rclcpp::Node>("ros2_perf_sub_" + transport_);
     pub_node_ = std::make_shared<rclcpp::Node>("ros2_perf_pub_" + transport_);
     const std::string topic = "/ros2_perf/" + transport_ + "/msg";
 
-    sub_ = sub_node_->create_subscription<std_msgs::msg::UInt8MultiArray>(
-      topic, msg_qos(),
-      [this](const std_msgs::msg::UInt8MultiArray::SharedPtr msg) { receive(msg->data); });
-
-    pub_ = pub_node_->create_publisher<std_msgs::msg::UInt8MultiArray>(topic, msg_qos());
+    if (cdr_) {
+      // Verify the fixture against the installed RMW before any timed send.
+      std_msgs::msg::UInt8MultiArray fixture;
+      fixture.data.resize(kPayloadLen);
+      rclcpp::Serialization<std_msgs::msg::UInt8MultiArray>{}.serialize_message(
+        &fixture, &serialized_);
+      const auto & wire = serialized_.get_rcl_serialized_message();
+      if (wire.buffer_length != kCdrPrefix.size() + kPayloadLen ||
+        !std::equal(kCdrPrefix.begin(), kCdrPrefix.end(), wire.buffer) ||
+        !std::equal(fixture.data.begin(), fixture.data.end(), wire.buffer + kCdrPrefix.size()))
+      {
+        throw std::runtime_error("RMW CDR fixture does not match the benchmark layout");
+      }
+      std::cout << "RAW payload {\"format\":\"cdr\",\"data_bytes\":" << kPayloadLen
+                << ",\"prefix\":[";
+      for (size_t i = 0; i < kCdrPrefix.size(); ++i) {
+        std::cout << (i == 0 ? "" : ",") << static_cast<unsigned>(wire.buffer[i]);
+      }
+      std::cout << "]}\n";
+      const auto type = "std_msgs/msg/UInt8MultiArray";
+      generic_sub_ = sub_node_->create_generic_subscription(
+        topic, type, msg_qos(), [this](std::shared_ptr<rclcpp::SerializedMessage> msg) {
+          const auto & sample = msg->get_rcl_serialized_message();
+          receive(sample.buffer, sample.buffer_length);
+        });
+      generic_pub_ = pub_node_->create_generic_publisher(topic, type, msg_qos());
+    } else {
+      sub_ = sub_node_->create_subscription<std_msgs::msg::UInt8MultiArray>(
+        topic, msg_qos(), [this](const std_msgs::msg::UInt8MultiArray::SharedPtr msg) {
+          receive(msg->data.data(), msg->data.size());
+        });
+      pub_ = pub_node_->create_publisher<std_msgs::msg::UInt8MultiArray>(topic, msg_qos());
+    }
   }
 
   std::vector<rclcpp::Node::SharedPtr> nodes() const { return {sub_node_, pub_node_}; }
@@ -259,7 +298,9 @@ public:
   {
     const std::string scenario = "message pub/sub";
     if (!wait_until(
-        [this] { return pub_->get_subscription_count() > 0; }, 10s))
+        [this] {
+          return (cdr_ ? generic_pub_->get_subscription_count() : pub_->get_subscription_count()) > 0;
+        }, 10s))
     {
       return make_skip(transport_, scenario, "no subscriber matched");
     }
@@ -269,7 +310,7 @@ public:
       publish_one(now_ns());
     }
     std::this_thread::sleep_for(100ms);
-    start_window(true);
+    start_window(1);
     const auto latency_start = now_ns();
     const size_t latency_samples =
       env_size("ROS2_PERF_MSG_LATENCY_SAMPLES", kDefaultMsgLatencySamples);
@@ -308,7 +349,8 @@ public:
     while (lo <= hi) {
       const size_t mid = lo + (hi - lo) / 2;
       const size_t rate = rate_lo + mid * step;
-      start_window(false);
+      const size_t latency_stride = cdr_ ? kCdrLatencyStride : 0;
+      start_window(latency_stride);
       const size_t fixed_msgs = trial_msg_count_fixed();
       const double trial_secs =
         env_double("ROS2_PERF_GOODPUT_TRIAL_SECS", kDefaultGoodputTrialSecs);
@@ -346,7 +388,7 @@ public:
       }
       const auto [send_end_ns, send_counts] = snapshot();
       std::this_thread::sleep_for(std::chrono::milliseconds(settle_ms));
-      const auto [settled_ns, final_counts] = snapshot();
+      const auto [settled_ns, final_counts, samples] = finish_window();
       const double elapsed = std::max(static_cast<double>(send_end_ns - start_ns) / 1e9, 1e-9);
       const size_t received_at_send_end = send_counts.received;
       const size_t received = final_counts.received;
@@ -360,7 +402,10 @@ public:
                 << ",\"stale\":" << final_counts.stale << ",\"invalid\":" << final_counts.invalid
                 << ",\"start_ns\":" << start_ns << ",\"send_end_ns\":" << send_end_ns
                 << ",\"settled_ns\":" << settled_ns
-                << ",\"valid\":" << (valid ? "true" : "false") << "}\n";
+                << ",\"valid\":" << (valid ? "true" : "false")
+                << ",\"latency_stride\":" << latency_stride << ",\"samples_ns\":";
+      raw_samples(std::cout, samples);
+      std::cout << "}\n";
       if (!valid) {
         return make_skip(transport_, scenario, "invalid receive counts in trial " + std::to_string(epoch_));
       }
@@ -413,31 +458,43 @@ private:
     size_t invalid = 0;
   };
 
-  void start_window(bool record_latency)
+  void start_window(size_t latency_stride)
   {
     std::lock_guard<std::mutex> lock(mu_);
     ++epoch_;
     issued_.store(0, std::memory_order_relaxed);
     seen_.clear();
+    latencies_.clear();
     counts_ = {};
-    record_latency_ = record_latency;
+    latency_stride_ = latency_stride;
   }
 
   void publish_one(uint64_t timestamp, size_t sequence = 0)
   {
-    std_msgs::msg::UInt8MultiArray msg;
-    msg.data = make_payload(timestamp, epoch_, sequence);
-    issued_.store(sequence + 1, std::memory_order_release);
-    pub_->publish(msg);
+    if (cdr_) {
+      write_payload(serialized_.get_rcl_serialized_message().buffer + kCdrPrefix.size(),
+        timestamp, epoch_, sequence);
+      issued_.store(sequence + 1, std::memory_order_release);
+      generic_pub_->publish(serialized_);
+    } else {
+      std_msgs::msg::UInt8MultiArray msg;
+      msg.data = make_payload(timestamp, epoch_, sequence);
+      issued_.store(sequence + 1, std::memory_order_release);
+      pub_->publish(msg);
+    }
   }
 
-  void receive(const std::vector<uint8_t> & payload)
+  void receive(const uint8_t * payload, size_t size)
   {
     std::lock_guard<std::mutex> lock(mu_);
-    if (payload.size() != kPayloadLen) {
+    const size_t offset = cdr_ ? kCdrPrefix.size() : 0;
+    if (size != offset + kPayloadLen ||
+      (cdr_ && !std::equal(kCdrPrefix.begin(), kCdrPrefix.end(), payload)))
+    {
       ++counts_.invalid;
       return;
     }
+    payload += offset;
     if (read_u64(payload, 8) != epoch_) {
       ++counts_.stale;
       return;
@@ -456,7 +513,7 @@ private:
     }
     seen_[sequence] = 1;
     ++counts_.received;
-    if (record_latency_) {
+    if (latency_stride_ > 0 && sequence % latency_stride_ == 0) {
       latencies_.push_back(now_ns() - read_u64(payload, 0));
     }
   }
@@ -467,11 +524,18 @@ private:
     return {now_ns(), counts_};
   }
 
+  std::tuple<uint64_t, Counts, std::vector<uint64_t>> finish_window()
+  {
+    std::lock_guard<std::mutex> lock(mu_);
+    latency_stride_ = 0;
+    return {now_ns(), counts_, std::move(latencies_)};
+  }
+
   void write_latency(
     const std::string & scenario, uint64_t start_ns, size_t sent, const char * error)
   {
     std::lock_guard<std::mutex> lock(mu_);
-    record_latency_ = false;
+    latency_stride_ = 0;
     std::cout << "RAW latency {\"transport\":" << std::quoted(transport_)
               << ",\"scenario\":" << std::quoted(scenario)
               << ",\"start_ns\":" << start_ns << ",\"end_ns\":" << now_ns()
@@ -486,15 +550,19 @@ private:
   }
 
   std::string transport_;
+  bool cdr_;
+  rclcpp::SerializedMessage serialized_;
   rclcpp::Node::SharedPtr sub_node_;
   rclcpp::Node::SharedPtr pub_node_;
   rclcpp::Subscription<std_msgs::msg::UInt8MultiArray>::SharedPtr sub_;
   rclcpp::Publisher<std_msgs::msg::UInt8MultiArray>::SharedPtr pub_;
+  rclcpp::GenericSubscription::SharedPtr generic_sub_;
+  rclcpp::GenericPublisher::SharedPtr generic_pub_;
   std::atomic<size_t> issued_{0};
   uint64_t epoch_ = 0;
   Counts counts_;
   std::vector<uint8_t> seen_;
-  bool record_latency_ = false;
+  size_t latency_stride_ = 0;
   std::mutex mu_;
   std::vector<uint64_t> latencies_;
 };
@@ -932,17 +1000,19 @@ int main(int argc, char ** argv)
     const char * v = std::getenv("ROS2_PERF_MODE");
     return v ? std::string(v) : std::string("shm");
   }();
-  const bool only_message = [] {
+  const std::string only = [] {
     const char * v = std::getenv("ROS2_PERF_ONLY");
     if (!v) {
-      return false;
+      return std::string{};
     }
     std::string s(v);
     for (char & c : s) {
       c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
     }
-    return s == "message" || s == "msg" || s == "pubsub";
+    return s;
   }();
+  const bool cdr = only == "cdr-topic";
+  const bool only_message = cdr || only == "message" || only == "msg" || only == "pubsub";
   const size_t svc_iters = env_size("ROS2_PERF_SVC_ITERS", kDefaultIters);
   const size_t act_iters = env_size("ROS2_PERF_ACT_ITERS", kDefaultIters);
   const char * report_path_env = std::getenv("ROS2_PERF_REPORT");
@@ -959,7 +1029,7 @@ int main(int argc, char ** argv)
 
   {
     std::cout << "--- message pub/sub ---\n";
-    PubSubBench bench(mode);
+    PubSubBench bench(mode, cdr);
     SpinExecutor spin;
     spin.add(bench.nodes());
     spin.start();

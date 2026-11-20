@@ -8,7 +8,12 @@ use crate::pacing::{MSG_HWM, TrialReceiver, WARMUP, make_payload, measure_pubsub
 use crate::support::{LatencyStats, ScenarioResult};
 use robot_bus::{Context, HighWaterMark, Node, NodeOptions, Publisher};
 
-pub fn bench_pubsub(ctx: &Context, transport: &str, options: &NodeOptions) -> ScenarioResult {
+pub fn bench_pubsub(
+    ctx: &Context,
+    transport: &str,
+    options: &NodeOptions,
+    cdr: bool,
+) -> ScenarioResult {
     let scenario = "message pub/sub";
     let sub = Node::with_context_options(ctx, format!("perf-sub-{transport}"), options.clone());
     if !sub.wait_for_broker(Some(Duration::from_secs(5))) {
@@ -40,6 +45,7 @@ pub fn bench_pubsub(ctx: &Context, transport: &str, options: &NodeOptions) -> Sc
         sub,
         publisher,
         Duration::from_millis(250),
+        TrialReceiver::with_cdr(cdr),
     )
 }
 
@@ -50,11 +56,12 @@ pub fn run_pubsub(
     mut sub: Node,
     publisher: Publisher,
     after_subscribe: Duration,
+    receiver: TrialReceiver,
 ) -> ScenarioResult {
     let transport = transport.to_string();
     let topic = format!("perf/{transport}/msg");
 
-    let receiver = Arc::new(TrialReceiver::default());
+    let receiver = Arc::new(receiver);
     let hwm = HighWaterMark {
         snd: MSG_HWM,
         rcv: MSG_HWM,

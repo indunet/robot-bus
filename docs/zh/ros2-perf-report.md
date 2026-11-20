@@ -4,6 +4,8 @@
 
 2026-11-20 修正传输配置后，在与 Robot Bus 相同的主机、容器和资源限制下，单独补测了 Fast DDS SHM 和 UDPv4，各三轮。测试使用 ROS 2 Humble、`rmw_fastrtps_cpp` 6.2.10、Fast DDS 2.6.12、`rclcpp` 16.0.21 和 GCC 11.4 Release 构建。原配置的诊断数据和新样本均已归档。 [性能说明](performance.md)
 
+本页 Topic 测的是类型化 `UInt8MultiArray`，计时包含 ROS 消息编解码。直接收发预编码数据的结果见[预编码 CDR 对照](performance.md#预编码-cdr-topic-对照)。
+
 ## 方法
 
 - 单进程多 Node，`MultiThreadedExecutor` 两线程。消息为 64 B 应用负载的 `UInt8MultiArray`，单发布者、单订阅者，QoS 为 `KeepLast(2048)` 和 best effort。

@@ -4,6 +4,8 @@
 
 2026-11-20 单机复测覆盖 TCP、IPC、inproc、WebSocket 和双 broker 邦联。每个场景测三轮。此次采样使用 Robot Bus 2.4.0、Rust 1.100.0、ZeroMQ 4.3.4 和 Release 构建，源码以提交 `b9b414e` 为基线，包含归档中的 benchmark 修订。两套测试的硬件和容器配置见[性能说明](performance.md)。
 
+本页 Topic 测的是 Robot Bus 原始 64 B 字节路径。与 ROS 2 对齐应用层编码后的 Topic 结果见[预编码 CDR 对照](performance.md#预编码-cdr-topic-对照)。
+
 ## 方法
 
 - 消息负载 64 B，单发布者、单订阅者，本机进程内编排。原生队列 HWM 为 2048，WS Subscribe 的服务端队列深度为 2048。WS Publish 测 WebSocket 进入原生订阅端，WS Subscribe 测原生发布端进入 WebSocket，邦联测 Broker A 到 Broker B。

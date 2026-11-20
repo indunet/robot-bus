@@ -10,6 +10,9 @@ use crate::support::{LatencyStats, ScenarioResult, env_f64, env_usize};
 pub const PAYLOAD_LEN: usize = 64;
 pub const WARMUP: usize = 50;
 pub const MSG_HWM: i32 = 2_048;
+// CDR little-endian encapsulation, empty dimensions, zero offset, 64-byte sequence.
+pub const CDR_PREFIX: [u8; 16] = [0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 64, 0, 0, 0];
+const CDR_LATENCY_STRIDE: usize = 16;
 
 pub fn svc_iters() -> usize {
     env_usize("ROBOT_BUS_PERF_SVC_ITERS", 10_000)
@@ -75,6 +78,7 @@ struct Counts {
 pub struct TrialReceiver {
     issued: AtomicUsize,
     window: Mutex<ReceiveWindow>,
+    cdr: bool,
 }
 
 #[derive(Default)]
@@ -82,32 +86,65 @@ struct ReceiveWindow {
     epoch: u64,
     seen: Vec<bool>,
     counts: Counts,
-    record_latency: bool,
+    latency_stride: usize,
     latency_ns: Vec<u64>,
 }
 
 impl TrialReceiver {
-    fn start(&self, record_latency: bool) -> u64 {
+    pub fn with_cdr(cdr: bool) -> Self {
+        Self {
+            cdr,
+            ..Self::default()
+        }
+    }
+
+    fn start(&self, latency_stride: usize) -> u64 {
         let mut window = self.window.lock().unwrap();
         self.issued.store(0, Ordering::Relaxed);
         window.epoch += 1;
         window.seen.clear();
         window.counts = Counts::default();
-        window.record_latency = record_latency;
+        window.latency_stride = latency_stride;
         window.latency_ns.clear();
         window.epoch
     }
 
-    fn payload(&self, epoch: u64, sequence: usize) -> Vec<u8> {
-        let mut payload = make_payload(clock_ns());
+    fn new_payload(&self) -> Vec<u8> {
+        let mut payload = Vec::new();
+        if self.cdr {
+            payload.extend_from_slice(&CDR_PREFIX);
+        }
+        payload.resize(payload.len() + PAYLOAD_LEN, 0);
+        payload
+    }
+
+    fn stamp(&self, payload: &mut [u8], epoch: u64, sequence: usize, timestamp: u64) {
+        let offset = if self.cdr { CDR_PREFIX.len() } else { 0 };
+        let payload = &mut payload[offset..];
+        payload[..8].copy_from_slice(&timestamp.to_le_bytes());
         payload[8..16].copy_from_slice(&epoch.to_le_bytes());
         payload[16..24].copy_from_slice(&(sequence as u64).to_le_bytes());
         self.issued.store(sequence + 1, Ordering::Release);
+    }
+
+    fn payload(&self, epoch: u64, sequence: usize) -> Vec<u8> {
+        let timestamp = clock_ns();
+        let mut payload = self.new_payload();
+        self.stamp(&mut payload, epoch, sequence, timestamp);
         payload
     }
 
     pub fn receive(&self, payload: &[u8]) {
         let mut window = self.window.lock().unwrap();
+        let payload = if self.cdr {
+            let Some(body) = payload.strip_prefix(&CDR_PREFIX) else {
+                window.counts.invalid += 1;
+                return;
+            };
+            body
+        } else {
+            payload
+        };
         if payload.len() != PAYLOAD_LEN {
             window.counts.invalid += 1;
             return;
@@ -131,7 +168,7 @@ impl TrialReceiver {
             return;
         }
         window.counts.received += 1;
-        if window.record_latency {
+        if window.latency_stride > 0 && sequence.is_multiple_of(window.latency_stride) {
             let sent = u64::from_le_bytes(payload[..8].try_into().unwrap());
             if let Some(latency) = clock_ns().checked_sub(sent) {
                 window.latency_ns.push(latency);
@@ -143,6 +180,13 @@ impl TrialReceiver {
         let window = self.window.lock().unwrap();
         (clock_ns(), window.counts)
     }
+
+    fn finish(&self) -> (u64, Counts, Vec<u64>) {
+        let mut window = self.window.lock().unwrap();
+        let end = clock_ns();
+        window.latency_stride = 0;
+        (end, window.counts, std::mem::take(&mut window.latency_ns))
+    }
 }
 
 /// Publisher and subscriber run independently. Keep latency, warmup and each
@@ -153,15 +197,30 @@ pub fn measure_pubsub<E: std::fmt::Display>(
     receiver: &TrialReceiver,
     mut publish: impl FnMut(&[u8]) -> Result<(), E>,
 ) -> ScenarioResult {
-    for _ in 0..WARMUP {
-        let _ = publish(&make_payload(clock_ns()));
+    let mut payload = receiver.new_payload();
+    for sequence in 0..WARMUP {
+        if receiver.cdr {
+            receiver.stamp(&mut payload, 0, sequence, clock_ns());
+            let _ = publish(&payload);
+        } else {
+            let _ = publish(&make_payload(clock_ns()));
+        }
     }
     thread::sleep(Duration::from_millis(100));
 
-    let latency_epoch = receiver.start(true);
+    let mut publish_one = |epoch, sequence| {
+        if receiver.cdr {
+            receiver.stamp(&mut payload, epoch, sequence, clock_ns());
+            publish(&payload)
+        } else {
+            publish(&receiver.payload(epoch, sequence))
+        }
+    };
+
+    let latency_epoch = receiver.start(1);
     let latency_start = clock_ns();
     for sequence in 0..msg_latency_samples() {
-        if let Err(err) = publish(&receiver.payload(latency_epoch, sequence)) {
+        if let Err(err) = publish_one(latency_epoch, sequence) {
             return ScenarioResult::skipped(transport, scenario, format!("latency publish: {err}"));
         }
         let deadline = Instant::now() + Duration::from_secs(2);
@@ -187,23 +246,23 @@ pub fn measure_pubsub<E: std::fmt::Display>(
         }
     }
     let latency = {
-        let mut window = receiver.window.lock().unwrap();
-        let samples = std::mem::take(&mut window.latency_ns);
+        let (end, counts, samples) = receiver.finish();
         println!(
             "RAW latency {}",
             serde_json::json!({
                 "transport": transport, "scenario": scenario,
-                "start_ns": latency_start, "end_ns": clock_ns(),
-                "sent": msg_latency_samples(), "received": window.counts.received,
-                "duplicates": window.counts.duplicates, "stale": window.counts.stale,
-                "invalid": window.counts.invalid, "samples_ns": samples,
+                "start_ns": latency_start, "end_ns": end,
+                "sent": msg_latency_samples(), "received": counts.received,
+                "duplicates": counts.duplicates, "stale": counts.stale,
+                "invalid": counts.invalid, "samples_ns": samples,
             })
         );
         LatencyStats::from_ns(samples)
     };
 
     let result = find_max_goodput(transport, |rate_hz| {
-        let epoch = receiver.start(false);
+        let stride = if receiver.cdr { CDR_LATENCY_STRIDE } else { 0 };
+        let epoch = receiver.start(stride);
         let trial_duration = Duration::from_secs_f64(goodput_trial_secs());
         let interval = Duration::from_secs_f64(1.0 / rate_hz.max(1) as f64);
         let fixed = goodput_trial_msgs();
@@ -216,14 +275,14 @@ pub fn measure_pubsub<E: std::fmt::Display>(
         } else {
             start.elapsed() < trial_duration
         } {
-            publish(&receiver.payload(epoch, sent)).map_err(|err| format!("publish: {err}"))?;
+            publish_one(epoch, sent).map_err(|err| format!("publish: {err}"))?;
             sent += 1;
             next += interval;
             wait_deadline(next);
         }
         let (send_end_ns, at_send_end) = receiver.snapshot();
         thread::sleep(goodput_settle());
-        let (settled_ns, final_counts) = receiver.snapshot();
+        let (settled_ns, final_counts, samples) = receiver.finish();
         let trial = GoodputTrial {
             target_hz: rate_hz,
             sent,
@@ -242,7 +301,7 @@ pub fn measure_pubsub<E: std::fmt::Display>(
                 "recv_send": trial.received_at_send_end, "recv_final": trial.received,
                 "duplicates": final_counts.duplicates, "stale": final_counts.stale, "invalid": final_counts.invalid,
                 "start_ns": start_ns, "send_end_ns": send_end_ns, "settled_ns": settled_ns,
-                "valid": valid,
+                "valid": valid, "latency_stride": stride, "samples_ns": samples,
             })
         );
         if !valid {
@@ -366,9 +425,9 @@ mod tests {
     fn delayed_and_duplicate_messages_cannot_count_as_current_deliveries() {
         let receiver = TrialReceiver::default();
         let warmup = make_payload(clock_ns());
-        let old_epoch = receiver.start(false);
+        let old_epoch = receiver.start(0);
         let queued = receiver.payload(old_epoch, 0);
-        let epoch = receiver.start(true);
+        let epoch = receiver.start(1);
         let first = receiver.payload(epoch, 0);
         receiver.receive(&warmup);
         receiver.receive(&queued);
@@ -412,7 +471,7 @@ mod tests {
             Publisher::with_hwm(Some(&broker.discover.message_xsub), HighWaterMark::STREAM)
                 .unwrap();
 
-        let previous = receiver.start(false);
+        let previous = receiver.start(0);
         let probe = receiver.payload(previous, 0);
         let deadline = Instant::now() + Duration::from_secs(3);
         while receiver.snapshot().1.received == 0 {
@@ -428,7 +487,7 @@ mod tests {
             .publish(topic, &receiver.payload(previous, 1))
             .unwrap();
         // Leave the WS callback queue undrained when moving to the next trial.
-        let epoch = receiver.start(false);
+        let epoch = receiver.start(0);
         let sample = receiver.payload(epoch, 0);
         publisher.publish(topic, &sample).unwrap();
         publisher.publish(topic, &sample).unwrap();

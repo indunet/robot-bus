@@ -255,6 +255,7 @@ fn bench_fed_pubsub(broker_a: &RobotBusBroker, broker_b: &RobotBusBroker) -> Sce
         sub,
         publisher,
         Duration::from_millis(500),
+        crate::pacing::TrialReceiver::default(),
     )
 }
 
