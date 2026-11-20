@@ -3,7 +3,6 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::mpsc::Sender;
 use std::thread;
 
 use crate::action_bus::{ActionKind, ActionMessage};
@@ -14,12 +13,13 @@ use crate::runtime::registrations::{
     RegistrationKind, ServiceRegistration, SubRegistration,
 };
 use crate::runtime::topic_callbacks::for_each_matching_callback;
+use crate::runtime::wake::WakingSender;
 use crate::runtime::worker_pool::{WorkerPool, run_callback};
 
 pub fn dispatch_registration(
     reg: &mut Registration,
     topic_callbacks: &HashMap<String, Vec<SubscriptionCallback>>,
-    reply_tx: &Sender<ReplyMessage>,
+    reply_tx: &WakingSender<ReplyMessage>,
     worker_pool: Option<&WorkerPool>,
 ) {
     match reg.kind() {
@@ -79,7 +79,7 @@ pub fn dispatch_sub_message(
 
 pub fn dispatch_service_request(
     reg: &ServiceRegistration,
-    reply_tx: &Sender<ReplyMessage>,
+    reply_tx: &WakingSender<ReplyMessage>,
     worker_pool: Option<&WorkerPool>,
 ) {
     let frames = match reg.socket.recv_multipart(0) {
@@ -135,7 +135,7 @@ pub fn dispatch_service_request(
 
 pub fn dispatch_action_message(
     reg: &ActionRegistration,
-    reply_tx: &Sender<ReplyMessage>,
+    reply_tx: &WakingSender<ReplyMessage>,
     worker_pool: Option<&WorkerPool>,
 ) {
     let frames = match reg.socket.recv_multipart(0) {
@@ -431,6 +431,7 @@ fn send_action_reply(
 mod tests {
     use super::*;
     use crate::errors::{BusError, parse_error_body};
+    use crate::runtime::wake::Waker;
     use crate::runtime::{CallbackGroup, CallbackGroupType};
     use std::sync::{Mutex, mpsc};
     use std::time::{Duration, Instant};
@@ -481,6 +482,7 @@ mod tests {
             last_heartbeat: Instant::now(),
         };
         let (tx, rx) = mpsc::channel();
+        let tx = WakingSender::new(tx, Waker::disabled());
         let send = |id: &[u8], body: &[u8]| {
             wire.send_multipart([b"client".as_slice(), b"echo", id, body], 0)
                 .unwrap();
@@ -549,6 +551,7 @@ mod tests {
             last_heartbeat: Instant::now(),
         };
         let (tx, rx) = mpsc::channel();
+        let tx = WakingSender::new(tx, Waker::disabled());
         let send = |id: &[u8], body: &[u8]| {
             wire.send_multipart([b"client".as_slice(), b"echo", id, b"GOAL", body], 0)
                 .unwrap();

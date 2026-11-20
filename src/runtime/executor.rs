@@ -18,7 +18,7 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::mpsc::{self, Receiver, Sender};
+use std::sync::mpsc::{self, Receiver};
 use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant};
 
@@ -41,6 +41,7 @@ use crate::runtime::registrations::{
 use crate::runtime::timers::{
     SubscriptionHandle, Timer, TimerCallback, TimerHandle, effective_poll_timeout_ms, tick_timers,
 };
+use crate::runtime::wake::{WakeReceiver, Waker, WakingSender, wake_pair};
 use crate::runtime::worker_pool::WorkerPool;
 use crate::transports::{
     action_backend_endpoint, action_frontend_endpoint, message_xpub_endpoint,
@@ -56,15 +57,24 @@ const DEFAULT_HEARTBEAT_INTERVAL_MS: u64 = 2500;
 #[derive(Clone)]
 pub struct ShutdownHandle {
     running: Arc<AtomicBool>,
+    waker: Waker,
 }
 
 impl ShutdownHandle {
     pub(crate) fn from_flag(running: Arc<AtomicBool>) -> Self {
-        Self { running }
+        Self {
+            running,
+            waker: Waker::disabled(),
+        }
+    }
+
+    fn with_waker(running: Arc<AtomicBool>, waker: Waker) -> Self {
+        Self { running, waker }
     }
 
     pub fn shutdown(&self) {
         self.running.store(false, Ordering::Release);
+        self.waker.wake();
     }
 
     pub fn is_running(&self) -> bool {
@@ -83,10 +93,12 @@ pub struct Executor {
     action_client_registration: Option<ActionClientRegistration>,
     topic_callbacks: HashMap<String, Vec<SubscriptionCallback>>,
     socket_registrations: Vec<Registration>,
-    outbound_tx: Sender<OutboundCommand>,
+    outbound_tx: WakingSender<OutboundCommand>,
     outbound_rx: Option<Receiver<OutboundCommand>>,
-    reply_tx: Sender<ReplyMessage>,
+    reply_tx: WakingSender<ReplyMessage>,
     reply_rx: Option<Receiver<ReplyMessage>>,
+    waker: Waker,
+    wake_rx: Option<WakeReceiver>,
     timers: Vec<Timer>,
     next_timer_id: u64,
     next_subscription_id: u64,
@@ -139,8 +151,11 @@ impl Executor {
         heartbeat_interval_ms: u64,
         worker_pool: Option<WorkerPool>,
     ) -> Self {
+        let (waker, wake_rx) = wake_pair(context.zmq());
         let (outbound_tx, outbound_rx) = mpsc::channel();
         let (reply_tx, reply_rx) = mpsc::channel();
+        let outbound_tx = WakingSender::new(outbound_tx, waker.clone());
+        let reply_tx = WakingSender::new(reply_tx, waker.clone());
         Self {
             context,
             heartbeat_interval_ms,
@@ -156,6 +171,8 @@ impl Executor {
             outbound_rx: Some(outbound_rx),
             reply_tx,
             reply_rx: Some(reply_rx),
+            waker,
+            wake_rx,
             timers: Vec::new(),
             next_timer_id: 1,
             next_subscription_id: 1,
@@ -171,7 +188,7 @@ impl Executor {
 
     /// Cloneable handle to stop [`spin`](Self::spin) / [`start`](Self::start).
     pub fn shutdown_handle(&self) -> ShutdownHandle {
-        ShutdownHandle::from_flag(self.running.clone())
+        ShutdownHandle::with_waker(self.running.clone(), self.waker.clone())
     }
 
     /// Waiting callback jobs and rejected submissions for the resident pool.
@@ -238,6 +255,7 @@ impl Executor {
     /// Signal the executor to leave `spin` / background `start`.
     pub fn shutdown(&self) {
         self.running.store(false, Ordering::Release);
+        self.waker.wake();
     }
 
     pub fn connect_subscriber(&mut self, endpoint: Option<&str>) -> Result<()> {
@@ -667,6 +685,7 @@ impl Executor {
             outbound_rx,
             reply_rx,
             &self.reply_tx,
+            self.wake_rx.as_ref(),
             self.worker_pool.as_ref(),
             timeout_to_ms(timeout),
         ))
@@ -720,6 +739,7 @@ impl Executor {
                 outbound_rx,
                 reply_rx,
                 &self.reply_tx,
+                self.wake_rx.as_ref(),
                 self.worker_pool.as_ref(),
                 poll_ms,
             );
@@ -758,6 +778,7 @@ impl Executor {
                 outbound_rx,
                 reply_rx,
                 &self.reply_tx,
+                self.wake_rx.as_ref(),
                 self.worker_pool.as_ref(),
                 DEFAULT_POLL_TIMEOUT_MS,
             );
@@ -788,6 +809,7 @@ impl Executor {
             .take()
             .ok_or_else(|| BusError::Protocol("runtime already started".into()))?;
         let reply_tx = self.reply_tx.clone();
+        let wake_rx = self.wake_rx.take();
         let worker_pool = self.worker_pool.clone();
         let handle = thread::spawn(move || {
             while running.load(Ordering::Acquire) {
@@ -798,6 +820,7 @@ impl Executor {
                     &outbound_rx,
                     &reply_rx,
                     &reply_tx,
+                    wake_rx.as_ref(),
                     worker_pool.as_ref(),
                     DEFAULT_POLL_TIMEOUT_MS,
                 );
@@ -812,6 +835,7 @@ impl Executor {
             return;
         }
         self.running.store(false, Ordering::Release);
+        self.waker.wake();
         if let Some(handle) = self.thread.take() {
             let _ = handle.join();
         }
@@ -963,25 +987,23 @@ fn spin_once_inner(
     topic_callbacks: &HashMap<String, Vec<SubscriptionCallback>>,
     outbound_rx: &Receiver<OutboundCommand>,
     reply_rx: &Receiver<ReplyMessage>,
-    reply_tx: &Sender<ReplyMessage>,
+    reply_tx: &WakingSender<ReplyMessage>,
+    wake_rx: Option<&WakeReceiver>,
     worker_pool: Option<&WorkerPool>,
     poll_timeout_ms: i64,
 ) -> bool {
     let now = Instant::now();
     tick_heartbeats(registrations, now);
-    for reg in registrations.iter_mut() {
-        if let Registration::ActionClient(client) = reg {
-            flush_outbound(client, outbound_rx);
-        }
-    }
-    flush_reply_queue(registrations, reply_rx);
+    flush_queues(registrations, outbound_rx, reply_rx);
 
     let mut had_work = tick_timers(timers, now, worker_pool);
 
     let poll_ms = effective_poll_timeout_ms(timers, poll_timeout_ms, Instant::now());
+    let socket_count = registrations.len();
     let mut poll_items: Vec<zmq::PollItem> = registrations
         .iter()
         .map(|reg| reg.socket().as_poll_item(zmq::POLLIN))
+        .chain(wake_rx.map(WakeReceiver::poll_item))
         .collect();
     let readable_count = if poll_items.is_empty() {
         if poll_ms > 0 {
@@ -993,12 +1015,20 @@ fn spin_once_inner(
     };
 
     if readable_count > 0 {
-        let readable: Vec<usize> = poll_items
+        let woken = poll_items
+            .get(socket_count)
+            .is_some_and(zmq::PollItem::is_readable);
+        let readable: Vec<usize> = poll_items[..socket_count]
             .iter()
             .enumerate()
             .filter(|(_, item)| item.is_readable())
             .map(|(index, _)| index)
             .collect();
+        if woken {
+            if let Some(wake_rx) = wake_rx {
+                wake_rx.clear();
+            }
+        }
         for index in readable {
             dispatch_registration(
                 &mut registrations[index],
@@ -1011,10 +1041,23 @@ fn spin_once_inner(
     }
 
     // Flush replies produced by workers (or inline handlers) during this step.
-    flush_reply_queue(registrations, reply_rx);
+    flush_queues(registrations, outbound_rx, reply_rx);
 
     if tick_timers(timers, Instant::now(), worker_pool) {
         had_work = true;
     }
     had_work
+}
+
+fn flush_queues(
+    registrations: &mut [Registration],
+    outbound_rx: &Receiver<OutboundCommand>,
+    reply_rx: &Receiver<ReplyMessage>,
+) {
+    for reg in registrations.iter_mut() {
+        if let Registration::ActionClient(client) = reg {
+            flush_outbound(client, outbound_rx);
+        }
+    }
+    flush_reply_queue(registrations, reply_rx);
 }

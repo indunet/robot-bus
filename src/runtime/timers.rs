@@ -71,19 +71,19 @@ pub(crate) fn tick_timers(
 }
 
 /// Milliseconds until the soonest active timer, or `None` if none.
+///
+/// Rounds up: a sub-millisecond remainder rounded to 0 would make the poll
+/// return immediately and spin until the deadline.
 pub(crate) fn ms_until_next_timer(timers: &[Timer], now: Instant) -> Option<i64> {
     timers
         .iter()
         .filter(|t| !t.cancelled)
         .map(|t| {
-            if t.next_deadline <= now {
-                0
-            } else {
-                t.next_deadline
-                    .duration_since(now)
-                    .as_millis()
-                    .min(i64::MAX as u128) as i64
-            }
+            t.next_deadline
+                .saturating_duration_since(now)
+                .as_nanos()
+                .div_ceil(1_000_000)
+                .min(i64::MAX as u128) as i64
         })
         .min()
 }
@@ -92,5 +92,43 @@ pub(crate) fn effective_poll_timeout_ms(timers: &[Timer], requested_ms: i64, now
     match ms_until_next_timer(timers, now) {
         Some(until) => until.min(requested_ms.max(0)),
         None => requested_ms.max(0),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn timer_due_in(now: Instant, remaining: Duration) -> Timer {
+        let mut timer = Timer::new(
+            1,
+            Duration::from_secs(1),
+            Arc::new(|| {}),
+            CallbackGroup::mutually_exclusive(),
+        );
+        timer.next_deadline = now + remaining;
+        timer
+    }
+
+    #[test]
+    fn sub_millisecond_remainder_waits_one_millisecond() {
+        let now = Instant::now();
+        let timers = [timer_due_in(now, Duration::from_micros(300))];
+        assert_eq!(ms_until_next_timer(&timers, now), Some(1));
+    }
+
+    #[test]
+    fn partial_milliseconds_round_up() {
+        let now = Instant::now();
+        let timers = [timer_due_in(now, Duration::from_micros(2_100))];
+        assert_eq!(ms_until_next_timer(&timers, now), Some(3));
+    }
+
+    #[test]
+    fn overdue_timer_does_not_wait() {
+        let now = Instant::now();
+        let mut timer = timer_due_in(now, Duration::ZERO);
+        timer.next_deadline = now - Duration::from_millis(5);
+        assert_eq!(ms_until_next_timer(&[timer], now), Some(0));
     }
 }

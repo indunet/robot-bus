@@ -21,6 +21,7 @@ mod timers;
 mod topic_callbacks;
 mod topic_type_register;
 mod topology_register;
+mod wake;
 mod worker_pool;
 #[cfg(feature = "ws")]
 mod ws_runtime;

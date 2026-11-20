@@ -50,7 +50,7 @@ Each cell shows the median [minimum–maximum] across rounds. Receive rates use 
 | 50,000 | shm | 50,000 [50,000–50,000] | 50,000 [50,000–50,000] | 100.00 [100.00–100.00] | 32 [23–33] | 18 [18–18] | 23 [23–23] |
 | 50,000 | udp | 50,000 [50,000–50,000] | 50,000 [50,000–50,000] | 100.00 [100.00–100.00] | 37 [36–39] | 21 [21–21] | 27 [27–34] |
 
-All five paths received close to the 50,000 messages/s target at the highest tested rate, and all 45 trials delivered every message after draining. At that target, the median loaded p99 was 179 µs for Robot Bus TCP and 23 µs for ROS 2 SHM. These results cover the fixed rates tested. Maximum throughput and typed application codec costs require separate measurements.
+All five paths received close to 50,000 messages/s at the highest rate in this lower-load run, and all 45 trials delivered every message after draining. At that target, the median loaded p99 was 179 µs for Robot Bus TCP and 23 µs for ROS 2 SHM. The following section covers throughput at higher targets.
 
 Per-run logs, environment, run order and samples are archived locally in `bench-results/20261120-190137-matched-cdr-topic/measurements/`. `execution.tsv` includes UDP datagram counts and `raw.jsonl` includes raw counts and latency samples.
 
@@ -67,6 +67,39 @@ bash benches/topic_cdr_perf/run.sh \
   bench-results/replay-cdr-topic
 python3 benches/topic_cdr_perf/summarize.py bench-results/replay-cdr-topic
 ```
+
+### Throughput under higher load
+
+The follow-up used the same release binary and DDS profile hashes, host, Docker image and resource limits. It ran all five paths at **75,000, 100,000, 200,000 and 400,000 messages/s**, three rounds per path and target. Each trial sent for 3 s and drained for 100 ms. The fixed targets were tested independently to capture repeat-run variation.
+
+A round passed if both rates during the send window reached 90% of the target and loss after the drain was at most 1%. Rates and loss are the median [minimum–maximum] across three rounds. The last column counts qualifying rounds individually.
+
+| Target/s | Route | Sent/s | Received in window/s | Loss after drain (%) | Passed |
+| ---: | --- | ---: | ---: | ---: | ---: |
+| 75,000 | tcp | 75,002 [75,002–75,002] | 75,000 [75,000–75,001] | 0.00 [0.00–0.00] | 3/3 |
+| 75,000 | ipc | 75,002 [75,002–75,002] | 75,001 [75,001–75,001] | 0.00 [0.00–0.00] | 3/3 |
+| 75,000 | inproc | 75,002 [75,002–75,002] | 75,002 [75,002–75,002] | 0.00 [0.00–0.00] | 3/3 |
+| 75,000 | shm | 75,002 [75,002–75,002] | 75,002 [75,002–75,002] | 0.00 [0.00–0.00] | 3/3 |
+| 75,000 | udp | 75,002 [75,002–75,002] | 75,002 [74,968–75,002] | 0.00 [0.00–0.04] | 3/3 |
+| 100,000 | tcp | 100,000 [100,000–100,000] | 99,998 [99,997–99,998] | 0.00 [0.00–0.00] | 3/3 |
+| 100,000 | ipc | 100,000 [100,000–100,000] | 99,999 [99,998–99,999] | 0.00 [0.00–0.00] | 3/3 |
+| 100,000 | inproc | 100,000 [100,000–100,000] | 100,000 [99,999–100,000] | 0.00 [0.00–0.00] | 3/3 |
+| 100,000 | shm | 100,000 [100,000–100,000] | 98,924 [98,585–99,102] | 1.08 [0.90–1.42] | 1/3 |
+| 100,000 | udp | 100,000 [100,000–100,000] | 97,597 [97,259–100,000] | 2.40 [0.00–2.74] | 1/3 |
+| 200,000 | tcp | 200,000 [200,000–200,000] | 199,995 [199,992–199,995] | 0.00 [0.00–0.00] | 3/3 |
+| 200,000 | ipc | 200,000 [200,000–200,000] | 199,997 [199,996–199,997] | 0.00 [0.00–0.00] | 3/3 |
+| 200,000 | inproc | 200,000 [200,000–200,000] | 199,999 [199,999–199,999] | 0.00 [0.00–0.00] | 3/3 |
+| 200,000 | shm | 200,000 [200,000–200,000] | 112,187 [112,101–112,505] | 43.57 [43.41–43.61] | 0/3 |
+| 200,000 | udp | 188,229 [187,794–191,364] | 136,793 [133,618–141,282] | 26.79 [25.81–28.65] | 0/3 |
+| 400,000 | tcp | 400,000 [400,000–400,000] | 356,621 [352,171–380,218] | 5.80 [0.00–6.88] | 1/3 |
+| 400,000 | ipc | 400,000 [400,000–400,000] | 396,263 [395,880–396,791] | 0.93 [0.80–1.03] | 2/3 |
+| 400,000 | inproc | 400,000 [400,000–400,000] | 396,900 [396,710–396,941] | 0.77 [0.76–0.82] | 3/3 |
+| 400,000 | shm | 400,000 [399,999–400,000] | 69,939 [69,282–71,907] | 82.33 [81.84–82.50] | 0/3 |
+| 400,000 | udp | 189,019 [188,053–189,191] | 125,392 [122,859–136,482] | 33.30 [27.06–34.70] | 0/3 |
+
+The highest tested target that passed all three rounds was 200,000 messages/s for Robot Bus TCP, 200,000 messages/s for Robot Bus IPC, 400,000 messages/s for Robot Bus inproc, 75,000 messages/s for ROS 2 SHM, 75,000 messages/s for ROS 2 UDP. Measurements and per-round logs are archived locally in `bench-results/20261120-191302-matched-cdr-throughput/measurements/`.
+
+Set `TOPIC_CDR_PERF_RATES='75000 100000 200000 400000'` before invoking the runner to reproduce the higher-load tests. The figures describe the matched pre-encoded Topic paths on this host over three 3 s windows.
 
 ## Counting and WS validation
 
