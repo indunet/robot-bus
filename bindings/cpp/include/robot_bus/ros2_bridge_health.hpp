@@ -62,7 +62,7 @@ struct RouteHealth {
     ++rpc.calls;
     record_rx();
   }
-  void rpc_finish(const std::string &status, const std::string &message = "") {
+  void rpc_finish(const std::string &status, const std::string &message = "", bool log = true) {
     std::lock_guard<std::mutex> lock(rpc_mutex);
     rpc.last_status = status;
     if (status == "succeeded") record_tx();
@@ -73,7 +73,7 @@ struct RouteHealth {
       if (status == "rejected") ++rpc.rejected;
     }
     if (!message.empty()) rpc.last_error = message.substr(0, 512);
-    const bool log_warn = !message.empty() && should_log_warn();
+    const bool log_warn = log && !message.empty() && should_log_warn();
     if (log_warn) {
       std::fprintf(stderr, "ROS bridge RPC %s: %s\n", status.c_str(), message.c_str());
     }
@@ -131,10 +131,11 @@ class RpcObservation {
     if (health_) health_->rpc_start();
   }
   ~RpcObservation() { if (!finished_) finish("failed", "RPC exited without a result"); }
-  void finish(const std::string &status = "succeeded", const std::string &message = "") {
+  void finish(const std::string &status = "succeeded", const std::string &message = "",
+              bool log = true) {
     if (finished_) return;
     finished_ = true;
-    if (health_) health_->rpc_finish(status, message);
+    if (health_) health_->rpc_finish(status, message, log);
   }
  private:
   std::shared_ptr<RouteHealth> health_;

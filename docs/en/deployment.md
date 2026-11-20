@@ -47,7 +47,7 @@ curl --fail http://127.0.0.1:15560/api/v1/discover
 
 Expect JSON containing the broker's advertised connection information. Open `http://127.0.0.1:15560` for the console. HTTP success only establishes API reachability; native clients also need the returned data endpoints. `0.0.0.0` binds all interfaces and is not a client destination.
 
-Current limitation: with the console enabled and API configured as `127.0.0.1:0`, an actual port is allocated but discover's `apiUrl` / `consoleUrl` may retain port 0, breaking readiness helpers. Configure an explicit nonzero API port when using discovery/monitoring. The inproc lifecycle example above does not depend on HTTP discovery.
+The shared API defaults to port `15560`. If the requested port is in use, the broker tries up to 32 following ports in order; `:0` lets the OS allocate a port. WebSocket, HTTP discovery, and the console share the resulting port. Use the actual port from the startup log or the SDK's `api_listen` for clients and container port mappings; clients do not scan for it.
 
 ## Multiple hosts and fixed ports
 
@@ -97,7 +97,7 @@ WS clients use `robot_bus.Node.ws_at("remote", "http://10.0.0.2:15560")`. HTTPS 
 
 | Symptom | First check | Next action |
 | --- | --- | --- |
-| Port 15560 occupied | Another broker already running | Reuse the known broker or change `--api-listen` and client API URL |
+| API is not on port 15560 | Actual port in the startup log | Connect using the actual port; only reuse an existing broker if intended |
 | Console works; native node cannot connect | Discovered data endpoints, interface addresses, port mappings | Allow required TCP ports and correct advertised host/fixed binds |
 | No topic output | Matching topic/type and active callback loop | Use repeated publication to accommodate asynchronous subscriptions; inspect Topics/Topology |
 | Service/action timeout | Server process and `start()`/`spin()`, route names, available workers | Run standard examples first; inspect blocking business callbacks rather than retrying indefinitely |

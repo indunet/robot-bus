@@ -46,11 +46,11 @@ impl TypedServiceMapper for TriggerServiceMapper {
         Ok(service::trigger_bus_resp_to_ros(&bus))
     }
 
-    fn error_response(&self, message: &str) -> ros_srv::Trigger_Response {
-        ros_srv::Trigger_Response {
+    fn error_response(&self, message: &str) -> Option<ros_srv::Trigger_Response> {
+        Some(ros_srv::Trigger_Response {
             success: false,
             message: message.into(),
-        }
+        })
     }
 }
 
@@ -81,10 +81,10 @@ impl TypedServiceMapper for SetBoolServiceMapper {
         Ok(service::set_bool_bus_resp_to_ros(&bus))
     }
 
-    fn error_response(&self, message: &str) -> ros_srv::SetBool_Response {
-        ros_srv::SetBool_Response {
+    fn error_response(&self, message: &str) -> Option<ros_srv::SetBool_Response> {
+        Some(ros_srv::SetBool_Response {
             success: false,
             message: message.into(),
-        }
+        })
     }
 }

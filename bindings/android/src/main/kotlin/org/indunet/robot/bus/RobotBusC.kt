@@ -148,6 +148,7 @@ internal interface RobotBusC : Library {
     fun robot_bus_multi_threaded_executor_spin(e: Pointer?): Int
     fun robot_bus_broker_start(opts: BrokerOptions?): Pointer?
     fun robot_bus_broker_start_with_context(ctx: Pointer?, opts: BrokerOptions?): Pointer?
+    fun robot_bus_broker_start_with_context_in(ctx: Pointer?, opts: BrokerOptions?, ipcRoot: String): Pointer?
     fun robot_bus_broker_free(b: Pointer?)
     fun robot_bus_broker_stop(b: Pointer?): Int
     fun robot_bus_broker_message_xsub_bind(b: Pointer?): Pointer?

@@ -151,6 +151,11 @@ impl RouteHealth {
     }
 
     pub fn rpc_finish(&self, error: Option<&BusError>) {
+        self.rpc_finish_with(error, true);
+    }
+
+    /// Like [`Self::rpc_finish`]; `log = false` lets the caller log a richer message itself.
+    pub fn rpc_finish_with(&self, error: Option<&BusError>, log: bool) {
         let mut stats = self.rpc.lock().unwrap_or_else(|e| e.into_inner());
         let status = match error {
             None => {
@@ -180,7 +185,7 @@ impl RouteHealth {
         stats.last_status = status.into();
         if let Some(error) = error {
             stats.last_error = error.to_string().chars().take(512).collect();
-            if self.should_log_warn() {
+            if log && self.should_log_warn() {
                 log::warn!("ROS bridge RPC {status}: {error}");
             }
         }

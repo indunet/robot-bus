@@ -1,13 +1,14 @@
 //! RobotBusBroker C ABI.
 
 use std::os::raw::{c_char, c_int};
+use std::path::Path;
 use std::ptr;
 
 use robot_bus::broker::{
-    apply_federation_opts, RobotBusBroker as RustRobotBusBroker, RobotBusConfig,
+    RobotBusBroker as RustRobotBusBroker, RobotBusConfig, apply_federation_opts,
 };
 
-use crate::context::{context_ref, RobotBusContext};
+use crate::context::{RobotBusContext, context_ref};
 use crate::ffi::{
     anyhow_err, clear_error, cstr_opt, dup_string, err, normalize_bind, ok, set_error,
 };
@@ -182,23 +183,33 @@ pub extern "C" fn robot_bus_broker_start_with_context(
     ctx: *mut RobotBusContext,
     opts: *const RobotBusBrokerOptions,
 ) -> *mut RobotBusBroker {
+    robot_bus_broker_start_with_context_in(ctx, opts, ptr::null())
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn robot_bus_broker_start_with_context_in(
+    ctx: *mut RobotBusContext,
+    opts: *const RobotBusBrokerOptions,
+    ipc_root: *const c_char,
+) -> *mut RobotBusBroker {
     clear_error();
     let config = match parse_broker_config(opts) {
         Ok(c) => c,
         Err(()) => return ptr::null_mut(),
     };
-    let started = if ctx.is_null() {
-        RustRobotBusBroker::start(config)
+    let owned;
+    let context = if ctx.is_null() {
+        owned = robot_bus::Context::new();
+        &owned
     } else {
         match context_ref(ctx) {
-            Ok(c) => RustRobotBusBroker::start_with_context(c, config),
+            Ok(c) => c,
             Err(_) => return ptr::null_mut(),
         }
     };
-    match started {
-        Ok(inner) => Box::into_raw(Box::new(RobotBusBroker {
-            inner: Some(inner),
-        })),
+    let ipc_root = cstr_opt(ipc_root).map(Path::new);
+    match RustRobotBusBroker::start_with_context_in(context, config, ipc_root) {
+        Ok(inner) => Box::into_raw(Box::new(RobotBusBroker { inner: Some(inner) })),
         Err(e) => {
             set_error(e.to_string());
             ptr::null_mut()
@@ -338,4 +349,3 @@ pub extern "C" fn robot_bus_broker_console_listen(b: *const RobotBusBroker) -> *
         Err(_) => ptr::null_mut(),
     }
 }
-

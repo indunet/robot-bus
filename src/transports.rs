@@ -2,7 +2,7 @@
 
 use anyhow::{Context, Result, bail};
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use zmq::Socket;
 
 /// Legacy fixed TCP ports for client helpers when not using HTTP discover.
@@ -21,8 +21,13 @@ pub const SERVICE_BACKEND_CHANNEL: &str = "service_bus/backend";
 pub const ACTION_FRONTEND_CHANNEL: &str = "action_bus/frontend";
 pub const ACTION_BACKEND_CHANNEL: &str = "action_bus/backend";
 
-/// Directory for ipc endpoint files (`ipc:///tmp/robot_bus/*.ipc`).
+/// Historical IPC directory on hosts with `/tmp`. Prefer [`default_ipc_dir`].
 pub const IPC_DIR: &str = "/tmp/robot_bus";
+
+/// Default directory for standalone buses and legacy fixed IPC endpoints.
+pub fn default_ipc_dir() -> PathBuf {
+    std::env::temp_dir().join("robot_bus")
+}
 
 /// Default API listen port (gRPC + WS + console + discover).
 pub const DEFAULT_API_PORT: u16 = 15560;
@@ -30,7 +35,7 @@ pub const DEFAULT_API_PORT: u16 = 15560;
 /// Options for multi-transport bind (tcp + optional inproc/ipc).
 #[derive(Clone, Debug)]
 pub struct BindAllOpts {
-    /// IPC directory (default [`IPC_DIR`]). Uniquify with broker id for multi-broker hosts.
+    /// IPC directory (default [`default_ipc_dir`]).
     pub ipc_dir: String,
     /// Inproc prefix (default `robot_bus`).
     pub inproc_prefix: String,
@@ -39,7 +44,7 @@ pub struct BindAllOpts {
 impl Default for BindAllOpts {
     fn default() -> Self {
         Self {
-            ipc_dir: IPC_DIR.to_string(),
+            ipc_dir: default_ipc_dir().to_string_lossy().into_owned(),
             inproc_prefix: "robot_bus".to_string(),
         }
     }
@@ -48,7 +53,10 @@ impl Default for BindAllOpts {
 impl BindAllOpts {
     pub fn for_broker(broker_id: &str) -> Self {
         Self {
-            ipc_dir: format!("{IPC_DIR}/{broker_id}"),
+            ipc_dir: default_ipc_dir()
+                .join(broker_id)
+                .to_string_lossy()
+                .into_owned(),
             inproc_prefix: "robot_bus".to_string(),
         }
     }
@@ -72,14 +80,14 @@ pub fn inproc_endpoint_with_prefix(prefix: &str, channel: &str) -> String {
 
 /// Stable local-machine endpoint for a logical channel.
 pub fn ipc_endpoint(channel: &str) -> String {
-    ipc_endpoint_in(IPC_DIR, channel)
+    ipc_endpoint_in(&default_ipc_dir().to_string_lossy(), channel)
 }
 
 /// IPC endpoint under a custom directory (e.g. `/var/run/robot_bus`).
 pub fn ipc_endpoint_in(dir: &str, channel: &str) -> String {
     let file = channel.replace('/', "_");
-    let dir = dir.trim().trim_end_matches('/');
-    format!("ipc://{dir}/{file}.ipc")
+    let path = Path::new(dir).join(format!("{file}.ipc"));
+    format!("ipc://{}", path.display())
 }
 
 pub fn tcp_endpoint(host: &str, port: u16) -> String {
@@ -107,18 +115,38 @@ pub fn bind_all(
     channel: &str,
     opts: &BindAllOpts,
 ) -> Result<(String, Vec<String>)> {
-    ensure_ipc_dir(&opts.ipc_dir)?;
     socket
         .bind(tcp_bind)
         .with_context(|| format!("bind {tcp_bind}"))?;
     let resolved_tcp = last_endpoint(socket)?;
     let inproc = inproc_endpoint_with_prefix(&opts.inproc_prefix, channel);
-    let ipc = ipc_endpoint_in(&opts.ipc_dir, channel);
     socket
         .bind(&inproc)
         .with_context(|| format!("bind {inproc}"))?;
-    socket.bind(&ipc).with_context(|| format!("bind {ipc}"))?;
-    Ok((resolved_tcp.clone(), vec![resolved_tcp, inproc, ipc]))
+    let mut endpoints = vec![resolved_tcp.clone(), inproc];
+    if ipc_supported() {
+        ensure_ipc_dir(&opts.ipc_dir)?;
+        let ipc = ipc_endpoint_in(&opts.ipc_dir, channel);
+        socket.bind(&ipc).with_context(|| format!("bind {ipc}"))?;
+        endpoints.push(ipc);
+    }
+    Ok((resolved_tcp, endpoints))
+}
+
+/// Whether libzmq and the host runtime support the IPC transport.
+pub fn ipc_supported() -> bool {
+    if zmq::has("ipc") != Some(true) {
+        return false;
+    }
+    #[cfg(windows)]
+    {
+        static SUPPORTED: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+        *SUPPORTED.get_or_init(|| {
+            socket2::Socket::new_raw(socket2::Domain::UNIX, socket2::Type::STREAM, None).is_ok()
+        })
+    }
+    #[cfg(not(windows))]
+    true
 }
 
 /// Bind a single TCP endpoint and return the resolved address (`:0` → real port).
@@ -238,7 +266,10 @@ mod tests {
     fn ipc_maps_channel_to_file() {
         assert_eq!(
             ipc_endpoint("service_bus/frontend"),
-            "ipc:///tmp/robot_bus/service_bus_frontend.ipc"
+            format!(
+                "ipc://{}",
+                default_ipc_dir().join("service_bus_frontend.ipc").display()
+            )
         );
     }
 
@@ -246,14 +277,19 @@ mod tests {
     fn ipc_custom_dir() {
         assert_eq!(
             ipc_endpoint_in("/var/run/robot_bus", "message_bus/xsub"),
-            "ipc:///var/run/robot_bus/message_bus_xsub.ipc"
+            format!(
+                "ipc://{}",
+                Path::new("/var/run/robot_bus")
+                    .join("message_bus_xsub.ipc")
+                    .display()
+            )
         );
     }
 
     #[test]
     fn broker_ipc_dir_is_namespaced() {
         let opts = BindAllOpts::for_broker("abc");
-        assert_eq!(opts.ipc_dir, "/tmp/robot_bus/abc");
+        assert_eq!(Path::new(&opts.ipc_dir), default_ipc_dir().join("abc"));
         assert_eq!(opts.inproc_prefix, "robot_bus");
     }
 }

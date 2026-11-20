@@ -127,6 +127,86 @@ class RpcWaitTests(unittest.TestCase):
         self.assertEqual((stats["calls"], stats["failures"], stats["timeouts"]), (1, 1, 1))
         self.assertFalse(future.done())
 
+    def ros_to_bus_callback(self, call_error, **mapper_overrides):
+        """Wire a ROS-side proxy service whose bus call raises ``call_error``."""
+        mapper = SimpleNamespace(
+            type_name=lambda: "test/Rpc",
+            ros_srv_type=lambda: object,
+            ros_req_to_bus=lambda request: b"req",
+            bus_resp_to_ros=lambda payload: payload,
+            **mapper_overrides,
+        )
+        route = dict(self.route(0.5), mapper=mapper, direction=Direction.Ros2ToBus)
+        self.bridge._bus.create_client.return_value.call.side_effect = call_error
+        srv = self.bridge._ros_node.create_service.return_value
+        srv.send_response = inner = Mock()  # what rclpy would send through
+        self.bridge._wire_service(route)
+        callback = self.bridge._ros_node.create_service.call_args.args[2]
+        return callback, srv, inner
+
+    def test_ros_service_failure_without_error_response_sends_no_reply(self):
+        callback, srv, _ = self.ros_to_bus_callback(RuntimeError("bus down"))
+        with self.assertLogs("robot_bus.ros2_bridge", "ERROR") as logs:
+            result = callback(object(), SimpleNamespace(sum=0))
+        self.assertIs(result, runtime._NO_REPLY)
+        self.assertIn("/service", logs.output[0])
+        self.assertIn("bus down", logs.output[0])
+        self.assertIn("no reply", logs.output[0])
+        stats = self.bridge._console_routes[-1]["health"].rpc_snapshot()
+        self.assertEqual((stats["calls"], stats["failures"]), (1, 1))
+
+    def test_no_reply_marker_is_never_sent_to_ros(self):
+        # Wrapper is installed on the real service object by _wire_service.
+        callback, wired, inner = self.ros_to_bus_callback(RuntimeError("bus down"))
+        self.assertIsNot(wired.send_response, inner)
+        wired.send_response(runtime._NO_REPLY, "hdr")
+        inner.assert_not_called()
+        wired.send_response("real", "hdr")
+        inner.assert_called_once_with("real", "hdr")
+
+    def test_ros_service_failure_uses_error_response_when_present(self):
+        class Resp:  # rclpy-style message: _copy_msg copies declared fields
+            def __init__(self, success=True, message=""):
+                self.success, self.message = success, message
+
+            def get_fields_and_field_types(self):
+                return {"success": "boolean", "message": "string"}
+
+        callback, _, _ = self.ros_to_bus_callback(
+            TimeoutError("timed out"),
+            error_response=lambda message: Resp(False, message),
+        )
+        response = Resp()
+        with self.assertLogs("robot_bus.ros2_bridge", "WARNING"):
+            result = callback(object(), response)
+        self.assertIs(result, response)
+        self.assertFalse(response.success)
+        self.assertIn("timed out", response.message)
+
+    def test_broken_error_response_falls_back_to_no_reply(self):
+        def broken(_message):
+            raise ValueError("cannot build response")
+
+        callback, _, _ = self.ros_to_bus_callback(RuntimeError("bus down"), error_response=broken)
+        with self.assertLogs("robot_bus.ros2_bridge", "ERROR"):
+            self.assertIs(callback(object(), SimpleNamespace()), runtime._NO_REPLY)
+
+    def test_ros_service_failure_logs_are_rate_limited(self):
+        callback, _, _ = self.ros_to_bus_callback(RuntimeError("bus down"))
+        with self.assertLogs("robot_bus.ros2_bridge", "ERROR") as logs:
+            for _ in range(5):
+                callback(object(), SimpleNamespace())
+        self.assertEqual(len(logs.output), 1)
+        stats = self.bridge._console_routes[-1]["health"].rpc_snapshot()
+        self.assertEqual(stats["failures"], 5)
+
+    def test_ros_service_success_still_replies(self):
+        callback, _, _ = self.ros_to_bus_callback(None)
+        self.bridge._bus.create_client.return_value.call.side_effect = None
+        self.bridge._bus.create_client.return_value.call.return_value = b"ok"
+        response = SimpleNamespace(data=b"")
+        self.assertIs(callback(object(), response), response)
+
     def test_action_already_ready(self):
         handle = Mock()
         handle.get_result_async.return_value = ready(SimpleNamespace(status=4, result=b"result"))

@@ -337,13 +337,19 @@ pub trait TypedServiceMapper: Clone + Send + Sync + 'static {
     fn ros_resp_to_bus(&self, resp: &<Self::Ros as ServiceIdl>::Response) -> BusResult<Vec<u8>>;
     fn bus_resp_to_ros(&self, payload: &[u8]) -> BusResult<<Self::Ros as ServiceIdl>::Response>;
 
-    /// ROS response used when bridging fails (timeout / decode / bus error).
-    fn error_response(&self, message: &str) -> <Self::Ros as ServiceIdl>::Response
+    /// ROS response used when bridging a ROS client's call fails (timeout / decode /
+    /// bus error).
+    ///
+    /// ROS services have no error channel, so the default is `None`: no reply is sent
+    /// and the ROS caller times out, instead of reading a default-valued response as a
+    /// real result. Return `Some(..)` when the response type can express failure (for
+    /// example `success = false`).
+    fn error_response(&self, message: &str) -> Option<<Self::Ros as ServiceIdl>::Response>
     where
         <Self::Ros as ServiceIdl>::Response: Default,
     {
         let _ = message;
-        Default::default()
+        None
     }
 }
 

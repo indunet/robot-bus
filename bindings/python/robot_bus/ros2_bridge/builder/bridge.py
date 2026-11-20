@@ -176,11 +176,12 @@ class Ros2Bridge:
         try:
             self._executor.spin()
         except Exception as err:
-            if not self._halt.is_set():
+            # Ctrl+C / rclpy.shutdown() invalidates the context under the executor: expected.
+            if not (self._halt.is_set() or self._ros_context_shut_down()):
                 self._executor_error = err
                 logging.getLogger("robot_bus.ros2_bridge").exception("ROS executor failed")
         else:
-            if not self._halt.is_set():
+            if not (self._halt.is_set() or self._ros_context_shut_down()):
                 self._executor_error = RuntimeError("ROS executor stopped unexpectedly")
 
     def _check_executor(self) -> None:
@@ -230,13 +231,20 @@ class Ros2Bridge:
             self._first_spin_at = time.monotonic()
         # Bound idle polling so executor failures and RPC replies remain observable.
         poll = min(timeout, 0.01) if timeout is not None and timeout >= 0 else 0.01
-        if self._rpc_bus is not None:
-            self._rpc_bus.spin_once(0.0)
-        try:
-            self._bus.spin_once(poll)
-        except Exception as err:  # noqa: BLE001
-            if "nothing registered" not in str(err):
-                raise
+        # A bus node with nothing registered (e.g. only ROS→bus publishers) raises
+        # immediately instead of waiting; that is normal for a bridge.
+        idle = 0
+        for bus, wait in ((self._rpc_bus, 0.0), (self._bus, poll)):
+            if bus is None:
+                continue
+            try:
+                bus.spin_once(wait)
+            except Exception as err:  # noqa: BLE001
+                if "nothing registered" not in str(err):
+                    raise
+                idle += 1
+        if idle == (self._rpc_bus is not None) + 1:
+            time.sleep(poll)  # nothing blocked above; avoid a busy loop in run()/spin()
         self._check_executor()
         self._apply_lazy()
         self._publish_observe()
@@ -578,10 +586,32 @@ class Ros2Bridge:
                     _copy_msg(out, response)
                     health.rpc_finish()
                 except Exception as err:  # noqa: BLE001
-                    health.rpc_finish(_failure_status(err), str(err))
+                    health.rpc_finish(_failure_status(err), str(err), log=False)
+                    # ROS services have no error channel. Use the mapper's failure
+                    # shape (e.g. Trigger success=False) when it has one; otherwise
+                    # send nothing, so the caller times out instead of reading a
+                    # default-valued response as a real result.
                     err_fn = getattr(m, "error_response", None)
+                    replied = False
                     if callable(err_fn):
-                        _copy_msg(err_fn(f"bus call failed: {err}"), response)
+                        try:
+                            _copy_msg(err_fn(f"bus call failed: {err}"), response)
+                            replied = True
+                        except Exception:  # noqa: BLE001
+                            pass
+                    if health.should_log_warn():
+                        log = logging.getLogger("robot_bus.ros2_bridge")
+                        (log.warning if replied else log.error)(
+                            "service %s: bus call failed: %s; %s",
+                            route["ros_service"],
+                            err,
+                            "replied with the mapper's error_response"
+                            if replied
+                            else "no reply sent, the ROS client will time out "
+                            "(add error_response to the mapper to reply instead)",
+                        )
+                    if not replied:
+                        return _NO_REPLY
                 return response
 
             srv = self._ros_node.create_service(
@@ -591,6 +621,7 @@ class Ros2Bridge:
                 qos_profile=ros_qos,
                 callback_group=self._callback_group,
             )
+            _skip_no_reply(srv)
             self._keep_alive.extend((bus_client, srv, lock))
             return
 
@@ -827,6 +858,20 @@ class Ros2Bridge:
             )
         )
         self._keep_alive.append(ros_client)
+
+
+_NO_REPLY = object()
+
+
+def _skip_no_reply(srv: Any) -> None:
+    """Make a rclpy service skip ``send_response`` when the callback returns ``_NO_REPLY``."""
+    send = srv.send_response
+
+    def send_response(response: Any, header: Any) -> None:
+        if response is not _NO_REPLY:
+            send(response, header)
+
+    srv.send_response = send_response
 
 
 def _copy_msg(src: Any, dest: Any) -> None:

@@ -110,6 +110,174 @@ fn trigger_ros2_to_bus_roundtrip() {
     assert_eq!(resp.message, "from-bus");
 }
 
+/// ROS caller -> bus service that does not exist: the bridge call fails.
+/// Trigger has a natural failure shape, so the caller must see `success = false`.
+#[test]
+fn trigger_ros2_to_bus_failure_replies_with_error_response() {
+    let _guard = lock_brokers();
+    let broker = RobotBusBroker::start(ephemeral_robot_bus_config()).expect("broker");
+    let opts = node_options_from_broker(&broker);
+
+    let ros_svc = format!("/robot_bus_trigger_fail_{}", std::process::id());
+    let bus_svc = format!("trigger_fail_{}", std::process::id());
+
+    let mut bridge = Ros2Bridge::new(format!("trigger_fail_bridge_{}", std::process::id()))
+        .bus_options(opts)
+        .service()
+        .from_ros(&ros_svc, TopicQos::keep_last(10).reliable())
+        .to_bus(&bus_svc, TopicQos::keep_last(8).best_effort())
+        .mapper(TriggerServiceMapper)
+        .timeout(Duration::from_secs(1))
+        .add()
+        .expect("add service")
+        .build()
+        .expect("build bridge");
+
+    let ctx = rclrs::Context::default_from_env().expect("ROS context");
+    let mut exec = ctx.create_basic_executor();
+    let node = exec
+        .create_node(format!("trigger_fail_client_{}", std::process::id()).as_str())
+        .expect("ros client node");
+    let client = node
+        .create_client::<ros_srv::Trigger>(ros_svc.as_str())
+        .expect("ros Trigger client");
+
+    let deadline = Instant::now() + Duration::from_secs(5);
+    while !client.service_is_ready().unwrap_or(false) {
+        assert!(Instant::now() < deadline, "ROS Trigger service not ready");
+        let _ = bridge.spin_once(Duration::from_millis(5));
+        let _ = exec.spin(rclrs::SpinOptions::spin_once().timeout(Duration::from_millis(20)));
+    }
+
+    let (tx, rx) = std::sync::mpsc::channel();
+    let _ = client
+        .call_then(
+            ros_srv::Trigger_Request {
+                structure_needs_at_least_one_member: 0,
+            },
+            move |resp: ros_srv::Trigger_Response| {
+                let _ = tx.send(resp);
+            },
+        )
+        .expect("call_then");
+
+    let resp_deadline = Instant::now() + Duration::from_secs(6);
+    let resp = loop {
+        if let Ok(r) = rx.try_recv() {
+            break r;
+        }
+        assert!(Instant::now() < resp_deadline, "no Trigger response at all");
+        let _ = bridge.spin_once(Duration::from_millis(5));
+        let _ = exec.spin(rclrs::SpinOptions::spin_once().timeout(Duration::from_millis(20)));
+    };
+    assert!(!resp.success, "failure must not look like success: {resp:?}");
+    assert!(resp.message.contains("bus call failed"), "resp={resp:?}");
+}
+
+/// A service type whose response has no failure field and whose mapper has no
+/// `error_response`.
+#[derive(Clone, Copy)]
+struct AddTwoIntsNoErrorResponse;
+
+impl robot_bus::ros2_bridge::TypedServiceMapper for AddTwoIntsNoErrorResponse {
+    type Ros = ros_env::example_interfaces::srv::AddTwoInts;
+
+    fn type_name(&self) -> &str {
+        "example_interfaces/srv/AddTwoInts"
+    }
+    fn ros_req_to_bus(
+        &self,
+        req: &ros_env::example_interfaces::srv::AddTwoInts_Request,
+    ) -> robot_bus::Result<Vec<u8>> {
+        Ok([req.a.to_le_bytes(), req.b.to_le_bytes()].concat())
+    }
+    fn bus_req_to_ros(
+        &self,
+        _payload: &[u8],
+    ) -> robot_bus::Result<ros_env::example_interfaces::srv::AddTwoInts_Request> {
+        unreachable!("bus -> ROS direction is not used")
+    }
+    fn ros_resp_to_bus(
+        &self,
+        resp: &ros_env::example_interfaces::srv::AddTwoInts_Response,
+    ) -> robot_bus::Result<Vec<u8>> {
+        Ok(resp.sum.to_le_bytes().to_vec())
+    }
+    fn bus_resp_to_ros(
+        &self,
+        payload: &[u8],
+    ) -> robot_bus::Result<ros_env::example_interfaces::srv::AddTwoInts_Response> {
+        let bytes: [u8; 8] = payload
+            .try_into()
+            .map_err(|_| robot_bus::BusError::Protocol("bad AddTwoInts response".into()))?;
+        Ok(ros_env::example_interfaces::srv::AddTwoInts_Response {
+            sum: i64::from_le_bytes(bytes),
+        })
+    }
+}
+
+/// Same failure, but the mapper cannot express it: the ROS caller must get no
+/// reply (and so time out), never a default-valued `sum = 0`.
+#[test]
+fn custom_service_failure_without_error_response_sends_no_reply() {
+    use ros_env::example_interfaces::srv as ex_srv;
+
+    let _guard = lock_brokers();
+    let broker = RobotBusBroker::start(ephemeral_robot_bus_config()).expect("broker");
+    let opts = node_options_from_broker(&broker);
+
+    let ros_svc = format!("/robot_bus_add_fail_{}", std::process::id());
+    let bus_svc = format!("add_fail_{}", std::process::id());
+
+    let mut bridge = Ros2Bridge::new(format!("add_fail_bridge_{}", std::process::id()))
+        .bus_options(opts)
+        .service()
+        .from_ros(&ros_svc, TopicQos::keep_last(10).reliable())
+        .to_bus(&bus_svc, TopicQos::keep_last(8).best_effort())
+        .mapper(AddTwoIntsNoErrorResponse)
+        .timeout(Duration::from_secs(1))
+        .add()
+        .expect("add service")
+        .build()
+        .expect("build bridge");
+
+    let ctx = rclrs::Context::default_from_env().expect("ROS context");
+    let mut exec = ctx.create_basic_executor();
+    let node = exec
+        .create_node(format!("add_fail_client_{}", std::process::id()).as_str())
+        .expect("ros client node");
+    let client = node
+        .create_client::<ex_srv::AddTwoInts>(ros_svc.as_str())
+        .expect("ros AddTwoInts client");
+
+    let deadline = Instant::now() + Duration::from_secs(5);
+    while !client.service_is_ready().unwrap_or(false) {
+        assert!(Instant::now() < deadline, "ROS AddTwoInts service not ready");
+        let _ = bridge.spin_once(Duration::from_millis(5));
+        let _ = exec.spin(rclrs::SpinOptions::spin_once().timeout(Duration::from_millis(20)));
+    }
+
+    let (tx, rx) = std::sync::mpsc::channel();
+    let _ = client
+        .call_then(
+            ex_srv::AddTwoInts_Request { a: 2, b: 40 },
+            move |resp: ex_srv::AddTwoInts_Response| {
+                let _ = tx.send(resp);
+            },
+        )
+        .expect("call_then");
+
+    // The bridge call times out after 1s; give it ample time to (wrongly) reply.
+    let watch_until = Instant::now() + Duration::from_secs(4);
+    while Instant::now() < watch_until {
+        if let Ok(resp) = rx.try_recv() {
+            panic!("bridge failure must not reach the ROS caller as a response: sum={}", resp.sum);
+        }
+        let _ = bridge.spin_once(Duration::from_millis(5));
+        let _ = exec.spin(rclrs::SpinOptions::spin_once().timeout(Duration::from_millis(20)));
+    }
+}
+
 #[test]
 fn trigger_bus_to_ros2_roundtrip() {
     let _guard = lock_brokers();

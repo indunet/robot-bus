@@ -123,7 +123,7 @@ impl Node {
         Self::with_options(name, NodeOptions::tcp_at(host))
     }
 
-    /// IPC under `/tmp/robot_bus` (default broker ipc binds).
+    /// IPC under the legacy fixed directory. Use discovery for per-broker IPC endpoints.
     pub fn ipc(name: impl Into<String>) -> Self {
         Self::with_options(name, NodeOptions::ipc())
     }
@@ -756,13 +756,16 @@ ros__parameters:
         assert_eq!(ipc.transport, "ipc");
         assert_eq!(
             ipc.message_xsub_endpoint().unwrap(),
-            "ipc:///tmp/robot_bus/message_bus_xsub.ipc"
+            crate::transports::ipc_endpoint(crate::transports::XSUB_CHANNEL)
         );
 
         let ipc_custom = NodeOptions::ipc_at("/var/run/robot_bus");
         assert_eq!(
             ipc_custom.service_frontend_endpoint().unwrap(),
-            "ipc:///var/run/robot_bus/service_bus_frontend.ipc"
+            crate::transports::ipc_endpoint_in(
+                "/var/run/robot_bus",
+                crate::transports::SERVICE_FRONTEND_CHANNEL
+            )
         );
 
         let inproc = NodeOptions::inproc();

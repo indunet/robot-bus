@@ -10,7 +10,7 @@ Does not depend on `org.indunet:robot-bus` (JVM Java package). Both artifacts ar
 
 ```bash
 # Maven Central (when published)
-# implementation("org.indunet:robot-bus-android:2.3.2")
+# implementation("org.indunet:robot-bus-android:2.4.0")
 
 # Local:
 just gen-android    # → bindings/android/generated/
@@ -38,22 +38,25 @@ class App : Application() {
 ```kotlin
 // build.gradle.kts
 dependencies {
-  implementation("org.indunet:robot-bus-android:2.3.2")
+  implementation("org.indunet:robot-bus-android:2.4.0")
 }
 ```
 
 ## Message bus (Kotlin)
 
+After `RobotBusAndroid.init(this)` receives an Android `Context`, the embedded broker creates a temporary IPC directory under the app's private `cacheDir` and removes it on shutdown. Other processes of the same app can obtain the actual path with `Node.discover(name, "ipc", opts)`. For `inproc`, the broker and nodes must still share the same Robot Bus `Context`. Set `BrokerOptions(tcpOnly = true)` to disable both local transports.
+
 There is no standalone CLI on Android; **starting the broker in-process** (`Broker()`) is the recommended usage:
 
 ```kotlin
 import org.indunet.robot.bus.Broker
+import org.indunet.robot.bus.DiscoverOpts
 import org.indunet.robot.bus.Node
 import org.indunet.robot.bus.geometry_msgs.msg.v1.Vector3
 import org.indunet.robot.bus.sensor_msgs.msg.v1.Imu
 
 Broker().use { _ ->
-  Node("pilot").use { node ->
+  Node.discover("pilot", "tcp", DiscoverOpts(apiUrl = "http://127.0.0.1:15560")).use { node ->
     val imuPub = node.createPublisher("/robot1/imu", Imu::class.java)
     val sub = node.createSubscription(
       "/robot1/imu",

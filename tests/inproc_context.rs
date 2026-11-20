@@ -2,6 +2,7 @@
 
 mod support;
 
+use std::path::Path;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 use std::thread;
@@ -11,7 +12,7 @@ use std::time::{Duration, Instant};
 use robot_bus::ConsoleBrokerConfig;
 use robot_bus::{
     ActionKind, ActionMessage, Context, HighWaterMark, Node, NodeOptions, Publisher,
-    RobotBusBroker, RobotBusConfig,
+    RobotBusBroker, RobotBusConfig, Subscriber,
 };
 use support::lock_brokers;
 
@@ -30,6 +31,58 @@ fn inproc_broker_config() -> RobotBusConfig {
         };
     }
     config
+}
+
+#[test]
+fn broker_uses_and_cleans_up_private_ipc_directory() {
+    let _guard = lock_brokers();
+    let root = tempfile::tempdir().expect("IPC parent directory");
+    let context = Context::new();
+    let broker =
+        RobotBusBroker::start_with_context_in(&context, inproc_broker_config(), Some(root.path()))
+            .expect("broker");
+    assert!(broker.discover.inproc_prefix.is_some());
+    if !robot_bus::transports::ipc_supported() {
+        assert!(broker.discover.ipc_dir.is_none());
+        assert!(std::fs::read_dir(root.path()).unwrap().next().is_none());
+        broker.stop().expect("stop broker");
+        return;
+    }
+
+    let directory = Path::new(
+        broker
+            .discover
+            .ipc_dir
+            .as_deref()
+            .expect("advertised IPC directory"),
+    )
+    .to_owned();
+    assert_eq!(directory.parent(), Some(root.path()));
+    let endpoints = broker
+        .discover
+        .to_announcement()
+        .expect("broker announcement")
+        .apply(NodeOptions::for_discovery("ipc"))
+        .expect("discover IPC endpoints");
+    {
+        let xsub = endpoints.message_xsub_endpoint().expect("IPC XSUB");
+        let xpub = endpoints.message_xpub_endpoint().expect("IPC XPUB");
+        let publisher = Publisher::new(Some(&xsub)).expect("IPC publisher");
+        let subscriber = Subscriber::new(Some(&xpub)).expect("IPC subscriber");
+        let topic = "/ipc/tempdir";
+        subscriber.subscribe(topic).expect("subscribe");
+        let deadline = Instant::now() + Duration::from_secs(5);
+        loop {
+            publisher.publish(topic, b"hello-ipc").expect("publish");
+            if let Ok(received) = subscriber.receive(Some(Duration::from_millis(50))) {
+                assert_eq!(received, (topic.to_owned(), b"hello-ipc".to_vec()));
+                break;
+            }
+            assert!(Instant::now() < deadline, "IPC message was not delivered");
+        }
+    }
+    broker.stop().expect("stop broker");
+    assert!(!directory.exists());
 }
 
 #[test]

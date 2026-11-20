@@ -424,6 +424,8 @@ ROBOT_BUS_API int robot_bus_multi_threaded_executor_spin(RobotBusMultiThreadedEx
 ROBOT_BUS_API RobotBusBroker *robot_bus_broker_start(const RobotBusBrokerOptions *opts);
 ROBOT_BUS_API RobotBusBroker *robot_bus_broker_start_with_context(RobotBusContext *ctx,
                                                                   const RobotBusBrokerOptions *opts);
+ROBOT_BUS_API RobotBusBroker *robot_bus_broker_start_with_context_in(
+    RobotBusContext *ctx, const RobotBusBrokerOptions *opts, const char *ipc_root);
 ROBOT_BUS_API void robot_bus_broker_free(RobotBusBroker *b);
 ROBOT_BUS_API int robot_bus_broker_stop(RobotBusBroker *b);
 ROBOT_BUS_API char *robot_bus_broker_message_xsub_bind(const RobotBusBroker *b);

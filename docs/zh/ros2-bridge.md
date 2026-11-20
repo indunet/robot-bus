@@ -142,6 +142,17 @@ Topic mapper 三语言同一套目录（Humble/Jazzy **发行版常见自带**�
 
 Rust 另有 `lookup_topic_mapper` / `registered_topic_types`（仅核心集）。
 
+**Python 可以直接写 ROS 类型名**，不用记 mapper 类名。话题、服务、action 都一样；包名后的 `msg` / `srv` / `action` 可以省略，类型名不区分大小写。写错时报错会给出相近的类型名。
+
+```python
+.from_ros("/imu", TopicQos.sensor_data()).to_bus("/imu", TopicQos.bus())
+.mapper("sensor_msgs/msg/Imu").add()
+.service().from_bus("/reset", TopicQos.bus()).to_ros("/reset", TopicQos.default())
+.mapper("std_srvs/srv/Trigger").add()
+```
+
+自定义类型注册一次也能这样用，见下文[自定义话题 mapper](#自定义话题-mapper)。传 mapper 对象的写法照旧可用。
+
 ### `.lazy()`（大流量 ROS → bus）
 
 默认 eager：`build()` 立刻建 ROS subscription，ROS 图上能看到这座桥。相机、雷达等大流量才在 `from_ros → to_bus` 上加 `.lazy()`：没人订 bus 时，ROS 图上这座桥不是该 topic 的 subscriber。
@@ -182,6 +193,19 @@ class MyStringMapper:
         out.data = bus.data
         return out
 ```
+
+直接 `.mapper(MyStringMapper())` 即可。想在别处（或以后的配置文件里）按类型名引用，就在类上加一行注册；服务、action mapper 同理：
+
+```python
+from robot_bus.ros2_bridge import register_mapper
+
+@register_mapper("my_pkg/msg/Sum")
+class SumMapper: ...
+
+.from_ros("/sum", TopicQos.default()).to_bus("/sum", TopicQos.bus()).mapper("my_pkg/msg/Sum").add()
+```
+
+和内置类型重名时会报错，确实要替换内置 mapper 时传 `override=True`。
 
 **Rust**（`TypedTopicMapper`）：
 
@@ -612,7 +636,25 @@ ROS 客户端调用 bus Action 时，成功映射为 ROS SUCCEEDED，取消映�
 
 服务与 Action 的控制台行显示调用总数、成功、进行中、失败、超时、拒绝、取消、最近结束状态及最近错误。超时和拒绝包含在失败总数中；取消单独统计。这里统计桥接/通信结果，不推断自定义响应中 `success=false` 等业务字段。最近错误在后续成功后仍保留，当前状态显示最近一次结束结果。
 
-内置及 Typed mapper 自动采集调用统计。自定义 `attach` 需通过接线上下文里的 `route_health`（Rust）或 `health`（Python/C++）记录调用开始/结束。ROS 自定义服务若需要在响应中表达故障，仍需实现 `error_response`。
+内置及 Typed mapper 自动采集调用统计。自定义 `attach` 需通过接线上下文里的 `route_health`（Rust）或 `health`（Python/C++）记录调用开始/结束。
+
+**ROS 客户端调用 bus 服务失败时（`.from_ros → .to_bus`）**：ROS 服务协议本身没有错误通道，只能靠响应字段表达。
+
+三种语言行为一致：
+
+- mapper 提供了 `error_response(message)`（内置 `Trigger` / `SetBool` 都有，返回 `success=False` 加消息），就回复它。
+- 没提供的，桥**不回复**，ROS 调用方会超时失败，而不是拿到一个全默认值、看上去像成功的响应。
+- 两种情况都会写一条日志（限流，带服务名和原因），控制台的失败计数照常增加。
+
+自定义服务想在失败时回复，且响应类型里要有能表达失败的字段，就实现 `error_response`：
+
+| 语言 | 签名 |
+| --- | --- |
+| Python | `def error_response(self, message): ...`，返回 ROS 响应 |
+| Rust | `fn error_response(&self, message: &str) -> Option<Response>`（默认返回 `None`） |
+| C++ | `std::optional<Response> error_response(const std::string &message) const`（默认返回 `std::nullopt`；直接返回 `Response` 也可以） |
+
+Rust 的限制：rclrs 0.7 不允许服务回调跳过响应，所以每次"不回复"的调用会让一个挂起的 future 留到桥退出。这是每次失败一点点的泄漏，经常失败的服务建议实现 `error_response`。
 
 部署时同时升级桥、bus 客户端 SDK 和 WebSocket 服务端：新增错误标记 `ACTION_REJECTED` / `ACTION_ABORTED` / `RPC_TIMEOUT` / `RPC_FAILED`；成功结果格式不变，取消沿用 `CANCELLED`。旧版客户端不具备新增错误的分类能力。
 

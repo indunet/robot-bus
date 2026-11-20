@@ -10,7 +10,7 @@ Package: `org.indunet.robot.bus`
 
 ```bash
 # Maven Central (when published)
-# implementation("org.indunet:robot-bus-android:2.3.2")
+# implementation("org.indunet:robot-bus-android:2.4.0")
 
 # 本地：
 just gen-android    # → bindings/android/generated/
@@ -38,22 +38,25 @@ class App : Application() {
 ```kotlin
 // build.gradle.kts
 dependencies {
-  implementation("org.indunet:robot-bus-android:2.3.2")
+  implementation("org.indunet:robot-bus-android:2.4.0")
 }
 ```
 
 ## Message bus（Kotlin）
 
+在 Android 上用 `RobotBusAndroid.init(this)` 传入 Android `Context` 后，应用内 broker 会在 App 的私有 `cacheDir` 下创建临时 IPC 目录，并在关闭时清理。同一 App 的其它进程可通过 `Node.discover(name, "ipc", opts)` 获取实际路径；同进程 `inproc` 仍需与 broker 共享同一个 Robot Bus `Context`。显式设置 `BrokerOptions(tcpOnly = true)` 可关闭这两种本地传输。
+
 Android 上没有独立 CLI，**在进程内起 broker**（`Broker()`）是推荐用法：
 
 ```kotlin
 import org.indunet.robot.bus.Broker
+import org.indunet.robot.bus.DiscoverOpts
 import org.indunet.robot.bus.Node
 import org.indunet.robot.bus.geometry_msgs.msg.v1.Vector3
 import org.indunet.robot.bus.sensor_msgs.msg.v1.Imu
 
 Broker().use { _ ->
-  Node("pilot").use { node ->
+  Node.discover("pilot", "tcp", DiscoverOpts(apiUrl = "http://127.0.0.1:15560")).use { node ->
     val imuPub = node.createPublisher("/robot1/imu", Imu::class.java)
     val sub = node.createSubscription(
       "/robot1/imu",

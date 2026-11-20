@@ -5,6 +5,11 @@
 //! **not** install a process-wide Ctrl+C handler (unlike the blocking `run` helpers).
 
 use anyhow::{Context, Result};
+#[cfg(any(feature = "ws", feature = "console-api"))]
+use std::io::ErrorKind;
+#[cfg(any(feature = "ws", feature = "console-api"))]
+use std::net::TcpListener;
+use std::path::Path;
 use std::sync::Arc;
 use std::thread::{self, JoinHandle};
 use std::time::Duration;
@@ -17,7 +22,7 @@ use crate::runtime::Context as BusContext;
 use crate::transports::{
     ACTION_BACKEND_CHANNEL, ACTION_FRONTEND_CHANNEL, BindAllOpts, SERVICE_BACKEND_CHANNEL,
     SERVICE_FRONTEND_CHANNEL, XPUB_CHANNEL, XSUB_CHANNEL, inproc_endpoint_with_prefix,
-    ipc_endpoint_in,
+    ipc_endpoint_in, ipc_supported,
 };
 
 #[cfg(all(feature = "console-api", not(feature = "ws")))]
@@ -41,6 +46,40 @@ pub use config::RobotBusConfig;
 pub use config::WsConfig;
 
 use bus_handles::{STARTUP_SETTLE, join_broker_thread};
+
+#[cfg(any(feature = "ws", feature = "console-api"))]
+fn bind_api_listener(requested: SocketAddr) -> Result<(TcpListener, SocketAddr)> {
+    const MAX_PORT_INCREMENTS: u16 = 32;
+    let last_port = requested.port().saturating_add(MAX_PORT_INCREMENTS);
+    let mut address = requested;
+    loop {
+        match TcpListener::bind(address) {
+            Ok(listener) => {
+                listener
+                    .set_nonblocking(true)
+                    .context("set API listener nonblocking")?;
+                let listen = listener.local_addr().context("API listener local_addr")?;
+                return Ok((listener, listen));
+            }
+            Err(error)
+                if error.kind() == ErrorKind::AddrInUse
+                    && address.port() != 0
+                    && address.port() < last_port =>
+            {
+                address.set_port(address.port() + 1);
+            }
+            Err(error) => {
+                return Err(error).with_context(|| {
+                    if address == requested {
+                        format!("bind API listen {requested}")
+                    } else {
+                        format!("bind API listen {requested} (last attempted {address})")
+                    }
+                });
+            }
+        }
+    }
+}
 
 #[cfg(feature = "ws")]
 fn connect_url_for_listen(listen: SocketAddr) -> String {
@@ -76,28 +115,8 @@ struct WsServerHandle {
 
 #[cfg(feature = "ws")]
 impl WsServerHandle {
-    fn start(mut config: WsServerConfig) -> Result<Self> {
-        let requested = config.listen;
-        // Bind on the calling thread so EADDRINUSE fails at start(), not only at stop().
-        let std_listener = std::net::TcpListener::bind(requested)
-            .with_context(|| format!("bind API listen {requested}"))?;
-        std_listener
-            .set_nonblocking(true)
-            .context("set API listener nonblocking")?;
-        let listen = std_listener
-            .local_addr()
-            .context("API listener local_addr")?;
-        config.listen = listen;
-        if let Some(disc) = config.discover.as_mut() {
-            let mut d = (**disc).clone();
-            d.api_url = connect_url_for_listen(listen);
-            #[cfg(feature = "console-api")]
-            if d.console_url.is_some() {
-                d.console_url = Some(d.api_url.clone());
-            }
-            *disc = Arc::new(d);
-        }
-
+    fn start(std_listener: TcpListener, config: WsServerConfig) -> Result<Self> {
+        let listen = config.listen;
         let (shutdown_tx, shutdown_rx) = tokio::sync::watch::channel(false);
         let handle = thread::spawn(move || {
             let rt = tokio::runtime::Builder::new_multi_thread()
@@ -253,6 +272,7 @@ pub struct RobotBusBroker {
     tank: Option<Arc<TankManager>>,
     /// Snapshot served at `GET /api/v1/discover`.
     pub discover: DiscoverResponse,
+    _ipc_dir: Option<tempfile::TempDir>,
 }
 
 impl RobotBusBroker {
@@ -269,23 +289,69 @@ impl RobotBusBroker {
     ///
     /// Takes a shared reference; the ZMQ context is refcounted, so the caller keeps using
     /// the same `context` for Nodes without an explicit `.clone()`.
-    pub fn start_with_context(context: &BusContext, mut config: RobotBusConfig) -> Result<Self> {
-        let broker_id = normalize_broker_id(&mut config);
-        let bind_opts = BindAllOpts::for_broker(&broker_id);
-        config.message.bind_opts = bind_opts.clone();
-        config.service.bind_opts = bind_opts.clone();
-        config.action.bind_opts = bind_opts.clone();
+    pub fn start_with_context(context: &BusContext, config: RobotBusConfig) -> Result<Self> {
+        Self::start_with_context_in(context, config, None)
+    }
+
+    /// Start with an optional writable parent directory for the per-broker IPC directory.
+    /// With no override, use the system temporary directory.
+    pub fn start_with_context_in(
+        context: &BusContext,
+        mut config: RobotBusConfig,
+        ipc_root: Option<&Path>,
+    ) -> Result<Self> {
+        #[cfg(feature = "ws")]
+        let ws_listener = {
+            let (listener, listen) = bind_api_listener(config.ws.listen)?;
+            config.ws.listen = listen;
+            listener
+        };
 
         #[cfg(all(feature = "console-api", not(feature = "ws")))]
         let console_listener = if config.console.enabled {
-            let listener = std::net::TcpListener::bind(config.console.listen)
-                .context("bind monitoring API")?;
-            listener.set_nonblocking(true)?;
-            config.console.listen = listener.local_addr()?;
+            let (listener, listen) = bind_api_listener(config.console.listen)?;
+            config.console.listen = listen;
             Some(listener)
         } else {
             None
         };
+
+        let broker_id = normalize_broker_id(&mut config);
+        let use_ipc = ipc_supported()
+            && (config.message.bind_all_transports
+                || config.service.bind_all_transports
+                || config.action.bind_all_transports);
+        let ipc_dir = if use_ipc {
+            let default_root;
+            let root = match ipc_root {
+                Some(root) => root,
+                None => {
+                    default_root = std::env::temp_dir();
+                    &default_root
+                }
+            };
+            Some(
+                tempfile::Builder::new()
+                    .prefix("rb-")
+                    .tempdir_in(root)
+                    .with_context(|| {
+                        format!("create broker IPC directory in {}", root.display())
+                    })?,
+            )
+        } else {
+            None
+        };
+        let mut bind_opts = BindAllOpts::default();
+        if let Some(dir) = &ipc_dir {
+            bind_opts.ipc_dir = dir
+                .path()
+                .to_str()
+                .context("IPC directory is not valid UTF-8")?
+                .to_owned();
+        }
+        config.message.bind_opts = bind_opts.clone();
+        config.service.bind_opts = bind_opts.clone();
+        config.action.bind_opts = bind_opts.clone();
 
         let advertise_host = resolve_advertise_host(&config.discovery);
         let zmq = context.clone_zmq();
@@ -337,7 +403,7 @@ impl RobotBusBroker {
         let svc_be = rewrite_bind_host(&service.backend_bind, &advertise_host);
         let act_fe = rewrite_bind_host(&action.frontend_bind, &advertise_host);
         let act_be = rewrite_bind_host(&action.backend_bind, &advertise_host);
-        #[allow(unused_mut)] // mutated after WS bind when `ws` is enabled (`:0` → real port)
+        #[allow(unused_mut)]
         let mut discover = DiscoverResponse {
             broker_id: broker_id.clone(),
             domain_id: config.discovery.domain_id,
@@ -349,9 +415,7 @@ impl RobotBusBroker {
             service_backend: svc_be.clone(),
             action_frontend: act_fe.clone(),
             action_backend: act_be.clone(),
-            ipc_dir: config
-                .message
-                .bind_all_transports
+            ipc_dir: (config.message.bind_all_transports && ipc_dir.is_some())
                 .then(|| bind_opts.ipc_dir.clone()),
             inproc_prefix: config
                 .message
@@ -428,6 +492,10 @@ impl RobotBusBroker {
 
         #[cfg(feature = "ws")]
         let ws = {
+            discover.api_url = connect_url_for_listen(config.ws.listen);
+            if discover.console_url.is_some() {
+                discover.console_url = Some(discover.api_url.clone());
+            }
             let ws_config = WsServerConfig {
                 listen: config.ws.listen,
                 message_xpub: bind_to_connect(&message.xpub_bind),
@@ -453,16 +521,8 @@ impl RobotBusBroker {
                 #[cfg(feature = "console-api")]
                 console: console_state.clone(),
             };
-            WsServerHandle::start(ws_config)?
+            WsServerHandle::start(ws_listener, ws_config)?
         };
-        #[cfg(feature = "ws")]
-        {
-            discover.api_url = connect_url_for_listen(ws.listen);
-            #[cfg(feature = "console-api")]
-            if discover.console_url.is_some() {
-                discover.console_url = Some(discover.api_url.clone());
-            }
-        }
 
         // Console-only HTTP server — only needed when `ws` is disabled; otherwise
         // the console shares the WebSocket RPC server's listener started above.
@@ -534,6 +594,7 @@ impl RobotBusBroker {
             #[cfg(all(feature = "console-api", feature = "demo-tank"))]
             tank,
             discover,
+            _ipc_dir: ipc_dir,
         })
     }
 

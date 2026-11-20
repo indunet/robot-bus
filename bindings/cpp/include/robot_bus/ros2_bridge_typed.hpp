@@ -10,6 +10,7 @@
 #include <future>
 #include <memory>
 #include <mutex>
+#include <optional>
 #include <string>
 #include <thread>
 #include <unordered_map>
@@ -97,11 +98,18 @@ class TypedServiceMapper : public ServiceMapper {
           std::make_shared<ServiceClient>(
               ctx.bus_node.create_client(ctx.bus_service.c_str(), ctx.bus_qos.depth()));
       auto mtx = std::make_shared<std::mutex>();
+      // Deferred-response callback: the reply is sent explicitly below, so a failure
+      // with no `error_response` can send nothing and the ROS caller times out,
+      // instead of reading a default-constructed Response as a real result.
       auto srv = ctx.ros_node->template create_service<RosSrv>(
           ctx.ros_service,
-          [self, bus_client, mtx, timeout, health](const std::shared_ptr<Request> request,
-                                           std::shared_ptr<Response> response) {
+          [self, bus_client, mtx, timeout, health, name = ctx.ros_service](
+              std::shared_ptr<rclcpp::Service<RosSrv>> service,
+              std::shared_ptr<rmw_request_id_t> header, std::shared_ptr<Request> request) {
             RpcObservation call(health);
+            std::optional<Response> reply;
+            std::string status = "failed";
+            std::string failure;
             try {
               auto req_bytes = self->ros_req_to_bus(*request);
               std::vector<uint8_t> resp_bytes;
@@ -109,15 +117,36 @@ class TypedServiceMapper : public ServiceMapper {
                 std::lock_guard<std::mutex> lock(*mtx);
                 resp_bytes = bus_client->call(req_bytes, timeout);
               }
-              *response = self->bus_resp_to_ros(resp_bytes);
+              reply = self->bus_resp_to_ros(resp_bytes);
               call.finish();
             } catch (const std::exception &e) {
-              call.finish(rpc_failure_status(e), e.what());
-              *response = self->error_response(std::string("bus call failed: ") + e.what());
+              status = rpc_failure_status(e);
+              failure = e.what();
             } catch (...) {
-              call.finish("failed", "bus call failed");
-              *response = self->error_response("bus call failed");
+              failure = "bus call failed";
             }
+            if (!reply) {
+              call.finish(status, failure, /*log=*/false);
+              try {
+                reply = self->error_response("bus call failed: " + failure);
+              } catch (...) {
+                reply.reset();
+              }
+              if (!health || health->should_log_warn()) {
+                if (reply) {
+                  RCLCPP_WARN(ros2_bridge_logger(),
+                              "service %s: bus call failed: %s; replied with the mapper's "
+                              "error_response",
+                              name.c_str(), failure.c_str());
+                } else {
+                  RCLCPP_ERROR(ros2_bridge_logger(),
+                               "service %s: bus call failed: %s; no reply sent, the ROS client "
+                               "will time out (add error_response to the mapper to reply instead)",
+                               name.c_str(), failure.c_str());
+                }
+              }
+            }
+            if (reply) service->send_response(*header, *reply);
           },
           service_rmw_qos(ctx.ros_qos), ctx.callback_group);
       ctx.retain(std::move(bus_client));
@@ -157,8 +186,13 @@ class TypedServiceMapper : public ServiceMapper {
   }
 
  protected:
-  /// Override for richer failure responses (default: default-constructed Response).
-  Response error_response(const std::string & /*message*/) const { return Response{}; }
+  /// Reply used when a ROS client's call cannot be bridged (timeout / decode / bus error).
+  /// ROS services have no error channel, so default is no reply: the caller times out.
+  /// Override with `Response error_response(const std::string &)` (or return
+  /// `std::optional<Response>`) when the response type can express failure.
+  std::optional<Response> error_response(const std::string & /*message*/) const {
+    return std::nullopt;
+  }
 };
 
 /// Action (Ros2ToBus + BusToRos2): Derived provides goal/feedback/result converts.

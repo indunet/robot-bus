@@ -110,7 +110,7 @@ class RouteHealth:
             self.calls += 1
             self.record_rx()
 
-    def rpc_finish(self, status: str = "succeeded", message: str = "") -> None:
+    def rpc_finish(self, status: str = "succeeded", message: str = "", log: bool = True) -> None:
         with self._lock:
             self.last_status = status
             if status == "succeeded":
@@ -123,7 +123,7 @@ class RouteHealth:
                 self.rejected += int(status == "rejected")
             if message:
                 self.last_error = message[:512]
-        if message and self.should_log_warn():
+        if log and message and self.should_log_warn():
             LOG.warning("ROS bridge RPC %s: %s", status, message)
 
     def rpc_snapshot(self) -> dict[str, Any]:

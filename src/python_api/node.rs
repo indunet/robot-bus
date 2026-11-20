@@ -129,7 +129,7 @@ impl PyNode {
         }
     }
 
-    /// IPC under `/tmp/robot_bus` (or a custom directory).
+    /// IPC under the system temp directory's `robot_bus` subdir (or a custom directory).
     #[classmethod]
     #[pyo3(signature = (name, path=None))]
     fn ipc(_cls: &Bound<'_, PyType>, name: String, path: Option<&str>) -> Self {

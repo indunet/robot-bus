@@ -392,6 +392,7 @@ Discovery / advertise:\n  \
 --no-discovery                 Compatibility no-op (UDP announce removed)\n\n\
 API options (feature `ws`, default on):\n  \
 --api-listen HOST:PORT         API listen (aliases: --listen, --console-listen)\n  \
+                               If busy, try the next 32 ports; :0 lets the OS choose.\n  \
 --cors-origin ORIGIN           Allowed browser origin (repeatable)\n\n\
 Console options (feature `console`, default on):\n  \
 --console-listen HOST:PORT     Alias of --api-listen (single-port UI + API)\n  \
@@ -401,7 +402,7 @@ Console options (feature `console`, default on):\n  \
 --console-cors-origin ORIGIN   Allow browser origin (repeatable)\n\n\
 --help, -h                     Show this help\n\n\
 Embed in code: robot_bus::RobotBusBroker::start(RobotBusConfig { ... }).\n\
-Clients: GET http://HOST:15560/api/v1/discover then connect to returned ZMQ endpoints.\n"
+Clients: GET /api/v1/discover on the actual API port shown at startup, then connect to returned ZMQ endpoints.\n"
 }
 
 /// Apply federation options shared by language bindings (CLI-compatible string forms).

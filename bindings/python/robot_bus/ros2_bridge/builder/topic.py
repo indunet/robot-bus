@@ -12,6 +12,7 @@ from .config import (
     _require_topic_qos,
     _topic_supports_lazy,
 )
+from ..registry import resolve_mapper
 
 class FromRos:
     def __init__(self, parent: Ros2BridgeBuilder, ros_topic: str, ros_qos: TopicQos) -> None:
@@ -41,6 +42,7 @@ class FromRosToBus:
         self._bus_qos = bus_qos
 
     def mapper(self, mapper: Any) -> "Ros2ToBusReady":
+        """Mapper object, or ROS type name such as ``"sensor_msgs/msg/Imu"``."""
         if mapper is None:
             raise ValueError("ros2 bridge route: mapper must not be None")
         return Ros2ToBusReady(
@@ -49,7 +51,7 @@ class FromRosToBus:
             self._ros_qos,
             self._bus_topic,
             self._bus_qos,
-            mapper,
+            resolve_mapper(mapper, "msg"),
         )
 
 
@@ -127,6 +129,7 @@ class FromBusToRos:
         self._bus_qos = bus_qos
 
     def mapper(self, mapper: Any) -> "BusToRos2Ready":
+        """Mapper object, or ROS type name such as ``"geometry_msgs/msg/Twist"``."""
         if mapper is None:
             raise ValueError("ros2 bridge route: mapper must not be None")
         return BusToRos2Ready(
@@ -135,7 +138,7 @@ class FromBusToRos:
             self._ros_qos,
             self._bus_topic,
             self._bus_qos,
-            mapper,
+            resolve_mapper(mapper, "msg"),
         )
 
 

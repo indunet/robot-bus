@@ -540,6 +540,44 @@ def test_run_reraises_executor_failure_and_shuts_down():
     assert bus.shutdowns == 1
 
 
+def test_spin_once_tolerates_idle_buses_without_busy_looping():
+    import time
+
+    def idle(_n):
+        raise RuntimeError("nothing registered; connect_subscriber, register worker, or create_timer first")
+
+    bridge = _bare_bridge(idle)
+    bridge._rpc_bus = _FakeBus(idle)
+    t0 = time.monotonic()
+    bridge.spin_once(0.05)  # polling is bounded to 10 ms
+    assert time.monotonic() - t0 >= 0.009
+    assert bridge._bus.spins == 1 and bridge._rpc_bus.spins == 1
+
+    def broken(_n):
+        raise RuntimeError("socket closed")
+
+    bridge._rpc_bus = _FakeBus(broken)
+    with pytest.raises(RuntimeError, match="socket closed"):
+        bridge.spin_once(0.0)
+
+
+def test_executor_error_after_ros_shutdown_is_not_reported():
+    class Boom:
+        def spin(self):
+            raise RuntimeError("context is not valid")
+
+    bridge = _bare_bridge()
+    bridge._executor = Boom()
+    bridge._ros_node.context.alive = False  # what rclpy's SIGINT handler does
+    bridge._ros_spin()
+    assert bridge._executor_error is None
+
+    bridge = _bare_bridge()
+    bridge._executor = Boom()
+    bridge._ros_spin()  # context still valid: a real failure
+    assert "not valid" in str(bridge._executor_error)
+
+
 def test_mapper_type_name_from_ros_interface():
     from robot_bus.ros2_bridge.builder.config import mapper_type_name
 
@@ -562,6 +600,91 @@ def test_mapper_type_name_from_ros_interface():
     assert mapper_type_name(ServiceMapper()) == "example_interfaces/srv/AddTwoInts"
     assert mapper_type_name(Named()) == "my_pkg/msg/Custom"
     assert mapper_type_name(Dummy()) == "object"
+
+
+def _builder():
+    from robot_bus.ros2_bridge import Ros2Bridge
+
+    return Ros2Bridge.new("t")
+
+
+def test_mapper_by_type_name_for_every_kind():
+    from robot_bus.ros2_bridge import (
+        FibonacciActionMapper,
+        GeometryMsgsTwistMapper,
+        SensorMsgsImuMapper,
+        StdMsgsColorRgbaMapper,
+        TriggerServiceMapper,
+    )
+
+    b = (
+        _builder()
+        .from_ros("/imu", _qos_ros()).to_bus("/imu", _qos_bus())
+        .mapper("sensor_msgs/msg/Imu").add()
+        .from_bus("/cmd_vel", _qos_bus()).to_ros("/cmd_vel", _qos_ros())
+        .mapper("geometry_msgs/Twist").add()
+        .from_ros("/color", _qos_ros()).to_bus("/color", _qos_bus())
+        .mapper("std_msgs/msg/ColorRGBA").add()
+        .service().from_bus("/reset", _qos_bus()).to_ros("/reset", _qos_ros())
+        .mapper("std_srvs/srv/Trigger").add()
+        .action().from_bus("/fib", _qos_bus()).to_ros("/fib", _qos_ros())
+        .mapper("example_interfaces/action/Fibonacci").add()
+    )
+    kinds = [type(r["mapper"]) for r in b._routes]
+    assert kinds == [SensorMsgsImuMapper, GeometryMsgsTwistMapper, StdMsgsColorRgbaMapper]
+    assert isinstance(b._services[0]["mapper"], TriggerServiceMapper)
+    assert isinstance(b._actions[0]["mapper"], FibonacciActionMapper)
+
+
+def test_every_builtin_mapper_has_a_type_name():
+    from robot_bus.ros2_bridge import mappers, registry
+
+    covered = {cls for _, cls in registry._load_builtin().values()}
+    assert [e for e in mappers.__all__ if getattr(mappers, e) not in covered] == []
+
+
+def test_mapper_type_name_errors_are_actionable():
+    b = _builder().from_ros("/x", _qos_ros()).to_bus("/x", _qos_bus())
+    with pytest.raises(ValueError, match="sensor_msgs/msg/Imu"):
+        b.mapper("sensor_msgs/msg/Imuu")
+    with pytest.raises(ValueError, match="register_mapper"):
+        b.mapper("my_pkg/msg/Nope")
+    with pytest.raises(ValueError, match="use it on .service()"):
+        b.mapper("std_srvs/srv/Trigger")
+    with pytest.raises(ValueError, match="pkg/msg/Name"):
+        b.mapper("Twist")
+
+
+def test_register_custom_mapper():
+    from robot_bus.ros2_bridge import register_mapper, registry
+
+    try:
+        @register_mapper("my_pkg/msg/Sum")
+        class SumMapper(Dummy):
+            pass
+
+        shared = Dummy()
+        register_mapper("my_pkg/srv/AddTwoInts", shared)
+
+        b = (
+            _builder()
+            .from_ros("/sum", _qos_ros()).to_bus("/sum", _qos_bus()).mapper("my_pkg/msg/Sum").add()
+            .service().from_ros("/add", _qos_ros()).to_bus("/add", _qos_bus())
+            .mapper("my_pkg/srv/AddTwoInts").add()
+        )
+        assert isinstance(b._routes[0]["mapper"], SumMapper)
+        assert b._services[0]["mapper"] is shared
+
+        register_mapper("my_pkg/msg/Sum", SumMapper)  # same mapper again is fine
+        with pytest.raises(ValueError, match="override=True"):
+            register_mapper("my_pkg/msg/Sum", Dummy)
+        with pytest.raises(ValueError, match="override=True"):
+            register_mapper("std_msgs/msg/String", Dummy)
+        register_mapper("std_msgs/msg/String", Dummy, override=True)
+        b = _builder().from_ros("/s", _qos_ros()).to_bus("/s", _qos_bus()).mapper("std_msgs/msg/String")
+        assert type(b._mapper) is Dummy
+    finally:
+        registry._user.clear()
 
 
 def test_ros2_available_checks_rclpy():
@@ -600,7 +723,13 @@ if __name__ == "__main__":
     test_run_stops_on_ros_shutdown()
     test_run_treats_ctrl_c_as_stop()
     test_run_reraises_executor_failure_and_shuts_down()
+    test_spin_once_tolerates_idle_buses_without_busy_looping()
+    test_executor_error_after_ros_shutdown_is_not_reported()
     test_mapper_type_name_from_ros_interface()
+    test_mapper_by_type_name_for_every_kind()
+    test_every_builtin_mapper_has_a_type_name()
+    test_mapper_type_name_errors_are_actionable()
+    test_register_custom_mapper()
     test_ros2_available_checks_rclpy()
     try:
         test_builder_accepts_concrete_mappers_without_build()

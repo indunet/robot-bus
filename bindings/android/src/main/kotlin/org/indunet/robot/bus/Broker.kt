@@ -3,40 +3,15 @@ package org.indunet.robot.bus
 import com.sun.jna.Pointer
 
 /** In-process / local broker process handle. */
-class Broker : AutoCloseable {
-    private var ptr: Pointer?
+class Broker private constructor(private var ptr: Pointer?) : AutoCloseable {
+    constructor() : this(start(null, null))
 
-    constructor() {
-        ptr = Errors.checkPtr(RobotBusC.Holder.INSTANCE.robot_bus_broker_start(null), "Broker")
-    }
-
-    constructor(options: BrokerOptions) {
-        ptr =
-            Errors.checkPtr(
-                RobotBusC.Holder.INSTANCE.robot_bus_broker_start(options.toNative()),
-                "Broker",
-            )
-    }
+    constructor(options: BrokerOptions) : this(start(null, options))
 
     /** Start broker sharing [context] (required for same-process inproc Nodes). */
-    constructor(context: Context) {
-        ptr =
-            Errors.checkPtr(
-                RobotBusC.Holder.INSTANCE.robot_bus_broker_start_with_context(context.raw(), null),
-                "Broker",
-            )
-    }
+    constructor(context: Context) : this(start(context, null))
 
-    constructor(context: Context, options: BrokerOptions?) {
-        ptr =
-            Errors.checkPtr(
-                RobotBusC.Holder.INSTANCE.robot_bus_broker_start_with_context(
-                    context.raw(),
-                    options?.toNative(),
-                ),
-                "Broker",
-            )
-    }
+    constructor(context: Context, options: BrokerOptions?) : this(start(context, options))
 
     fun stop() {
         Errors.check(RobotBusC.Holder.INSTANCE.robot_bus_broker_stop(ptr), "broker stop")
@@ -77,5 +52,19 @@ class Broker : AutoCloseable {
     override fun close() {
         RobotBusC.Holder.INSTANCE.robot_bus_broker_free(ptr)
         ptr = null
+    }
+
+    companion object {
+        private fun start(context: Context?, options: BrokerOptions?): Pointer {
+            val native = RobotBusC.Holder.INSTANCE
+            val nativeOpts = options?.toNative()
+            val ipcRoot = RobotBusAndroid.ipcRoot
+            val broker = if (ipcRoot == null) {
+                native.robot_bus_broker_start_with_context(context?.raw(), nativeOpts)
+            } else {
+                native.robot_bus_broker_start_with_context_in(context?.raw(), nativeOpts, ipcRoot)
+            }
+            return Errors.checkPtr(broker, "Broker")
+        }
     }
 }

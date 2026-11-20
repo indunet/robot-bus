@@ -37,7 +37,7 @@ pip install robot-bus
 * Rust
 
 ```toml
-robot-bus = "2.3.2"
+robot-bus = "2.4.0"
 ```
 
 * npm
@@ -52,20 +52,20 @@ npm install robot-bus
 <dependency>
     <groupId>org.indunet</groupId>
     <artifactId>robot-bus</artifactId>
-    <version>2.3.2</version>
+    <version>2.4.0</version>
 </dependency>
 ```
 
 * Gradle (Android)
 
 ```kotlin
-implementation("org.indunet:robot-bus-android:2.3.2")
+implementation("org.indunet:robot-bus-android:2.4.0")
 ```
 
 * C++ ([GitHub Releases](https://github.com/indunet/robot-bus/releases) DEB / MSI)
 
 ```bash
-sudo apt install ./robot-bus_2.3.2_linux_amd64.deb
+sudo apt install ./robot-bus_2.4.0_linux_amd64.deb
 ```
 
 

@@ -31,6 +31,7 @@ from robot_bus.ros2_bridge.builder import (
 )
 from robot_bus.ros2_bridge.mappers import *  # noqa: F403
 from robot_bus.ros2_bridge.mappers import __all__ as _MAPPER_EXPORTS
+from robot_bus.ros2_bridge.registry import register_mapper
 
 __all__ = [
     "ACTION_CALL_TIMEOUT",
@@ -57,6 +58,7 @@ __all__ = [
     "ServiceReady",
     "TopicQos",
     "TopicQosKeepLast",
+    "register_mapper",
     "should_enable_ros_subscription",
     *_MAPPER_EXPORTS,
 ]

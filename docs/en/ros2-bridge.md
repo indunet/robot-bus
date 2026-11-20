@@ -177,6 +177,17 @@ Service / action remain hand-written builtins (no generated srv/action catalogs)
 
 Rust also exposes `lookup_topic_mapper` / `registered_topic_types` for the core set only.
 
+**In Python you can pass the ROS type name** instead of the mapper class, for topics, services and actions. The `msg` / `srv` / `action` segment is optional and the type name is case-insensitive. A typo gets an error listing close matches.
+
+```python
+.from_ros("/imu", TopicQos.sensor_data()).to_bus("/imu", TopicQos.bus())
+.mapper("sensor_msgs/msg/Imu").add()
+.service().from_bus("/reset", TopicQos.bus()).to_ros("/reset", TopicQos.default())
+.mapper("std_srvs/srv/Trigger").add()
+```
+
+Custom types work the same way after a one-line registration; see "Python: custom Service mapper" below. Passing a mapper object still works.
+
 ---
 
 ## User-defined mappers
@@ -303,6 +314,20 @@ bridge = (
 ```
 
 Action: same flow — three proto messages (Goal / Feedback / Result), then `ros_action_type()` + six-way conversion (see [`mappers/fibonacci.py`](../../bindings/python/robot_bus/ros2_bridge/mappers/fibonacci.py)).
+
+To refer to a custom mapper by type name elsewhere (or from a future config file), register it once. This works the same for topic, service and action mappers:
+
+```python
+from robot_bus.ros2_bridge import register_mapper
+
+register_mapper("example_interfaces/srv/AddTwoInts", AddTwoIntsServiceMapper)
+
+.service().from_ros("/examples/add_two_ints", TopicQos.default())
+.to_bus("/examples/add_two_ints", TopicQos.bus())
+.mapper("example_interfaces/srv/AddTwoInts").add()
+```
+
+`@register_mapper("my_pkg/msg/Sum")` also works as a class decorator. Registering a name that already exists, built-in or not, raises an error; pass `override=True` to replace it on purpose.
 
 ### Rust: custom Service (`TypedServiceMapper`)
 
@@ -635,7 +660,25 @@ status and last error. These measure bridge/transport outcomes, not application
 fields such as `success=false`. Last error is retained after later success.
 Builtin and Typed mappers record them automatically; custom `attach` implementations
 can use `ctx.route_health` (Rust) or `ctx.health` (Python/C++) to record start/finish.
-Custom ROS service responses still need `error_response` to express a failure.
+
+
+**When a ROS client calls a bus service and the bridge call fails (`.from_ros → .to_bus`):** the ROS service protocol has no error channel, only response fields.
+
+All three languages behave the same way:
+
+- If the mapper provides `error_response(message)` (built-in `Trigger` / `SetBool` do, returning `success=False` plus the message), the bridge replies with it.
+- Otherwise the bridge sends **no reply**, so the ROS caller times out instead of reading a default-valued response as a real result.
+- Both cases log a rate-limited message with the service name and reason, and the console failure counters still increase.
+
+To reply for a custom service, implement `error_response` for a response type that has a way to signal failure:
+
+| Language | Signature |
+| --- | --- |
+| Python | `def error_response(self, message): ...` returns a ROS response |
+| Rust | `fn error_response(&self, message: &str) -> Option<Response>` (the default returns `None`) |
+| C++ | `std::optional<Response> error_response(const std::string &message) const` (the default returns `std::nullopt`; returning a plain `Response` also works) |
+
+Rust limitation: rclrs 0.7 does not let a service callback skip the response, so each no-reply call keeps one parked future alive until the bridge exits. This is a small per-failure leak, which is why `error_response` is worth implementing for services that can fail often.
 
 Topic warnings now detect both missing first traffic after 15 seconds and a
 15-second gap after receiving data. One warning is emitted per quiet episode;

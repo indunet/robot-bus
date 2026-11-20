@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.16)
-project(robot_bus_cpp VERSION 2.3.2 LANGUAGES CXX)
+project(robot_bus_cpp VERSION 2.4.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -175,6 +175,14 @@ if(ROBOT_BUS_BUILD_TESTS)
     endif()
     list(APPEND ROBOT_BUS_TEST_TARGETS ${t})
   endforeach()
+  if(ROBOT_BUS_ROS2)
+    # Real rclcpp integration; needs a sourced ROS 2 (not part of the stub-only CI build).
+    add_executable(ros2_bridge_service_failure tests/ros2_bridge_service_failure.cpp)
+    target_include_directories(ros2_bridge_service_failure PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/tests")
+    target_link_libraries(ros2_bridge_service_failure PRIVATE robot_bus robot_bus_msgs robot_bus_ros2_bridge)
+    add_dependencies(ros2_bridge_service_failure robot_bus_ffi_build)
+    list(APPEND ROBOT_BUS_TEST_TARGETS ros2_bridge_service_failure)
+  endif()
   add_custom_target(cpp_tests DEPENDS ${ROBOT_BUS_TEST_TARGETS})
 endif()
 

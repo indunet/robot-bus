@@ -13,6 +13,7 @@ from .config import (
     _require_bus_best_effort,
     _require_topic_qos,
 )
+from ..registry import resolve_mapper
 
 class Service:
     def __init__(self, parent: Ros2BridgeBuilder) -> None:
@@ -81,11 +82,12 @@ class ServicePair:
         self._direction = direction
 
     def mapper(self, mapper: Any) -> "ServiceReady":
+        """Mapper object, or ROS type name such as ``"std_srvs/srv/Trigger"``."""
         return ServiceReady(
             self._parent,
             self._ros_service,
             self._bus_service,
-            mapper,
+            resolve_mapper(mapper, "srv"),
             self._direction,
             self._ros_qos,
             self._bus_qos,
@@ -198,11 +200,12 @@ class ActionPair:
         self._direction = direction
 
     def mapper(self, mapper: Any) -> "ActionReady":
+        """Mapper object, or ROS type name such as ``"example_interfaces/action/Fibonacci"``."""
         return ActionReady(
             self._parent,
             self._ros_action,
             self._bus_action,
-            mapper,
+            resolve_mapper(mapper, "action"),
             self._direction,
             self._ros_qos,
             self._bus_qos,

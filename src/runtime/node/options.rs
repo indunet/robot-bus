@@ -67,10 +67,15 @@ impl NodeOptions {
         Self::empty_endpoints(host, "tcp")
     }
 
-    /// IPC under the default directory (`/tmp/robot_bus`). Prefer discover when the
-    /// broker uses a broker-id namespaced ipc dir.
+    /// Select a transport without pre-filling endpoints, so discovery can supply them.
+    pub fn for_discovery(transport: impl Into<String>) -> Self {
+        Self::empty_endpoints("localhost", transport)
+    }
+
+    /// IPC under the legacy fixed directory in the system temp directory.
+    /// Use discover for a broker with a per-instance IPC directory.
     pub fn ipc() -> Self {
-        Self::ipc_at(crate::transports::IPC_DIR)
+        Self::ipc_at(crate::transports::default_ipc_dir().to_string_lossy())
     }
 
     /// IPC under a custom directory (must match the broker's ipc binds).

@@ -11,7 +11,7 @@ resolver = "2"
 
 [package]
 name = "robot-bus"
-version = "2.3.2"
+version = "2.4.0"
 edition = "2024"
 description = "ZeroMQ message bus: broker routing and participant SDK"
 license = "Apache-2.0"
@@ -92,6 +92,7 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 serde_yaml = "0.9"
 socket2 = { version = "0.6.5", features = ["all"] }
+tempfile = "3"
 thiserror = "2"
 tokio = { version = "1", optional = true, features = ["rt-multi-thread", "macros", "net", "sync", "time", "signal", "io-util"] }
 tokio-stream = { version = "0.1", optional = true, features = ["sync", "net"] }

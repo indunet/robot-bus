@@ -149,8 +149,7 @@ pub(crate) fn py_discover_options(
 ) -> PyResult<RustNodeOptions> {
     let base = match transport {
         "tcp" => RustNodeOptions::tcp(),
-        "ipc" => RustNodeOptions::ipc(),
-        "inproc" => RustNodeOptions::inproc(),
+        "ipc" | "inproc" => RustNodeOptions::for_discovery(transport),
         "ws" => {
             #[cfg(feature = "ws")]
             {

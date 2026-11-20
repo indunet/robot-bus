@@ -191,12 +191,14 @@ where
                 QosProfile::keep_last(ctx.bus_qos.depth()),
             )?));
             let timeout = ctx.timeout;
+            let ros_service = ctx.ros_service.to_string();
             let pool = crate::runtime::WorkerPool::with_queue_capacity(2, 64);
             let srv = ctx
                 .ros_node
                 .create_async_service::<M::Ros, _>(
                     ros_topic_options(ctx.ros_service, ctx.ros_qos),
                     move |req: <M::Ros as ServiceIdl>::Request| {
+                        let ros_service = ros_service.clone();
                         health.rpc_start();
                         let deadline = Deadline::new(timeout);
                         let mapper = mapper.clone();
@@ -222,8 +224,38 @@ where
                                     Err(BusError::Protocol(format!("bridge service queue: {e}")))
                                 }
                             };
-                            health.rpc_finish(result.as_ref().err());
-                            result.unwrap_or_else(|e| mapper.error_response(&e.to_string()))
+                            health.rpc_finish_with(result.as_ref().err(), false);
+                            match result {
+                                Ok(response) => response,
+                                Err(e) => {
+                                    let reply =
+                                        mapper.error_response(&format!("bus call failed: {e}"));
+                                    if health.should_log_warn() {
+                                        match &reply {
+                                            Some(_) => log::warn!(
+                                                "service {ros_service}: bus call failed: {e}; \
+                                                 replied with the mapper's error_response"
+                                            ),
+                                            None => log::error!(
+                                                "service {ros_service}: bus call failed: {e}; \
+                                                 no reply sent, the ROS client will time out \
+                                                 (implement error_response on the mapper to reply \
+                                                 instead)"
+                                            ),
+                                        }
+                                    }
+                                    match reply {
+                                        Some(response) => response,
+                                        None => {
+                                            // rclrs sends whatever the callback returns and has no
+                                            // way to skip a reply, so park this request: the ROS
+                                            // caller times out instead of reading a default value.
+                                            drop((mapper, health));
+                                            std::future::pending().await
+                                        }
+                                    }
+                                }
+                            }
                         }
                     },
                 )

@@ -55,4 +55,6 @@ python scripts/test_doc_examples.py
 
 Follow [support status](docs/en/support.md), and attach the environment and commands when adding device or ROS runtime claims. Performance runs overwrite generated reports. See [performance](docs/en/performance.md).
 
+Record every user-visible change (new features, behavior changes, fixes, breaking changes) under the applicable version in [CHANGELOG.md](CHANGELOG.md).
+
 Before submitting, explain the user-visible change, checks run and remaining limitations. Add regression coverage for behavior changes; document compatibility changes alongside code.

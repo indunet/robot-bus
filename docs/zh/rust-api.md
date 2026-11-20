@@ -5,9 +5,9 @@
 `Cargo.toml`：
 
 ```toml
-robot-bus = "2.3.2"
+robot-bus = "2.4.0"
 # 本地：robot-bus = { path = "../robot-bus" }
-# 默认已启用 WebSocket RPC服务端（`ws` feature）；若需关闭：robot-bus = { version = "2.3.2", default-features = false }
+# 默认已启用 WebSocket RPC服务端（`ws` feature）；若需关闭：robot-bus = { version = "2.4.0", default-features = false }
 ```
 
 ## Broker启动
@@ -38,16 +38,20 @@ cargo run --bin robot_bus_broker
 
 | 角色 | tcp | ipc | inproc |
 |------|-----|-----|--------|
-| message XSUB / XPUB | `tcp://0.0.0.0:0`（启动后解析为实际端口） | `ipc:///tmp/robot_bus/<broker_id>/…` | `inproc://robot_bus/…` |
+| message XSUB / XPUB | `tcp://0.0.0.0:0`（启动后解析为实际端口） | broker 专用临时目录（见发现结果 `ipcDir`） | `inproc://robot_bus/…` |
 | service FE / BE | `tcp://0.0.0.0:0` | 同上 | 同上 |
 | action FE / BE | `tcp://0.0.0.0:0` | 同上 | 同上 |
 | API（WebSocket RPC + discover + console） | `0.0.0.0:15560` | — | — |
+
+Broker 在系统临时目录下创建独立的 IPC 子目录，关闭时清理。需要指定可写父目录时，使用 `RobotBusBroker::start_with_context_in`。IPC 需要 ZeroMQ 构建和操作系统同时支持；同机客户端应从发现结果取实际路径，而不是拼接目录名。
 
 仍可用 `--message-xsub-bind`等手动固定总线端口。SDK侧**推荐** `Context::new` → `Node::with_context`（本地 tcp）；便捷的 `Node::new`仍可用（私有 Context）。端点未填时自动对 `http://127.0.0.1:15560`做 discover；`Node::ipc` / `Node::inproc` / `Node::ws`分别走对应传输。
 
 ### HTTP发现（填地址，不选传输）
 
 对已知 API口请求 `GET /api/v1/discover`，拿到可连接的 ZMQ端点。传输方式仍由你指定；发现只填充位置：
+
+发现 IPC 端点时用 `NodeOptions::for_discovery("ipc")`，不要用预填了固定路径的 `NodeOptions::ipc()`。
 
 ```rust
 use robot_bus::{DiscoverOpts, Node, NodeOptions};

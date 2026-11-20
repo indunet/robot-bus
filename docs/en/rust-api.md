@@ -5,9 +5,9 @@ English | [中文](../zh/rust-api.md)
 `Cargo.toml`:
 
 ```toml
-robot-bus = "2.3.2"
+robot-bus = "2.4.0"
 # Local: robot-bus = { path = "../robot-bus" }
-# WebSocket RPC server (`ws` feature) is on by default; to disable: robot-bus = { version = "2.3.2", default-features = false }
+# WebSocket RPC server (`ws` feature) is on by default; to disable: robot-bus = { version = "2.4.0", default-features = false }
 ```
 
 ## Broker startup
@@ -38,16 +38,20 @@ cargo run --bin robot_bus_broker
 
 | Role | tcp | ipc | inproc |
 |------|-----|-----|--------|
-| message XSUB / XPUB | `tcp://0.0.0.0:0` (resolved to actual port after startup) | `ipc:///tmp/robot_bus/<broker_id>/…` | `inproc://robot_bus/…` |
+| message XSUB / XPUB | `tcp://0.0.0.0:0` (resolved to actual port after startup) | broker-specific temp directory (see discovery `ipcDir`) | `inproc://robot_bus/…` |
 | service FE / BE | `tcp://0.0.0.0:0` | same as above | same as above |
 | action FE / BE | `tcp://0.0.0.0:0` | same as above | same as above |
 | API (WebSocket RPC + discover + console) | `0.0.0.0:15560` | — | — |
+
+The broker creates its own IPC subdirectory in the system temp directory and removes it on shutdown. Use `RobotBusBroker::start_with_context_in` to supply a writable parent directory. IPC requires support from both the ZeroMQ build and the operating system. Local clients should discover the actual directory instead of constructing it.
 
 You can still manually pin bus ports with `--message-xsub-bind` and similar flags. On the SDK side, **prefer** `Context::new` → `Node::with_context` (local tcp); convenience `Node::new` still works (private Context). When endpoints are unset it auto-discovers against `http://127.0.0.1:15560`; `Node::ipc` / `Node::inproc` / `Node::ws` use the corresponding transport.
 
 ### HTTP discovery (fill addresses, not transport)
 
 Request `GET /api/v1/discover` on a known API port to obtain connectable ZMQ endpoints. You still choose the transport; discovery only fills in locations:
+
+For IPC discovery, use `NodeOptions::for_discovery("ipc")` instead of `NodeOptions::ipc()`, which pre-fills fixed paths.
 
 ```rust
 use robot_bus::{DiscoverOpts, Node, NodeOptions};

@@ -18,15 +18,19 @@ import android.content.Context
  */
 object RobotBusAndroid {
     @Volatile private var initialized = false
+    @Volatile internal var ipcRoot: String? = null
+        private set
 
     @JvmStatic
     @Synchronized
     fun init(context: Context?) {
-        if (initialized) {
-            return
+        if (!initialized) {
+            System.loadLibrary("robot_bus_c")
+            NativePreload.markRobotBusNativePreloaded()
+            initialized = true
         }
-        System.loadLibrary("robot_bus_c")
-        NativePreload.markRobotBusNativePreloaded()
-        initialized = true
+        if (context != null) {
+            ipcRoot = context.cacheDir.absolutePath
+        }
     }
 }
