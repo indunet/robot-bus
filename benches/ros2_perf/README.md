@@ -63,6 +63,8 @@ ROS2_PERF_SVC_ITERS=1000 ROS2_PERF_ACT_ITERS=1000 \
 - RMW固定 `rmw_fastrtps_cpp`；`ROS_LOCALHOST_ONLY=1`。
 - 单进程多 Node + `MultiThreadedExecutor`，与 robot-bus本机回环场景同级，不是跨机 DDS。
 - Message QoS：`KeepLast(2048)` + **best_effort**。
+- `ROS2_PERF_GOODPUT_RATE_STEP` 控制速率档位间距（默认 1 Hz），`ROS2_PERF_GOODPUT_SETTLE_MS` 控制排空时间（默认 100 ms）。`ROS2_PERF_EXECUTOR_THREADS` 默认 2，`ROS2_PERF_RPC_WARMUP` 可统一 service 和 action 的预热次数。
+- 标准输出里的 `RAW trial`、`RAW latency` 和 `RAW result` 与 bus 测试使用相同的 JSON 字段。直接运行 `ros2_perf_bench` 时，可通过 `ROS2_PERF_REPORT` 把报告写入本次实验目录。
 - 小 payload（64B）+ 同容器本机回环时，**UDP loopback有时会高于 SHM**：SHM管理段/同步有固定开销，优势更常体现在大消息或跨进程；且 Docker Desktop的 `/dev/shm`常受限。上次结果里 SHM延迟更低、吞吐更低，符合这一画像。
 - Apple宿主机不直接跑 ROS2；数字来自 Linux容器（Docker Desktop VM），和 macOS上的 `just perf`不在同一 OS，横比时注意环境差异。
 - 若报告里 max goodput顶到 `RATE_HI`，把 `ROS2_PERF_GOODPUT_RATE_HI`再调高后重跑。

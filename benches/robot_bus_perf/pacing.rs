@@ -1,11 +1,11 @@
 //! Shared pacing / goodput helpers for robot_bus_perf.
 
 use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::{Mutex, OnceLock};
 use std::thread;
 use std::time::{Duration, Instant};
 
-use crate::support::{env_f64, env_usize, now_ns};
-use robot_bus::Publisher;
+use crate::support::{LatencyStats, ScenarioResult, env_f64, env_usize};
 
 pub const PAYLOAD_LEN: usize = 64;
 pub const WARMUP: usize = 50;
@@ -17,6 +17,10 @@ pub fn svc_iters() -> usize {
 
 pub fn act_iters() -> usize {
     env_usize("ROBOT_BUS_PERF_ACT_ITERS", 5_000)
+}
+
+pub fn rpc_warmup(default: usize) -> usize {
+    env_usize("ROBOT_BUS_PERF_RPC_WARMUP", default).max(1)
 }
 
 pub fn msg_latency_samples() -> usize {
@@ -48,98 +52,217 @@ pub fn goodput_settle() -> Duration {
     Duration::from_millis(env_usize("ROBOT_BUS_PERF_GOODPUT_SETTLE_MS", 100) as u64)
 }
 
-/// Fixed message count when `ROBOT_BUS_PERF_GOODPUT_TRIAL_MSGS` is set (smoke).
-/// Default path uses [`publish_paced_for`] (wall-clock duration), not a capped count —
-/// a 50k cap made MHz targets finish in ~40ms and inflated reported goodput.
-pub fn trial_msg_count(rate_hz: u64) -> Option<usize> {
-    let fixed = goodput_trial_msgs();
-    if fixed > 0 {
-        Some(fixed)
-    } else {
-        let _ = rate_hz;
-        None
-    }
-}
 pub fn make_payload(ts_ns: u64) -> Vec<u8> {
     let mut buf = vec![0u8; PAYLOAD_LEN];
     buf[..8].copy_from_slice(&ts_ns.to_le_bytes());
     buf
 }
 
-pub fn read_ts(payload: &[u8]) -> Option<u64> {
-    if payload.len() < 8 {
-        return None;
-    }
-    let mut b = [0u8; 8];
-    b.copy_from_slice(&payload[..8]);
-    Some(u64::from_le_bytes(b))
+fn clock_ns() -> u64 {
+    static START: OnceLock<Instant> = OnceLock::new();
+    START.get_or_init(Instant::now).elapsed().as_nanos() as u64
 }
 
-pub fn wait_until(count: &AtomicUsize, target: usize, timeout: Duration) -> bool {
-    let deadline = Instant::now() + timeout;
-    while count.load(Ordering::Relaxed) < target {
-        if Instant::now() >= deadline {
-            return false;
+#[derive(Default, Clone, Copy)]
+struct Counts {
+    received: usize,
+    duplicates: usize,
+    stale: usize,
+    invalid: usize,
+}
+
+#[derive(Default)]
+pub struct TrialReceiver {
+    issued: AtomicUsize,
+    window: Mutex<ReceiveWindow>,
+}
+
+#[derive(Default)]
+struct ReceiveWindow {
+    epoch: u64,
+    seen: Vec<bool>,
+    counts: Counts,
+    record_latency: bool,
+    latency_ns: Vec<u64>,
+}
+
+impl TrialReceiver {
+    fn start(&self, record_latency: bool) -> u64 {
+        let mut window = self.window.lock().unwrap();
+        self.issued.store(0, Ordering::Relaxed);
+        window.epoch += 1;
+        window.seen.clear();
+        window.counts = Counts::default();
+        window.record_latency = record_latency;
+        window.latency_ns.clear();
+        window.epoch
+    }
+
+    fn payload(&self, epoch: u64, sequence: usize) -> Vec<u8> {
+        let mut payload = make_payload(clock_ns());
+        payload[8..16].copy_from_slice(&epoch.to_le_bytes());
+        payload[16..24].copy_from_slice(&(sequence as u64).to_le_bytes());
+        self.issued.store(sequence + 1, Ordering::Release);
+        payload
+    }
+
+    pub fn receive(&self, payload: &[u8]) {
+        let mut window = self.window.lock().unwrap();
+        if payload.len() != PAYLOAD_LEN {
+            window.counts.invalid += 1;
+            return;
         }
-        thread::sleep(Duration::from_millis(1));
-    }
-    true
-}
-
-fn loss_pct(sent: usize, received: usize) -> f64 {
-    if sent == 0 {
-        100.0
-    } else if received >= sent {
-        0.0
-    } else {
-        100.0 * (sent - received) as f64 / sent as f64
-    }
-}
-
-/// Publish aiming for `rate_hz` until `duration` elapses (sustained trial).
-pub fn publish_paced_for(
-    publisher: &Publisher,
-    topic: &str,
-    rate_hz: f64,
-    duration: Duration,
-) -> (usize, Duration) {
-    let interval = Duration::from_secs_f64(1.0 / rate_hz.max(1.0));
-    let t0 = Instant::now();
-    let deadline = t0 + duration;
-    let mut next = t0;
-    let mut sent = 0usize;
-    while Instant::now() < deadline {
-        if publisher.publish(topic, &make_payload(now_ns())).is_err() {
-            break;
+        let epoch = u64::from_le_bytes(payload[8..16].try_into().unwrap());
+        if epoch != window.epoch {
+            window.counts.stale += 1;
+            return;
         }
-        sent += 1;
-        next += interval;
-        wait_deadline(next);
+        let sequence = u64::from_le_bytes(payload[16..24].try_into().unwrap());
+        if sequence >= self.issued.load(Ordering::Acquire) as u64 {
+            window.counts.invalid += 1;
+            return;
+        }
+        let sequence = sequence as usize;
+        if sequence >= window.seen.len() {
+            window.seen.resize(sequence + 1, false);
+        }
+        if std::mem::replace(&mut window.seen[sequence], true) {
+            window.counts.duplicates += 1;
+            return;
+        }
+        window.counts.received += 1;
+        if window.record_latency {
+            let sent = u64::from_le_bytes(payload[..8].try_into().unwrap());
+            if let Some(latency) = clock_ns().checked_sub(sent) {
+                window.latency_ns.push(latency);
+            }
+        }
     }
-    (sent, t0.elapsed())
+
+    fn snapshot(&self) -> (u64, Counts) {
+        let window = self.window.lock().unwrap();
+        (clock_ns(), window.counts)
+    }
 }
 
-/// Publish `n` messages aiming for `rate_hz`. Uses sleep for coarse gaps and
-/// busy-wait for sub-ms deadlines (macOS sleep granularity is ~1ms).
-pub fn publish_paced(
-    publisher: &Publisher,
-    topic: &str,
-    n: usize,
-    rate_hz: f64,
-) -> (usize, Duration) {
-    let interval = Duration::from_secs_f64(1.0 / rate_hz.max(1.0));
-    let t0 = Instant::now();
-    let mut next = t0;
-    let mut sent = 0usize;
-    for _ in 0..n {
-        if publisher.publish(topic, &make_payload(now_ns())).is_err() {
-            break;
-        }
-        sent += 1;
-        next += interval;
-        wait_deadline(next);
+/// Publisher and subscriber run independently. Keep latency, warmup and each
+/// throughput trial in separate epochs even when the transport queues overlap.
+pub fn measure_pubsub<E: std::fmt::Display>(
+    transport: &str,
+    scenario: &str,
+    receiver: &TrialReceiver,
+    mut publish: impl FnMut(&[u8]) -> Result<(), E>,
+) -> ScenarioResult {
+    for _ in 0..WARMUP {
+        let _ = publish(&make_payload(clock_ns()));
     }
-    (sent, t0.elapsed())
+    thread::sleep(Duration::from_millis(100));
+
+    let latency_epoch = receiver.start(true);
+    let latency_start = clock_ns();
+    for sequence in 0..msg_latency_samples() {
+        if let Err(err) = publish(&receiver.payload(latency_epoch, sequence)) {
+            return ScenarioResult::skipped(transport, scenario, format!("latency publish: {err}"));
+        }
+        let deadline = Instant::now() + Duration::from_secs(2);
+        while receiver.snapshot().1.received <= sequence {
+            if Instant::now() >= deadline {
+                let window = receiver.window.lock().unwrap();
+                println!(
+                    "RAW latency {}",
+                    serde_json::json!({
+                        "transport": transport, "scenario": scenario,
+                        "start_ns": latency_start, "end_ns": clock_ns(),
+                        "sent": sequence + 1, "received": window.counts.received,
+                        "samples_ns": window.latency_ns, "error": "latency sample timed out",
+                    })
+                );
+                return ScenarioResult::skipped(
+                    transport,
+                    scenario,
+                    format!("latency sample {sequence} timed out"),
+                );
+            }
+            thread::sleep(Duration::from_millis(1));
+        }
+    }
+    let latency = {
+        let mut window = receiver.window.lock().unwrap();
+        let samples = std::mem::take(&mut window.latency_ns);
+        println!(
+            "RAW latency {}",
+            serde_json::json!({
+                "transport": transport, "scenario": scenario,
+                "start_ns": latency_start, "end_ns": clock_ns(),
+                "sent": msg_latency_samples(), "received": window.counts.received,
+                "duplicates": window.counts.duplicates, "stale": window.counts.stale,
+                "invalid": window.counts.invalid, "samples_ns": samples,
+            })
+        );
+        LatencyStats::from_ns(samples)
+    };
+
+    let result = find_max_goodput(transport, |rate_hz| {
+        let epoch = receiver.start(false);
+        let trial_duration = Duration::from_secs_f64(goodput_trial_secs());
+        let interval = Duration::from_secs_f64(1.0 / rate_hz.max(1) as f64);
+        let fixed = goodput_trial_msgs();
+        let start_ns = clock_ns();
+        let start = Instant::now();
+        let mut next = start;
+        let mut sent = 0;
+        while if fixed > 0 {
+            sent < fixed
+        } else {
+            start.elapsed() < trial_duration
+        } {
+            publish(&receiver.payload(epoch, sent)).map_err(|err| format!("publish: {err}"))?;
+            sent += 1;
+            next += interval;
+            wait_deadline(next);
+        }
+        let (send_end_ns, at_send_end) = receiver.snapshot();
+        thread::sleep(goodput_settle());
+        let (settled_ns, final_counts) = receiver.snapshot();
+        let trial = GoodputTrial {
+            target_hz: rate_hz,
+            sent,
+            received_at_send_end: at_send_end.received,
+            received: final_counts.received,
+            elapsed: Duration::from_nanos(send_end_ns - start_ns),
+        };
+        let valid = trial.received_at_send_end <= trial.received
+            && trial.received <= trial.sent
+            && final_counts.invalid == 0;
+        println!(
+            "RAW trial {}",
+            serde_json::json!({
+                "transport": transport, "scenario": scenario, "epoch": epoch,
+                "target_hz": rate_hz, "sent": sent,
+                "recv_send": trial.received_at_send_end, "recv_final": trial.received,
+                "duplicates": final_counts.duplicates, "stale": final_counts.stale, "invalid": final_counts.invalid,
+                "start_ns": start_ns, "send_end_ns": send_end_ns, "settled_ns": settled_ns,
+                "valid": valid,
+            })
+        );
+        if !valid {
+            return Err(format!("invalid receive counts in trial {epoch}"));
+        }
+        Ok(trial)
+    });
+
+    match result {
+        Ok(goodput) => ScenarioResult::ok_message(
+            transport,
+            scenario,
+            goodput.sent,
+            goodput.received_at_send_end,
+            goodput.received,
+            goodput.elapsed,
+            latency,
+        ),
+        Err(note) => ScenarioResult::skipped(transport, scenario, note),
+    }
 }
 
 pub fn wait_deadline(deadline: Instant) {
@@ -157,7 +280,15 @@ pub fn wait_deadline(deadline: Instant) {
     }
 }
 
-pub struct GoodputTrial {
+fn loss_pct(sent: usize, received: usize) -> f64 {
+    if sent == 0 {
+        100.0
+    } else {
+        100.0 * (sent - received) as f64 / sent as f64
+    }
+}
+
+struct GoodputTrial {
     pub target_hz: u64,
     pub sent: usize,
     /// Receives observed by end of the send window (before settle).
@@ -177,29 +308,31 @@ fn trial_sustains_rate(t: &GoodputTrial) -> bool {
     pub_rate >= 0.90 * target && sub_rate >= 0.90 * target
 }
 
-pub fn find_max_goodput(
+fn find_max_goodput(
     label: &str,
     mut trial: impl FnMut(u64) -> Result<GoodputTrial, String>,
 ) -> Result<GoodputTrial, String> {
     let max_loss = max_loss_pct();
-    let mut lo = goodput_rate_lo();
-    let mut hi = goodput_rate_hi().max(lo);
+    let step = env_usize("ROBOT_BUS_PERF_GOODPUT_RATE_STEP", 1).max(1) as u64;
+    let rate_lo = goodput_rate_lo();
+    let mut lo = 0;
+    let mut hi = (goodput_rate_hi().max(rate_lo) - rate_lo) / step;
+    let rate_hi = rate_lo + hi * step;
     let mut best: Option<GoodputTrial> = None;
-    let rate_lo = lo;
-    let rate_hi = hi;
 
     println!(
-        "  … {label} max goodput: binary search {lo}..={hi} Hz, loss≤{max_loss:.1}%, trial≈{:.1}s (or fixed msgs)",
+        "  … {label} max goodput: binary search {rate_lo}..={rate_hi} Hz (step {step}), loss≤{max_loss:.1}%, trial≈{:.1}s (or fixed msgs)",
         goodput_trial_secs()
     );
 
     while lo <= hi {
         let mid = lo + (hi - lo) / 2;
-        let t = trial(mid)?;
+        let t = trial(rate_lo + mid * step)?;
         let loss = loss_pct(t.sent, t.received);
         let sustained = trial_sustains_rate(&t);
         println!(
-            "  …   try {mid} Hz → sent={} recv_send={} recv_final={} loss={loss:.2}% pub={:.0}/s sub_send={:.0}/s sustained={}",
+            "  …   try {} Hz → sent={} recv_send={} recv_final={} loss={loss:.2}% pub={:.0}/s sub_send={:.0}/s sustained={}",
+            t.target_hz,
             t.sent,
             t.received_at_send_end,
             t.received,
@@ -223,4 +356,104 @@ pub fn find_max_goodput(
             "no rate in {rate_lo}..={rate_hi} Hz met loss≤{max_loss:.1}% at ≥90% of target pace"
         )
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn delayed_and_duplicate_messages_cannot_count_as_current_deliveries() {
+        let receiver = TrialReceiver::default();
+        let warmup = make_payload(clock_ns());
+        let old_epoch = receiver.start(false);
+        let queued = receiver.payload(old_epoch, 0);
+        let epoch = receiver.start(true);
+        let first = receiver.payload(epoch, 0);
+        receiver.receive(&warmup);
+        receiver.receive(&queued);
+        receiver.receive(&first);
+        let at_send_end = receiver.snapshot().1;
+        assert_eq!(at_send_end.received, 1);
+        assert_eq!(at_send_end.stale, 2);
+
+        receiver.receive(&first);
+        assert_eq!(receiver.snapshot().1.duplicates, 1);
+        let second = receiver.payload(epoch, 1);
+        receiver.receive(&second);
+        let settled = receiver.snapshot().1;
+        assert_eq!(settled.received, 2);
+        assert_eq!(receiver.window.lock().unwrap().latency_ns.len(), 2);
+    }
+
+    #[test]
+    fn websocket_backlog_does_not_inflate_the_next_trial() {
+        use std::sync::Arc;
+
+        use robot_bus::{HighWaterMark, Node, Publisher, RobotBusBroker};
+
+        let _guard = crate::support::lock_broker();
+        let mut config = crate::support::perf_broker_config();
+        config.ws.listen = "127.0.0.1:0".parse().unwrap();
+        let broker = RobotBusBroker::start(config).unwrap();
+        let mut node = Node::ws_at("perf-ws-late-packets", &broker.api_url());
+        let receiver = Arc::new(TrialReceiver::default());
+        let topic = "perf/ws/late-packets";
+        node.create_subscription_raw(
+            topic,
+            Arc::new({
+                let receiver = Arc::clone(&receiver);
+                move |payload| receiver.receive(payload)
+            }),
+            None,
+        )
+        .unwrap();
+        let publisher =
+            Publisher::with_hwm(Some(&broker.discover.message_xsub), HighWaterMark::STREAM)
+                .unwrap();
+
+        let previous = receiver.start(false);
+        let probe = receiver.payload(previous, 0);
+        let deadline = Instant::now() + Duration::from_secs(3);
+        while receiver.snapshot().1.received == 0 {
+            assert!(
+                Instant::now() < deadline,
+                "WS subscription did not become ready"
+            );
+            publisher.publish(topic, &probe).unwrap();
+            node.spin_once(Some(Duration::from_millis(20))).unwrap();
+        }
+
+        publisher
+            .publish(topic, &receiver.payload(previous, 1))
+            .unwrap();
+        // Leave the WS callback queue undrained when moving to the next trial.
+        let epoch = receiver.start(false);
+        let sample = receiver.payload(epoch, 0);
+        publisher.publish(topic, &sample).unwrap();
+        publisher.publish(topic, &sample).unwrap();
+        let deadline = Instant::now() + Duration::from_secs(3);
+        loop {
+            let counts = receiver.snapshot().1;
+            if counts.stale > 0 && counts.duplicates > 0 {
+                assert_eq!(counts.received, 1);
+                assert_eq!(counts.invalid, 0);
+                println!(
+                    "WS trial sent=1 raw_arrivals={} unique={} stale={} duplicates={}",
+                    counts.received + counts.stale + counts.duplicates,
+                    counts.received,
+                    counts.stale,
+                    counts.duplicates,
+                );
+                break;
+            }
+            assert!(
+                Instant::now() < deadline,
+                "expected late and duplicate WS frames"
+            );
+            node.spin_once(Some(Duration::from_millis(20))).unwrap();
+        }
+        drop(node);
+        broker.stop().unwrap();
+    }
 }

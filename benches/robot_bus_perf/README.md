@@ -56,13 +56,17 @@ ROBOT_BUS_PERF_ONLY=local cargo run --release --bin robot_bus_perf --features ws
 | `ROBOT_BUS_PERF_GOODPUT_TRIAL_SECS` | `1.0` | 每档试验时长（秒）；默认按时长发送，避免高速率被条数上限截成短突发 |
 | `ROBOT_BUS_PERF_GOODPUT_TRIAL_MSGS` | （空） | 若设置则改为固定条数（冒烟） |
 | `ROBOT_BUS_PERF_GOODPUT_RATE_LO` / `_HI` | `1000` / `2000000` | 二分搜索速率范围（Hz） |
+| `ROBOT_BUS_PERF_GOODPUT_RATE_STEP` | `1` | 相邻搜索档位的间距（Hz） |
+| `ROBOT_BUS_PERF_GOODPUT_SETTLE_MS` | `100` | 停止发送后继续收包的时间 |
 | `ROBOT_BUS_PERF_MSG_LATENCY_SAMPLES` | `5000` | 限速延迟抽样次数 |
 | `ROBOT_BUS_PERF_SVC_ITERS` | `10000` | service call次数 |
 | `ROBOT_BUS_PERF_ACT_ITERS` | `5000` | action send_goal次数 |
+| `ROBOT_BUS_PERF_RPC_WARMUP` | service `50` / action `10` | 每个 RPC 场景的预热次数 |
 | `ROBOT_BUS_PERF_SKIP_REPORT` | （空） | 设为非空且非 `0` 时不覆盖 `docs/*perf-report.md` |
 
 ## 说明
 
 - Message HWM=2048（仅 bench）；与 trial长度配合，避免深队列把过载藏掉。
+- 标准输出中的 `RAW trial`、`RAW latency` 和 `RAW result` 使用 JSON。保留完整输出可核对每档的唯一接收数、跨轮消息、重复、发送与排空边界，以及单条延迟样本。
 - 指标为单机本机回环，机器相关，不作为 CI门槛。
 - 与 ROS2对比见 [`../ros2_perf/`](../ros2_perf/) / [`docs/zh/ros2-perf-report.md`](../../docs/zh/ros2-perf-report.md)；注意 macOS本机 vs Linux容器环境差异。

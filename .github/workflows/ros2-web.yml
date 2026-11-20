@@ -2,34 +2,50 @@ name: ROS2 browser acceptance
 
 on:
   push:
-    branches: [master, main]
   pull_request:
   workflow_dispatch:
 
 jobs:
-  humble-python-chromium:
-    runs-on: ubuntu-22.04
+  python-chromium:
+    name: ${{ matrix.ros_distro }}-python-chromium
+    runs-on: ${{ matrix.runner }}
     timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - ros_distro: humble
+            runner: ubuntu-22.04
+            ros_base: ros:humble-ros-base-jammy
+          - ros_distro: jazzy
+            runner: ubuntu-24.04
+            ros_base: ros:jazzy-ros-base-noble
     steps:
       - uses: actions/checkout@v6
-      - name: Build real Humble environment and SDKs from this checkout
-        run: docker build -f examples/ros2_web/Dockerfile -t robot-bus-ros2-web:test .
+      - name: Build ROS environment and SDKs from this checkout
+        run: |
+          set -o pipefail
+          mkdir -p artifacts
+          docker build -f examples/ros2_web/Dockerfile \
+            --build-arg ROS_BASE="${{ matrix.ros_base }}" \
+            -t robot-bus-ros2-web:test . 2>&1 | tee artifacts/build.log
       - name: Run browser through Python bridge to a real ROS peer
         run: |
+          set -o pipefail
           docker run --name ros2-web-acceptance --init \
             -e ROBOT_BUS_TEST_COMMIT="${{ github.sha }}" \
-            robot-bus-ros2-web:test bash test.sh
+            -e ROBOT_BUS_TEST_ROS_DISTRO="${{ matrix.ros_distro }}" \
+            robot-bus-ros2-web:test bash test.sh 2>&1 | tee artifacts/container.log
       - name: Collect runtime evidence even after failure
         if: always()
         run: |
           mkdir -p artifacts
           if docker container inspect ros2-web-acceptance >/dev/null 2>&1; then
-            docker logs ros2-web-acceptance > artifacts/container.log 2>&1
             docker cp ros2-web-acceptance:/workspace/examples/ros2_web/test-results artifacts/ros2-web
           fi
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: humble-python-chromium-evidence
+          name: ${{ matrix.ros_distro }}-python-chromium-evidence
           path: artifacts/
           retention-days: 14

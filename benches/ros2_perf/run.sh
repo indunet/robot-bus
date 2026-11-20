@@ -28,6 +28,8 @@ GOODPUT_TRIAL_MSGS="${ROS2_PERF_GOODPUT_TRIAL_MSGS:-}"
 GOODPUT_TRIAL_SECS="${ROS2_PERF_GOODPUT_TRIAL_SECS:-1.0}"
 GOODPUT_RATE_LO="${ROS2_PERF_GOODPUT_RATE_LO:-500}"
 GOODPUT_RATE_HI="${ROS2_PERF_GOODPUT_RATE_HI:-500000}"
+GOODPUT_RATE_STEP="${ROS2_PERF_GOODPUT_RATE_STEP:-1}"
+GOODPUT_SETTLE_MS="${ROS2_PERF_GOODPUT_SETTLE_MS:-100}"
 MAX_LOSS_PCT="${ROS2_PERF_MAX_LOSS_PCT:-1.0}"
 ONLY="${ROS2_PERF_ONLY:-}"
 
@@ -79,6 +81,8 @@ run_bench_local() {
   export ROS2_PERF_GOODPUT_TRIAL_SECS="${GOODPUT_TRIAL_SECS}"
   export ROS2_PERF_GOODPUT_RATE_LO="${GOODPUT_RATE_LO}"
   export ROS2_PERF_GOODPUT_RATE_HI="${GOODPUT_RATE_HI}"
+  export ROS2_PERF_GOODPUT_RATE_STEP="${GOODPUT_RATE_STEP}"
+  export ROS2_PERF_GOODPUT_SETTLE_MS="${GOODPUT_SETTLE_MS}"
   export ROS2_PERF_MAX_LOSS_PCT="${MAX_LOSS_PCT}"
   if [[ -n "${ONLY}" ]]; then
     export ROS2_PERF_ONLY="${ONLY}"
@@ -185,15 +189,25 @@ docker exec \
   -e ROS2_PERF_GOODPUT_TRIAL_SECS="${GOODPUT_TRIAL_SECS}" \
   -e ROS2_PERF_GOODPUT_RATE_LO="${GOODPUT_RATE_LO}" \
   -e ROS2_PERF_GOODPUT_RATE_HI="${GOODPUT_RATE_HI}" \
+  -e ROS2_PERF_GOODPUT_RATE_STEP="${GOODPUT_RATE_STEP}" \
+  -e ROS2_PERF_GOODPUT_SETTLE_MS="${GOODPUT_SETTLE_MS}" \
+  -e ROS2_PERF_EXECUTOR_THREADS \
+  -e ROS2_PERF_RPC_WARMUP \
   -e ROS2_PERF_MAX_LOSS_PCT="${MAX_LOSS_PCT}" \
   -e ROS2_PERF_ONLY="${ONLY}" \
   -w "${WS_IN_CONTAINER}/ros2_perf" \
   "${CONTAINER}" \
   bash ./run.sh "${mode_args[@]}"
 
+if [[ "${BUILD_ONLY}" -eq 1 ]]; then
+  exit 0
+fi
+
 echo "==> copying reports back"
 docker exec "${CONTAINER}" mkdir -p "${WS_IN_CONTAINER}/docs/zh" "${WS_IN_CONTAINER}/docs/en"
 docker cp "${CONTAINER}:${WS_IN_CONTAINER}/docs/zh/ros2-perf-report.md" "${REPORT_HOST_ZH}"
-docker cp "${CONTAINER}:${WS_IN_CONTAINER}/docs/en/ros2-perf-report.md" "${REPORT_HOST_EN}"
 echo "done: ${REPORT_HOST_ZH}"
-echo "done: ${REPORT_HOST_EN}"
+if [[ "${MODE}" == both ]]; then
+  docker cp "${CONTAINER}:${WS_IN_CONTAINER}/docs/en/ros2-perf-report.md" "${REPORT_HOST_EN}"
+  echo "done: ${REPORT_HOST_EN}"
+fi

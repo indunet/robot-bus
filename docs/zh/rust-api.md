@@ -282,7 +282,7 @@ node.create_timer(
 
 在 `Node::ws` / `Node::ws_at` 上，将配置传给 `create_subscription_with_qos` 或 `create_subscription_raw_with_qos`。例如：`node.create_subscription_raw_with_qos("/pose", QosProfile::keep_last(1), std::sync::Arc::new(|_bytes| {}), None)?;`。不传深度或 depth ≤ 0 使用 64，上限为 1,048,576。同一过滤器的多个回调共享队列，有效深度必须一致。
 
-KeepLast 仅影响**每个订阅过滤器在服务端的待发送队列**，不影响客户端回调队列、ZMQ 队列或网络缓冲。前缀订阅匹配的所有 topic 共用一个队列；已取出发送的消息无法撤回，也不保证可靠送达。**原生 ZMQ 目前仍只将深度映射为 HWM；HWM 不保证移除最旧消息，该传输上的 KeepLast 历史语义仍待实现。** WS 发布和 RPC 的深度参数忽略。
+KeepLast 限制**服务端待发送队列，以及 Rust WS Node 中等待回调的队列**。每个订阅过滤器在这两个阶段各有自己的队列，前缀过滤器匹配的所有 Topic 共用该过滤器的队列。已进入网络缓冲或正在执行回调的消息会继续处理。原生 ZMQ 队列使用 HWM，消息传递仍为尽力而为。WS 发布和 RPC 忽略深度参数。
 
 启用 `ws` 即提供 `GET /api/v1/subscriptions`，无需控制台。控制台 Topics 页显示 KeepLast 深度、待发送数量/容量和溢出丢弃数。API 还返回 `received`（入队尝试）、`dequeued`（取出发送，不代表送达）。取消后移除该行；`totalDropped` 保留已关闭订阅的溢出计数，服务端重启归零。统计不包含原生传输丢包，读取期间队列仍可变化。
 

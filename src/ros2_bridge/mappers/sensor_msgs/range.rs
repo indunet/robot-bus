@@ -15,6 +15,8 @@ pub(crate) fn range_to_bus(
     }
 }
 
+// Jazzy adds variance, which has no field in the bus message.
+#[allow(clippy::needless_update)]
 pub(crate) fn range_to_ros(
     bus: crate::sensor_msgs::msg::v1::Range,
 ) -> ros_env::sensor_msgs::msg::Range {
@@ -27,6 +29,7 @@ pub(crate) fn range_to_ros(
         min_range: bus.min_range,
         max_range: bus.max_range,
         range: bus.range,
+        ..Default::default()
     }
 }
 

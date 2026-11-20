@@ -41,6 +41,7 @@ constexpr double kDefaultMaxLossPct = 1.0;
 constexpr size_t kMsgHistory = 2048;
 
 struct LatencyStats {
+  std::vector<uint64_t> samples_ns;
   size_t count = 0;
   double p50_us = 0;
   double p95_us = 0;
@@ -66,30 +67,41 @@ uint64_t now_ns()
 {
   return static_cast<uint64_t>(
     std::chrono::duration_cast<std::chrono::nanoseconds>(
-      std::chrono::system_clock::now().time_since_epoch())
+      std::chrono::steady_clock::now().time_since_epoch())
       .count());
 }
 
-std::vector<uint8_t> make_payload(uint64_t ts_ns)
+std::vector<uint8_t> make_payload(uint64_t ts_ns, uint64_t epoch = 0, uint64_t sequence = 0)
 {
   std::vector<uint8_t> buf(kPayloadLen, 0);
-  for (size_t i = 0; i < 8; ++i) {
-    buf[i] = static_cast<uint8_t>((ts_ns >> (8 * i)) & 0xff);
+  const uint64_t values[] = {ts_ns, epoch, sequence};
+  for (size_t field = 0; field < 3; ++field) {
+    for (size_t byte = 0; byte < 8; ++byte) {
+      buf[field * 8 + byte] = static_cast<uint8_t>(values[field] >> (8 * byte));
+    }
   }
   return buf;
 }
 
-bool read_ts(const std::vector<uint8_t> & payload, uint64_t & out)
+uint64_t read_u64(const std::vector<uint8_t> & payload, size_t offset)
 {
-  if (payload.size() < 8) {
-    return false;
+  uint64_t value = 0;
+  for (size_t byte = 0; byte < 8; ++byte) {
+    value |= static_cast<uint64_t>(payload[offset + byte]) << (8 * byte);
   }
-  uint64_t ts = 0;
-  for (size_t i = 0; i < 8; ++i) {
-    ts |= static_cast<uint64_t>(payload[i]) << (8 * i);
+  return value;
+}
+
+void raw_samples(std::ostream & out, const std::vector<uint64_t> & samples)
+{
+  out << '[';
+  for (size_t i = 0; i < samples.size(); ++i) {
+    if (i > 0) {
+      out << ',';
+    }
+    out << samples[i];
   }
-  out = ts;
-  return true;
+  out << ']';
 }
 
 double percentile_us(std::vector<uint64_t> & samples_ns, double p)
@@ -120,12 +132,13 @@ LatencyStats from_ns(std::vector<uint64_t> samples)
   s.p95_us = percentile_us(copy, 0.95);
   copy = samples;
   s.p99_us = percentile_us(copy, 0.99);
+  s.samples_ns = std::move(samples);
   return s;
 }
 
 ScenarioResult make_ok_message(
   const std::string & transport, const std::string & scenario,
-  size_t sent, size_t received, double elapsed_s, LatencyStats latency)
+  size_t sent, size_t received_at_send_end, size_t received, double elapsed_s, LatencyStats latency)
 {
   ScenarioResult r;
   r.transport = transport;
@@ -134,7 +147,7 @@ ScenarioResult make_ok_message(
   r.received = received;
   r.elapsed_s = elapsed_s;
   r.publish_per_s = elapsed_s > 0 ? sent / elapsed_s : 0;
-  r.subscribe_per_s = elapsed_s > 0 ? received / elapsed_s : 0;
+  r.subscribe_per_s = elapsed_s > 0 ? received_at_send_end / elapsed_s : 0;
   r.delivery_pct = sent == 0 ? 0.0 : (100.0 * static_cast<double>(received) / static_cast<double>(sent));
   r.latency = std::move(latency);
   r.is_message = true;
@@ -214,9 +227,6 @@ double loss_pct(size_t sent, size_t received)
   if (sent == 0) {
     return 100.0;
   }
-  if (received >= sent) {
-    return 0.0;
-  }
   return 100.0 * static_cast<double>(sent - received) / static_cast<double>(sent);
 }
 
@@ -238,19 +248,7 @@ public:
 
     sub_ = sub_node_->create_subscription<std_msgs::msg::UInt8MultiArray>(
       topic, msg_qos(),
-      [this](const std_msgs::msg::UInt8MultiArray::SharedPtr msg) {
-        if (record_latency_.load()) {
-          uint64_t sent = 0;
-          if (read_ts(msg->data, sent)) {
-            const uint64_t now = now_ns();
-            if (now >= sent) {
-              std::lock_guard<std::mutex> lock(mu_);
-              latencies_.push_back(now - sent);
-            }
-          }
-        }
-        count_.fetch_add(1, std::memory_order_relaxed);
-      });
+      [this](const std_msgs::msg::UInt8MultiArray::SharedPtr msg) { receive(msg->data); });
 
     pub_ = pub_node_->create_publisher<std_msgs::msg::UInt8MultiArray>(topic, msg_qos());
   }
@@ -271,59 +269,51 @@ public:
       publish_one(now_ns());
     }
     std::this_thread::sleep_for(100ms);
-    count_.store(0);
-    {
-      std::lock_guard<std::mutex> lock(mu_);
-      latencies_.clear();
-    }
-
-    const size_t latency_samples = env_size("ROS2_PERF_MSG_LATENCY_SAMPLES", kDefaultMsgLatencySamples);
-
-    // Phase 1: paced one-way latency.
-    record_latency_.store(true);
+    start_window(true);
+    const auto latency_start = now_ns();
+    const size_t latency_samples =
+      env_size("ROS2_PERF_MSG_LATENCY_SAMPLES", kDefaultMsgLatencySamples);
     std::cout << "  … latency samples: " << latency_samples << std::endl;
     for (size_t i = 0; i < latency_samples; ++i) {
-      const size_t before = count_.load();
-      publish_one(now_ns());
-      if (!wait_until([this, before] { return count_.load() >= before + 1; }, 2s)) {
-        return make_skip(transport_, scenario, "latency sample timed out");
+      publish_one(now_ns(), i);
+      if (!wait_until([this, i] { return snapshot().second.received > i; }, 2s)) {
+        write_latency(scenario, latency_start, i + 1, "latency sample timed out");
+        return make_skip(transport_, scenario, "latency sample timed out at " + std::to_string(i));
       }
     }
-    LatencyStats latency;
-    {
-      std::lock_guard<std::mutex> lock(mu_);
-      latency = from_ns(latencies_);
-    }
+    write_latency(scenario, latency_start, latency_samples, nullptr);
+    LatencyStats latency = from_ns(latencies_);
 
-    // Phase 2: binary-search max goodput at loss ≤ threshold.
-    record_latency_.store(false);
     const double max_loss = env_double("ROS2_PERF_MAX_LOSS_PCT", kDefaultMaxLossPct);
     const size_t settle_ms = env_size("ROS2_PERF_GOODPUT_SETTLE_MS", kDefaultGoodputSettleMs);
-    size_t lo = env_size("ROS2_PERF_GOODPUT_RATE_LO", kDefaultGoodputRateLo);
-    size_t hi = env_size("ROS2_PERF_GOODPUT_RATE_HI", kDefaultGoodputRateHi);
-    if (hi < lo) {
-      hi = lo;
-    }
+    const size_t step = std::max<size_t>(1, env_size("ROS2_PERF_GOODPUT_RATE_STEP", 1));
+    const size_t rate_lo = env_size("ROS2_PERF_GOODPUT_RATE_LO", kDefaultGoodputRateLo);
+    const size_t limit = std::max(rate_lo, env_size("ROS2_PERF_GOODPUT_RATE_HI", kDefaultGoodputRateHi));
+    size_t lo = 0;
+    size_t hi = (limit - rate_lo) / step;
 
-    std::cout << "  … max goodput: binary search " << lo << "..=" << hi
-              << " Hz, loss≤" << std::fixed << std::setprecision(1) << max_loss
+    std::cout << "  … max goodput: binary search " << rate_lo << "..=" << rate_lo + hi * step
+              << " Hz (step " << step << "), loss≤" << std::fixed << std::setprecision(1) << max_loss
               << "%, trial≈" << env_double("ROS2_PERF_GOODPUT_TRIAL_SECS", kDefaultGoodputTrialSecs)
               << "s (KeepLast=" << kMsgHistory
               << ", best_effort)" << std::endl;
 
     bool have_best = false;
     size_t best_sent = 0;
-    size_t best_recv = 0;
+    size_t best_recv_send = 0;
+    size_t best_recv_final = 0;
     double best_elapsed = 0;
     size_t best_target = 0;
 
     while (lo <= hi) {
       const size_t mid = lo + (hi - lo) / 2;
-      count_.store(0);
+      const size_t rate = rate_lo + mid * step;
+      start_window(false);
       const size_t fixed_msgs = trial_msg_count_fixed();
       const double trial_secs =
         env_double("ROS2_PERF_GOODPUT_TRIAL_SECS", kDefaultGoodputTrialSecs);
-      const double interval_s = 1.0 / static_cast<double>(std::max<size_t>(mid, 1));
+      const double interval_s = 1.0 / static_cast<double>(std::max<size_t>(rate, 1));
+      const auto start_ns = now_ns();
       const auto t0 = std::chrono::steady_clock::now();
       const auto trial_deadline =
         t0 + std::chrono::duration_cast<std::chrono::steady_clock::duration>(
@@ -338,7 +328,7 @@ public:
         } else if (std::chrono::steady_clock::now() >= trial_deadline) {
           break;
         }
-        publish_one(now_ns());
+        publish_one(now_ns(), sent);
         ++sent;
         next += std::chrono::duration_cast<std::chrono::steady_clock::duration>(
           std::chrono::duration<double>(interval_s));
@@ -354,18 +344,32 @@ public:
           }
         }
       }
-      const auto t_send_end = std::chrono::steady_clock::now();
-      const size_t received_at_send_end = count_.load();
+      const auto [send_end_ns, send_counts] = snapshot();
       std::this_thread::sleep_for(std::chrono::milliseconds(settle_ms));
-      const double elapsed =
-        std::max(std::chrono::duration<double>(t_send_end - t0).count(), 1e-9);
-      const size_t received = count_.load();
+      const auto [settled_ns, final_counts] = snapshot();
+      const double elapsed = std::max(static_cast<double>(send_end_ns - start_ns) / 1e9, 1e-9);
+      const size_t received_at_send_end = send_counts.received;
+      const size_t received = final_counts.received;
+      const bool valid = received_at_send_end <= received && received <= sent &&
+        final_counts.invalid == 0;
+      std::cout << "RAW trial {\"transport\":" << std::quoted(transport_)
+                << ",\"scenario\":" << std::quoted(scenario)
+                << ",\"epoch\":" << epoch_ << ",\"target_hz\":" << rate
+                << ",\"sent\":" << sent << ",\"recv_send\":" << received_at_send_end
+                << ",\"recv_final\":" << received << ",\"duplicates\":" << final_counts.duplicates
+                << ",\"stale\":" << final_counts.stale << ",\"invalid\":" << final_counts.invalid
+                << ",\"start_ns\":" << start_ns << ",\"send_end_ns\":" << send_end_ns
+                << ",\"settled_ns\":" << settled_ns
+                << ",\"valid\":" << (valid ? "true" : "false") << "}\n";
+      if (!valid) {
+        return make_skip(transport_, scenario, "invalid receive counts in trial " + std::to_string(epoch_));
+      }
       const double loss = loss_pct(sent, received);
       const double actual_pub = sent / elapsed;
       const double actual_sub_send = received_at_send_end / elapsed;
-      const bool sustained = actual_pub >= 0.90 * static_cast<double>(mid) &&
-        actual_sub_send >= 0.90 * static_cast<double>(mid);
-      std::cout << "  …   try " << mid << " Hz (sent=" << sent
+      const bool sustained = actual_pub >= 0.90 * static_cast<double>(rate) &&
+        actual_sub_send >= 0.90 * static_cast<double>(rate);
+      std::cout << "  …   try " << rate << " Hz (sent=" << sent
                 << ") → recv_send=" << received_at_send_end
                 << " recv_final=" << received
                 << " loss=" << std::setprecision(2) << loss << "% pub="
@@ -376,9 +380,10 @@ public:
       if (received > 0 && loss <= max_loss && sustained) {
         have_best = true;
         best_sent = sent;
-        best_recv = received_at_send_end;  // report sustain-window receive rate
+        best_recv_send = received_at_send_end;
+        best_recv_final = received;
         best_elapsed = elapsed;
-        best_target = mid;
+        best_target = rate;
         lo = mid + 1;
       } else if (mid == 0) {
         break;
@@ -395,15 +400,89 @@ public:
 
     std::cout << "  … max goodput ≈ " << best_target << " Hz target (loss≤"
               << std::setprecision(1) << max_loss << "%)" << std::endl;
-    return make_ok_message(transport_, scenario, best_sent, best_recv, best_elapsed, latency);
+    return make_ok_message(
+      transport_, scenario, best_sent, best_recv_send, best_recv_final, best_elapsed,
+      std::move(latency));
   }
 
 private:
-  void publish_one(uint64_t ts)
+  struct Counts {
+    size_t received = 0;
+    size_t duplicates = 0;
+    size_t stale = 0;
+    size_t invalid = 0;
+  };
+
+  void start_window(bool record_latency)
+  {
+    std::lock_guard<std::mutex> lock(mu_);
+    ++epoch_;
+    issued_.store(0, std::memory_order_relaxed);
+    seen_.clear();
+    counts_ = {};
+    record_latency_ = record_latency;
+  }
+
+  void publish_one(uint64_t timestamp, size_t sequence = 0)
   {
     std_msgs::msg::UInt8MultiArray msg;
-    msg.data = make_payload(ts);
+    msg.data = make_payload(timestamp, epoch_, sequence);
+    issued_.store(sequence + 1, std::memory_order_release);
     pub_->publish(msg);
+  }
+
+  void receive(const std::vector<uint8_t> & payload)
+  {
+    std::lock_guard<std::mutex> lock(mu_);
+    if (payload.size() != kPayloadLen) {
+      ++counts_.invalid;
+      return;
+    }
+    if (read_u64(payload, 8) != epoch_) {
+      ++counts_.stale;
+      return;
+    }
+    const auto sequence = read_u64(payload, 16);
+    if (sequence >= issued_.load(std::memory_order_acquire)) {
+      ++counts_.invalid;
+      return;
+    }
+    if (sequence >= seen_.size()) {
+      seen_.resize(sequence + 1);
+    }
+    if (seen_[sequence]) {
+      ++counts_.duplicates;
+      return;
+    }
+    seen_[sequence] = 1;
+    ++counts_.received;
+    if (record_latency_) {
+      latencies_.push_back(now_ns() - read_u64(payload, 0));
+    }
+  }
+
+  std::pair<uint64_t, Counts> snapshot()
+  {
+    std::lock_guard<std::mutex> lock(mu_);
+    return {now_ns(), counts_};
+  }
+
+  void write_latency(
+    const std::string & scenario, uint64_t start_ns, size_t sent, const char * error)
+  {
+    std::lock_guard<std::mutex> lock(mu_);
+    record_latency_ = false;
+    std::cout << "RAW latency {\"transport\":" << std::quoted(transport_)
+              << ",\"scenario\":" << std::quoted(scenario)
+              << ",\"start_ns\":" << start_ns << ",\"end_ns\":" << now_ns()
+              << ",\"sent\":" << sent << ",\"received\":" << counts_.received
+              << ",\"duplicates\":" << counts_.duplicates << ",\"stale\":" << counts_.stale
+              << ",\"invalid\":" << counts_.invalid << ",\"samples_ns\":";
+    raw_samples(std::cout, latencies_);
+    if (error) {
+      std::cout << ",\"error\":" << std::quoted(error);
+    }
+    std::cout << "}\n";
   }
 
   std::string transport_;
@@ -411,8 +490,11 @@ private:
   rclcpp::Node::SharedPtr pub_node_;
   rclcpp::Subscription<std_msgs::msg::UInt8MultiArray>::SharedPtr sub_;
   rclcpp::Publisher<std_msgs::msg::UInt8MultiArray>::SharedPtr pub_;
-  std::atomic<size_t> count_{0};
-  std::atomic<bool> record_latency_{true};
+  std::atomic<size_t> issued_{0};
+  uint64_t epoch_ = 0;
+  Counts counts_;
+  std::vector<uint8_t> seen_;
+  bool record_latency_ = false;
   std::mutex mu_;
   std::vector<uint64_t> latencies_;
 };
@@ -458,7 +540,7 @@ public:
     }
     (void)probe_fut.get();
 
-    for (size_t i = 1; i < kWarmup; ++i) {
+    for (size_t i = 1; i < env_size("ROS2_PERF_RPC_WARMUP", kWarmup); ++i) {
       auto req = std::make_shared<ros2_perf::srv::Echo::Request>();
       req->data = payload;
       auto fut = client_->async_send_request(req);
@@ -471,13 +553,16 @@ public:
     std::vector<uint64_t> samples;
     samples.reserve(n);
     size_t received = 0;
+    size_t attempted = 0;
     const auto t0 = std::chrono::steady_clock::now();
     for (size_t i = 0; i < n; ++i) {
+      ++attempted;
       auto req = std::make_shared<ros2_perf::srv::Echo::Request>();
       req->data = payload;
       const auto start = std::chrono::steady_clock::now();
       auto fut = client_->async_send_request(req);
       if (fut.wait_for(5s) != std::future_status::ready) {
+        std::cerr << scenario << " attempt " << attempted << " timed out\n";
         if (received == 0) {
           return make_skip(transport_, scenario, "call timed out");
         }
@@ -496,7 +581,7 @@ public:
     if (received == 0) {
       return make_skip(transport_, scenario, "0 successful calls");
     }
-    return make_ok_rpc(transport_, scenario, n, received, elapsed, from_ns(std::move(samples)));
+    return make_ok_rpc(transport_, scenario, attempted, received, elapsed, from_ns(std::move(samples)));
   }
 
 private:
@@ -534,6 +619,9 @@ public:
         // client is blocked waiting on (avoids single-thread deadlocks).
         std::thread([goal_handle]() {
           const auto goal = goal_handle->get_goal();
+          auto feedback = std::make_shared<Echo::Feedback>();
+          feedback->data = {'f'};
+          goal_handle->publish_feedback(feedback);
           auto result = std::make_shared<Echo::Result>();
           result->data = goal->data;
           goal_handle->succeed(result);
@@ -559,7 +647,7 @@ public:
     if (!send_one(payload, 2s)) {
       return make_skip(transport_, scenario, "probe send_goal failed");
     }
-    for (size_t i = 1; i < std::min(kWarmup, size_t{10}); ++i) {
+    for (size_t i = 1; i < env_size("ROS2_PERF_RPC_WARMUP", std::min(kWarmup, size_t{10})); ++i) {
       if (!send_one(payload, 2s)) {
         return make_skip(transport_, scenario, "warmup send_goal failed");
       }
@@ -568,10 +656,13 @@ public:
     std::vector<uint64_t> samples;
     samples.reserve(n);
     size_t received = 0;
+    size_t attempted = 0;
     const auto t0 = std::chrono::steady_clock::now();
     for (size_t i = 0; i < n; ++i) {
+      ++attempted;
       const auto start = std::chrono::steady_clock::now();
       if (!send_one(payload, 5s)) {
+        std::cerr << scenario << " attempt " << attempted << " failed\n";
         if (received == 0) {
           return make_skip(transport_, scenario, "send_goal failed");
         }
@@ -589,7 +680,7 @@ public:
     if (received == 0) {
       return make_skip(transport_, scenario, "0 successful goals");
     }
-    return make_ok_rpc(transport_, scenario, n, received, elapsed, from_ns(std::move(samples)));
+    return make_ok_rpc(transport_, scenario, attempted, received, elapsed, from_ns(std::move(samples)));
   }
 
 private:
@@ -644,7 +735,8 @@ public:
   }
 
 private:
-  rclcpp::executors::MultiThreadedExecutor exec_;
+  rclcpp::executors::MultiThreadedExecutor exec_{
+    rclcpp::ExecutorOptions(), env_size("ROS2_PERF_EXECUTOR_THREADS", 2)};
   std::thread thread_;
 };
 
@@ -676,6 +768,27 @@ std::string env_summary()
 
 void print_result(const ScenarioResult & r)
 {
+  std::ostringstream raw;
+  raw << "RAW result {\"transport\":" << std::quoted(r.transport)
+      << ",\"scenario\":" << std::quoted(r.scenario)
+      << ",\"sent\":" << r.sent << ",\"received\":" << r.received
+      << ",\"elapsed_ns\":" << static_cast<uint64_t>(r.elapsed_s * 1e9)
+      << std::setprecision(12)
+      << ",\"publish_per_s\":" << r.publish_per_s << ",\"subscribe_per_s\":" << r.subscribe_per_s
+      << ",\"delivery_pct\":" << r.delivery_pct << ",\"p50_us\":" << r.latency.p50_us
+      << ",\"p99_us\":" << r.latency.p99_us << ",\"note\":";
+  if (r.note.empty()) {
+    raw << "null";
+  } else {
+    raw << std::quoted(r.note);
+  }
+  raw << ",\"rpc_samples_ns\":";
+  if (r.is_message) {
+    raw << "[]";
+  } else {
+    raw_samples(raw, r.latency.samples_ns);
+  }
+  std::cout << raw.str() << "}\n";
   if (!r.note.empty()) {
     std::cout << "[" << r.transport << "/" << r.scenario << "] SKIP: " << r.note << "\n";
     return;

@@ -23,9 +23,10 @@ use self::dispatch::{
     deliver_reply, dispatch_request, expire_corr, reclaim_worker_inflight, retry_pending,
 };
 use self::protocol::{CMD_DISCONNECT, CMD_HEARTBEAT, CMD_READY, CMD_READY_FED, POLL_CAP_MS};
+pub(super) use self::remote::is_fed_identity;
 use self::remote::{
-    CorrEntry, PeerLink, PendingRequest, ReplyTarget, connect_peer, is_fed_identity,
-    learn_peer_broker_id, parse_corr_id, parse_fed_broker_id,
+    CorrEntry, PeerLink, PendingRequest, ReplyTarget, connect_peer, learn_peer_broker_id,
+    parse_corr_id, parse_fed_broker_id,
 };
 use super::broker::{
     ERR_NO_WORKER, InFlightTable, WorkerRegistry, build_error_body, extend_hops, hop_contains,
@@ -347,7 +348,11 @@ fn handle_backend(
         3 => {
             let cmd = &frames[1];
             let svc = &frames[2];
-            if cmd == CMD_READY {
+            if cmd == CMD_READY
+                || (cmd == CMD_HEARTBEAT
+                    && !is_fed_identity(worker_id)
+                    && !registry.is_alive(worker_id))
+            {
                 if is_fed_identity(worker_id) {
                     if let Some(via) = parse_fed_broker_id(worker_id) {
                         let svc_str = String::from_utf8_lossy(svc).into_owned();

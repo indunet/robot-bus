@@ -40,6 +40,31 @@ jobs:
           cargo test --no-default-features --features ws --lib --test ws_node --test ws_rpc
           cargo test --no-default-features --features console-api --lib --test feature_boundaries --test wait_helpers
           cargo test --no-default-features --features ws,console-api --lib --test feature_boundaries --test console_metrics_smoke --test topic_demand --test topic_type_registry --test rbus_cli_smoke
+      - name: Check reconnect, subscriber backlog and short soak
+        timeout-minutes: 5
+        env:
+          TOKIO_WORKER_THREADS: "2"
+        run: |
+          set -o pipefail
+          mkdir -p target/reliability
+          {
+            printf 'sha=%s\n' "$GITHUB_SHA"
+            uname -a
+            rustc --version
+            pkg-config --modversion libzmq
+          } > target/reliability/environment.log
+          status=0
+          cargo test --no-default-features --features ws,console-api --test ws_reliability \
+            -- --nocapture --test-threads=1 2>&1 | tee target/reliability/faults.log || status=1
+          cargo test --no-default-features --features ws,console-api --test ws_reliability \
+            -- --ignored --nocapture --test-threads=1 2>&1 | tee target/reliability/soak.log || status=1
+          exit "$status"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: rust-reliability-evidence
+          path: target/reliability/
+          if-no-files-found: ignore
       - name: Setup pnpm
         uses: pnpm/action-setup@v6
         with:

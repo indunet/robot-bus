@@ -92,3 +92,6 @@ scripts/gen_rust_msgs/Cargo.lock
 # ROS 2 perf local colcon workspace + merge partials (`run.sh --local`)
 benches/ros2_perf/_ws/
 benches/ros2_perf/_out.*.partial.md
+
+# Internal performance captures, including per-trial counts and latency samples.
+/bench-results/

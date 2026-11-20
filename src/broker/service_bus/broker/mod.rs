@@ -228,7 +228,13 @@ fn handle_worker_message(
         3 => {
             let cmd = &frames[1];
             let svc = &frames[2];
-            if cmd == CMD_READY {
+            // A DEALER survives a broker restart, but its original READY does
+            // not. A heartbeat carries enough information to restore it.
+            if cmd == CMD_READY
+                || (cmd == CMD_HEARTBEAT
+                    && !registry.is_alive(worker_id)
+                    && !super::bridge::is_fed_identity(worker_id))
+            {
                 let svc_str = String::from_utf8_lossy(svc).into_owned();
                 registry.register(worker_id.to_vec(), svc_str.clone(), Instant::now());
                 if let Some(m) = metrics {

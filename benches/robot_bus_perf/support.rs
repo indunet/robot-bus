@@ -7,7 +7,7 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 #[cfg(feature = "console-api")]
 use robot_bus::ConsoleBrokerConfig;
-use robot_bus::{Context, Node, NodeOptions, RobotBusConfig};
+use robot_bus::{NodeOptions, RobotBusBroker, RobotBusConfig};
 
 /// Only one bind_all broker at a time (fixed ipc / inproc names).
 static BROKER_LOCK: Mutex<()> = Mutex::new(());
@@ -22,6 +22,7 @@ pub fn perf_broker_config() -> RobotBusConfig {
     let mut config = RobotBusConfig::default();
     // Deep enough that paced goodput trials are not HWM-drop dominated.
     // Not a production default (STREAM default remains 8).
+    config.discovery.advertise_host = Some("127.0.0.1".into());
     config.message.snd_hwm = 2_048;
     config.message.rcv_hwm = 2_048;
     config.service.snd_hwm = 64;
@@ -38,18 +39,11 @@ pub fn perf_broker_config() -> RobotBusConfig {
     config
 }
 
-pub fn options_for(transport: &str) -> NodeOptions {
-    match transport {
-        "tcp" => NodeOptions::tcp(),
-        "ipc" => NodeOptions::ipc(),
-        "inproc" => NodeOptions::inproc(),
-        other => panic!("unknown transport: {other}"),
-    }
-}
-
-/// Node sharing `context` (required for inproc with the embedded broker).
-pub fn node_for(context: &Context, name: impl Into<String>, transport: &str) -> Node {
-    Node::with_context_options(context, name, options_for(transport))
+pub fn options_for(broker: &RobotBusBroker, transport: &str) -> robot_bus::Result<NodeOptions> {
+    broker
+        .discover
+        .to_announcement()?
+        .apply(NodeOptions::for_discovery(transport))
 }
 
 pub fn now_ns() -> u64 {
@@ -61,6 +55,7 @@ pub fn now_ns() -> u64 {
 
 #[derive(Clone, Debug)]
 pub struct LatencyStats {
+    pub samples_ns: Vec<u64>,
     pub count: usize,
     pub p50_us: f64,
     pub p95_us: f64,
@@ -69,9 +64,10 @@ pub struct LatencyStats {
 }
 
 impl LatencyStats {
-    pub fn from_ns(mut samples: Vec<u64>) -> Self {
+    pub fn from_ns(samples: Vec<u64>) -> Self {
         if samples.is_empty() {
             return Self {
+                samples_ns: samples,
                 count: 0,
                 p50_us: 0.0,
                 p95_us: 0.0,
@@ -79,14 +75,16 @@ impl LatencyStats {
                 mean_us: 0.0,
             };
         }
-        samples.sort_unstable();
+        let mut sorted = samples.clone();
+        sorted.sort_unstable();
         let n = samples.len();
         let sum: u128 = samples.iter().map(|&v| v as u128).sum();
         Self {
+            samples_ns: samples,
             count: n,
-            p50_us: percentile_us(&samples, 0.50),
-            p95_us: percentile_us(&samples, 0.95),
-            p99_us: percentile_us(&samples, 0.99),
+            p50_us: percentile_us(&sorted, 0.50),
+            p95_us: percentile_us(&sorted, 0.95),
+            p99_us: percentile_us(&sorted, 0.99),
             mean_us: (sum as f64 / n as f64) / 1_000.0,
         }
     }

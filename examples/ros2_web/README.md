@@ -4,8 +4,8 @@
 
 A browser using the **local TypeScript SDK** connects through WebSocket, an
 embedded Robot Bus broker and the **Python/rclpy bridge** to a separate, real ROS2
-process. No ROS or WebSocket mocks are used. The first acceptance target is
-**Humble + Fast DDS + Chromium**; this does not certify other bridges or platforms.
+process. CI runs the same Fast DDS and Chromium suite on **ROS 2 Humble and
+Jazzy** for pushes to any branch and pull request updates.
 
 From the repository root, with Docker Compose available:
 
@@ -26,6 +26,7 @@ For automated acceptance (stop the interactive demo first if running locally):
 docker build -f examples/ros2_web/Dockerfile -t robot-bus-ros2-web:test .
 docker run --name ros2-web-acceptance --init \
   -e ROBOT_BUS_TEST_COMMIT="$(git rev-parse HEAD)" \
+  -e ROBOT_BUS_TEST_ROS_DISTRO=humble \
   robot-bus-ros2-web:test bash test.sh
 docker cp ros2-web-acceptance:/workspace/examples/ros2_web/test-results ./ros2-web-results
 docker rm ros2-web-acceptance
@@ -33,4 +34,6 @@ docker rm ros2-web-acceptance
 
 Run the copy command even if the test command fails. The container is retained
 so failures can be inspected; choose a new name or remove it before rerunning.
+For Jazzy, build with `--build-arg ROS_BASE=ros:jazzy-ros-base-noble` and set
+`ROBOT_BUS_TEST_ROS_DISTRO=jazzy` when running the container.
 See the guides for route semantics, local development, evidence and limitations.

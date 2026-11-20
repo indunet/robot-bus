@@ -18,7 +18,9 @@ use std::thread;
 use std::time::Duration;
 
 use robot_bus::{Context, RobotBusBroker};
-use support::{ScenarioResult, env_summary, lock_broker, perf_broker_config, write_report};
+use support::{
+    ScenarioResult, env_summary, lock_broker, options_for, perf_broker_config, write_report,
+};
 
 use federation::bench_federation;
 use native::{bench_action, bench_pubsub, bench_service};
@@ -58,20 +60,40 @@ fn main() {
 
         for transport in ["tcp", "ipc", "inproc"] {
             println!("=== {transport} ===");
-            results.push(bench_pubsub(&ctx, transport));
-            if !skip_rpc {
-                results.push(bench_service(&ctx, transport, svc_iters));
-                results.push(bench_action(&ctx, transport, act_iters));
+            match options_for(&broker, transport) {
+                Ok(options) => {
+                    record_result(&mut results, bench_pubsub(&ctx, transport, &options));
+                    if !skip_rpc {
+                        record_result(
+                            &mut results,
+                            bench_service(&ctx, transport, &options, svc_iters),
+                        );
+                        record_result(
+                            &mut results,
+                            bench_action(&ctx, transport, &options, act_iters),
+                        );
+                    }
+                }
+                Err(err) => {
+                    for scenario in ["message pub/sub", "service call", "action send_goal"] {
+                        if !skip_rpc || scenario == "message pub/sub" {
+                            record_result(
+                                &mut results,
+                                ScenarioResult::skipped(transport, scenario, err.to_string()),
+                            );
+                        }
+                    }
+                }
             }
         }
 
         let ws_url = broker.api_url();
         println!("=== ws ({ws_url}) ===");
-        results.push(bench_ws_publish(&broker, &ws_url));
-        results.push(bench_ws_subscribe(&broker, &ws_url));
+        record_result(&mut results, bench_ws_publish(&broker, &ws_url));
+        record_result(&mut results, bench_ws_subscribe(&broker, &ws_url));
         if !skip_rpc {
-            results.push(bench_ws_service(&broker, &ws_url, svc_iters));
-            results.push(bench_ws_action(&broker, &ws_url, act_iters));
+            record_result(&mut results, bench_ws_service(&broker, &ws_url, svc_iters));
+            record_result(&mut results, bench_ws_action(&broker, &ws_url, act_iters));
         }
 
         broker.stop().expect("stop broker");
@@ -81,36 +103,8 @@ fn main() {
 
     if run_federation {
         println!("=== federation (tcp A→B) ===");
-        results.extend(bench_federation(skip_rpc));
-    }
-
-    for r in &results {
-        if let Some(note) = &r.note {
-            println!("[{}/{}] SKIP: {note}", r.transport, r.scenario);
-        } else if r.kind == support::ScenarioKind::Message {
-            println!(
-                "[{}/{}] sent={} recv={} pub={:.0}/s sub={:.0}/s delivery={:.1}% p50={:.0}µs p99={:.0}µs",
-                r.transport,
-                r.scenario,
-                r.sent,
-                r.received,
-                r.publish_per_s,
-                r.subscribe_per_s,
-                r.delivery_pct,
-                r.latency.p50_us,
-                r.latency.p99_us,
-            );
-        } else {
-            println!(
-                "[{}/{}] n={} got={} {:.0}/s p50={:.0}µs p99={:.0}µs",
-                r.transport,
-                r.scenario,
-                r.sent,
-                r.received,
-                r.subscribe_per_s,
-                r.latency.p50_us,
-                r.latency.p99_us,
-            );
+        for result in bench_federation(skip_rpc) {
+            record_result(&mut results, result);
         }
     }
 
@@ -124,4 +118,45 @@ fn main() {
 
     let path = write_report(&results, &env_summary()).expect("write report");
     println!("wrote {} (and docs/en/perf-report.md)", path.display());
+}
+
+fn record_result(results: &mut Vec<ScenarioResult>, r: ScenarioResult) {
+    println!(
+        "RAW result {}",
+        serde_json::json!({
+            "transport": r.transport, "scenario": r.scenario, "sent": r.sent, "received": r.received,
+            "elapsed_ns": r.elapsed.as_nanos() as u64, "publish_per_s": r.publish_per_s,
+            "subscribe_per_s": r.subscribe_per_s, "delivery_pct": r.delivery_pct,
+            "latency_count": r.latency.count, "p50_us": r.latency.p50_us, "p99_us": r.latency.p99_us, "note": r.note,
+            "rpc_samples_ns": if r.kind == support::ScenarioKind::Rpc { r.latency.samples_ns.as_slice() } else { &[] },
+        })
+    );
+    if let Some(note) = &r.note {
+        println!("[{}/{}] SKIP: {note}", r.transport, r.scenario);
+    } else if r.kind == support::ScenarioKind::Message {
+        println!(
+            "[{}/{}] sent={} recv={} pub={:.0}/s sub={:.0}/s delivery={:.1}% p50={:.0}µs p99={:.0}µs",
+            r.transport,
+            r.scenario,
+            r.sent,
+            r.received,
+            r.publish_per_s,
+            r.subscribe_per_s,
+            r.delivery_pct,
+            r.latency.p50_us,
+            r.latency.p99_us,
+        );
+    } else {
+        println!(
+            "[{}/{}] n={} got={} {:.0}/s p50={:.0}µs p99={:.0}µs",
+            r.transport,
+            r.scenario,
+            r.sent,
+            r.received,
+            r.subscribe_per_s,
+            r.latency.p50_us,
+            r.latency.p99_us,
+        );
+    }
+    results.push(r);
 }

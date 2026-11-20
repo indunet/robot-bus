@@ -492,7 +492,7 @@ fn main() -> robot_bus::Result<()> {
 
 ### Rust messages (`ros-env` + ament rust IDL)
 
-The client is crates.io **`rclrs`**. Message types come from **`ros-env`** re-exporting `share/<pkg>/rust/`, not from rclrs itself.
+Cargo builds the bridge with **`rclrs` 0.8**, **`ros-env` 0.3**, and **`rosidl_runtime_rs` 0.7**. `ros-env` reads the generated Rust bindings from the sourced ROS environment.
 
 The `ros2` Cargo feature requires generated Rust interfaces (`share/<pkg>/rust/` under `AMENT_PREFIX_PATH`) and their ROS system libraries. Use custom mappers for extension packages such as Nav2 and Foxglove.
 
@@ -511,7 +511,7 @@ ROS_LOCALHOST_ONLY=1 ROS_DOMAIN_ID=94 RMW_IMPLEMENTATION=rmw_fastrtps_cpp \
   --test ros2_bridge_diagnostics -- --test-threads=1
 ```
 
-Use Humble interface packages that ship compatible Rust bindings. `example_interfaces` provides Fibonacci and AddTwoInts. `rclrs` links the `test_msgs` system libraries. See [support and verification status](support.md) for the tested environment.
+Use interface packages that ship compatible Rust bindings. On Jazzy, install the corresponding `ros-jazzy-*` packages, source `/opt/ros/jazzy/setup.bash`, and use `ROS_AUTOMATIC_DISCOVERY_RANGE=LOCALHOST` for local tests. `example_interfaces` provides Fibonacci and AddTwoInts. See [support and verification status](support.md) for the tested environments.
 
 ---
 
@@ -678,7 +678,7 @@ To reply for a custom service, implement `error_response` for a response type th
 | Rust | `fn error_response(&self, message: &str) -> Option<Response>` (the default returns `None`) |
 | C++ | `std::optional<Response> error_response(const std::string &message) const` (the default returns `std::nullopt`; returning a plain `Response` also works) |
 
-Rust limitation: rclrs 0.7 does not let a service callback skip the response, so each no-reply call keeps one parked future alive until the bridge exits. This is a small per-failure leak, which is why `error_response` is worth implementing for services that can fail often.
+The Rust bridge keeps each unanswered service callback pending until shutdown. This is a small per-failure leak, which is why `error_response` is worth implementing for services that can fail often.
 
 Topic warnings now detect both missing first traffic after 15 seconds and a
 15-second gap after receiving data. One warning is emitted per quiet episode;

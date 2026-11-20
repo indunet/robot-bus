@@ -1,9 +1,9 @@
 //! Multiplexed WebSocket connection: stream start/cancel and inbound demux.
 
 use std::collections::HashMap;
-use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::sync::mpsc::Sender;
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use futures_util::{SinkExt, StreamExt};
@@ -21,13 +21,8 @@ use crate::ws::ws_frame::{
     Frame, RequestHeader, decode_action_data, decode_frame, decode_subscribe_data, encode_frame,
 };
 
+use super::inbox::TopicInbox;
 use super::status::{map_rpc_status, ws_action_kind};
-
-#[derive(Debug)]
-pub(super) struct TopicEvent {
-    pub(super) topic: String,
-    pub(super) payload: Vec<u8>,
-}
 
 pub(super) enum ConnCmd {
     Start {
@@ -45,9 +40,8 @@ pub(super) enum ConnCmd {
 
 pub(super) enum StreamKind {
     Subscribe {
-        #[allow(dead_code)]
-        topic: String,
-        tx: Sender<TopicEvent>,
+        id: u64,
+        inbox: Arc<Mutex<TopicInbox>>,
         done: Option<tokio::sync::oneshot::Sender<()>>,
     },
     Unary {
@@ -453,9 +447,11 @@ fn handle_inbound_frame(streams: &mut HashMap<u32, StreamState>, frame: Frame) {
                 return;
             };
             match &mut st.kind {
-                StreamKind::Subscribe { tx, .. } => {
-                    if let Ok((topic, payload)) = decode_subscribe_data(&payload) {
-                        let _ = tx.send(TopicEvent { topic, payload });
+                StreamKind::Subscribe { id, inbox, .. } => {
+                    if let Ok((_, payload)) = decode_subscribe_data(&payload) {
+                        if let Ok(mut inbox) = inbox.lock() {
+                            inbox.push(*id, payload);
+                        }
                     }
                 }
                 StreamKind::Unary { data, .. } => {

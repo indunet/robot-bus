@@ -290,15 +290,20 @@ fn handle_worker_message(
             control,
         }) => {
             match control {
-                WorkerControl::Ready => {
+                WorkerControl::Heartbeat
+                    if registry.is_alive(worker_id)
+                        || super::bridge::is_fed_identity(worker_id) =>
+                {
+                    registry.heartbeat(worker_id, Instant::now());
+                }
+                // A heartbeat from an existing DEALER can be the first
+                // message seen by a replacement broker.
+                WorkerControl::Ready | WorkerControl::Heartbeat => {
                     let act_str = String::from_utf8_lossy(action).into_owned();
                     registry.register(worker_id.to_vec(), act_str.clone(), Instant::now());
                     if let Some(m) = metrics {
                         m.set_workers(&act_str, registry.worker_count(&act_str) as u64);
                     }
-                }
-                WorkerControl::Heartbeat => {
-                    registry.heartbeat(worker_id, Instant::now());
                 }
                 WorkerControl::Disconnect => {
                     let act = registry.remove(worker_id);

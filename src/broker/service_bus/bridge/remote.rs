@@ -81,7 +81,7 @@ pub(super) fn parse_fed_broker_id(identity: &[u8]) -> Option<String> {
         .map(str::to_string)
 }
 
-pub(super) fn is_fed_identity(identity: &[u8]) -> bool {
+pub(in crate::broker::service_bus) fn is_fed_identity(identity: &[u8]) -> bool {
     parse_fed_broker_id(identity).is_some()
 }
 

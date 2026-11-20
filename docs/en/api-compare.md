@@ -187,7 +187,7 @@ fn main() -> robot_bus::Result<()> {
 
 ## 4. Action
 
-rclrs 0.7 provides `create_action_server` / `create_action_client`. robot-bus uses the same ROS 2–style split between an immediately returned GoalHandle, streaming feedback, and a separately awaited result. The optional ROS 2 bridge is implemented natively per language (rclrs / rclpy / rclcpp) for topic, service, and action with concrete mappers (no YAML / no type-string mounting).
+rclrs provides `create_action_server` / `create_action_client`. robot-bus uses the same ROS 2–style split between an immediately returned GoalHandle, streaming feedback, and a separately awaited result. The optional ROS 2 bridge is implemented natively per language (rclrs / rclpy / rclcpp) for topic, service, and action with concrete mappers (no YAML / no type-string mounting).
 
 **rclrs**
 

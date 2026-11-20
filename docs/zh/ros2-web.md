@@ -2,8 +2,8 @@
 
 # 浏览器 → Robot Bus → 真实 ROS2
 
-[桥接实验台](../../examples/ros2_web/README.md)提供一条可运行的验收链路，首轮范围为
-**ROS2 Humble、Python/rclpy、Fast DDS、Chromium**。Broker 和 Python/TypeScript SDK
+[桥接实验台](../../examples/ros2_web/README.md)在 **ROS 2 Humble 和 Jazzy** 上使用
+Python/rclpy、Fast DDS 和 Chromium。Broker 和 Python/TypeScript SDK
 均从当前源码构建。ROS 节点在独立进程中运行，与桥之间使用真实 DDS 实体通信。
 
 ```text
@@ -35,8 +35,8 @@ Compose 只在回环地址开放 8080、15560 端口。DDS 留在容器内部
 | `/status` | `/status` | ROS → bus，`std_msgs/String` | 浏览器收到递增的 ROS 状态序号 |
 | `/command` | `/command` | Bus → ROS，`std_msgs/String` | 唯一的浏览器指令出现在 ROS 状态中 |
 | `/reset` | `/reset` | Bus → ROS，`std_srvs/Trigger` | 返回内容正确，ROS 重置次数加一 |
-| `/slow` | `/slow` | Bus → ROS，`std_srvs/Trigger` | 返回类型化 `timeout`，后续重置仍能成功 |
-| `/fibonacci` | `/fibonacci` | Bus → ROS，`example_interfaces/Fibonacci` | 反馈、精确结果、拒绝、中止、取消 |
+| `/slow` | `/slow` | Bus → ROS，`std_srvs/Trigger` | 返回类型化 `timeout`，ROS 确认请求晚些完成，下一次重置成功 |
+| `/fibonacci` | `/fibonacci` | Bus → ROS，`example_interfaces/Fibonacci` | 结果返回前有反馈、结果正确、非法目标未执行，以及 ROS 中止和确认取消 |
 | `/deadline` | `/fibonacci` | Bus → ROS，同一 Action | 返回 `timeout`，ROS 确认收到取消 |
 
 示例计算恰好 `order` 项 Fibonacci 数列。项数超出 1–30 时拒绝，13 项用于主动中止演示。
@@ -47,23 +47,27 @@ Compose 只在回环地址开放 8080、15560 端口。DDS 留在容器内部
 ## 自动验收与证据
 
 [测试入口](../../examples/ros2_web/test.sh)启动后端，用 Chromium 执行八个 Playwright
-测试；等待均有上限，缺少依赖不会跳过。[CI 工作流](../../.github/workflows/ros2-web.yml)
-在 Ubuntu 22.04 上构建同一 Dockerfile，测试失败也会保存证据。
+测试，所有等待都有上限。[CI 工作流](../../.github/workflows/ros2-web.yml)在任意分支推送
+和 Pull Request 更新时，用同一 Dockerfile 分别运行 Humble（Ubuntu 22.04）和
+Jazzy（Ubuntu 24.04）。每个发行版单独上传证据，测试失败时也会保留。
 
 ```bash
 docker build -f examples/ros2_web/Dockerfile -t robot-bus-ros2-web:test .
 docker run --name ros2-web-acceptance --init \
   -e ROBOT_BUS_TEST_COMMIT="$(git rev-parse HEAD)" \
+  -e ROBOT_BUS_TEST_ROS_DISTRO=humble \
   robot-bus-ros2-web:test bash test.sh
 # 测试失败后也执行复制：
 docker cp ros2-web-acceptance:/workspace/examples/ros2_web/test-results ./ros2-web-results
 docker rm ros2-web-acceptance
 ```
 
-结果包含 `environment.log`（提交、系统/架构、ROS/RMW 配置及工具版本）、
-`backend.log`、JUnit 报告，以及失败时的浏览器 trace 和截图。配置了工作流不代表特定
-提交已经通过，应查看对应运行与附件。Docker 标签和 apt 仓库可能变化，环境日志记录
-实际使用的版本。容器保留供排障，再次运行前删除它或换一个名称。
+复跑 Jazzy 时，给 `docker build` 加上 `--build-arg ROS_BASE=ros:jazzy-ros-base-noble`，
+并在 `docker run` 中使用 `ROBOT_BUS_TEST_ROS_DISTRO=jazzy`。
+
+测试进程沿用当前允许的 CPU，最多使用四个逻辑 CPU，使本机复跑与 CI 的线程池规模接近。
+证据包括构建和容器日志、`environment.log`（提交、系统/架构、CPU 亲和性、实际加载的
+`rclpy`、中间件与工具版本）、`backend.log`、JUnit 报告，以及失败时的浏览器 trace 和截图。
 
 ## 已 source Humble 的本机开发
 
@@ -98,6 +102,5 @@ bash test.sh
 
 ## 范围
 
-本验收覆盖一个 ROS 节点与一个 Python 桥，不据此保证 Jazzy、Rust/C++、Android、
-ROS 主动调用 service/action、多机 DDS、重启恢复、性能或长期稳定性。
-其他范围见[支持状态](support.md)。示例不控制机器人硬件。
+本验收覆盖单个容器内一个 Python 桥和一个 ROS 节点，检查双向话题和浏览器发起的
+Service 与 Action。其他场景见[支持状态](support.md)。

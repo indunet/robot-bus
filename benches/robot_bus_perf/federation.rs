@@ -25,7 +25,7 @@ use robot_bus::{
 use robot_bus::WsConfig;
 
 use crate::native::run_pubsub;
-use crate::pacing::{MSG_HWM, WARMUP, act_iters, make_payload, svc_iters};
+use crate::pacing::{MSG_HWM, WARMUP, act_iters, make_payload, rpc_warmup, svc_iters};
 use crate::support::{LatencyStats, ScenarioResult};
 
 const TRANSPORT: &str = "federation";
@@ -299,14 +299,16 @@ fn bench_fed_service(
         worker.stop();
         return ScenarioResult::skipped(TRANSPORT, scenario, "federated service not ready");
     }
-    for _ in 1..WARMUP {
+    for _ in 1..rpc_warmup(WARMUP) {
         let _ = client.call(name, &payload, None, Some(Duration::from_secs(2)));
     }
 
     let mut samples = Vec::with_capacity(n);
     let t0 = Instant::now();
     let mut received = 0usize;
+    let mut attempted = 0;
     for _ in 0..n {
+        attempted += 1;
         let start = Instant::now();
         match client.call(name, &payload, None, Some(Duration::from_secs(5))) {
             Ok(_) => {
@@ -314,6 +316,7 @@ fn bench_fed_service(
                 received += 1;
             }
             Err(err) => {
+                eprintln!("{scenario} attempt {attempted} failed: {err}");
                 if received == 0 {
                     worker.stop();
                     return ScenarioResult::skipped(
@@ -334,7 +337,7 @@ fn bench_fed_service(
     ScenarioResult::ok_rpc(
         TRANSPORT,
         scenario,
-        n,
+        attempted,
         received,
         elapsed,
         LatencyStats::from_ns(samples),
@@ -387,14 +390,16 @@ fn bench_fed_action(
         worker.stop();
         return ScenarioResult::skipped(TRANSPORT, scenario, "federated action not ready");
     }
-    for _ in 1..WARMUP.min(10) {
+    for _ in 1..rpc_warmup(WARMUP.min(10)) {
         let _ = client.send_goal(name, &payload, None, Some(Duration::from_secs(2)));
     }
 
     let mut samples = Vec::with_capacity(n);
     let t0 = Instant::now();
     let mut received = 0usize;
+    let mut attempted = 0;
     for _ in 0..n {
+        attempted += 1;
         let start = Instant::now();
         match client.send_goal(name, &payload, None, Some(Duration::from_secs(5))) {
             Ok(_) => {
@@ -402,6 +407,7 @@ fn bench_fed_action(
                 received += 1;
             }
             Err(err) => {
+                eprintln!("{scenario} attempt {attempted} failed: {err}");
                 if received == 0 {
                     worker.stop();
                     return ScenarioResult::skipped(
@@ -422,7 +428,7 @@ fn bench_fed_action(
     ScenarioResult::ok_rpc(
         TRANSPORT,
         scenario,
-        n,
+        attempted,
         received,
         elapsed,
         LatencyStats::from_ns(samples),

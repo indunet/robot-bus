@@ -19,19 +19,40 @@
 
 各语言接口差异以对应 [API 指南](../../README-zh.md#16-文档) 为准。WS Node 是客户端模式，不提供 service/action 服务端注册。
 
+## 可靠性回归测试
+
+Linux Rust CI 使用真实 TCP、WebSocket、broker 和原生 worker 执行以下检查。
+
+| 场景 | 检查项 |
+| --- | --- |
+| 强制结束 broker 进程并在原端口重启 | 已有 WS 订阅恢复，仍在运行的原生 Service 和 Action worker 可以接收新请求。在途 Service 请求断开后失败，重连时不会重放。 |
+| 静默中断 WS 的 TCP 链路 | broker 保持运行。客户端通过心跳发现断网，恢复网络后原订阅和新 Service 请求可用。 |
+| 慢订阅者积压 | 暂停回调期间送达 128 条消息，深度为 3 和 1 的两个过滤器分别保留最新 3 条和 1 条。另一客户端收到全部序号，暂停回调的连接也能处理 RPC。 |
+| 小长跑 | 预热 5 秒后测量 6 个 10 秒窗口，持续发送 Topic 和 Service 流量并反复创建和注销订阅，记录 RSS、打开的 Linux 文件描述符和两类流量的 p95 延迟。 |
+
+长跑在同一进程内测量 broker 和客户端。预热后，峰值 RSS 增量上限为 32 MiB，文件描述符增量上限为 6。每类延迟用前两个窗口的较高 p95 作基线，最后两个窗口的较高 p95 必须低于或等于基线的 3 倍与基线加 20 ms 中的较大值。可用 `ROBOT_BUS_SOAK_WINDOW_SECONDS` 加长测量窗口。
+
+```sh
+export TOKIO_WORKER_THREADS=2
+cargo test --no-default-features --features ws,console-api --test ws_reliability -- --nocapture --test-threads=1
+cargo test --no-default-features --features ws,console-api --test ws_reliability -- --ignored --nocapture --test-threads=1
+```
+
+CI 在 `rust-reliability-evidence` 附件保存故障测试和长跑日志，长跑每个窗口留一条 JSON 记录。见[测试套件](../../tests/ws_reliability.rs)和 [CI 工作流](../../.github/workflows/ci.yml)。
+
 ## ROS2 桥：目标发行版与证据
 
 目标发行版为 **Humble / Jazzy**，topic、service、action 均有双向桥接实现。两方向需分别配置路由。目标支持不等于所有语言和功能已完成真实发行版验收。
 
 | 语言 | 目标发行版 | Topic | Service / Action | 验证边界 |
 | --- | --- | --- | --- | --- |
-| Rust / rclrs | Humble、Jazzy | 有 mapper 与路由实现 | 有双向实现 | 2026-11-20 在真实 Humble 上编译并链接通过，验证了按需话题转发和双向 Trigger 服务。Jazzy 和完整路由验收待验证 |
-| Python / rclpy | Humble、Jazzy | 有 mapper 与路由实现 | 有双向实现 | [Humble 浏览器验收](ros2-web.md)配置了双向话题和浏览器发起的服务、Action 检查，结果见对应运行附件 |
+| Rust / rclrs | Humble、Jazzy | 有 mapper 与路由实现 | 有双向实现 | 2026-11-20 在 Humble 和 Jazzy 上编译并链接通过，验证了按需话题转发、双向 Trigger 服务和双向 Fibonacci Action |
+| Python / rclpy | Humble、Jazzy | 有 mapper 与路由实现 | 有双向实现 | [浏览器验收](ros2-web.md)在 Humble 和 Jazzy 上运行双向话题和浏览器发起的服务、Action 测试，结果见各发行版运行附件 |
 | C++ / rclcpp | Humble、Jazzy | 有 mapper 与路由实现 | 有双向实现 | [发布流程](../../.github/workflows/release-cpp.yml) 配置 Linux ROS 包构建；构建与打包不等于逐路由运行验收，服务/Action 真实实测待补 |
 
-Rust 构建复测使用 Ubuntu 22.04.5（x86_64，`ros:humble-ros-base`）、Rust 1.100.0、`rclrs` 0.7.0、`ros-env` 0.2.0 和 Protobuf 编译器 35.1。使用 Humble 系统包提供的 Rust 绑定，编译并链接了桥库、`ros2_bridge_perf` 和两个桥接示例。依赖安装及复测命令见[桥接指南](ros2-bridge.md)。2026-08-31 的字段类型失败见[历史性能记录](ros2-bridge-perf-report.md)。
+Rust 构建复测使用 Ubuntu 22.04.5 和 24.04.5（x86_64，`ros:humble-ros-base` 和 `ros:jazzy-ros-base`）、Rust 1.100.0、`rclrs` 0.8.0、`ros-env` 0.3.0、`rosidl_runtime_rs` 0.7.0 和 Protobuf 编译器 35.1。使用各发行版系统包提供的 Rust 绑定，编译并链接了桥库、`ros2_bridge_perf` 和两个桥接示例。依赖安装及复测命令见[桥接指南](ros2-bridge.md)。2026-08-31 的字段类型失败见[历史性能记录](ros2-bridge-perf-report.md)。
 
-在同一 Humble 环境中使用 Fast DDS 和本地 ROS 通信，运行了 `ros2_bridge_lazy`、`ros2_bridge_service_smoke` 和 `ros2_bridge_diagnostics` 三组测试，共 14 项通过。运行命令见[桥接指南](ros2-bridge.md)。
+在两个发行版上都使用 Fast DDS 和本机 ROS 通信，分别通过了 `ros2_bridge_lazy`、`ros2_bridge_service_smoke` 和 `ros2_bridge_diagnostics` 三组测试，各 16 项。两个发行版也各通过了 32 项 Rust 桥单元测试。性能工具的临时副本使用显式 broker 端点和可靠 ROS QoS，完成了双向 Fibonacci 目标。集成测试命令见[桥接指南](ros2-bridge.md)。
 
 在将桥用于应用前，按[桥接示例](../../examples/ros2_bridge/README.md)验证自己的消息类型与方向，并记录：提交/tag、系统/架构、ROS 发行版、RMW、语言、依赖版本、运行命令及结果。Service 验证成功和超时；Action 另验拒绝、反馈、结果、取消及异常。新增验证结论时附可复现证据，不只改“支持”标签。
 

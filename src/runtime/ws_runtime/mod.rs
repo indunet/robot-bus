@@ -4,6 +4,7 @@
 //! action RPCs (V3 framing with `stream_id`).
 
 mod conn;
+mod inbox;
 mod status;
 
 pub(crate) use conn::{WsCancelHandle, WsClientContext};
@@ -11,7 +12,6 @@ pub(crate) use conn::{WsCancelHandle, WsClientContext};
 use crate::QosProfile;
 use std::collections::{HashMap, HashSet};
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
-use std::sync::mpsc::{self, Receiver, Sender, TryRecvError};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
@@ -23,24 +23,26 @@ use crate::runtime::session::{SESSION_BACKOFF_INITIAL, SESSION_BACKOFF_MAX, Sess
 use crate::runtime::timers::{
     SubscriptionHandle, Timer, TimerCallback, TimerHandle, effective_poll_timeout_ms, tick_timers,
 };
-use crate::runtime::topic_callbacks::for_each_matching_callback;
 use crate::ws::ws_frame::RequestHeader;
 
-use conn::{ConnCmd, StreamKind, TopicEvent, WsConnection, connection_loop};
+use conn::{ConnCmd, StreamKind, WsConnection, connection_loop};
+use inbox::{TopicEvent, TopicInbox};
 
 const DEFAULT_WS_URL: &str = "http://127.0.0.1:15560";
 const DEFAULT_SPIN_TIMEOUT_MS: i64 = 250;
 
 struct WsState {
     topic_callbacks: HashMap<String, Vec<SubscriptionCallback>>,
-    active_topics: HashSet<String>,
-    /// KeepLast depth sent on Subscribe REQUEST (`0` = server default).
-    topic_qos: HashMap<String, QosProfile>,
-    /// Latest WS stream id for each active topic (for Cancel on destroy).
-    topic_stream_ids: HashMap<String, u32>,
+    active_topics: HashMap<String, ActiveTopic>,
     timers: Vec<Timer>,
     next_timer_id: u64,
     next_subscription_id: u64,
+}
+
+struct ActiveTopic {
+    id: u64,
+    qos: QosProfile,
+    stream_id: Option<u32>,
 }
 
 /// Owns a tokio runtime and dispatches WS subscription / timer callbacks.
@@ -54,8 +56,7 @@ pub struct WsRuntime {
     conn: Arc<WsConnection>,
     running: Arc<AtomicBool>,
     alive: Arc<AtomicBool>,
-    inbound_tx: Sender<TopicEvent>,
-    inbound_rx: Mutex<Receiver<TopicEvent>>,
+    inbox: Arc<Mutex<TopicInbox>>,
     state: Arc<Mutex<WsState>>,
 }
 
@@ -78,19 +79,15 @@ impl WsRuntime {
 
         runtime.spawn(connection_loop(ws_url, cmd_rx, transport));
 
-        let (inbound_tx, inbound_rx) = mpsc::channel();
         Ok(Self {
             runtime,
             conn,
             running: Arc::new(AtomicBool::new(false)),
             alive: Arc::new(AtomicBool::new(true)),
-            inbound_tx,
-            inbound_rx: Mutex::new(inbound_rx),
+            inbox: Arc::new(Mutex::new(TopicInbox::default())),
             state: Arc::new(Mutex::new(WsState {
                 topic_callbacks: HashMap::new(),
-                active_topics: HashSet::new(),
-                topic_qos: HashMap::new(),
-                topic_stream_ids: HashMap::new(),
+                active_topics: HashMap::new(),
                 timers: Vec::new(),
                 next_timer_id: 1,
                 next_subscription_id: 1,
@@ -125,8 +122,8 @@ impl WsRuntime {
     ) -> Result<SubscriptionHandle> {
         let mut state = self.lock_state()?;
         let requested = qos.unwrap_or(QosProfile::keep_last(0));
-        if let Some(existing) = state.topic_qos.get(topic) {
-            if crate::runtime::ws_subscribe_queue_capacity(existing.depth())
+        if let Some(existing) = state.active_topics.get(topic) {
+            if crate::runtime::ws_subscribe_queue_capacity(existing.qos.depth())
                 != crate::runtime::ws_subscribe_queue_capacity(requested.depth())
             {
                 return Err(BusError::Protocol(format!(
@@ -146,9 +143,24 @@ impl WsRuntime {
                 group,
             });
 
-        if state.active_topics.insert(topic.to_string()) {
-            state.topic_qos.insert(topic.to_string(), requested);
-            self.spawn_subscription(topic.to_string());
+        if !state.active_topics.contains_key(topic) {
+            self.inbox
+                .lock()
+                .map_err(|_| BusError::Protocol("ws inbox mutex poisoned".into()))?
+                .add(
+                    id,
+                    topic,
+                    crate::runtime::ws_subscribe_queue_capacity(requested.depth()),
+                );
+            state.active_topics.insert(
+                topic.to_string(),
+                ActiveTopic {
+                    id,
+                    qos: requested,
+                    stream_id: None,
+                },
+            );
+            self.spawn_subscription(topic.to_string(), id);
         }
         Ok(SubscriptionHandle { id })
     }
@@ -176,10 +188,14 @@ impl WsRuntime {
             .unwrap_or(true);
         if empty {
             state.topic_callbacks.remove(&topic);
-            state.active_topics.remove(&topic);
-            state.topic_qos.remove(&topic);
-            if let Some(stream_id) = state.topic_stream_ids.remove(&topic) {
-                let _ = self.conn.cmd_tx.send(ConnCmd::Cancel { stream_id });
+            if let Some(active) = state.active_topics.remove(&topic) {
+                self.inbox
+                    .lock()
+                    .map_err(|_| BusError::Protocol("ws inbox mutex poisoned".into()))?
+                    .remove(active.id);
+                if let Some(stream_id) = active.stream_id {
+                    let _ = self.conn.cmd_tx.send(ConnCmd::Cancel { stream_id });
+                }
             }
         }
         Ok(())
@@ -247,24 +263,14 @@ impl WsRuntime {
 
         let deadline = Instant::now() + Duration::from_millis(timeout_ms.max(0) as u64);
         loop {
-            let event = {
-                let rx = self
-                    .inbound_rx
-                    .lock()
-                    .map_err(|_| BusError::Protocol("ws inbound mutex poisoned".into()))?;
-                match rx.try_recv() {
-                    Ok(ev) => Some(ev),
-                    Err(TryRecvError::Empty) => None,
-                    Err(TryRecvError::Disconnected) => {
-                        return Err(BusError::Protocol(
-                            "ws subscription channel disconnected".into(),
-                        ));
-                    }
-                }
-            };
+            let event = self
+                .inbox
+                .lock()
+                .map_err(|_| BusError::Protocol("ws inbox mutex poisoned".into()))?
+                .pop();
 
             if let Some(event) = event {
-                self.dispatch_topic(&event.topic, &event.payload)?;
+                self.dispatch_topic(event)?;
                 worked = true;
                 continue;
             }
@@ -277,75 +283,77 @@ impl WsRuntime {
         Ok(worked)
     }
 
-    fn dispatch_topic(&self, topic: &str, payload: &[u8]) -> Result<()> {
-        let payload: Arc<[u8]> = payload.to_vec().into();
+    fn dispatch_topic(&self, event: TopicEvent) -> Result<()> {
         let state = self.lock_state()?;
-        for_each_matching_callback(topic, &state.topic_callbacks, |entry| {
-            let callback = Arc::clone(&entry.callback);
-            let payload = Arc::clone(&payload);
-            entry.group.run(None, move || callback(&payload));
-        });
+        let filter = event.filter.as_ref();
+        if !state
+            .active_topics
+            .get(filter)
+            .is_some_and(|active| active.id == event.id)
+        {
+            return Ok(());
+        }
+        if let Some(callbacks) = state.topic_callbacks.get(filter) {
+            let payload: Arc<[u8]> = event.payload.into();
+            let mut seen = HashSet::new();
+            for entry in callbacks {
+                if seen.insert(Arc::as_ptr(&entry.callback) as *const ()) {
+                    let callback = Arc::clone(&entry.callback);
+                    let payload = Arc::clone(&payload);
+                    entry.group.run(None, move || callback(&payload));
+                }
+            }
+        }
         Ok(())
     }
 
-    fn spawn_subscription(&self, topic: String) {
-        let tx = self.inbound_tx.clone();
+    fn spawn_subscription(&self, topic: String, id: u64) {
+        let inbox = Arc::clone(&self.inbox);
         let alive = Arc::clone(&self.alive);
         let conn = Arc::clone(&self.conn);
         let state = Arc::clone(&self.state);
         self.conn.handle.spawn(async move {
             let mut backoff = SESSION_BACKOFF_INITIAL;
-            loop {
-                {
-                    let Ok(guard) = state.lock() else {
+            while alive.load(Ordering::Acquire) {
+                let (reply_rx, done_rx) = {
+                    let Ok(mut guard) = state.lock() else {
                         break;
                     };
-                    if !guard.active_topics.contains(&topic) {
+                    let Some(active) = guard.active_topics.get_mut(&topic) else {
+                        break;
+                    };
+                    if active.id != id {
                         break;
                     }
-                }
-                if !alive.load(Ordering::Acquire) {
-                    break;
-                }
-                let stream_id = conn.alloc_stream_id();
-                if let Ok(mut guard) = state.lock() {
-                    guard.topic_stream_ids.insert(topic.clone(), stream_id);
-                }
-                let qos_depth = {
-                    let Ok(guard) = state.lock() else {
-                        break;
+                    let stream_id = conn.alloc_stream_id();
+                    // Explicit opcode prevents an older server silently using drop-newest.
+                    let header = RequestHeader::SubscribeWithPolicy {
+                        topic: topic.clone(),
+                        qos_depth: active.qos.depth(),
+                        overflow: crate::SubscriptionOverflowPolicy::DropOldest,
                     };
-                    guard
-                        .topic_qos
-                        .get(&topic)
-                        .copied()
-                        .unwrap_or(QosProfile::keep_last(0))
+                    let (reply_tx, reply_rx) = tokio::sync::oneshot::channel();
+                    let (done_tx, done_rx) = tokio::sync::oneshot::channel();
+                    if conn
+                        .cmd_tx
+                        .send(ConnCmd::Start {
+                            stream_id,
+                            header,
+                            body: Vec::new(),
+                            kind: StreamKind::Subscribe {
+                                id,
+                                inbox: Arc::clone(&inbox),
+                                done: Some(done_tx),
+                            },
+                            reply: reply_tx,
+                        })
+                        .is_err()
+                    {
+                        break;
+                    }
+                    active.stream_id = Some(stream_id);
+                    (reply_rx, done_rx)
                 };
-                // Explicit opcode prevents an older server silently using drop-newest.
-                let header = RequestHeader::SubscribeWithPolicy {
-                    topic: topic.clone(),
-                    qos_depth: qos_depth.depth(),
-                    overflow: crate::SubscriptionOverflowPolicy::DropOldest,
-                };
-                let (reply_tx, reply_rx) = tokio::sync::oneshot::channel();
-                let (done_tx, done_rx) = tokio::sync::oneshot::channel();
-                if conn
-                    .cmd_tx
-                    .send(ConnCmd::Start {
-                        stream_id,
-                        header,
-                        body: Vec::new(),
-                        kind: StreamKind::Subscribe {
-                            topic: topic.clone(),
-                            tx: tx.clone(),
-                            done: Some(done_tx),
-                        },
-                        reply: reply_tx,
-                    })
-                    .is_err()
-                {
-                    break;
-                }
                 match reply_rx.await {
                     Ok(Ok(())) => {
                         backoff = SESSION_BACKOFF_INITIAL;
@@ -353,17 +361,6 @@ impl WsRuntime {
                     }
                     Ok(Err(err)) => log::warn!("ws subscribe '{topic}' start failed: {err}"),
                     Err(_) => break,
-                }
-                if !alive.load(Ordering::Acquire) {
-                    break;
-                }
-                {
-                    let Ok(guard) = state.lock() else {
-                        break;
-                    };
-                    if !guard.active_topics.contains(&topic) {
-                        break;
-                    }
                 }
                 tokio::time::sleep(backoff).await;
                 backoff = std::cmp::min(backoff.saturating_mul(2), SESSION_BACKOFF_MAX);

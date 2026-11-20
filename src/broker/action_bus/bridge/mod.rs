@@ -25,9 +25,9 @@ use self::protocol::{
     CMD_DISCONNECT, CMD_HEARTBEAT, CMD_READY, CMD_READY_FED, KIND_CANCEL, KIND_FEEDBACK, KIND_GOAL,
     KIND_RESULT, POLL_CAP_MS,
 };
+pub(super) use self::remote::is_fed_identity;
 use self::remote::{
-    PeerLink, PendingGoal, RemoteActions, connect_peer, is_fed_identity, learn_peer_broker_id,
-    parse_fed_broker_id,
+    PeerLink, PendingGoal, RemoteActions, connect_peer, learn_peer_broker_id, parse_fed_broker_id,
 };
 use super::broker::{
     GoalReply, GoalTable, WorkerRegistry, build_client_reply, build_error_body, extend_hops,
@@ -318,7 +318,7 @@ fn handle_backend(
         3 => {
             let cmd = &frames[1];
             let action = &frames[2];
-            if cmd == CMD_READY {
+            if cmd == CMD_READY || (cmd == CMD_HEARTBEAT && !registry.is_alive(worker_id)) {
                 let act = String::from_utf8_lossy(action).into_owned();
                 registry.register(worker_id.to_vec(), act, now);
                 sync_all_advertisements(peers, registry, remote, broker_id)?;

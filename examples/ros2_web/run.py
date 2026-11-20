@@ -73,7 +73,9 @@ def main():
                 while not stopped.is_set():
                     if peer.poll() is not None:
                         raise RuntimeError(f"ROS peer exited with code {peer.returncode}")
-                    bridge.spin_once(0.01)
+                    # Let the ROS executor and HTTP threads run between native bus polls.
+                    bridge.spin_once(0.0)
+                    stopped.wait(0.005)
             finally:
                 if httpd is not None:
                     httpd.shutdown()

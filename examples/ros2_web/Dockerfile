@@ -1,21 +1,23 @@
+ARG ROS_BASE=ros:humble-ros-base-jammy
 FROM node:22-bullseye-slim AS node
-FROM ros:humble-ros-base-jammy
+FROM rust:1.95.0-bullseye AS rust
+FROM ${ROS_BASE}
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 ENV DEBIAN_FRONTEND=noninteractive
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential curl ca-certificates unzip pkg-config libzmq3-dev \
-    python3-venv python3-pip ros-humble-example-interfaces \
+    python3-venv python3-pip "ros-${ROS_DISTRO}-example-interfaces" \
     && rm -rf /var/lib/apt/lists/*
 COPY --from=node /usr/local/bin/node /usr/local/bin/node
 COPY --from=node /usr/local/lib/node_modules /usr/local/lib/node_modules
 RUN ln -s ../lib/node_modules/npm/bin/npm-cli.js /usr/local/bin/npm \
     && ln -s ../lib/node_modules/npm/bin/npx-cli.js /usr/local/bin/npx
-ARG RUST_VERSION=1.95.0
-RUN curl --fail --silent --show-error https://sh.rustup.rs -o /tmp/rustup.sh \
-    && sh /tmp/rustup.sh -y --profile minimal --default-toolchain "$RUST_VERSION"
-ENV PATH="/opt/venv/bin:/root/.cargo/bin:${PATH}"
+COPY --from=rust /usr/local/rustup /usr/local/rustup
+COPY --from=rust /usr/local/cargo/bin /usr/local/cargo/bin
+ENV RUSTUP_HOME=/usr/local/rustup CARGO_HOME=/usr/local/cargo
+ENV PATH="/opt/venv/bin:/usr/local/cargo/bin:${PATH}"
 RUN arch="$(uname -m)" && case "$arch" in aarch64) arch=aarch_64;; x86_64) ;; *) exit 1;; esac \
-    && curl --fail --location --retry 3 -o /tmp/protoc.zip \
+    && curl --fail --location --connect-timeout 15 --retry 3 --retry-all-errors -o /tmp/protoc.zip \
     "https://github.com/protocolbuffers/protobuf/releases/download/v35.1/protoc-35.1-linux-${arch}.zip" \
     && unzip /tmp/protoc.zip -d /usr/local \
     && python3 -m venv --system-site-packages /opt/venv \
@@ -39,5 +41,5 @@ WORKDIR /workspace/examples/ros2_web
 RUN npm run build
 ENV ROS_LOCALHOST_ONLY=1 ROS_DOMAIN_ID=73 RMW_IMPLEMENTATION=rmw_fastrtps_cpp
 EXPOSE 8080 15560
-# ros_entrypoint.sh sources Humble before starting the Python application.
+# ros_entrypoint.sh sources the base image's ROS distribution.
 CMD ["python3", "-u", "run.py", "--host", "0.0.0.0"]

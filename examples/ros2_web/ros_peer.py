@@ -22,7 +22,9 @@ class DemoRobot(Node):
         super().__init__("ros2_web_robot")
         self.lock = threading.Lock()
         self.state = dict(sequence=0, last_command="", resets=0,
-                          goals_started=0, goals_cancelled=0, goals_aborted=0)
+                          slow_started=0, slow_completed=0, goals_started=0,
+                          goals_succeeded=0, goals_rejected=0,
+                          goals_cancelled=0, goals_aborted=0)
         self.group = ReentrantCallbackGroup()
         self.status = self.create_publisher(String, PREFIX + "/status", 10)
         self.create_subscription(String, PREFIX + "/command", self.command, 10)
@@ -34,8 +36,7 @@ class DemoRobot(Node):
         self.action = ActionServer(
             self, Fibonacci, PREFIX + "/fibonacci", self.execute,
             callback_group=self.group,
-            goal_callback=lambda goal: (GoalResponse.ACCEPT if 1 <= goal.order <= 30
-                                        else GoalResponse.REJECT),
+            goal_callback=self.on_goal,
             cancel_callback=lambda _goal: CancelResponse.ACCEPT,
         )
 
@@ -57,10 +58,21 @@ class DemoRobot(Node):
         return response
 
     def slow(self, _request, response):
+        with self.lock:
+            self.state["slow_started"] += 1
         time.sleep(2)  # Bridge deadline is 0.4 s; the ROS operation still completes.
+        with self.lock:
+            self.state["slow_completed"] += 1
         response.success = True
         response.message = "late response"
         return response
+
+    def on_goal(self, goal):
+        if 1 <= goal.order <= 30:
+            return GoalResponse.ACCEPT
+        with self.lock:
+            self.state["goals_rejected"] += 1
+        return GoalResponse.REJECT
 
     def execute(self, goal):
         with self.lock:
@@ -81,6 +93,8 @@ class DemoRobot(Node):
             goal.publish_feedback(Fibonacci.Feedback(sequence=sequence))
             time.sleep(0.15)
         goal.succeed()
+        with self.lock:
+            self.state["goals_succeeded"] += 1
         return Fibonacci.Result(sequence=sequence)
 
 

@@ -27,6 +27,10 @@ Record changes under the applicable version. Explain what changed, why it change
 - Fixed a crash in `examples/ros2_bridge/python/custom_add_two_ints.py` when spinning with no routes registered.
 - Generic RPC warnings could consume the rate limit and suppress service-specific failure logs. In Rust, C++, and Python, `rpc_finish` now accepts a `log` flag so the bridge can suppress the generic warning when it logs the failure itself.
 
+### Changed
+
+- The Rust ROS 2 bridge now uses `rclrs` 0.8, `ros-env` 0.3, and `rosidl_runtime_rs` 0.7. On Jazzy, the `Range` mapper uses the ROS default for variance, since the bus message has no variance field.
+
 ### Testing
 
 - Python tests cover the bridge lifecycle, context manager, `run()` exit, executor errors, idle spinning, type names, string mapper references, the mapper registry, unanswered service failures, `error_response` replies, and log rate limiting. The tests ran against ROS 2 in a Jazzy container.
@@ -35,4 +39,4 @@ Record changes under the applicable version. Explain what changed, why it change
 
 ### Known Limitations
 
-- In Rust, rclrs 0.7 requires service callbacks to return a response and provides no `send_response` API. To leave a call unanswered, the bridge keeps its response future pending until shutdown. Each unanswered call leaves one pending future. Implement `error_response` for services that fail frequently.
+- Rust service callbacks return a response through `rclrs`. To leave a call unanswered, the bridge keeps its response future pending until shutdown. Each unanswered call leaves one pending future. Implement `error_response` for services that fail frequently.

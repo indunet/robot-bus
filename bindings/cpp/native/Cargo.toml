@@ -21,7 +21,7 @@ ros2 = ["robot-bus/ros2", "dep:rclrs"]
 anyhow = "1"
 prost = "0.14"
 robot-bus = { path = "../../..", default-features = false, features = ["ws", "console", "demo-tank"] }
-rclrs = { version = "0.7", optional = true }
+rclrs = { version = "0.8", optional = true }
 uuid = { version = "1", features = ["v4"] }
 
 [profile.release]

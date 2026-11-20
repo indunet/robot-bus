@@ -563,7 +563,7 @@ class MyFibonacciMapper:
 
 ### Rust（`rclrs`）
 
-启用 Cargo 的 `ros2` 功能需要 `AMENT_PREFIX_PATH` 中的 Rust 消息定义（`share/<pkg>/rust/`）以及对应的 ROS 系统库。Nav2、Foxglove 等扩展包可通过自定义 mapper 接入。
+启用 Cargo 的 `ros2` 功能时，桥使用 `rclrs` 0.8、`ros-env` 0.3 和 `rosidl_runtime_rs` 0.7。构建需要 `AMENT_PREFIX_PATH` 中的 Rust 消息定义（`share/<pkg>/rust/`）以及对应的 ROS 系统库。Nav2、Foxglove 等扩展包可通过自定义 mapper 接入。
 
 安装 ROS 2 Humble 和构建工具（Rust、Protobuf 编译器 35.1、C/C++ 工具链及 pkg-config）后，在仓库根目录执行：
 
@@ -580,7 +580,7 @@ ROS_LOCALHOST_ONLY=1 ROS_DOMAIN_ID=94 RMW_IMPLEMENTATION=rmw_fastrtps_cpp \
   --test ros2_bridge_diagnostics -- --test-threads=1
 ```
 
-请使用带有兼容 Rust 绑定的 Humble 接口包。`example_interfaces` 提供 Fibonacci 和 AddTwoInts，`rclrs` 链接时还需要 `test_msgs` 系统库。已验证的环境见[支持与验证状态](support.md)。
+请使用带有兼容 Rust 绑定的接口包。Jazzy 环境使用对应的 `ros-jazzy-*` 软件包并执行 `source /opt/ros/jazzy/setup.bash`。在 Jazzy 上做本机测试时，使用 `ROS_AUTOMATIC_DISCOVERY_RANGE=LOCALHOST`。`example_interfaces` 提供 Fibonacci 和 AddTwoInts。已验证的环境见[支持与验证状态](support.md)。
 
 ### Python（`rclpy`）
 
@@ -654,7 +654,7 @@ ROS 客户端调用 bus Action 时，成功映射为 ROS SUCCEEDED，取消映�
 | Rust | `fn error_response(&self, message: &str) -> Option<Response>`（默认返回 `None`） |
 | C++ | `std::optional<Response> error_response(const std::string &message) const`（默认返回 `std::nullopt`；直接返回 `Response` 也可以） |
 
-Rust 的限制：rclrs 0.7 不允许服务回调跳过响应，所以每次"不回复"的调用会让一个挂起的 future 留到桥退出。这是每次失败一点点的泄漏，经常失败的服务建议实现 `error_response`。
+Rust 桥会将每个未回复的服务回调挂起，直到桥退出。这是每次失败一点点的泄漏，经常失败的服务建议实现 `error_response`。
 
 部署时同时升级桥、bus 客户端 SDK 和 WebSocket 服务端：新增错误标记 `ACTION_REJECTED` / `ACTION_ABORTED` / `RPC_TIMEOUT` / `RPC_FAILED`；成功结果格式不变，取消沿用 `CANCELLED`。旧版客户端不具备新增错误的分类能力。
 

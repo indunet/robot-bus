@@ -18,11 +18,11 @@ This is the state reviewed on 2026-09-08, not a new measurement.
 
 ## WS counts require verification
 
-The saved WS Subscribe row reports `sent=151447`, `recv=151595`, `delivery=100.1%`. If each message is expected once within one trial, these counts cannot directly represent successful delivery. Cross-trial messages, mismatched windows or duplicate counting need investigation against raw samples and counting code. This documentation revision neither establishes a root cause nor recalculates results.
+The historical WS Subscribe row reports `sent=151447`, `recv=151595`, `delivery=100.1%`. The old benchmark reset the counter at trial boundaries while the callback could still receive messages queued by the preceding trial. The historical record lacks per-message data for attributing the 148 extra counts to individual trials.
 
 WS Publish at approximately 2,659/s and WS Subscribe at approximately 138,793/s represent different directional scenarios, not a paired end-to-end loss measurement. Latency uses separate sampling and is not measured at the listed maximum-throughput load.
 
-Do not use these WS figures for selection decisions until counts and windows are reconciled. Historical tables remain available for traceability.
+The benchmarks now carry a trial ID and sequence number in the 64-byte payload. They count unique in-trial receives, cross-trial arrivals, and duplicates separately. Unique receives in the send window determine the receive rate. Unique receives after draining determine delivery. Save the `RAW trial`, `RAW latency`, and `RAW result` lines for per-trial counts, window timing and latency samples.
 
 ## Record on a rerun
 
@@ -35,6 +35,8 @@ Do not use these WS figures for selection decisions until counts and windows are
 Validate count consistency before interpreting performance. Receives exceeding sends, inconsistent windows and missing samples require investigation rather than a maximum-sustainable-delivery claim.
 
 ## Reproduction entry points
+
+For an internal run, use `ROBOT_BUS_PERF_SKIP_REPORT=1` to preserve the historical bus report and point `ROS2_PERF_REPORT` at the experiment directory. Save stdout, stderr, commands, environment details, DDS profiles and source versions under `bench-results/`. Run measured workloads sequentially under the same resource limits and keep logs from smoke runs, failures and skipped scenarios.
 
 See [contributing](../../CONTRIBUTING.md) for source-build prerequisites. These commands overwrite the matching English/Chinese reports; retain previous results and raw output first.
 

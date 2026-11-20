@@ -3,7 +3,7 @@
 # Browser → Robot Bus → real ROS2
 
 The [bridge lab](../../examples/ros2_web/README.md) provides a runnable acceptance
-scenario for **ROS2 Humble, Python/rclpy, Fast DDS and Chromium**. It builds the
+scenario for **ROS 2 Humble and Jazzy, Python/rclpy, Fast DDS and Chromium**. It builds the
 broker and TypeScript/Python SDKs from the current checkout. A separate process
 runs the ROS node; communication with the bridge uses real DDS entities.
 
@@ -38,8 +38,8 @@ flow; RPC directions describe where the initiating client lives.
 | `/status` | `/status` | ROS → bus, `std_msgs/String` | Increasing ROS sequence reaches browser |
 | `/command` | `/command` | Bus → ROS, `std_msgs/String` | Unique browser command appears in ROS status |
 | `/reset` | `/reset` | Bus → ROS, `std_srvs/Trigger` | Exact response and incremented ROS reset count |
-| `/slow` | `/slow` | Bus → ROS, `std_srvs/Trigger` | Typed `timeout`; subsequent reset works |
-| `/fibonacci` | `/fibonacci` | Bus → ROS, `example_interfaces/Fibonacci` | Feedback, exact result, rejection, abort, cancellation |
+| `/slow` | `/slow` | Bus → ROS, `std_srvs/Trigger` | Typed `timeout`, confirmed late completion on ROS, and a successful subsequent reset |
+| `/fibonacci` | `/fibonacci` | Bus → ROS, `example_interfaces/Fibonacci` | Live feedback before the exact result, rejection before execution, ROS abort and ROS-confirmed cancellation |
 | `/deadline` | `/fibonacci` | Bus → ROS, same action | Typed `timeout` and ROS confirms cancellation |
 
 The demo computes exactly `order` Fibonacci terms. Orders outside 1–30 are
@@ -53,24 +53,29 @@ same idempotent command within a bounded window. RPCs are not automatically retr
 
 The [test runner](../../examples/ros2_web/test.sh) starts the backend and executes
 eight Playwright tests in Chromium with bounded waits and no skipped dependencies.
-The [CI workflow](../../.github/workflows/ros2-web.yml) builds the same Dockerfile
-on Ubuntu 22.04 and preserves evidence even after test failure.
+The [CI workflow](../../.github/workflows/ros2-web.yml) runs the same Dockerfile on
+Humble (Ubuntu 22.04) and Jazzy (Ubuntu 24.04) for pushes to any branch and pull
+request updates. Each distribution uploads its own evidence, including on failure.
 
 ```bash
 docker build -f examples/ros2_web/Dockerfile -t robot-bus-ros2-web:test .
 docker run --name ros2-web-acceptance --init \
   -e ROBOT_BUS_TEST_COMMIT="$(git rev-parse HEAD)" \
+  -e ROBOT_BUS_TEST_ROS_DISTRO=humble \
   robot-bus-ros2-web:test bash test.sh
 # Also run after test failure:
 docker cp ros2-web-acceptance:/workspace/examples/ros2_web/test-results ./ros2-web-results
 docker rm ros2-web-acceptance
 ```
 
-Evidence contains `environment.log` (commit, OS/architecture, ROS/RMW settings and
-tool versions), `backend.log`, JUnit results and browser traces/screenshots on
-failure. A configured workflow is not proof that a particular commit passed;
-inspect its run and artifacts. Docker tags and apt repositories can move; the
-environment record describes the versions actually used.
+For Jazzy, add `--build-arg ROS_BASE=ros:jazzy-ros-base-noble` to `docker build`
+and use `ROBOT_BUS_TEST_ROS_DISTRO=jazzy` in `docker run`.
+
+The suite uses up to four of the available logical CPUs to keep local thread
+pool sizing comparable to hosted CI. Evidence includes the build and container
+logs, `environment.log` (commit, OS/architecture, CPU affinity, installed
+`rclpy`, middleware and tool versions), `backend.log`, JUnit results and
+browser traces/screenshots on failure.
 
 ## Local development with sourced Humble
 
@@ -106,7 +111,6 @@ after a disconnection, click Connect to rerun route readiness checks.
 
 ## Scope
 
-This acceptance covers one ROS peer and one Python bridge. It does not establish
-Jazzy, Rust/C++, Android, ROS-initiated service/action, multi-host DDS, restart
-recovery, performance or long-running stability guarantees. See [support
-status](support.md) for the wider matrix. No robot hardware is controlled.
+This acceptance covers bidirectional topics and browser-initiated RPC across one
+Python bridge and one ROS peer in a container. See [support status](support.md)
+for the wider matrix.
