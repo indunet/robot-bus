@@ -236,7 +236,6 @@ just gen-cpp          # 写入 bindings/cpp/generated（gitignored；protoc 35.1
 just cpp-dev          # cargo FFI + cmake msgs/tests（无 ros2）
 just cpp-dev-ros2     # 原生 rclcpp bridge库（先 source Humble/Jazzy）
 just test-cpp         # msgs / timer / pub-sub / service / action / ros2 stub
-just check-ros2-shim  # 无完整 ROS安装时 typecheck ros2
 ```
 
 仓库布局：`just gen-cpp`后在 `bindings/cpp/generated/robot_bus/`生成源码（gitignored）；安装/公开 include去掉 `generated/`段。Release包自带生成头文件 — 消费者不需要 `protoc`。

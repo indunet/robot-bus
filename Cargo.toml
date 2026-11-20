@@ -70,14 +70,13 @@ console-api = [
 # Not enabled by default — keep core SDK / maturin builds free of ROS.
 # Typed msgs come from ros-env 0.2 re-exporting share/<pkg>/rust/ on AMENT_PREFIX_PATH.
 ros2 = ["dep:rclrs", "dep:rosidl_runtime_rs", "dep:ros-env", "dep:futures-channel"]
-# Typecheck without a real ROS install (rclrs stub).
-ros2-shim = ["ros2", "rclrs/use_ros_shim", "rosidl_runtime_rs/use_ros_shim", "ros-env/use_ros_shim"]
 
 [dependencies]
 anyhow = "1"
 rclrs = { version = "0.7", optional = true }
 rosidl_runtime_rs = { version = "0.6", optional = true }
-ros-env = { version = "0.2", optional = true }
+# ros-env 0.2.1 uses rosidl_runtime_rs 0.7, while rclrs 0.7 uses 0.6.
+ros-env = { version = "=0.2.0", optional = true }
 axum = { version = "0.8", optional = true, default-features = false, features = ["http1", "tokio", "query", "json"] }
 clap = { version = "4", features = ["derive"] }
 futures-channel = { version = "0.3", optional = true }
@@ -212,8 +211,3 @@ required-features = ["ros2"]
 
 [package.metadata.docs.rs]
 features = ["ws", "console"]
-
-[patch.crates-io]
-# crates.io ros-env 0.2 empties interfaces.rs under use_ros_shim; topic mappers
-# still need field-complete stubs for `just check-ros2-shim`.
-ros-env = { path = "third_party/ros-env-shim" }

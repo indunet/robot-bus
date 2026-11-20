@@ -101,11 +101,13 @@ def main() -> None:
     try:
         # Bridge spins ROS on a background thread. Drive the bus *server* here;
         # bridge.spin_once is also safe (idle bus client is tolerated).
-        while True:
-            bus.spin_once(0.01)
-            bridge.spin_once(0.01)
+        with bridge:
+            while True:
+                bus.spin_once(0.01)
+                bridge.spin_once(0.01)
     except KeyboardInterrupt:
-        bridge.shutdown()
+        pass
+    finally:
         bus.shutdown()
 
 

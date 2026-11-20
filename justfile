@@ -57,7 +57,7 @@ build-monitoring: gen-rust
 build-full: gen-rust console
 	cargo build --release --bin robot_bus_broker
 
-# Typed ROS↔protobuf topic mappers (Rust + Python + C++) + ros-env-shim stubs
+# Typed ROS↔protobuf topic mappers (Rust + Python + C++)
 gen-topic-mappers:
 	python3 scripts/generate_topic_mappers.py
 
@@ -273,9 +273,3 @@ perf-ros2:
 # ROS ↔ bus bridge benches (Docker container `ros2`); writes docs/{zh,en}/ros2-bridge-perf-report.md
 perf-ros2-bridge:
 	./benches/ros2_bridge_perf/run.sh
-
-# Typecheck ros2 bridge without a full ROS install (rclrs use_ros_shim)
-check-ros2-shim:
-	RUSTFLAGS='--cfg ros_distro="humble"' cargo check --features ros2-shim
-	RUSTFLAGS='--cfg ros_distro="humble"' cargo check --manifest-path bindings/cpp/native/Cargo.toml --features ros2-shim
-	RUSTFLAGS='--cfg ros_distro="humble"' cargo check --lib --no-default-features --features extension-module,ws,ros2-shim

@@ -300,7 +300,7 @@ bridge = (
     .add()
     .build()
 )
-bridge.spin()
+bridge.run()  # Ctrl+C / SIGTERM 退出
 ```
 
 完整说明与示例（Rust / Python / C++）：[`docs/zh/ros2-bridge.md`](docs/zh/ros2-bridge.md)。若要做整包迁移（而不只是桥接），见 [`docs/skills/`](docs/skills/)。

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Generate typed ROS↔protobuf topic mappers and ros-env-shim message stubs.
+"""Generate typed ROS↔protobuf topic mappers.
 
 Reads proto/*/msg/v1/*.proto plus existing mapper file headers, then rewrites:
 
@@ -7,7 +7,6 @@ Reads proto/*/msg/v1/*.proto plus existing mapper file headers, then rewrites:
 - Python: bindings/python/robot_bus/ros2_bridge/mappers/<pkg>/<msg>.py
 - C++: bindings/cpp/include/robot_bus/ros2_bridge/mappers/<pkg>/<msg>.hpp
   and umbrella bindings/cpp/include/robot_bus/ros2_bridge_topic_mappers.hpp
-- Shim: third_party/ros-env-shim/src/generated_msgs.rs
 
 Only packages in CORE_BRIDGE_PACKAGES are generated. Extension stacks
 (nav2 / control / foxglove / apriltag) are not bridge builtins — users write
@@ -24,7 +23,6 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 PROTO = ROOT / "proto"
 MAPPERS = ROOT / "src" / "ros2_bridge" / "mappers"
-SHIM_OUT = ROOT / "third_party" / "ros-env-shim" / "src" / "generated_msgs.rs"
 GENERATED = ROOT / "src" / "generated"
 
 GOLD = {
@@ -63,7 +61,7 @@ OCTET_BOOL = {
     ("sensor_msgs/msg/Image", "is_bigendian"),
 }
 
-# proto scalar → (ros rust field type in shim, to_bus expr, to_ros expr)
+# ROS integer field overrides: (Rust field type, to_bus expr, to_ros expr)
 WRAPPER_CAST = {
     ("std_msgs/msg/Int8", "data"): ("i8", "{ros} as i32", "{bus} as i8"),
     ("std_msgs/msg/Int16", "data"): ("i16", "{ros} as i32", "{bus} as i16"),
@@ -75,15 +73,6 @@ WRAPPER_CAST = {
     ("sensor_msgs/msg/NavSatStatus", "status"): ("i8", "i32::from({ros})", "{bus} as i8"),
     ("sensor_msgs/msg/NavSatStatus", "service"): ("u16", "u32::from({ros})", "{bus} as u16"),
     ("action_msgs/msg/GoalStatus", "status"): ("i8", "i32::from({ros})", "{bus} as i8"),
-}
-
-SKIP_SHIM_PACKAGES = {
-    "unique_identifier_msgs",
-    "builtin_interfaces",
-    "action_msgs",
-    "example_interfaces",
-    "rosgraph_msgs",
-    "rcl_interfaces",
 }
 
 SCALAR_ROS = {
@@ -419,7 +408,7 @@ def to_bus_expr(msg: Msg, f: Field, existing: dict[str, tuple[Path, str]]) -> st
         return f"{ros}.into_iter().collect()"
     if f.optional and f.proto_type in SCALAR_ROS:
         return ros
-    # Proto int32/uint32 may be u8/i8/u16/… on distro rust IDL and u32/i32 on the shim.
+    # ROS fields mapped to Protobuf int32/uint32 can use narrower integer types.
     if f.proto_type in ("int32", "uint32"):
         return f"{ros}.into()"
     return ros
@@ -467,7 +456,7 @@ def to_ros_expr(msg: Msg, f: Field, existing: dict[str, tuple[Path, str]]) -> st
         return f"crate::ros2_bridge::mappers::convert::FromU32Seq::from_u32_seq({bus})"
     if f.repeated:
         return bus
-    # Infer distro (u8) vs shim (u32) from the ROS field type.
+    # Infer the integer width from the ROS field type.
     if f.proto_type in ("int32", "uint32"):
         return f"{bus} as _"
     return bus
@@ -537,89 +526,6 @@ impl TypedTopicMapper for {struct} {{
     }}
 }}
 '''
-
-
-def shim_field_ty(msg: Msg, f: Field) -> str:
-    key = (msg.ros_type, f.name)
-    if key in WRAPPER_CAST:
-        ty = WRAPPER_CAST[key][0]
-        return f"Option<{ty}>" if f.optional else ty
-    if key in OCTET_BOOL:
-        return "u8"
-    if f.is_timestamp or f.is_duration:
-        inner = "crate::builtin_interfaces::msg::Time" if f.is_timestamp else "crate::builtin_interfaces::msg::Duration"
-        if f.repeated:
-            return f"Vec<{inner}>"
-        if f.optional:
-            return f"Option<{inner}>"
-        return inner
-    if f.is_enum:
-        return "Vec<i32>" if f.repeated else "i32"
-    if f.is_bytes and key in INT8_BYTES:
-        return "Vec<i8>"
-    if f.is_bytes and msg.name == "UUID" and f.name == "uuid":
-        return "[u8; 16]"
-    if f.is_bytes:
-        return "Vec<u8>"
-    if f.is_string:
-        return "Vec<rosidl_runtime_rs::String>" if f.repeated else "rosidl_runtime_rs::String"
-    if f.nested_ros_type:
-        pkg, _, name = f.nested_ros_type.partition("/msg/")
-        inner = f"crate::{pkg}::msg::{name}"
-        if f.repeated:
-            return f"Vec<{inner}>"
-        if f.optional:
-            return f"Option<{inner}>"
-        return inner
-    if f.repeated:
-        rust = SCALAR_ROS.get(f.proto_type, "i32")
-        return f"Vec<{rust}>"
-    if f.optional and f.proto_type in SCALAR_ROS:
-        return f"Option<{SCALAR_ROS[f.proto_type]}>"
-    if f.proto_type in SCALAR_ROS:
-        return SCALAR_ROS[f.proto_type]
-    if f.proto_type == "bool":
-        return "bool"
-    return "i32"
-
-
-def emit_shim(msgs: list[Msg]) -> str:
-    by_pkg: dict[str, list[Msg]] = defaultdict(list)
-    for m in msgs:
-        if m.package in SKIP_SHIM_PACKAGES:
-            continue
-        by_pkg[m.package].append(m)
-
-    chunks = [
-        "// Generated typed ROS message stubs for `use_ros_shim` (topic mappers).",
-        "",
-    ]
-    for pkg in sorted(by_pkg):
-        chunks.append(f"pub mod {pkg} {{")
-        chunks.append("    pub mod msg {")
-        seen = set()
-        for m in sorted(by_pkg[pkg], key=lambda x: x.name):
-            if m.name in seen:
-                continue
-            seen.add(m.name)
-            fields = []
-            for f in m.fields:
-                ty = shim_field_ty(m, f)
-                fields.append(f"            pub {ros_field(f.name)}: {ty},")
-            field_block = "\n".join(fields)
-            chunks.append(
-                f"""
-        #[derive(Clone, Debug, Default, PartialEq)]
-        pub struct {m.name} {{
-{field_block}
-        }}
-        impl_rmw!({m.name});
-"""
-            )
-        chunks.append("    }")
-        chunks.append("}")
-        chunks.append("")
-    return "\n".join(chunks)
 
 
 PY_MAPPERS = ROOT / "bindings" / "python" / "robot_bus" / "ros2_bridge" / "mappers"
@@ -1224,9 +1130,6 @@ def main() -> None:
         path.write_text(emit_mapper(path, struct, msg, existing_by_type, prost_names))
         written += 1
 
-    shim_msgs = [all_msgs[ros] for _, _, ros in mappers if ros in all_msgs]
-    SHIM_OUT.write_text(emit_shim(shim_msgs))
-
     PY_MAPPERS.mkdir(parents=True, exist_ok=True)
     (PY_MAPPERS / "_convert.py").write_text(emit_python_convert())
     CPP_MAPPERS.mkdir(parents=True, exist_ok=True)
@@ -1255,8 +1158,7 @@ def main() -> None:
     write_cpp_umbrella(cpp_headers)
     print(
         f"wrote {written} rust mappers (skipped {skipped} gold), "
-        f"{py_written} python, {cpp_written} cpp, umbrella {CPP_UMBRELLA.name}, "
-        f"{SHIM_OUT}"
+        f"{py_written} python, {cpp_written} cpp, umbrella {CPP_UMBRELLA.name}"
     )
 
 

@@ -51,8 +51,8 @@ python scripts/test_doc_examples.py
 | Android | `just android-dev` + `just test-android` (SDK/NDK required) |
 | Cross-language protocol | `just test-interop` (all participating toolchains required) |
 | Console | `just console`; see [console development](console/README.md) |
-| ROS bridge | `just check-ros2-shim` for Rust type checks, plus real ROS runs for the changed language/routes |
+| ROS bridge | Build the changed bridge against ROS 2 and run the affected routes in that environment. See the [bridge guide](docs/en/ros2-bridge.md). |
 
-Host tests and shim checks do not replace device or real ROS verification. Follow [support status](docs/en/support.md), and attach environment plus commands when adding runtime claims. Performance runs are separate and overwrite generated reports; see [performance](docs/en/performance.md).
+Follow [support status](docs/en/support.md), and attach the environment and commands when adding device or ROS runtime claims. Performance runs overwrite generated reports. See [performance](docs/en/performance.md).
 
 Before submitting, explain the user-visible change, checks run and remaining limitations. Add regression coverage for behavior changes; document compatibility changes alongside code.

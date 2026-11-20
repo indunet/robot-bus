@@ -19,7 +19,7 @@
 #[path = "my_pkg.rs"]
 mod my_pkg;
 
-use std::time::Duration;
+use std::{sync::Arc, time::Duration};
 
 use prost::Message as ProstMessage;
 use robot_bus::Node;
@@ -66,13 +66,13 @@ fn main() -> robot_bus::Result<()> {
     let mut bus = Node::new("examples_add_two_ints_bus");
     bus.create_service_raw(
         "/examples/add_two_ints",
-        |body| match AddTwoIntsRequest::decode(body) {
+        Arc::new(|body| match AddTwoIntsRequest::decode(body) {
             Ok(req) => AddTwoIntsResponse { sum: req.a + req.b }.encode_to_vec(),
             Err(err) => {
                 log::warn!("decode AddTwoIntsRequest: {err}");
                 Vec::new()
             }
-        },
+        }),
         None,
     )?;
 

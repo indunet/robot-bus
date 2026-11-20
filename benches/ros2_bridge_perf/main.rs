@@ -4,31 +4,15 @@
 //! Run: `just perf-ros2-bridge` or
 //! `cargo run --release --bin ros2_bridge_perf --features ros2`
 
-#[cfg(feature = "ros2-shim")]
-fn main() {
-    eprintln!(
-        "ros2_bridge_perf requires --features ros2 with a sourced ROS install \
-         (not ros2-shim)"
-    );
-    std::process::exit(2);
-}
-
-#[cfg(not(feature = "ros2-shim"))]
 #[path = "../robot_bus_perf/support.rs"]
 mod support;
 
-#[cfg(not(feature = "ros2-shim"))]
 mod config;
-#[cfg(not(feature = "ros2-shim"))]
 mod pacing;
-#[cfg(not(feature = "ros2-shim"))]
 mod report;
-#[cfg(not(feature = "ros2-shim"))]
 mod rpc;
-#[cfg(not(feature = "ros2-shim"))]
 mod topics;
 
-#[cfg(not(feature = "ros2-shim"))]
 fn main() {
     use std::thread;
     use std::time::Duration;

@@ -66,7 +66,7 @@ Progress:
 - [ ] 3. List routes: topic/service/action names + direction each
 - [ ] 4. Prefer built-in mappers; else define bus `.proto` (fields = ROS .srv/.action), `protoc`, then Typed* mapper
 - [ ] 5. Ros2Bridge.new → bus_* → from_ros/to_bus (or from_bus/to_ros); pass TopicQos on both ends for topic, service, and action; service/action: `.service().from_ros(name, TopicQos).to_bus(name, TopicQos).mapper().timeout().add()`
-- [ ] 6. bridge.spin(); verify ros2 topic echo + bus console
+- [ ] 6. bridge.spin() (Python: bridge.run()); verify ros2 topic echo + bus console
 ```
 
 ## Unified builder contract
@@ -125,7 +125,7 @@ bridge = (
     .add()
     .build()
 )
-bridge.spin()
+bridge.run()  # Ctrl+C / SIGTERM to stop
 ```
 
 ### Rust

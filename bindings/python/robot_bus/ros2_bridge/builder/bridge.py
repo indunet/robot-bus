@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import signal
 import threading
 import time
 import uuid
@@ -187,10 +188,43 @@ class Ros2Bridge:
             raise RuntimeError(f"ROS executor failed: {self._executor_error}") from self._executor_error
 
     def spin(self) -> None:
-        while True:
+        while not self._halt.is_set():
             self.spin_once(None)
 
+    def run(self) -> None:
+        """Spin until Ctrl+C, SIGTERM or ROS shutdown, then ``shutdown()``."""
+        stop = threading.Event()
+        prev_sigterm = None
+        if threading.current_thread() is threading.main_thread():
+            prev_sigterm = signal.signal(signal.SIGTERM, lambda *_: stop.set())
+        try:
+            while not stop.is_set() and not self._halt.is_set():
+                if self._ros_context_shut_down():
+                    break
+                self.spin_once(None)
+        except KeyboardInterrupt:
+            pass
+        except RuntimeError:
+            # rclpy's SIGINT handler shuts the context down, which stops the executor.
+            if not (self._halt.is_set() or self._ros_context_shut_down()):
+                raise
+        finally:
+            if prev_sigterm is not None:
+                signal.signal(signal.SIGTERM, prev_sigterm)
+            self.shutdown()
+
+    def _ros_context_shut_down(self) -> bool:
+        context = getattr(self._ros_node, "context", None)
+        if context is None:
+            return False
+        try:
+            return not context.ok()
+        except Exception:  # noqa: BLE001
+            return False
+
     def spin_once(self, timeout: Optional[float] = 0.01) -> None:
+        if self._halt.is_set():
+            raise RuntimeError("Ros2Bridge is shut down")
         self._check_executor()
         if self._first_spin_at is None:
             self._first_spin_at = time.monotonic()
@@ -310,7 +344,14 @@ class Ros2Bridge:
             except Exception:  # noqa: BLE001
                 pass
 
-    def close(self) -> None:
+    def __enter__(self) -> "Ros2Bridge":
+        return self
+
+    def __exit__(self, *_exc: Any) -> None:
+        self.shutdown()
+
+    def shutdown(self) -> None:
+        """Stop ROS spinning and release ROS / bus resources. Idempotent."""
         self._halt.set()
         if self._bus_executor is not None:
             self._bus_executor.shutdown()
@@ -335,10 +376,19 @@ class Ros2Bridge:
             except Exception:  # noqa: BLE001
                 pass
             self._ros_node = None
+        self._executor = None
+        if self._bus is not None:
+            try:
+                self._bus.shutdown()
+            except Exception:  # noqa: BLE001
+                pass
+            self._bus = None
+
+    close = shutdown
 
     def __del__(self) -> None:  # pragma: no cover
         try:
-            self.close()
+            self.shutdown()
         except Exception:
             pass
 

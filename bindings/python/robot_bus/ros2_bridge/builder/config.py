@@ -212,6 +212,15 @@ def _topic_supports_lazy(mapper: Any) -> bool:
     )
 
 
+def ros_interface_name(t: Any) -> Optional[str]:
+    """``geometry_msgs/msg/Twist`` for an rclpy interface class, else None."""
+    name = getattr(t, "__name__", None)
+    parts = str(getattr(t, "__module__", "")).split(".")
+    if name and len(parts) >= 2 and parts[1] in ("msg", "srv", "action"):
+        return f"{parts[0]}/{parts[1]}/{name}"
+    return None
+
+
 def mapper_type_name(mapper: Any) -> str:
     fn = getattr(mapper, "type_name", None)
     if callable(fn):
@@ -219,13 +228,15 @@ def mapper_type_name(mapper: Any) -> str:
             return str(fn())
         except TypeError:
             pass
-    ros = getattr(mapper, "ros_msg_type", None)
-    if callable(ros):
+    for attr in ("ros_msg_type", "ros_srv_type", "ros_action_type"):
+        ros = getattr(mapper, attr, None)
+        if not callable(ros):
+            continue
         try:
             t = ros()
-            return str(getattr(t, "__name__", type(mapper).__name__))
         except Exception:  # noqa: BLE001
-            pass
+            continue
+        return ros_interface_name(t) or str(getattr(t, "__name__", type(mapper).__name__))
     return type(mapper).__name__
 
 

@@ -2,11 +2,7 @@ English | [中文](../zh/support.md)
 
 # Support and verification status
 
-This page describes the implementation and traceable verification evidence for repository version **2.3.1** (documentation reviewed 2026-09-08). A configured CI check does not mean a particular commit passed. For a release, inspect the matching tag's build results and actual artifacts.
-
-The 2.3.2 working tree adds a [real Humble browser acceptance workflow](ros2-web.md)
-for the Python bridge. This is a separate, scoped check; consult its run artifacts
-before treating a commit as verified. The older matrix below remains historical.
+This page records implementation and verification evidence for the **2.3.2** development tree. Consult CI runs and their artifacts for results for specific commits and release packages.
 
 ## Core SDKs
 
@@ -29,11 +25,13 @@ Target distributions are **Humble / Jazzy**. Topic, service and action bridging 
 
 | Language | Target distributions | Topics | Services / actions | Verification boundary |
 | --- | --- | --- | --- | --- |
-| Rust / rclrs | Humble, Jazzy | Mappers and routes implemented | Both directions implemented | Regular CI type-checks `ros2-shim` with Humble configuration without linking real ROS; the 2026-08-31 host record reports rust IDL type mismatches |
-| Python / rclpy | Humble, Jazzy | Mappers and routes implemented | Both directions implemented | Regular CI includes simulated and bus-side tests; live service and action feedback/result/timeout/cancel verification remains pending |
+| Rust / rclrs | Humble, Jazzy | Mappers and routes implemented | Both directions implemented | Built and linked against Humble on 2026-11-20. Verified on-demand topic forwarding and Trigger services in both directions. Jazzy and full route acceptance remain pending |
+| Python / rclpy | Humble, Jazzy | Mappers and routes implemented | Both directions implemented | The [Humble browser workflow](ros2-web.md) checks topics in both directions and browser-initiated services and actions. See its run artifacts for results |
 | C++ / rclcpp | Humble, Jazzy | Mappers and routes implemented | Both directions implemented | The [release workflow](../../.github/workflows/release-cpp.yml) configures Linux ROS package builds; packaging is not route-by-route runtime acceptance; live service/action verification remains pending |
 
-See the [bridge test record](ros2-bridge-perf-report.md) for the historical failing environment and commands. It does not prove every current machine fails, or that the current commit has fixed that failure. In addition to sourcing ROS, Rust needs compatible rust IDL and typesupport. Passing shim checks alone does not establish runtime support.
+The Rust build used Ubuntu 22.04.5 (x86_64, `ros:humble-ros-base`), Rust 1.100.0, `rclrs` 0.7.0, `ros-env` 0.2.0, and Protobuf compiler 35.1. The bridge library, `ros2_bridge_perf`, and both bridge examples compiled and linked with Rust bindings from Humble system packages. See the [bridge guide](ros2-bridge.md) for dependencies and commands and the [historical performance record](ros2-bridge-perf-report.md) for the 2026-08-31 field-type failure.
+
+In the same Humble environment with Fast DDS and localhost ROS communication, all 14 tests in `ros2_bridge_lazy`, `ros2_bridge_service_smoke`, and `ros2_bridge_diagnostics` passed. See the [bridge guide](ros2-bridge.md) for the test command.
 
 Before using the bridge in an application, run the [bridge examples](../../examples/ros2_bridge/README.md) for your types and directions. Record commit/tag, OS/architecture, ROS distribution, RMW, language, dependency versions, commands and results. Check service success and timeout; for actions also check rejection, feedback, result, cancellation and failure. Attach reproducible evidence when updating verification status.
 

@@ -20,7 +20,7 @@ Rust:    rclrs  ──mapper──► robot_bus::Node
 
 **Why per language:** Topic / service / action all need compile-time concrete types (`create_subscription<T>`, `create_service<T>`, etc.). Each language creates ROS entities with concrete types on its side, then forwards via its own bus `Node`.
 
-Target distributions: **Humble**, **Jazzy**. See [support and verification status](support.md) for CI, packaging and live runtime boundaries; shim checks and package builds are not full runtime acceptance. Mount routes with `.mapper(concrete object)`; custom mappers are field converters in that language.
+Target distributions: **Humble**, **Jazzy**. See [support and verification status](support.md) for build and runtime coverage. Mount routes with `.mapper(concrete object)`; custom mappers are field converters in that language.
 
 ---
 
@@ -469,9 +469,24 @@ fn main() -> robot_bus::Result<()> {
 
 The client is crates.io **`rclrs`**. Message types come from **`ros-env`** re-exporting `share/<pkg>/rust/`, not from rclrs itself.
 
-The **core** bridge mapper set needs rust IDL on `AMENT_PREFIX_PATH` with field types matching the mappers. After sourcing ROS, build and run the routes in the target environment; sourcing alone does not establish compatibility. The [historical build record](ros2-bridge-perf-report.md) includes a field-type mismatch. Extension stacks are not builtins — do not expect nav2/control/foxglove/apriltag overlay to unlock in-tree mappers (write TypedTopicMapper instead).
+The `ros2` Cargo feature requires generated Rust interfaces (`share/<pkg>/rust/` under `AMENT_PREFIX_PATH`) and their ROS system libraries. Use custom mappers for extension packages such as Nav2 and Foxglove.
 
-Without ROS, use `just check-ros2-shim`. crates.io `ros-env` empties its shim; this repo patches it with **typed field stubs** in [`third_party/ros-env-shim`](../../third_party/ros-env-shim) (generated from core mapper protos). Our `std_srvs` vendor still uses system C typesupport and does not need rust IDL.
+With ROS 2 Humble and the build tools installed (Rust, Protobuf compiler 35.1, C/C++ toolchain and pkg-config), run from the repository root:
+
+```bash
+sudo apt-get install libzmq3-dev ros-humble-rosidl-generator-rs \
+  ros-humble-example-interfaces ros-humble-test-msgs
+source /opt/ros/humble/setup.bash
+python3 scripts/generate_rust_msgs.py
+cargo build --no-default-features --features ros2 --bin ros2_bridge_perf \
+  --example ros2_bridge_builtin --example ros2_bridge_custom_add_two_ints
+ROS_LOCALHOST_ONLY=1 ROS_DOMAIN_ID=94 RMW_IMPLEMENTATION=rmw_fastrtps_cpp \
+  cargo test --no-default-features --features ws,console-api,ros2 \
+  --test ros2_bridge_lazy --test ros2_bridge_service_smoke \
+  --test ros2_bridge_diagnostics -- --test-threads=1
+```
+
+Use Humble interface packages that ship compatible Rust bindings. `example_interfaces` provides Fibonacci and AddTwoInts. `rclrs` links the `test_msgs` system libraries. See [support and verification status](support.md) for the tested environment.
 
 ---
 
@@ -509,7 +524,7 @@ bridge = (
     .add()
     .build()
 )
-bridge.spin()
+bridge.run()  # Ctrl+C / SIGTERM to stop
 ```
 
 - ROS side: `rclpy` node + executor (background thread spin)
@@ -556,6 +571,15 @@ Same process holds both:
 2. robot-bus `Node`
 
 The main loop must drive both sides (`spin` / `spin_once`); implementation details differ per language, semantics are the same: drain ROS↔bus queues and drive the bus.
+
+Python: `bridge.run()` spins until Ctrl+C, SIGTERM or ROS shutdown, then calls `bridge.shutdown()`. With your own loop (for example, also driving another bus `Node`), use `with bridge:` so it shuts down on exit. `shutdown()` is idempotent; `close()` is an alias.
+
+```python
+with bridge:
+    while True:
+        my_node.spin_once(0.01)
+        bridge.spin_once(0.01)
+```
 
 Topic convert / decode / publish failures are dropped (the bridge stays up). Each bridge keeps atomic counters; `drop_stats()` returns the **sum** across routes (`convert_fail` / `decode_fail` / `publish_fail`). Failure logs are rate-limited per route (first plus at most one per second). `build()` prints the route table. Per-topic route counters are published at 1 Hz on `/robot_bus/bridges` (console **BRIDGE** tab). After 15s without topic traffic the bridge warns once per quiet episode on `/robot_bus/events`; receiving traffic rearms the warning. Transient-local topics are exempt after their first sample. See the diagnostics section for counters and interpretation.
 
@@ -624,4 +648,4 @@ Upgrade the bridge, client SDK and WebSocket server together for the new
 Successful result payloads are unchanged; cancellation uses existing `CANCELLED`.
 Older SDKs cannot classify the new errors.
 
-Humble/Jazzy live ROS verification of service calls, action feedback/result/timeout/cancel is still pending. Current coverage is simulated unit tests plus bus-side regression without a sourced ROS distro.
+See [support status](support.md) for live ROS service and action coverage by language.

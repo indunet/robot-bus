@@ -448,7 +448,7 @@ bridge = (
     .add()
     .build()
 )
-bridge.spin()
+bridge.run()  # Ctrl+C / SIGTERM to stop
 ```
 
 Key points:

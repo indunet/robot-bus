@@ -442,6 +442,128 @@ def test_ros2_bridge_drop_stats_starts_zero():
     assert bridge.drop_stats() == {"convert_fail": 0, "decode_fail": 0, "publish_fail": 0}
 
 
+class _FakeBus:
+    def __init__(self, on_spin=None):
+        self.spins = 0
+        self.shutdowns = 0
+        self._on_spin = on_spin
+
+    def spin_once(self, _timeout):
+        self.spins += 1
+        if self._on_spin is not None:
+            self._on_spin(self.spins)
+
+    def shutdown(self):
+        self.shutdowns += 1
+
+
+class _FakeContext:
+    def __init__(self):
+        self.alive = True
+
+    def ok(self):
+        return self.alive
+
+
+class _FakeRosNode:
+    def __init__(self):
+        self.context = _FakeContext()
+        self.destroyed = 0
+
+    def destroy_node(self):
+        self.destroyed += 1
+
+
+def _bare_bridge(on_spin=None):
+    from robot_bus.ros2_bridge import Ros2Bridge
+
+    bridge = Ros2Bridge()
+    bridge._bus = _FakeBus(on_spin)
+    bridge._ros_node = _FakeRosNode()
+    return bridge
+
+
+def test_shutdown_idempotent_and_closes_bus():
+    bridge = _bare_bridge()
+    bus, ros = bridge._bus, bridge._ros_node
+    bridge.shutdown()
+    bridge.shutdown()
+    bridge.close()
+    assert bus.shutdowns == 1
+    assert ros.destroyed == 1
+    with pytest.raises(RuntimeError, match="shut down"):
+        bridge.spin_once(0.0)
+
+
+def test_context_manager_shuts_down():
+    bridge = _bare_bridge()
+    bus = bridge._bus
+    with bridge as entered:
+        assert entered is bridge
+        bridge.spin_once(0.0)
+    assert bus.shutdowns == 1
+
+
+def test_run_stops_on_ros_shutdown():
+    holder = {}
+
+    def on_spin(n):
+        if n == 3:
+            holder["bridge"]._ros_node.context.alive = False
+
+    bridge = _bare_bridge(on_spin)
+    holder["bridge"] = bridge
+    bus = bridge._bus
+    bridge.run()
+    assert bus.spins == 3
+    assert bus.shutdowns == 1
+
+
+def test_run_treats_ctrl_c_as_stop():
+    def on_spin(_n):
+        raise KeyboardInterrupt
+
+    bridge = _bare_bridge(on_spin)
+    bus = bridge._bus
+    bridge.run()
+    assert bus.shutdowns == 1
+
+
+def test_run_reraises_executor_failure_and_shuts_down():
+    def on_spin(_n):
+        raise RuntimeError("ROS executor failed: boom")
+
+    bridge = _bare_bridge(on_spin)
+    bus = bridge._bus
+    with pytest.raises(RuntimeError, match="boom"):
+        bridge.run()
+    assert bus.shutdowns == 1
+
+
+def test_mapper_type_name_from_ros_interface():
+    from robot_bus.ros2_bridge.builder.config import mapper_type_name
+
+    Twist = type("Twist", (), {"__module__": "geometry_msgs.msg._twist"})
+    AddTwoInts = type("AddTwoInts", (), {"__module__": "example_interfaces.srv._add_two_ints"})
+
+    class TopicMapper:
+        def ros_msg_type(self):
+            return Twist
+
+    class ServiceMapper:
+        def ros_srv_type(self):
+            return AddTwoInts
+
+    class Named(TopicMapper):
+        def type_name(self):
+            return "my_pkg/msg/Custom"
+
+    assert mapper_type_name(TopicMapper()) == "geometry_msgs/msg/Twist"
+    assert mapper_type_name(ServiceMapper()) == "example_interfaces/srv/AddTwoInts"
+    assert mapper_type_name(Named()) == "my_pkg/msg/Custom"
+    assert mapper_type_name(Dummy()) == "object"
+
+
 def test_ros2_available_checks_rclpy():
     import robot_bus
 
@@ -473,6 +595,12 @@ if __name__ == "__main__":
     test_forward_with_health_counts_route_and_bridge()
     test_bridge_snapshot_proto_roundtrip()
     test_ros2_bridge_drop_stats_starts_zero()
+    test_shutdown_idempotent_and_closes_bus()
+    test_context_manager_shuts_down()
+    test_run_stops_on_ros_shutdown()
+    test_run_treats_ctrl_c_as_stop()
+    test_run_reraises_executor_failure_and_shuts_down()
+    test_mapper_type_name_from_ros_interface()
     test_ros2_available_checks_rclpy()
     try:
         test_builder_accepts_concrete_mappers_without_build()

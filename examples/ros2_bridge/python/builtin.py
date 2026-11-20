@@ -47,7 +47,7 @@ def main() -> None:
         "builtin bridge: /examples/chatter, /examples/reset, /examples/fibonacci "
         "(ROS publishes topics; ROS clients call bus services/actions; Ctrl+C to stop)"
     )
-    bridge.spin()
+    bridge.run()
 
 
 if __name__ == "__main__":

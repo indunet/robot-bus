@@ -12,9 +12,6 @@
 !scripts/generate*.py
 !scripts/gen_rust_msgs/
 !scripts/gen_rust_msgs/**
-!third_party/
-!third_party/ros-env-shim/
-!third_party/ros-env-shim/**
 !bindings/
 !bindings/python/
 !bindings/python/**

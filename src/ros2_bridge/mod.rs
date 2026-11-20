@@ -20,7 +20,6 @@ mod drop_stats;
 mod dynamic_rpc_spike;
 mod mapper;
 mod observe;
-mod ros_idl;
 mod spin;
 mod typed_rpc;
 mod typed_wire;

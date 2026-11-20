@@ -300,7 +300,7 @@ bridge = (
     .add()
     .build()
 )
-bridge.spin()
+bridge.run()  # Ctrl+C / SIGTERM to stop
 ```
 
 Full guide and examples (Rust / Python / C++): [`docs/en/ros2-bridge.md`](docs/en/ros2-bridge.md). For full package migration (not just bridging), see [`docs/skills/`](docs/skills/).

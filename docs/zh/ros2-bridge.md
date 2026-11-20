@@ -10,7 +10,7 @@
 | **Python** | `rclpy` | `robot_bus.ros2_bridge` |
 | **C++** | `rclcpp` | `<robot_bus/ros2_bridge.hpp>` + `robot_bus_ros2_bridge` |
 
-目标发行版：**Humble**、**Jazzy**。各语言的 CI、打包与真实运行验证范围见[支持与验证状态](support.md)；不能把 shim 检查或发行包构建视为完整运行验收。一条桥进程里可以同时挂多条话题 / 服务 / action。方向只能单向：`from_ros → to_bus` 或 `from_bus → to_ros`，没有 `both`。
+目标发行版：**Humble**、**Jazzy**。各语言的构建与运行覆盖范围见[支持与验证状态](support.md)。一条桥进程里可以同时挂多条话题 / 服务 / action，每条路由选择 `from_ros → to_bus` 或 `from_bus → to_ros`。
 
 可运行示例：[`examples/ros2_bridge/`](../../examples/ros2_bridge/)（`builtin` 为内置 mapper，`custom_add_two_ints` 为自定义服务）。
 
@@ -27,7 +27,7 @@ cargo run --bin robot_bus_broker    # 或 python -m robot_bus.broker
 | 语言 | 依赖 |
 |------|------|
 | 通用 | 可达的 broker（tcp / ipc / discover） |
-| Rust | `robot-bus = { features = ["ros2"] }` + 下文「Rust overlay」 |
+| Rust | `robot-bus = { features = ["ros2"] }`，见下文 Rust 构建步骤 |
 | Python | `robot_bus` + 系统 **`rclpy`**（`just python-dev` / `python-dev-ros2`） |
 | C++ | `robot-bus-ros2-humble` 或 `…-jazzy`，或 `just cpp-dev-ros2`（`-DROBOT_BUS_ROS2=ON`） |
 
@@ -53,7 +53,7 @@ bridge = (
     .add()
     .build()
 )
-bridge.spin()
+bridge.run()  # Ctrl+C / SIGTERM 退出
 ```
 
 ```rust
@@ -539,9 +539,24 @@ class MyFibonacciMapper:
 
 ### Rust（`rclrs`）
 
-`feature = "ros2"` 需要 `AMENT_PREFIX_PATH` 上有核心桥包的 rust IDL（`share/<pkg>/rust/`），并且生成字段类型与 mapper 匹配。source ROS 是必要步骤，但不能保证本机 IDL 兼容；[历史构建记录](ros2-bridge-perf-report.md)包含类型不匹配的实例。请在实际环境构建并运行所需路由。扩展栈（nav2 / control / foxglove / apriltag）**不是**桥内置，需要自定义 mapper。
+启用 Cargo 的 `ros2` 功能需要 `AMENT_PREFIX_PATH` 中的 Rust 消息定义（`share/<pkg>/rust/`）以及对应的 ROS 系统库。Nav2、Foxglove 等扩展包可通过自定义 mapper 接入。
 
-无 ROS 环境时可用 `just check-ros2-shim`。`rclrs` 走 `ros_env::*`，crates.io 的 `ros-env` shim 是空的，本仓库用 [`third_party/ros-env-shim`](../../third_party/ros-env-shim) 通过 `[patch.crates-io]` 提供 **typed 字段桩**（按核心 mapper proto 生成）。我们自己的 `std_srvs` vendor 仍走系统 C typesupport，不依赖 rust IDL。
+安装 ROS 2 Humble 和构建工具（Rust、Protobuf 编译器 35.1、C/C++ 工具链及 pkg-config）后，在仓库根目录执行：
+
+```bash
+sudo apt-get install libzmq3-dev ros-humble-rosidl-generator-rs \
+  ros-humble-example-interfaces ros-humble-test-msgs
+source /opt/ros/humble/setup.bash
+python3 scripts/generate_rust_msgs.py
+cargo build --no-default-features --features ros2 --bin ros2_bridge_perf \
+  --example ros2_bridge_builtin --example ros2_bridge_custom_add_two_ints
+ROS_LOCALHOST_ONLY=1 ROS_DOMAIN_ID=94 RMW_IMPLEMENTATION=rmw_fastrtps_cpp \
+  cargo test --no-default-features --features ws,console-api,ros2 \
+  --test ros2_bridge_lazy --test ros2_bridge_service_smoke \
+  --test ros2_bridge_diagnostics -- --test-threads=1
+```
+
+请使用带有兼容 Rust 绑定的 Humble 接口包。`example_interfaces` 提供 Fibonacci 和 AddTwoInts，`rclrs` 链接时还需要 `test_msgs` 系统库。已验证的环境见[支持与验证状态](support.md)。
 
 ### Python（`rclpy`）
 
@@ -563,6 +578,15 @@ just python-dev-ros2   # 或 just python-dev；需本机有 rclpy
 ## 运行时
 
 同进程同时持有 ROS 节点（rclrs / rclpy / rclcpp）和 robot-bus `Node`。主循环需推进两侧（`spin` / `spin_once`）：排空 ROS↔bus 队列并驱动 bus。
+
+Python：`bridge.run()` 一直转到 Ctrl+C、SIGTERM 或 ROS 被关闭，然后自动 `bridge.shutdown()`。自己写循环（比如同时驱动另一个 bus `Node`）时用 `with bridge:`，退出时自动关闭。`shutdown()` 可重复调用；`close()` 是它的别名。
+
+```python
+with bridge:
+    while True:
+        my_node.spin_once(0.01)
+        bridge.spin_once(0.01)
+```
 
 话题转换 / 解码 / 发出失败会丢掉该帧（桥继续转）。每座桥有原子计数，`drop_stats()` 返回整桥合计（`convert_fail` / `decode_fail` / `publish_fail`）。失败日志按路由限流（首次 + 每秒至多一条）。`build()` 会打印路由表。每条话题路由另有独立计数，经 `/robot_bus/bridges` 以 1 Hz 发到 console（侧栏 **BRIDGE**）。话题路由在首次 `spin` 后 15s 仍未收到样本，或收到过样本后连续 15s 无新数据，会往 `/robot_bus/events` 发 WARN。每次静默只提醒一次；恢复收数后重新布防。lazy 未启用时不提醒；transient-local 静态话题收到首帧后不做持续断流告警。低频/事件型话题的静默也可能是正常行为，请结合消息源判断。
 
@@ -592,7 +616,7 @@ ROS 客户端调用 bus Action 时，成功映射为 ROS SUCCEEDED，取消映�
 
 部署时同时升级桥、bus 客户端 SDK 和 WebSocket 服务端：新增错误标记 `ACTION_REJECTED` / `ACTION_ABORTED` / `RPC_TIMEOUT` / `RPC_FAILED`；成功结果格式不变，取消沿用 `CANCELLED`。旧版客户端不具备新增错误的分类能力。
 
-Humble／Jazzy 上的真实 ROS 实测（服务调用、Action 反馈/结果/超时/取消）仍待补；当前覆盖的是模拟单测和 bus 侧回归，尚未在已 source 的发行版上跑通。
+各语言在真实 ROS 环境中的服务和 Action 验证范围见[支持状态](support.md)。
 
 ---
 

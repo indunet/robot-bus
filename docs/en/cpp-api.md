@@ -225,7 +225,6 @@ just gen-cpp          # write bindings/cpp/generated (gitignored; protoc 35.1)
 just cpp-dev          # cargo FFI + cmake msgs/tests (no ros2)
 just cpp-dev-ros2     # native rclcpp bridge lib (source Humble/Jazzy first)
 just test-cpp         # msgs / timer / pub-sub / service / action / ros2 stub
-just check-ros2-shim  # typecheck ros2 without a full ROS install
 ```
 
 Repo layout: generated sources (gitignored) live under `bindings/cpp/generated/robot_bus/` after `just gen-cpp`; install/public includes drop the `generated/` segment. Release packages ship the generated headers — consumers do not need `protoc`.

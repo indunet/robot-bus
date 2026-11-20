@@ -2,10 +2,7 @@
 
 # 支持与验证状态
 
-本文描述仓库版本 **2.3.1** 的实现范围与可追溯验证证据（文档整理：2026-09-08）。“配置了 CI 检查”不代表某个提交已通过；使用发布包时还应检查对应 tag 的构建结果和实际附件。
-
-2.3.2 工作树新增了针对 Python 桥的[真实 Humble 浏览器验收工作流](ros2-web.md)。
-这是一项范围明确的独立检查，应查看对应运行附件再判断提交是否已验证；下方旧矩阵仍是历史记录。
+本文记录仓库 **2.3.2** 开发版本的实现范围与验证证据。具体提交和发布包的验证结果请查看对应的 CI 运行及附件。
 
 ## 核心 SDK
 
@@ -28,11 +25,13 @@
 
 | 语言 | 目标发行版 | Topic | Service / Action | 验证边界 |
 | --- | --- | --- | --- | --- |
-| Rust / rclrs | Humble、Jazzy | 有 mapper 与路由实现 | 有双向实现 | 常规 CI 使用 Humble 配置的 `ros2-shim` 类型检查，不链接真实 ROS；2026-08-31 的本机记录存在 rust IDL 类型不匹配 |
-| Python / rclpy | Humble、Jazzy | 有 mapper 与路由实现 | 有双向实现 | 常规 CI 包含模拟测试和 bus 侧测试；服务及 Action 反馈、结果、超时、取消的真实发行版实测待补 |
+| Rust / rclrs | Humble、Jazzy | 有 mapper 与路由实现 | 有双向实现 | 2026-11-20 在真实 Humble 上编译并链接通过，验证了按需话题转发和双向 Trigger 服务。Jazzy 和完整路由验收待验证 |
+| Python / rclpy | Humble、Jazzy | 有 mapper 与路由实现 | 有双向实现 | [Humble 浏览器验收](ros2-web.md)配置了双向话题和浏览器发起的服务、Action 检查，结果见对应运行附件 |
 | C++ / rclcpp | Humble、Jazzy | 有 mapper 与路由实现 | 有双向实现 | [发布流程](../../.github/workflows/release-cpp.yml) 配置 Linux ROS 包构建；构建与打包不等于逐路由运行验收，服务/Action 真实实测待补 |
 
-历史失败环境与命令见[桥接测试记录](ros2-bridge-perf-report.md)。该记录不代表今天每台机器都会失败，也不能作为当前提交已修复的证据。Rust 除 source 发行版外，还需要与 mapper 匹配的 rust IDL 和 typesupport；仅通过 shim 检查不足以确认可运行。
+Rust 构建复测使用 Ubuntu 22.04.5（x86_64，`ros:humble-ros-base`）、Rust 1.100.0、`rclrs` 0.7.0、`ros-env` 0.2.0 和 Protobuf 编译器 35.1。使用 Humble 系统包提供的 Rust 绑定，编译并链接了桥库、`ros2_bridge_perf` 和两个桥接示例。依赖安装及复测命令见[桥接指南](ros2-bridge.md)。2026-08-31 的字段类型失败见[历史性能记录](ros2-bridge-perf-report.md)。
+
+在同一 Humble 环境中使用 Fast DDS 和本地 ROS 通信，运行了 `ros2_bridge_lazy`、`ros2_bridge_service_smoke` 和 `ros2_bridge_diagnostics` 三组测试，共 14 项通过。运行命令见[桥接指南](ros2-bridge.md)。
 
 在将桥用于应用前，按[桥接示例](../../examples/ros2_bridge/README.md)验证自己的消息类型与方向，并记录：提交/tag、系统/架构、ROS 发行版、RMW、语言、依赖版本、运行命令及结果。Service 验证成功和超时；Action 另验拒绝、反馈、结果、取消及异常。新增验证结论时附可复现证据，不只改“支持”标签。
 

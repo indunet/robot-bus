@@ -16,8 +16,6 @@ path = "src/lib.rs"
 default = []
 # Links system ROS 2 (rcl via rclrs). Build only with a sourced Humble/Jazzy env.
 ros2 = ["robot-bus/ros2", "dep:rclrs"]
-# Typecheck without a real ROS install (also enables local `ros2` so FFI is compiled).
-ros2-shim = ["ros2", "robot-bus/ros2-shim", "rclrs/use_ros_shim"]
 
 [dependencies]
 anyhow = "1"
@@ -25,9 +23,6 @@ prost = "0.14"
 robot-bus = { path = "../../..", default-features = false, features = ["ws", "console", "demo-tank"] }
 rclrs = { version = "0.7", optional = true }
 uuid = { version = "1", features = ["v4"] }
-
-[patch.crates-io]
-ros-env = { path = "../../../third_party/ros-env-shim" }
 
 [profile.release]
 lto = true
