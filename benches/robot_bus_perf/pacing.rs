@@ -7,12 +7,40 @@ use std::time::{Duration, Instant};
 
 use crate::support::{LatencyStats, ScenarioResult, env_f64, env_usize};
 
-pub const PAYLOAD_LEN: usize = 64;
 pub const WARMUP: usize = 50;
-pub const MSG_HWM: i32 = 2_048;
-// CDR little-endian encapsulation, empty dimensions, zero offset, 64-byte sequence.
-pub const CDR_PREFIX: [u8; 16] = [0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 64, 0, 0, 0];
 const CDR_LATENCY_STRIDE: usize = 16;
+const DEFAULT_PAYLOAD_LEN: usize = 64;
+const DEFAULT_MSG_HWM: i32 = 2_048;
+
+/// Application payload bytes. `ROBOT_BUS_PERF_PAYLOAD_BYTES` overrides the 64-byte default.
+pub fn payload_len() -> usize {
+    static LEN: OnceLock<usize> = OnceLock::new();
+    *LEN.get_or_init(|| {
+        let len = env_usize("ROBOT_BUS_PERF_PAYLOAD_BYTES", DEFAULT_PAYLOAD_LEN);
+        assert!(
+            (24..=32 * 1024 * 1024).contains(&len),
+            "ROBOT_BUS_PERF_PAYLOAD_BYTES must be 24..=32MiB"
+        );
+        len
+    })
+}
+
+/// Message queue depth. `ROBOT_BUS_PERF_MSG_HWM` overrides the 2048 default.
+pub fn msg_hwm() -> i32 {
+    static HWM: OnceLock<i32> = OnceLock::new();
+    *HWM.get_or_init(|| {
+        let hwm = env_usize("ROBOT_BUS_PERF_MSG_HWM", DEFAULT_MSG_HWM as usize);
+        assert!(hwm > 0, "ROBOT_BUS_PERF_MSG_HWM must be positive");
+        hwm as i32
+    })
+}
+
+/// CDR prefix for `std_msgs/UInt8MultiArray`: encapsulation, no dimensions, length.
+pub fn cdr_prefix() -> [u8; 16] {
+    let mut prefix = [0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+    prefix[12..16].copy_from_slice(&(payload_len() as u32).to_le_bytes());
+    prefix
+}
 
 pub fn svc_iters() -> usize {
     env_usize("ROBOT_BUS_PERF_SVC_ITERS", 10_000)
@@ -56,7 +84,7 @@ pub fn goodput_settle() -> Duration {
 }
 
 pub fn make_payload(ts_ns: u64) -> Vec<u8> {
-    let mut buf = vec![0u8; PAYLOAD_LEN];
+    let mut buf = vec![0u8; payload_len()];
     buf[..8].copy_from_slice(&ts_ns.to_le_bytes());
     buf
 }
@@ -112,14 +140,14 @@ impl TrialReceiver {
     fn new_payload(&self) -> Vec<u8> {
         let mut payload = Vec::new();
         if self.cdr {
-            payload.extend_from_slice(&CDR_PREFIX);
+            payload.extend_from_slice(&cdr_prefix());
         }
-        payload.resize(payload.len() + PAYLOAD_LEN, 0);
+        payload.resize(payload.len() + payload_len(), 0);
         payload
     }
 
     fn stamp(&self, payload: &mut [u8], epoch: u64, sequence: usize, timestamp: u64) {
-        let offset = if self.cdr { CDR_PREFIX.len() } else { 0 };
+        let offset = if self.cdr { cdr_prefix().len() } else { 0 };
         let payload = &mut payload[offset..];
         payload[..8].copy_from_slice(&timestamp.to_le_bytes());
         payload[8..16].copy_from_slice(&epoch.to_le_bytes());
@@ -137,7 +165,8 @@ impl TrialReceiver {
     pub fn receive(&self, payload: &[u8]) {
         let mut window = self.window.lock().unwrap();
         let payload = if self.cdr {
-            let Some(body) = payload.strip_prefix(&CDR_PREFIX) else {
+            let prefix = cdr_prefix();
+            let Some(body) = payload.strip_prefix(&prefix) else {
                 window.counts.invalid += 1;
                 return;
             };
@@ -145,7 +174,7 @@ impl TrialReceiver {
         } else {
             payload
         };
-        if payload.len() != PAYLOAD_LEN {
+        if payload.len() != payload_len() {
             window.counts.invalid += 1;
             return;
         }

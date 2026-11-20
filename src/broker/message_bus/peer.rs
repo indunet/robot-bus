@@ -2,7 +2,7 @@
 
 use anyhow::{Context, Result, bail};
 
-use crate::transports::XPUB_PORT;
+use crate::transports::{XPUB_CHANNEL, XPUB_PORT, XSUB_CHANNEL, ipc_sibling_endpoint};
 
 /// Remote broker message-bus endpoints (client-facing XSUB/XPUB of the peer).
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -17,7 +17,8 @@ impl MessagePeer {
     /// Build a peer from its XPUB endpoint; XSUB uses the same host with port − 1.
     ///
     /// Accepts `tcp://host:port`, `host:port`, or a bare `host`
-    /// (XPUB [`XPUB_PORT`] / XSUB = XPUB − 1).
+    /// (XPUB [`XPUB_PORT`] / XSUB = XPUB − 1), or the peer's
+    /// `ipc://DIR/message_bus_xpub.ipc` (XSUB = `DIR/message_bus_xsub.ipc`).
     pub fn from_xpub(xpub: &str) -> Result<Self> {
         let xpub = normalize_tcp_endpoint(xpub);
         let xsub = xsub_from_xpub(&xpub)?;
@@ -36,9 +37,14 @@ fn normalize_tcp_endpoint(addr: &str) -> String {
 }
 
 fn xsub_from_xpub(xpub: &str) -> Result<String> {
+    if xpub.starts_with("ipc://") {
+        return ipc_sibling_endpoint(xpub, XPUB_CHANNEL, XSUB_CHANNEL).with_context(|| {
+            format!("message peer ipc endpoint must end with /message_bus_xpub.ipc, got {xpub}")
+        });
+    }
     let rest = xpub
         .strip_prefix("tcp://")
-        .with_context(|| format!("message peer must be tcp://…, got {xpub}"))?;
+        .with_context(|| format!("message peer must be tcp://… or ipc://…, got {xpub}"))?;
     // IPv6: tcp://[::1]:15581
     let (host, port_str) = if let Some(bracket) = rest.strip_prefix('[') {
         let end = bracket
@@ -86,5 +92,17 @@ mod tests {
         let p = MessagePeer::from_xpub(&format!("tcp://[::1]:{XPUB_PORT}")).unwrap();
         assert_eq!(p.xpub, format!("tcp://[::1]:{XPUB_PORT}"));
         assert_eq!(p.xsub, format!("tcp://[::1]:{XSUB_PORT}"));
+    }
+
+    #[test]
+    fn ipc_peer_derives_xsub_file() {
+        let p = MessagePeer::from_xpub("ipc:///tmp/rb-a/message_bus_xpub.ipc").unwrap();
+        assert_eq!(p.xpub, "ipc:///tmp/rb-a/message_bus_xpub.ipc");
+        assert_eq!(p.xsub, "ipc:///tmp/rb-a/message_bus_xsub.ipc");
+    }
+
+    #[test]
+    fn ipc_peer_rejects_non_xpub_file() {
+        assert!(MessagePeer::from_xpub("ipc:///tmp/rb-a/message_bus_xsub.ipc").is_err());
     }
 }

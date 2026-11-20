@@ -3,7 +3,9 @@
 use anyhow::{Context, Result, bail};
 
 use crate::transports::{
-    ACTION_BACKEND_PORT as BACKEND_PORT, ACTION_FRONTEND_PORT as FRONTEND_PORT,
+    ACTION_BACKEND_CHANNEL as BACKEND_CHANNEL, ACTION_BACKEND_PORT as BACKEND_PORT,
+    ACTION_FRONTEND_CHANNEL as FRONTEND_CHANNEL, ACTION_FRONTEND_PORT as FRONTEND_PORT,
+    ipc_sibling_endpoint,
 };
 
 /// Remote broker action-bus backend (federation DEALERs connect here).
@@ -20,6 +22,7 @@ impl ActionPeer {
     ///
     /// Accepts:
     /// - `tcp://host:port`, `host:port`, or bare `host` (port [`BACKEND_PORT`])
+    /// - `ipc://DIR/action_bus_backend.ipc` for a peer on the same host
     /// - `broker-id=tcp://host:port` to set [`Self::broker_id`]
     pub fn from_backend(backend: &str) -> Result<Self> {
         let (broker_id, backend) = split_peer_id(backend);
@@ -61,9 +64,18 @@ fn normalize_tcp_endpoint(addr: &str, default_port: u16) -> String {
 }
 
 fn backend_from_frontend(frontend: &str) -> Result<String> {
+    if frontend.starts_with("ipc://") {
+        return ipc_sibling_endpoint(frontend, FRONTEND_CHANNEL, BACKEND_CHANNEL).with_context(
+            || {
+                format!(
+                    "action peer ipc endpoint must end with /action_bus_frontend.ipc, got {frontend}"
+                )
+            },
+        );
+    }
     let rest = frontend
         .strip_prefix("tcp://")
-        .with_context(|| format!("action peer must be tcp://…, got {frontend}"))?;
+        .with_context(|| format!("action peer must be tcp://… or ipc://…, got {frontend}"))?;
     let (host, port_str) = if let Some(bracket) = rest.strip_prefix('[') {
         let end = bracket
             .find("]:")
@@ -120,5 +132,11 @@ mod tests {
     fn ipv6_from_frontend() {
         let p = ActionPeer::from_frontend("tcp://[::1]:15664").unwrap();
         assert_eq!(p.backend, "tcp://[::1]:15665");
+    }
+
+    #[test]
+    fn ipc_from_frontend_derives_backend_file() {
+        let p = ActionPeer::from_frontend("ipc:///tmp/rb-b/action_bus_frontend.ipc").unwrap();
+        assert_eq!(p.backend, "ipc:///tmp/rb-b/action_bus_backend.ipc");
     }
 }

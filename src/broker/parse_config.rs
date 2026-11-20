@@ -235,6 +235,10 @@ pub fn parse_robot_bus_config(args: &[String]) -> Result<Option<RobotBusConfig>>
                 i += 1;
                 config.discovery.advertise_host = Some(require_arg(args, i, arg)?.to_string());
             }
+            "--ipc-dir" => {
+                i += 1;
+                config.discovery.ipc_dir = Some(require_arg(args, i, arg)?.to_string());
+            }
             "--discovery-port" | "--discovery-addr" => {
                 // Deprecated UDP flags: ignored with a soft warning via bail message
                 // that points users to --api-listen / --peer.
@@ -363,7 +367,9 @@ Message options:\n  \
 --message-rcv-hwm N            Message receive HWM\n  \
 --broker-id ID                 Hop-path id for message/service/action federation (default: random UUID)\n  \
 --message-peer tcp://HOST:XPUB Peer broker XPUB (advanced; XSUB = XPUB port - 1)\n  \
---peer HOST:PORT               Federation peer via API listen (GET /api/v1/discover; repeatable)\n\n\
+--message-peer ipc://DIR/message_bus_xpub.ipc  Same-host peer (XSUB = DIR/message_bus_xsub.ipc)\n  \
+--peer HOST:PORT               Federation peer via API listen (GET /api/v1/discover; repeatable)\n  \
+--peer ipc+HOST:PORT           Same as --peer, but link over the peer's IPC endpoints (same host only)\n\n\
 Service options:\n  \
 --service-frontend-bind ADDR   Client (REQ) bind (default :0)\n  \
 --service-backend-bind ADDR    Worker (DEALER) bind (default :0)\n  \
@@ -372,7 +378,7 @@ Service options:\n  \
 --service-heartbeat-timeout-ms N\n  \
 --service-pending-timeout-ms N     NO_WORKER timeout for queued requests\n  \
 --service-max-pending N            Max queued requests before NO_WORKER\n  \
---service-peer [ID=]tcp://HOST:BE  Peer service backend (advanced; optional ID=)\n\n\
+--service-peer [ID=]tcp://HOST:BE  Peer service backend (advanced; optional ID=; ipc://… also accepted)\n\n\
 Action options:\n  \
 --action-frontend-bind ADDR    Client (DEALER) bind (default :0)\n  \
 --action-backend-bind ADDR     Worker (DEALER) bind (default :0)\n  \
@@ -380,12 +386,13 @@ Action options:\n  \
 --action-heartbeat-interval-ms N\n  \
 --action-heartbeat-timeout-ms N\n  \
 --action-pending-timeout-ms N  NO_WORKER timeout for queued goals\n  \
---action-peer [ID=]tcp://HOST:BE  Peer action backend (advanced; optional ID=)\n\n\
+--action-peer [ID=]tcp://HOST:BE  Peer action backend (advanced; optional ID=; ipc://… also accepted)\n\n\
 Shared bus options:\n  \
 --snd-hwm / --rcv-hwm N        Apply HWM to message + service + action\n  \
 --heartbeat-interval-ms N      Apply to service + action\n  \
 --heartbeat-timeout-ms N       Apply to service + action\n  \
---tcp-only                     Bind TCP only (skip inproc/ipc aliases)\n\n\
+--tcp-only                     Bind TCP only (skip inproc/ipc aliases)\n  \
+--ipc-dir DIR                  Fixed IPC socket directory, one per broker (default: fresh temp dir)\n\n\
 Discovery / advertise:\n  \
 --domain-id N                  Soft label returned in /api/v1/discover (default: 0)\n  \
 --advertise-host HOST          Host clients should connect to (default: inferred)\n  \
@@ -660,6 +667,30 @@ mod tests {
         assert!(config.action.peers[0].broker_id.is_empty());
         assert_eq!(config.action.peers[1].backend, "tcp://10.0.0.2:15665");
         assert_eq!(config.action.peers[1].broker_id, "broker-c");
+    }
+
+    #[test]
+    fn parses_ipc_dir_and_ipc_peers() {
+        let config = parse_robot_bus_config(&args(&[
+            "--ipc-dir",
+            "/run/rb-a",
+            "--message-peer",
+            "ipc:///run/rb-b/message_bus_xpub.ipc",
+            "--service-peer",
+            "broker-b=ipc:///run/rb-b/service_bus_backend.ipc",
+        ]))
+        .unwrap()
+        .expect("config");
+        assert_eq!(config.discovery.ipc_dir.as_deref(), Some("/run/rb-a"));
+        assert_eq!(
+            config.message.peers[0].xsub,
+            "ipc:///run/rb-b/message_bus_xsub.ipc"
+        );
+        assert_eq!(
+            config.service.peers[0].backend,
+            "ipc:///run/rb-b/service_bus_backend.ipc"
+        );
+        assert_eq!(config.service.peers[0].broker_id, "broker-b");
     }
 
     #[test]

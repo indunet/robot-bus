@@ -9,7 +9,9 @@ pub mod service_bus;
 
 pub use crate::discovery::DiscoveryConfig;
 pub use action_bus::ActionPeer;
-pub use federation::{FederationPeerEndpoints, apply_api_peers, resolve_peer_from_api};
+pub use federation::{
+    FederationPeerEndpoints, IPC_PEER_PREFIX, apply_api_peers, resolve_peer_from_api,
+};
 pub use handle::{RobotBusBroker, RobotBusConfig};
 pub use message_bus::MessagePeer;
 pub use parse_config::{

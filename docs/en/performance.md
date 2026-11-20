@@ -101,6 +101,53 @@ The highest tested target that passed all three rounds was 200,000 messages/s fo
 
 Set `TOPIC_CDR_PERF_RATES='75000 100000 200000 400000'` before invoking the runner to reproduce the higher-load tests. The figures describe the matched pre-encoded Topic paths on this host over three 3 s windows.
 
+### Camera and lidar sizes
+
+The comparison above uses 64 B of application data. This run keeps the same pre-encoded CDR layout and changes the application payload to 256 KiB, 640×480 RGB (921,600 B), and 1920×1080 RGB (6,220,800 B). The first is about one mid-size lidar sweep or a compressed image. The other two are uncompressed camera frames.
+
+The fixed rates were 10 and 30 messages/s, three rounds each, with a 3 s send window and 100 ms drain. Both sides used queue depth 8. A depth of 2048, as used for the 64 B runs, would hold more than 12 GiB of 1080p frames on one side, and sensor streams usually keep only the latest frames. The ROS 2 SHM profile for this run allows a 12 MiB sample and a 128 MiB segment. The 64 KiB cap in the 64 B profile cannot carry these frames. UDP stayed on loopback, with the kernel's default 208 KiB socket buffers. The container limits were unchanged: CPUs 32–39, 8 GiB of memory, and 512 MiB of `/dev/shm`.
+
+A round passed when both send-window rates reached 90% of the target and loss after draining was at most 1%. One-at-a-time latency sends the next message only after the previous one arrives. If a message is not received within 2 s, that path stops and its rate trial does not run.
+
+| Payload | Target/s | Route | Sent/s | Received in window/s | Loss after drain (%) | One-at-a-time p50 (µs) | Loaded p50 (µs) | Loaded p99 (µs) | Passed |
+| --- | ---: | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| 256 KiB | 10 | tcp | 10 [10–10] | 10 [10–10] | 0.00 [0.00–0.00] | 766 [735–838] | 790 [740–856] | 1,148 [1,052–1,187] | 3/3 |
+| 256 KiB | 10 | ipc | 10 [10–10] | 10 [10–10] | 0.00 [0.00–0.00] | 710 [709–750] | 720 [718–754] | 1,057 [1,042–1,116] | 3/3 |
+| 256 KiB | 10 | inproc | 10 [10–10] | 10 [10–10] | 0.00 [0.00–0.00] | 466 [444–469] | 474 [452–479] | 634 [627–638] | 3/3 |
+| 256 KiB | 10 | shm | 10 [10–10] | 10 [10–10] | 0.00 [0.00–0.00] | 189 [185–213] | 192 [183–213] | 364 [338–378] | 3/3 |
+| 256 KiB | 10 | udp | 10 [10–10] | 10 [10–10] | 0.00 [0.00–0.00] | 249 [246–252] | 273 [246–276] | 468 [362–483] | 3/3 |
+| 256 KiB | 30 | tcp | 30 [30–30] | 30 [30–30] | 0.00 [0.00–0.00] | 774 [755–847] | 1,083 [1,046–1,136] | 1,216 [1,107–1,241] | 3/3 |
+| 256 KiB | 30 | ipc | 30 [30–30] | 30 [30–30] | 0.00 [0.00–0.00] | 703 [699–834] | 1,021 [985–1,048] | 1,061 [1,034–1,067] | 3/3 |
+| 256 KiB | 30 | inproc | 30 [30–30] | 30 [30–30] | 0.00 [0.00–0.00] | 461 [458–470] | 587 [568–600] | 615 [606–626] | 3/3 |
+| 256 KiB | 30 | shm | 30 [30–30] | 30 [30–30] | 0.00 [0.00–0.00] | 184 [158–186] | 339 [283–378] | 399 [310–410] | 3/3 |
+| 256 KiB | 30 | udp | 30 [30–30] | 30 [30–30] | 0.00 [0.00–0.00] | 188 [157–190] | 366 [331–384] | 405 [380–420] | 3/3 |
+| 640×480 RGB | 10 | tcp | 10 [10–10] | 10 [10–10] | 0.00 [0.00–0.00] | 2,502 [2,450–2,535] | 2,555 [2,520–2,631] | 2,829 [2,767–2,911] | 3/3 |
+| 640×480 RGB | 10 | ipc | 10 [10–10] | 10 [10–10] | 0.00 [0.00–0.00] | 2,770 [2,297–2,801] | 2,744 [2,288–2,804] | 2,755 [2,652–2,805] | 3/3 |
+| 640×480 RGB | 10 | inproc | 10 [10–10] | 10 [10–10] | 0.00 [0.00–0.00] | 1,229 [1,227–1,266] | 1,245 [1,233–1,286] | 1,943 [1,923–1,945] | 3/3 |
+| 640×480 RGB | 10 | shm | 10 [10–10] | 10 [10–10] | 0.00 [0.00–0.00] | 522 [481–554] | 502 [477–535] | 867 [852–887] | 3/3 |
+| 640×480 RGB | 10 | udp | 10 [10–10] | 9 [5–10] | 13.33 [3.33–46.67] | — | 670 [555–675] | 705 [555–851] | 0/3 |
+| 640×480 RGB | 30 | tcp | 30 [30–30] | 30 [30–30] | 0.00 [0.00–0.00] | 2,542 [2,532–2,546] | 2,841 [2,836–2,893] | 2,942 [2,924–3,226] | 3/3 |
+| 640×480 RGB | 30 | ipc | 30 [30–30] | 30 [30–30] | 0.00 [0.00–0.00] | 2,461 [2,418–3,410] | 2,774 [2,768–2,797] | 2,840 [2,824–3,055] | 3/3 |
+| 640×480 RGB | 30 | inproc | 30 [30–30] | 30 [30–30] | 0.00 [0.00–0.00] | 1,277 [1,269–1,281] | 1,877 [1,860–1,887] | 1,913 [1,895–1,931] | 3/3 |
+| 640×480 RGB | 30 | shm | 30 [30–30] | 30 [30–30] | 0.00 [0.00–0.00] | 504 [423–542] | 706 [596–764] | 787 [658–819] | 3/3 |
+| 640×480 RGB | 30 | udp | 30 [30–30] | 30 [30–30] | 0.00 [0.00–0.00] | 524 [473–574] | 821 [757–830] | 854 [815–900] | 3/3 |
+| 1920×1080 RGB | 10 | tcp | 10 [10–10] | 10 [10–10] | 0.00 [0.00–0.00] | 23,255 [19,222–30,236] | 17,568 [16,741–18,546] | 23,577 [19,217–30,498] | 3/3 |
+| 1920×1080 RGB | 10 | ipc | 10 [10–10] | 10 [10–10] | 0.00 [0.00–0.00] | 30,168 [23,369–30,179] | 27,784 [23,578–28,676] | 30,448 [27,289–31,225] | 3/3 |
+| 1920×1080 RGB | 10 | inproc | 10 [10–10] | 10 [10–10] | 0.00 [0.00–0.00] | 5,501 [5,498–5,657] | 5,524 [5,505–5,830] | 12,124 [11,772–12,549] | 3/3 |
+| 1920×1080 RGB | 10 | shm | 10 [10–10] | 10 [10–10] | 0.00 [0.00–0.00] | 2,729 [2,719–2,736] | 6,833 [6,789–7,003] | 14,315 [14,160–14,663] | 3/3 |
+| 1920×1080 RGB | 10 | udp | 10 [10–10] | 9 [0–9] | 10.00 [6.67–100.00] | — | 3,929 [3,421–4,436] | 3,929 [3,421–4,436] | 0/3 |
+| 1920×1080 RGB | 30 | tcp | 30 [30–30] | 30 [30–30] | 0.00 [0.00–0.00] | 23,185 [23,016–23,535] | 18,436 [17,492–19,379] | 23,510 [23,270–23,532] | 3/3 |
+| 1920×1080 RGB | 30 | ipc | 30 [30–30] | 30 [30–30] | 0.00 [0.00–0.00] | 25,237 [23,549–30,266] | 27,805 [27,489–28,127] | 29,979 [28,336–30,271] | 3/3 |
+| 1920×1080 RGB | 30 | inproc | 30 [30–30] | 30 [30–30] | 0.00 [0.00–0.00] | 5,548 [5,361–5,689] | 12,005 [11,372–12,487] | 12,063 [11,541–13,112] | 3/3 |
+| 1920×1080 RGB | 30 | shm | 30 [30–30] | 30 [30–30] | 0.00 [0.00–0.00] | 2,715 [2,713–2,718] | 14,185 [14,019–14,237] | 14,467 [14,319–14,560] | 3/3 |
+| 1920×1080 RGB | 30 | udp | 30 [30–30] | 29 [12–30] | 3.33 [0.00–60.00] | — | 3,475 [3,329–4,261] | 4,299 [3,488–4,690] | 1/3 |
+
+1080p at 30 messages/s is about 187 MB/s of application data. Robot Bus TCP, IPC, and inproc, and ROS 2 SHM, delivered every frame in all three rounds. One-at-a-time median p50 on that row was 2.7 ms for SHM, 5.5 ms for inproc, 23.2 ms for TCP, and 25.2 ms for IPC. A Robot Bus message passes through the broker, so a large frame is copied an extra time. SHM shares the frame between the publisher and subscriber.
+
+UDP delivered both 256 KiB rates and 640×480 at 30 messages/s in all three rounds. On the first run, the larger frames did not arrive within 2 s during one-at-a-time sampling, so the rate trial was skipped. Those cells were rerun at the same fixed rate with one-at-a-time sampling turned off. The rerun lost a median 13.33% at 640×480 and 10 messages/s, 10.00% at 1080p and 10 messages/s (one round delivered nothing), and 3.33% at 1080p and 30 messages/s, where only one round passed. A dash in the one-at-a-time column means that cell has no complete serial sample. The kernel UDP socket buffer is 208 KiB, which is smaller than these frames, so fragments are dropped. The rerun logs are in `bench-results/20261120-2132-sensor-payload/udp-rate/`.
+
+Logs are in `bench-results/20261120-2132-sensor-payload/`. To reproduce, build both Release binaries in the same container and run [run_sensor.sh](../../benches/topic_cdr_perf/run_sensor.sh). The defaults are the sizes and rates above, with queue depth 8. The 64 B runner and its Fast DDS profiles are unchanged.
+
 ## Counting and WS validation
 
 The message receive rate divides unique in-trial receives during the send window by the actual send duration. Delivery divides unique in-trial receives after draining by sends. Separate one-at-a-time samples measure message latency. The tables summarize per-round percentiles using the median and minimum–maximum range. RPC rates divide successful completions by measured elapsed time.

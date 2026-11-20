@@ -51,6 +51,11 @@ pub struct DiscoveryConfig {
     pub domain_id: u32,
     /// Override advertise host (otherwise inferred / `127.0.0.1`).
     pub advertise_host: Option<String>,
+    /// Fixed IPC directory (advertised as `ipcDir`). `None` → a fresh temp dir per start.
+    ///
+    /// Set it when peers must know this broker's `ipc://` endpoints before it starts
+    /// (e.g. mutual IPC federation). Use one directory per broker.
+    pub ipc_dir: Option<String>,
 }
 
 impl Default for DiscoveryConfig {
@@ -59,6 +64,7 @@ impl Default for DiscoveryConfig {
             enabled: true,
             domain_id: 0,
             advertise_host: None,
+            ipc_dir: None,
         }
     }
 }

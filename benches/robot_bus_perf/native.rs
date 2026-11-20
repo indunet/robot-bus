@@ -4,7 +4,7 @@ use std::sync::Arc;
 use std::thread;
 use std::time::{Duration, Instant};
 
-use crate::pacing::{MSG_HWM, TrialReceiver, WARMUP, make_payload, measure_pubsub, rpc_warmup};
+use crate::pacing::{TrialReceiver, WARMUP, make_payload, measure_pubsub, msg_hwm, rpc_warmup};
 use crate::support::{LatencyStats, ScenarioResult};
 use robot_bus::{Context, HighWaterMark, Node, NodeOptions, Publisher};
 
@@ -26,8 +26,8 @@ pub fn bench_pubsub(
         }
     };
     let hwm = HighWaterMark {
-        snd: MSG_HWM,
-        rcv: MSG_HWM,
+        snd: msg_hwm(),
+        rcv: msg_hwm(),
     };
     let publisher = match Publisher::with_shared_context(ctx, Some(&xsub), hwm) {
         Ok(p) => p,
@@ -63,8 +63,8 @@ pub fn run_pubsub(
 
     let receiver = Arc::new(receiver);
     let hwm = HighWaterMark {
-        snd: MSG_HWM,
-        rcv: MSG_HWM,
+        snd: msg_hwm(),
+        rcv: msg_hwm(),
     };
     if let Err(err) = sub.set_stream_hwm(hwm) {
         return ScenarioResult::skipped(&transport, scenario, format!("set_stream_hwm: {err}"));

@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!--
+  Fast DDS shared memory for camera/lidar-sized samples.
+  maxMessageSize covers a 1920x1080 RGB frame plus the CDR prefix.
+  segment_size holds several in-flight frames and must fit in /dev/shm.
+-->
+<profiles xmlns="http://www.eprosima.com/XMLSchemas/fastRTPS_Profiles">
+  <library_settings>
+    <intraprocess_delivery>OFF</intraprocess_delivery>
+  </library_settings>
+  <transport_descriptors>
+    <transport_descriptor>
+      <transport_id>shm_transport</transport_id>
+      <type>SHM</type>
+      <segment_size>134217728</segment_size>
+      <maxMessageSize>12582912</maxMessageSize>
+    </transport_descriptor>
+  </transport_descriptors>
+
+  <participant profile_name="ros2_perf_shm" is_default_profile="true">
+    <rtps>
+      <userTransports>
+        <transport_id>shm_transport</transport_id>
+      </userTransports>
+      <useBuiltinTransports>false</useBuiltinTransports>
+    </rtps>
+  </participant>
+</profiles>

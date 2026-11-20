@@ -9,7 +9,7 @@ use crate::support::{LatencyStats, ScenarioResult};
 use robot_bus::worker_thread::WorkerThread;
 use robot_bus::{HighWaterMark, Node, Publisher, QosProfile, RobotBusBroker, Subscriber};
 
-use crate::pacing::{MSG_HWM, TrialReceiver, WARMUP, make_payload, measure_pubsub, rpc_warmup};
+use crate::pacing::{TrialReceiver, WARMUP, make_payload, measure_pubsub, msg_hwm, rpc_warmup};
 
 pub fn bench_ws_publish(broker: &RobotBusBroker, url: &str) -> ScenarioResult {
     let transport = "ws";
@@ -25,8 +25,8 @@ pub fn bench_ws_publish(broker: &RobotBusBroker, url: &str) -> ScenarioResult {
     };
 
     let hwm = HighWaterMark {
-        snd: MSG_HWM,
-        rcv: MSG_HWM,
+        snd: msg_hwm(),
+        rcv: msg_hwm(),
     };
     let sub = match Subscriber::with_hwm(Some(&broker.discover.message_xpub), hwm) {
         Ok(s) => s,
@@ -68,7 +68,7 @@ pub fn bench_ws_subscribe(broker: &RobotBusBroker, url: &str) -> ScenarioResult 
     let mut node = Node::ws_at("perf-ws-sub", url);
     if let Err(err) = node.create_subscription_raw_with_qos(
         topic,
-        QosProfile::keep_last(MSG_HWM),
+        QosProfile::keep_last(msg_hwm()),
         Arc::new({
             let receiver = Arc::clone(&receiver);
             move |payload| receiver.receive(payload)
@@ -79,8 +79,8 @@ pub fn bench_ws_subscribe(broker: &RobotBusBroker, url: &str) -> ScenarioResult 
     }
 
     let hwm = HighWaterMark {
-        snd: MSG_HWM,
-        rcv: MSG_HWM,
+        snd: msg_hwm(),
+        rcv: msg_hwm(),
     };
     let publisher = match Publisher::with_hwm(Some(&broker.discover.message_xsub), hwm) {
         Ok(p) => p,

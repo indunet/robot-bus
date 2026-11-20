@@ -25,7 +25,7 @@ use robot_bus::{
 use robot_bus::WsConfig;
 
 use crate::native::run_pubsub;
-use crate::pacing::{MSG_HWM, WARMUP, act_iters, make_payload, rpc_warmup, svc_iters};
+use crate::pacing::{WARMUP, act_iters, make_payload, msg_hwm, rpc_warmup, svc_iters};
 use crate::support::{LatencyStats, ScenarioResult};
 
 const TRANSPORT: &str = "federation";
@@ -238,8 +238,8 @@ fn bench_fed_pubsub(broker_a: &RobotBusBroker, broker_b: &RobotBusBroker) -> Sce
         return ScenarioResult::skipped(TRANSPORT, scenario, "wait_for_broker timed out");
     }
     let hwm = HighWaterMark {
-        snd: MSG_HWM,
-        rcv: MSG_HWM,
+        snd: msg_hwm(),
+        rcv: msg_hwm(),
     };
     let xsub = connect_addr(&broker_a.message.xsub_bind);
     let publisher = match Publisher::with_hwm(Some(&xsub), hwm) {

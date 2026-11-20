@@ -321,7 +321,16 @@ impl RobotBusBroker {
             && (config.message.bind_all_transports
                 || config.service.bind_all_transports
                 || config.action.bind_all_transports);
-        let ipc_dir = if use_ipc {
+        let fixed_ipc_dir = config
+            .discovery
+            .ipc_dir
+            .clone()
+            .filter(|d| use_ipc && !d.is_empty());
+        if let Some(dir) = &fixed_ipc_dir {
+            std::fs::create_dir_all(dir)
+                .with_context(|| format!("create broker IPC directory {dir}"))?;
+        }
+        let ipc_dir = if use_ipc && fixed_ipc_dir.is_none() {
             let default_root;
             let root = match ipc_root {
                 Some(root) => root,
@@ -342,7 +351,9 @@ impl RobotBusBroker {
             None
         };
         let mut bind_opts = BindAllOpts::default();
-        if let Some(dir) = &ipc_dir {
+        if let Some(dir) = &fixed_ipc_dir {
+            bind_opts.ipc_dir = dir.clone();
+        } else if let Some(dir) = &ipc_dir {
             bind_opts.ipc_dir = dir
                 .path()
                 .to_str()
@@ -415,8 +426,9 @@ impl RobotBusBroker {
             service_backend: svc_be.clone(),
             action_frontend: act_fe.clone(),
             action_backend: act_be.clone(),
-            ipc_dir: (config.message.bind_all_transports && ipc_dir.is_some())
-                .then(|| bind_opts.ipc_dir.clone()),
+            ipc_dir: (config.message.bind_all_transports
+                && (ipc_dir.is_some() || fixed_ipc_dir.is_some()))
+            .then(|| bind_opts.ipc_dir.clone()),
             inproc_prefix: config
                 .message
                 .bind_all_transports

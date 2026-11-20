@@ -5,9 +5,9 @@ English | [中文](../zh/rust-api.md)
 `Cargo.toml`:
 
 ```toml
-robot-bus = "2.4.0"
+robot-bus = "2.4.1"
 # Local: robot-bus = { path = "../robot-bus" }
-# WebSocket RPC server (`ws` feature) is on by default; to disable: robot-bus = { version = "2.4.0", default-features = false }
+# WebSocket RPC server (`ws` feature) is on by default; to disable: robot-bus = { version = "2.4.1", default-features = false }
 ```
 
 ## Broker startup
@@ -99,7 +99,7 @@ broker.stop()?;
 
 `RobotBusBroker::start(config)` still works (creates its own Context internally); cross-process tcp/ipc does not require sharing.
 
-Cross-broker (federation): prefer `--peer HOST:PORT` (peer API port; internally `GET /api/v1/discover` fills ZMQ peers), or set `broker_id` and `peers` on `RobotBusConfig` (`MessagePeer` / `ServicePeer` / `ActionPeer`), or CLI `--broker-id` / `--message-peer` / `--service-peer` / `--action-peer`. Embedded start APIs in other languages use the same string conventions (see the corresponding `*-api.md`). Message federation **does not** forward the reserved namespace `/robot_bus` (including `/robot_bus/status`, topology, bot, and other console system topics), avoiding status snapshot overwrites when multiple brokers are bridged; user business topics are still pushed as needed.
+Cross-broker (federation): prefer `--peer HOST:PORT` (peer API port; internally `GET /api/v1/discover` fills ZMQ peers), or set `broker_id` and `peers` on `RobotBusConfig` (`MessagePeer` / `ServicePeer` / `ActionPeer`), or CLI `--broker-id` / `--message-peer` / `--service-peer` / `--action-peer`. For brokers on the same host, `--peer ipc+HOST:PORT` links over the peer's `ipc://` sockets, and the `*-peer` flags accept explicit `ipc://DIR/<channel>.ipc` endpoints. Topic federation needs each broker to peer the other, so give the broker that starts second a fixed directory with `--ipc-dir DIR` (`DiscoveryConfig::ipc_dir`) that the first one can name in its `*-peer` flags. Embedded start APIs in other languages use the same string conventions (see the corresponding `*-api.md`). Message federation **does not** forward the reserved namespace `/robot_bus` (including `/robot_bus/status`, topology, bot, and other console system topics), avoiding status snapshot overwrites when multiple brokers are bridged; user business topics are still pushed as needed.
 
 Typical flow: `Context` → `Node::with_context` → `create_*` → `node.spin()` (or convenience `Node::new`). For multiple nodes or parallelism, use `executor.add_node` + `executor.spin`. For WebSocket communication, use `Node::ws` / `Node::ws_at` (see “WebSocket RPC mode Node” below).
 

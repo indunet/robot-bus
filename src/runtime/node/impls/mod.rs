@@ -11,6 +11,7 @@ mod topics;
 impl Node {
     fn start_topology_guard(&self, kind: &str, name: &str) -> Arc<TopologyEndpointGuard> {
         let guard = TopologyEndpointGuard::start(
+            self.context.zmq(),
             self.options.service_frontend.as_deref(),
             &self.options.host,
             &self.options.transport,

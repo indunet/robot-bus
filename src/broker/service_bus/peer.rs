@@ -3,7 +3,9 @@
 use anyhow::{Context, Result, bail};
 
 use crate::transports::{
-    SERVICE_BACKEND_PORT as BACKEND_PORT, SERVICE_FRONTEND_PORT as FRONTEND_PORT,
+    SERVICE_BACKEND_CHANNEL as BACKEND_CHANNEL, SERVICE_BACKEND_PORT as BACKEND_PORT,
+    SERVICE_FRONTEND_CHANNEL as FRONTEND_CHANNEL, SERVICE_FRONTEND_PORT as FRONTEND_PORT,
+    ipc_sibling_endpoint,
 };
 
 /// Remote broker service-bus backend (workers / federation DEALERs connect here).
@@ -20,6 +22,7 @@ impl ServicePeer {
     ///
     /// Accepts:
     /// - `tcp://host:port`, `host:port`, or bare `host` (port [`BACKEND_PORT`])
+    /// - `ipc://DIR/service_bus_backend.ipc` for a peer on the same host
     /// - `broker-id=tcp://host:port` to set [`Self::broker_id`]
     pub fn from_backend(backend: &str) -> Result<Self> {
         let (broker_id, backend) = split_peer_id(backend);
@@ -62,9 +65,18 @@ fn normalize_tcp_endpoint(addr: &str, default_port: u16) -> String {
 }
 
 fn backend_from_frontend(frontend: &str) -> Result<String> {
+    if frontend.starts_with("ipc://") {
+        return ipc_sibling_endpoint(frontend, FRONTEND_CHANNEL, BACKEND_CHANNEL).with_context(
+            || {
+                format!(
+                    "service peer ipc endpoint must end with /service_bus_frontend.ipc, got {frontend}"
+                )
+            },
+        );
+    }
     let rest = frontend
         .strip_prefix("tcp://")
-        .with_context(|| format!("service peer must be tcp://…, got {frontend}"))?;
+        .with_context(|| format!("service peer must be tcp://… or ipc://…, got {frontend}"))?;
     let (host, port_str) = if let Some(bracket) = rest.strip_prefix('[') {
         let end = bracket
             .find("]:")
@@ -127,5 +139,19 @@ mod tests {
     fn ipv6_from_frontend() {
         let p = ServicePeer::from_frontend("tcp://[::1]:15662").unwrap();
         assert_eq!(p.backend, "tcp://[::1]:15663");
+    }
+
+    #[test]
+    fn ipc_backend_with_id() {
+        let p =
+            ServicePeer::from_backend("broker-b=ipc:///tmp/rb-b/service_bus_backend.ipc").unwrap();
+        assert_eq!(p.backend, "ipc:///tmp/rb-b/service_bus_backend.ipc");
+        assert_eq!(p.broker_id, "broker-b");
+    }
+
+    #[test]
+    fn ipc_from_frontend_derives_backend_file() {
+        let p = ServicePeer::from_frontend("ipc:///tmp/rb-b/service_bus_frontend.ipc").unwrap();
+        assert_eq!(p.backend, "ipc:///tmp/rb-b/service_bus_backend.ipc");
     }
 }

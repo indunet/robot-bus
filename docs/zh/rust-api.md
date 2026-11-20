@@ -5,9 +5,9 @@
 `Cargo.toml`：
 
 ```toml
-robot-bus = "2.4.0"
+robot-bus = "2.4.1"
 # 本地：robot-bus = { path = "../robot-bus" }
-# 默认已启用 WebSocket RPC服务端（`ws` feature）；若需关闭：robot-bus = { version = "2.4.0", default-features = false }
+# 默认已启用 WebSocket RPC服务端（`ws` feature）；若需关闭：robot-bus = { version = "2.4.1", default-features = false }
 ```
 
 ## Broker启动
@@ -99,7 +99,7 @@ broker.stop()?;
 
 `RobotBusBroker::start(config)`仍可用（内部自建 Context）；跨进程 tcp/ipc不要求共享。
 
-跨 broker（federation）：优先 `--peer HOST:PORT`（对端 API口，内部会 `GET /api/v1/discover`填齐 ZMQ peers），或在 `RobotBusConfig`上设置 `broker_id`与 `peers`（`MessagePeer` / `ServicePeer` / `ActionPeer`），或 CLI `--broker-id` / `--message-peer` / `--service-peer` / `--action-peer`。各语言嵌入式 start API使用同款字符串约定（见对应 `*-api.md`）。Message federation **不会**转发保留命名空间 `/robot_bus`（含 `/robot_bus/status`、topology、bot等 console系统 topic），避免多 broker帮连时状态快照互相覆盖；用户业务 topic仍按需推送。
+跨 broker（federation）：优先 `--peer HOST:PORT`（对端 API口，内部会 `GET /api/v1/discover`填齐 ZMQ peers），或在 `RobotBusConfig`上设置 `broker_id`与 `peers`（`MessagePeer` / `ServicePeer` / `ActionPeer`），或 CLI `--broker-id` / `--message-peer` / `--service-peer` / `--action-peer`。同一台机器上的 broker 可用 `--peer ipc+HOST:PORT` 走对端的 `ipc://` socket，`*-peer` 参数也接受显式的 `ipc://目录/<通道>.ipc`。topic 邦联要求双方互相配置 peer，先启动的一方需要知道后启动方的目录，所以要用 `--ipc-dir DIR`（`DiscoveryConfig::ipc_dir`）给后启动方固定 IPC 目录。各语言嵌入式 start API使用同款字符串约定（见对应 `*-api.md`）。Message federation **不会**转发保留命名空间 `/robot_bus`（含 `/robot_bus/status`、topology、bot等 console系统 topic），避免多 broker帮连时状态快照互相覆盖；用户业务 topic仍按需推送。
 
 典型流程：`Context` → `Node::with_context` → `create_*` → `node.spin()`（或便捷 `Node::new`）。多节点或需并行时再 `executor.add_node` + `executor.spin`。仅连 WebSocket RPC服务端时用 `Node::ws` / `Node::ws_at`（见下文「WebSocket RPC模式 Node」）。
 

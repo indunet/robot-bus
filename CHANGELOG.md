@@ -4,6 +4,19 @@ This changelog records user-visible additions, changes, fixes, and breaking chan
 
 Record changes under the applicable version. Explain what changed, why it changed, and how to migrate when needed.
 
+## [Unreleased]
+
+## [2.4.1] - 2026-11-20
+
+### Added
+
+- Brokers on the same host can now federate over IPC. Use `--peer ipc+HOST:PORT` to fetch the peer's discover data over HTTP and link through its `ipc://` sockets. `--message-peer`, `--service-peer`, and `--action-peer` also accept explicit `ipc://` endpoints. If the peer was started with `--tcp-only`, or its socket files are not visible from this host (for example, from another container), startup fails with an explanation instead of silently failing to connect.
+- The new `--ipc-dir DIR` option (`DiscoveryConfig::ipc_dir` in Rust) pins a broker's IPC socket directory. By default, each start creates a new temporary directory. Topic federation requires each broker to peer the other. The broker that starts second therefore needs a fixed directory, so that the first broker can name its sockets in its `*-peer` flags. Use one directory per broker.
+
+### Fixed
+
+- Creating a publisher, subscription, service, or action no longer waits on the console topology RPC. With the console disabled, or when the endpoint is `inproc` and the client cannot share the broker context, that call used to block until its 2 second timeout. Register and unregister now run in the background on the node's own ZeroMQ context. The native TypeScript in-process tests were hitting their own deadlines because of this wait.
+
 ## [2.4.0] - 2026-11-20
 
 ### Breaking Changes

@@ -32,7 +32,6 @@ using namespace std::chrono_literals;
 
 namespace {
 
-constexpr size_t kPayloadLen = 64;
 constexpr size_t kWarmup = 50;
 constexpr size_t kDefaultMsgLatencySamples = 5000;
 constexpr size_t kDefaultIters = 100000;
@@ -42,8 +41,28 @@ constexpr size_t kDefaultGoodputRateLo = 500;
 constexpr size_t kDefaultGoodputRateHi = 500000;
 constexpr size_t kDefaultGoodputSettleMs = 100;
 constexpr double kDefaultMaxLossPct = 1.0;
-constexpr size_t kMsgHistory = 2048;
-constexpr std::array<uint8_t, 16> kCdrPrefix{0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 64, 0, 0, 0};
+size_t g_payload_len = 64;
+size_t g_msg_history = 2048;
+std::array<uint8_t, 16> g_cdr_prefix{0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 64, 0, 0, 0};
+
+size_t env_size(const char * name, size_t fallback);
+
+void init_bench_config()
+{
+  g_payload_len = env_size("ROS2_PERF_PAYLOAD_BYTES", 64);
+  g_msg_history = env_size("ROS2_PERF_MSG_HISTORY", 2048);
+  if (g_payload_len < 24 || g_payload_len > 32u * 1024u * 1024u) {
+    throw std::runtime_error("ROS2_PERF_PAYLOAD_BYTES must be 24..=32MiB");
+  }
+  if (g_msg_history == 0) {
+    throw std::runtime_error("ROS2_PERF_MSG_HISTORY must be positive");
+  }
+  const auto length = static_cast<uint32_t>(g_payload_len);
+  g_cdr_prefix[12] = static_cast<uint8_t>(length);
+  g_cdr_prefix[13] = static_cast<uint8_t>(length >> 8);
+  g_cdr_prefix[14] = static_cast<uint8_t>(length >> 16);
+  g_cdr_prefix[15] = static_cast<uint8_t>(length >> 24);
+}
 constexpr size_t kCdrLatencyStride = 16;
 
 struct LatencyStats {
@@ -89,7 +108,7 @@ void write_payload(uint8_t * buf, uint64_t ts_ns, uint64_t epoch, uint64_t seque
 
 std::vector<uint8_t> make_payload(uint64_t ts_ns, uint64_t epoch = 0, uint64_t sequence = 0)
 {
-  std::vector<uint8_t> buf(kPayloadLen, 0);
+  std::vector<uint8_t> buf(g_payload_len, 0);
   write_payload(buf.data(), ts_ns, epoch, sequence);
   return buf;
 }
@@ -199,7 +218,7 @@ ScenarioResult make_skip(
 rclcpp::QoS msg_qos()
 {
   // Deep enough for paced goodput; best effort aligns with ZMQ PUB drop semantics.
-  return rclcpp::QoS(rclcpp::KeepLast(kMsgHistory)).best_effort().durability_volatile();
+  return rclcpp::QoS(rclcpp::KeepLast(g_msg_history)).best_effort().durability_volatile();
 }
 
 bool wait_until(
@@ -260,19 +279,19 @@ public:
     if (cdr_) {
       // Verify the fixture against the installed RMW before any timed send.
       std_msgs::msg::UInt8MultiArray fixture;
-      fixture.data.resize(kPayloadLen);
+      fixture.data.resize(g_payload_len);
       rclcpp::Serialization<std_msgs::msg::UInt8MultiArray>{}.serialize_message(
         &fixture, &serialized_);
       const auto & wire = serialized_.get_rcl_serialized_message();
-      if (wire.buffer_length != kCdrPrefix.size() + kPayloadLen ||
-        !std::equal(kCdrPrefix.begin(), kCdrPrefix.end(), wire.buffer) ||
-        !std::equal(fixture.data.begin(), fixture.data.end(), wire.buffer + kCdrPrefix.size()))
+      if (wire.buffer_length != g_cdr_prefix.size() + g_payload_len ||
+        !std::equal(g_cdr_prefix.begin(), g_cdr_prefix.end(), wire.buffer) ||
+        !std::equal(fixture.data.begin(), fixture.data.end(), wire.buffer + g_cdr_prefix.size()))
       {
         throw std::runtime_error("RMW CDR fixture does not match the benchmark layout");
       }
-      std::cout << "RAW payload {\"format\":\"cdr\",\"data_bytes\":" << kPayloadLen
+      std::cout << "RAW payload {\"format\":\"cdr\",\"data_bytes\":" << g_payload_len
                 << ",\"prefix\":[";
-      for (size_t i = 0; i < kCdrPrefix.size(); ++i) {
+      for (size_t i = 0; i < g_cdr_prefix.size(); ++i) {
         std::cout << (i == 0 ? "" : ",") << static_cast<unsigned>(wire.buffer[i]);
       }
       std::cout << "]}\n";
@@ -336,7 +355,7 @@ public:
     std::cout << "  … max goodput: binary search " << rate_lo << "..=" << rate_lo + hi * step
               << " Hz (step " << step << "), loss≤" << std::fixed << std::setprecision(1) << max_loss
               << "%, trial≈" << env_double("ROS2_PERF_GOODPUT_TRIAL_SECS", kDefaultGoodputTrialSecs)
-              << "s (KeepLast=" << kMsgHistory
+              << "s (KeepLast=" << g_msg_history
               << ", best_effort)" << std::endl;
 
     bool have_best = false;
@@ -472,7 +491,7 @@ private:
   void publish_one(uint64_t timestamp, size_t sequence = 0)
   {
     if (cdr_) {
-      write_payload(serialized_.get_rcl_serialized_message().buffer + kCdrPrefix.size(),
+      write_payload(serialized_.get_rcl_serialized_message().buffer + g_cdr_prefix.size(),
         timestamp, epoch_, sequence);
       issued_.store(sequence + 1, std::memory_order_release);
       generic_pub_->publish(serialized_);
@@ -487,9 +506,9 @@ private:
   void receive(const uint8_t * payload, size_t size)
   {
     std::lock_guard<std::mutex> lock(mu_);
-    const size_t offset = cdr_ ? kCdrPrefix.size() : 0;
-    if (size != offset + kPayloadLen ||
-      (cdr_ && !std::equal(kCdrPrefix.begin(), kCdrPrefix.end(), payload)))
+    const size_t offset = cdr_ ? g_cdr_prefix.size() : 0;
+    if (size != offset + g_payload_len ||
+      (cdr_ && !std::equal(g_cdr_prefix.begin(), g_cdr_prefix.end(), payload)))
     {
       ++counts_.invalid;
       return;
@@ -818,13 +837,13 @@ std::string env_summary()
   if (profiles) {
     os << "- Fast DDS profile: `" << profiles << "`\n";
   }
-  os << "- Payload: 64 bytes\n";
+  os << "- Payload: " << g_payload_len << " bytes\n";
   os << "- Message max loss / trial / rate range: "
      << env_double("ROS2_PERF_MAX_LOSS_PCT", kDefaultMaxLossPct) << "% / ~"
      << env_double("ROS2_PERF_GOODPUT_TRIAL_SECS", kDefaultGoodputTrialSecs) << "s / "
      << env_size("ROS2_PERF_GOODPUT_RATE_LO", kDefaultGoodputRateLo) << ".."
      << env_size("ROS2_PERF_GOODPUT_RATE_HI", kDefaultGoodputRateHi)
-     << " Hz (KeepLast(" << kMsgHistory << ") best_effort)\n";
+     << " Hz (KeepLast(" << g_msg_history << ") best_effort)\n";
   os << "- Message latency samples: "
      << env_size("ROS2_PERF_MSG_LATENCY_SAMPLES", kDefaultMsgLatencySamples)
      << " (paced)\n";
@@ -954,7 +973,7 @@ void write_report(const std::vector<ScenarioResult> & results, const std::string
   md << "## 方法\n\n";
   md << "- RMW: `rmw_fastrtps_cpp`；传输由 Fast DDS XML 固定为 **SHM** 或 **UDPv4**。\n";
   md << "- 单进程多 Node + `MultiThreadedExecutor`（本机回环，非跨机）。\n";
-  md << "- Payload：64 字节；QoS `KeepLast(" << kMsgHistory << ")` **best_effort**（对齐 ZMQ PUB 不可靠语义）。\n";
+  md << "- Payload：" << g_payload_len << " 字节；QoS `KeepLast(" << g_msg_history << ")` **best_effort**（对齐 ZMQ PUB 不可靠语义）。\n";
   md << "- Message **吞吐（主指标）**：在目标速率下限速发送，**二分搜索**丢包率 ≤ "
      << env_double("ROS2_PERF_MAX_LOSS_PCT", kDefaultMaxLossPct)
      << "% 的最大可持续速率（max goodput）；每档约 "
@@ -994,6 +1013,7 @@ void write_report(const std::vector<ScenarioResult> & results, const std::string
 
 int main(int argc, char ** argv)
 {
+  init_bench_config();
   rclcpp::init(argc, argv);
 
   const std::string mode = [] {

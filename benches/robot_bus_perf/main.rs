@@ -49,7 +49,7 @@ fn main() {
         println!(
             "RAW payload {}",
             serde_json::json!({
-                "format": "cdr", "data_bytes": pacing::PAYLOAD_LEN, "prefix": pacing::CDR_PREFIX,
+                "format": "cdr", "data_bytes": pacing::payload_len(), "prefix": pacing::cdr_prefix(),
             })
         );
     } else if skip_rpc {

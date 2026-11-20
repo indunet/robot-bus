@@ -90,6 +90,26 @@ pub fn ipc_endpoint_in(dir: &str, channel: &str) -> String {
     format!("ipc://{}", path.display())
 }
 
+/// Swap the channel file of an `ipc://` endpoint built by [`ipc_endpoint_in`]
+/// (e.g. `…/message_bus_xpub.ipc` → `…/message_bus_xsub.ipc`).
+///
+/// Returns `None` when `endpoint` is not an IPC endpoint for `from_channel`.
+pub fn ipc_sibling_endpoint(
+    endpoint: &str,
+    from_channel: &str,
+    to_channel: &str,
+) -> Option<String> {
+    if !endpoint.starts_with("ipc://") {
+        return None;
+    }
+    let from_file = format!("{}.ipc", from_channel.replace('/', "_"));
+    let base = endpoint.strip_suffix(&from_file)?;
+    if !(base.ends_with('/') || base.ends_with('\\')) {
+        return None;
+    }
+    Some(format!("{base}{}.ipc", to_channel.replace('/', "_")))
+}
+
 pub fn tcp_endpoint(host: &str, port: u16) -> String {
     format!("tcp://{host}:{port}")
 }
@@ -283,6 +303,31 @@ mod tests {
                     .join("message_bus_xsub.ipc")
                     .display()
             )
+        );
+    }
+
+    #[test]
+    fn ipc_sibling_swaps_channel_file() {
+        let xpub = ipc_endpoint_in("/tmp/rb-x", XPUB_CHANNEL);
+        assert_eq!(
+            ipc_sibling_endpoint(&xpub, XPUB_CHANNEL, XSUB_CHANNEL),
+            Some(ipc_endpoint_in("/tmp/rb-x", XSUB_CHANNEL))
+        );
+        assert_eq!(
+            ipc_sibling_endpoint(&xpub, XSUB_CHANNEL, XPUB_CHANNEL),
+            None
+        );
+        assert_eq!(
+            ipc_sibling_endpoint(
+                "ipc:///tmp/rb-x/other_message_bus_xpub.ipc",
+                XPUB_CHANNEL,
+                XSUB_CHANNEL
+            ),
+            None
+        );
+        assert_eq!(
+            ipc_sibling_endpoint("tcp://127.0.0.1:1", XPUB_CHANNEL, XSUB_CHANNEL),
+            None
         );
     }
 
