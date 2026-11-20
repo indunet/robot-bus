@@ -29,7 +29,7 @@ pub struct BrokerLockGuard {
 
 /// Serialize broker integration tests across threads **and** test binaries.
 ///
-/// `cargo test` runs many `tests/*.rs` targets in parallel; each gets its own
+/// `cargo test` runs the domain binaries under `tests/` in parallel; each gets its own
 /// copy of this module, so a process-local `Mutex` does not help. We `flock`
 /// a temp file instead (released when the process exits, even on panic).
 pub fn lock_brokers() -> BrokerLockGuard {

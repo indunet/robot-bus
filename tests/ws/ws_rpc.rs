@@ -1,26 +1,22 @@
 //! Multiplexed WebSocket RPC smoke tests (V3: stream_id + opcode).
 
-#![cfg(feature = "ws")]
-
-mod support;
-
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::thread;
 use std::time::Duration;
 
+use crate::common::{ephemeral_robot_bus_config, lock_brokers};
 use futures_util::{SinkExt, StreamExt};
 use robot_bus::ws::ws_frame::{
     ACTION_KIND_RESULT, Frame, RequestHeader, decode_action_data, decode_frame,
     decode_subscribe_data, encode_frame,
 };
 use robot_bus::{Publisher, RobotBusBroker, Subscriber};
-use support::{ephemeral_robot_bus_config, lock_brokers};
 use tokio_tungstenite::connect_async;
 use tokio_tungstenite::tungstenite::Message;
 use zmq::{Context as ZmqContext, SocketType};
 
-fn start_bus() -> (support::BrokerLockGuard, RobotBusBroker) {
+fn start_bus() -> (crate::common::BrokerLockGuard, RobotBusBroker) {
     let guard = lock_brokers();
     let broker = RobotBusBroker::start(ephemeral_robot_bus_config()).expect("start RobotBusBroker");
     (guard, broker)

@@ -2,7 +2,8 @@
 # Install: https://github.com/casey/just
 #
 # Layout: Rust core at repo root; language SDKs under bindings/;
-# benches/; tests/ for interop; console/ is broker monitoring UI;
+# benches/; Rust integration tests grouped under tests/<domain>/;
+# tests/interop/ for cross-language checks; console/ is broker monitoring UI;
 # Console TANK panel pairs with in-process src/tank (session-acquired).
 
 set shell := ["bash", "-eu", "-o", "pipefail", "-c"]

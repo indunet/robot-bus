@@ -1,20 +1,16 @@
 //! Opt-in `.lazy()` ROS2→bus topic subscribe (requires sourced ROS 2).
 //!
-//! Run: `cargo test --features ws,ros2 --test ros2_bridge_lazy -- --nocapture`
-
-#![cfg(feature = "ros2")]
-
-mod support;
+//! Run: `cargo test --features ws,ros2 --test ros2_bridge -- --nocapture`
 
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
+use crate::common::{ephemeral_robot_bus_config, lock_brokers};
 use rclrs::CreateBasicExecutor;
 use robot_bus::lazy_subscribe::CONSOLE_DETECT_TIMEOUT;
 use robot_bus::ros2_bridge::{Ros2Bridge, StdMsgsStringMapper, TopicQos, TypedTopicMapper};
 use robot_bus::std_msgs::msg::v1::String as BusString;
 use robot_bus::{Node, NodeOptions, RobotBusBroker};
-use support::{ephemeral_robot_bus_config, lock_brokers};
 
 fn node_options_from_broker(broker: &RobotBusBroker) -> NodeOptions {
     NodeOptions {

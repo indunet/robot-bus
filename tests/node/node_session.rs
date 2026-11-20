@@ -1,17 +1,14 @@
 //! Node broker session: connection_state and wait_for_broker.
 
-#[cfg(feature = "ws")]
-mod support;
-
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use robot_bus::{ConnectionState, Node, NodeOptions};
 
 #[cfg(feature = "ws")]
-use robot_bus::RobotBusBroker;
+use crate::common::{ephemeral_robot_bus_config, lock_brokers};
 #[cfg(feature = "ws")]
-use support::{ephemeral_robot_bus_config, lock_brokers};
+use robot_bus::RobotBusBroker;
 
 #[test]
 fn tcp_node_constructs_without_broker() {
@@ -55,7 +52,7 @@ fn shutdown_emits_connection_event() {
 #[test]
 fn wait_for_broker_after_late_start() {
     let _guard = lock_brokers();
-    let api_port = support::free_port();
+    let api_port = crate::common::free_port();
     let mut opts = NodeOptions::tcp();
     opts.console_url = Some(format!("http://127.0.0.1:{api_port}"));
     let node = Node::with_options("session-late", opts);

@@ -11,8 +11,7 @@ use std::thread;
 use std::time::Duration;
 use zmq::{Context as ZmqContext, SocketType};
 
-mod support;
-use support::{BrokerLockGuard, ephemeral_robot_bus_config, lock_brokers};
+use crate::common::{BrokerLockGuard, ephemeral_robot_bus_config, lock_brokers};
 
 /// Spawn all buses via [`RobotBusBroker::start`]; expose service endpoints.
 struct BrokerHandle {

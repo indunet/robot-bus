@@ -1,12 +1,10 @@
-mod support;
-
 use std::sync::Arc;
 use std::time::Duration;
 
+use crate::common::BrokerProcess;
 use robot_bus::errors::BusError;
 use robot_bus::service_bus::ServiceClient;
 use robot_bus::worker_thread::WorkerThread;
-use support::BrokerProcess;
 
 #[test]
 fn service_request_reply() {

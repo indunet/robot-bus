@@ -1,10 +1,9 @@
 //! Broker↔broker message-bus federation (static peers, hop-path anti-loop).
 
-mod support;
-
 use std::thread;
 use std::time::{Duration, Instant};
 
+use crate::common::{free_ports, lock_brokers};
 #[cfg(feature = "console-api")]
 use robot_bus::ConsoleBrokerConfig;
 #[cfg(feature = "ws")]
@@ -13,7 +12,6 @@ use robot_bus::broker::action_bus::ActionBusConfig;
 use robot_bus::broker::message_bus::{BusConfig, MessagePeer};
 use robot_bus::broker::service_bus::ServiceBusConfig;
 use robot_bus::{DiscoveryConfig, Publisher, RobotBusBroker, RobotBusConfig, Subscriber};
-use support::{free_ports, lock_brokers};
 
 fn connect_addr(bind: &str) -> String {
     bind.replace("tcp://0.0.0.0:", "tcp://127.0.0.1:")

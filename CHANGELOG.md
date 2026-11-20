@@ -4,8 +4,6 @@ This changelog records user-visible additions, changes, fixes, and breaking chan
 
 Record changes under the applicable version. Explain what changed, why it changed, and how to migrate when needed.
 
-## [Unreleased]
-
 ## [2.4.1] - 2026-11-20
 
 ### Added

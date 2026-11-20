@@ -1,10 +1,8 @@
-mod support;
-
 use std::time::Duration;
 
+use crate::common::MessageProxy;
 use robot_bus::errors::{BusError, parse_error_body};
 use robot_bus::message_bus::{Publisher, Subscriber};
-use support::MessageProxy;
 
 #[test]
 fn parse_no_worker() {

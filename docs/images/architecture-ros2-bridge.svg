@@ -1,0 +1,105 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="720" viewBox="0 0 1200 720" role="img" aria-labelledby="title desc">
+  <title id="title">Robot Bus ROS 2 bridge</title>
+  <desc id="desc">Android, browser, Windows, and other non-ROS processes talk protobuf on robot-bus. An in-process bridge in Python, Rust, or C++ maps fields onto a ROS 2 graph running Humble or Jazzy over DDS and CDR. Directions are from_ros to to_bus, or from_bus to to_ros. There is no both direction. The bridge process is the only place the two graphs meet.</desc>
+  <rect width="1200" height="720" fill="#F4F7FB"/>
+  <defs>
+    <marker id="arrow-bus" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M 0 1.2 L 9 5 L 0 8.8 Z" fill="#1F4E79"/>
+    </marker>
+    <marker id="arrow-ros" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M 0 1.2 L 9 5 L 0 8.8 Z" fill="#0F6E56"/>
+    </marker>
+  </defs>
+
+  <text x="40" y="42" fill="#172033" font-family="Segoe UI, Helvetica, Arial, sans-serif" font-size="22" font-weight="600">ROS 2 bridge</text>
+  <text x="40" y="66" fill="#5C6B7A" font-family="Segoe UI, Helvetica, Arial, sans-serif" font-size="14">Edge hosts stay on the bus. ROS 2 stays on DDS. They meet only in the bridge process.</text>
+
+  <!-- Edge -->
+  <rect x="32" y="100" width="250" height="500" rx="14" fill="#FFFFFF" stroke="#D5DDE8"/>
+  <text x="52" y="134" fill="#172033" font-family="Segoe UI, Helvetica, Arial, sans-serif" font-size="16" font-weight="600">Edge hosts</text>
+  <text x="52" y="158" fill="#5C6B7A" font-family="Segoe UI, Helvetica, Arial, sans-serif" font-size="12">No ROS install</text>
+  <g font-family="Segoe UI, Helvetica, Arial, sans-serif">
+    <rect x="48" y="184" width="218" height="52" rx="8" fill="#F8FAFC" stroke="#E3E9F0"/>
+    <text x="64" y="216" fill="#172033" font-size="14">Android</text>
+    <rect x="48" y="248" width="218" height="52" rx="8" fill="#F8FAFC" stroke="#E3E9F0"/>
+    <text x="64" y="280" fill="#172033" font-size="14">Browser</text>
+    <rect x="48" y="312" width="218" height="52" rx="8" fill="#F8FAFC" stroke="#E3E9F0"/>
+    <text x="64" y="344" fill="#172033" font-size="14">Windows</text>
+    <rect x="48" y="376" width="218" height="64" rx="8" fill="#F8FAFC" stroke="#E3E9F0"/>
+    <text x="64" y="404" fill="#172033" font-size="14">Other processes</text>
+    <text x="64" y="424" fill="#5C6B7A" font-size="12">Where ROS 2 is impractical</text>
+  </g>
+  <text x="52" y="480" fill="#1F4E79" font-family="Segoe UI, Helvetica, Arial, sans-serif" font-size="13" font-weight="600">Protobuf on the bus</text>
+  <text x="52" y="504" fill="#5C6B7A" font-family="Segoe UI, Helvetica, Arial, sans-serif" font-size="12">Topics, services, actions</text>
+  <text x="52" y="528" fill="#5C6B7A" font-family="Segoe UI, Helvetica, Arial, sans-serif" font-size="12">Same Node model</text>
+
+  <line x1="294" y1="350" x2="336" y2="350" stroke="#1F4E79" stroke-width="2" marker-start="url(#arrow-bus)" marker-end="url(#arrow-bus)"/>
+  <text x="314" y="336" fill="#1F4E79" font-family="Segoe UI, Helvetica, Arial, sans-serif" font-size="11" text-anchor="middle">bus</text>
+
+  <!-- Broker -->
+  <rect x="348" y="100" width="200" height="500" rx="14" fill="#E7F0FA" stroke="#1F4E79"/>
+  <text x="368" y="134" fill="#1F4E79" font-family="Segoe UI, Helvetica, Arial, sans-serif" font-size="16" font-weight="600">Broker</text>
+  <text x="368" y="158" fill="#3D5A73" font-family="Segoe UI, Helvetica, Arial, sans-serif" font-size="12">robot-bus</text>
+  <g font-family="Segoe UI, Helvetica, Arial, sans-serif">
+    <rect x="364" y="184" width="168" height="72" rx="8" fill="#FFFFFF" stroke="#D5DDE8"/>
+    <text x="380" y="214" fill="#172033" font-size="14" font-weight="600">Topics</text>
+    <text x="380" y="236" fill="#5C6B7A" font-size="12">pub / sub</text>
+    <rect x="364" y="268" width="168" height="72" rx="8" fill="#FFFFFF" stroke="#D5DDE8"/>
+    <text x="380" y="298" fill="#172033" font-size="14" font-weight="600">Services</text>
+    <text x="380" y="320" fill="#5C6B7A" font-size="12">request / reply</text>
+    <rect x="364" y="352" width="168" height="72" rx="8" fill="#FFFFFF" stroke="#D5DDE8"/>
+    <text x="380" y="382" fill="#172033" font-size="14" font-weight="600">Actions</text>
+    <text x="380" y="404" fill="#5C6B7A" font-size="12">goal / result</text>
+  </g>
+  <text x="368" y="460" fill="#3D5A73" font-family="Segoe UI, Helvetica, Arial, sans-serif" font-size="12">Embedded or</text>
+  <text x="368" y="480" fill="#3D5A73" font-family="Segoe UI, Helvetica, Arial, sans-serif" font-size="12">standalone</text>
+  <text x="368" y="528" fill="#5C6B7A" font-family="Segoe UI, Helvetica, Arial, sans-serif" font-size="12">Protobuf bytes</text>
+
+  <line x1="560" y1="350" x2="602" y2="350" stroke="#1F4E79" stroke-width="2" marker-start="url(#arrow-bus)" marker-end="url(#arrow-bus)"/>
+  <text x="580" y="336" fill="#1F4E79" font-family="Segoe UI, Helvetica, Arial, sans-serif" font-size="11" text-anchor="middle">bus</text>
+
+  <!-- Bridge -->
+  <rect x="614" y="100" width="300" height="500" rx="14" fill="#E5F5EF" stroke="#0F6E56"/>
+  <text x="634" y="134" fill="#0F6E56" font-family="Segoe UI, Helvetica, Arial, sans-serif" font-size="16" font-weight="600">Bridge process</text>
+  <text x="634" y="158" fill="#3E6B5C" font-family="Segoe UI, Helvetica, Arial, sans-serif" font-size="12">ROS client, mapper, bus Node</text>
+  <g font-family="Segoe UI, Helvetica, Arial, sans-serif">
+    <rect x="630" y="180" width="268" height="44" rx="8" fill="#FFFFFF" stroke="#C9E6DB"/>
+    <text x="646" y="208" fill="#172033" font-size="13">Python  /  rclpy</text>
+    <rect x="630" y="232" width="268" height="44" rx="8" fill="#FFFFFF" stroke="#C9E6DB"/>
+    <text x="646" y="260" fill="#172033" font-size="13">Rust  /  rclrs</text>
+    <rect x="630" y="284" width="268" height="44" rx="8" fill="#FFFFFF" stroke="#C9E6DB"/>
+    <text x="646" y="312" fill="#172033" font-size="13">C++  /  rclcpp</text>
+  </g>
+  <text x="634" y="356" fill="#0F6E56" font-family="Segoe UI, Helvetica, Arial, sans-serif" font-size="13" font-weight="600">One direction</text>
+  <text x="634" y="380" fill="#1A3D32" font-family="Segoe UI, Helvetica, Arial, sans-serif" font-size="13">from_ros  ->  to_bus</text>
+  <text x="634" y="402" fill="#1A3D32" font-family="Segoe UI, Helvetica, Arial, sans-serif" font-size="13">or from_bus  ->  to_ros</text>
+  <text x="634" y="428" fill="#3E6B5C" font-family="Segoe UI, Helvetica, Arial, sans-serif" font-size="12">Topics, services, and actions</text>
+  <text x="634" y="450" fill="#3E6B5C" font-family="Segoe UI, Helvetica, Arial, sans-serif" font-size="12">No both</text>
+  <text x="634" y="488" fill="#3E6B5C" font-family="Segoe UI, Helvetica, Arial, sans-serif" font-size="12">Mapper converts fields</text>
+  <text x="634" y="512" fill="#3E6B5C" font-family="Segoe UI, Helvetica, Arial, sans-serif" font-size="12">Each language is native</text>
+  <text x="634" y="548" fill="#3E6B5C" font-family="Segoe UI, Helvetica, Arial, sans-serif" font-size="12">Broker may be separate</text>
+
+  <line x1="926" y1="350" x2="968" y2="350" stroke="#0F6E56" stroke-width="2" marker-start="url(#arrow-ros)" marker-end="url(#arrow-ros)"/>
+  <text x="946" y="336" fill="#0F6E56" font-family="Segoe UI, Helvetica, Arial, sans-serif" font-size="11" text-anchor="middle">ROS</text>
+
+  <!-- ROS 2 -->
+  <rect x="980" y="100" width="188" height="500" rx="14" fill="#FFFFFF" stroke="#0F6E56"/>
+  <text x="996" y="134" fill="#0F6E56" font-family="Segoe UI, Helvetica, Arial, sans-serif" font-size="16" font-weight="600">ROS 2</text>
+  <text x="996" y="158" fill="#5C6B7A" font-family="Segoe UI, Helvetica, Arial, sans-serif" font-size="12">Existing graph</text>
+  <g font-family="Segoe UI, Helvetica, Arial, sans-serif">
+    <rect x="996" y="184" width="156" height="56" rx="8" fill="#E5F5EF" stroke="#C9E6DB"/>
+    <text x="1010" y="218" fill="#172033" font-size="14">Humble</text>
+    <rect x="996" y="252" width="156" height="56" rx="8" fill="#E5F5EF" stroke="#C9E6DB"/>
+    <text x="1010" y="286" fill="#172033" font-size="14">Jazzy</text>
+    <rect x="996" y="320" width="156" height="72" rx="8" fill="#F8FAFC" stroke="#E3E9F0"/>
+    <text x="1010" y="348" fill="#172033" font-size="14">DDS</text>
+    <text x="1010" y="370" fill="#5C6B7A" font-size="12">CDR messages</text>
+  </g>
+  <text x="996" y="428" fill="#5C6B7A" font-family="Segoe UI, Helvetica, Arial, sans-serif" font-size="12">RViz, Nav2,</text>
+  <text x="996" y="448" fill="#5C6B7A" font-family="Segoe UI, Helvetica, Arial, sans-serif" font-size="12">and other nodes</text>
+  <text x="996" y="492" fill="#0F6E56" font-family="Segoe UI, Helvetica, Arial, sans-serif" font-size="12" font-weight="600">Unchanged</text>
+  <text x="996" y="516" fill="#5C6B7A" font-family="Segoe UI, Helvetica, Arial, sans-serif" font-size="12">ROS graph</text>
+
+  <text x="40" y="640" fill="#172033" font-family="Segoe UI, Helvetica, Arial, sans-serif" font-size="14" font-weight="600">The bridge process is the only place the two graphs meet.</text>
+  <text x="40" y="666" fill="#5C6B7A" font-family="Segoe UI, Helvetica, Arial, sans-serif" font-size="13">A route is from_ros to to_bus, or from_bus to to_ros. Responses, feedback, and results travel back to the caller.</text>
+</svg>

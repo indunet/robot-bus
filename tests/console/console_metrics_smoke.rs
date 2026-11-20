@@ -3,14 +3,11 @@
 //! Message metrics only observe traffic that real subscribers receive (no
 //! internal blanket SUB — communication efficiency comes first).
 
-#![cfg(feature = "console-api")]
-
-mod support;
-
 use std::sync::Arc;
 use std::thread;
 use std::time::Duration;
 
+use crate::common::lock_brokers;
 use robot_bus::action_bus::ActionClient;
 use robot_bus::broker::action_bus::ActionBusConfig;
 use robot_bus::broker::message_bus::BusConfig;
@@ -21,7 +18,6 @@ use robot_bus::broker::{
 use robot_bus::message_bus::{Publisher, Subscriber};
 use robot_bus::service_bus::ServiceClient;
 use robot_bus::worker_thread::WorkerThread;
-use support::lock_brokers;
 
 fn curl_body(url: &str) -> String {
     std::process::Command::new("curl")

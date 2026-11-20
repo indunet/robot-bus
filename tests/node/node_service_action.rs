@@ -1,19 +1,17 @@
 //! Node-based service / action client round-trips (ROS 2–style API).
 
-mod support;
-
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::thread;
 use std::time::{Duration, Instant};
 
+use crate::common::{ephemeral_robot_bus_config, lock_brokers};
 use robot_bus::action_bus::ActionKind;
 use robot_bus::example_interfaces::action::v1::{
     Fibonacci, FibonacciFeedback, FibonacciGoal, FibonacciResult,
 };
 use robot_bus::std_srvs::srv::v1::{SetBool, SetBoolRequest, SetBoolResponse};
 use robot_bus::{ActionOutcome, Node, NodeOptions, RobotBusBroker, SingleThreadedExecutor};
-use support::{ephemeral_robot_bus_config, lock_brokers};
 
 fn node_options_from_broker(broker: &RobotBusBroker) -> NodeOptions {
     NodeOptions {

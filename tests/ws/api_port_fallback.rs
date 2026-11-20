@@ -1,7 +1,3 @@
-#![cfg(any(feature = "ws", feature = "console-api"))]
-
-mod support;
-
 use std::net::{SocketAddr, TcpListener};
 use std::time::Duration;
 
@@ -26,7 +22,7 @@ fn consecutive_listeners() -> (TcpListener, TcpListener) {
 }
 
 fn config(listen: SocketAddr, console: bool) -> RobotBusConfig {
-    let mut config = support::ephemeral_robot_bus_config();
+    let mut config = crate::common::ephemeral_robot_bus_config();
     config.discovery.advertise_host = Some("127.0.0.1".into());
     #[cfg(feature = "ws")]
     {

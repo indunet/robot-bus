@@ -1,12 +1,11 @@
 //! Broker↔broker action-bus federation (GoalTable-centric, hop-path anti-loop).
 
-mod support;
-
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::thread;
 use std::time::{Duration, Instant};
 
+use crate::common::{free_ports, lock_brokers};
 #[cfg(feature = "console-api")]
 use robot_bus::ConsoleBrokerConfig;
 #[cfg(feature = "ws")]
@@ -18,7 +17,6 @@ use robot_bus::broker::service_bus::ServiceBusConfig;
 use robot_bus::errors::BusError;
 use robot_bus::worker_thread::WorkerThread;
 use robot_bus::{DiscoveryConfig, RobotBusBroker, RobotBusConfig};
-use support::{free_ports, lock_brokers};
 
 fn connect_addr(bind: &str) -> String {
     bind.replace("tcp://0.0.0.0:", "tcp://127.0.0.1:")

@@ -1,12 +1,11 @@
 //! Executor / Node callback executor (subscribe + spin_once / spin / shutdown).
 
-mod support;
-
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::thread;
 use std::time::Duration;
 
+use crate::common::MessageProxy;
 use robot_bus::geometry_msgs::msg::v1::Vector3;
 use robot_bus::message_bus::Publisher;
 use robot_bus::sensor_msgs::msg::v1::Imu;
@@ -14,7 +13,6 @@ use robot_bus::{
     CallbackGroup, Executor, HighWaterMark, MessageCallback, Node, NodeOptions, QosProfile,
     SingleThreadedExecutor,
 };
-use support::MessageProxy;
 
 #[test]
 fn subscribe_callback_via_spin_once() {

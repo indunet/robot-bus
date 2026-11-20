@@ -43,7 +43,7 @@ python scripts/test_doc_examples.py
 
 | Change | Checks |
 | --- | --- |
-| Rust core | `just test-rust`; feature boundaries: `just test-rust-minimal` |
+| Rust core | `just test-rust`; feature boundaries: `just test-rust-minimal`. Integration tests are grouped under `tests/<domain>/` |
 | Python wrappers/native API | `just test-python` + `just test-python-native` |
 | TypeScript | `just ts-dev` + `just test-typescript` |
 | C++ | `just cpp-dev` + `just test-cpp` |

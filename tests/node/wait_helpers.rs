@@ -1,16 +1,12 @@
 //! wait_for_message / wait_for_service / wait_for_action_server helpers.
 
-#![cfg(feature = "console-api")]
-
-mod support;
-
 use std::sync::Arc;
 use std::thread;
 use std::time::Duration;
 
+use crate::common::{MessageProxy, ephemeral_robot_bus_config, lock_brokers};
 use robot_bus::message_bus::Publisher;
 use robot_bus::{Node, NodeOptions, RobotBusBroker, RobotBusConfig};
-use support::{MessageProxy, ephemeral_robot_bus_config, lock_brokers};
 
 fn console_on_config() -> RobotBusConfig {
     let mut config = ephemeral_robot_bus_config();

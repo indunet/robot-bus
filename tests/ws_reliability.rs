@@ -1,6 +1,7 @@
 //! Fault injection and bounded-load checks over the real TCP and WebSocket transports.
 
-mod support;
+#[path = "common/mod.rs"]
+mod common;
 
 use std::net::{SocketAddr, TcpListener};
 use std::process::{Child, Command};
@@ -9,12 +10,12 @@ use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::{Duration, Instant};
 
+use crate::common::{ephemeral_robot_bus_config, free_ports, lock_brokers};
 use robot_bus::runtime::NodeServiceClientRaw;
 use robot_bus::{
     BusError, ConnectionState, MultiThreadedExecutor, Node, NodeOptions, Publisher, QosProfile,
     RobotBusBroker, SubscriptionHandle,
 };
-use support::{ephemeral_robot_bus_config, free_ports, lock_brokers};
 use tokio::net::TcpStream;
 use tokio::sync::watch;
 

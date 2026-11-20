@@ -1,14 +1,11 @@
 //! TANK session API: acquire starts in-process tank; last release stops it.
 
-#![cfg(all(feature = "console", feature = "ws"))]
-
-mod support;
-
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::thread;
 use std::time::{Duration, Instant};
 
+use crate::common::lock_brokers;
 use robot_bus::broker::action_bus::ActionBusConfig;
 use robot_bus::broker::message_bus::BusConfig;
 use robot_bus::broker::service_bus::ServiceBusConfig;
@@ -17,7 +14,6 @@ use robot_bus::broker::{
 };
 use robot_bus::geometry_msgs::msg::v1::{Pose2D, Twist, Vector3};
 use robot_bus::{CMD_VEL_TOPIC, Node, NodeOptions, POSE_TOPIC};
-use support::lock_brokers;
 
 fn test_broker_config(
     msg_xsub: u16,

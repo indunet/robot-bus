@@ -1,16 +1,12 @@
-#![cfg(feature = "ws")]
-
-mod support;
-
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Duration;
 
+use crate::common::{ephemeral_robot_bus_config, lock_brokers};
 use robot_bus::worker_thread::WorkerThread;
 use robot_bus::{Node, Publisher, QosProfile, RobotBusBroker};
-use support::{ephemeral_robot_bus_config, lock_brokers};
 
-fn start_bus() -> (support::BrokerLockGuard, RobotBusBroker) {
+fn start_bus() -> (crate::common::BrokerLockGuard, RobotBusBroker) {
     let guard = lock_brokers();
     let broker = RobotBusBroker::start(ephemeral_robot_bus_config()).expect("start RobotBusBroker");
     (guard, broker)
@@ -265,7 +261,7 @@ fn ws_node_rejects_service_and_action_server() {
 #[test]
 fn ws_node_resubscribes_after_broker_restart() {
     let _guard = lock_brokers();
-    let api_port = support::free_port();
+    let api_port = crate::common::free_port();
     let mut config = ephemeral_robot_bus_config();
     config.ws.listen = format!("127.0.0.1:{api_port}").parse().unwrap();
     let broker = RobotBusBroker::start(config.clone()).expect("start RobotBusBroker");
@@ -320,7 +316,7 @@ fn ws_node_resubscribes_after_broker_restart() {
 #[test]
 fn ws_node_connection_state_follows_socket() {
     let _guard = lock_brokers();
-    let api_port = support::free_port();
+    let api_port = crate::common::free_port();
     let mut config = ephemeral_robot_bus_config();
     config.ws.listen = format!("127.0.0.1:{api_port}").parse().unwrap();
     let broker = RobotBusBroker::start(config).expect("start RobotBusBroker");

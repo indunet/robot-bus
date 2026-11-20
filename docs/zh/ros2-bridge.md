@@ -576,8 +576,7 @@ cargo build --no-default-features --features ros2 --bin ros2_bridge_perf \
   --example ros2_bridge_builtin --example ros2_bridge_custom_add_two_ints
 ROS_LOCALHOST_ONLY=1 ROS_DOMAIN_ID=94 RMW_IMPLEMENTATION=rmw_fastrtps_cpp \
   cargo test --no-default-features --features ws,console-api,ros2 \
-  --test ros2_bridge_lazy --test ros2_bridge_service_smoke \
-  --test ros2_bridge_diagnostics -- --test-threads=1
+  --test ros2_bridge -- --test-threads=1
 ```
 
 请使用带有兼容 Rust 绑定的接口包。Jazzy 环境使用对应的 `ros-jazzy-*` 软件包并执行 `source /opt/ros/jazzy/setup.bash`。在 Jazzy 上做本机测试时，使用 `ROS_AUTOMATIC_DISCOVERY_RANGE=LOCALHOST`。`example_interfaces` 提供 Fibonacci 和 AddTwoInts。已验证的环境见[支持与验证状态](support.md)。

@@ -1,16 +1,14 @@
 //! Replies produced on worker threads must leave the executor without waiting
 //! for the next socket event or the poll timeout.
 
-mod support;
-
 use std::sync::Arc;
 use std::thread;
 use std::time::{Duration, Instant};
 
+use crate::common::{BrokerLockGuard, ephemeral_robot_bus_config, lock_brokers};
 use robot_bus::action_bus::{ActionClient, ActionKind};
 use robot_bus::service_bus::ServiceClient;
 use robot_bus::{CallbackGroup, Executor, RobotBusBroker};
-use support::{BrokerLockGuard, ephemeral_robot_bus_config, lock_brokers};
 
 /// Default heartbeat timeouts: the short ones in `BrokerProcess` expire before
 /// the executor's 2.5 s worker heartbeat.

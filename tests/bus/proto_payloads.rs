@@ -25,10 +25,9 @@ use robot_bus::std_srvs::srv::v1::{
 };
 use robot_bus::worker_thread::WorkerThread;
 
-mod support;
-use support::{ephemeral_robot_bus_config, lock_brokers};
+use crate::common::{ephemeral_robot_bus_config, lock_brokers};
 
-fn start_bus() -> (support::BrokerLockGuard, RobotBusBroker) {
+fn start_bus() -> (crate::common::BrokerLockGuard, RobotBusBroker) {
     let guard = lock_brokers();
     let broker = RobotBusBroker::start(ephemeral_robot_bus_config()).expect("start RobotBusBroker");
     (guard, broker)

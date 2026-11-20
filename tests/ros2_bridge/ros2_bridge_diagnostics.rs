@@ -1,9 +1,8 @@
 //! Diagnostics and bus error propagation without installing ROS.
-mod support;
 
-use robot_bus::errors::{self, BusError, parse_error_body, rpc_error_body};
+use robot_bus::errors::{BusError, parse_error_body, rpc_error_body};
 #[allow(dead_code)]
-#[path = "../src/ros2_bridge/drop_stats.rs"]
+#[path = "../../src/ros2_bridge/drop_stats.rs"]
 mod health;
 
 use robot_bus::{Node, NodeOptions, RobotBusBroker};
@@ -35,8 +34,8 @@ fn bridge_errors_roundtrip_without_changing_success_payloads() {
 
 #[test]
 fn action_client_receives_bridge_failures_as_errors() {
-    let _guard = support::lock_brokers();
-    let broker = RobotBusBroker::start(support::ephemeral_robot_bus_config()).unwrap();
+    let _guard = crate::common::lock_brokers();
+    let broker = RobotBusBroker::start(crate::common::ephemeral_robot_bus_config()).unwrap();
     let options = NodeOptions {
         action_frontend: Some(broker.action.frontend_bind.clone()),
         action_backend: Some(broker.action.backend_bind.clone()),

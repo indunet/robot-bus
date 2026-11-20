@@ -1,11 +1,10 @@
 //! HTTP discovery: wait for broker `/api/v1/discover` and connect via applied NodeOptions.
 
-#[cfg(feature = "ws")]
-mod support;
-
 use robot_bus::robot_bus_interfaces::msg::v1::TcpPorts;
 use robot_bus::{NodeOptions, discovery};
 
+#[cfg(feature = "ws")]
+use crate::common::{free_ports, lock_brokers};
 #[cfg(feature = "ws")]
 use robot_bus::discovery::DiscoverOpts;
 #[cfg(feature = "ws")]
@@ -16,8 +15,6 @@ use robot_bus::{Node, RobotBusBroker, RobotBusConfig};
 use std::thread;
 #[cfg(feature = "ws")]
 use std::time::Duration;
-#[cfg(feature = "ws")]
-use support::{free_ports, lock_brokers};
 
 /// HTTP discover needs the WebSocket RPC server listener (`GET /api/v1/discover`).
 /// Skip under `cargo test --no-default-features` where no API server is started.

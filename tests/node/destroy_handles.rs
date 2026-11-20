@@ -1,15 +1,13 @@
 //! Destroy subscription / service / action server handles.
 
-mod support;
-
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::thread;
 use std::time::Duration;
 
+use crate::common::{MessageProxy, ephemeral_robot_bus_config, lock_brokers};
 use robot_bus::message_bus::Publisher;
 use robot_bus::{MessageCallback, Node, NodeOptions, RobotBusBroker};
-use support::{MessageProxy, ephemeral_robot_bus_config, lock_brokers};
 
 fn node_options_from_broker(broker: &RobotBusBroker) -> NodeOptions {
     NodeOptions {

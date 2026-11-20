@@ -1,20 +1,16 @@
 //! Builtin Trigger service bridge smoke (ROS ↔ bus) under sourced ROS 2.
 //!
-//! Run: `cargo test --features ws,ros2 --test ros2_bridge_service_smoke -- --nocapture`
-
-#![cfg(feature = "ros2")]
-
-mod support;
+//! Run: `cargo test --features ws,ros2 --test ros2_bridge -- --nocapture`
 
 use std::thread;
 use std::time::{Duration, Instant};
 
+use crate::common::{ephemeral_robot_bus_config, lock_brokers};
 use rclrs::CreateBasicExecutor;
 use robot_bus::ros2_bridge::vendor::std_srvs::srv as ros_srv;
 use robot_bus::ros2_bridge::{Ros2Bridge, TopicQos, TriggerServiceMapper};
 use robot_bus::std_srvs::srv::v1::{Trigger, TriggerRequest, TriggerResponse};
 use robot_bus::{Node, NodeOptions, RobotBusBroker};
-use support::{ephemeral_robot_bus_config, lock_brokers};
 
 fn node_options_from_broker(broker: &RobotBusBroker) -> NodeOptions {
     NodeOptions {
@@ -170,7 +166,10 @@ fn trigger_ros2_to_bus_failure_replies_with_error_response() {
         let _ = bridge.spin_once(Duration::from_millis(5));
         let _ = exec.spin(rclrs::SpinOptions::spin_once().timeout(Duration::from_millis(20)));
     };
-    assert!(!resp.success, "failure must not look like success: {resp:?}");
+    assert!(
+        !resp.success,
+        "failure must not look like success: {resp:?}"
+    );
     assert!(resp.message.contains("bus call failed"), "resp={resp:?}");
 }
 
@@ -252,7 +251,10 @@ fn custom_service_failure_without_error_response_sends_no_reply() {
 
     let deadline = Instant::now() + Duration::from_secs(5);
     while !client.service_is_ready().unwrap_or(false) {
-        assert!(Instant::now() < deadline, "ROS AddTwoInts service not ready");
+        assert!(
+            Instant::now() < deadline,
+            "ROS AddTwoInts service not ready"
+        );
         let _ = bridge.spin_once(Duration::from_millis(5));
         let _ = exec.spin(rclrs::SpinOptions::spin_once().timeout(Duration::from_millis(20)));
     }
@@ -271,7 +273,10 @@ fn custom_service_failure_without_error_response_sends_no_reply() {
     let watch_until = Instant::now() + Duration::from_secs(4);
     while Instant::now() < watch_until {
         if let Ok(resp) = rx.try_recv() {
-            panic!("bridge failure must not reach the ROS caller as a response: sum={}", resp.sum);
+            panic!(
+                "bridge failure must not reach the ROS caller as a response: sum={}",
+                resp.sum
+            );
         }
         let _ = bridge.spin_once(Duration::from_millis(5));
         let _ = exec.spin(rclrs::SpinOptions::spin_once().timeout(Duration::from_millis(20)));

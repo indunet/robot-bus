@@ -1,11 +1,10 @@
 //! Broker↔broker federation over `ipc://` endpoints (same host).
 
-mod support;
-
 use std::sync::Arc;
 use std::thread;
 use std::time::{Duration, Instant};
 
+use crate::common::{ephemeral_robot_bus_config, lock_brokers};
 use robot_bus::action_bus::{ActionClient, ActionKind};
 use robot_bus::broker::FederationPeerEndpoints;
 use robot_bus::broker::action_bus::ActionPeer;
@@ -17,7 +16,6 @@ use robot_bus::transports::{
 };
 use robot_bus::worker_thread::WorkerThread;
 use robot_bus::{Publisher, RobotBusBroker, RobotBusConfig, Subscriber};
-use support::{ephemeral_robot_bus_config, lock_brokers};
 
 fn ipc_broker_config(broker_id: &str, ipc_dir: &str) -> RobotBusConfig {
     let mut config = ephemeral_robot_bus_config();

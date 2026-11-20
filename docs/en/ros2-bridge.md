@@ -507,8 +507,7 @@ cargo build --no-default-features --features ros2 --bin ros2_bridge_perf \
   --example ros2_bridge_builtin --example ros2_bridge_custom_add_two_ints
 ROS_LOCALHOST_ONLY=1 ROS_DOMAIN_ID=94 RMW_IMPLEMENTATION=rmw_fastrtps_cpp \
   cargo test --no-default-features --features ws,console-api,ros2 \
-  --test ros2_bridge_lazy --test ros2_bridge_service_smoke \
-  --test ros2_bridge_diagnostics -- --test-threads=1
+  --test ros2_bridge -- --test-threads=1
 ```
 
 Use interface packages that ship compatible Rust bindings. On Jazzy, install the corresponding `ros-jazzy-*` packages, source `/opt/ros/jazzy/setup.bash`, and use `ROS_AUTOMATIC_DISCOVERY_RANGE=LOCALHOST` for local tests. `example_interfaces` provides Fibonacci and AddTwoInts. See [support and verification status](support.md) for the tested environments.

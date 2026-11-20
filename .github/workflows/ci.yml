@@ -37,9 +37,9 @@ jobs:
       - name: Test SDK and headless feature combinations before building web assets
         run: |
           cargo test --no-default-features
-          cargo test --no-default-features --features ws --lib --test ws_node --test ws_rpc
-          cargo test --no-default-features --features console-api --lib --test feature_boundaries --test wait_helpers
-          cargo test --no-default-features --features ws,console-api --lib --test feature_boundaries --test console_metrics_smoke --test topic_demand --test topic_type_registry --test rbus_cli_smoke
+          cargo test --no-default-features --features ws --lib --test ws
+          cargo test --no-default-features --features console-api --lib --test console --test node
+          cargo test --no-default-features --features ws,console-api --lib --test console
       - name: Check reconnect, subscriber backlog and short soak
         timeout-minutes: 5
         env:
@@ -78,7 +78,7 @@ jobs:
       - name: Build embedded console assets
         run: ./scripts/build_console.sh
       - run: cargo test
-      - run: cargo test --no-default-features --features ws,console --lib --test feature_boundaries
+      - run: cargo test --no-default-features --features ws,console --lib --test console
       - name: Build Rust examples
         run: cargo build --examples
 

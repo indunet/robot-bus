@@ -52,7 +52,7 @@ CI 在 `rust-reliability-evidence` 附件保存故障测试和长跑日志，长
 
 Rust 构建复测使用 Ubuntu 22.04.5 和 24.04.5（x86_64，`ros:humble-ros-base` 和 `ros:jazzy-ros-base`）、Rust 1.100.0、`rclrs` 0.8.0、`ros-env` 0.3.0、`rosidl_runtime_rs` 0.7.0 和 Protobuf 编译器 35.1。使用各发行版系统包提供的 Rust 绑定，编译并链接了桥库、`ros2_bridge_perf` 和两个桥接示例。依赖安装及复测命令见[桥接指南](ros2-bridge.md)。2026-08-31 的字段类型失败见[历史性能记录](ros2-bridge-perf-report.md)。
 
-在两个发行版上都使用 Fast DDS 和本机 ROS 通信，分别通过了 `ros2_bridge_lazy`、`ros2_bridge_service_smoke` 和 `ros2_bridge_diagnostics` 三组测试，各 16 项。两个发行版也各通过了 32 项 Rust 桥单元测试。性能工具的临时副本使用显式 broker 端点和可靠 ROS QoS，完成了双向 Fibonacci 目标。集成测试命令见[桥接指南](ros2-bridge.md)。
+在两个发行版上都使用 Fast DDS 和本机 ROS 通信，通过了 `ros2_bridge` 集成测试中的 `ros2_bridge_lazy`、`ros2_bridge_service_smoke` 和 `ros2_bridge_diagnostics` 三组，共 16 项。两个发行版也各通过了 32 项 Rust 桥单元测试。性能工具的临时副本使用显式 broker 端点和可靠 ROS QoS，完成了双向 Fibonacci 目标。集成测试命令见[桥接指南](ros2-bridge.md)。
 
 在将桥用于应用前，按[桥接示例](../../examples/ros2_bridge/README.md)验证自己的消息类型与方向，并记录：提交/tag、系统/架构、ROS 发行版、RMW、语言、依赖版本、运行命令及结果。Service 验证成功和超时；Action 另验拒绝、反馈、结果、取消及异常。新增验证结论时附可复现证据，不只改“支持”标签。
 

@@ -1,17 +1,13 @@
 //! Immediate `/robot_bus/topic_demand` events from topology register/unregister.
 
-#![cfg(feature = "console-api")]
-
-mod support;
-
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
+use crate::common::{ephemeral_robot_bus_config, lock_brokers};
 use prost::Message;
 use robot_bus::console_topics;
 use robot_bus::robot_bus_interfaces::msg::v1::{TopicDemand, TopicStatsList};
 use robot_bus::{MessageCallback, Node, NodeOptions, RobotBusBroker};
-use support::{ephemeral_robot_bus_config, lock_brokers};
 
 fn console_on_config() -> robot_bus::RobotBusConfig {
     let mut config = ephemeral_robot_bus_config();

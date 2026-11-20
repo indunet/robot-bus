@@ -1,14 +1,11 @@
 //! Topic type registry: typed create_publisher registers before any traffic.
 
-#![cfg(feature = "console-api")]
-
-mod support;
-
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::thread;
 use std::time::{Duration, Instant};
 
+use crate::common::{ephemeral_robot_bus_config, lock_brokers};
 use prost::{Message, Name};
 use robot_bus::broker::action_bus::ActionBusConfig;
 use robot_bus::broker::message_bus::BusConfig;
@@ -22,7 +19,6 @@ use robot_bus::std_msgs::msg::v1::String as BusString;
 use robot_bus::{Node, NodeOptions};
 use robot_bus::{console_topics, robot_bus_interfaces::msg::v1::TopicTypeRegister};
 use serde::Deserialize;
-use support::{ephemeral_robot_bus_config, lock_brokers};
 
 fn test_broker_config(
     msg_xsub: u16,

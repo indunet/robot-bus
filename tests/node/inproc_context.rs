@@ -1,24 +1,22 @@
 //! Same-process inproc requires a shared [`robot_bus::Context`].
 
-mod support;
-
 use std::path::Path;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::{Duration, Instant};
 
+use crate::common::lock_brokers;
 #[cfg(feature = "console-api")]
 use robot_bus::ConsoleBrokerConfig;
 use robot_bus::{
     ActionKind, ActionMessage, Context, HighWaterMark, Node, NodeOptions, Publisher,
     RobotBusBroker, RobotBusConfig, Subscriber,
 };
-use support::lock_brokers;
 
 fn inproc_broker_config() -> RobotBusConfig {
     // Ephemeral TCP/gRPC ports — defaults (e.g. :15560) collide under parallel cargo test.
-    let mut config = support::ephemeral_robot_bus_config();
+    let mut config = crate::common::ephemeral_robot_bus_config();
     // Keep inproc (+ ipc/tcp) so Node::inproc_with_context can reach the proxy.
     config.message.bind_all_transports = true;
     config.service.bind_all_transports = true;

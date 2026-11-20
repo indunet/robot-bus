@@ -1,11 +1,9 @@
 //! The same API assertions run for headless and embedded-console builds.
-#![cfg(feature = "console-api")]
-mod support;
 
 #[test]
 fn monitoring_works_without_assets_and_demo_flag_matches_build() {
-    let _guard = support::lock_brokers();
-    let mut config = support::ephemeral_robot_bus_config();
+    let _guard = crate::common::lock_brokers();
+    let mut config = crate::common::ephemeral_robot_bus_config();
     config.console.enabled = true;
     // Even an explicitly enabled runtime flag cannot resurrect omitted code.
     config.console.tank_enabled = true;
