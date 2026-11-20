@@ -4,6 +4,9 @@
   segment_size must fit in container /dev/shm (Docker default often 64MiB).
 -->
 <profiles xmlns="http://www.eprosima.com/XMLSchemas/fastRTPS_Profiles">
+  <library_settings>
+    <intraprocess_delivery>OFF</intraprocess_delivery>
+  </library_settings>
   <transport_descriptors>
     <transport_descriptor>
       <transport_id>shm_transport</transport_id>

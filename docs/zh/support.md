@@ -69,4 +69,4 @@ Node 编程模型的稳定性不表示底层线协议和所有错误分类永远
 
 ## 性能证据
 
-[现有 bus 报告](perf-report.md)是历史单机采样，存在缺测项与 WS 计数异常，不足以用于 ROS2 选型排名。[性能报告阅读与复现要求](performance.md)列出可用结论、待解释数字和重新采样需要的信息。
+2026-11-20，[Robot Bus](perf-report.md) 和 [ROS 2 Humble](ros2-perf-report.md) 报告各保留了三轮。传输复核隔离 SHM 与 UDPv4 后，ROS 2 在同一主机和资源限制下单独补测。WS 接收计数通过轮次与序号校验。环境、统计口径和证据见[性能说明](performance.md)。[桥接性能](ros2-bridge-perf-report.md)待单独采样。

@@ -1,61 +1,27 @@
 [English](../en/ros2-perf-report.md) | 中文
 
-# ROS2性能测试报告
+# ROS 2 Humble 性能测试报告
 
-> 本报告未建立与 Robot Bus 结果同机、同资源限制的对比证据，不能直接计算性能倍数。测试结果为历史记录，本轮未重跑；见[性能报告说明](performance.md)。
-
-由 `benches/ros2_perf/run.sh`（容器内 `ros2_perf_bench`）生成，方法对齐 [`perf-report.md`](perf-report.md)。
-
-## 环境
-
-- ROS: Humble (rmw_fastrtps_cpp)
-- Fast DDS profile: `/root/robot-bus/benches/ros2_perf/config/fastdds_shm.xml`
-- Payload: 64 bytes
-- Message max loss / trial / rate range: 1% / ~1s / 500..500000 Hz (KeepLast(2048) best_effort)
-- Message latency samples: 5000 (paced)
-- Service/action iterations: 20000 / 5000
-- Modes: **shm** (Fast DDS Shared Memory) + **udp** (Fast DDS UDPv4 only)
+2026-11-20 修正传输配置后，在与 Robot Bus 相同的主机、容器和资源限制下，单独补测了 Fast DDS SHM 和 UDPv4，各三轮。测试使用 ROS 2 Humble、`rmw_fastrtps_cpp` 6.2.10、Fast DDS 2.6.12、`rclcpp` 16.0.21 和 GCC 11.4 Release 构建。原配置的诊断数据和新样本均已归档。 [性能说明](performance.md)
 
 ## 方法
 
-- RMW: `rmw_fastrtps_cpp`；传输由 Fast DDS XML固定为 **SHM** 或 **UDPv4**。
-- 单进程多 Node + `MultiThreadedExecutor`（本机回环，非跨机）。
-- Payload：64 字节；QoS `KeepLast(2048)` best_effort。
-- Message **吞吐（主指标）**：按目标速率限速发送约 1s，**二分搜索**丢包率 ≤ 1% 且发送窗口内 pub/sub均 ≥90% 目标速率的最大可持续速率（max goodput）。
-- Message **延迟**：另做限速抽样（发一条等收到再发）。
-- Service / action延迟：每次 call / send_goal本地计时。
-- 指标机器相关，不作为 CI门槛。
+- 单进程多 Node，`MultiThreadedExecutor` 两线程。消息为 64 B 应用负载的 `UInt8MultiArray`，单发布者、单订阅者，QoS 为 `KeepLast(2048)` 和 best effort。
+- 两个 Fast DDS XML 都关闭进程内传递，脚本设 `ROS_LOCALHOST_ONLY=0`，由 XML 分别启用 SHM 或仅回环 UDPv4。固定发送 20,000 条的传输检查中，两种配置均收齐。SHM 的 UDP 发包计数为 0，UDPv4 为 20,138。 [SHM 配置](../../benches/ros2_perf/config/fastdds_shm.xml) · [UDPv4 配置](../../benches/ros2_perf/config/fastdds_udp.xml)
+- 每档发送 1 秒，排空 100 ms，从 100 到 750,000 Hz 按 100 Hz 步长搜索。通过一档要求排空后丢失率不超过 1%，且发送窗口内收、发速率均达到目标速率的 90%。两种传输所选档位均低于搜索上限。
+- 消息单向延迟另采 500 条。Service 和 Action 各预热 8 次后串行执行 32 次，Action 包含一条反馈及最终结果。32 个样本的 RPC p99 对单个慢样本敏感。
 
-## 横比
+## 三轮结果
 
-message为 **max goodput**（丢包阈值内的最大可持续订阅速率）；括号为该档实测投递率。
+每格是三轮中位数 [最小值–最大值]。消息速率按发送窗口内同轮唯一接收数计算，投递率按排空后同轮唯一接收数计算。RPC 使用成功完成数和调用耗时。
 
-| 场景 | shm | udp |
-|------|-----|-----|
-| message发布 | 111807/s | 117330/s |
-| message max goodput | 111797/s (100.0% delivered) | 117304/s (100.0% delivered) |
-| service call | 19797/s | 18228/s |
-| action send_goal | 1815/s | 1848/s |
+| 传输 | 场景 | 接收或完成/s | 投递或完成率 (%) | p50 (µs) | p95 (µs) | p99 (µs) |
+| --- | --- | ---: | ---: | ---: | ---: | ---: |
+| shm | message pub/sub | 60,020 [59,947–61,699] | 99.5 [99.0–100.0] | 35 [24–35] | 39 [37–39] | 78 [47–91] |
+| shm | service call | 28,784 [28,316–31,069] | 100.0 [100.0–100.0] | 31 [30–33] | 43 [41–46] | 50 [44–51] |
+| shm | action send_goal | 9,624 [9,535–9,937] | 100.0 [100.0–100.0] | 100 [98–101] | 121 [115–127] | 139 [134–174] |
+| udp | message pub/sub | 62,236 [62,162–71,601] | 100.0 [100.0–100.0] | 39 [38–39] | 44 [44–69] | 85 [82–91] |
+| udp | service call | 21,130 [17,469–22,764] | 100.0 [100.0–100.0] | 44 [43–57] | 56 [46–58] | 59 [56–60] |
+| udp | action send_goal | 8,075 [7,971–8,161] | 100.0 [100.0–100.0] | 122 [122–125] | 134 [129–138] | 144 [139–145] |
 
-## shm（Fast DDS Shared Memory）
-
-| 场景 | 发送 | 接收 | 耗时 | 发布/s | 订阅/s | 投递% | p50 (µs) | p95 (µs) | p99 (µs) | mean (µs) |
-|------|------|------|------|--------|--------|-------|----------|----------|----------|-----------|
-| message pub/sub | 111807 | 111797 | 1.000s | 111807 | 111797 | 100.0 | 57 | 96 | 130 | 437 |
-| service call | 20000 | 20000 | 1.010s | 19797 | 19797 | 100.0 | 47 | 72 | 102 | 50 |
-| action send_goal | 5000 | 5000 | 2.754s | 1815 | 1815 | 100.0 | 543 | 905 | 1023 | 551 |
-
-## udp（Fast DDS UDPv4，无 SHM）
-
-| 场景 | 发送 | 接收 | 耗时 | 发布/s | 订阅/s | 投递% | p50 (µs) | p95 (µs) | p99 (µs) | mean (µs) |
-|------|------|------|------|--------|--------|-------|----------|----------|----------|-----------|
-| message pub/sub | 117330 | 117304 | 1.000s | 117330 | 117304 | 100.0 | 59 | 93 | 130 | 60 |
-| service call | 20000 | 20000 | 1.097s | 18228 | 18228 | 100.0 | 53 | 71 | 102 | 55 |
-| action send_goal | 5000 | 5000 | 2.706s | 1848 | 1848 | 100.0 | 518 | 917 | 1057 | 541 |
-
-## 复现
-
-```bash
-./benches/ros2_perf/run.sh
-ROS2_PERF_ONLY=message ./benches/ros2_perf/run.sh
-```
+这些值覆盖普通的类型化发布、订阅回调和 RPC。Fast DDS 的 SHM transport、Data-sharing 和借用消息的零拷贝路径分别有各自的配置条件。跨产品比较还需要匹配应用路径和负载。 [Fast DDS Data-sharing](https://fast-dds.docs.eprosima.com/en/2.6.x/fastdds/transport/datasharing.html) · [复现与原始数据](performance.md)

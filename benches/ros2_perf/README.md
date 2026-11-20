@@ -60,11 +60,11 @@ ROS2_PERF_SVC_ITERS=1000 ROS2_PERF_ACT_ITERS=1000 \
 
 ## 说明
 
-- RMW固定 `rmw_fastrtps_cpp`；`ROS_LOCALHOST_ONLY=1`。
-- 单进程多 Node + `MultiThreadedExecutor`，与 robot-bus本机回环场景同级，不是跨机 DDS。
+- RMW 固定为 `rmw_fastrtps_cpp`。Humble 在 `ROS_LOCALHOST_ONLY=1` 时会额外添加 UDP 和 SHM，因此此 bench 设置 `ROS_LOCALHOST_ONLY=0`，由 XML 独占选择传输。UDP XML 将接口限定在 `127.0.0.1`。
+- 单进程多 Node 和 `MultiThreadedExecutor`。两个 XML 都设 `intraprocess_delivery=OFF`，使消息经指定的 DDS 传输；测量范围为本机。
 - Message QoS：`KeepLast(2048)` + **best_effort**。
 - `ROS2_PERF_GOODPUT_RATE_STEP` 控制速率档位间距（默认 1 Hz），`ROS2_PERF_GOODPUT_SETTLE_MS` 控制排空时间（默认 100 ms）。`ROS2_PERF_EXECUTOR_THREADS` 默认 2，`ROS2_PERF_RPC_WARMUP` 可统一 service 和 action 的预热次数。
 - 标准输出里的 `RAW trial`、`RAW latency` 和 `RAW result` 与 bus 测试使用相同的 JSON 字段。直接运行 `ros2_perf_bench` 时，可通过 `ROS2_PERF_REPORT` 把报告写入本次实验目录。
-- 小 payload（64B）+ 同容器本机回环时，**UDP loopback有时会高于 SHM**：SHM管理段/同步有固定开销，优势更常体现在大消息或跨进程；且 Docker Desktop的 `/dev/shm`常受限。上次结果里 SHM延迟更低、吞吐更低，符合这一画像。
+- 直接运行 `ros2_perf_bench` 时沿用上述环境和 XML。传输复核用固定速率、独立容器网络命名空间以及 `/proc/net/snmp` UDP 计数，证据见[性能说明](../../docs/zh/performance.md)。
 - Apple宿主机不直接跑 ROS2；数字来自 Linux容器（Docker Desktop VM），和 macOS上的 `just perf`不在同一 OS，横比时注意环境差异。
 - 若报告里 max goodput顶到 `RATE_HI`，把 `ROS2_PERF_GOODPUT_RATE_HI`再调高后重跑。

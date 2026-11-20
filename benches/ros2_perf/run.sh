@@ -72,7 +72,9 @@ run_bench_local() {
   source_ros "${ws}/install/setup.bash"
 
   export RMW_IMPLEMENTATION=rmw_fastrtps_cpp
-  export ROS_LOCALHOST_ONLY=1
+  # Humble appends both a UDP and an SHM transport when localhost-only is enabled.
+  # Let the XML select the transport and scope UDP to loopback.
+  export ROS_LOCALHOST_ONLY=0
   export ROS2_PERF_MODE="${mode}"
   export ROS2_PERF_SVC_ITERS="${SVC_ITERS}"
   export ROS2_PERF_ACT_ITERS="${ACT_ITERS}"

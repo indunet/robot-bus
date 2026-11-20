@@ -2,59 +2,42 @@ English | [中文](../zh/performance.md)
 
 # Performance interpretation and reproduction
 
-Repository reports are local experiment records, not cross-platform guarantees or a sufficient basis for ranking Robot Bus against ROS 2. Read throughput and latency together with transport, process layout and reliability constraints.
+## 2026-11-20 same-host retest
 
-## Boundaries of the saved results
+Robot Bus and ROS 2 Humble initially ran three rounds each in the same Docker container. All nine process runs exited successfully. The initial archive contains 306 throughput trials, 24 sets of one-way latency samples and 42 sets of RPC samples. A follow-up audit found that the initial ROS configuration did not isolate SHM and UDPv4. ROS 2 was rerun with corrected profiles in the same container.
 
-This is the state reviewed on 2026-09-08, not a new measurement.
+| Report | Coverage |
+| --- | --- |
+| [Robot Bus](perf-report.md) | Message, Service and Action over TCP, IPC, inproc, WebSocket and two-broker federation |
+| [ROS 2 Humble](ros2-perf-report.md) | Message, Service and Action over Fast DDS SHM and UDPv4 with the corrected profiles |
+| [ROS 2 bridge](ros2-bridge-perf-report.md) | Humble and Jazzy build and route checks, with bridge throughput and latency sampling pending |
 
-| Report | Available information | Gaps and limits |
-| --- | --- | --- |
-| [Robot Bus](perf-report.md) | Some TCP/inproc/WS 64B single-host results, methodology and commands | Environment records only version and logical CPU count; CPU model, OS, commit, run date, full configuration and repeated-run variation are missing; IPC/service/action/federation have no results |
-| [ROS 2](ros2-perf-report.md) | Humble, Fast DDS, SHM/UDP configuration and results | No established evidence of matching hardware, time or resource limits with the bus report; direct speed ratios are unsupported |
-| [ROS 2 bridge](ros2-bridge-perf-report.md) | The 2026-08-31 non-execution/build-failure record and methodology | No usable throughput or latency results; rerun with a matching live ROS environment |
+The AMD EPYC 9554 host had 256 logical CPUs, 755 GiB of memory and Linux 5.15.0-203-generic. Docker 29.1.3 ran `ros:humble-ros-base` (Ubuntu 22.04.5, x86_64) with affinity to logical CPUs 32–39 on eight physical cores, an 8 GiB memory limit and 512 MiB of shared memory. Robot Bus used Rust 1.100.0 and ZeroMQ 4.3.4. ROS 2 used GCC 11.4 and Fast DDS 2.6.12. Both used release builds. The measured source was based on `b9b414e35f0274bdcef19843562ca8ca770d5685` with the archived benchmark revisions applied.
 
-`—` means data was not provided, not zero performance or an unsupported feature. The saved record does not fully explain each missing scenario; do not assume it was measured but omitted.
+The figures apply to their respective local API paths. Robot Bus routes raw bytes through a broker. ROS 2 uses typed `UInt8MultiArray` messages, DDS and a two-thread executor. ZeroMQ HWM and DDS KeepLast both use a depth of 2048 on different queues. The corrected ROS 2 figures and initial Robot Bus figures come from separate runs. A cross-product comparison still requires aligned application workloads, process and thread layouts, and a common set of fixed rates.
 
-## WS counts require verification
+## ROS 2 transport audit
 
-The historical WS Subscribe row reports `sent=151447`, `recv=151595`, `delivery=100.1%`. The old benchmark reset the counter at trial boundaries while the callback could still receive messages queued by the preceding trial. The historical record lacks per-message data for attributing the 148 extra counts to individual trials.
+The original benchmark placed the publisher and subscriber in one process. Fast DDS 2.6 enables intra-process delivery by default, which can bypass the transport. In two 20,000 msg/s checks with the original binary and container, the original UDP profile emitted only 21 UDP datagrams per run. With intra-process delivery disabled, it emitted more than 80,000. With that same bypass disabled, the original SHM profile also emitted about 20,000 UDP datagrams. Humble's `ROS_LOCALHOST_ONLY=1` appends both UDP and SHM to the XML transport configuration. The original SHM and UDP rows therefore describe the same-process configurations used at the time. [Fast DDS intra-process delivery](https://fast-dds.docs.eprosima.com/en/2.6.x/fastdds/transport/intraprocess.html) · [Humble RMW source](https://github.com/ros2/rmw_fastrtps/blob/6.2.10/rmw_fastrtps_shared_cpp/src/participant.cpp#L145-L162)
 
-WS Publish at approximately 2,659/s and WS Subscribe at approximately 138,793/s represent different directional scenarios, not a paired end-to-end loss measurement. Latency uses separate sampling and is not measured at the listed maximum-throughput load.
+The corrected profiles disable intra-process delivery. The runner sets `ROS_LOCALHOST_ONLY=0`, and the UDP profile restricts its interface to loopback. At a fixed load of about 20,000 messages, both profiles delivered all messages. SHM emitted zero UDP datagrams and UDP emitted about 20,000. The [ROS 2 report](ros2-perf-report.md) uses the corrected runs.
 
-The benchmarks now carry a trial ID and sequence number in the 64-byte payload. They count unique in-trial receives, cross-trial arrivals, and duplicates separately. Unique receives in the send window determine the receive rate. Unique receives after draining determine delivery. Save the `RAW trial`, `RAW latency`, and `RAW result` lines for per-trial counts, window timing and latency samples.
+At a fixed 80,000 msg/s under the original configuration, changing the executor from two threads to one increased send-window receives from about 51,000 to 80,000. This shows that the original results were sensitive to executor configuration. The throughput search reports the highest passing rate it encountered. Repeat rates independently to characterize variation near that point.
 
-## Record on a rerun
+## Counting and WS validation
 
-1. **Environment:** date, Git commit/tag, CPU model/core count, memory, OS/kernel, container/VM and CPU limits, build profile and toolchain. For ROS, add distribution, RMW, DDS and overlays.
-2. **Load:** payload type/size, publisher/subscriber counts, process layout, transport, pacing/trial duration, HWM/QoS, warm-up/draining and all environment overrides.
-3. **Raw results:** per-trial sent/recv, counting windows, duration, loss/duplicate definitions, latency samples and failure logs. Explain skipped scenarios.
-4. **Repeatability:** keep multiple runs of each configuration and report medians and variation, rather than only the best run.
-5. **Comparison:** match hardware, resources, payload, process layout, QoS, counting windows and run count; state unavoidable differences.
+The message receive rate divides unique in-trial receives during the send window by the actual send duration. Delivery divides unique in-trial receives after draining by sends. Separate one-at-a-time samples measure message latency. The tables summarize per-round percentiles using the median and minimum–maximum range. RPC rates divide successful completions by measured elapsed time.
 
-Validate count consistency before interpreting performance. Receives exceeding sends, inconsistent windows and missing samples require investigation rather than a maximum-sustainable-delivery claim.
+The historical WS Subscribe line recorded `sent=151447`, `recv=151595`, and `delivery=100.1%`. The old counter could attribute still-queued arrivals to the next trial. The historical logs lack the identifiers needed to trace the extra 148 events individually. The current benchmark counts unique in-trial receives, cross-trial arrivals and duplicates by trial ID and sequence. All 77 measured WS throughput trials satisfied `recv_send <= recv_final <= sent`. WS Publish and WS Subscribe measure independent directions.
 
-## Reproduction entry points
+## Archive and reproduction
 
-For an internal run, use `ROBOT_BUS_PERF_SKIP_REPORT=1` to preserve the historical bus report and point `ROS2_PERF_REPORT` at the experiment directory. Save stdout, stderr, commands, environment details, DDS profiles and source versions under `bench-results/`. Run measured workloads sequentially under the same resource limits and keep logs from smoke runs, failures and skipped scenarios.
+The initial local archive is `bench-results/20261120-134156-same-host/`. Its `run.sh` is the executed command sequence, `execution.tsv` records run order and exit codes, `raw.jsonl` contains per-trial counts, windows and latency samples, and `round-*.log` contains the full output. It also contains the environment, DDS profiles, source patches, Cargo lockfile, binary hashes, `SHA256SUMS` and an earlier Bus smoke timeout. The transport audit and corrected ROS 2 samples live in `transport/` and `isolated/` under `bench-results/20261120-183629-ros2-executor-probe/`, with XML, environment details, UDP counts and full logs.
 
-See [contributing](../../CONTRIBUTING.md) for source-build prerequisites. These commands overwrite the matching English/Chinese reports; retain previous results and raw output first.
+See [contributing](../../CONTRIBUTING.md) for source-build prerequisites and the [Robot Bus bench](../../benches/robot_bus_perf/README.md), [ROS 2 bench](../../benches/ros2_perf/README.md) and [bridge bench](../../benches/ros2_bridge_perf/README.md) for commands and dependencies. During sampling, set `ROBOT_BUS_PERF_SKIP_REPORT=1` and use `ROS2_PERF_REPORT` to direct reports to the run archive when invoking `ros2_perf_bench` directly. Save each run's stdout and stderr. The default `just perf`, `just perf-ros2` and `just perf-ros2-bridge` commands write to the corresponding reports.
 
-```bash
-just perf
-# Message only; this configuration cannot establish service/action performance.
-ROBOT_BUS_PERF_ONLY=message cargo run --release --bin robot_bus_perf
-# Federation only (two TCP brokers, A→B).
-ROBOT_BUS_PERF_ONLY=federation cargo run --release --bin robot_bus_perf
-# or
-just perf-federation
-```
+Record the following for each measured run.
 
-ROS benches additionally need ROS. Default tasks use a container named `ros2`; do not assume it exists on every machine. Dependencies and optional local execution are documented in the [ROS bench](../../benches/ros2_perf/README.md) and [bridge bench](../../benches/ros2_bridge_perf/README.md).
-
-```bash
-just perf-ros2
-just perf-ros2-bridge
-```
-
-Performance is not a gate for ordinary documentation checks. New performance claims should update raw evidence, environment details and [support status](support.md) together.
+1. Date, commit and source changes, CPU model and core count, memory, OS/kernel, container resource limits, release-build toolchain, ROS distribution, RMW and DDS versions.
+2. Payload type and size, publisher/subscriber counts, process layout, transport, HWM/QoS, trial and drain windows, and all environment overrides.
+3. Raw counts, timing windows, latency samples, failures and skips for each round, plus the median and range across rounds.
