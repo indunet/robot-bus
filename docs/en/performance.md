@@ -158,6 +158,8 @@ The historical WS Subscribe line recorded `sent=151447`, `recv=151595`, and `del
 
 The initial local archive is `bench-results/20261120-134156-same-host/`. Its `run.sh` is the executed command sequence, `execution.tsv` records run order and exit codes, `raw.jsonl` contains per-trial counts, windows and latency samples, and `round-*.log` contains the full output. It also contains the environment, DDS profiles, source patches, Cargo lockfile, binary hashes, `SHA256SUMS` and an earlier Bus smoke timeout. The transport audit and corrected ROS 2 samples live in `transport/` and `isolated/` under `bench-results/20261120-183629-ros2-executor-probe/`, with XML, environment details, UDP counts and full logs.
 
+The WebSocket rows in the [Robot Bus report](perf-report.md) come from a later archive, `bench-results/20261121-0911-ws-nodelay-inbox/`. It holds three rounds of the same Robot Bus run on the host with the process pinned to CPUs 32–39, the pre-change binary measured alongside as `baseline/`, a `TCP_NODELAY`-only control build, `summarize.py` and the environment record. Rerun it with the `run.sh` there.
+
 See [contributing](../../CONTRIBUTING.md) for source-build prerequisites and the [Robot Bus bench](../../benches/robot_bus_perf/README.md), [ROS 2 bench](../../benches/ros2_perf/README.md) and [bridge bench](../../benches/ros2_bridge_perf/README.md) for commands and dependencies. During sampling, set `ROBOT_BUS_PERF_SKIP_REPORT=1` and use `ROS2_PERF_REPORT` to direct reports to the run archive when invoking `ros2_perf_bench` directly. Save each run's stdout and stderr. The default `just perf`, `just perf-ros2` and `just perf-ros2-bridge` commands write to the corresponding reports.
 
 Record the following for each measured run.

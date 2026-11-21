@@ -158,6 +158,8 @@ UDP 的 256 KiB 两个速率，以及 640×480 的 30 条/秒，三轮都收齐�
 
 初始证据保存在本机 `bench-results/20261120-134156-same-host/`。其中 `run.sh` 是实际运行脚本，`execution.tsv` 记录轮次和退出码，`raw.jsonl` 包含每档计数、窗口时间和延迟样本，`round-*.log` 含完整输出。同目录保留环境、DDS 配置、源码补丁、Cargo 依赖锁定、二进制哈希、`SHA256SUMS` 和一次超时的 Bus 冒烟。传输复核和修正后的 ROS 2 样本分别位于 `bench-results/20261120-183629-ros2-executor-probe/transport/` 与 `isolated/`，各有 XML、环境、UDP 计数和完整日志。
 
+[Robot Bus 报告](perf-report.md)中的 WebSocket 各行来自后续归档 `bench-results/20261121-0911-ws-nodelay-inbox/`。其中有同一套 Robot Bus 测试在宿主机上绑 CPU 32–39 跑的三轮结果，一并测量的改动前二进制 `baseline/`，只加 `TCP_NODELAY` 的对照构建，`summarize.py` 和环境记录。用里面的 `run.sh` 可以重跑。
+
 从源码构建的前置步骤见[贡献指南](../../CONTRIBUTING.md)。按场景运行的命令和依赖见 [Robot Bus bench](../../benches/robot_bus_perf/README.md)、[ROS 2 bench](../../benches/ros2_perf/README.md)和[桥接 bench](../../benches/ros2_bridge_perf/README.md)。采样时用 `ROBOT_BUS_PERF_SKIP_REPORT=1`，直接运行 `ros2_perf_bench` 时用 `ROS2_PERF_REPORT` 指定实验目录，保留每轮 stdout 和 stderr。`just perf`、`just perf-ros2` 和 `just perf-ros2-bridge` 默认会写回对应报告。
 
 每次正式复测记录以下信息。

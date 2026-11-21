@@ -139,6 +139,15 @@ pub async fn serve_on_listener(
 
     let app = app.layer(cors);
 
+    // Small frames (RPC requests/replies, topic samples) must not wait on Nagle +
+    // delayed ACK (~40 ms on Linux), so disable Nagle on every accepted stream.
+    use axum::serve::ListenerExt;
+    let listener = listener.tap_io(|stream| {
+        if let Err(err) = stream.set_nodelay(true) {
+            log::debug!("set TCP_NODELAY on accepted stream failed: {err}");
+        }
+    });
+
     axum::serve(listener, app)
         .with_graceful_shutdown(shutdown)
         .await

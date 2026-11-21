@@ -27,10 +27,10 @@ Each cell shows the median [minimum–maximum] across rounds. The message receiv
 | inproc | message pub/sub | 374,950 [374,950–374,951] | 100.0 [100.0–100.0] | 49 [47–51] | 53 [53–58] | 92 [67–93] |
 | inproc | service call | 12,751 [12,224–13,461] | 100.0 [100.0–100.0] | 80 [68–81] | 89 [83–94] | 109 [91–161] |
 | inproc | action send_goal | 7,283 [7,236–7,314] | 100.0 [100.0–100.0] | 126 [121–131] | 179 [171–215] | 255 [185–296] |
-| ws | message Publish | 6,074 [6,074–6,080] | 99.6 [99.6–99.7] | 201 [199–206] | 241 [226–242] | 387 [372–391] |
-| ws | message Subscribe | 228,739 [226,563–238,961] | 100.0 [99.3–100.0] | 4,558 [4,534–4,559] | 5,011 [5,010–5,034] | 5,057 [5,052–5,082] |
-| ws | service Call | 23 [23–23] | 100.0 [100.0–100.0] | 43,998 [43,992–44,005] | 44,243 [44,208–44,246] | 44,277 [44,224–48,029] |
-| ws | action SendGoal | 23 [23–23] | 100.0 [100.0–100.0] | 43,992 [43,991–44,001] | 44,212 [44,199–44,251] | 44,326 [44,217–48,114] |
+| ws | message Publish | 6,076 [6,073–6,078] | 99.6 [99.6–99.7] | 214 [208–217] | 239 [235–244] | 337 [313–362] |
+| ws | message Subscribe | 132,441 [130,154–136,225] | 99.9 [99.6–99.9] | 203 [203–205] | 230 [230–253] | 284 [283–297] |
+| ws | service Call | 6,540 [5,606–6,598] | 100.0 [100.0–100.0] | 153 [151–178] | 165 [158–196] | 170 [160–203] |
+| ws | action SendGoal | 3,087 [2,359–3,225] | 100.0 [100.0–100.0] | 318 [304–421] | 376 [354–477] | 390 [357–479] |
 | federation | message pub/sub | 592,504 [580,645–598,393] | 100.0 [100.0–100.0] | 239 [231–248] | 276 [266–316] | 339 [334–356] |
 | federation | service call | 3,122 [2,924–3,820] | 100.0 [100.0–100.0] | 306 [262–339] | 363 [276–371] | 421 [284–432] |
 | federation | action send_goal | 3,009 [2,833–3,244] | 100.0 [100.0–100.0] | 331 [303–351] | 348 [340–370] | 377 [375–398] |
@@ -39,6 +39,22 @@ Each cell shows the median [minimum–maximum] across rounds. The message receiv
 
 - A historical WS Subscribe trial reported 100.1% delivery. The old counter reset at trial boundaries while messages from the previous trial could still be queued. The historical logs lack per-message identifiers. The new benchmark attributes messages by trial and sequence. In a controlled WS regression, the current trial counted one send and observed three arrivals consisting of one unique in-trial receive, one cross-trial arrival and one duplicate. In all 77 measured WS throughput trials, unique in-trial receives were at or below sends.
 - TCP, IPC and inproc Action were remeasured on the default SDK path. Queueing a reply now wakes the executor instead of waiting out the 250 ms poll timeout. Median p50 across three rounds was 542 µs for TCP, 296 µs for IPC and 126 µs for inproc. The process was pinned to CPUs 32–39, with the same warm-up and sample counts as the other rows, but it ran on the host without the original 8 GiB container memory limit. The three logs are in `bench-results/20261120-2115-executor-wake/`. WebSocket and federation Action do not wait on that poll; the same rerun still measured about 44 ms and 0.34 ms, so those rows keep the original numbers.
+- The four `ws` rows come from a later run on 2026-11-21 and replace the original WebSocket numbers. The original run showed about 44 ms for every WebSocket service call and action goal. Neither the broker's WebSocket server nor the Rust client set `TCP_NODELAY`, so each small frame waited on Nagle's algorithm and the peer's delayed ACK. Both ends now disable Nagle. WS Subscribe also took about 4.5 ms because the node's spin loop slept 5 ms between inbox checks. It now blocks until a message arrives. The other rows keep the original container measurements.
+- That run used the same commands and settings as the original, three rounds, on the host with the process pinned to CPUs 32–39 and without the 8 GiB container memory limit. The host differs from the container, so compare rows within the table below, not against the rows above. The pre-change binary (commit `d24a506`) was measured in the same way, immediately before:
+
+| Scenario | Before: receives or completions/s | Before: p50 (µs) | Before: p99 (µs) | After: receives or completions/s | After: p50 (µs) | After: p99 (µs) |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| ws message Publish | 6,083 | 217 | 336 | 6,076 | 214 | 337 |
+| ws message Subscribe | 233,501 | 4,556 | 5,085 | 132,441 | 203 | 284 |
+| ws service Call | 23 | 43,992 | 48,030 | 6,540 | 153 | 170 |
+| ws action SendGoal | 23 | 44,010 | 48,000 | 3,087 | 318 | 390 |
+| tcp message pub/sub | 208,507 | 154 | 217 | 206,315 | 155 | 220 |
+| tcp service call | 5,698 | 176 | 186 | 6,751 | 147 | 158 |
+| ipc service call | 8,807 | 117 | 124 | 7,557 | 134 | 154 |
+| federation message pub/sub | 442,157 | 248 | 357 | 442,665 | 256 | 352 |
+
+- The TCP, IPC and federation rows show that the host, not the change, accounts for the gap to the original container numbers. They did not move. The highest passing WS Subscribe rate fell from about 233,000 to about 132,000 messages/s. A control build with only `TCP_NODELAY` added, and the old 5 ms polling, also stopped at about 128,000 messages/s, so the cause is `TCP_NODELAY`: the server writes and flushes each 64 B frame separately, and without Nagle each one becomes its own TCP segment. Polling did not contribute. Batching several frames per flush on the server would recover it and has not been done. A WebSocket Subscribe stream of 64 B messages above about 130,000/s now loses messages where it previously did not, in exchange for sub-millisecond latency at every rate.
+- The archive is `bench-results/20261121-0911-ws-nodelay-inbox/`: `round-*.log` and `raw.jsonl` for the three rounds, `baseline/` for the pre-change binary, `control-nodelay-only/` for the control build, and `summarize.py`, which produced `summary.md` with the same selection rules and nearest-rank percentiles as the original.
 
 See the [performance guide](performance.md) for reproduction commands and the archive location for per-round logs and raw samples.
 

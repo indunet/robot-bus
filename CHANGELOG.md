@@ -13,6 +13,9 @@ Record changes under the applicable version. Explain what changed, why it change
 
 ### Fixed
 
+- WebSocket service calls and action goals no longer take about 44 ms each. Neither the broker's HTTP/WebSocket server nor the Rust WebSocket client set `TCP_NODELAY`, so each small frame waited on Nagle's algorithm and the peer's delayed ACK. Both ends now disable Nagle; the console HTTP server does too. On the single-host benchmark, the median WebSocket service call dropped from about 44 ms to 0.15 ms and the action from about 44 ms to 0.32 ms. The performance reports now carry these figures.
+- A Rust WebSocket node now dispatches a subscribed message as soon as it arrives. `spin` used to sleep 5 ms between checks of the inbox, which added up to 5 ms (about 4.5 ms median) to every delivery. It now blocks until a message arrives, and `ShutdownHandle::shutdown` interrupts the wait, so stopping no longer waits out the poll timeout. Median WebSocket Subscribe latency dropped from about 4.6 ms to 0.2 ms.
+- Known trade-off: the highest 64 B WebSocket Subscribe rate that is delivered without loss fell from about 233,000 to about 132,000 messages/s. With Nagle off, the server's per-frame write and flush sends each frame as its own TCP segment. A control build with only `TCP_NODELAY` shows the same ceiling. Batching frames per flush on the server would recover it and is not done yet.
 - Creating a publisher, subscription, service, or action no longer waits on the console topology RPC. With the console disabled, or when the endpoint is `inproc` and the client cannot share the broker context, that call used to block until its 2 second timeout. Register and unregister now run in the background on the node's own ZeroMQ context. The native TypeScript in-process tests were hitting their own deadlines because of this wait.
 
 ## [2.4.0] - 2026-11-20

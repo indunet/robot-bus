@@ -26,7 +26,7 @@ use crate::runtime::timers::{
 use crate::ws::ws_frame::RequestHeader;
 
 use conn::{ConnCmd, StreamKind, WsConnection, connection_loop};
-use inbox::{TopicEvent, TopicInbox};
+use inbox::{SharedInbox, TopicEvent};
 
 const DEFAULT_WS_URL: &str = "http://127.0.0.1:15560";
 const DEFAULT_SPIN_TIMEOUT_MS: i64 = 250;
@@ -56,7 +56,7 @@ pub struct WsRuntime {
     conn: Arc<WsConnection>,
     running: Arc<AtomicBool>,
     alive: Arc<AtomicBool>,
-    inbox: Arc<Mutex<TopicInbox>>,
+    inbox: Arc<SharedInbox>,
     state: Arc<Mutex<WsState>>,
 }
 
@@ -84,7 +84,7 @@ impl WsRuntime {
             conn,
             running: Arc::new(AtomicBool::new(false)),
             alive: Arc::new(AtomicBool::new(true)),
-            inbox: Arc::new(Mutex::new(TopicInbox::default())),
+            inbox: Arc::new(SharedInbox::default()),
             state: Arc::new(Mutex::new(WsState {
                 topic_callbacks: HashMap::new(),
                 active_topics: HashMap::new(),
@@ -104,12 +104,17 @@ impl WsRuntime {
     }
 
     pub fn shutdown_handle(&self) -> ShutdownHandle {
-        ShutdownHandle::from_flag(Arc::clone(&self.running))
+        let inbox = Arc::clone(&self.inbox);
+        ShutdownHandle::from_flag_with_hook(
+            Arc::clone(&self.running),
+            Arc::new(move || inbox.wake()),
+        )
     }
 
     pub fn shutdown(&self) {
         self.alive.store(false, Ordering::Release);
         self.running.store(false, Ordering::Release);
+        self.inbox.wake();
         let _ = self.conn.cmd_tx.send(ConnCmd::Shutdown);
     }
 
@@ -144,14 +149,11 @@ impl WsRuntime {
             });
 
         if !state.active_topics.contains_key(topic) {
-            self.inbox
-                .lock()
-                .map_err(|_| BusError::Protocol("ws inbox mutex poisoned".into()))?
-                .add(
-                    id,
-                    topic,
-                    crate::runtime::ws_subscribe_queue_capacity(requested.depth()),
-                );
+            self.inbox.add(
+                id,
+                topic,
+                crate::runtime::ws_subscribe_queue_capacity(requested.depth()),
+            )?;
             state.active_topics.insert(
                 topic.to_string(),
                 ActiveTopic {
@@ -189,10 +191,7 @@ impl WsRuntime {
         if empty {
             state.topic_callbacks.remove(&topic);
             if let Some(active) = state.active_topics.remove(&topic) {
-                self.inbox
-                    .lock()
-                    .map_err(|_| BusError::Protocol("ws inbox mutex poisoned".into()))?
-                    .remove(active.id);
+                self.inbox.remove(active.id)?;
                 if let Some(stream_id) = active.stream_id {
                     let _ = self.conn.cmd_tx.send(ConnCmd::Cancel { stream_id });
                 }
@@ -261,24 +260,13 @@ impl WsRuntime {
             }
         }
 
+        // Block until a message arrives instead of sleeping and re-checking: a
+        // delivery wakes this thread right away. Keep servicing the inbox until
+        // the deadline, as before, so timers are re-evaluated on schedule.
         let deadline = Instant::now() + Duration::from_millis(timeout_ms.max(0) as u64);
-        loop {
-            let event = self
-                .inbox
-                .lock()
-                .map_err(|_| BusError::Protocol("ws inbox mutex poisoned".into()))?
-                .pop();
-
-            if let Some(event) = event {
-                self.dispatch_topic(event)?;
-                worked = true;
-                continue;
-            }
-
-            if Instant::now() >= deadline {
-                break;
-            }
-            std::thread::sleep(Duration::from_millis(5));
+        while let Some(event) = self.inbox.pop_or_wait(deadline, &self.running)? {
+            self.dispatch_topic(event)?;
+            worked = true;
         }
         Ok(worked)
     }

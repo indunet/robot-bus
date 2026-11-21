@@ -58,23 +58,38 @@ const DEFAULT_HEARTBEAT_INTERVAL_MS: u64 = 2500;
 pub struct ShutdownHandle {
     running: Arc<AtomicBool>,
     waker: Waker,
+    /// Extra wake-up for runtimes that do not wait on the executor's ZeroMQ poll.
+    hook: Option<Arc<dyn Fn() + Send + Sync>>,
 }
 
 impl ShutdownHandle {
-    pub(crate) fn from_flag(running: Arc<AtomicBool>) -> Self {
+    /// Handle over a bare flag that also runs `hook` on shutdown, to interrupt a
+    /// wait that is not the executor's ZeroMQ poll.
+    pub(crate) fn from_flag_with_hook(
+        running: Arc<AtomicBool>,
+        hook: Arc<dyn Fn() + Send + Sync>,
+    ) -> Self {
         Self {
             running,
             waker: Waker::disabled(),
+            hook: Some(hook),
         }
     }
 
     fn with_waker(running: Arc<AtomicBool>, waker: Waker) -> Self {
-        Self { running, waker }
+        Self {
+            running,
+            waker,
+            hook: None,
+        }
     }
 
     pub fn shutdown(&self) {
         self.running.store(false, Ordering::Release);
         self.waker.wake();
+        if let Some(hook) = &self.hook {
+            hook();
+        }
     }
 
     pub fn is_running(&self) -> bool {

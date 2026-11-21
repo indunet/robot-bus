@@ -3,11 +3,11 @@
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::sync::mpsc::Sender;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 use std::time::Duration;
 
 use futures_util::{SinkExt, StreamExt};
-use tokio_tungstenite::{connect_async, tungstenite::Message as WsMessage};
+use tokio_tungstenite::{connect_async_with_config, tungstenite::Message as WsMessage};
 use uuid::Uuid;
 
 use crate::action_bus::{ActionKind, ActionMessage};
@@ -21,7 +21,7 @@ use crate::ws::ws_frame::{
     Frame, RequestHeader, decode_action_data, decode_frame, decode_subscribe_data, encode_frame,
 };
 
-use super::inbox::TopicInbox;
+use super::inbox::SharedInbox;
 use super::status::{map_rpc_status, ws_action_kind};
 
 pub(super) enum ConnCmd {
@@ -41,7 +41,7 @@ pub(super) enum ConnCmd {
 pub(super) enum StreamKind {
     Subscribe {
         id: u64,
-        inbox: Arc<Mutex<TopicInbox>>,
+        inbox: Arc<SharedInbox>,
         done: Option<tokio::sync::oneshot::Sender<()>>,
     },
     Unary {
@@ -236,7 +236,8 @@ pub(super) async fn connection_loop(
 ) {
     let mut backoff = SESSION_BACKOFF_INITIAL;
     loop {
-        match connect_async(&ws_url).await {
+        // disable_nagle: tiny RPC frames must not wait on Nagle + delayed ACK (~40 ms).
+        match connect_async_with_config(&ws_url, None, true).await {
             Ok((ws, _)) => {
                 backoff = SESSION_BACKOFF_INITIAL;
                 if let Some(t) = &transport {
@@ -449,9 +450,7 @@ fn handle_inbound_frame(streams: &mut HashMap<u32, StreamState>, frame: Frame) {
             match &mut st.kind {
                 StreamKind::Subscribe { id, inbox, .. } => {
                     if let Ok((_, payload)) = decode_subscribe_data(&payload) {
-                        if let Ok(mut inbox) = inbox.lock() {
-                            inbox.push(*id, payload);
-                        }
+                        inbox.push(*id, payload);
                     }
                 }
                 StreamKind::Unary { data, .. } => {

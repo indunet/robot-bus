@@ -164,6 +164,48 @@ fn ws_node_service_call_echoes_payload() {
     broker.stop().expect("stop");
 }
 
+/// Regression: without TCP_NODELAY on both ends, each small WS RPC waited ~40 ms
+/// on Nagle + delayed ACK. The median must stay far below that.
+#[test]
+fn ws_node_service_call_is_not_delayed_by_nagle() {
+    let (_guard, broker) = start_bus();
+    let url = ws_url(&broker);
+
+    let handler: Arc<dyn Fn(&[u8]) -> Vec<u8> + Send + Sync> = Arc::new(|body| body.to_vec());
+    let worker =
+        WorkerThread::spawn_service("svc.ws_node_nagle", handler, &broker.service.backend_bind)
+            .expect("worker");
+    thread::sleep(Duration::from_millis(100));
+
+    let mut node = Node::ws_at("ws-nagle-client", &url);
+    let client = node
+        .create_client_raw("svc.ws_node_nagle")
+        .expect("create_client");
+    for _ in 0..8 {
+        client
+            .call(b"warmup", Some(Duration::from_secs(3)))
+            .expect("warmup call");
+    }
+    let mut samples: Vec<Duration> = (0..30)
+        .map(|_| {
+            let start = std::time::Instant::now();
+            client
+                .call(b"ping", Some(Duration::from_secs(3)))
+                .expect("call");
+            start.elapsed()
+        })
+        .collect();
+    samples.sort();
+    let median = samples[samples.len() / 2];
+    assert!(
+        median < Duration::from_millis(20),
+        "median WS service call took {median:?}; TCP_NODELAY is probably missing"
+    );
+
+    worker.stop();
+    broker.stop().expect("stop");
+}
+
 #[test]
 fn ws_node_action_client_streams_feedback_then_result() {
     let (_guard, broker) = start_bus();

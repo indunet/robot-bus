@@ -147,6 +147,13 @@ pub async fn serve_on_listener(
     let listen = listener.local_addr()?;
     log::info!("robot_bus console listening on http://{listen}");
 
+    use axum::serve::ListenerExt;
+    let listener = listener.tap_io(|stream| {
+        if let Err(err) = stream.set_nodelay(true) {
+            log::debug!("set TCP_NODELAY on accepted stream failed: {err}");
+        }
+    });
+
     axum::serve(listener, app)
         .with_graceful_shutdown(shutdown)
         .await
