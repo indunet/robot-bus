@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.16)
-project(robot_bus_cpp VERSION 2.4.2 LANGUAGES CXX)
+project(robot_bus_cpp VERSION 2.4.3 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -62,18 +62,33 @@ else()
   set(ROBOT_BUS_FFI_SONAME "librobot_bus.so")
 endif()
 
+set(ROBOT_BUS_FFI_LINK "${ROBOT_BUS_FFI_BUILT}")
+set(ROBOT_BUS_FFI_BYPRODUCTS "${ROBOT_BUS_FFI_BUILT}")
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+  # Rust's cdylib has no ELF SONAME. Link with -lrobot_bus from the build
+  # directory so the bridge records the installed name instead of a build path.
+  set(ROBOT_BUS_FFI_LINK "${CMAKE_CURRENT_BINARY_DIR}/${ROBOT_BUS_FFI_SONAME}")
+  list(APPEND ROBOT_BUS_FFI_BYPRODUCTS "${ROBOT_BUS_FFI_LINK}")
+  set(ROBOT_BUS_FFI_STAGE_COMMAND COMMAND ${CMAKE_COMMAND} -E copy_if_different
+    "${ROBOT_BUS_FFI_BUILT}" "${ROBOT_BUS_FFI_LINK}")
+endif()
 add_custom_target(robot_bus_ffi_build
   COMMAND cargo build --release --manifest-path "${ROBOT_BUS_FFI_DIR}/Cargo.toml"
+  ${ROBOT_BUS_FFI_STAGE_COMMAND}
   WORKING_DIRECTORY "${ROBOT_BUS_FFI_DIR}"
   COMMENT "Building robot-bus C FFI (cargo)"
-  BYPRODUCTS "${ROBOT_BUS_FFI_BUILT}")
+  BYPRODUCTS ${ROBOT_BUS_FFI_BYPRODUCTS}
+  VERBATIM)
 
 add_library(robot_bus SHARED IMPORTED GLOBAL)
 add_library(robot_bus::robot_bus ALIAS robot_bus)
 add_dependencies(robot_bus robot_bus_ffi_build)
 set_target_properties(robot_bus PROPERTIES
-  IMPORTED_LOCATION "${ROBOT_BUS_FFI_BUILT}"
+  IMPORTED_LOCATION "${ROBOT_BUS_FFI_LINK}"
   INTERFACE_INCLUDE_DIRECTORIES "${ROBOT_BUS_INCLUDE_DIR}")
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+  set_property(TARGET robot_bus PROPERTY IMPORTED_NO_SONAME TRUE)
+endif()
 if(WIN32)
   set_target_properties(robot_bus PROPERTIES
     IMPORTED_IMPLIB "${ROBOT_BUS_FFI_TARGET_DIR}/robot_bus_c.dll.lib")

@@ -75,7 +75,7 @@ cmake --build "$BUILD_DIR" --target "${CMAKE_TARGETS[@]}" -j"$JOBS"
 find "$BUILD_DIR" \( -name 'librobot_bus_msgs*' -o -name 'robot_bus_msgs.*' \
   -o -name 'librobot_bus_ros2_bridge*' -o -name 'robot_bus_ros2_bridge.*' \) | while read -r f; do
   case "$f" in
-    *.so*|*.dylib|*.dll|*.lib|*.a) cp -f "$f" "$DEST/usr/lib/" ;;
+    *.so*|*.dylib|*.dll|*.lib|*.a) cp -a "$f" "$DEST/usr/lib/" ;;
   esac
 done
 

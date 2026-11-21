@@ -38,14 +38,14 @@ CMake sets `CMAKE_CXX_STANDARD 17`. Building with a newer standard (e.g. `-DCMAK
 
 ```bash
 # Core SDK (no ROS bridge)
-sudo apt install ./robot-bus_2.4.2_linux_amd64.deb
+sudo apt install ./robot-bus_2.4.3_linux_amd64.deb
 
 # Or ROS 2 bridge variant (Humble example) — needs Humble already installed
-sudo apt install ./robot-bus-ros2-humble_2.4.2_linux_amd64.deb
+sudo apt install ./robot-bus-ros2-humble_2.4.3_linux_amd64.deb
 source /opt/ros/humble/setup.bash
 
 # macOS Apple Silicon (core package only)
-sudo installer -pkg robot-bus_2.4.2_macos_arm64.pkg -target /
+sudo installer -pkg robot-bus_2.4.3_macos_arm64.pkg -target /
 # Installs under /usr/local ({bin,lib,include})
 
 # Or from source (dev)
@@ -88,7 +88,7 @@ The archive is a compiled SDK, not an installer. CMake downloads it while config
 | `robot-bus-sdk_<ver>_windows_x64.zip` | Windows x64. Release DLLs. |
 | `robot-bus-sdk_<ver>_macos_arm64.tar.gz` | macOS Apple Silicon. |
 | `robot-bus-sdk-ros2-humble_<ver>_linux_<arch>.tar.gz` | Core SDK plus `librobot_bus_ros2_bridge`, Linux only. Needs system ROS 2 Humble at build and run time. |
-| `robot-bus-sdk-ros2-jazzy_<ver>_linux_<arch>.tar.gz` | Same for Jazzy. |
+| `robot-bus-sdk-ros2-jazzy_<ver>_linux_<arch>.tar.gz` | Same for the Ubuntu 24.04 ROS 2 Jazzy installation. |
 
 `<arch>` is `amd64` or `arm64`. Each archive has a sibling `.sha256` file (`<hash>  <filename>`). The archive root is the prefix: `bin/`, `include/`, `lib/`, and `lib/cmake/robot_bus/`.
 
@@ -97,15 +97,17 @@ The archive is a compiled SDK, not an installer. CMake downloads it while config
 Replace the version and hash with the release you want. The hash is the first field of the `.sha256` asset.
 
 ```cmake
-cmake_minimum_required(VERSION 3.24)
+cmake_minimum_required(VERSION 3.22)
 project(my_robot LANGUAGES CXX)
 
+if(POLICY CMP0135)
+  cmake_policy(SET CMP0135 NEW)
+endif()
 include(FetchContent)
 
 FetchContent_Declare(robot_bus_sdk
-  URL "https://github.com/indunet/robot-bus/releases/download/v2.4.2/robot-bus-sdk_2.4.2_linux_amd64.tar.gz"
-  URL_HASH SHA256=<hash from robot-bus-sdk_2.4.2_linux_amd64.tar.gz.sha256>
-  DOWNLOAD_EXTRACT_TIMESTAMP TRUE)
+  URL "https://github.com/indunet/robot-bus/releases/download/v2.4.3/robot-bus-sdk_2.4.3_linux_amd64.tar.gz"
+  URL_HASH "SHA256=<hash from the .sha256 asset>")
 FetchContent_MakeAvailable(robot_bus_sdk)
 
 find_package(robot_bus CONFIG REQUIRED
@@ -136,7 +138,7 @@ build/_deps/robot_bus_sdk-src/
 To share one copy across projects, or to work offline:
 
 ```bash
-cmake -S . -B build -DFETCHCONTENT_SOURCE_DIR_ROBOT_BUS_SDK=/opt/robot-bus-sdk-2.4.2
+cmake -S . -B build -DFETCHCONTENT_SOURCE_DIR_ROBOT_BUS_SDK=/opt/robot-bus-sdk-2.4.3
 ```
 
 Point that variable at the unpacked archive root (the directory that contains `lib/cmake/robot_bus`).
@@ -146,12 +148,12 @@ Point that variable at the unpacked archive root (the directory that contains `l
 `FetchRobotBus.cmake` is on each GitHub Release and inside the archive at `lib/cmake/robot_bus/FetchRobotBus.cmake`. Copy it into your project (for example `cmake/FetchRobotBus.cmake`):
 
 ```cmake
-cmake_minimum_required(VERSION 3.24)
+cmake_minimum_required(VERSION 3.22)
 project(my_robot LANGUAGES CXX)
 
 include(cmake/FetchRobotBus.cmake)
-robot_bus_fetch_sdk(VERSION 2.4.2 SHA256 <hash>)
-# ROS 2 Humble on Linux: robot_bus_fetch_sdk(VERSION 2.4.2 ROS2 humble SHA256 <hash>)
+robot_bus_fetch_sdk(VERSION 2.4.3 SHA256 <hash>)
+# Pass ROS2 humble or ROS2 jazzy when you need the corresponding bridge.
 
 add_executable(my_robot main.cpp)
 target_link_libraries(my_robot PRIVATE robot_bus::robot_bus robot_bus::msgs)
@@ -165,7 +167,7 @@ A mirror or a cached directory:
 ```bash
 cmake -S . -B build -DROBOT_BUS_SDK_BASE_URL=https://mirror.example/robot-bus
 # or leave the URL alone and reuse an unpacked tree:
-cmake -S . -B build -DFETCHCONTENT_SOURCE_DIR_ROBOT_BUS_SDK=/opt/robot-bus-sdk-2.4.2
+cmake -S . -B build -DFETCHCONTENT_SOURCE_DIR_ROBOT_BUS_SDK=/opt/robot-bus-sdk-2.4.3
 ```
 
 `ROBOT_BUS_SDK_BASE_URL` may also be set in the environment. The file name under that URL is the same as on the GitHub Release.
@@ -183,12 +185,12 @@ source /opt/ros/humble/setup.bash   # or jazzy
 cmake -S . -B build
 ```
 
-Link `robot_bus::ros2_bridge` in addition to `robot_bus::robot_bus` and `robot_bus::msgs`. The archive does not contain ROS itself.
+Pass `ROS2 humble` or `ROS2 jazzy` and also link `robot_bus::ros2_bridge` when you use the bridge. The ROS 2 archive requires the matching system installation. For an application without ROS, omit `ROS2` to fetch the core archive.
 
 ### Limits
 
-- CMake **3.24** or newer (`FetchContent` `DOWNLOAD_EXTRACT_TIMESTAMP`).
-- Linux archives are built on Ubuntu 22.04 and need **glibc 2.35** or newer.
+- CMake **3.22** or newer, including the system CMake on Ubuntu 22.04.
+- Linux core and Humble archives are built on Ubuntu 22.04 and need **glibc 2.35** or newer. Jazzy archives are built on Ubuntu 24.04 and need **glibc 2.39** or newer.
 - Windows ships Release DLLs. The package maps Debug (and the other non-Release configs) onto those Release binaries. Do not mix them with a Debug Protobuf you built yourself.
 - The archive carries Protobuf **35.1**. Link that copy (`protobuf::libprotobuf` from the archive). A second Protobuf of another version in the same process will clash.
 - The macOS archive is Apple Silicon. ROS 2 archives are Linux Humble and Jazzy only.

@@ -4,6 +4,14 @@ This changelog records user-visible additions, changes, fixes, and breaking chan
 
 Record changes under the applicable version. Explain what changed, why it changed, and how to migrate when needed.
 
+## [2.4.3] - 2026-11-21
+
+### Fixed
+
+- The prebuilt C++ SDK includes the libraries and tools referenced by Protobuf's CMake package, so a standalone CMake project can configure and link after fetching the archive.
+- Linux ROS 2 Humble and Jazzy SDKs link the bridge to the bundled robot-bus library by name and use the system ROS 2 libraries. FetchContent supports CMake 3.22, the version shipped with Ubuntu 22.04.
+- The release workflow builds and runs a FetchContent consumer against each Linux core and ROS 2 SDK before uploading it.
+
 ## [2.4.2] - 2026-11-21
 
 ### Added

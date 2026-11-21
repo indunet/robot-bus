@@ -8,6 +8,8 @@ include(CMakeFindDependencyMacro)
 if(NOT DEFINED PACKAGE_PREFIX_DIR OR PACKAGE_PREFIX_DIR STREQUAL "")
   get_filename_component(PACKAGE_PREFIX_DIR "${CMAKE_CURRENT_LIST_DIR}/../../.." ABSOLUTE)
 endif()
+set(_robot_bus_package_prefix "${PACKAGE_PREFIX_DIR}")
+set(_robot_bus_saved_prefix_path "${CMAKE_PREFIX_PATH}")
 
 # Prefer Protobuf shipped inside this prefix (SDK archive). Installer packages
 # do not carry Protobuf's CMake config, so they keep the normal search order.
@@ -39,6 +41,7 @@ if(_robot_bus_bundled_protobuf)
 endif()
 
 find_dependency(Protobuf CONFIG REQUIRED)
+set(PACKAGE_PREFIX_DIR "${_robot_bus_package_prefix}")
 
 # Build @loader_path without writing that token in this file. configure_file
 # would treat @loader_path as a substitution.
@@ -71,6 +74,7 @@ endif()
 if(NOT TARGET robot_bus::robot_bus)
   add_library(robot_bus::robot_bus SHARED IMPORTED GLOBAL)
   set_target_properties(robot_bus::robot_bus PROPERTIES
+    INTERFACE_COMPILE_FEATURES cxx_std_17
     INTERFACE_INCLUDE_DIRECTORIES "${PACKAGE_PREFIX_DIR}/include")
   if(WIN32)
     set_target_properties(robot_bus::robot_bus PROPERTIES
@@ -117,6 +121,11 @@ else()
   set(_robot_bus_ros2_lib "${PACKAGE_PREFIX_DIR}/lib/librobot_bus_ros2_bridge.so")
 endif()
 if(_robot_bus_ros2_lib AND EXISTS "${_robot_bus_ros2_lib}" AND NOT TARGET robot_bus::ros2_bridge)
+  if(UNIX AND DEFINED ENV{AMENT_PREFIX_PATH})
+    string(REPLACE ":" ";" _robot_bus_ament_prefixes "$ENV{AMENT_PREFIX_PATH}")
+    list(APPEND CMAKE_PREFIX_PATH ${_robot_bus_ament_prefixes})
+    unset(_robot_bus_ament_prefixes)
+  endif()
   find_dependency(rclcpp)
   find_dependency(rclcpp_action)
   foreach(_robot_bus_ros2_pkg IN ITEMS
@@ -125,6 +134,7 @@ if(_robot_bus_ros2_lib AND EXISTS "${_robot_bus_ros2_lib}" AND NOT TARGET robot_
       tf2_msgs trajectory_msgs unique_identifier_msgs visualization_msgs)
     find_dependency(${_robot_bus_ros2_pkg})
   endforeach()
+  set(PACKAGE_PREFIX_DIR "${_robot_bus_package_prefix}")
 
   add_library(robot_bus::ros2_bridge SHARED IMPORTED GLOBAL)
   set_target_properties(robot_bus::ros2_bridge PROPERTIES
@@ -150,4 +160,7 @@ if(_robot_bus_ros2_lib AND EXISTS "${_robot_bus_ros2_lib}" AND NOT TARGET robot_
   _robot_bus_add_consumer_rpath(robot_bus::ros2_bridge)
 endif()
 
+set(CMAKE_PREFIX_PATH "${_robot_bus_saved_prefix_path}")
+unset(_robot_bus_saved_prefix_path)
+unset(_robot_bus_package_prefix)
 check_required_components(robot_bus)

@@ -5,9 +5,9 @@ English | [中文](../zh/rust-api.md)
 `Cargo.toml`:
 
 ```toml
-robot-bus = "2.4.2"
+robot-bus = "2.4.3"
 # Local: robot-bus = { path = "../robot-bus" }
-# WebSocket RPC server (`ws` feature) is on by default; to disable: robot-bus = { version = "2.4.2", default-features = false }
+# WebSocket RPC server (`ws` feature) is on by default; to disable: robot-bus = { version = "2.4.3", default-features = false }
 ```
 
 ## Broker startup

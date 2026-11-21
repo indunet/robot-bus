@@ -38,14 +38,14 @@ CMake设置 `CMAKE_CXX_STANDARD 17`。自有应用用更高标准（如 `-DCMAKE
 
 ```bash
 # 核心 SDK（无 ROS bridge）
-sudo apt install ./robot-bus_2.4.2_linux_amd64.deb
+sudo apt install ./robot-bus_2.4.3_linux_amd64.deb
 
 # 或 ROS2 bridge变体（Humble示例）— 需已安装 Humble
-sudo apt install ./robot-bus-ros2-humble_2.4.2_linux_amd64.deb
+sudo apt install ./robot-bus-ros2-humble_2.4.3_linux_amd64.deb
 source /opt/ros/humble/setup.bash
 
 # macOS Apple Silicon（仅核心包）
-sudo installer -pkg robot-bus_2.4.2_macos_arm64.pkg -target /
+sudo installer -pkg robot-bus_2.4.3_macos_arm64.pkg -target /
 # 安装于 /usr/local（{bin,lib,include}）
 
 # 或从源码（开发）
@@ -88,7 +88,7 @@ just cpp-dev-ros2
 | `robot-bus-sdk_<ver>_windows_x64.zip` | Windows x64。Release DLL。 |
 | `robot-bus-sdk_<ver>_macos_arm64.tar.gz` | macOS Apple Silicon。 |
 | `robot-bus-sdk-ros2-humble_<ver>_linux_<arch>.tar.gz` | 核心 SDK 加上 `librobot_bus_ros2_bridge`，仅 Linux。编译和运行都需要系统里的 ROS 2 Humble。 |
-| `robot-bus-sdk-ros2-jazzy_<ver>_linux_<arch>.tar.gz` | Jazzy，其余相同。 |
+| `robot-bus-sdk-ros2-jazzy_<ver>_linux_<arch>.tar.gz` | 同上，编译和运行需要 Ubuntu 24.04 对应的 ROS 2 Jazzy。 |
 
 `<arch>` 为 `amd64` 或 `arm64`。每个压缩包旁边有一个 `.sha256` 文件（`<哈希>  <文件名>`）。压缩包根目录就是前缀：`bin/`、`include/`、`lib/`、`lib/cmake/robot_bus/`。
 
@@ -97,15 +97,17 @@ just cpp-dev-ros2
 把版本号和哈希换成你要用的 Release。哈希是 `.sha256` 附件里的第一段。
 
 ```cmake
-cmake_minimum_required(VERSION 3.24)
+cmake_minimum_required(VERSION 3.22)
 project(my_robot LANGUAGES CXX)
 
+if(POLICY CMP0135)
+  cmake_policy(SET CMP0135 NEW)
+endif()
 include(FetchContent)
 
 FetchContent_Declare(robot_bus_sdk
-  URL "https://github.com/indunet/robot-bus/releases/download/v2.4.2/robot-bus-sdk_2.4.2_linux_amd64.tar.gz"
-  URL_HASH SHA256=<来自 robot-bus-sdk_2.4.2_linux_amd64.tar.gz.sha256 的哈希>
-  DOWNLOAD_EXTRACT_TIMESTAMP TRUE)
+  URL "https://github.com/indunet/robot-bus/releases/download/v2.4.3/robot-bus-sdk_2.4.3_linux_amd64.tar.gz"
+  URL_HASH "SHA256=<来自 .sha256 附件的哈希>")
 FetchContent_MakeAvailable(robot_bus_sdk)
 
 find_package(robot_bus CONFIG REQUIRED
@@ -136,7 +138,7 @@ build/_deps/robot_bus_sdk-src/
 多个工程共用一份，或离线使用：
 
 ```bash
-cmake -S . -B build -DFETCHCONTENT_SOURCE_DIR_ROBOT_BUS_SDK=/opt/robot-bus-sdk-2.4.2
+cmake -S . -B build -DFETCHCONTENT_SOURCE_DIR_ROBOT_BUS_SDK=/opt/robot-bus-sdk-2.4.3
 ```
 
 这个变量指向解压后的根目录（里面有 `lib/cmake/robot_bus` 的那一层）。
@@ -146,12 +148,12 @@ cmake -S . -B build -DFETCHCONTENT_SOURCE_DIR_ROBOT_BUS_SDK=/opt/robot-bus-sdk-2
 `FetchRobotBus.cmake` 附在每个 GitHub Release 上，压缩包里也有一份：`lib/cmake/robot_bus/FetchRobotBus.cmake`。把它拷进自己的工程（例如 `cmake/FetchRobotBus.cmake`）：
 
 ```cmake
-cmake_minimum_required(VERSION 3.24)
+cmake_minimum_required(VERSION 3.22)
 project(my_robot LANGUAGES CXX)
 
 include(cmake/FetchRobotBus.cmake)
-robot_bus_fetch_sdk(VERSION 2.4.2 SHA256 <哈希>)
-# Linux 上的 ROS 2 Humble：robot_bus_fetch_sdk(VERSION 2.4.2 ROS2 humble SHA256 <哈希>)
+robot_bus_fetch_sdk(VERSION 2.4.3 SHA256 <哈希>)
+# ROS 2 环境可以传入 ROS2 humble 或 ROS2 jazzy 来选择对应的桥接包。
 
 add_executable(my_robot main.cpp)
 target_link_libraries(my_robot PRIVATE robot_bus::robot_bus robot_bus::msgs)
@@ -165,7 +167,7 @@ robot_bus_copy_runtime_libs(my_robot)
 ```bash
 cmake -S . -B build -DROBOT_BUS_SDK_BASE_URL=https://mirror.example/robot-bus
 # 或者不改 URL，直接用已经解压的目录：
-cmake -S . -B build -DFETCHCONTENT_SOURCE_DIR_ROBOT_BUS_SDK=/opt/robot-bus-sdk-2.4.2
+cmake -S . -B build -DFETCHCONTENT_SOURCE_DIR_ROBOT_BUS_SDK=/opt/robot-bus-sdk-2.4.3
 ```
 
 `ROBOT_BUS_SDK_BASE_URL` 也可以放在环境变量里。该地址下的文件名与 GitHub Release 上的相同。
@@ -183,12 +185,12 @@ source /opt/ros/humble/setup.bash   # 或 jazzy
 cmake -S . -B build
 ```
 
-除了 `robot_bus::robot_bus` 和 `robot_bus::msgs`，再链接 `robot_bus::ros2_bridge`。压缩包里不含 ROS 本身。
+使用 ROS 2 桥接时，传入 `ROS2 humble` 或 `ROS2 jazzy`，并额外链接 `robot_bus::ros2_bridge`。ROS 2 压缩包依赖系统安装的对应发行版。无 ROS 项目使用核心包，省略 `ROS2` 参数即可。
 
 ### 限制
 
-- 需要 CMake **3.24** 或更高（`FetchContent` 的 `DOWNLOAD_EXTRACT_TIMESTAMP`）。
-- Linux 压缩包在 Ubuntu 22.04 上构建，需要 **glibc 2.35** 或更高。
+- 需要 CMake **3.22** 或更高，包括 Ubuntu 22.04 自带的 CMake 3.22。
+- Linux 核心包和 Humble 包在 Ubuntu 22.04 上构建，需要 **glibc 2.35** 或更高。Jazzy 包在 Ubuntu 24.04 上构建，需要 **glibc 2.39** 或更高。
 - Windows 只提供 Release DLL。包配置会把 Debug（以及其他非 Release 配置）映射到这些 Release 库。不要再和自己编译的 Debug Protobuf 混用。
 - 压缩包内是 Protobuf **35.1**。请链接这一份（压缩包里的 `protobuf::libprotobuf`）。同一进程里再放另一个版本的 Protobuf 会冲突。
 - macOS 压缩包是 Apple Silicon。ROS 2 压缩包只有 Linux 上的 Humble 和 Jazzy。

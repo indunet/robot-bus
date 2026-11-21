@@ -14,6 +14,11 @@ WORK="$(mktemp -d)"
 trap 'rm -rf "$WORK"' EXIT
 
 mkdir -p "$DEST"
+# The generated CMake source is read by native Windows CMake under Git Bash.
+if command -v cygpath >/dev/null 2>&1; then
+  ROOT="$(cygpath -am "$ROOT")"
+  DEST="$(cygpath -am "$DEST")"
+fi
 cat >"$WORK/CMakeLists.txt" <<EOF
 cmake_minimum_required(VERSION 3.16)
 project(robot_bus_cmake_config LANGUAGES NONE)

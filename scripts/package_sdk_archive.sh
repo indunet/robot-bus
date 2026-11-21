@@ -10,9 +10,9 @@
 #   variant:  main (default) | ros2-humble | ros2-jazzy
 #
 # The archive root is the SDK prefix (no usr/ layer). Protobuf and Abseil
-# headers, shared libraries, and CMake configs are copied from PROTOBUF_PREFIX
-# (default /usr/local). On Linux, non-glibc shared libraries needed by the SDK
-# (libzmq and its dependencies) are copied in and given an $ORIGIN RPATH.
+# headers, libraries, tools, and CMake configs are copied from PROTOBUF_PREFIX
+# (default /usr/local). On Linux, non-system shared libraries needed by the SDK
+# are copied in with relative RPATHs. ROS libraries stay in the system install.
 #
 # Env:
 #   PROTOBUF_PREFIX   install prefix of protobuf 35.1 (default /usr/local)
@@ -102,19 +102,17 @@ case "$PLATFORM" in
     copy_named "$PROTOBUF_PREFIX/lib" '*.dll' "$WORK/bin"
     copy_named "$PROTOBUF_PREFIX/lib" '*.lib' "$WORK/lib"
     ;;
-  macos)
-    copy_named "$PROTOBUF_PREFIX/lib" 'libprotobuf*.dylib' "$WORK/lib"
-    copy_named "$PROTOBUF_PREFIX/lib" 'libabsl*.dylib' "$WORK/lib"
-    copy_named "$PROTOBUF_PREFIX/lib" 'libutf8*.dylib' "$WORK/lib"
-    ;;
-  linux)
+  linux|macos)
+    # The upstream CMake export checks all its targets, including protoc and
+    # libraries unused by apps that only link protobuf::libprotobuf.
     for libdir in "$PROTOBUF_PREFIX/lib" "$PROTOBUF_PREFIX/lib64"; do
-      copy_named "$libdir" 'libprotobuf.so*' "$WORK/lib"
-      copy_named "$libdir" 'libabsl*.so*' "$WORK/lib"
-      copy_named "$libdir" 'libutf8*.so*' "$WORK/lib"
+      for pattern in 'libprotobuf*' 'libprotoc*' 'libupb*' 'libabsl*' 'libutf8*'; do
+        copy_named "$libdir" "$pattern" "$WORK/lib"
+      done
     done
     ;;
 esac
+copy_named "$PROTOBUF_PREFIX/bin" 'protoc*' "$WORK/bin"
 
 if [[ ! -f "$WORK/lib/cmake/protobuf/protobuf-config.cmake" ]]; then
   echo "error: $PROTOBUF_PREFIX has no lib/cmake/protobuf/protobuf-config.cmake" >&2
@@ -207,7 +205,12 @@ locate_needed() {
 bundle_linux_deps() {
   command -v readelf >/dev/null 2>&1 || { echo "error: readelf is required" >&2; exit 1; }
   command -v patchelf >/dev/null 2>&1 || { echo "error: patchelf is required" >&2; exit 1; }
-  local changed=1 guard=0 f name src real base needed
+  local changed=1 guard=0 f name src real base needed rpath ros_dir
+  local ros_lib_dirs=()
+  if [[ "$VARIANT" == ros2-* ]]; then
+    local ros_lib="/opt/ros/${VARIANT#ros2-}/lib"
+    ros_lib_dirs=("$ros_lib" "$ros_lib"/*/)
+  fi
   while [[ "$changed" -eq 1 ]]; do
     changed=0
     guard=$((guard + 1))
@@ -230,6 +233,11 @@ bundle_linux_deps() {
         if [[ -e "$WORK/lib/$name" ]]; then
           continue
         fi
+        for ros_dir in "${ros_lib_dirs[@]}"; do
+          if [[ -e "$ros_dir/$name" ]]; then
+            continue 2
+          fi
+        done
         if ! src=$(locate_needed "$name"); then
           echo "error: $f needs $name, not found (PROTOBUF_PREFIX=$PROTOBUF_PREFIX)" >&2
           exit 1
@@ -243,7 +251,7 @@ bundle_linux_deps() {
         fi
         changed=1
       done
-    done < <(find "$WORK/lib" -type f)
+    done < <(find "$WORK/lib" "$WORK/bin" -type f)
   done
   while IFS= read -r f; do
     if [[ -L "$f" ]]; then
@@ -255,14 +263,18 @@ bundle_linux_deps() {
     if [[ "$(basename "$f")" == "librobot_bus.so" ]]; then
       patchelf --set-soname librobot_bus.so "$f"
     fi
-    patchelf --set-rpath '$ORIGIN' "$f"
-  done < <(find "$WORK/lib" -type f)
+    case "$f" in
+      "$WORK/bin/"*) rpath='$ORIGIN/../lib' ;;
+      *) rpath='$ORIGIN' ;;
+    esac
+    patchelf --set-rpath "$rpath" "$f"
+  done < <(find "$WORK/lib" "$WORK/bin" -type f)
 }
 
 bundle_macos_deps() {
   command -v otool >/dev/null 2>&1 || { echo "error: otool is required" >&2; exit 1; }
   command -v install_name_tool >/dev/null 2>&1 || { echo "error: install_name_tool is required" >&2; exit 1; }
-  local changed=1 guard=0 f dep depbase src real
+  local changed=1 guard=0 f dep depbase src real rpath
   while [[ "$changed" -eq 1 ]]; do
     changed=0
     guard=$((guard + 1))
@@ -305,7 +317,7 @@ bundle_macos_deps() {
         fi
         changed=1
       done < <(otool -L "$f" | awk 'NR>1 { print $1 }')
-    done < <(find "$WORK/lib" -type f)
+    done < <(find "$WORK/lib" "$WORK/bin" -type f)
   done
   while IFS= read -r f; do
     if [[ -L "$f" ]]; then
@@ -314,7 +326,13 @@ bundle_macos_deps() {
     if ! is_macho "$f"; then
       continue
     fi
-    install_name_tool -id "@rpath/$(basename "$f")" "$f"
+    case "$f" in
+      "$WORK/bin/"*) rpath='@loader_path/../lib' ;;
+      *)
+        rpath='@loader_path'
+        install_name_tool -id "@rpath/$(basename "$f")" "$f"
+        ;;
+    esac
     while IFS= read -r dep; do
       if [[ -z "$dep" ]]; then
         continue
@@ -324,13 +342,13 @@ bundle_macos_deps() {
       esac
       install_name_tool -change "$dep" "@rpath/$(basename "$dep")" "$f"
     done < <(otool -L "$f" | awk 'NR>1 { print $1 }')
-    if ! otool -l "$f" | grep -F '@loader_path' >/dev/null; then
-      install_name_tool -add_rpath @loader_path "$f"
+    if ! otool -l "$f" | grep -F "path $rpath (offset " >/dev/null; then
+      install_name_tool -add_rpath "$rpath" "$f"
     fi
     if command -v codesign >/dev/null 2>&1; then
       codesign --force --sign - "$f" >/dev/null || echo "warning: codesign failed for $f" >&2
     fi
-  done < <(find "$WORK/lib" -type f)
+  done < <(find "$WORK/lib" "$WORK/bin" -type f)
 }
 
 case "$PLATFORM" in

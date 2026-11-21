@@ -5,9 +5,9 @@
 `Cargo.toml`：
 
 ```toml
-robot-bus = "2.4.2"
+robot-bus = "2.4.3"
 # 本地：robot-bus = { path = "../robot-bus" }
-# 默认已启用 WebSocket RPC服务端（`ws` feature）；若需关闭：robot-bus = { version = "2.4.2", default-features = false }
+# 默认已启用 WebSocket RPC服务端（`ws` feature）；若需关闭：robot-bus = { version = "2.4.3", default-features = false }
 ```
 
 ## Broker启动

@@ -1,5 +1,8 @@
 #include <robot_bus/node.hpp>
 #include <robot_bus/sensor_msgs/msg/v1/imu.pb.h>
+#ifdef ROBOT_BUS_HAS_ROS2
+#include <robot_bus/ros2_bridge.hpp>
+#endif
 
 #include <iostream>
 #include <string>
@@ -24,6 +27,16 @@ int main() {
     std::cerr << "node name mismatch\n";
     return 1;
   }
+#ifdef ROBOT_BUS_HAS_ROS2
+  auto bridge = robot_bus::Ros2Bridge::New("sdk_smoke_bridge")
+                    .bus_ipc()
+                    .from_ros("/sdk_smoke_chatter", robot_bus::TopicQos::ros_default())
+                    .to_bus("/sdk_smoke_chatter", robot_bus::TopicQos::bus())
+                    .mapper(robot_bus::StdMsgsStringMapper{})
+                    .add()
+                    .build();
+  bridge.spin_once(0.0);
+#endif
   std::cout << "sdk-smoke ok\n";
   return 0;
 }

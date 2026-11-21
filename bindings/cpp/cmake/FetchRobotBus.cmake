@@ -3,9 +3,9 @@
 # Copy this file into your project (it is also attached to each GitHub Release
 # and stored inside the SDK at lib/cmake/robot_bus/FetchRobotBus.cmake).
 #
-#   cmake_minimum_required(VERSION 3.24)
+#   cmake_minimum_required(VERSION 3.22)
 #   include(cmake/FetchRobotBus.cmake)
-#   robot_bus_fetch_sdk(VERSION 2.4.2 SHA256 <hash>)
+#   robot_bus_fetch_sdk(VERSION 2.4.3 SHA256 <hash>)
 #   target_link_libraries(my_app PRIVATE robot_bus::robot_bus robot_bus::msgs)
 #   robot_bus_copy_runtime_libs(my_app)
 #
@@ -21,8 +21,8 @@
 # or the same name in the environment.
 
 macro(robot_bus_fetch_sdk)
-  if(CMAKE_VERSION VERSION_LESS 3.24)
-    message(FATAL_ERROR "robot_bus_fetch_sdk requires CMake 3.24 or newer (found ${CMAKE_VERSION})")
+  if(CMAKE_VERSION VERSION_LESS 3.22)
+    message(FATAL_ERROR "robot_bus_fetch_sdk requires CMake 3.22 or newer (found ${CMAKE_VERSION})")
   endif()
   cmake_parse_arguments(_RBSDK "" "VERSION;ROS2;SHA256" "" ${ARGN})
   if(NOT _RBSDK_VERSION)
@@ -96,16 +96,14 @@ macro(robot_bus_fetch_sdk)
     message(STATUS "robot-bus SDK: ${_RBSDK_URL}")
 
     include(FetchContent)
+    set(_RBSDK_DOWNLOAD_ARGS)
     if(_RBSDK_SHA256)
-      FetchContent_Declare(robot_bus_sdk
-        URL "${_RBSDK_URL}"
-        URL_HASH "SHA256=${_RBSDK_SHA256}"
-        DOWNLOAD_EXTRACT_TIMESTAMP TRUE)
-    else()
-      FetchContent_Declare(robot_bus_sdk
-        URL "${_RBSDK_URL}"
-        DOWNLOAD_EXTRACT_TIMESTAMP TRUE)
+      list(APPEND _RBSDK_DOWNLOAD_ARGS URL_HASH "SHA256=${_RBSDK_SHA256}")
     endif()
+    if(POLICY CMP0135)
+      list(APPEND _RBSDK_DOWNLOAD_ARGS DOWNLOAD_EXTRACT_TIMESTAMP FALSE)
+    endif()
+    FetchContent_Declare(robot_bus_sdk URL "${_RBSDK_URL}" ${_RBSDK_DOWNLOAD_ARGS})
     FetchContent_MakeAvailable(robot_bus_sdk)
     set(ROBOT_BUS_SDK_DIR "${robot_bus_sdk_SOURCE_DIR}"
       CACHE PATH "Unpacked robot-bus SDK prefix" FORCE)
@@ -126,6 +124,7 @@ macro(robot_bus_fetch_sdk)
   unset(_RBSDK_ARCHIVE)
   unset(_RBSDK_BASE)
   unset(_RBSDK_URL)
+  unset(_RBSDK_DOWNLOAD_ARGS)
 endmacro()
 
 # Windows: copy the SDK's bin/ (DLLs and the broker) next to the target.
