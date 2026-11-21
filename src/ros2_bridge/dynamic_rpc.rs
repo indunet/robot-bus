@@ -1,12 +1,3 @@
-//! Historical note: dynamic ROS service/action on the bridge executor.
-//!
-//! Ros2Bridge mounts service/action via **typed** rclrs entities (concrete `T`).
-//! Dynamic service/action attach via type-name string remains blocked (wait-set
-//! registration / `NodeHandle::rcl_node` are `pub(crate)`; upstream dynamic
-//! pub/sub only). Prefer per-language native bridges or typed `attach` overrides.
-
-#![allow(dead_code)]
-
 /// Spike outcome for docs / CI messaging.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DynamicServiceSpikeResult {

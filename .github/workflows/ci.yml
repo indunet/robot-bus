@@ -417,7 +417,7 @@ jobs:
           cd bindings/python
           maturin develop --features extension-module,ws,console,demo-tank --no-default-features
       - name: Build Rust interop peer
-        run: cargo build --bin robot_bus_interop
+        run: cargo build --example robot_bus_interop
       - name: Build C ABI + C++ interop peer
         run: |
           export PKG_CONFIG_PATH=/usr/local/lib/pkgconfig:${PKG_CONFIG_PATH:-}

@@ -1,9 +1,6 @@
 //! Diagnostics and bus error propagation without installing ROS.
 
 use robot_bus::errors::{BusError, parse_error_body, rpc_error_body};
-#[allow(dead_code)]
-#[path = "../../src/ros2_bridge/drop_stats.rs"]
-mod health;
 
 use robot_bus::{Node, NodeOptions, RobotBusBroker};
 use std::sync::Arc;

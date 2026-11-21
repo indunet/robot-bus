@@ -223,7 +223,7 @@ test-python-native:
 test-interop: gen-rust console
 	#!/usr/bin/env bash
 	set -euo pipefail
-	cargo build --quiet --bin robot_bus_interop
+	cargo build --quiet --example robot_bus_interop
 	cargo build --release --manifest-path bindings/cpp/native/Cargo.toml
 	python3 scripts/generate_cpp_msgs.py
 	cmake -S bindings/cpp -B bindings/cpp/build -DCMAKE_BUILD_TYPE=Release \

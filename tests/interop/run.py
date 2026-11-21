@@ -85,8 +85,8 @@ def _node_kwargs(broker) -> dict[str, str]:
 
 def _rust_bin() -> Path | None:
     for p in (
-        REPO / "target/debug/robot_bus_interop",
-        REPO / "target/release/robot_bus_interop",
+        REPO / "target/debug/examples/robot_bus_interop",
+        REPO / "target/release/examples/robot_bus_interop",
     ):
         if p.is_file():
             return p
@@ -196,7 +196,7 @@ def _stop(proc: subprocess.Popen | None) -> None:
 def _spawn_rust(role: str, env: dict[str, str]) -> subprocess.Popen:
     bin_ = _rust_bin()
     if not bin_:
-        raise FileNotFoundError("robot_bus_interop missing (cargo build --bin robot_bus_interop)")
+        raise FileNotFoundError("robot_bus_interop missing (cargo build --example robot_bus_interop)")
     env = dict(env)
     env["ROBOT_BUS_INTEROP_ROLE"] = role
     return _spawn([str(bin_)], env)
@@ -401,7 +401,7 @@ def _allow_skip() -> bool:
 def _missing_peers() -> list[str]:
     missing: list[str] = []
     if _rust_bin() is None:
-        missing.append("robot_bus_interop (cargo build --bin robot_bus_interop)")
+        missing.append("robot_bus_interop (cargo build --example robot_bus_interop)")
     if not _java_ready():
         missing.append("Java InteropPeer (mvn test-compile in bindings/java)")
     if not _ts_ready():

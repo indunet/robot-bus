@@ -462,6 +462,8 @@ Topic / Action: same “proto first, then mapper” flow. `TypedTopicMapper` / `
 
 ## Rust (`rclrs`)
 
+The dynamic RPC experiment with `rclrs` 0.8 found that registering a service or action with the executor by ROS type name would require access to private wait-set registration and node handles. The Rust bridge therefore creates these entities with concrete ROS types. For a custom interface, implement `TypedServiceMapper` or `TypedActionMapper`. The public `ros2_bridge::dynamic_rpc` module records the outcome of the experiment.
+
 ```rust
 use robot_bus::ros2_bridge::{
     Ros2Bridge, StdMsgsStringMapper, TopicQos, TriggerServiceMapper,

@@ -16,8 +16,9 @@
 
 mod builder;
 mod deadline;
-mod drop_stats;
-mod dynamic_rpc_spike;
+use crate::drop_stats;
+/// Recorded outcome of the Rust bridge dynamic service/action experiment.
+pub mod dynamic_rpc;
 mod mapper;
 mod observe;
 mod spin;
@@ -38,11 +39,6 @@ pub mod typed_service {
         attach_typed_bus_to_ros, create_typed_ros2_to_bus_sub, wire_typed_action,
         wire_typed_service,
     };
-}
-
-/// Historical note on dynamic service/action feasibility (not a product path).
-pub mod dynamic_rpc {
-    pub use super::dynamic_rpc_spike::{DynamicServiceSpikeResult, SPIKE_RESULT, spike_summary};
 }
 
 pub use builder::{

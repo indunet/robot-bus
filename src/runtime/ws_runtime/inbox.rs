@@ -1,7 +1,7 @@
 use std::collections::{HashMap, VecDeque};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Condvar, Mutex, MutexGuard};
-use std::time::{Duration, Instant};
+use std::time::Instant;
 
 use crate::errors::{BusError, Result};
 
@@ -159,6 +159,7 @@ impl SharedInbox {
 mod tests {
     use super::*;
     use std::thread;
+    use std::time::Duration;
 
     fn inbox_with_topic() -> Arc<SharedInbox> {
         let inbox = Arc::new(SharedInbox::default());

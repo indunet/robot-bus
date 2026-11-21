@@ -38,6 +38,6 @@ just test-interop
 |------|------|
 | `run.py` | Orchestrator (Python broker + peers) |
 | `ts_pub.mjs` | TypeScript pub peer |
-| `src/bin/robot_bus_interop.rs` | Rust peer (`pub`, `svc-client`) |
+| `rust_peer.rs` | Rust peer (`pub`, `svc-client`) |
 | `bindings/cpp/tests/interop_peer.cpp` | C++ peer (`svc-server`, `act-client`) |
 | `bindings/java/.../interop/InteropPeer.java` | Java peer (`sub`, `svc-server`) |

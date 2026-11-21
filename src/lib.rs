@@ -4,6 +4,9 @@ pub mod action_bus;
 pub mod broker;
 pub mod console_topics;
 pub mod discovery;
+// ROS-independent counters used by the ROS 2 bridge; compiled (and unit-tested) always.
+#[cfg_attr(not(feature = "ros2"), allow(dead_code))]
+mod drop_stats;
 pub mod errors;
 pub mod lazy_subscribe;
 pub mod message_bus;
