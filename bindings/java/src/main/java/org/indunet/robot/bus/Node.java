@@ -7,6 +7,7 @@ import com.sun.jna.Structure;
 import com.sun.jna.ptr.LongByReference;
 import com.sun.jna.ptr.PointerByReference;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
 
@@ -445,7 +446,7 @@ public final class Node implements AutoCloseable {
                 payload -> {
                     Goal goal = ProtoCodec.tryParse(goalT, payload);
                     if (goal == null) {
-                        return List.of(new ActionPhase("RESULT", new byte[0]));
+                        return Collections.singletonList(new ActionPhase("RESULT", new byte[0]));
                     }
                     List<TypedActionPhase> replies = handler.handle(goal);
                     List<ActionPhase> out = new ArrayList<>(replies.size());

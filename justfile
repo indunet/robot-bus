@@ -105,7 +105,7 @@ java-install: gen-java
 android-native:
 	./scripts/build_android_native.sh
 
-# Assemble Android AAR (self-contained Kotlin SDK; no java-install)
+# Assemble Android AAR (compiles bindings/java sources; no java-install)
 android-dev: gen-android android-native
 	cd bindings/android && ./gradlew assembleRelease --no-daemon
 

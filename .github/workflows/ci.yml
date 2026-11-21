@@ -349,13 +349,15 @@ jobs:
           ANDROID_API_LEVEL: "24"
       # Host JVM unit tests load desktop librobot_bus_c (see just test-android),
       # not the Android ABI .so under jniLibs.
+      # This job compiles bindings/java into the AAR. Keep it on every push and
+      # pull request; do not limit it to bindings/android paths.
       - name: Build host C ABI (for unit tests)
         run: cargo build --release --manifest-path bindings/cpp/native/Cargo.toml
-      - name: Assemble AAR + unit tests
+      - name: Lint, assemble AAR, and unit tests
         working-directory: bindings/android
         env:
           ROBOT_BUS_NATIVE_DIR: ${{ github.workspace }}/bindings/cpp/native/target/release
-        run: ./gradlew assembleRelease test --no-daemon
+        run: ./gradlew lintRelease assembleRelease test --no-daemon
 
   interop:
     runs-on: ubuntu-22.04

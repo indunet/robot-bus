@@ -15,11 +15,11 @@ import android.content.Context
  *   }
  * }
  * ```
+ *
+ * The Node / Broker API itself is the shared Java SDK, compiled into this AAR.
  */
 object RobotBusAndroid {
     @Volatile private var initialized = false
-    @Volatile internal var ipcRoot: String? = null
-        private set
 
     @JvmStatic
     @Synchronized
@@ -30,7 +30,7 @@ object RobotBusAndroid {
             initialized = true
         }
         if (context != null) {
-            ipcRoot = context.cacheDir.absolutePath
+            AndroidRuntime.setIpcRoot(context.cacheDir.absolutePath)
         }
     }
 }

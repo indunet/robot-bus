@@ -16,7 +16,7 @@ internal class TestBus private constructor(
     fun makeNode(name: String): Node =
         Node(
             name,
-            NodeOptions(
+            nodeOptions(
                 host = null,
                 transport = "tcp",
                 wsUrl = null,
@@ -39,7 +39,7 @@ internal class TestBus private constructor(
         fun start(): TestBus {
             // Bind :0 so the OS assigns ports at broker start (avoids freePort TOCTOU).
             val opts =
-                BrokerOptions(
+                brokerOptions(
                     messageXsubBind = "tcp://127.0.0.1:0",
                     messageXpubBind = "tcp://127.0.0.1:0",
                     serviceFrontendBind = "tcp://127.0.0.1:0",

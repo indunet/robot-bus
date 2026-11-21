@@ -29,7 +29,13 @@ android {
         getByName("main") {
             jniLibs.srcDirs("src/main/jniLibs")
             java.srcDir("generated")
+            // Shared JVM implementation. Do not also depend on the robot-bus JAR.
+            java.srcDir("../java/src/main/java")
         }
+    }
+
+    lint {
+        abortOnError = true
     }
 
     testOptions {
@@ -70,7 +76,7 @@ mavenPublishing {
     pom {
         name.set("robot-bus-android")
         description.set(
-            "Standalone Android Kotlin SDK for robot-bus (JNA + librobot_bus_c jniLibs)",
+            "Android SDK for robot-bus. Compiles the shared Java implementation, plus RobotBusAndroid.init and jniLibs.",
         )
         inceptionYear.set(providers.gradleProperty("POM_INCEPTION_YEAR"))
         url.set(providers.gradleProperty("POM_URL"))

@@ -7,29 +7,41 @@ public final class Broker implements AutoCloseable {
     private Pointer ptr;
 
     public Broker() {
-        this.ptr = Errors.checkPtr(RobotBusC.Holder.INSTANCE.robot_bus_broker_start(null), "Broker");
+        this.ptr = start(null, null);
     }
 
     public Broker(BrokerOptions options) {
-        this.ptr =
-                Errors.checkPtr(
-                        RobotBusC.Holder.INSTANCE.robot_bus_broker_start(options.toNative()), "Broker");
+        this.ptr = start(null, options);
     }
 
     /** Start broker sharing {@code context} (required for same-process inproc Nodes). */
     public Broker(Context context) {
-        this.ptr =
-                Errors.checkPtr(
-                        RobotBusC.Holder.INSTANCE.robot_bus_broker_start_with_context(context.raw(), null),
-                        "Broker");
+        this.ptr = start(context, null);
     }
 
     public Broker(Context context, BrokerOptions options) {
-        this.ptr =
-                Errors.checkPtr(
-                        RobotBusC.Holder.INSTANCE.robot_bus_broker_start_with_context(
-                                context.raw(), options != null ? options.toNative() : null),
-                        "Broker");
+        this.ptr = start(context, options);
+    }
+
+    /**
+     * When {@link AndroidRuntime#ipcRoot} is set, pass it through so Android brokers keep IPC
+     * sockets under the app cache directory. Desktop starts keep the previous entry points.
+     */
+    private static Pointer start(Context context, BrokerOptions options) {
+        Pointer ctx = context != null ? context.raw() : null;
+        RobotBusC.BrokerOptions nativeOpts = options != null ? options.toNative() : null;
+        String ipcRoot = AndroidRuntime.ipcRoot;
+        if (ipcRoot != null) {
+            return Errors.checkPtr(
+                    RobotBusC.Holder.INSTANCE.robot_bus_broker_start_with_context_in(
+                            ctx, nativeOpts, ipcRoot),
+                    "Broker");
+        }
+        if (context == null) {
+            return Errors.checkPtr(RobotBusC.Holder.INSTANCE.robot_bus_broker_start(nativeOpts), "Broker");
+        }
+        return Errors.checkPtr(
+                RobotBusC.Holder.INSTANCE.robot_bus_broker_start_with_context(ctx, nativeOpts), "Broker");
     }
 
     public void stop() {

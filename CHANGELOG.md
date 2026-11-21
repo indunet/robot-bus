@@ -4,6 +4,13 @@ This changelog records user-visible additions, changes, fixes, and breaking chan
 
 Record changes under the applicable version. Explain what changed, why it changed, and how to migrate when needed.
 
+## [Unreleased]
+
+### Changed
+
+- The Android AAR (`org.indunet:robot-bus-android`) now compiles the Java SDK sources instead of keeping a second Kotlin copy. `RobotBusAndroid.init` is unchanged: call it before `Node` or `Broker`, and an in-process broker still puts IPC sockets under the app cache directory. Do not depend on `org.indunet:robot-bus` and `org.indunet:robot-bus-android` in the same app; the classes would be duplicated.
+- Kotlin code on Android can no longer pass named arguments to `BrokerOptions`, `NodeOptions`, or `DiscoverOpts`, and cannot use named arguments on the Java methods (for example `createPublisher(topic, qosDepth = 5)`). Use `brokerOptions`, `nodeOptions`, and `discoverOpts` when you want default arguments. Pass other arguments by position, or pick an overload.
+
 ## [2.4.3] - 2026-11-21
 
 ### Fixed

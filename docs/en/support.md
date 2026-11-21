@@ -15,7 +15,7 @@ Core SDKs need no ROS installation unless the bridge is enabled. The table refle
 | TypeScript / Node.js | Native SDK, WS client, broker | npm tests and native interop | Every Node.js/platform combination |
 | Browser | WS publish/subscribe and service/action clients | WS protocol and client tests | Complete browser matrix; service/action server registration is unavailable |
 | C++ / Java | Native SDK, WS client, broker | Native interface tests and interop | Runtime validation of every release artifact in the user's environment |
-| Android | Independent Kotlin SDK, minSdk 24 | JNI and AAR builds, host JVM unit tests | Comprehensive device/emulator, background lifecycle or network recovery testing |
+| Android | AAR that compiles the shared Java SDK, minSdk 24 | JNI and AAR builds, host JVM unit tests | Comprehensive device/emulator, background lifecycle or network recovery testing |
 
 Consult the [language API guides](../../README.md#16-documentation) for interface differences. WS Nodes operate as clients and cannot register service/action servers.
 

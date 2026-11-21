@@ -7,8 +7,8 @@ Package: `org.indunet.robot.bus`
 JNA wrappers over the C ABI (`bindings/cpp/native` → `librobot_bus_c`), plus
 **pre-generated protobuf stubs** (same `proto/` as Python / C++ / TypeScript).
 
-Android AAR: [`../android/`](../android/) — **standalone Kotlin SDK** (does not depend on this
-JAR). See [`docs/en/android-api.md`](../../docs/en/android-api.md).
+Android AAR: [`../android/`](../android/) compiles these sources directly (it does not
+depend on this JAR). See [`docs/en/android-api.md`](../../docs/en/android-api.md).
 
 API examples: [`docs/en/java-api.md`](../../docs/en/java-api.md).
 
@@ -24,7 +24,7 @@ just java-dev
 Needs **protoc 35.1** for `just gen-java` (stubs under `generated/`, gitignored).
 Published JARs embed stubs — consumers do not need protoc.
 
-Install into `~/.m2` (needed before building the Android AAR locally):
+Install into `~/.m2` for local JVM experiments:
 
 ```bash
 just java-install

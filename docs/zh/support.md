@@ -15,7 +15,7 @@
 | TypeScript / Node.js | 原生 SDK、WS 客户端、broker | npm 测试与原生互通 | 所有 Node.js 版本与平台组合 |
 | 浏览器 | WS 发布、订阅、service/action 客户端 | WS 协议及客户端测试 | 完整浏览器兼容矩阵；不能作为 service/action 服务端 |
 | C++ / Java | 原生 SDK、WS 客户端、broker | 原生接口测试与互通 | 每个发布包都已在用户目标环境运行 |
-| Android | 独立 Kotlin SDK，minSdk 24 | JNI 构建、AAR 构建、宿主 JVM 单测 | 真机、模拟器、后台生命周期与断网恢复已全面验证 |
+| Android | 与 Java SDK 共用实现的 AAR，minSdk 24 | JNI 构建、AAR 构建、宿主 JVM 单测 | 真机、模拟器、后台生命周期与断网恢复已全面验证 |
 
 各语言接口差异以对应 [API 指南](../../README-zh.md#16-文档) 为准。WS Node 是客户端模式，不提供 service/action 服务端注册。
 

@@ -14,7 +14,8 @@ just java-dev       # gen-java + cargo FFI + mvn test
 |------|------|------|
 | JVM JAR | `org.indunet:robot-bus` | Java 11+, JNA + protobuf stubs |
 
-Package name `org.indunet.robot.bus`. The Android AAR is an **independent** Kotlin SDK (does not depend on this JAR); see [`android-api.md`](android-api.md).
+Package name `org.indunet.robot.bus`. The Android AAR compiles these same Java sources and adds `RobotBusAndroid.init`; it does not depend on this JAR. Do not depend on both artifacts in one Android app. See [`android-api.md`](android-api.md).
+
 ## Broker startup
 
 **Prefer starting the broker from your program**, then run your application logic. The CLI is for demos, multi-process bring-up, or a standalone long-running broker.
@@ -112,7 +113,7 @@ node.createSubscription("/robot1/imu", (payload) -> {
 
 ### Android
 
-See [`android-api.md`](android-api.md) (independent Kotlin SDK; `RobotBusAndroid.init`, Node, parameters, etc.).
+See [`android-api.md`](android-api.md) (shared implementation; `RobotBusAndroid.init`, Node, parameters, and so on).
 
 ### HTTP discovery (fill addresses, pick transport yourself)
 

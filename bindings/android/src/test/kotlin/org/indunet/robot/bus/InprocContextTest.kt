@@ -103,7 +103,7 @@ class InprocContextTest {
 
     /** Ephemeral TCP binds (`:0`), but keep inproc (tcpOnly=false). */
     private fun inprocBrokerOptions(): BrokerOptions =
-        BrokerOptions(
+        brokerOptions(
             messageXsubBind = "tcp://127.0.0.1:0",
             messageXpubBind = "tcp://127.0.0.1:0",
             serviceFrontendBind = "tcp://127.0.0.1:0",

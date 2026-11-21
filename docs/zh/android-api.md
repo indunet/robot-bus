@@ -4,9 +4,9 @@
 
 Maven: `org.indunet:robot-bus-android`  
 Package: `org.indunet.robot.bus`  
-**minSdk 24** · **独立 Kotlin SDK**（自有 Node / Broker / JNA + protobuf stubs + jniLibs）
+**minSdk 24** · 与 Java SDK 共用同一份实现，另带 Android 初始化（`RobotBusAndroid.init`）和 `jniLibs`
 
-不依赖 `org.indunet:robot-bus`（JVM Java包）。两套产物各自完整、互不引用。
+AAR 直接编译 [`bindings/java`](../../bindings/java/src/main/java/org/indunet/robot/bus) 的源码，不依赖 `org.indunet:robot-bus` 这个 JAR。不要在同一个应用里同时依赖 JAR 和 AAR，两个包里的类会重复。
 
 ```bash
 # Maven Central (when published)
@@ -20,7 +20,7 @@ just test-android   # host单测（桌面 librobot_bus_c）
 
 | 产物 | 坐标 | 说明 |
 |------|------|------|
-| Android AAR | `org.indunet:robot-bus-android` | Kotlin API + `jniLibs` + embedded protobuf stubs |
+| Android AAR | `org.indunet:robot-bus-android` | 共用的 Java API + `jniLibs` + 内嵌 protobuf stubs |
 
 ## 初始化
 
@@ -42,21 +42,23 @@ dependencies {
 }
 ```
 
-## Message bus（Kotlin）
+## Message bus
 
-在 Android 上用 `RobotBusAndroid.init(this)` 传入 Android `Context` 后，应用内 broker 会在 App 的私有 `cacheDir` 下创建临时 IPC 目录，并在关闭时清理。同一 App 的其它进程可通过 `Node.discover(name, "ipc", opts)` 获取实际路径；同进程 `inproc` 仍需与 broker 共享同一个 Robot Bus `Context`。显式设置 `BrokerOptions(tcpOnly = true)` 可关闭这两种本地传输。
+在 Android 上用 `RobotBusAndroid.init(this)` 传入 Android `Context` 后，应用内 broker 会在 App 的私有 `cacheDir` 下创建临时 IPC 目录，并在关闭时清理。同一 App 的其它进程可通过 `Node.discover(name, "ipc", opts)` 获取实际路径；同进程 `inproc` 仍需与 broker 共享同一个 Robot Bus `Context`。显式设置 `brokerOptions(tcpOnly = true)` 可关闭这两种本地传输。
+
+`Node`、`Broker` 等方法就是 Java SDK 的方法。Kotlin 不能对它们使用具名参数（例如 `qosDepth = 5`），按位置传参，或使用下面的重载。选项对象用 `brokerOptions`、`nodeOptions`、`discoverOpts`，这三个函数带默认参数。
 
 Android 上没有独立 CLI，**在进程内起 broker**（`Broker()`）是推荐用法：
 
 ```kotlin
 import org.indunet.robot.bus.Broker
-import org.indunet.robot.bus.DiscoverOpts
 import org.indunet.robot.bus.Node
+import org.indunet.robot.bus.discoverOpts
 import org.indunet.robot.bus.geometry_msgs.msg.v1.Vector3
 import org.indunet.robot.bus.sensor_msgs.msg.v1.Imu
 
 Broker().use { _ ->
-  Node.discover("pilot", "tcp", DiscoverOpts(apiUrl = "http://127.0.0.1:15560")).use { node ->
+  Node.discover("pilot", "tcp", discoverOpts(apiUrl = "http://127.0.0.1:15560")).use { node ->
     val imuPub = node.createPublisher("/robot1/imu", Imu::class.java)
     val sub = node.createSubscription(
       "/robot1/imu",
@@ -85,15 +87,18 @@ Broker().use { _ ->
 
 ```kotlin
 val node = Node.discover(
-    "talker", "tcp", DiscoverOpts(apiUrl = "http://127.0.0.1:15560"))
-// 可选：brokerId、timeoutSecs；BrokerOptions.noDiscovery / domainId非 UDP
+    "talker", "tcp", discoverOpts(apiUrl = "http://127.0.0.1:15560"))
+// 可选：brokerId、timeoutSecs；BrokerOptions 的 noDiscovery / domainId 非 UDP
 ```
 
 跨 broker（federation）：
 
 ```kotlin
+import org.indunet.robot.bus.Broker
+import org.indunet.robot.bus.brokerOptions
+
 Broker(
-  BrokerOptions(
+  brokerOptions(
     brokerId = "broker-a",
     messagePeers = listOf("tcp://10.0.0.2:15581"),
     servicePeers = listOf("broker-b=tcp://10.0.0.2:15663"),
@@ -106,12 +111,12 @@ Broker(
 }
 ```
 
-## 本地参数（Kotlin）
+## 本地参数
 
 ```kotlin
 node.declareParameter("max_speed", 1.5)
 node.setParameter("max_speed", 2.0)
-val v = node.getParameter("max_speed") as Double
+val v = node.getParameterValue("max_speed") as Double
 node.loadParametersFromYamlStr("ros__parameters:\n  max_speed: 3.0\n")
 ```
 

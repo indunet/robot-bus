@@ -14,7 +14,8 @@ just java-dev       # gen-java + cargo FFI + mvn test
 |------|------|------|
 | JVM JAR | `org.indunet:robot-bus` | Java 11+，JNA + protobuf stubs |
 
-包名 `org.indunet.robot.bus`。Android AAR是**独立** Kotlin SDK（不依赖本 JAR），见 [`android-api.md`](android-api.md)。
+包名 `org.indunet.robot.bus`。Android AAR 编译同一份 Java 源码，另带 `RobotBusAndroid.init`，不依赖本 JAR。不要在同一个 Android 应用里同时依赖两个包。见 [`android-api.md`](android-api.md)。
+
 ## Broker启动
 
 **更鼓励在程序里启动 broker**，再跑业务。CLI 适合演示、多进程联调，或单独拉起常驻 broker。
@@ -114,7 +115,7 @@ node.createSubscription("/robot1/imu", (payload) -> {
 
 ### Android
 
-见 [`android-api.md`](android-api.md)（独立 Kotlin SDK；`RobotBusAndroid.init`、Node、参数等）。
+见 [`android-api.md`](android-api.md)（与本 JAR 共用实现；`RobotBusAndroid.init`、Node、参数等）。
 
 ### HTTP发现（填地址，不选传输）
 

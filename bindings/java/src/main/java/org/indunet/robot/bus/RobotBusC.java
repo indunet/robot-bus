@@ -310,6 +310,9 @@ interface RobotBusC extends Library {
 
     Pointer robot_bus_broker_start_with_context(Pointer ctx, BrokerOptions opts);
 
+    /** Same as {@link #robot_bus_broker_start_with_context}, with an explicit IPC directory. */
+    Pointer robot_bus_broker_start_with_context_in(Pointer ctx, BrokerOptions opts, String ipcRoot);
+
     void robot_bus_broker_free(Pointer b);
 
     int robot_bus_broker_stop(Pointer b);
