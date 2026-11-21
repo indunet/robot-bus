@@ -94,11 +94,12 @@ just cpp-dev-ros2
 
 ### 最小 CMakeLists.txt
 
-把版本号和哈希换成你要用的 Release。哈希是 `.sha256` 附件里的第一段。
+下面的哈希是 2.4.3 Linux amd64 核心包的。换版本或换平台时，用对应 `.sha256` 附件的第一段。
 
 ```cmake
 cmake_minimum_required(VERSION 3.22)
 project(my_robot LANGUAGES CXX)
+set(CMAKE_CXX_STANDARD 17)
 
 if(POLICY CMP0135)
   cmake_policy(SET CMP0135 NEW)
@@ -107,7 +108,7 @@ include(FetchContent)
 
 FetchContent_Declare(robot_bus_sdk
   URL "https://github.com/indunet/robot-bus/releases/download/v2.4.3/robot-bus-sdk_2.4.3_linux_amd64.tar.gz"
-  URL_HASH "SHA256=<来自 .sha256 附件的哈希>")
+  URL_HASH "SHA256=e375ec6e52cf69b49ece4db6b51336574d9f7cf5908718d12a9b3e0e04ebeb94")
 FetchContent_MakeAvailable(robot_bus_sdk)
 
 find_package(robot_bus CONFIG REQUIRED
@@ -118,12 +119,32 @@ add_executable(my_robot main.cpp)
 target_link_libraries(my_robot PRIVATE robot_bus::robot_bus robot_bus::msgs)
 ```
 
-```bash
-cmake -S . -B build
-cmake --build build
+```cpp
+#include <robot_bus/node.hpp>
+#include <robot_bus/sensor_msgs/msg/v1/imu.pb.h>
+
+#include <iostream>
+#include <string>
+
+int main() {
+  sensor_msgs::msg::v1::Imu imu;
+  imu.mutable_angular_velocity()->set_z(3.0);
+  std::string bytes;
+  imu.SerializeToString(&bytes);
+
+  auto node = robot_bus::Node::inproc("my-robot");
+  std::cout << node.name() << " " << bytes.size() << "\n";
+}
 ```
 
-第一条命令下载并解压，第二条编译你的程序并链接预编译库。Windows 和 macOS 写法相同，换成对应平台的文件名（`robot-bus-sdk_<ver>_windows_x64.zip`、`robot-bus-sdk_<ver>_macos_arm64.tar.gz`）。
+```bash
+sudo apt install build-essential cmake
+cmake -S . -B build
+cmake --build build
+./build/my_robot
+```
+
+`cmake -S` 下载并解压，`cmake --build` 编译并链接预编译库。直接运行 `./build/my_robot` 即可，不用再设置 `LD_LIBRARY_PATH`。Windows 和 macOS 写法相同，换成对应平台的文件名（`robot-bus-sdk_<ver>_windows_x64.zip`、`robot-bus-sdk_<ver>_macos_arm64.tar.gz`）。
 
 ### 文件放在哪里
 
@@ -147,13 +168,16 @@ cmake -S . -B build -DFETCHCONTENT_SOURCE_DIR_ROBOT_BUS_SDK=/opt/robot-bus-sdk-2
 
 `FetchRobotBus.cmake` 附在每个 GitHub Release 上，压缩包里也有一份：`lib/cmake/robot_bus/FetchRobotBus.cmake`。把它拷进自己的工程（例如 `cmake/FetchRobotBus.cmake`）：
 
+`SHA256` 必须是**当前这台机器会下载的那一个**压缩包的哈希。下面的值只适用于 Linux amd64 核心包。
+
 ```cmake
 cmake_minimum_required(VERSION 3.22)
 project(my_robot LANGUAGES CXX)
+set(CMAKE_CXX_STANDARD 17)
 
 include(cmake/FetchRobotBus.cmake)
-robot_bus_fetch_sdk(VERSION 2.4.3 SHA256 <哈希>)
-# ROS 2 环境可以传入 ROS2 humble 或 ROS2 jazzy 来选择对应的桥接包。
+robot_bus_fetch_sdk(VERSION 2.4.3
+  SHA256 e375ec6e52cf69b49ece4db6b51336574d9f7cf5908718d12a9b3e0e04ebeb94)
 
 add_executable(my_robot main.cpp)
 target_link_libraries(my_robot PRIVATE robot_bus::robot_bus robot_bus::msgs)
@@ -178,14 +202,52 @@ Linux 和 macOS 的构建产物通过 RPATH 找到 SDK 里的库，直接运行 
 
 Windows 加载器在 `.exe` 旁边找 DLL。每次构建后用 `robot_bus_copy_runtime_libs` 把 SDK `bin/` 里的 DLL 拷过去。
 
-ROS 2 压缩包：配置前和运行前 source 对应发行版。
+### 带 ROS 2
 
-```bash
-source /opt/ros/humble/setup.bash   # 或 jazzy
-cmake -S . -B build
+配置前和运行前都要 source 对应发行版。`ROS2` 取 `humble` 或 `jazzy`，并链接 `robot_bus::ros2_bridge`。压缩包不含 ROS 本身。无 ROS 的工程不要传 `ROS2`，那会去下载核心包。
+
+Humble 的 Linux amd64 哈希如下。Jazzy 或其他架构改用该附件旁边的 `.sha256`。系统里要能 `find_package` 到桥用到的 ROS 包：`rclcpp`、`rclcpp_action`、`std_msgs`、`sensor_msgs`、`geometry_msgs`、`nav_msgs`、`std_srvs`、`example_interfaces`、`builtin_interfaces`、`action_msgs`、`diagnostic_msgs`、`shape_msgs`、`stereo_msgs`、`tf2_msgs`、`trajectory_msgs`、`unique_identifier_msgs`、`visualization_msgs`。`ros-humble-desktop` 已经包含这些；只有 `ros-base` 时再安装对应的 `ros-humble-*` 包。
+
+```cmake
+cmake_minimum_required(VERSION 3.22)
+project(my_robot LANGUAGES CXX)
+set(CMAKE_CXX_STANDARD 17)
+
+include(cmake/FetchRobotBus.cmake)
+robot_bus_fetch_sdk(VERSION 2.4.3 ROS2 humble
+  SHA256 65b5c0eead9331b3615c4145c733bf0fae6051d76f2e1197bed86fc03f04867e)
+
+add_executable(my_robot main.cpp)
+target_link_libraries(my_robot PRIVATE
+  robot_bus::robot_bus
+  robot_bus::msgs
+  robot_bus::ros2_bridge)
+robot_bus_copy_runtime_libs(my_robot)
 ```
 
-使用 ROS 2 桥接时，传入 `ROS2 humble` 或 `ROS2 jazzy`，并额外链接 `robot_bus::ros2_bridge`。ROS 2 压缩包依赖系统安装的对应发行版。无 ROS 项目使用核心包，省略 `ROS2` 参数即可。
+```cpp
+#include <robot_bus/node.hpp>
+#include <robot_bus/ros2_bridge.hpp>
+
+#include <iostream>
+
+int main() {
+  if (!robot_bus::ros2_available()) {
+    return 1;
+  }
+  auto node = robot_bus::Node::inproc("my-robot");
+  std::cout << node.name() << "\n";
+}
+```
+
+```bash
+source /opt/ros/humble/setup.bash
+cmake -S . -B build
+cmake --build build
+./build/my_robot
+```
+
+Jazzy 把 `ROS2 humble` 换成 `ROS2 jazzy`，source `/opt/ros/jazzy/setup.bash`，哈希换成 `robot-bus-sdk-ros2-jazzy_2.4.3_linux_<arch>.tar.gz.sha256` 里的值。Jazzy 压缩包在 Ubuntu 24.04 上构建。
 
 ### 限制
 

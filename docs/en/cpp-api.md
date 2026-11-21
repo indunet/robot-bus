@@ -94,11 +94,12 @@ The archive is a compiled SDK, not an installer. CMake downloads it while config
 
 ### Minimal CMakeLists.txt
 
-Replace the version and hash with the release you want. The hash is the first field of the `.sha256` asset.
+The hash below is the 2.4.3 Linux amd64 core archive. For another version or platform, use the first field of that asset's `.sha256` file.
 
 ```cmake
 cmake_minimum_required(VERSION 3.22)
 project(my_robot LANGUAGES CXX)
+set(CMAKE_CXX_STANDARD 17)
 
 if(POLICY CMP0135)
   cmake_policy(SET CMP0135 NEW)
@@ -107,7 +108,7 @@ include(FetchContent)
 
 FetchContent_Declare(robot_bus_sdk
   URL "https://github.com/indunet/robot-bus/releases/download/v2.4.3/robot-bus-sdk_2.4.3_linux_amd64.tar.gz"
-  URL_HASH "SHA256=<hash from the .sha256 asset>")
+  URL_HASH "SHA256=e375ec6e52cf69b49ece4db6b51336574d9f7cf5908718d12a9b3e0e04ebeb94")
 FetchContent_MakeAvailable(robot_bus_sdk)
 
 find_package(robot_bus CONFIG REQUIRED
@@ -118,12 +119,32 @@ add_executable(my_robot main.cpp)
 target_link_libraries(my_robot PRIVATE robot_bus::robot_bus robot_bus::msgs)
 ```
 
-```bash
-cmake -S . -B build
-cmake --build build
+```cpp
+#include <robot_bus/node.hpp>
+#include <robot_bus/sensor_msgs/msg/v1/imu.pb.h>
+
+#include <iostream>
+#include <string>
+
+int main() {
+  sensor_msgs::msg::v1::Imu imu;
+  imu.mutable_angular_velocity()->set_z(3.0);
+  std::string bytes;
+  imu.SerializeToString(&bytes);
+
+  auto node = robot_bus::Node::inproc("my-robot");
+  std::cout << node.name() << " " << bytes.size() << "\n";
+}
 ```
 
-The first command downloads and unpacks the archive. The second compiles your program and links the prebuilt libraries. Windows and macOS use the same CMake with that platform's archive name (`robot-bus-sdk_<ver>_windows_x64.zip`, `robot-bus-sdk_<ver>_macos_arm64.tar.gz`).
+```bash
+sudo apt install build-essential cmake
+cmake -S . -B build
+cmake --build build
+./build/my_robot
+```
+
+`cmake -S` downloads and unpacks the archive. `cmake --build` compiles your program and links the prebuilt libraries. `./build/my_robot` runs it without `LD_LIBRARY_PATH`. Windows and macOS use the same CMake with that platform's archive name (`robot-bus-sdk_<ver>_windows_x64.zip`, `robot-bus-sdk_<ver>_macos_arm64.tar.gz`).
 
 ### Where the files go
 
@@ -147,13 +168,16 @@ Point that variable at the unpacked archive root (the directory that contains `l
 
 `FetchRobotBus.cmake` is on each GitHub Release and inside the archive at `lib/cmake/robot_bus/FetchRobotBus.cmake`. Copy it into your project (for example `cmake/FetchRobotBus.cmake`):
 
+`SHA256` is the hash of the archive this machine will download. The value below is only the Linux amd64 core archive.
+
 ```cmake
 cmake_minimum_required(VERSION 3.22)
 project(my_robot LANGUAGES CXX)
+set(CMAKE_CXX_STANDARD 17)
 
 include(cmake/FetchRobotBus.cmake)
-robot_bus_fetch_sdk(VERSION 2.4.3 SHA256 <hash>)
-# Pass ROS2 humble or ROS2 jazzy when you need the corresponding bridge.
+robot_bus_fetch_sdk(VERSION 2.4.3
+  SHA256 e375ec6e52cf69b49ece4db6b51336574d9f7cf5908718d12a9b3e0e04ebeb94)
 
 add_executable(my_robot main.cpp)
 target_link_libraries(my_robot PRIVATE robot_bus::robot_bus robot_bus::msgs)
@@ -178,14 +202,52 @@ Linux and macOS binaries pick up the SDK libraries from the build tree through R
 
 On Windows the loader looks for DLLs next to the `.exe`. Call `robot_bus_copy_runtime_libs` so the SDK `bin/` DLLs are copied there after each build.
 
-ROS 2 archives: source the matching distro before configuring and before running.
+### With ROS 2
 
-```bash
-source /opt/ros/humble/setup.bash   # or jazzy
-cmake -S . -B build
+Source the matching distro before configuring and before running. Pass `ROS2 humble` or `ROS2 jazzy`, and link `robot_bus::ros2_bridge`. The archive does not contain ROS itself. An application without ROS omits `ROS2` and downloads the core archive.
+
+The hash below is the Humble Linux amd64 archive. For Jazzy or another architecture, use the sibling `.sha256` file. The bridge's CMake config looks up `rclcpp`, `rclcpp_action`, `std_msgs`, `sensor_msgs`, `geometry_msgs`, `nav_msgs`, `std_srvs`, `example_interfaces`, `builtin_interfaces`, `action_msgs`, `diagnostic_msgs`, `shape_msgs`, `stereo_msgs`, `tf2_msgs`, `trajectory_msgs`, `unique_identifier_msgs`, and `visualization_msgs`. `ros-humble-desktop` already provides them. On `ros-base`, install the matching `ros-humble-*` packages.
+
+```cmake
+cmake_minimum_required(VERSION 3.22)
+project(my_robot LANGUAGES CXX)
+set(CMAKE_CXX_STANDARD 17)
+
+include(cmake/FetchRobotBus.cmake)
+robot_bus_fetch_sdk(VERSION 2.4.3 ROS2 humble
+  SHA256 65b5c0eead9331b3615c4145c733bf0fae6051d76f2e1197bed86fc03f04867e)
+
+add_executable(my_robot main.cpp)
+target_link_libraries(my_robot PRIVATE
+  robot_bus::robot_bus
+  robot_bus::msgs
+  robot_bus::ros2_bridge)
+robot_bus_copy_runtime_libs(my_robot)
 ```
 
-Pass `ROS2 humble` or `ROS2 jazzy` and also link `robot_bus::ros2_bridge` when you use the bridge. The ROS 2 archive requires the matching system installation. For an application without ROS, omit `ROS2` to fetch the core archive.
+```cpp
+#include <robot_bus/node.hpp>
+#include <robot_bus/ros2_bridge.hpp>
+
+#include <iostream>
+
+int main() {
+  if (!robot_bus::ros2_available()) {
+    return 1;
+  }
+  auto node = robot_bus::Node::inproc("my-robot");
+  std::cout << node.name() << "\n";
+}
+```
+
+```bash
+source /opt/ros/humble/setup.bash
+cmake -S . -B build
+cmake --build build
+./build/my_robot
+```
+
+For Jazzy, pass `ROS2 jazzy`, source `/opt/ros/jazzy/setup.bash`, and use the hash from `robot-bus-sdk-ros2-jazzy_2.4.3_linux_<arch>.tar.gz.sha256`. The Jazzy archive is built on Ubuntu 24.04.
 
 ### Limits
 
