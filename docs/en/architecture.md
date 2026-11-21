@@ -1,3 +1,5 @@
+English | [中文](../zh/architecture.md)
+
 # Architecture
 
 Robot Bus is a multi-language messaging framework with a ROS 2–style Node model. One broker routes topics, services, and actions. Payloads are protobuf. These figures are the pictures later docs can cite. Connection setup stays in [deployment](deployment.md). Bridge setup stays in [ROS 2 bridge](ros2-bridge.md).
