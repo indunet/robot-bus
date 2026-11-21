@@ -55,7 +55,7 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y \
             cmake g++ pkg-config libzmq3-dev \
-            curl unzip ninja-build
+            curl unzip ninja-build patchelf binutils
 
       - name: Install pinned protoc + C++ runtime
         run: |
@@ -111,12 +111,26 @@ jobs:
             /tmp/robot-bus-stage \
             "robot-bus_${{ steps.meta.outputs.version }}_linux_${{ matrix.arch }}.deb"
 
+      - name: Package SDK archive
+        env:
+          PROTOBUF_PREFIX: /usr/local
+        run: |
+          ./scripts/package_sdk_archive.sh \
+            "${{ steps.meta.outputs.version }}" \
+            linux \
+            "${{ matrix.arch }}" \
+            /tmp/robot-bus-stage \
+            "robot-bus-sdk_${{ steps.meta.outputs.version }}_linux_${{ matrix.arch }}.tar.gz"
+
       - name: Upload to Release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           gh release upload "${{ steps.meta.outputs.tag }}" \
             "robot-bus_${{ steps.meta.outputs.version }}_linux_${{ matrix.arch }}.deb" \
+            "robot-bus-sdk_${{ steps.meta.outputs.version }}_linux_${{ matrix.arch }}.tar.gz" \
+            "robot-bus-sdk_${{ steps.meta.outputs.version }}_linux_${{ matrix.arch }}.tar.gz.sha256" \
+            bindings/cpp/cmake/FetchRobotBus.cmake \
             --clobber
 
   # ROS 2 bridge packages (system rcl; does not vendor /opt/ros).
@@ -162,7 +176,7 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y \
             cmake g++ pkg-config libzmq3-dev \
-            curl unzip ninja-build gnupg lsb-release
+            curl unzip ninja-build gnupg lsb-release patchelf binutils
 
       # Pre-install so setup-ros skips its unauthenticated GitHub API lookup
       # (rate-limit → empty tag → 404 / curl 22). See ros-tooling/setup-ros#892
@@ -263,12 +277,27 @@ jobs:
             "robot-bus-ros2-${{ matrix.distro }}_${{ steps.meta.outputs.version }}_linux_${{ matrix.arch }}.deb" \
             "ros2-${{ matrix.distro }}"
 
+      - name: Package SDK archive (ros2-${{ matrix.distro }})
+        env:
+          PROTOBUF_PREFIX: /usr/local
+        run: |
+          ./scripts/package_sdk_archive.sh \
+            "${{ steps.meta.outputs.version }}" \
+            linux \
+            "${{ matrix.arch }}" \
+            /tmp/robot-bus-stage-ros2 \
+            "robot-bus-sdk-ros2-${{ matrix.distro }}_${{ steps.meta.outputs.version }}_linux_${{ matrix.arch }}.tar.gz" \
+            "ros2-${{ matrix.distro }}"
+
       - name: Upload to Release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           gh release upload "${{ steps.meta.outputs.tag }}" \
             "robot-bus-ros2-${{ matrix.distro }}_${{ steps.meta.outputs.version }}_linux_${{ matrix.arch }}.deb" \
+            "robot-bus-sdk-ros2-${{ matrix.distro }}_${{ steps.meta.outputs.version }}_linux_${{ matrix.arch }}.tar.gz" \
+            "robot-bus-sdk-ros2-${{ matrix.distro }}_${{ steps.meta.outputs.version }}_linux_${{ matrix.arch }}.tar.gz.sha256" \
+            bindings/cpp/cmake/FetchRobotBus.cmake \
             --clobber
 
   windows:
@@ -430,17 +459,17 @@ jobs:
           test -f "$STAGE/bin/robot_bus_msgs.dll"
           cp -a bindings/cpp/include/. "$STAGE/include/"
           cp -a bindings/cpp/generated/robot_bus "$STAGE/include/"
-          # CMake / pkg-config so installed SDK is usable for app development
+          # CMake / pkg-config so installed SDK is usable for app development.
+          # The CMake package is relocatable (prefix derived from the file
+          # location), which matches Program Files/robot-bus and the zip archive.
           VERSION="${{ steps.meta.outputs.version }}"
           sed -e "s|@CMAKE_INSTALL_PREFIX@|C:/Program Files/robot-bus|g" \
               -e "s|@CMAKE_INSTALL_LIBDIR@|lib|g" \
               -e "s|@CMAKE_INSTALL_INCLUDEDIR@|include|g" \
               -e "s|@PROJECT_VERSION@|${VERSION}|g" \
               bindings/cpp/cmake/robot_bus.pc.in >"$STAGE/lib/pkgconfig/robot_bus.pc"
-          sed -e 's/@PACKAGE_INIT@//' \
-              -e 's|\${PACKAGE_PREFIX_DIR}|C:/Program Files/robot-bus|g' \
-              bindings/cpp/cmake/robot_busConfig.cmake.in \
-              >"$STAGE/lib/cmake/robot_bus/robot_busConfig.cmake"
+          ./scripts/stage_robot_bus_cmake_config.sh \
+            "$STAGE/lib/cmake/robot_bus" "$VERSION"
 
       - name: Build MSI
         shell: bash
@@ -453,6 +482,19 @@ jobs:
             /tmp/robot-bus-msi \
             "robot-bus_${{ steps.meta.outputs.version }}_windows_x64.msi"
 
+      - name: Package SDK archive
+        shell: bash
+        run: |
+          set -eux
+          test -n "${PROTOBUF_PREFIX:-}"
+          test -d "$PROTOBUF_PREFIX"
+          ./scripts/package_sdk_archive.sh \
+            "${{ steps.meta.outputs.version }}" \
+            windows \
+            x64 \
+            /tmp/robot-bus-msi \
+            "robot-bus-sdk_${{ steps.meta.outputs.version }}_windows_x64.zip"
+
       - name: Upload to Release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -460,6 +502,9 @@ jobs:
         run: |
           gh release upload "${{ steps.meta.outputs.tag }}" \
             "robot-bus_${{ steps.meta.outputs.version }}_windows_x64.msi" \
+            "robot-bus-sdk_${{ steps.meta.outputs.version }}_windows_x64.zip" \
+            "robot-bus-sdk_${{ steps.meta.outputs.version }}_windows_x64.zip.sha256" \
+            bindings/cpp/cmake/FetchRobotBus.cmake \
             --clobber
 
   macos:
@@ -543,10 +588,147 @@ jobs:
             /tmp/robot-bus-stage \
             "robot-bus_${{ steps.meta.outputs.version }}_macos_arm64.pkg"
 
+      - name: Package SDK archive
+        env:
+          PROTOBUF_PREFIX: /usr/local
+          EXTRA_LIB_DIRS: /opt/homebrew/lib:/usr/local/lib
+        run: |
+          ./scripts/package_sdk_archive.sh \
+            "${{ steps.meta.outputs.version }}" \
+            macos \
+            arm64 \
+            /tmp/robot-bus-stage \
+            "robot-bus-sdk_${{ steps.meta.outputs.version }}_macos_arm64.tar.gz"
+
       - name: Upload to Release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           gh release upload "${{ steps.meta.outputs.tag }}" \
             "robot-bus_${{ steps.meta.outputs.version }}_macos_arm64.pkg" \
+            "robot-bus-sdk_${{ steps.meta.outputs.version }}_macos_arm64.tar.gz" \
+            "robot-bus-sdk_${{ steps.meta.outputs.version }}_macos_arm64.tar.gz.sha256" \
+            bindings/cpp/cmake/FetchRobotBus.cmake \
             --clobber
+
+  # Download the core SDK just uploaded above and build a consumer with
+  # FetchContent. The runner does not install protobuf, libzmq, or Rust.
+  sdk-smoke:
+    name: SDK archive smoke (${{ matrix.label }})
+    needs: [linux, windows]
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-22.04
+            label: linux-amd64
+            platform: linux
+            arch: amd64
+            ext: tar.gz
+          - runner: windows-latest
+            label: windows-x64
+            platform: windows
+            arch: x64
+            ext: zip
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Resolve version / tag
+        id: meta
+        shell: bash
+        run: |
+          if [ "${{ github.event_name }}" = "release" ]; then
+            TAG="${{ github.event.release.tag_name }}"
+          else
+            TAG="${{ inputs.tag }}"
+          fi
+          VERSION="${TAG#v}"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Install CMake >= 3.24 and a C++ compiler
+        shell: bash
+        run: |
+          set -eux
+          if [ "${{ matrix.platform }}" = "linux" ]; then
+            sudo apt-get update
+            sudo apt-get install -y g++ curl ca-certificates
+            curl -fsSL -o /tmp/cmake.tar.gz \
+              "https://github.com/Kitware/CMake/releases/download/v3.30.5/cmake-3.30.5-linux-x86_64.tar.gz"
+            sudo tar -C /usr/local --strip-components=1 -xzf /tmp/cmake.tar.gz
+          fi
+          cmake --version
+          cmake --version | awk 'NR==1 {split($3,v,"."); if (v[1] < 3 || (v[1] == 3 && v[2] < 24)) exit 1}'
+
+      - name: FetchContent consumer against the release asset
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          TAG="${{ steps.meta.outputs.tag }}"
+          VERSION="${{ steps.meta.outputs.version }}"
+          ASSET="robot-bus-sdk_${VERSION}_${{ matrix.platform }}_${{ matrix.arch }}.${{ matrix.ext }}"
+          DEST="${RUNNER_TEMP}/sdk-assets"
+          mkdir -p "$DEST"
+          gh release download "$TAG" -p "$ASSET" -p "${ASSET}.sha256" -D "$DEST"
+          HASH="$(awk '{print $1}' "$DEST/${ASSET}.sha256")"
+          if command -v sha256sum >/dev/null 2>&1; then
+            (cd "$DEST" && echo "${HASH}  ${ASSET}" | sha256sum -c -)
+          else
+            (cd "$DEST" && echo "${HASH}  ${ASSET}" | shasum -a 256 -c -)
+          fi
+          case "$(uname -s)" in
+            MINGW*|MSYS*|CYGWIN*)
+              BASE="file:///$(cygpath -m "$DEST")"
+              ;;
+            *)
+              BASE="file://${DEST}"
+              ;;
+          esac
+          BUILD="${RUNNER_TEMP}/sdk-smoke-build"
+          cmake -S bindings/cpp/sdk-smoke -B "$BUILD" \
+            -DROBOT_BUS_VERSION="$VERSION" \
+            -DROBOT_BUS_SHA256="$HASH" \
+            -DROBOT_BUS_SDK_BASE_URL="$BASE"
+          cmake --build "$BUILD" --config Release
+          exe=""
+          for candidate in \
+            "$BUILD/sdk_smoke" \
+            "$BUILD/sdk_smoke.exe" \
+            "$BUILD/Release/sdk_smoke.exe" \
+            "$BUILD/Release/sdk_smoke"
+          do
+            if [[ -f "$candidate" ]]; then
+              exe="$candidate"
+              break
+            fi
+          done
+          if [[ -z "$exe" ]]; then
+            echo "error: sdk_smoke binary not found" >&2
+            find "$BUILD" -type f -name 'sdk_smoke*' >&2 || true
+            exit 1
+          fi
+          "$exe"
+          if [[ "${{ matrix.platform }}" == "linux" ]]; then
+            ldd "$exe" | tee "${RUNNER_TEMP}/sdk-smoke-ldd.txt"
+            if ! grep -F libprotobuf "${RUNNER_TEMP}/sdk-smoke-ldd.txt" | grep -F '/_deps/' >/dev/null; then
+              echo "error: libprotobuf was not loaded from the SDK archive" >&2
+              exit 1
+            fi
+            if ! grep -E 'libzmq\.so' "${RUNNER_TEMP}/sdk-smoke-ldd.txt" | grep -F '/_deps/' >/dev/null; then
+              echo "error: libzmq was not loaded from the SDK archive" >&2
+              exit 1
+            fi
+          else
+            bindir="$(dirname "$exe")"
+            test -f "$bindir/robot_bus.dll"
+            shopt -s nullglob nocaseglob
+            protobuf_dlls=("$bindir"/*protobuf*.dll)
+            if [[ ${#protobuf_dlls[@]} -eq 0 ]]; then
+              echo "error: protobuf DLL was not copied next to the executable" >&2
+              ls -la "$bindir" >&2
+              exit 1
+            fi
+          fi

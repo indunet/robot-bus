@@ -2,8 +2,8 @@
 
 C ABI (`native/`) + C++ RAII headers (`include/`) + protobuf msgs under
 `generated/robot_bus/` (gitignored; run `just gen-cpp` before build).
-Distributed as GitHub Release **DEB / MSI / PKG** assets (see
-[docs/en/cpp-api.md](../../docs/en/cpp-api.md)).
+Distributed as GitHub Release **DEB / MSI / PKG** assets and **prebuilt SDK archives** (see
+[docs/en/cpp-api.md](../../docs/en/cpp-api.md#prebuilt-sdk-archive-cmake-fetchcontent)).
 
 **C++ standard: C++17** (same minimum as ROS 2 Humble).
 
@@ -63,6 +63,8 @@ just cpp-dev-ros2     # -DROBOT_BUS_ROS2=ON (rclcpp; cargo FFI stays without ros
 ```
 
 Release DEBs: `robot-bus` (no bridge) and `robot-bus-ros2-{humble,jazzy}` (system ROS, no vendored `rcl`).
+
+Prebuilt archives: `robot-bus-sdk_<ver>_<platform>_<arch>.tar.gz` (Windows: `.zip`) and, on Linux, `robot-bus-sdk-ros2-{humble,jazzy}_<ver>_linux_<arch>.tar.gz`. CMake usage is in the C++ API page linked above.
 
 ## Regenerate msgs
 

@@ -14,6 +14,8 @@ C++ SDK is distributed via **GitHub Release attachments** (no central C++ regist
 
 The three Debian packages **conflict** with each other (same `librobot_bus.so`). Install exactly one.
 
+Prebuilt SDK archives (`.tar.gz` / `.zip`) are a separate download for CMake projects. See [Prebuilt SDK archive](#prebuilt-sdk-archive-cmake-fetchcontent).
+
 **rcl is not vendored.** Ros2 packages dynamically link the `rcl` / typesupport already on the machine. After install:
 
 ```bash
@@ -36,14 +38,14 @@ CMake sets `CMAKE_CXX_STANDARD 17`. Building with a newer standard (e.g. `-DCMAK
 
 ```bash
 # Core SDK (no ROS bridge)
-sudo apt install ./robot-bus_2.4.1_linux_amd64.deb
+sudo apt install ./robot-bus_2.4.2_linux_amd64.deb
 
 # Or ROS 2 bridge variant (Humble example) — needs Humble already installed
-sudo apt install ./robot-bus-ros2-humble_2.4.1_linux_amd64.deb
+sudo apt install ./robot-bus-ros2-humble_2.4.2_linux_amd64.deb
 source /opt/ros/humble/setup.bash
 
 # macOS Apple Silicon (core package only)
-sudo installer -pkg robot-bus_2.4.1_macos_arm64.pkg -target /
+sudo installer -pkg robot-bus_2.4.2_macos_arm64.pkg -target /
 # Installs under /usr/local ({bin,lib,include})
 
 # Or from source (dev)
@@ -71,9 +73,125 @@ After a system install you should be able to compile against the headers immedia
 | macOS (PKG) | `/usr/local/include`, `/usr/local/lib` | same; `/usr/local` is on default search paths |
 | Windows (MSI) | `C:\Program Files\robot-bus\include` (+ `lib`, `bin` on PATH) | `-DCMAKE_PREFIX_PATH="C:/Program Files/robot-bus"` |
 
-You still need a matching **libprotobuf** (bundled next to the SDK libs in the package on Linux/macOS; DLLs under `bin/` on Windows) and, for typed msgs, to link `robot_bus_msgs`.
+Installer packages (`.deb` / `.msi` / `.pkg`) ship the matching Protobuf shared libraries beside the SDK (DLLs under `bin/` on Windows). Compiling your own sources against an installer requires a Protobuf **35.1** development package on the machine. The prebuilt SDK archive below includes Protobuf 35.1 headers, libraries, and CMake config. Typed messages link `robot_bus_msgs`.
 
 Check at runtime: `robot_bus::ros2_available()` / `robot_bus_ros2_available()` — `0` on the default package, `1` on ros2-* packages.
+
+## Prebuilt SDK archive (CMake FetchContent)
+
+The archive is a compiled SDK, not an installer. CMake downloads it while configuring your project and unpacks it into the build directory. You do not run an installer, and you do not build robot-bus or install a Rust toolchain. `.deb` / `.msi` / `.pkg` stay available for a system install.
+
+| Asset | Contents |
+|-------|----------|
+| `robot-bus-sdk_<ver>_linux_amd64.tar.gz` | Linux x86-64. Built on Ubuntu 22.04 (glibc 2.35 or newer). |
+| `robot-bus-sdk_<ver>_linux_arm64.tar.gz` | Linux arm64. Same glibc floor. |
+| `robot-bus-sdk_<ver>_windows_x64.zip` | Windows x64. Release DLLs. |
+| `robot-bus-sdk_<ver>_macos_arm64.tar.gz` | macOS Apple Silicon. |
+| `robot-bus-sdk-ros2-humble_<ver>_linux_<arch>.tar.gz` | Core SDK plus `librobot_bus_ros2_bridge`, Linux only. Needs system ROS 2 Humble at build and run time. |
+| `robot-bus-sdk-ros2-jazzy_<ver>_linux_<arch>.tar.gz` | Same for Jazzy. |
+
+`<arch>` is `amd64` or `arm64`. Each archive has a sibling `.sha256` file (`<hash>  <filename>`). The archive root is the prefix: `bin/`, `include/`, `lib/`, and `lib/cmake/robot_bus/`.
+
+### Minimal CMakeLists.txt
+
+Replace the version and hash with the release you want. The hash is the first field of the `.sha256` asset.
+
+```cmake
+cmake_minimum_required(VERSION 3.24)
+project(my_robot LANGUAGES CXX)
+
+include(FetchContent)
+
+FetchContent_Declare(robot_bus_sdk
+  URL "https://github.com/indunet/robot-bus/releases/download/v2.4.2/robot-bus-sdk_2.4.2_linux_amd64.tar.gz"
+  URL_HASH SHA256=<hash from robot-bus-sdk_2.4.2_linux_amd64.tar.gz.sha256>
+  DOWNLOAD_EXTRACT_TIMESTAMP TRUE)
+FetchContent_MakeAvailable(robot_bus_sdk)
+
+find_package(robot_bus CONFIG REQUIRED
+  PATHS "${robot_bus_sdk_SOURCE_DIR}"
+  NO_DEFAULT_PATH)
+
+add_executable(my_robot main.cpp)
+target_link_libraries(my_robot PRIVATE robot_bus::robot_bus robot_bus::msgs)
+```
+
+```bash
+cmake -S . -B build
+cmake --build build
+```
+
+The first command downloads and unpacks the archive. The second compiles your program and links the prebuilt libraries. Windows and macOS use the same CMake with that platform's archive name (`robot-bus-sdk_<ver>_windows_x64.zip`, `robot-bus-sdk_<ver>_macos_arm64.tar.gz`).
+
+### Where the files go
+
+By default CMake unpacks into your build directory:
+
+```text
+build/_deps/robot_bus_sdk-src/
+```
+
+`${robot_bus_sdk_SOURCE_DIR}` is that directory. Nothing is written under `/usr` or `Program Files`. Later configures reuse the unpacked tree as long as the build directory is kept. Deleting the build directory downloads it again.
+
+To share one copy across projects, or to work offline:
+
+```bash
+cmake -S . -B build -DFETCHCONTENT_SOURCE_DIR_ROBOT_BUS_SDK=/opt/robot-bus-sdk-2.4.2
+```
+
+Point that variable at the unpacked archive root (the directory that contains `lib/cmake/robot_bus`).
+
+### Pick the archive for this machine
+
+`FetchRobotBus.cmake` is on each GitHub Release and inside the archive at `lib/cmake/robot_bus/FetchRobotBus.cmake`. Copy it into your project (for example `cmake/FetchRobotBus.cmake`):
+
+```cmake
+cmake_minimum_required(VERSION 3.24)
+project(my_robot LANGUAGES CXX)
+
+include(cmake/FetchRobotBus.cmake)
+robot_bus_fetch_sdk(VERSION 2.4.2 SHA256 <hash>)
+# ROS 2 Humble on Linux: robot_bus_fetch_sdk(VERSION 2.4.2 ROS2 humble SHA256 <hash>)
+
+add_executable(my_robot main.cpp)
+target_link_libraries(my_robot PRIVATE robot_bus::robot_bus robot_bus::msgs)
+robot_bus_copy_runtime_libs(my_robot)
+```
+
+The helper selects `linux` / `windows` / `macos` and `amd64` / `arm64` / `x64` from the compiler target. `robot_bus_copy_runtime_libs` copies DLLs next to the executable on Windows, and records `$ORIGIN` / `@loader_path` as the install RPATH on Linux and macOS.
+
+A mirror or a cached directory:
+
+```bash
+cmake -S . -B build -DROBOT_BUS_SDK_BASE_URL=https://mirror.example/robot-bus
+# or leave the URL alone and reuse an unpacked tree:
+cmake -S . -B build -DFETCHCONTENT_SOURCE_DIR_ROBOT_BUS_SDK=/opt/robot-bus-sdk-2.4.2
+```
+
+`ROBOT_BUS_SDK_BASE_URL` may also be set in the environment. The file name under that URL is the same as on the GitHub Release.
+
+### Running and shipping your binary
+
+Linux and macOS binaries pick up the SDK libraries from the build tree through RPATH, so running `./build/my_robot` needs no `LD_LIBRARY_PATH`. An installed or copied binary needs the SDK `lib/` directory beside it (`robot_bus_copy_runtime_libs` sets `$ORIGIN` / `@loader_path`) or an RPATH that still points at the unpacked archive.
+
+On Windows the loader looks for DLLs next to the `.exe`. Call `robot_bus_copy_runtime_libs` so the SDK `bin/` DLLs are copied there after each build.
+
+ROS 2 archives: source the matching distro before configuring and before running.
+
+```bash
+source /opt/ros/humble/setup.bash   # or jazzy
+cmake -S . -B build
+```
+
+Link `robot_bus::ros2_bridge` in addition to `robot_bus::robot_bus` and `robot_bus::msgs`. The archive does not contain ROS itself.
+
+### Limits
+
+- CMake **3.24** or newer (`FetchContent` `DOWNLOAD_EXTRACT_TIMESTAMP`).
+- Linux archives are built on Ubuntu 22.04 and need **glibc 2.35** or newer.
+- Windows ships Release DLLs. The package maps Debug (and the other non-Release configs) onto those Release binaries. Do not mix them with a Debug Protobuf you built yourself.
+- The archive carries Protobuf **35.1**. Link that copy (`protobuf::libprotobuf` from the archive). A second Protobuf of another version in the same process will clash.
+- The macOS archive is Apple Silicon. ROS 2 archives are Linux Humble and Jazzy only.
 
 ## Broker
 

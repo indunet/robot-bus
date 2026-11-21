@@ -37,7 +37,7 @@ pip install robot-bus
 * Rust
 
 ```toml
-robot-bus = "2.4.1"
+robot-bus = "2.4.2"
 ```
 
 * npm
@@ -52,21 +52,23 @@ npm install robot-bus
 <dependency>
     <groupId>org.indunet</groupId>
     <artifactId>robot-bus</artifactId>
-    <version>2.4.1</version>
+    <version>2.4.2</version>
 </dependency>
 ```
 
 * Gradle（Android）
 
 ```kotlin
-implementation("org.indunet:robot-bus-android:2.4.1")
+implementation("org.indunet:robot-bus-android:2.4.2")
 ```
 
-* C++（[GitHub Releases](https://github.com/indunet/robot-bus/releases) DEB / MSI）
+* C++（[GitHub Releases](https://github.com/indunet/robot-bus/releases) DEB / MSI / 预编译 SDK 压缩包）
 
 ```bash
-sudo apt install ./robot-bus_2.4.1_linux_amd64.deb
+sudo apt install ./robot-bus_2.4.2_linux_amd64.deb
 ```
+
+CMake 工程可以拉取预编译 SDK，而不必安装系统包。见 [C++ API — 预编译 SDK 压缩包](docs/zh/cpp-api.md#预编译-sdk-压缩包cmake-fetchcontent)。
 
 
 ## *1. 快速开始*
@@ -243,7 +245,7 @@ finally:
 | Python | [PyPI `robot-bus`](https://pypi.org/project/robot-bus/) | [`docs/zh/python-api.md`](docs/zh/python-api.md) |
 | Rust | [crates.io `robot-bus`](https://crates.io/crates/robot-bus) | [`docs/zh/rust-api.md`](docs/zh/rust-api.md) |
 | TypeScript | [npm `robot-bus`](https://www.npmjs.com/package/robot-bus) | [`docs/zh/typescript-api.md`](docs/zh/typescript-api.md) |
-| C++ | [GitHub Releases](https://github.com/indunet/robot-bus/releases)（DEB / MSI） | [`docs/zh/cpp-api.md`](docs/zh/cpp-api.md) |
+| C++ | [GitHub Releases](https://github.com/indunet/robot-bus/releases)（DEB / MSI / SDK 压缩包） | [`docs/zh/cpp-api.md`](docs/zh/cpp-api.md) |
 | Java | Maven Central `org.indunet:robot-bus` | [`docs/zh/java-api.md`](docs/zh/java-api.md) |
 | Android | Maven Central `org.indunet:robot-bus-android` | [`docs/zh/android-api.md`](docs/zh/android-api.md) |
 | ROS2桥 | 分语言（`rclrs` / `rclpy` / `rclcpp`） | [`docs/zh/ros2-bridge.md`](docs/zh/ros2-bridge.md) |

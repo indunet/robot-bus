@@ -86,13 +86,9 @@ sed -e "s|@CMAKE_INSTALL_PREFIX@|/usr|g" \
     -e "s|@PROJECT_VERSION@|${VERSION}|g" \
     "$CPP/cmake/robot_bus.pc.in" >"$DEST/usr/lib/pkgconfig/robot_bus.pc"
 
-# Minimal CMake package config (imported targets for robot_bus + msgs).
-cp "$CPP/cmake/robot_busConfig.cmake.in" "$DEST/usr/lib/cmake/robot_bus/robot_busConfig.cmake"
-# Strip @PACKAGE_INIT@ for a usable installed file
-sed -i.bak 's/@PACKAGE_INIT@//' "$DEST/usr/lib/cmake/robot_bus/robot_busConfig.cmake"
-rm -f "$DEST/usr/lib/cmake/robot_bus/robot_busConfig.cmake.bak"
-# Fix PACKAGE_PREFIX_DIR references roughly
-sed -i.bak 's|\${PACKAGE_PREFIX_DIR}|/usr|g' "$DEST/usr/lib/cmake/robot_bus/robot_busConfig.cmake"
-rm -f "$DEST/usr/lib/cmake/robot_bus/robot_busConfig.cmake.bak"
+# Relocatable CMake package. Installed at <prefix>/lib/cmake/robot_bus, so a
+# /usr deb resolves the prefix to /usr without hardcoding it.
+"$ROOT/scripts/stage_robot_bus_cmake_config.sh" \
+  "$DEST/usr/lib/cmake/robot_bus" "$VERSION"
 
 echo "install tree ready at $DEST (ros2=${ROBOT_BUS_ROS2:-0})"

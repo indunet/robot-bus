@@ -4,6 +4,12 @@ This changelog records user-visible additions, changes, fixes, and breaking chan
 
 Record changes under the applicable version. Explain what changed, why it changed, and how to migrate when needed.
 
+## [2.4.2] - 2026-11-21
+
+### Added
+
+- C++ releases now include a prebuilt SDK archive alongside the existing installers. CMake `FetchContent` downloads `robot-bus-sdk_<version>_<platform>_<arch>.tar.gz` (Windows: `.zip`) and links it from the build directory. The archive bundles Protobuf 35.1 and, on Linux, libzmq. Linux ROS 2 Humble and Jazzy archives are published separately. `FetchRobotBus.cmake` selects the archive for the current platform. See the C++ API guide.
+
 ## [2.4.1] - 2026-11-20
 
 ### Added

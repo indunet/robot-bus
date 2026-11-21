@@ -14,6 +14,8 @@ C++ SDK通过 **GitHub Release附件** 分发（无中央 C++包仓库）。
 
 三个 Debian包**互斥**（共用 `librobot_bus.so`）。只装其中一个。
 
+预编译 SDK 压缩包（`.tar.gz` / `.zip`）是给 CMake 工程用的另一份下载，见[预编译 SDK 压缩包](#预编译-sdk-压缩包cmake-fetchcontent)。
+
 **不 vendor `rcl`。** Ros2包动态链接机器上已有的 `rcl` / typesupport。安装后：
 
 ```bash
@@ -36,14 +38,14 @@ CMake设置 `CMAKE_CXX_STANDARD 17`。自有应用用更高标准（如 `-DCMAKE
 
 ```bash
 # 核心 SDK（无 ROS bridge）
-sudo apt install ./robot-bus_2.4.1_linux_amd64.deb
+sudo apt install ./robot-bus_2.4.2_linux_amd64.deb
 
 # 或 ROS2 bridge变体（Humble示例）— 需已安装 Humble
-sudo apt install ./robot-bus-ros2-humble_2.4.1_linux_amd64.deb
+sudo apt install ./robot-bus-ros2-humble_2.4.2_linux_amd64.deb
 source /opt/ros/humble/setup.bash
 
 # macOS Apple Silicon（仅核心包）
-sudo installer -pkg robot-bus_2.4.1_macos_arm64.pkg -target /
+sudo installer -pkg robot-bus_2.4.2_macos_arm64.pkg -target /
 # 安装于 /usr/local（{bin,lib,include}）
 
 # 或从源码（开发）
@@ -71,9 +73,125 @@ just cpp-dev-ros2
 | macOS (PKG) | `/usr/local/include`、`/usr/local/lib` | 同上；默认搜索路径含 `/usr/local` |
 | Windows (MSI) | `C:\Program Files\robot-bus\include`（+ `lib`，`bin`在 PATH） | `-DCMAKE_PREFIX_PATH="C:/Program Files/robot-bus"` |
 
-仍需匹配的 **libprotobuf**（Linux/macOS包内与 SDK库捆绑；Windows DLL在 `bin/`），typed msgs需链接 `robot_bus_msgs`。
+安装包（`.deb` / `.msi` / `.pkg`）会带上与 SDK 匹配的 Protobuf 动态库（Windows 的 DLL 在 `bin/`）。用安装包编译自己的程序时，机器上还要有 Protobuf **35.1** 的开发文件。下面的预编译 SDK 压缩包自带头文件、库和 CMake 配置。typed msgs 链接 `robot_bus_msgs`。
 
 运行时检查：`robot_bus::ros2_available()` / `robot_bus_ros2_available()` — 默认包为 `0`，ros2-* 包为 `1`。
+
+## 预编译 SDK 压缩包（CMake FetchContent）
+
+压缩包是编好的 SDK，不是安装程序。配置你自己的工程时，CMake 会下载并解压到构建目录。不需要运行安装包，也不需要自己编译 robot-bus 或安装 Rust 工具链。`.deb` / `.msi` / `.pkg` 仍然可以装到系统里。
+
+| 资产 | 内容 |
+|------|------|
+| `robot-bus-sdk_<ver>_linux_amd64.tar.gz` | Linux x86-64。在 Ubuntu 22.04 上构建（glibc 2.35 及以上）。 |
+| `robot-bus-sdk_<ver>_linux_arm64.tar.gz` | Linux arm64。glibc 要求相同。 |
+| `robot-bus-sdk_<ver>_windows_x64.zip` | Windows x64。Release DLL。 |
+| `robot-bus-sdk_<ver>_macos_arm64.tar.gz` | macOS Apple Silicon。 |
+| `robot-bus-sdk-ros2-humble_<ver>_linux_<arch>.tar.gz` | 核心 SDK 加上 `librobot_bus_ros2_bridge`，仅 Linux。编译和运行都需要系统里的 ROS 2 Humble。 |
+| `robot-bus-sdk-ros2-jazzy_<ver>_linux_<arch>.tar.gz` | Jazzy，其余相同。 |
+
+`<arch>` 为 `amd64` 或 `arm64`。每个压缩包旁边有一个 `.sha256` 文件（`<哈希>  <文件名>`）。压缩包根目录就是前缀：`bin/`、`include/`、`lib/`、`lib/cmake/robot_bus/`。
+
+### 最小 CMakeLists.txt
+
+把版本号和哈希换成你要用的 Release。哈希是 `.sha256` 附件里的第一段。
+
+```cmake
+cmake_minimum_required(VERSION 3.24)
+project(my_robot LANGUAGES CXX)
+
+include(FetchContent)
+
+FetchContent_Declare(robot_bus_sdk
+  URL "https://github.com/indunet/robot-bus/releases/download/v2.4.2/robot-bus-sdk_2.4.2_linux_amd64.tar.gz"
+  URL_HASH SHA256=<来自 robot-bus-sdk_2.4.2_linux_amd64.tar.gz.sha256 的哈希>
+  DOWNLOAD_EXTRACT_TIMESTAMP TRUE)
+FetchContent_MakeAvailable(robot_bus_sdk)
+
+find_package(robot_bus CONFIG REQUIRED
+  PATHS "${robot_bus_sdk_SOURCE_DIR}"
+  NO_DEFAULT_PATH)
+
+add_executable(my_robot main.cpp)
+target_link_libraries(my_robot PRIVATE robot_bus::robot_bus robot_bus::msgs)
+```
+
+```bash
+cmake -S . -B build
+cmake --build build
+```
+
+第一条命令下载并解压，第二条编译你的程序并链接预编译库。Windows 和 macOS 写法相同，换成对应平台的文件名（`robot-bus-sdk_<ver>_windows_x64.zip`、`robot-bus-sdk_<ver>_macos_arm64.tar.gz`）。
+
+### 文件放在哪里
+
+默认解压到你的构建目录：
+
+```text
+build/_deps/robot_bus_sdk-src/
+```
+
+`${robot_bus_sdk_SOURCE_DIR}` 就是这个目录。不会写到 `/usr` 或 `Program Files`。只要留着构建目录，之后的配置会复用已解压的内容。删掉构建目录会重新下载。
+
+多个工程共用一份，或离线使用：
+
+```bash
+cmake -S . -B build -DFETCHCONTENT_SOURCE_DIR_ROBOT_BUS_SDK=/opt/robot-bus-sdk-2.4.2
+```
+
+这个变量指向解压后的根目录（里面有 `lib/cmake/robot_bus` 的那一层）。
+
+### 按本机选择压缩包
+
+`FetchRobotBus.cmake` 附在每个 GitHub Release 上，压缩包里也有一份：`lib/cmake/robot_bus/FetchRobotBus.cmake`。把它拷进自己的工程（例如 `cmake/FetchRobotBus.cmake`）：
+
+```cmake
+cmake_minimum_required(VERSION 3.24)
+project(my_robot LANGUAGES CXX)
+
+include(cmake/FetchRobotBus.cmake)
+robot_bus_fetch_sdk(VERSION 2.4.2 SHA256 <哈希>)
+# Linux 上的 ROS 2 Humble：robot_bus_fetch_sdk(VERSION 2.4.2 ROS2 humble SHA256 <哈希>)
+
+add_executable(my_robot main.cpp)
+target_link_libraries(my_robot PRIVATE robot_bus::robot_bus robot_bus::msgs)
+robot_bus_copy_runtime_libs(my_robot)
+```
+
+辅助模块按编译目标选择 `linux` / `windows` / `macos` 和 `amd64` / `arm64` / `x64`。`robot_bus_copy_runtime_libs` 在 Windows 上把 DLL 拷到可执行文件旁边，在 Linux 和 macOS 上把安装用的 RPATH 设为 `$ORIGIN` / `@loader_path`。
+
+镜像或本地缓存：
+
+```bash
+cmake -S . -B build -DROBOT_BUS_SDK_BASE_URL=https://mirror.example/robot-bus
+# 或者不改 URL，直接用已经解压的目录：
+cmake -S . -B build -DFETCHCONTENT_SOURCE_DIR_ROBOT_BUS_SDK=/opt/robot-bus-sdk-2.4.2
+```
+
+`ROBOT_BUS_SDK_BASE_URL` 也可以放在环境变量里。该地址下的文件名与 GitHub Release 上的相同。
+
+### 运行和发布你的程序
+
+Linux 和 macOS 的构建产物通过 RPATH 找到 SDK 里的库，直接运行 `./build/my_robot` 时不用设置 `LD_LIBRARY_PATH`。安装或拷走的二进制需要把 SDK 的 `lib/` 放在程序旁边（`robot_bus_copy_runtime_libs` 会设置 `$ORIGIN` / `@loader_path`），或者保留指向解压目录的 RPATH。
+
+Windows 加载器在 `.exe` 旁边找 DLL。每次构建后用 `robot_bus_copy_runtime_libs` 把 SDK `bin/` 里的 DLL 拷过去。
+
+ROS 2 压缩包：配置前和运行前 source 对应发行版。
+
+```bash
+source /opt/ros/humble/setup.bash   # 或 jazzy
+cmake -S . -B build
+```
+
+除了 `robot_bus::robot_bus` 和 `robot_bus::msgs`，再链接 `robot_bus::ros2_bridge`。压缩包里不含 ROS 本身。
+
+### 限制
+
+- 需要 CMake **3.24** 或更高（`FetchContent` 的 `DOWNLOAD_EXTRACT_TIMESTAMP`）。
+- Linux 压缩包在 Ubuntu 22.04 上构建，需要 **glibc 2.35** 或更高。
+- Windows 只提供 Release DLL。包配置会把 Debug（以及其他非 Release 配置）映射到这些 Release 库。不要再和自己编译的 Debug Protobuf 混用。
+- 压缩包内是 Protobuf **35.1**。请链接这一份（压缩包里的 `protobuf::libprotobuf`）。同一进程里再放另一个版本的 Protobuf 会冲突。
+- macOS 压缩包是 Apple Silicon。ROS 2 压缩包只有 Linux 上的 Humble 和 Jazzy。
 
 ## Broker
 

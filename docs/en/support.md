@@ -19,6 +19,8 @@ Core SDKs need no ROS installation unless the bridge is enabled. The table refle
 
 Consult the [language API guides](../../README.md#16-documentation) for interface differences. WS Nodes operate as clients and cannot register service/action servers.
 
+The [release workflow](../../.github/workflows/release-cpp.yml) job `sdk-smoke` downloads the Linux amd64 and Windows x64 core SDK archives and builds a FetchContent consumer (a protobuf round-trip and an in-process node) on a runner that does not install protobuf or Rust. The same workflow uploads arm64, macOS, and ROS 2 archives; this smoke job covers the two core archives above.
+
 ## Reliability regression tests
 
 The Linux Rust CI job runs real TCP and WebSocket traffic through a broker and native workers.

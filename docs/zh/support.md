@@ -19,6 +19,8 @@
 
 各语言接口差异以对应 [API 指南](../../README-zh.md#16-文档) 为准。WS Node 是客户端模式，不提供 service/action 服务端注册。
 
+[发布工作流](../../.github/workflows/release-cpp.yml) 的 `sdk-smoke` 会下载 Linux amd64 和 Windows x64 核心 SDK 压缩包，并在未安装 protobuf 和 Rust 的 runner 上用 FetchContent 编译一个消费者（protobuf 往返和一个进程内 node）。同一工作流还会上传 arm64、macOS 和 ROS 2 压缩包；这次冒烟覆盖上面两个核心包。
+
 ## 可靠性回归测试
 
 Linux Rust CI 使用真实 TCP、WebSocket、broker 和原生 worker 执行以下检查。

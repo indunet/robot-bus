@@ -37,7 +37,7 @@ pip install robot-bus
 * Rust
 
 ```toml
-robot-bus = "2.4.1"
+robot-bus = "2.4.2"
 ```
 
 * npm
@@ -52,21 +52,23 @@ npm install robot-bus
 <dependency>
     <groupId>org.indunet</groupId>
     <artifactId>robot-bus</artifactId>
-    <version>2.4.1</version>
+    <version>2.4.2</version>
 </dependency>
 ```
 
 * Gradle (Android)
 
 ```kotlin
-implementation("org.indunet:robot-bus-android:2.4.1")
+implementation("org.indunet:robot-bus-android:2.4.2")
 ```
 
-* C++ ([GitHub Releases](https://github.com/indunet/robot-bus/releases) DEB / MSI)
+* C++ ([GitHub Releases](https://github.com/indunet/robot-bus/releases) DEB / MSI / prebuilt SDK archive)
 
 ```bash
-sudo apt install ./robot-bus_2.4.1_linux_amd64.deb
+sudo apt install ./robot-bus_2.4.2_linux_amd64.deb
 ```
+
+CMake projects can fetch the prebuilt SDK instead of installing a package. See [C++ API — prebuilt SDK archive](docs/en/cpp-api.md#prebuilt-sdk-archive-cmake-fetchcontent).
 
 
 ## *1. Quick start*
@@ -243,7 +245,7 @@ Reading path: [support and verification](docs/en/support.md) → [deployment and
 | Python | [PyPI `robot-bus`](https://pypi.org/project/robot-bus/) | [`docs/en/python-api.md`](docs/en/python-api.md) |
 | Rust | [crates.io `robot-bus`](https://crates.io/crates/robot-bus) | [`docs/en/rust-api.md`](docs/en/rust-api.md) |
 | TypeScript | [npm `robot-bus`](https://www.npmjs.com/package/robot-bus) | [`docs/en/typescript-api.md`](docs/en/typescript-api.md) |
-| C++ | [GitHub Releases](https://github.com/indunet/robot-bus/releases) (DEB / MSI) | [`docs/en/cpp-api.md`](docs/en/cpp-api.md) |
+| C++ | [GitHub Releases](https://github.com/indunet/robot-bus/releases) (DEB / MSI / SDK archive) | [`docs/en/cpp-api.md`](docs/en/cpp-api.md) |
 | Java | Maven Central `org.indunet:robot-bus` | [`docs/en/java-api.md`](docs/en/java-api.md) |
 | Android | Maven Central `org.indunet:robot-bus-android` | [`docs/en/android-api.md`](docs/en/android-api.md) |
 | ROS 2 bridge | per-language (`rclrs` / `rclpy` / `rclcpp`) | [`docs/en/ros2-bridge.md`](docs/en/ros2-bridge.md) |
