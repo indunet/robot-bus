@@ -359,7 +359,11 @@ esac
 case "$PLATFORM" in
   linux) [[ -e "$WORK/lib/librobot_bus.so" ]] || { echo "error: missing lib/librobot_bus.so" >&2; exit 1; } ;;
   macos) [[ -e "$WORK/lib/librobot_bus.dylib" ]] || { echo "error: missing lib/librobot_bus.dylib" >&2; exit 1; } ;;
-  windows) [[ -e "$WORK/bin/robot_bus.dll" ]] || { echo "error: missing bin/robot_bus.dll" >&2; exit 1; } ;;
+  windows)
+    for file in bin/robot_bus_c.dll bin/robot_bus_msgs.dll lib/robot_bus.lib lib/robot_bus_msgs.lib; do
+      [[ -f "$WORK/$file" ]] || { echo "error: missing $file" >&2; exit 1; }
+    done
+    ;;
 esac
 if [[ "$VARIANT" == ros2-* ]]; then
   if [[ -e "$WORK/opt/ros" || -d "$WORK/opt/ros" ]]; then

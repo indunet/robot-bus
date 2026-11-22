@@ -1,0 +1,57 @@
+name: Robot Bus website
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - 'site/**'
+      - 'Cargo.toml'
+      - 'docs/images/console-overview.png'
+      - '.github/workflows/pages.yml'
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: robot-bus-pages
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    if: github.ref == 'refs/heads/master'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v6
+      - name: Build static site
+        run: python3 site/build.py "$RUNNER_TEMP/robot-bus-site"
+      - name: Publish to gh-pages
+        shell: bash
+        env:
+          GIT_AUTHOR_NAME: github-actions[bot]
+          GIT_AUTHOR_EMAIL: 41898282+github-actions[bot]@users.noreply.github.com
+          GIT_COMMITTER_NAME: github-actions[bot]
+          GIT_COMMITTER_EMAIL: 41898282+github-actions[bot]@users.noreply.github.com
+        run: |
+          commit=$(bash site/publish.sh "$RUNNER_TEMP/robot-bus-site")
+          mkdir "$RUNNER_TEMP/pages-artifact"
+          git archive "$commit" | tar -x -C "$RUNNER_TEMP/pages-artifact"
+      - uses: actions/upload-pages-artifact@v5
+        with:
+          path: ${{ runner.temp }}/pages-artifact
+          include-hidden-files: true
+
+  deploy:
+    needs: publish
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v5

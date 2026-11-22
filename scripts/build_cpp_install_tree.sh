@@ -25,13 +25,13 @@ mkdir -p "$DEST/usr/bin" "$DEST/usr/lib" "$DEST/usr/include" \
 cargo build --release --manifest-path "$ROOT/Cargo.toml" --bin robot_bus_broker
 cp -f "$ROOT/target/release/robot_bus_broker" "$DEST/usr/bin/"
 
-# FFI (rename robot_bus_c → robot_bus). ROS bridge is native C++, not cargo --features ros2.
+# The Windows import library embeds the original DLL filename.
 cargo build --release --manifest-path "$CPP/native/Cargo.toml"
 if [[ "$(uname -s)" == "Darwin" ]]; then
   cp -f "$CPP/native/target/release/librobot_bus_c.dylib" "$DEST/usr/lib/librobot_bus.dylib"
 elif [[ "$(uname -s)" == MINGW* || "$(uname -s)" == MSYS* || "$(uname -s)" == CYGWIN* ]]; then
-  cp -f "$CPP/native/target/release/robot_bus_c.dll" "$DEST/usr/bin/robot_bus.dll" || true
-  cp -f "$CPP/native/target/release/robot_bus_c.dll.lib" "$DEST/usr/lib/robot_bus.lib" 2>/dev/null || true
+  cp -f "$CPP/native/target/release/robot_bus_c.dll" "$DEST/usr/bin/"
+  cp -f "$CPP/native/target/release/robot_bus_c.dll.lib" "$DEST/usr/lib/robot_bus.lib"
 else
   cp -f "$CPP/native/target/release/librobot_bus_c.so" "$DEST/usr/lib/librobot_bus.so"
 fi
@@ -75,7 +75,8 @@ cmake --build "$BUILD_DIR" --target "${CMAKE_TARGETS[@]}" -j"$JOBS"
 find "$BUILD_DIR" \( -name 'librobot_bus_msgs*' -o -name 'robot_bus_msgs.*' \
   -o -name 'librobot_bus_ros2_bridge*' -o -name 'robot_bus_ros2_bridge.*' \) | while read -r f; do
   case "$f" in
-    *.so*|*.dylib|*.dll|*.lib|*.a) cp -a "$f" "$DEST/usr/lib/" ;;
+    *.dll) cp -a "$f" "$DEST/usr/bin/" ;;
+    *.so*|*.dylib|*.lib|*.a) cp -a "$f" "$DEST/usr/lib/" ;;
   esac
 done
 

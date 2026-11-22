@@ -110,7 +110,7 @@ def run_protoc(protos: list[Path], out_dir: Path) -> None:
     cmd = [
         PROTOC,
         f"--proto_path={PROTO_ROOT}",
-        f"--cpp_out={out_dir}",
+        f"--cpp_out=dllexport_decl=ROBOT_BUS_MSGS_API:{out_dir}",
         *[str(p) for p in protos],
     ]
     subprocess.run(cmd, check=True)
@@ -158,6 +158,13 @@ def copy_and_rewrite(tmp: Path) -> None:
             continue
         text = path.read_text(encoding="utf-8")
         rewritten = rewrite_includes(text)
+        if path.name.endswith(".pb.h"):
+            rewritten = rewritten.replace(
+                "// @@protoc_insertion_point(includes)",
+                "#include <robot_bus/detail/msgs_export.hpp>\n"
+                "// @@protoc_insertion_point(includes)",
+                1,
+            )
         if rewritten != text:
             path.write_text(rewritten, encoding="utf-8")
 

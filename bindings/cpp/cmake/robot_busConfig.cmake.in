@@ -78,7 +78,7 @@ if(NOT TARGET robot_bus::robot_bus)
     INTERFACE_INCLUDE_DIRECTORIES "${PACKAGE_PREFIX_DIR}/include")
   if(WIN32)
     set_target_properties(robot_bus::robot_bus PROPERTIES
-      IMPORTED_LOCATION "${PACKAGE_PREFIX_DIR}/bin/robot_bus.dll"
+      IMPORTED_LOCATION "${PACKAGE_PREFIX_DIR}/bin/robot_bus_c.dll"
       IMPORTED_IMPLIB "${PACKAGE_PREFIX_DIR}/lib/robot_bus.lib")
   elseif(APPLE)
     set_target_properties(robot_bus::robot_bus PROPERTIES

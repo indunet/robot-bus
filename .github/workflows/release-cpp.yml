@@ -471,11 +471,11 @@ jobs:
           mkdir -p "$STAGE/bin" "$STAGE/lib" "$STAGE/include" \
             "$STAGE/lib/cmake/robot_bus" "$STAGE/lib/pkgconfig"
           cp target/release/robot_bus_broker.exe "$STAGE/bin/"
-          cp bindings/cpp/native/target/release/robot_bus_c.dll "$STAGE/bin/robot_bus.dll"
-          cp bindings/cpp/native/target/release/robot_bus_c.dll.lib "$STAGE/lib/robot_bus.lib" 2>/dev/null || true
-          # msgs dll
-          find bindings/cpp/build-win -name 'robot_bus_msgs.dll' -exec cp {} "$STAGE/bin/" \;
-          find bindings/cpp/build-win -name 'robot_bus_msgs.lib' -exec cp {} "$STAGE/lib/" \; || true
+          # The Rust import library embeds the DLL filename.
+          cp bindings/cpp/native/target/release/robot_bus_c.dll "$STAGE/bin/"
+          cp bindings/cpp/native/target/release/robot_bus_c.dll.lib "$STAGE/lib/robot_bus.lib"
+          cp bindings/cpp/build-win/Release/robot_bus_msgs.dll "$STAGE/bin/"
+          cp bindings/cpp/build-win/Release/robot_bus_msgs.lib "$STAGE/lib/"
           # Bundle matching protobuf / abseil from the pinned prefix + zeromq from vcpkg
           cp "$PROTOBUF_PREFIX"/bin/libprotobuf*.dll "$STAGE/bin/" 2>/dev/null || true
           cp "$PROTOBUF_PREFIX"/bin/*protobuf*.dll "$STAGE/bin/" 2>/dev/null || true
@@ -485,7 +485,6 @@ jobs:
           cp "$PROTOBUF_PREFIX"/bin/absl*.dll "$STAGE/bin/" 2>/dev/null || true
           cp "$VCPKG_ROOT"/installed/x64-windows/bin/libzmq*.dll "$STAGE/bin/" || true
           ls -la "$STAGE/bin/"
-          test -f "$STAGE/bin/robot_bus_msgs.dll"
           cp -a bindings/cpp/include/. "$STAGE/include/"
           cp -a bindings/cpp/generated/robot_bus "$STAGE/include/"
           # CMake / pkg-config so installed SDK is usable for app development.
@@ -705,14 +704,12 @@ jobs:
           else
             (cd "$DEST" && echo "${HASH}  ${ASSET}" | shasum -a 256 -c -)
           fi
-          case "$(uname -s)" in
-            MINGW*|MSYS*|CYGWIN*)
-              BASE="file:///$(cygpath -m "$DEST")"
-              ;;
-            *)
-              BASE="file://${DEST}"
-              ;;
-          esac
+          # FetchContent accepts an absolute archive path. On Windows, using
+          # file:///D:/... makes CMake look for the invalid path /D:/....
+          BASE="$DEST"
+          if [[ "${{ matrix.platform }}" == "windows" ]]; then
+            BASE="$(cygpath -am "$DEST")"
+          fi
           BUILD="${RUNNER_TEMP}/sdk-smoke-build"
           cmake -S bindings/cpp/sdk-smoke -B "$BUILD" \
             -DROBOT_BUS_VERSION="$VERSION" \
@@ -749,7 +746,7 @@ jobs:
             fi
           else
             bindir="$(dirname "$exe")"
-            test -f "$bindir/robot_bus.dll"
+            test -f "$bindir/robot_bus_c.dll"
             shopt -s nullglob nocaseglob
             protobuf_dlls=("$bindir"/*protobuf*.dll)
             if [[ ${#protobuf_dlls[@]} -eq 0 ]]; then

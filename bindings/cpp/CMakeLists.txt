@@ -29,12 +29,14 @@ if(ROBOT_BUS_BUILD_MSGS)
   target_include_directories(robot_bus_msgs
     PUBLIC
       $<BUILD_INTERFACE:${ROBOT_BUS_GENERATED_ROOT}>
+      $<BUILD_INTERFACE:${ROBOT_BUS_INCLUDE_DIR}>
       $<INSTALL_INTERFACE:include>)
   target_link_libraries(robot_bus_msgs PUBLIC protobuf::libprotobuf)
   # Belt-and-suspenders: shared Abseil on MSVC exports LogMessage templates
   # from abseil_dll; without ABSL_CONSUME_DLL the linker looks for static
   # symbols and fails with LNK2001.
   if(WIN32)
+    target_compile_definitions(robot_bus_msgs PRIVATE ROBOT_BUS_MSGS_BUILDING_DLL)
     get_target_property(_rb_pb_defs protobuf::libprotobuf INTERFACE_COMPILE_DEFINITIONS)
     if(_rb_pb_defs MATCHES "PROTOBUF_USE_DLLS")
       target_compile_definitions(robot_bus_msgs PUBLIC ABSL_CONSUME_DLL)
@@ -56,7 +58,6 @@ if(APPLE)
   set(ROBOT_BUS_FFI_SONAME "librobot_bus.dylib")
 elseif(WIN32)
   set(ROBOT_BUS_FFI_BUILT "${ROBOT_BUS_FFI_TARGET_DIR}/robot_bus_c.dll")
-  set(ROBOT_BUS_FFI_SONAME "robot_bus.dll")
 else()
   set(ROBOT_BUS_FFI_BUILT "${ROBOT_BUS_FFI_TARGET_DIR}/librobot_bus_c.so")
   set(ROBOT_BUS_FFI_SONAME "librobot_bus.so")
@@ -272,12 +273,14 @@ if(ROBOT_BUS_ROS2)
     RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
 endif()
 
-# Install renamed FFI shared library as librobot_bus.
-install(CODE "
-  file(INSTALL \"${ROBOT_BUS_FFI_BUILT}\"
-       DESTINATION \"\${CMAKE_INSTALL_PREFIX}/${CMAKE_INSTALL_LIBDIR}\"
-       RENAME \"${ROBOT_BUS_FFI_SONAME}\")
-")
+if(WIN32)
+  install(FILES "${ROBOT_BUS_FFI_BUILT}" DESTINATION ${CMAKE_INSTALL_BINDIR})
+  install(FILES "${ROBOT_BUS_FFI_BUILT}.lib"
+    DESTINATION ${CMAKE_INSTALL_LIBDIR} RENAME robot_bus.lib)
+else()
+  install(FILES "${ROBOT_BUS_FFI_BUILT}"
+    DESTINATION ${CMAKE_INSTALL_LIBDIR} RENAME "${ROBOT_BUS_FFI_SONAME}")
+endif()
 
 # Also install broker binary if present at repo root target.
 set(ROBOT_BUS_BROKER "${CMAKE_CURRENT_SOURCE_DIR}/../../target/release/robot_bus_broker")

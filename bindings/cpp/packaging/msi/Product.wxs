@@ -31,7 +31,7 @@
         <Environment Id="Path" Name="PATH" Value="[BINDIR]" Permanent="no" Part="last" Action="set" System="yes" />
       </Component>
       <Component Id="FfiDll" Directory="BINDIR" Guid="*" Win64="yes">
-        <File Id="robot_bus_dll" Source="$(var.StageDir)\bin\robot_bus.dll" KeyPath="yes" />
+        <File Id="robot_bus_dll" Source="$(var.StageDir)\bin\robot_bus_c.dll" KeyPath="yes" />
       </Component>
       <Component Id="MsgsDll" Directory="BINDIR" Guid="*" Win64="yes">
         <File Id="robot_bus_msgs_dll" Source="$(var.StageDir)\bin\robot_bus_msgs.dll" KeyPath="yes" />
