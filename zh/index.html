@@ -1,0 +1,202 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#10171d">
+  <meta name="description" content="面向机器人应用的轻量级消息框架。基于 ZeroMQ，提供六种 SDK、ROS 2 风格的话题、服务和动作，以及可选的 ROS 2 桥接。">
+  <title>Robot Bus | 机器人系统消息通信框架</title>
+  <link rel="alternate" hreflang="en" href="../">
+  <link rel="stylesheet" href="../assets/site.css">
+  <script defer src="../assets/site.js"></script>
+</head>
+<body id="top">
+  <a class="skip-link" href="#main">跳转到正文</a>
+  <header class="site-header">
+    <div class="wrap header-inner">
+      <a class="brand" href="#top"><span class="mark" aria-hidden="true"></span>Robot<span>Bus</span></a>
+      <nav aria-label="主导航">
+        <a href="#model">消息模型</a>
+        <a href="#start">快速开始</a>
+        <a href="#docs">技术文档</a>
+      </nav>
+      <div class="header-links">
+        <a href="../" lang="en" hreflang="en">English</a>
+        <a class="header-github" href="https://github.com/indunet/robot-bus">GitHub</a>
+      </div>
+    </div>
+  </header>
+
+  <main id="main">
+    <section class="hero">
+      <div class="wrap hero-inner">
+        <div class="hero-copy">
+          <p class="eyebrow"><span></span>开源机器人中间件</p>
+          <h1>让机器人系统<br><em>互联互通。</em></h1>
+          <p class="hero-description">面向机器人应用的轻量级消息框架。基于 ZeroMQ，提供六种 SDK、ROS 2 风格的话题、服务和动作，以及可选的 ROS 2 桥接。</p>
+          <div class="hero-actions">
+            <a class="button primary" href="#start">快速开始</a>
+            <a class="button secondary" href="https://github.com/indunet/robot-bus">查看 GitHub 源码</a>
+          </div>
+        </div>
+        <figure class="topology" aria-label="原生、JVM 和浏览器客户端连接 Robot Bus Broker。Broker 路由话题、服务和动作，消息由 Protocol Buffers 定义。">
+          <figcaption><span class="topology-dot"></span>系统拓扑 <span class="topology-transport">ZeroMQ / WS</span></figcaption>
+          <div class="network" aria-hidden="true">
+            <div class="network-column">
+              <div class="network-node"><span class="node-icon terminal-icon"></span><div><strong>原生节点</strong><small>Rust / Python / C++</small></div></div>
+              <div class="network-node"><span class="node-icon mobile-icon"></span><div><strong>JVM 客户端</strong><small>Java / Android</small></div></div>
+              <div class="network-node"><span class="node-icon browser-icon"></span><div><strong>浏览器客户端</strong><small>TypeScript</small></div></div>
+            </div>
+            <div class="network-column network-core">
+              <i class="trace trace-left" aria-hidden="true"></i>
+              <div class="broker"><span class="mark" aria-hidden="true"></span><strong>Robot Bus</strong><small>Broker</small></div>
+              <i class="trace trace-right" aria-hidden="true"></i>
+            </div>
+            <div class="network-column network-output">
+              <div class="network-node"><span class="node-icon pulse-icon"></span><div><strong>话题</strong><small>发布 / 订阅</small></div></div>
+              <div class="network-node"><span class="node-icon service-icon"></span><div><strong>服务</strong><small>请求 / 响应</small></div></div>
+              <div class="network-node"><span class="node-icon target-icon"></span><div><strong>动作</strong><small>目标 / 反馈</small></div></div>
+            </div>
+          </div>
+          <div class="topology-footer"><span>Protocol Buffers</span><span>统一消息定义</span></div>
+        </figure>
+      </div>
+    </section>
+
+    <section class="model section" id="model" aria-labelledby="model-title">
+      <div class="wrap">
+        <p class="eyebrow">消息模型</p>
+        <div class="section-intro">
+          <h2 id="model-title">三种消息模式。</h2>
+          <p>基于统一的 Node API，按场景选择发布订阅、请求响应，或带反馈的异步任务。</p>
+        </div>
+        <div class="primitives">
+          <article>
+            <span class="primitive-icon node-icon pulse-icon" aria-hidden="true"></span>
+            <h3>话题</h3>
+            <p>将传感器读数、状态更新等持续数据分发给多个订阅方。</p>
+            <code>/robot1/imu</code>
+          </article>
+          <article>
+            <span class="primitive-icon node-icon service-icon" aria-hidden="true"></span>
+            <h3>服务</h3>
+            <p>发起一次明确的操作并接收类型化响应，例如切换设备开关。</p>
+            <code>/set_bool</code>
+          </article>
+          <article>
+            <span class="primitive-icon node-icon target-icon" aria-hidden="true"></span>
+            <h3>动作</h3>
+            <p>为长时间运行的任务发送目标、接收进度反馈，并获取结果或取消目标。</p>
+            <code>/fibonacci</code>
+          </article>
+        </div>
+        <a class="text-link" href="https://github.com/indunet/robot-bus/blob/master/docs/zh/architecture.md">查看系统架构</a>
+      </div>
+    </section>
+
+    <section class="section getting-started" id="start" aria-labelledby="start-title">
+      <div class="wrap start-layout">
+        <div>
+          <p class="eyebrow">快速开始</p>
+          <h2 id="start-title">选择你的 SDK。</h2>
+          <p class="section-description">Rust 控制器、Python 工具和 TypeScript 浏览器应用可以连接同一个 Broker。安装 SDK 后，按对应指南接入。</p>
+          <a class="text-link" href="https://github.com/indunet/robot-bus/blob/master/README-zh.md#1-%E5%BF%AB%E9%80%9F%E5%BC%80%E5%A7%8B">运行 Python 快速开始示例</a>
+        </div>
+        <div class="install" data-install data-copy="复制" data-copied="已复制" data-copy-error="无法复制">
+          <div class="sdk-tabs" role="tablist" aria-label="选择 SDK" hidden>
+            <button type="button" role="tab" id="tab-python" aria-controls="panel-python">Python</button>
+            <button type="button" role="tab" id="tab-rust" aria-controls="panel-rust">Rust</button>
+            <button type="button" role="tab" id="tab-typescript" aria-controls="panel-typescript">TypeScript</button>
+            <button type="button" role="tab" id="tab-cpp" aria-controls="panel-cpp">C++</button>
+            <button type="button" role="tab" id="tab-java" aria-controls="panel-java">Java</button>
+            <button type="button" role="tab" id="tab-android" aria-controls="panel-android">Android</button>
+          </div>
+          <div class="sdk-panels">
+            <section class="sdk-panel" id="panel-python" role="tabpanel" aria-labelledby="tab-python">
+            <div class="code-header"><span>Shell</span><button class="copy" type="button" hidden>复制</button></div>
+            <pre tabindex="0"><code>pip install robot-bus</code></pre>
+            <a class="text-link" href="https://github.com/indunet/robot-bus/blob/master/docs/zh/python-api.md">查看 Python 指南</a>
+          </section>
+          <section class="sdk-panel" id="panel-rust" role="tabpanel" aria-labelledby="tab-rust">
+            <div class="code-header"><span>Cargo.toml</span><button class="copy" type="button" hidden>复制</button></div>
+            <pre tabindex="0"><code>[dependencies]
+robot-bus = &quot;2.4.3&quot;</code></pre>
+            <a class="text-link" href="https://github.com/indunet/robot-bus/blob/master/docs/zh/rust-api.md">查看 Rust 指南</a>
+          </section>
+          <section class="sdk-panel" id="panel-typescript" role="tabpanel" aria-labelledby="tab-typescript">
+            <div class="code-header"><span>Shell</span><button class="copy" type="button" hidden>复制</button></div>
+            <pre tabindex="0"><code>npm install robot-bus</code></pre>
+            <a class="text-link" href="https://github.com/indunet/robot-bus/blob/master/docs/zh/typescript-api.md">查看 TypeScript 指南</a>
+          </section>
+          <section class="sdk-panel" id="panel-cpp" role="tabpanel" aria-labelledby="tab-cpp">
+            <div class="code-header"><span>Shell</span><button class="copy" type="button" hidden>复制</button></div>
+            <pre tabindex="0"><code>sudo apt install ./robot-bus_2.4.3_linux_amd64.deb</code></pre>
+            <a class="text-link" href="https://github.com/indunet/robot-bus/blob/master/docs/zh/cpp-api.md">查看 C++ 指南</a>
+          </section>
+          <section class="sdk-panel" id="panel-java" role="tabpanel" aria-labelledby="tab-java">
+            <div class="code-header"><span>pom.xml</span><button class="copy" type="button" hidden>复制</button></div>
+            <pre tabindex="0"><code>&lt;dependency&gt;
+  &lt;groupId&gt;org.indunet&lt;/groupId&gt;
+  &lt;artifactId&gt;robot-bus&lt;/artifactId&gt;
+  &lt;version&gt;2.4.3&lt;/version&gt;
+&lt;/dependency&gt;</code></pre>
+            <a class="text-link" href="https://github.com/indunet/robot-bus/blob/master/docs/zh/java-api.md">查看 Java 指南</a>
+          </section>
+          <section class="sdk-panel" id="panel-android" role="tabpanel" aria-labelledby="tab-android">
+            <div class="code-header"><span>build.gradle.kts</span><button class="copy" type="button" hidden>复制</button></div>
+            <pre tabindex="0"><code>implementation(&quot;org.indunet:robot-bus-android:2.4.3&quot;)</code></pre>
+            <a class="text-link" href="https://github.com/indunet/robot-bus/blob/master/docs/zh/android-api.md">查看 Android 指南</a>
+          </section>
+          </div>
+          <p class="sr-only" role="status" data-copy-status></p>
+        </div>
+      </div>
+    </section>
+
+    <section class="section section-console" id="console" aria-labelledby="console-title">
+      <div class="wrap console-layout">
+        <div>
+          <p class="eyebrow">内嵌 Web 控制台</p>
+          <h2 id="console-title">看见节点如何协作。</h2>
+          <p class="section-description">Broker 自带 Web 控制台。用浏览器即可查看消息活动、连接关系和节点状态。</p>
+          <ul class="console-items">
+            <li><span>查看消息拓扑</span><p>浏览话题、服务、动作及其连接。</p></li>
+            <li><span>体验坦克模拟器</span><p>用键盘操控，或在地图上点击发送目标。</p></li>
+          </ul>
+          <a class="text-link" href="https://github.com/indunet/robot-bus/blob/master/README-zh.md#2-web%E6%8E%A7%E5%88%B6%E5%8F%B0">查看控制台使用说明</a>
+        </div>
+        <figure class="console-frame">
+          <div class="window-bar" aria-hidden="true"><span></span><span></span><span></span><code>127.0.0.1:15560</code></div>
+          <img src="../assets/console-overview.png" width="3308" height="2510" loading="lazy" alt="Robot Bus Web 控制台，显示 Broker 状态和各端点活动。">
+        </figure>
+      </div>
+    </section>
+
+    <section class="section resources" id="docs" aria-labelledby="docs-title">
+      <div class="wrap resources-layout">
+        <div>
+          <p class="eyebrow">技术文档</p>
+          <h2 id="docs-title">从接入到部署。</h2>
+        </div>
+        <div class="resource-list">
+          <a href="https://github.com/indunet/robot-bus/blob/master/docs/zh/deployment.md"><strong>部署与排查</strong><span>运行嵌入式 Broker，或建立跨主机连接。</span></a>
+          <a href="https://github.com/indunet/robot-bus/blob/master/docs/zh/ros2-bridge.md"><strong>ROS 2 桥接</strong><span>通过可选的进程内桥接接入 Humble 或 Jazzy。</span></a>
+          <a href="https://github.com/indunet/robot-bus/blob/master/docs/zh/ros2-web.md"><strong>ROS 2 浏览器实验</strong><span>运行从浏览器经 Python 桥接到真实 ROS 2 节点的示例。</span></a>
+          <a href="https://github.com/indunet/robot-bus/blob/master/docs/zh/performance.md"><strong>性能与 QoS</strong><span>了解队列行为和基准测试方法。</span></a>
+          <a href="https://github.com/indunet/robot-bus/blob/master/docs/zh/support.md"><strong>支持矩阵</strong><span>查看支持的平台和已验证的功能。</span></a>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="wrap footer-inner">
+      <a class="brand" href="#top"><span class="mark" aria-hidden="true"></span>Robot<span>Bus</span></a>
+      <a href="https://github.com/indunet">indunet</a>
+      <a href="https://github.com/indunet/robot-bus/blob/master/LICENSE">Apache-2.0</a>
+      <a href="https://github.com/indunet/robot-bus/releases">发布版本</a>
+      <a href="https://github.com/indunet/robot-bus">GitHub</a>
+    </div>
+  </footer>
+</body>
+</html>
