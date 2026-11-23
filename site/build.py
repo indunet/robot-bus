@@ -48,7 +48,7 @@ def build(output):
     template = Template((SITE / "index.html").read_text(encoding="utf-8"))
     translations = json.loads((SITE / "content.json").read_text(encoding="utf-8"))
     with (ROOT / "Cargo.toml").open("rb") as manifest:
-        version = tomllib.load(manifest)["package"]["version"]
+        version = tomllib.load(manifest)["workspace"]["package"]["version"]
 
     for locale, content in translations.items():
         english = locale == "en"
