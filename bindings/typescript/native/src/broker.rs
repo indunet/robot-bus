@@ -1,15 +1,15 @@
 //! Broker lifecycle, discovery CLI entrypoints, and version.
 
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::thread;
 use std::time::Duration;
 
 use napi::bindgen_prelude::*;
 use napi_derive::napi;
 use robot_bus::broker::{
-    apply_federation_opts, binding_broker_cli_args, parse_robot_bus_config, robot_bus_broker_help,
-    RobotBusBroker as RustRobotBusBroker, RobotBusConfig,
+    RobotBusBroker as RustRobotBusBroker, RobotBusConfig, apply_federation_opts,
+    binding_broker_cli_args, parse_robot_bus_config, robot_bus_broker_help,
 };
 use robot_bus::{shutdown, transports};
 
@@ -17,20 +17,14 @@ use crate::node::Context;
 use crate::util::{anyhow_err, map_endpoint_err, normalize_bind};
 
 #[napi]
-pub fn message_xsub_endpoint(
-    host: Option<String>,
-    transport: Option<String>,
-) -> Result<String> {
+pub fn message_xsub_endpoint(host: Option<String>, transport: Option<String>) -> Result<String> {
     let host = host.unwrap_or_else(|| "localhost".into());
     let transport = transport.unwrap_or_else(|| "tcp".into());
     transports::message_xsub_endpoint(&host, &transport).map_err(map_endpoint_err)
 }
 
 #[napi]
-pub fn message_xpub_endpoint(
-    host: Option<String>,
-    transport: Option<String>,
-) -> Result<String> {
+pub fn message_xpub_endpoint(host: Option<String>, transport: Option<String>) -> Result<String> {
     let host = host.unwrap_or_else(|| "localhost".into());
     let transport = transport.unwrap_or_else(|| "tcp".into());
     transports::message_xpub_endpoint(&host, &transport).map_err(map_endpoint_err)
@@ -84,10 +78,7 @@ pub struct RobotBusBroker {
 #[napi]
 impl RobotBusBroker {
     #[napi(factory)]
-    pub fn start(
-        options: Option<BrokerStartOptions>,
-        context: Option<&Context>,
-    ) -> Result<Self> {
+    pub fn start(options: Option<BrokerStartOptions>, context: Option<&Context>) -> Result<Self> {
         let mut config = RobotBusConfig::default();
         if let Some(o) = options {
             if let Some(v) = o.message_xsub_bind {

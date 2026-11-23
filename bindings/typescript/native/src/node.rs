@@ -4,14 +4,12 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use napi::bindgen_prelude::*;
-use napi::threadsafe_function::{
-    ErrorStrategy, ThreadsafeFunction, ThreadsafeFunctionCallMode,
-};
+use napi::threadsafe_function::{ErrorStrategy, ThreadsafeFunction, ThreadsafeFunctionCallMode};
 use napi_derive::napi;
-use robot_bus::discovery::{wait as discover_wait, DiscoverOpts as RustDiscoverOpts};
+use robot_bus::discovery::{DiscoverOpts as RustDiscoverOpts, wait as discover_wait};
 use robot_bus::runtime::{
-    ActionGoalHandler, Context as RustContext, Node as RustNode,
-    NodeOptions as RustNodeOptions, Parameter, ServiceHandler, TimerCallback,
+    ActionGoalHandler, Context as RustContext, Node as RustNode, NodeOptions as RustNodeOptions,
+    Parameter, ServiceHandler, TimerCallback,
 };
 
 use crate::handles::{
@@ -20,9 +18,7 @@ use crate::handles::{
 };
 use crate::message::TopicPublisher;
 use crate::rpc::{ActionClient, ActionPhaseReply, ServiceClient};
-use crate::util::{
-    bus_err, node_options, parameter_to_js, parameter_value_from_js,
-};
+use crate::util::{bus_err, node_options, parameter_to_js, parameter_value_from_js};
 
 #[napi(object)]
 #[derive(Default)]
@@ -32,7 +28,6 @@ pub struct DiscoverNodeOptions {
     pub broker_id: Option<String>,
     pub timeout_secs: Option<f64>,
 }
-
 
 type ConnTsfn = ThreadsafeFunction<(String, String, String), ErrorStrategy::Fatal>;
 type MsgTsfn = ThreadsafeFunction<Vec<u8>, ErrorStrategy::Fatal>;
@@ -128,11 +123,7 @@ impl Node {
 
     /// Same-process inproc sharing `context` with an embedded broker.
     #[napi(factory)]
-    pub fn inproc_with_context(
-        context: &Context,
-        name: String,
-        prefix: Option<String>,
-    ) -> Self {
+    pub fn inproc_with_context(context: &Context, name: String, prefix: Option<String>) -> Self {
         match prefix.as_deref() {
             Some(p) => Self {
                 inner: RustNode::inproc_at_with_context(&context.inner, name, p),
@@ -259,16 +250,17 @@ impl Node {
             ])
         })?;
         let tsfn = Arc::new(tsfn);
-        self.inner.add_on_connection_event(move |old, next, reason| {
-            let _ = tsfn.call(
-                (
-                    old.as_str().to_string(),
-                    next.as_str().to_string(),
-                    reason.to_string(),
-                ),
-                ThreadsafeFunctionCallMode::NonBlocking,
-            );
-        });
+        self.inner
+            .add_on_connection_event(move |old, next, reason| {
+                let _ = tsfn.call(
+                    (
+                        old.as_str().to_string(),
+                        next.as_str().to_string(),
+                        reason.to_string(),
+                    ),
+                    ThreadsafeFunctionCallMode::NonBlocking,
+                );
+            });
         Ok(())
     }
 
@@ -390,7 +382,9 @@ impl Node {
         use robot_bus::runtime::QosProfile;
         let tsfn: MsgTsfn = callback.create_threadsafe_function(0, |ctx| {
             let payload = ctx.value;
-            Ok(vec![ctx.env.create_buffer_with_data(payload)?.into_unknown()])
+            Ok(vec![
+                ctx.env.create_buffer_with_data(payload)?.into_unknown(),
+            ])
         })?;
         let tsfn = Arc::new(tsfn);
         let cb: robot_bus::runtime::MessageCallback = Arc::new(move |payload| {
@@ -467,9 +461,8 @@ impl Node {
         callback_group: Option<&JsCallbackGroup>,
         qos_depth: Option<i32>,
     ) -> Result<ServiceHandle> {
-        let tsfn: ServiceTsfn = handler.create_threadsafe_function(0, |ctx| {
-            Ok(vec![Buffer::from(ctx.value)])
-        })?;
+        let tsfn: ServiceTsfn =
+            handler.create_threadsafe_function(0, |ctx| Ok(vec![Buffer::from(ctx.value)]))?;
         let tsfn = Arc::new(tsfn);
         let cb: ServiceHandler = Arc::new(move |body| {
             let (tx, rx) = std::sync::mpsc::sync_channel::<Vec<u8>>(1);
@@ -481,8 +474,7 @@ impl Node {
                     Ok(())
                 },
             );
-            rx.recv_timeout(Duration::from_secs(30))
-                .unwrap_or_default()
+            rx.recv_timeout(Duration::from_secs(30)).unwrap_or_default()
         });
         let group = callback_group.map(|g| &g.inner);
         use robot_bus::runtime::QosProfile;
@@ -536,9 +528,8 @@ impl Node {
         callback_group: Option<&JsCallbackGroup>,
         qos_depth: Option<i32>,
     ) -> Result<ActionServerHandle> {
-        let tsfn: ActionTsfn = handler.create_threadsafe_function(0, |ctx| {
-            Ok(vec![Buffer::from(ctx.value)])
-        })?;
+        let tsfn: ActionTsfn =
+            handler.create_threadsafe_function(0, |ctx| Ok(vec![Buffer::from(ctx.value)]))?;
         let tsfn = Arc::new(tsfn);
         let cb: ActionGoalHandler = Arc::new(move |payload| {
             let (tx, rx) = std::sync::mpsc::sync_channel::<Vec<(String, Vec<u8>)>>(1);
@@ -554,8 +545,7 @@ impl Node {
                     Ok(())
                 },
             );
-            rx.recv_timeout(Duration::from_secs(30))
-                .unwrap_or_default()
+            rx.recv_timeout(Duration::from_secs(30)).unwrap_or_default()
         });
         let group = callback_group.map(|g| &g.inner);
         use robot_bus::runtime::QosProfile;
@@ -630,7 +620,11 @@ impl Node {
         timeout: Option<f64>,
     ) -> Result<Option<Buffer>> {
         let timeout = timeout.map(Duration::from_secs_f64);
-        match self.inner.wait_for_message(&topic, timeout).map_err(bus_err)? {
+        match self
+            .inner
+            .wait_for_message(&topic, timeout)
+            .map_err(bus_err)?
+        {
             Some(payload) => Ok(Some(Buffer::from(payload))),
             None => Ok(None),
         }

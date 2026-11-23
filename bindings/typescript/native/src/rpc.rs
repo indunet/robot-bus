@@ -1,11 +1,13 @@
 //! Service and action client bindings.
 
 use std::sync::Arc;
+use std::sync::mpsc;
 use std::time::Duration;
 
 use napi::bindgen_prelude::*;
 use napi::threadsafe_function::{
     ErrorStrategy, ThreadSafeCallContext, ThreadsafeFunction, ThreadsafeFunctionCallMode,
+    UnknownReturnValue,
 };
 use napi_derive::napi;
 use robot_bus::runtime::{
@@ -156,11 +158,7 @@ impl ActionClient {
     }
 
     #[napi]
-    pub fn send_goal(
-        &self,
-        body: Buffer,
-        options: Option<SendGoalOptions>,
-    ) -> Result<GoalHandle> {
+    pub fn send_goal(&self, body: Buffer, options: Option<SendGoalOptions>) -> Result<GoalHandle> {
         let options = options.unwrap_or(SendGoalOptions {
             goal_id: None,
             timeout_seconds: None,
@@ -171,13 +169,9 @@ impl ActionClient {
         let feedback_callback = options.on_feedback;
         let feedback_callback = feedback_callback
             .map(|callback| {
-                let tsfn: ActionFeedbackTsfn =
-                    callback.create_threadsafe_function(0, |ctx: ThreadSafeCallContext<(
-                        String,
-                        Vec<u8>,
-                        String,
-                        String,
-                    )>| {
+                let tsfn: ActionFeedbackTsfn = callback.create_threadsafe_function(
+                    0,
+                    |ctx: ThreadSafeCallContext<(String, Vec<u8>, String, String)>| {
                         let (kind, body, goal_id, action_name) = ctx.value;
                         let mut event = ctx.env.create_object()?;
                         event.set_named_property("kind", ctx.env.create_string(&kind)?)?;
@@ -185,30 +179,41 @@ impl ActionClient {
                             "body",
                             ctx.env.create_buffer_with_data(body)?.into_unknown(),
                         )?;
-                        event.set_named_property(
-                            "goalId",
-                            ctx.env.create_string(&goal_id)?,
-                        )?;
+                        event.set_named_property("goalId", ctx.env.create_string(&goal_id)?)?;
                         event.set_named_property(
                             "actionName",
                             ctx.env.create_string(&action_name)?,
                         )?;
                         Ok(vec![event.into_unknown()])
-                    })?;
+                    },
+                )?;
                 let tsfn = Arc::new(tsfn);
-                Ok::<RawActionFeedbackCallback, Error>(
-                    Arc::new(move |message: &robot_bus::action_bus::ActionMessage| {
-                        let _ = tsfn.call(
+                Ok::<RawActionFeedbackCallback, Error>(Arc::new(
+                    move |message: &robot_bus::action_bus::ActionMessage| {
+                        // The action thread invokes this before it forwards RESULT.
+                        // `call` only queues a macrotask, so `await handle.result()`
+                        // can resume before `onFeedback` runs. Wait until the JS
+                        // callback returns; that is the same order as the Rust client.
+                        let (tx, rx) = mpsc::sync_channel(1);
+                        let status = tsfn.call_with_return_value(
                             (
                                 action_kind_str(message.kind).to_string(),
                                 message.body.clone(),
                                 message.goal_id.clone(),
                                 message.action_name.clone(),
                             ),
-                            ThreadsafeFunctionCallMode::NonBlocking,
+                            ThreadsafeFunctionCallMode::Blocking,
+                            move |_value: UnknownReturnValue| {
+                                let _ = tx.send(());
+                                Ok(())
+                            },
                         );
-                    }) as RawActionFeedbackCallback,
+                        if status == Status::Ok {
+                            let _ = rx.recv_timeout(Duration::from_secs(30));
+                        }
+                    },
                 )
+                    as RawActionFeedbackCallback)
             })
             .transpose()?;
         let handle = self
