@@ -8,11 +8,11 @@ use std::time::Duration;
 use pyo3::exceptions::PyRuntimeError;
 use pyo3::prelude::*;
 
-use crate::broker::{
+use robot_bus_broker::broker::{
     RobotBusBroker as RustRobotBusBroker, RobotBusConfig, apply_federation_opts,
     parse_robot_bus_config, robot_bus_broker_help, strip_runtime_argv,
 };
-use crate::shutdown;
+use robot_bus::shutdown;
 
 use super::runtime::PyContext;
 use super::util::anyhow_err;
@@ -240,7 +240,7 @@ impl PyRobotBusBroker {
         .map_err(anyhow_err)?;
 
         if let Some(peer_list) = peers {
-            crate::broker::apply_api_peers(&mut config, &peer_list).map_err(anyhow_err)?;
+            robot_bus_broker::broker::apply_api_peers(&mut config, &peer_list).map_err(anyhow_err)?;
         }
 
         if no_discovery {

@@ -3,8 +3,8 @@
 //! Each test spins up a real broker (in-process, ephemeral ports) plus a
 //! client (REQ) and worker(s) (DEALER), then verifies end-to-end routing.
 
-use robot_bus::RobotBusBroker;
-use robot_bus::broker::service_bus::ServiceBusConfig;
+use robot_bus_broker::RobotBusBroker;
+use robot_bus_broker::broker::service_bus::ServiceBusConfig;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::thread;

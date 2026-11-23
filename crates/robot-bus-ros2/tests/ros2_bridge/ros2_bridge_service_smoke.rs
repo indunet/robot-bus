@@ -7,10 +7,11 @@ use std::time::{Duration, Instant};
 
 use crate::common::{ephemeral_robot_bus_config, lock_brokers};
 use rclrs::CreateBasicExecutor;
-use robot_bus::ros2_bridge::vendor::std_srvs::srv as ros_srv;
-use robot_bus::ros2_bridge::{Ros2Bridge, TopicQos, TriggerServiceMapper};
+use robot_bus_ros2::vendor::std_srvs::srv as ros_srv;
+use robot_bus_ros2::{Ros2Bridge, TopicQos, TriggerServiceMapper};
 use robot_bus::std_srvs::srv::v1::{Trigger, TriggerRequest, TriggerResponse};
-use robot_bus::{Node, NodeOptions, RobotBusBroker};
+use robot_bus::{Node, NodeOptions};
+use robot_bus_broker::{RobotBusBroker};
 
 fn node_options_from_broker(broker: &RobotBusBroker) -> NodeOptions {
     NodeOptions {
@@ -178,7 +179,7 @@ fn trigger_ros2_to_bus_failure_replies_with_error_response() {
 #[derive(Clone, Copy)]
 struct AddTwoIntsNoErrorResponse;
 
-impl robot_bus::ros2_bridge::TypedServiceMapper for AddTwoIntsNoErrorResponse {
+impl robot_bus_ros2::TypedServiceMapper for AddTwoIntsNoErrorResponse {
     type Ros = ros_env::example_interfaces::srv::AddTwoInts;
 
     fn type_name(&self) -> &str {

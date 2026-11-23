@@ -6,7 +6,8 @@ use std::time::Duration;
 
 use crate::common::{MessageProxy, ephemeral_robot_bus_config, lock_brokers};
 use robot_bus::message_bus::Publisher;
-use robot_bus::{Node, NodeOptions, RobotBusBroker, RobotBusConfig};
+use robot_bus::{Node, NodeOptions};
+use robot_bus_broker::{RobotBusBroker, RobotBusConfig};
 
 fn console_on_config() -> RobotBusConfig {
     let mut config = ephemeral_robot_bus_config();

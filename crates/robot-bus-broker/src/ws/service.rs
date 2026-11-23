@@ -7,9 +7,9 @@ use tokio::sync::{OwnedSemaphorePermit, Semaphore};
 
 use zmq::Context;
 
-use crate::errors::BusError;
-use crate::service_bus::ServiceClient;
-use crate::zmq_helpers::HighWaterMark;
+use robot_bus::errors::BusError;
+use robot_bus::service_bus::ServiceClient;
+use robot_bus::zmq_helpers::HighWaterMark;
 
 use super::rpc_status::{Code, RpcStatus};
 
@@ -224,7 +224,7 @@ mod tests {
             SERVICE_CLIENT_POOL_SIZE + MAX_PENDING_CALLS
         );
         assert!(
-            !crate::zmq_helpers::poll_readable(&server, 100).unwrap(),
+            !robot_bus::zmq_helpers::poll_readable(&server, 100).unwrap(),
             "expired call was dispatched"
         );
     }
@@ -272,7 +272,7 @@ mod tests {
             SERVICE_CLIENT_POOL_SIZE + MAX_PENDING_CALLS
         );
         assert!(
-            !crate::zmq_helpers::poll_readable(&server, 100).unwrap(),
+            !robot_bus::zmq_helpers::poll_readable(&server, 100).unwrap(),
             "expired blocking job was dispatched"
         );
     }

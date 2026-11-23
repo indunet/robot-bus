@@ -6,7 +6,7 @@
 
 | 语言 | ROS客户端 | 入口 |
 |------|------------|------|
-| **Rust** | `rclrs` | `robot_bus::ros2_bridge`（Cargo feature **`ros2`**） |
+| **Rust** | `rclrs` | `robot_bus_ros2`（Cargo feature **`ros2`**） |
 | **Python** | `rclpy` | `robot_bus.ros2_bridge` |
 | **C++** | `rclcpp` | `<robot_bus/ros2_bridge.hpp>` + `robot_bus_ros2_bridge` |
 
@@ -57,7 +57,7 @@ bridge.run()  # Ctrl+C / SIGTERM 退出
 ```
 
 ```rust
-use robot_bus::ros2_bridge::{Ros2Bridge, StdMsgsStringMapper, TopicQos};
+use robot_bus_ros2::{Ros2Bridge, StdMsgsStringMapper, TopicQos};
 
 let mut bridge = Ros2Bridge::new("ros_bridge")
     .bus_tcp("localhost")
@@ -210,7 +210,7 @@ class SumMapper: ...
 **Rust**（`TypedTopicMapper`）：
 
 ```rust
-use robot_bus::ros2_bridge::TypedTopicMapper;
+use robot_bus_ros2::TypedTopicMapper;
 
 #[derive(Clone, Copy)]
 struct MyStringMapper;
@@ -373,7 +373,7 @@ bridge = (
 use prost::Message as ProstMessage;
 use ros_env::example_interfaces::srv as ros_srv;
 use robot_bus::example_interfaces::srv::v1::{AddTwoIntsRequest, AddTwoIntsResponse};
-use robot_bus::ros2_bridge::TypedServiceMapper;
+use robot_bus_ros2::TypedServiceMapper;
 
 #[derive(Clone, Copy)]
 struct AddTwoIntsServiceMapper;
@@ -574,10 +574,10 @@ sudo apt-get install libzmq3-dev ros-humble-rosidl-generator-rs \
   ros-humble-example-interfaces ros-humble-test-msgs
 source /opt/ros/humble/setup.bash
 python3 scripts/generate_rust_msgs.py
-cargo build --no-default-features --features ros2 --bin ros2_bridge_perf \
-  --example ros2_bridge_builtin --example ros2_bridge_custom_add_two_ints
+cargo build -p robot-bus-ros2-perf --bin ros2_bridge_perf
+cargo build -p robot-bus-ros2 --examples
 ROS_LOCALHOST_ONLY=1 ROS_DOMAIN_ID=94 RMW_IMPLEMENTATION=rmw_fastrtps_cpp \
-  cargo test --no-default-features --features ws,console-api,ros2 \
+  cargo test -p robot-bus-ros2 --features ws \
   --test ros2_bridge -- --test-threads=1
 ```
 

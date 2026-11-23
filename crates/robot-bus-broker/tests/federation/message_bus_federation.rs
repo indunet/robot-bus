@@ -5,13 +5,14 @@ use std::time::{Duration, Instant};
 
 use crate::common::{free_ports, lock_brokers};
 #[cfg(feature = "console-api")]
-use robot_bus::ConsoleBrokerConfig;
+use robot_bus_broker::ConsoleBrokerConfig;
 #[cfg(feature = "ws")]
-use robot_bus::WsConfig;
-use robot_bus::broker::action_bus::ActionBusConfig;
-use robot_bus::broker::message_bus::{BusConfig, MessagePeer};
-use robot_bus::broker::service_bus::ServiceBusConfig;
-use robot_bus::{DiscoveryConfig, Publisher, RobotBusBroker, RobotBusConfig, Subscriber};
+use robot_bus_broker::WsConfig;
+use robot_bus_broker::broker::action_bus::ActionBusConfig;
+use robot_bus_broker::broker::message_bus::{BusConfig, MessagePeer};
+use robot_bus_broker::broker::service_bus::ServiceBusConfig;
+use robot_bus::{Publisher, Subscriber};
+use robot_bus_broker::{DiscoveryConfig, RobotBusBroker, RobotBusConfig};
 
 fn connect_addr(bind: &str) -> String {
     bind.replace("tcp://0.0.0.0:", "tcp://127.0.0.1:")
@@ -328,8 +329,8 @@ fn federation_peer_via_api_discover() {
 
     let api_a = format!("127.0.0.1:{}", a.other[4]);
     let api_b = format!("127.0.0.1:{}", b.other[4]);
-    let peer_a = robot_bus::resolve_peer_from_api(&api_a).expect("discover a");
-    let peer_b = robot_bus::resolve_peer_from_api(&api_b).expect("discover b");
+    let peer_a = robot_bus_broker::resolve_peer_from_api(&api_a).expect("discover a");
+    let peer_b = robot_bus_broker::resolve_peer_from_api(&api_b).expect("discover b");
     assert_eq!(peer_a.broker_id, "api-peer-a");
     assert_eq!(peer_b.broker_id, "api-peer-b");
     assert_eq!(peer_a.message.xpub, format!("tcp://127.0.0.1:{}", a.xpub));

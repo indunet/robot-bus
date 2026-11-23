@@ -18,7 +18,7 @@
 //! Publish success is TRAILER only (no DATA ack). Status codes match historical
 //! gRPC / tonic codes (0 = OK).
 
-use crate::runtime::SubscriptionOverflowPolicy;
+use super::SubscriptionOverflowPolicy;
 
 pub const FRAME_REQUEST: u8 = 1;
 pub const FRAME_DATA: u8 = 2;

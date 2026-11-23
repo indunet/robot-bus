@@ -12,30 +12,7 @@
 
 use crate::zmq_helpers::HighWaterMark;
 
-/// Overflow policy for a WebSocket subscription's pending server messages.
-/// Does not recall messages already written to the network or guarantee delivery.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, serde::Serialize)]
-#[serde(rename_all = "snake_case")]
-#[repr(u8)]
-pub enum SubscriptionOverflowPolicy {
-    /// Compatibility for explicitly requested wire policy 0.
-    DropNewest = 0,
-    #[default]
-    DropOldest = 1,
-    /// Compatibility for wire policy 2; equivalent to KeepLast(1).
-    Latest = 2,
-}
-
-impl SubscriptionOverflowPolicy {
-    pub fn from_wire(value: u8) -> Option<Self> {
-        match value {
-            0 => Some(Self::DropNewest),
-            1 => Some(Self::DropOldest),
-            2 => Some(Self::Latest),
-            _ => None,
-        }
-    }
-}
+pub use crate::wire::SubscriptionOverflowPolicy;
 
 /// KeepLast(N) retains the newest N pending messages on WS subscriptions.
 /// Native ZMQ currently uses depth as HWM only; oldest-message replacement
@@ -84,7 +61,8 @@ const WS_SUBSCRIBE_QUEUE_MAX: usize = 1_048_576;
 /// Depth → bounded WebSocket subscription capacity.
 ///
 /// `qos_depth <= 0` keeps [`WS_SUBSCRIBE_QUEUE_DEFAULT`].
-pub(crate) fn ws_subscribe_queue_capacity(qos_depth: i32) -> usize {
+#[doc(hidden)]
+pub fn ws_subscribe_queue_capacity(qos_depth: i32) -> usize {
     if qos_depth <= 0 {
         WS_SUBSCRIBE_QUEUE_DEFAULT as usize
     } else {

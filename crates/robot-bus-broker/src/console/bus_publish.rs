@@ -5,9 +5,9 @@ use std::sync::Arc;
 
 use prost::Message;
 
-use crate::console_topics;
-use crate::message_bus::Publisher;
-use crate::robot_bus_interfaces::msg::v1::{
+use robot_bus::console_topics;
+use robot_bus::message_bus::Publisher;
+use robot_bus::robot_bus_interfaces::msg::v1::{
     ActionStats, ActionStatsList, BrokerStatus, ConsoleEvent, ServiceStats, ServiceStatsList,
     TopicStats, TopicStatsList, TopologyEdge, TopologyNode, TopologySnapshot,
 };

@@ -36,11 +36,11 @@ Linux Rust CI 使用真实 TCP、WebSocket、broker 和原生 worker 执行以�
 
 ```sh
 export TOKIO_WORKER_THREADS=2
-cargo test --no-default-features --features ws,console-api --test ws_reliability -- --nocapture --test-threads=1
-cargo test --no-default-features --features ws,console-api --test ws_reliability -- --ignored --nocapture --test-threads=1
+cargo test -p robot-bus-broker --no-default-features --features ws,console-api --test ws_reliability -- --nocapture --test-threads=1
+cargo test -p robot-bus-broker --no-default-features --features ws,console-api --test ws_reliability -- --ignored --nocapture --test-threads=1
 ```
 
-CI 在 `rust-reliability-evidence` 附件保存故障测试和长跑日志，长跑每个窗口留一条 JSON 记录。见[测试套件](../../tests/ws_reliability.rs)和 [CI 工作流](../../.github/workflows/ci.yml)。
+CI 在 `rust-reliability-evidence` 附件保存故障测试和长跑日志，长跑每个窗口留一条 JSON 记录。见[测试套件](../../crates/robot-bus-broker/tests/ws_reliability.rs)和 [CI 工作流](../../.github/workflows/ci.yml)。
 
 ## ROS2 桥：目标发行版与证据
 

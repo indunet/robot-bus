@@ -5,9 +5,14 @@ English | [中文](../zh/rust-api.md)
 `Cargo.toml`:
 
 ```toml
-robot-bus = "2.4.3"
-# Local: robot-bus = { path = "../robot-bus" }
-# WebSocket RPC server (`ws` feature) is on by default; to disable: robot-bus = { version = "2.4.3", default-features = false }
+robot-bus = "3.0.0"
+robot-bus-broker = "3.0.0"
+# Local:
+# robot-bus = { path = "../crates/robot-bus" }
+# robot-bus-broker = { path = "../crates/robot-bus-broker" }
+# Client-only programs do not depend on robot-bus-broker.
+# The WebSocket client is the `ws` feature of robot-bus and is off by default.
+# The WebSocket server, console, and tank demo live in robot-bus-broker and are on by default.
 ```
 
 ## Broker startup
@@ -15,7 +20,7 @@ robot-bus = "2.4.3"
 **Prefer starting the broker from your program** (`RobotBusBroker::start`) so it shares a process with the application. The CLI is for demos, multi-process examples, or a standalone long-running broker. By default one startup brings up **message / service / action** buses; each TCP bind defaults to `…:0` (OS assigns a free port), plus **API** (WebSocket RPC `/ws-rpc` / `GET /api/v1/discover` / console http), default `0.0.0.0:15560`.
 
 ```rust
-use robot_bus::{RobotBusBroker, RobotBusConfig};
+use robot_bus_broker::{RobotBusBroker, RobotBusConfig};
 
 let broker = RobotBusBroker::start(RobotBusConfig::default())?;
 // Default endpoints in the table below; set RobotBusConfig fields when you need different ports / addresses
@@ -25,8 +30,8 @@ broker.stop()?;
 Use the CLI when you need a standalone process:
 
 ```bash
-cargo run --bin robot_bus_broker
-# See options: cargo run --bin robot_bus_broker -- --help
+cargo run -p robot-bus-broker --bin robot_bus_broker
+# See options: cargo run -p robot-bus-broker --bin robot_bus_broker -- --help
 # TCP only: add --tcp-only
 # API port: --api-listen 0.0.0.0:15560 (alias --console-listen)
 # Externally reachable host: --advertise-host HOST
@@ -68,7 +73,7 @@ Or in two steps: `discovery::wait(opts)?` → `ann.apply(NodeOptions::ws())?`.
 
 UDP multicast discovery has been removed.
 
-`Node::new` / `Node::tcp` do **not** block on the broker. Construction never fails if the broker is down; the session retries HTTP discover in the background. Use [`ConnectionState`](../../src/runtime/session.rs) and `wait_for_broker`:
+`Node::new` / `Node::tcp` do **not** block on the broker. Construction never fails if the broker is down; the session retries HTTP discover in the background. Use [`ConnectionState`](../../crates/robot-bus/src/runtime/session.rs) and `wait_for_broker`:
 
 ```rust
 use std::time::Duration;
@@ -85,10 +90,11 @@ node.add_on_connection_event(|old, new, reason| {
 
 `spin` / `start` keep retrying after a broker restart. `create_*` waits a few seconds for discover, then returns an error that names the current state. WebSocket nodes share this session contract; Connected means the `/ws-rpc` socket is up.
 
-**Same-process inproc:** ZeroMQ `inproc://` is context-local. An embedded broker and Node must share the same [`Context`](../../src/runtime/context.rs):
+**Same-process inproc:** ZeroMQ `inproc://` is context-local. An embedded broker and Node must share the same [`Context`](../../crates/robot-bus/src/runtime/context.rs):
 
 ```rust
-use robot_bus::{Context, Node, RobotBusBroker, RobotBusConfig};
+use robot_bus::{Context, Node};
+use robot_bus_broker::{RobotBusBroker, RobotBusConfig};
 
 let ctx = Context::new();
 let broker = RobotBusBroker::start_with_context(&ctx, RobotBusConfig::default())?;
@@ -395,7 +401,8 @@ No need to run the `robot_bus_broker` binary separately; fill bind addresses fro
 
 ```rust
 use std::sync::Arc;
-use robot_bus::{Node, NodeOptions, RobotBusBroker, RobotBusConfig};
+use robot_bus::{Node, NodeOptions};
+use robot_bus_broker::{RobotBusBroker, RobotBusConfig};
 
 fn main() -> anyhow::Result<()> {
     let broker = RobotBusBroker::start(RobotBusConfig::default())?;
@@ -493,7 +500,7 @@ Under the hood this is multiplexed WebSocket RPC (V3 opcodes: Subscribe / Publis
 
 ## WebSocket RPC server
 
-The Rust WebSocket module is `robot_bus::ws`. Broker listen options use `robot_bus::WsConfig`; standalone server setup uses `robot_bus::ws::WsServerConfig`. Request handling types are `WsMessageService`, `WsServiceHandler`, and `WsActionHandler`. When updating existing Rust integrations, update imports and type names to these names. The `/ws-rpc` endpoint, frame format, `ws` feature, and client APIs are unchanged.
+The Rust WebSocket module is `robot_bus::ws`. Broker listen options use `robot_bus_broker::WsConfig`; standalone server setup uses `robot_bus_broker::ws::WsServerConfig`. Request handling types are `WsMessageService`, `WsServiceHandler`, and `WsActionHandler`. When updating existing Rust integrations, update imports and type names to these names. The `/ws-rpc` endpoint, frame format, `ws` feature, and client APIs are unchanged.
 
 Started together by `RobotBusBroker` / `robot_bus_broker` (feature `ws`, on by default). Native and browser clients share **`/ws-rpc`** on the API port (default `0.0.0.0:15560`). **Breaking:** V3 framing; V2 method-string + `TopicMessage` envelopes are not accepted.
 

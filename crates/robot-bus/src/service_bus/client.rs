@@ -141,7 +141,8 @@ impl ServiceClient {
     }
 
     /// Share one deadline across server queuing, socket locking, send and receive.
-    pub(crate) fn call_with_deadline(
+    #[doc(hidden)]
+    pub fn call_with_deadline(
         &self,
         service_name: &str,
         body: &[u8],

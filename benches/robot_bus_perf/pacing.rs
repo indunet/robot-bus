@@ -478,7 +478,8 @@ mod tests {
     fn websocket_backlog_does_not_inflate_the_next_trial() {
         use std::sync::Arc;
 
-        use robot_bus::{HighWaterMark, Node, Publisher, RobotBusBroker};
+        use robot_bus::{HighWaterMark, Node, Publisher};
+use robot_bus_broker::{RobotBusBroker};
 
         let _guard = crate::support::lock_broker();
         let mut config = crate::support::perf_broker_config();

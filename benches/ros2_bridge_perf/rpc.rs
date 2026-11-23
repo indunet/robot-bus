@@ -9,7 +9,7 @@ use std::time::{Duration, Instant};
 use prost::Message as ProstMessage;
 use rclrs::IntoPrimitiveOptions;
 use robot_bus::example_interfaces::action::v1::{FibonacciGoal, FibonacciResult};
-use robot_bus::ros2_bridge::vendor::std_srvs::srv as ros_std_srvs;
+use robot_bus_ros2::vendor::std_srvs::srv as ros_std_srvs;
 use robot_bus::std_srvs::srv::v1::{TriggerRequest, TriggerResponse};
 use robot_bus::{Context, Node, NodeOptions};
 

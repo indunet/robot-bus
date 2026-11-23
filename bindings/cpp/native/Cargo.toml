@@ -2,7 +2,7 @@
 
 [package]
 name = "robot-bus-cpp"
-version = "2.4.3"
+version = "3.0.0"
 edition = "2024"
 publish = false
 license = "Apache-2.0"
@@ -14,14 +14,15 @@ path = "src/lib.rs"
 
 [features]
 default = []
-# Links system ROS 2 (rcl via rclrs). Build only with a sourced Humble/Jazzy env.
-ros2 = ["robot-bus/ros2", "dep:rclrs"]
+# Links the Rust ROS 2 bridge. Build only with a sourced Humble/Jazzy env.
+ros2 = ["dep:robot-bus-ros2"]
 
 [dependencies]
 anyhow = "1"
 prost = "0.14"
-robot-bus = { path = "../../..", default-features = false, features = ["ws", "console", "demo-tank"] }
-rclrs = { version = "0.8", optional = true }
+robot-bus = { path = "../../../crates/robot-bus", default-features = false, features = ["ws"] }
+robot-bus-broker = { path = "../../../crates/robot-bus-broker", default-features = false, features = ["ws", "console", "demo-tank"] }
+robot-bus-ros2 = { path = "../../../crates/robot-bus-ros2", optional = true }
 uuid = { version = "1", features = ["v4"] }
 
 [profile.release]

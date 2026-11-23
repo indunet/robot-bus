@@ -4,7 +4,7 @@ use std::os::raw::{c_char, c_int};
 use std::path::Path;
 use std::ptr;
 
-use robot_bus::broker::{
+use robot_bus_broker::broker::{
     RobotBusBroker as RustRobotBusBroker, RobotBusConfig, apply_federation_opts,
 };
 
@@ -170,7 +170,7 @@ fn parse_broker_config(opts: *const RobotBusBrokerOptions) -> Result<RobotBusCon
         }
     }
     let peers = cstr_array(o.peers, o.peer_count)?;
-    if let Err(e) = robot_bus::apply_api_peers(&mut config, &peers) {
+    if let Err(e) = robot_bus_broker::apply_api_peers(&mut config, &peers) {
         set_error(e.to_string());
         return Err(());
     }

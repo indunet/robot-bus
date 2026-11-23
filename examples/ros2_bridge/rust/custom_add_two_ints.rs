@@ -11,7 +11,7 @@
 //!
 //! ```bash
 //! source /opt/ros/humble/setup.bash
-//! cargo run --example ros2_bridge_custom_add_two_ints --features ros2
+//! cargo run -p robot-bus-ros2 --example ros2_bridge_custom_add_two_ints
 //!
 //! ros2 service call /examples/add_two_ints example_interfaces/srv/AddTwoInts "{a: 2, b: 40}"
 //! ```
@@ -23,7 +23,7 @@ use std::{sync::Arc, time::Duration};
 
 use prost::Message as ProstMessage;
 use robot_bus::Node;
-use robot_bus::ros2_bridge::{Ros2Bridge, TopicQos, TypedServiceMapper};
+use robot_bus_ros2::{Ros2Bridge, TopicQos, TypedServiceMapper};
 use ros_env::example_interfaces::srv as ros_srv;
 
 use my_pkg::{AddTwoIntsRequest, AddTwoIntsResponse};

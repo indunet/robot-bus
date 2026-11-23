@@ -37,7 +37,9 @@ pip install robot-bus
 * Rust
 
 ```toml
-robot-bus = "2.4.3"
+robot-bus = "3.0.0"
+# 同进程嵌入 broker：
+# robot-bus-broker = "3.0.0"
 ```
 
 * npm
@@ -52,20 +54,20 @@ npm install robot-bus
 <dependency>
     <groupId>org.indunet</groupId>
     <artifactId>robot-bus</artifactId>
-    <version>2.4.3</version>
+    <version>3.0.0</version>
 </dependency>
 ```
 
 * Gradle（Android）
 
 ```kotlin
-implementation("org.indunet:robot-bus-android:2.4.3")
+implementation("org.indunet:robot-bus-android:3.0.0")
 ```
 
 * C++（[GitHub Releases](https://github.com/indunet/robot-bus/releases) DEB / MSI / 预编译 SDK 压缩包）
 
 ```bash
-sudo apt install ./robot-bus_2.4.3_linux_amd64.deb
+sudo apt install ./robot-bus_3.0.0_linux_amd64.deb
 ```
 
 CMake 工程可以拉取预编译 SDK，而不必安装系统包。见 [C++ API — 预编译 SDK 压缩包](docs/zh/cpp-api.md#预编译-sdk-压缩包cmake-fetchcontent)。

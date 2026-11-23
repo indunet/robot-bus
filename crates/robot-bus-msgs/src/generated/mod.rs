@@ -1,4 +1,4 @@
-//! Generated ROS 2–style protobuf message and service types from [`proto/`](../../proto).
+//! Generated ROS 2–style protobuf message and service types from [`proto/`](../../../../proto).
 //!
 //! On-disk stubs mirror C++/Python: `generated/<pkg>/{msg|srv|action}/v1/<stem>.rs`
 //! (gitignored; one file per `.proto`). Run `just gen-rust` before building.

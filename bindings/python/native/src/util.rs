@@ -6,11 +6,11 @@ use pyo3::exceptions::PyRuntimeError;
 use pyo3::prelude::*;
 use pyo3::types::PyBytes;
 
-use crate::action_bus::ActionKind;
-use crate::discovery::{DiscoverOpts as RustDiscoverOpts, wait as discover_wait};
-use crate::errors::BusError;
-use crate::runtime::{NodeOptions as RustNodeOptions, Parameter, ParameterValue};
-use crate::transports;
+use robot_bus::action_bus::ActionKind;
+use robot_bus::discovery::{DiscoverOpts as RustDiscoverOpts, wait as discover_wait};
+use robot_bus::errors::BusError;
+use robot_bus::runtime::{NodeOptions as RustNodeOptions, Parameter, ParameterValue};
+use robot_bus::transports;
 
 pub(crate) fn bus_err(err: BusError) -> PyErr {
     PyRuntimeError::new_err(err.to_string())
@@ -77,7 +77,7 @@ pub(crate) fn map_endpoint_err(err: String) -> PyErr {
 
 pub(crate) fn action_message_to_py(
     py: Python<'_>,
-    msg: crate::action_bus::ActionMessage,
+    msg: robot_bus::action_bus::ActionMessage,
 ) -> PyResult<PyObject> {
     let dict = pyo3::types::PyDict::new(py);
     dict.set_item(
@@ -105,7 +105,7 @@ pub(crate) fn py_node_options(
     service_backend: Option<String>,
     action_backend: Option<String>,
     action_frontend: Option<String>,
-) -> PyResult<crate::runtime::NodeOptions> {
+) -> PyResult<robot_bus::runtime::NodeOptions> {
     if transport == "ws" {
         #[cfg(feature = "ws")]
         {
@@ -127,7 +127,7 @@ pub(crate) fn py_node_options(
             "ws_url is only valid when transport=\"ws\"",
         ));
     }
-    Ok(crate::runtime::NodeOptions {
+    Ok(robot_bus::runtime::NodeOptions {
         host: host.into(),
         transport: transport.into(),
         ws_url: None,

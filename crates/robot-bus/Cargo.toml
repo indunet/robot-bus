@@ -1,0 +1,68 @@
+[package]
+name = "robot-bus"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+description = "ZeroMQ participant SDK: Node, executors, and topic / service / action clients"
+readme = "README.md"
+autobenches = false
+autotests = false
+include = ["/Cargo.toml", "/LICENSE", "/README.md", "/build.rs", "/src/**"]
+
+[lib]
+name = "robot_bus"
+crate-type = ["rlib"]
+
+[features]
+default = []
+# WebSocket client runtime. The server lives in robot-bus-broker.
+ws = ["dep:tokio", "dep:tokio-tungstenite", "dep:futures-util"]
+
+[dependencies]
+robot-bus-msgs = { path = "../robot-bus-msgs", version = "3.0.0" }
+anyhow = "1"
+futures-util = { version = "0.3", optional = true, default-features = false, features = ["sink"] }
+log = "0.4"
+prost = "0.14"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+serde_yaml = "0.9"
+socket2 = { version = "0.6.5", features = ["all"] }
+thiserror = "2"
+tokio = { version = "1", optional = true, features = ["rt-multi-thread", "macros", "net", "sync", "time", "io-util"] }
+tokio-tungstenite = { version = "0.29", optional = true }
+ureq = { version = "2", default-features = false, features = ["json"] }
+uuid = { version = "1", features = ["v4"] }
+zmq = "0.10"
+
+[dev-dependencies]
+tempfile = "3"
+
+[[example]]
+name = "topic_imu_listener"
+path = "../../examples/topic_imu/rust/listener.rs"
+
+[[example]]
+name = "topic_imu_talker"
+path = "../../examples/topic_imu/rust/talker.rs"
+
+[[example]]
+name = "service_set_bool_server"
+path = "../../examples/service_set_bool/rust/server.rs"
+
+[[example]]
+name = "service_set_bool_client"
+path = "../../examples/service_set_bool/rust/client.rs"
+
+[[example]]
+name = "action_fibonacci_server"
+path = "../../examples/action_fibonacci/rust/server.rs"
+
+[[example]]
+name = "action_fibonacci_client"
+path = "../../examples/action_fibonacci/rust/client.rs"
+
+[package.metadata.docs.rs]
+features = ["ws"]

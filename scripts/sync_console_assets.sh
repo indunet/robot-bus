@@ -3,7 +3,7 @@
 set -euo pipefail
 root="$(cd "$(dirname "$0")/.." && pwd)"
 src="$root/console/out"
-dst="$root/assets/console"
+dst="$root/crates/robot-bus-broker/assets/console"
 
 if [[ ! -f "$src/index.html" ]]; then
   echo "error: $src/index.html not found — run: ./scripts/build_console.sh" >&2
@@ -13,4 +13,4 @@ fi
 rm -rf "$dst"
 mkdir -p "$dst"
 cp -R "$src"/. "$dst"/
-echo "synced console assets → assets/console/ ($(find "$dst" -type f | wc -l | tr -d ' ') files)"
+echo "synced console assets → crates/robot-bus-broker/assets/console/ ($(find "$dst" -type f | wc -l | tr -d ' ') files)"

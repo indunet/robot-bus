@@ -17,11 +17,18 @@ pub use config::DEFAULT_DISCOVERY_PORT;
 #[allow(deprecated)]
 pub use config::{
     DEFAULT_API_DISCOVER_PATH, DEFAULT_DISCOVERY_TIMEOUT, DEFAULT_MULTICAST_ADDR,
-    DEFAULT_WS_RPC_PATH, DiscoverOpts, DiscoveryConfig, MAGIC, SCHEMA_VERSION, with_ws_rpc_path,
+    DEFAULT_WS_RPC_PATH, DiscoverOpts, MAGIC, SCHEMA_VERSION, with_ws_rpc_path,
 };
-pub use http::{DiscoverResponse, fetch_discover, normalize_api_base, rewrite_bind_host};
+#[doc(hidden)]
+pub use config::DiscoveryConfig;
+pub use http::{DiscoverResponse, fetch_discover};
+#[doc(hidden)]
+pub use http::{normalize_api_base, rewrite_bind_host};
+#[doc(hidden)]
 pub use net::{infer_advertise_host, resolve_advertise_host, tcp_port_from_bind};
-pub use packet::{BrokerAnnouncement, decode_announce, encode_announce, try_parse_datagram};
+pub use packet::BrokerAnnouncement;
+#[doc(hidden)]
+pub use packet::{decode_announce, encode_announce, try_parse_datagram};
 
 use crate::errors::{BusError, Result};
 use crate::runtime::NodeOptions;

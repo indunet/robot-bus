@@ -1,7 +1,7 @@
 //! Generate on-disk (gitignored) prost / tonic stubs for robot-bus.
 //!
 //! Layout mirrors C++/Python (one file per `.proto`):
-//!   `src/generated/<pkg>/{msg|srv|action}/v1/<stem>.rs`
+//!   `crates/robot-bus-msgs/src/generated/<pkg>/{msg|srv|action}/v1/<stem>.rs`
 //!
 //! Prost still compiles by package; we then split the package module into
 //! per-proto files and `include!` them back into one Rust module so
@@ -26,7 +26,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     env::set_current_dir(&repo_root)?;
 
     let proto_root = PathBuf::from("proto");
-    let out_root = PathBuf::from("src/generated");
+    let out_root = PathBuf::from("crates/robot-bus-msgs/src/generated");
     fs::create_dir_all(&out_root)?;
     clear_generated_tree(&out_root)?;
 

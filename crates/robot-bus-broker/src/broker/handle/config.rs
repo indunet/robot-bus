@@ -5,7 +5,7 @@ use std::net::SocketAddr;
 use super::super::action_bus::ActionBusConfig;
 use super::super::message_bus::BusConfig;
 use super::super::service_bus::ServiceBusConfig;
-use crate::discovery::DiscoveryConfig;
+use robot_bus::discovery::DiscoveryConfig;
 
 /// WebSocket RPC listen options (feature `ws`, enabled by default).
 #[cfg(feature = "ws")]

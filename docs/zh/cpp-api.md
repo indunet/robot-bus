@@ -38,14 +38,14 @@ CMake设置 `CMAKE_CXX_STANDARD 17`。自有应用用更高标准（如 `-DCMAKE
 
 ```bash
 # 核心 SDK（无 ROS bridge）
-sudo apt install ./robot-bus_2.4.3_linux_amd64.deb
+sudo apt install ./robot-bus_3.0.0_linux_amd64.deb
 
 # 或 ROS2 bridge变体（Humble示例）— 需已安装 Humble
-sudo apt install ./robot-bus-ros2-humble_2.4.3_linux_amd64.deb
+sudo apt install ./robot-bus-ros2-humble_3.0.0_linux_amd64.deb
 source /opt/ros/humble/setup.bash
 
 # macOS Apple Silicon（仅核心包）
-sudo installer -pkg robot-bus_2.4.3_macos_arm64.pkg -target /
+sudo installer -pkg robot-bus_3.0.0_macos_arm64.pkg -target /
 # 安装于 /usr/local（{bin,lib,include}）
 
 # 或从源码（开发）
@@ -94,7 +94,7 @@ just cpp-dev-ros2
 
 ### 最小 CMakeLists.txt
 
-下面的哈希是 2.4.3 Linux amd64 核心包的。换版本或换平台时，用对应 `.sha256` 附件的第一段。
+下面的哈希是 3.0.0 Linux amd64 核心包的。换版本或换平台时，用对应 `.sha256` 附件的第一段。
 
 ```cmake
 cmake_minimum_required(VERSION 3.22)
@@ -107,7 +107,7 @@ endif()
 include(FetchContent)
 
 FetchContent_Declare(robot_bus_sdk
-  URL "https://github.com/indunet/robot-bus/releases/download/v2.4.3/robot-bus-sdk_2.4.3_linux_amd64.tar.gz"
+  URL "https://github.com/indunet/robot-bus/releases/download/v3.0.0/robot-bus-sdk_3.0.0_linux_amd64.tar.gz"
   URL_HASH "SHA256=e375ec6e52cf69b49ece4db6b51336574d9f7cf5908718d12a9b3e0e04ebeb94")
 FetchContent_MakeAvailable(robot_bus_sdk)
 
@@ -159,7 +159,7 @@ build/_deps/robot_bus_sdk-src/
 多个工程共用一份，或离线使用：
 
 ```bash
-cmake -S . -B build -DFETCHCONTENT_SOURCE_DIR_ROBOT_BUS_SDK=/opt/robot-bus-sdk-2.4.3
+cmake -S . -B build -DFETCHCONTENT_SOURCE_DIR_ROBOT_BUS_SDK=/opt/robot-bus-sdk-3.0.0
 ```
 
 这个变量指向解压后的根目录（里面有 `lib/cmake/robot_bus` 的那一层）。
@@ -176,7 +176,7 @@ project(my_robot LANGUAGES CXX)
 set(CMAKE_CXX_STANDARD 17)
 
 include(cmake/FetchRobotBus.cmake)
-robot_bus_fetch_sdk(VERSION 2.4.3
+robot_bus_fetch_sdk(VERSION 3.0.0
   SHA256 e375ec6e52cf69b49ece4db6b51336574d9f7cf5908718d12a9b3e0e04ebeb94)
 
 add_executable(my_robot main.cpp)
@@ -191,7 +191,7 @@ robot_bus_copy_runtime_libs(my_robot)
 ```bash
 cmake -S . -B build -DROBOT_BUS_SDK_BASE_URL=https://mirror.example/robot-bus
 # 或者不改 URL，直接用已经解压的目录：
-cmake -S . -B build -DFETCHCONTENT_SOURCE_DIR_ROBOT_BUS_SDK=/opt/robot-bus-sdk-2.4.3
+cmake -S . -B build -DFETCHCONTENT_SOURCE_DIR_ROBOT_BUS_SDK=/opt/robot-bus-sdk-3.0.0
 ```
 
 `ROBOT_BUS_SDK_BASE_URL` 也可以放在环境变量里。该地址下的文件名与 GitHub Release 上的相同。
@@ -204,7 +204,7 @@ Windows 加载器在 `.exe` 旁边找 DLL。每次构建后用 `robot_bus_copy_r
 
 ### 带 ROS 2
 
-配置前和运行前都要 source 对应发行版。`ROS2` 取 `humble` 或 `jazzy`，并链接 `robot_bus::ros2_bridge`。压缩包不含 ROS 本身。无 ROS 的工程不要传 `ROS2`，那会去下载核心包。
+配置前和运行前都要 source 对应发行版。`ROS2` 取 `humble` 或 `jazzy`，并链接 `robot_bus_ros2`。压缩包不含 ROS 本身。无 ROS 的工程不要传 `ROS2`，那会去下载核心包。
 
 Humble 的 Linux amd64 哈希如下。Jazzy 或其他架构改用该附件旁边的 `.sha256`。系统里要能 `find_package` 到桥用到的 ROS 包：`rclcpp`、`rclcpp_action`、`std_msgs`、`sensor_msgs`、`geometry_msgs`、`nav_msgs`、`std_srvs`、`example_interfaces`、`builtin_interfaces`、`action_msgs`、`diagnostic_msgs`、`shape_msgs`、`stereo_msgs`、`tf2_msgs`、`trajectory_msgs`、`unique_identifier_msgs`、`visualization_msgs`。`ros-humble-desktop` 已经包含这些；只有 `ros-base` 时再安装对应的 `ros-humble-*` 包。
 
@@ -214,14 +214,14 @@ project(my_robot LANGUAGES CXX)
 set(CMAKE_CXX_STANDARD 17)
 
 include(cmake/FetchRobotBus.cmake)
-robot_bus_fetch_sdk(VERSION 2.4.3 ROS2 humble
+robot_bus_fetch_sdk(VERSION 3.0.0 ROS2 humble
   SHA256 65b5c0eead9331b3615c4145c733bf0fae6051d76f2e1197bed86fc03f04867e)
 
 add_executable(my_robot main.cpp)
 target_link_libraries(my_robot PRIVATE
   robot_bus::robot_bus
   robot_bus::msgs
-  robot_bus::ros2_bridge)
+  robot_bus_ros2)
 robot_bus_copy_runtime_libs(my_robot)
 ```
 
@@ -247,7 +247,7 @@ cmake --build build
 ./build/my_robot
 ```
 
-Jazzy 把 `ROS2 humble` 换成 `ROS2 jazzy`，source `/opt/ros/jazzy/setup.bash`，哈希换成 `robot-bus-sdk-ros2-jazzy_2.4.3_linux_<arch>.tar.gz.sha256` 里的值。Jazzy 压缩包在 Ubuntu 24.04 上构建。
+Jazzy 把 `ROS2 humble` 换成 `ROS2 jazzy`，source `/opt/ros/jazzy/setup.bash`，哈希换成 `robot-bus-sdk-ros2-jazzy_3.0.0_linux_<arch>.tar.gz.sha256` 里的值。Jazzy 压缩包在 Ubuntu 24.04 上构建。
 
 ### 限制
 

@@ -52,7 +52,8 @@ Convenience (private Context, fine for single-node tcp/ipc): `Node::new("pilot")
 Same-process **inproc** requires a shared Context:
 
 ```rust
-use robot_bus::{Context, Node, RobotBusBroker, RobotBusConfig};
+use robot_bus::{Context, Node};
+use robot_bus_broker::{RobotBusBroker, RobotBusConfig};
 
 fn main() -> anyhow::Result<()> {
     let ctx = Context::new();

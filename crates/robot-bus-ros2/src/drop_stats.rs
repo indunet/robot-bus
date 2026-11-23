@@ -1,6 +1,6 @@
 //! Per-bridge drop counters and per-route health (console snapshots / idle).
 
-use crate::errors::BusError;
+use robot_bus::errors::BusError;
 use std::sync::Mutex;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::time::{SystemTime, UNIX_EPOCH};

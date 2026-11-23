@@ -1,6 +1,6 @@
 //! Bounded, replaceable pending messages for one WebSocket subscription.
 use super::{rpc_status::RpcStatus, sub_demux::BusMsg};
-use crate::runtime::{SubscriptionOverflowPolicy, ws_subscribe_queue_capacity};
+use robot_bus::runtime::{SubscriptionOverflowPolicy, ws_subscribe_queue_capacity};
 use serde::Serialize;
 use std::collections::VecDeque;
 use std::sync::atomic::{AtomicU64, Ordering};

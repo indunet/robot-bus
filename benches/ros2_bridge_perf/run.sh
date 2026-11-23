@@ -47,7 +47,7 @@ run_local() {
   set -u
   cd "${root}"
   RUSTFLAGS="${RUSTFLAGS:---cfg ros_distro=\"humble\"}" \
-    cargo run --release --bin ros2_bridge_perf --features ros2
+    cargo run --release -p robot-bus-ros2-perf --bin ros2_bridge_perf
 }
 
 if [[ "${LOCAL}" -eq 1 ]]; then

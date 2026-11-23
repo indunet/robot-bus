@@ -35,7 +35,8 @@ impl Context {
     }
 
     /// Clone of the underlying ZeroMQ context.
-    pub(crate) fn clone_zmq(&self) -> ZmqContext {
+    #[doc(hidden)]
+    pub fn clone_zmq(&self) -> ZmqContext {
         self.inner.clone()
     }
 }

@@ -1,0 +1,15 @@
+[package]
+name = "robot-bus-msgs"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+description = "Protobuf messages and service/action type markers for robot-bus"
+readme = "README.md"
+publish = true
+include = ["/Cargo.toml", "/LICENSE", "/src/**"]
+
+[dependencies]
+prost = "0.14"
+prost-types = "0.14"

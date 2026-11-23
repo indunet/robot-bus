@@ -33,7 +33,7 @@ Shared names:
 |--|------|--------|-----|
 | Build | `cargo build --examples` | `just python-dev` (or `pip install robot-bus`) | `just examples-cpp` |
 | Run | `cargo run --example <name>` | `python3 examples/.../*.py` | binaries under `examples/build/` |
-| ROS 2 bridge | `--features ros2` | source ROS + `rclpy` | `just examples-cpp-ros2` |
+| ROS 2 bridge | `robot-bus-ros2` crate | source ROS + `rclpy` | `just examples-cpp-ros2` |
 
 C++ binaries after `just examples-cpp` (ROS bridge binaries need `just examples-cpp-ros2`):
 
@@ -113,7 +113,7 @@ A **custom** bridge needs both sides in-tree:
 ```bash
 # Terminal 2 — pick one language
 python3 examples/ros2_bridge/python/builtin.py
-# cargo run --example ros2_bridge_builtin --features ros2
+# cargo run -p robot-bus-ros2 --example ros2_bridge_builtin
 # ./examples/build/ros2_bridge_builtin
 
 # Terminal 3 — exercise from ROS (bus servers must exist for service/action)
@@ -130,7 +130,7 @@ Definitions:
 ```bash
 # Terminal 2
 python3 examples/ros2_bridge/python/custom_add_two_ints.py
-# cargo run --example ros2_bridge_custom_add_two_ints --features ros2
+# cargo run -p robot-bus-ros2 --example ros2_bridge_custom_add_two_ints
 # ./examples/build/ros2_bridge_custom_add_two_ints
 
 # Terminal 3 (smoke uses system example_interfaces; same fields as my_pkg .srv)

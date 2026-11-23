@@ -38,25 +38,25 @@ gen-java:
 gen-android:
 	ROBOT_BUS_JAVA_OUT=bindings/android/generated python3 scripts/generate_java_msgs.py
 
-# Generate Rust prost/tonic stubs under src/generated/<pkg>/…/v1/<stem>.rs (gitignored)
+# Generate Rust prost/tonic stubs under crates/robot-bus-msgs/src/generated/ (gitignored)
 gen-rust:
 	python3 scripts/generate_rust_msgs.py
 
 # Native ZMQ SDK, without WS, web assets, or demo
 build-sdk: gen-rust
-	cargo build --release --no-default-features --lib
+	cargo build --release -p robot-bus
 
 # WebSocket communication without the monitoring control plane or web assets
 build-ws: gen-rust
-	cargo build --release --no-default-features --features ws --bin robot_bus_broker
+	cargo build --release -p robot-bus-broker --no-default-features --features ws --bin robot_bus_broker
 
 # WS server and monitoring API, without web assets or demo
 build-monitoring: gen-rust
-	cargo build --release --no-default-features --features ws,console-api --bin robot_bus_broker
+	cargo build --release -p robot-bus-broker --no-default-features --features ws,console-api --bin robot_bus_broker
 
 # Full distribution including embedded console and tank demo
 build-full: gen-rust console
-	cargo build --release --bin robot_bus_broker
+	cargo build --release -p robot-bus-broker --bin robot_bus_broker
 
 # Typed ROS↔protobuf topic mappers (Rust + Python + C++)
 gen-topic-mappers:
@@ -67,17 +67,17 @@ gen-all: gen-rust proto gen-typescript gen-cpp gen-java gen-android
 
 # Build and install the Python binding into the active venv (includes Web console)
 python-dev: proto gen-rust
-	if [[ ! -f assets/console/index.html ]]; then just console; fi
+	if [[ ! -f crates/robot-bus-broker/assets/console/index.html ]]; then just console; fi
 	cd bindings/python && maturin develop --features extension-module,ws,console,demo-tank --no-default-features
 
 # Same as python-dev; Ros2Bridge is pure Python (rclpy). Source Humble/Jazzy first.
 python-dev-ros2: proto gen-rust
-	if [[ ! -f assets/console/index.html ]]; then just console; fi
+	if [[ ! -f crates/robot-bus-broker/assets/console/index.html ]]; then just console; fi
 	cd bindings/python && maturin develop --features extension-module,ws,console,demo-tank --no-default-features
 
 # Build TypeScript native addon + JS bundle (includes Web console)
 ts-dev: gen-typescript gen-rust
-	if [[ ! -f assets/console/index.html ]]; then just console; fi
+	if [[ ! -f crates/robot-bus-broker/assets/console/index.html ]]; then just console; fi
 	cd bindings/typescript && npm install && npm run build:native && npm run build:ts
 
 # Build C++ FFI + msgs library + tests
@@ -141,7 +141,8 @@ test-cpp:
 # --- examples/ (see examples/README.md) ---
 
 examples-rust: gen-rust
-	cargo build --examples
+	cargo build -p robot-bus --examples
+	cargo build -p robot-bus-broker --examples
 
 examples-python:
 	#!/usr/bin/env bash
@@ -184,7 +185,7 @@ examples-topic:
 
 examples: examples-rust examples-python examples-cpp examples-topic
 
-# Build console UI into assets/console/ for rust-embed (gitignored; run before cargo with `console`)
+# Build console UI into crates/robot-bus-broker/assets/console/ for rust-embed (gitignored)
 console:
 	./scripts/build_console.sh
 
@@ -193,13 +194,18 @@ tank:
 	@echo "tank runs inside robot_bus_broker when a console TANK session is open."
 	@echo "Start the broker, then open the sidebar TANK window (or /tank)."
 
-# Rust tests (default features)
+# Rust tests. The SDK is tested with and without the WebSocket client.
+# The broker keeps its default (ws + console + tank).
 test-rust: gen-rust
-	cargo test
+	cargo test -p robot-bus-msgs
+	cargo test -p robot-bus
+	cargo test -p robot-bus --features ws
+	cargo test -p robot-bus-broker
 
-# Rust tests without default features
+# Broker without ws, console, or the tank demo. SDK has no default features.
 test-rust-minimal: gen-rust
-	cargo test --no-default-features
+	cargo test -p robot-bus
+	cargo test -p robot-bus-broker --no-default-features
 
 # Pure-Python message / typed-API smoke tests (no native extension required)
 test-python: proto
@@ -223,7 +229,7 @@ test-python-native:
 test-interop: gen-rust console
 	#!/usr/bin/env bash
 	set -euo pipefail
-	cargo build --quiet --example robot_bus_interop
+	cargo build --quiet -p robot-bus-broker --example robot_bus_interop
 	cargo build --release --manifest-path bindings/cpp/native/Cargo.toml
 	python3 scripts/generate_cpp_msgs.py
 	cmake -S bindings/cpp -B bindings/cpp/build -DCMAKE_BUILD_TYPE=Release \
@@ -261,11 +267,11 @@ ci: gen-all
 
 # Performance harness (release); writes docs/zh/perf-report.md and docs/en/perf-report.md
 perf: gen-rust
-	cargo run --release --bin robot_bus_perf --features ws
+	cargo run --release -p robot-bus-perf --bin robot_bus_perf
 
 # Federation-only (two TCP brokers); same report files
 perf-federation: gen-rust
-	ROBOT_BUS_PERF_ONLY=federation cargo run --release --bin robot_bus_perf --features ws
+	ROBOT_BUS_PERF_ONLY=federation cargo run --release -p robot-bus-perf --bin robot_bus_perf
 
 # ROS 2 comparison benches (Docker container `ros2`); writes docs/{zh,en}/ros2-perf-report.md
 perf-ros2:

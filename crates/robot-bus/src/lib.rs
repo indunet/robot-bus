@@ -1,77 +1,51 @@
-//! ZeroMQ message bus: broker routing and participant SDK.
+//! ZeroMQ participant SDK: Node, executors, and topic / service / action clients.
+//!
+//! The broker, WebSocket server, console, and ROS 2 bridge live in separate crates
+//! (`robot-bus-broker`, `robot-bus-ros2`). Message types are re-exported from
+//! `robot-bus-msgs`.
 
+#[doc(hidden)]
 pub mod action_bus;
-pub mod broker;
+#[doc(hidden)]
 pub mod console_topics;
 pub mod discovery;
-// ROS-independent counters used by the ROS 2 bridge; compiled (and unit-tested) always.
-#[cfg_attr(not(feature = "ros2"), allow(dead_code))]
-mod drop_stats;
 pub mod errors;
-pub mod lazy_subscribe;
+#[doc(hidden)]
 pub mod message_bus;
 pub mod runtime;
+#[doc(hidden)]
 pub mod service_bus;
+#[doc(hidden)]
 pub mod shutdown;
-#[cfg(feature = "demo-tank")]
-pub mod tank;
+#[doc(hidden)]
 pub mod transports;
-pub mod typed;
+#[doc(hidden)]
+pub mod wire;
+#[doc(hidden)]
 pub mod worker_thread;
+#[doc(hidden)]
 pub mod zmq_helpers;
 
-// Keep packages under a private module so prost `super::…` paths resolve;
-// re-export at crate root as `robot_bus::sensor_msgs::…`.
-mod generated;
-
-pub use generated::{
-    ackermann_msgs, action, action_msgs, apriltag_msgs, builtin_interfaces, control_msgs,
-    diagnostic_msgs, example_interfaces, foxglove_msgs, geometry_msgs, lifecycle_msgs, map_msgs,
-    nav_msgs, nav2_msgs, robot_bus_interfaces, sensor_msgs, shape_msgs, std_msgs, std_srvs,
-    stereo_msgs, tf2_msgs, trajectory_msgs, unique_identifier_msgs, vision_msgs,
-    visualization_msgs,
+pub use robot_bus_msgs::{
+    Action, ActionOutcome, Service, ackermann_msgs, action, action_msgs, apriltag_msgs,
+    builtin_interfaces, control_msgs, diagnostic_msgs, example_interfaces, foxglove_msgs,
+    geometry_msgs, lifecycle_msgs, map_msgs, nav2_msgs, nav_msgs, robot_bus_interfaces,
+    sensor_msgs, shape_msgs, std_msgs, std_srvs, stereo_msgs, tf2_msgs, trajectory_msgs,
+    unique_identifier_msgs, vision_msgs, visualization_msgs,
 };
-pub use typed::{Action, ActionOutcome, Service};
+pub use robot_bus_msgs::typed;
 
-#[cfg(feature = "ws")]
-pub mod ws;
-
-#[cfg(feature = "console-api")]
-pub mod console;
-
-#[cfg(feature = "ros2")]
-pub mod ros2_bridge;
-
-#[cfg(feature = "extension-module")]
-mod python_api;
-
+#[doc(hidden)]
 pub use action_bus::{ActionClient, ActionKind, ActionMessage, ActionWorker};
-pub use broker::{
-    ActionPeer, DiscoveryConfig, FederationPeerEndpoints, MessagePeer, RobotBusBroker,
-    RobotBusConfig, ServicePeer, apply_api_peers, apply_federation_opts, parse_robot_bus_config,
-    resolve_peer_from_api, robot_bus_broker_help,
-};
 pub use discovery::{
     BrokerAnnouncement, DEFAULT_API_DISCOVER_PATH, DEFAULT_WS_RPC_PATH, DiscoverOpts,
     DiscoverResponse, MAGIC as DISCOVERY_MAGIC, SCHEMA_VERSION as DISCOVERY_SCHEMA_VERSION,
-    decode_announce, encode_announce, fetch_discover, wait as discover_wait, with_ws_rpc_path,
+    fetch_discover, wait as discover_wait, with_ws_rpc_path,
 };
-#[cfg(feature = "demo-tank")]
-pub use tank::{
-    CMD_VEL_TOPIC, MULTI_WAYPOINT_NAV_ACTION, POINT_NAV_ACTION, POSE_TOPIC, RESET_SERVICE,
-    TankEndpoints, TankHandle, TankManager, TankSession, TankStatus, WORLD_SIZE,
-};
-
 #[allow(deprecated)]
 pub use discovery::{DEFAULT_DISCOVERY_PORT, DEFAULT_MULTICAST_ADDR};
-
-#[cfg(feature = "ws")]
-pub use broker::WsConfig;
-
-#[cfg(feature = "console-api")]
-pub use broker::ConsoleBrokerConfig;
 pub use errors::{BusError, Result, parse_error_body};
-pub use lazy_subscribe::{CONSOLE_DETECT_TIMEOUT, should_enable_ros_subscription};
+#[doc(hidden)]
 pub use message_bus::{Publisher, Subscriber};
 pub use runtime::{
     ActionGoalContext, ActionGoalHandler, ActionGoalLiveHandler, CallbackGroup, CallbackGroupType,
@@ -83,7 +57,9 @@ pub use runtime::{
     SingleThreadedExecutor, SubscriptionHandle, SubscriptionOverflowPolicy, TimerCallback,
     TimerHandle, TopicPublisher, TopicPublisherRaw,
 };
+#[doc(hidden)]
 pub use service_bus::{ServiceClient, ServiceWorker};
+#[doc(hidden)]
 pub use transports::{
     BindAllOpts, DEFAULT_API_PORT, action_backend_endpoint, action_frontend_endpoint, bind_all,
     bind_tcp, format_endpoints, inproc_endpoint, ipc_endpoint, message_xpub_endpoint,

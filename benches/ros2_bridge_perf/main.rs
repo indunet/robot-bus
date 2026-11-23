@@ -18,11 +18,12 @@ fn main() {
     use std::time::Duration;
 
     use rclrs::{CreateBasicExecutor, SpinOptions};
-    use robot_bus::ros2_bridge::{
+    use robot_bus_ros2::{
         FibonacciActionMapper, Ros2Bridge, SensorMsgsImageMapper, StdMsgsStringMapper, TopicQos,
         TriggerServiceMapper,
     };
-    use robot_bus::{Context, RobotBusBroker};
+    use robot_bus::{Context};
+use robot_bus_broker::{RobotBusBroker};
 
     use config::MSG_HWM;
     use report::write_reports;

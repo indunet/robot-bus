@@ -8,7 +8,7 @@ use pyo3::exceptions::{PyRuntimeError, PyTimeoutError};
 use pyo3::prelude::*;
 use pyo3::types::PyBytes;
 
-use crate::runtime::{
+use robot_bus::runtime::{
     NodeActionClientRaw as RustNodeActionClient, NodeServiceClientRaw as RustNodeServiceClient,
     RawActionFeedbackCallback, RawGoalHandle as RustRawGoalHandle,
 };
@@ -145,7 +145,7 @@ impl PyNodeActionClient {
     ) -> PyResult<PyActionGoalHandle> {
         let timeout = timeout.map(Duration::from_secs_f64);
         let callback = feedback_callback.map(|callback| {
-            Arc::new(move |message: &crate::action_bus::ActionMessage| {
+            Arc::new(move |message: &robot_bus::action_bus::ActionMessage| {
                 Python::with_gil(|py| {
                     if let Err(err) = callback.call1(py, (PyBytes::new(py, &message.body),)) {
                         err.print(py);

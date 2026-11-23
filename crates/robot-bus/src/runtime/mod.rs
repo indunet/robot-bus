@@ -37,7 +37,8 @@ pub use node::{
     TopicPublisher, TopicPublisherRaw,
 };
 pub use parameters::{ListParametersResult, PARAMETER_DEPTH_RECURSIVE, Parameter, ParameterValue};
-pub(crate) use qos::ws_subscribe_queue_capacity;
+#[doc(hidden)]
+pub use qos::ws_subscribe_queue_capacity;
 pub use qos::{QOS_PROFILE_DEFAULT, QosProfile, SubscriptionOverflowPolicy};
 pub use queues::ActionMessageCallback;
 pub use registrations::{
@@ -46,4 +47,5 @@ pub use registrations::{
 pub use session::ConnectionState;
 pub use timers::{SubscriptionHandle, TimerCallback, TimerHandle};
 pub use worker_pool::QueueStats;
-pub(crate) use worker_pool::WorkerPool;
+#[doc(hidden)]
+pub use worker_pool::WorkerPool;

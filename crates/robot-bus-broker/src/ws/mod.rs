@@ -6,13 +6,14 @@
 
 pub mod action;
 pub mod message;
-pub mod rpc_status;
 pub mod server;
 pub mod service;
 pub mod sub_demux;
 pub mod subscription_queue;
 pub mod ws;
-pub mod ws_frame;
+
+pub use robot_bus::wire::rpc_status;
+pub use robot_bus::wire::ws_frame;
 
 pub use action::WsActionHandler;
 pub use message::WsMessageService;

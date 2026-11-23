@@ -37,7 +37,9 @@ pip install robot-bus
 * Rust
 
 ```toml
-robot-bus = "2.4.3"
+robot-bus = "3.0.0"
+# Embed a broker in the same process:
+# robot-bus-broker = "3.0.0"
 ```
 
 * npm
@@ -52,20 +54,20 @@ npm install robot-bus
 <dependency>
     <groupId>org.indunet</groupId>
     <artifactId>robot-bus</artifactId>
-    <version>2.4.3</version>
+    <version>3.0.0</version>
 </dependency>
 ```
 
 * Gradle (Android)
 
 ```kotlin
-implementation("org.indunet:robot-bus-android:2.4.3")
+implementation("org.indunet:robot-bus-android:3.0.0")
 ```
 
 * C++ ([GitHub Releases](https://github.com/indunet/robot-bus/releases) DEB / MSI / prebuilt SDK archive)
 
 ```bash
-sudo apt install ./robot-bus_2.4.3_linux_amd64.deb
+sudo apt install ./robot-bus_3.0.0_linux_amd64.deb
 ```
 
 CMake projects can fetch the prebuilt SDK instead of installing a package. See [C++ API — prebuilt SDK archive](docs/en/cpp-api.md#prebuilt-sdk-archive-cmake-fetchcontent).

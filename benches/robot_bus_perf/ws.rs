@@ -7,7 +7,8 @@ use std::time::{Duration, Instant};
 
 use crate::support::{LatencyStats, ScenarioResult};
 use robot_bus::worker_thread::WorkerThread;
-use robot_bus::{HighWaterMark, Node, Publisher, QosProfile, RobotBusBroker, Subscriber};
+use robot_bus::{HighWaterMark, Node, Publisher, QosProfile, Subscriber};
+use robot_bus_broker::{RobotBusBroker};
 
 use crate::pacing::{TrialReceiver, WARMUP, make_payload, measure_pubsub, msg_hwm, rpc_warmup};
 

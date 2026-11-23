@@ -1,0 +1,19 @@
+[package]
+name = "robot-bus-ros2-perf"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish = false
+description = "ROS 2 bridge performance harness"
+
+[[bin]]
+name = "ros2_bridge_perf"
+path = "main.rs"
+
+[dependencies]
+robot-bus = { path = "../../crates/robot-bus", default-features = false }
+robot-bus-broker = { path = "../../crates/robot-bus-broker", default-features = false, features = ["ws"] }
+robot-bus-ros2 = { path = "../../crates/robot-bus-ros2" }
+rclrs = "0.8"
+ros-env = "0.3"
+prost = "0.14"

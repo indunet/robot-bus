@@ -8,7 +8,8 @@ use std::time::{Duration, Instant};
 use crate::common::{BrokerLockGuard, ephemeral_robot_bus_config, lock_brokers};
 use robot_bus::action_bus::{ActionClient, ActionKind};
 use robot_bus::service_bus::ServiceClient;
-use robot_bus::{CallbackGroup, Executor, RobotBusBroker};
+use robot_bus::{CallbackGroup, Executor};
+use robot_bus_broker::{RobotBusBroker};
 
 /// Default heartbeat timeouts: the short ones in `BrokerProcess` expire before
 /// the executor's 2.5 s worker heartbeat.

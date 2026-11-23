@@ -12,9 +12,9 @@ use std::time::{Duration, Instant};
 use tokio::sync::mpsc;
 use zmq::Context;
 
-use crate::action_bus::{ActionClient, ActionKind as WireKind, ActionMessage};
-use crate::errors::{BusError, parse_error_body};
-use crate::zmq_helpers::HighWaterMark;
+use robot_bus::action_bus::{ActionClient, ActionKind as WireKind, ActionMessage};
+use robot_bus::errors::{BusError, parse_error_body};
+use robot_bus::zmq_helpers::HighWaterMark;
 
 use super::rpc_status::RpcStatus;
 use super::ws_frame::{

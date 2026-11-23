@@ -36,11 +36,11 @@ The soak samples the broker and clients in one process. Its regression limits al
 
 ```sh
 export TOKIO_WORKER_THREADS=2
-cargo test --no-default-features --features ws,console-api --test ws_reliability -- --nocapture --test-threads=1
-cargo test --no-default-features --features ws,console-api --test ws_reliability -- --ignored --nocapture --test-threads=1
+cargo test -p robot-bus-broker --no-default-features --features ws,console-api --test ws_reliability -- --nocapture --test-threads=1
+cargo test -p robot-bus-broker --no-default-features --features ws,console-api --test ws_reliability -- --ignored --nocapture --test-threads=1
 ```
 
-The CI artifact `rust-reliability-evidence` contains the fault and soak logs, including per-window JSON records. See the [test suite](../../tests/ws_reliability.rs) and [CI workflow](../../.github/workflows/ci.yml).
+The CI artifact `rust-reliability-evidence` contains the fault and soak logs, including per-window JSON records. See the [test suite](../../crates/robot-bus-broker/tests/ws_reliability.rs) and [CI workflow](../../.github/workflows/ci.yml).
 
 ## ROS 2 bridge: targets and evidence
 

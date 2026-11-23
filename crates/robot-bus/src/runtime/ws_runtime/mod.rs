@@ -23,7 +23,7 @@ use crate::runtime::session::{SESSION_BACKOFF_INITIAL, SESSION_BACKOFF_MAX, Sess
 use crate::runtime::timers::{
     SubscriptionHandle, Timer, TimerCallback, TimerHandle, effective_poll_timeout_ms, tick_timers,
 };
-use crate::ws::ws_frame::RequestHeader;
+use crate::wire::ws_frame::RequestHeader;
 
 use conn::{ConnCmd, StreamKind, WsConnection, connection_loop};
 use inbox::{SharedInbox, TopicEvent};

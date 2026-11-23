@@ -1,199 +1,29 @@
 [workspace]
-members = ["."]
+members = [
+    "crates/robot-bus-msgs",
+    "crates/robot-bus",
+    "crates/robot-bus-broker",
+    "crates/robot-bus-ros2",
+    "benches/robot_bus_perf",
+    "benches/ros2_bridge_perf",
+]
+default-members = [
+    "crates/robot-bus-msgs",
+    "crates/robot-bus",
+    "crates/robot-bus-broker",
+]
 # Invoked via --manifest-path; each declares its own [workspace].
 exclude = [
     "scripts/gen_rust_msgs",
     "bindings/cpp/native",
     "bindings/typescript/native",
+    "bindings/python/native",
 ]
-default-members = ["."]
 resolver = "2"
 
-[package]
-name = "robot-bus"
-version = "2.4.3"
+[workspace.package]
+version = "3.0.0"
 edition = "2024"
-description = "ZeroMQ message bus: broker routing and participant SDK"
 license = "Apache-2.0"
 authors = ["deng_ran <deng_ran@aliyun.com>"]
 repository = "https://github.com/indunet/robot-bus"
-readme = "README.md"
-autobenches = false
-autotests = false
-# Force-include gitignored pre-generated prost stubs when present at
-# `cargo package` / publish time (run `just gen-rust` first).
-include = [
-    "/Cargo.toml",
-    "/LICENSE",
-    "/README.md",
-    "/build.rs",
-    "/src/**",
-    "/proto/**",
-    "/assets/**",
-]
-
-[lib]
-name = "robot_bus"
-crate-type = ["cdylib", "rlib"]
-
-[features]
-default = ["full"]
-# Compatibility preset: the official distribution keeps all existing features.
-full = ["ws", "console", "demo-tank"]
-# Optional in-process tank demo. Independent of the communication SDK.
-demo-tank = []
-# Enable with maturin / `cargo build --features extension-module` for the Python module.
-extension-module = ["dep:pyo3", "pyo3/extension-module"]
-# Multiplexed WebSocket RPC server (started with RobotBusBroker; on by default).
-# Payload stubs are pre-generated (`just gen-rust`); no protoc at compile time.
-# axum shares one listener with the console when both features are enabled.
-ws = [
-    "axum/ws",
-    "dep:tokio",
-    "dep:tower-http",
-    "dep:tokio-stream",
-    "dep:http",
-    "dep:axum",
-    "dep:futures-util",
-    "dep:tokio-tungstenite",
-]
-# Embedded Web console (static UI + REST shim; same port as WS server when both enabled).
-console = ["console-api", "dep:rust-embed", "dep:mime_guess"]
-# Monitoring/control-plane API without embedded web assets or a Node.js build.
-console-api = [
-    "dep:tokio",
-    "dep:tokio-stream",
-    "dep:axum",
-    "dep:tower-http",
-    "dep:http",
-]
-# In-process ROS 2 ↔ robot-bus topic/service/action bridge (requires sourced ROS + linking rcl).
-# Not enabled by default — keep core SDK / maturin builds free of ROS.
-# Typed messages come from ros-env re-exporting share/<pkg>/rust/ on AMENT_PREFIX_PATH.
-ros2 = ["dep:rclrs", "dep:rosidl_runtime_rs", "dep:ros-env", "dep:futures-channel"]
-
-[dependencies]
-anyhow = "1"
-rclrs = { version = "0.8", optional = true }
-rosidl_runtime_rs = { version = "0.7", optional = true }
-ros-env = { version = "0.3", optional = true }
-axum = { version = "0.8", optional = true, default-features = false, features = ["http1", "tokio", "query", "json"] }
-clap = { version = "4", features = ["derive"] }
-futures-channel = { version = "0.3", optional = true }
-futures-util = { version = "0.3", optional = true, default-features = false, features = ["sink"] }
-http = { version = "1", optional = true }
-log = "0.4"
-mime_guess = { version = "2", optional = true }
-prost = "0.14"
-prost-types = "0.14"
-pyo3 = { version = "0.25", optional = true, features = ["abi3-py39"] }
-rust-embed = { version = "8", optional = true }
-serde = { version = "1", features = ["derive"] }
-serde_json = "1"
-serde_yaml = "0.9"
-socket2 = { version = "0.6.5", features = ["all"] }
-tempfile = "3"
-thiserror = "2"
-tokio = { version = "1", optional = true, features = ["rt-multi-thread", "macros", "net", "sync", "time", "signal", "io-util"] }
-tokio-stream = { version = "0.1", optional = true, features = ["sync", "net"] }
-tokio-tungstenite = { version = "0.29", optional = true }
-tower-http = { version = "0.6", optional = true, features = ["cors"] }
-ureq = { version = "2", default-features = false, features = ["json"] }
-uuid = { version = "1", features = ["v4"] }
-zmq = "0.10"
-
-[dev-dependencies]
-futures-util = { version = "0.3", default-features = false, features = ["sink"] }
-libc = "0.2"
-tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "sync", "time"] }
-tokio-tungstenite = "0.29"
-tokio-stream = "0.1"
-
-[[test]]
-name = "bus"
-path = "tests/bus/main.rs"
-
-[[test]]
-name = "federation"
-path = "tests/federation/main.rs"
-
-[[test]]
-name = "node"
-path = "tests/node/main.rs"
-
-[[test]]
-name = "ws"
-path = "tests/ws/main.rs"
-
-[[test]]
-name = "console"
-path = "tests/console/main.rs"
-required-features = ["console-api"]
-
-[[test]]
-name = "ros2_bridge"
-path = "tests/ros2_bridge/main.rs"
-
-[[test]]
-name = "ws_reliability"
-path = "tests/ws_reliability.rs"
-required-features = ["ws", "console-api"]
-
-[[bin]]
-name = "robot_bus_broker"
-path = "src/bin/robot_bus_broker.rs"
-
-[[bin]]
-name = "rbus"
-path = "src/bin/rbus.rs"
-
-[[bin]]
-name = "robot_bus_perf"
-path = "benches/robot_bus_perf/main.rs"
-required-features = ["ws"]
-
-[[bin]]
-name = "ros2_bridge_perf"
-path = "benches/ros2_bridge_perf/main.rs"
-required-features = ["ros2"]
-
-[[example]]
-name = "robot_bus_interop"
-path = "tests/interop/rust_peer.rs"
-
-[[example]]
-name = "topic_imu_listener"
-path = "examples/topic_imu/rust/listener.rs"
-
-[[example]]
-name = "topic_imu_talker"
-path = "examples/topic_imu/rust/talker.rs"
-
-[[example]]
-name = "service_set_bool_server"
-path = "examples/service_set_bool/rust/server.rs"
-
-[[example]]
-name = "service_set_bool_client"
-path = "examples/service_set_bool/rust/client.rs"
-
-[[example]]
-name = "action_fibonacci_server"
-path = "examples/action_fibonacci/rust/server.rs"
-
-[[example]]
-name = "action_fibonacci_client"
-path = "examples/action_fibonacci/rust/client.rs"
-
-[[example]]
-name = "ros2_bridge_builtin"
-path = "examples/ros2_bridge/rust/builtin.rs"
-required-features = ["ros2"]
-
-[[example]]
-name = "ros2_bridge_custom_add_two_ints"
-path = "examples/ros2_bridge/rust/custom_add_two_ints.rs"
-required-features = ["ros2"]
-
-[package.metadata.docs.rs]
-features = ["ws", "console"]

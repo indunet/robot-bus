@@ -6,16 +6,17 @@ use std::time::{Duration, Instant};
 
 use crate::common::{ephemeral_robot_bus_config, lock_brokers};
 use robot_bus::action_bus::{ActionClient, ActionKind};
-use robot_bus::broker::FederationPeerEndpoints;
-use robot_bus::broker::action_bus::ActionPeer;
-use robot_bus::broker::message_bus::MessagePeer;
-use robot_bus::broker::service_bus::ServicePeer;
+use robot_bus_broker::broker::FederationPeerEndpoints;
+use robot_bus_broker::broker::action_bus::ActionPeer;
+use robot_bus_broker::broker::message_bus::MessagePeer;
+use robot_bus_broker::broker::service_bus::ServicePeer;
 use robot_bus::service_bus::ServiceClient;
 use robot_bus::transports::{
     ACTION_BACKEND_CHANNEL, SERVICE_BACKEND_CHANNEL, XPUB_CHANNEL, ipc_endpoint_in, ipc_supported,
 };
 use robot_bus::worker_thread::WorkerThread;
-use robot_bus::{Publisher, RobotBusBroker, RobotBusConfig, Subscriber};
+use robot_bus::{Publisher, Subscriber};
+use robot_bus_broker::{RobotBusBroker, RobotBusConfig};
 
 fn ipc_broker_config(broker_id: &str, ipc_dir: &str) -> RobotBusConfig {
     let mut config = ephemeral_robot_bus_config();

@@ -7,13 +7,13 @@ use std::time::Duration;
 
 use prost::Message;
 
-use crate::console_topics;
-use crate::message_bus::{Publisher, Subscriber};
-use crate::robot_bus_interfaces::msg::v1::{
+use robot_bus::console_topics;
+use robot_bus::message_bus::{Publisher, Subscriber};
+use robot_bus::robot_bus_interfaces::msg::v1::{
     TopicDemand, TopicTypeRegister, TopologyRegister, TopologyUnregister,
 };
-use crate::worker_thread::WorkerThread;
-use crate::zmq_helpers::HighWaterMark;
+use robot_bus::worker_thread::WorkerThread;
+use robot_bus::zmq_helpers::HighWaterMark;
 
 use super::state::ConsoleState;
 use super::topology_registry::EndpointKind;
@@ -83,7 +83,7 @@ impl ControlPlaneHandle {
                         Ok((topic, payload)) => {
                             handle_message(&state, demand_pub.as_ref(), &topic, &payload)
                         }
-                        Err(crate::errors::BusError::Timeout(_)) => {}
+                        Err(robot_bus::errors::BusError::Timeout(_)) => {}
                         Err(err) => {
                             log::warn!("console control-plane receive: {err}");
                             thread::sleep(Duration::from_millis(50));

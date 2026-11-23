@@ -4,8 +4,8 @@ use std::time::Duration;
 
 use pyo3::prelude::*;
 
-use crate::message_bus::{Publisher as RustPublisher, Subscriber as RustSubscriber};
-use crate::runtime::TopicPublisherRaw as RustTopicPublisher;
+use robot_bus::message_bus::{Publisher as RustPublisher, Subscriber as RustSubscriber};
+use robot_bus::runtime::TopicPublisherRaw as RustTopicPublisher;
 
 use super::util::bus_err;
 

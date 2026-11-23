@@ -1,0 +1,15 @@
+[package]
+name = "robot-bus-perf"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish = false
+description = "robot-bus performance harness"
+
+[[bin]]
+name = "robot_bus_perf"
+path = "main.rs"
+
+[dependencies]
+robot-bus = { path = "../../crates/robot-bus", default-features = false, features = ["ws"] }
+robot-bus-broker = { path = "../../crates/robot-bus-broker", default-features = false, features = ["ws"] }

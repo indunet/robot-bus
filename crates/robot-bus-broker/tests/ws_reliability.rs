@@ -12,10 +12,8 @@ use std::time::{Duration, Instant};
 
 use crate::common::{ephemeral_robot_bus_config, free_ports, lock_brokers};
 use robot_bus::runtime::NodeServiceClientRaw;
-use robot_bus::{
-    BusError, ConnectionState, MultiThreadedExecutor, Node, NodeOptions, Publisher, QosProfile,
-    RobotBusBroker, SubscriptionHandle,
-};
+use robot_bus::{BusError, ConnectionState, MultiThreadedExecutor, Node, NodeOptions, Publisher, QosProfile, SubscriptionHandle};
+use robot_bus_broker::{RobotBusBroker};
 use tokio::net::TcpStream;
 use tokio::sync::watch;
 

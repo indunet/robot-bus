@@ -6,7 +6,7 @@ use std::time::Duration;
 use pyo3::prelude::*;
 use pyo3::types::{PyBytes, PyType};
 
-use crate::runtime::{
+use robot_bus::runtime::{
     ActionGoalContext, ActionGoalHandler, Node as RustNode, NodeOptions as RustNodeOptions,
     QosProfile,
 };
@@ -275,7 +275,7 @@ impl PyNode {
     /// Update a declared parameter (type must match).
     fn set_parameter(&mut self, name: &str, value: &Bound<'_, PyAny>) -> PyResult<()> {
         self.inner
-            .set_parameter(crate::runtime::Parameter::new(
+            .set_parameter(robot_bus::runtime::Parameter::new(
                 name,
                 parameter_value_from_py(value)?,
             ))
@@ -366,7 +366,7 @@ impl PyNode {
     ) -> PyResult<PySubscriptionHandle> {
         let handle = {
             let mut this = slf.borrow_mut();
-            let cb: crate::runtime::MessageCallback = Arc::new(move |payload| {
+            let cb: robot_bus::runtime::MessageCallback = Arc::new(move |payload| {
                 Python::with_gil(|py| {
                     let payload = PyBytes::new(py, payload);
                     if let Err(err) = callback.call1(py, (payload,)) {
@@ -397,7 +397,7 @@ impl PyNode {
         callback: Py<PyAny>,
         callback_group: Option<&PyCallbackGroup>,
     ) -> PyResult<PyTimerHandle> {
-        let cb: crate::runtime::TimerCallback = Arc::new(move || {
+        let cb: robot_bus::runtime::TimerCallback = Arc::new(move || {
             Python::with_gil(|py| {
                 if let Err(err) = callback.call0(py) {
                     err.print(py);
@@ -440,7 +440,7 @@ impl PyNode {
     ) -> PyResult<PyServiceHandle> {
         let handle = {
             let mut this = slf.borrow_mut();
-            let cb: crate::runtime::ServiceHandler = Arc::new(move |body| {
+            let cb: robot_bus::runtime::ServiceHandler = Arc::new(move |body| {
                 Python::with_gil(|py| {
                     let args = (PyBytes::new(py, body),);
                     match handler.call1(py, args) {
@@ -506,7 +506,7 @@ impl PyNode {
         qos_depth: Option<i32>,
         streaming: bool,
     ) -> PyResult<PyActionServerHandle> {
-        use crate::runtime::ActionGoalLiveHandler;
+        use robot_bus::runtime::ActionGoalLiveHandler;
         let handle = {
             let mut this = slf.borrow_mut();
             let group = callback_group.map(|g| &g.inner);

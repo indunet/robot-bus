@@ -7,7 +7,7 @@ Requires sourced Humble/Jazzy (`share/std_msgs/rust`, `share/sensor_msgs/rust`, 
 ```bash
 just perf-ros2-bridge
 # or:
-cargo run --release --bin ros2_bridge_perf --features ros2
+cargo run --release -p robot-bus-ros2-perf --bin ros2_bridge_perf
 ```
 
 Writes [`docs/zh/ros2-bridge-perf-report.md`](../../docs/zh/ros2-bridge-perf-report.md) and the English twin.

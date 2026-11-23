@@ -7,9 +7,10 @@ use crate::common::{ephemeral_robot_bus_config, lock_brokers};
 use prost::Message;
 use robot_bus::console_topics;
 use robot_bus::robot_bus_interfaces::msg::v1::{TopicDemand, TopicStatsList};
-use robot_bus::{MessageCallback, Node, NodeOptions, RobotBusBroker};
+use robot_bus::{MessageCallback, Node, NodeOptions};
+use robot_bus_broker::{RobotBusBroker};
 
-fn console_on_config() -> robot_bus::RobotBusConfig {
+fn console_on_config() -> robot_bus_broker::RobotBusConfig {
     let mut config = ephemeral_robot_bus_config();
     config.console.enabled = true;
     config.console.tank_enabled = false;

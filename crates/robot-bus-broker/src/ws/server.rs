@@ -18,7 +18,7 @@ use super::ws::{WsServerState, ws_upgrade};
 
 #[cfg(feature = "console-api")]
 use crate::console::{self, ConsoleState};
-use crate::discovery::DiscoverResponse;
+use robot_bus::discovery::DiscoverResponse;
 
 #[derive(Clone)]
 pub struct WsServerConfig {
@@ -39,11 +39,11 @@ pub struct WsServerConfig {
 impl Default for WsServerConfig {
     fn default() -> Self {
         Self {
-            listen: format!("0.0.0.0:{}", crate::transports::DEFAULT_API_PORT)
+            listen: format!("0.0.0.0:{}", robot_bus::transports::DEFAULT_API_PORT)
                 .parse()
                 .expect("default listen"),
-            message_xpub: format!("tcp://127.0.0.1:{}", crate::transports::XPUB_PORT),
-            message_xsub: format!("tcp://127.0.0.1:{}", crate::transports::XSUB_PORT),
+            message_xpub: format!("tcp://127.0.0.1:{}", robot_bus::transports::XPUB_PORT),
+            message_xsub: format!("tcp://127.0.0.1:{}", robot_bus::transports::XSUB_PORT),
             service_frontend: "tcp://127.0.0.1:15662".to_string(),
             action_frontend: "tcp://127.0.0.1:15664".to_string(),
             cors_origins: Vec::new(),
@@ -114,7 +114,7 @@ pub async fn serve_on_listener(
                 }
             }),
         )
-        .route(crate::discovery::DEFAULT_WS_RPC_PATH, get(ws_upgrade))
+        .route(robot_bus::discovery::DEFAULT_WS_RPC_PATH, get(ws_upgrade))
         .with_state(ws_state);
 
     let app = if let Some(disc) = config.discover.clone() {

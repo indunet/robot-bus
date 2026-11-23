@@ -2,8 +2,8 @@
 
 use crate::action_bus::ActionKind;
 use crate::errors::{BusError, Result};
-use crate::ws::rpc_status::Code;
-use crate::ws::ws_frame::{
+use crate::wire::rpc_status::Code;
+use crate::wire::ws_frame::{
     ACTION_KIND_CANCEL, ACTION_KIND_FEEDBACK, ACTION_KIND_GOAL, ACTION_KIND_RESULT,
 };
 

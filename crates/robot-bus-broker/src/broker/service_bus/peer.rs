@@ -2,7 +2,7 @@
 
 use anyhow::{Context, Result, bail};
 
-use crate::transports::{
+use robot_bus::transports::{
     SERVICE_BACKEND_CHANNEL as BACKEND_CHANNEL, SERVICE_BACKEND_PORT as BACKEND_PORT,
     SERVICE_FRONTEND_CHANNEL as FRONTEND_CHANNEL, SERVICE_FRONTEND_PORT as FRONTEND_PORT,
     ipc_sibling_endpoint,

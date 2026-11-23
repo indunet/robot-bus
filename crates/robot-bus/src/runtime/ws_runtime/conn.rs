@@ -17,7 +17,7 @@ use crate::runtime::session::{
     SESSION_BACKOFF_INITIAL, SESSION_BACKOFF_MAX, SESSION_WS_PING_INTERVAL,
     SESSION_WS_PING_MISS_LIMIT, SessionHandle,
 };
-use crate::ws::ws_frame::{
+use crate::wire::ws_frame::{
     Frame, RequestHeader, decode_action_data, decode_frame, decode_subscribe_data, encode_frame,
 };
 

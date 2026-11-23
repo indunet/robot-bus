@@ -9,7 +9,7 @@ node_modules/
 .next/
 console/out/
 console/lib/bundled-docs.generated.ts
-assets/console/
+crates/robot-bus-broker/assets/console/
 *.tsbuildinfo
 pnpm-debug.log*
 npm-debug.log*
@@ -69,8 +69,8 @@ dev_note.md
 
 # Protobuf stubs — regenerate with `just gen-*` (CI / package builds); not tracked.
 # Published wheels / crates / npm / DEB·MSI embed these after codegen.
-src/generated/**
-!src/generated/mod.rs
+crates/robot-bus-msgs/src/generated/**
+!crates/robot-bus-msgs/src/generated/mod.rs
 bindings/python/robot_bus/*/
 !bindings/python/robot_bus/ros2_bridge/
 !bindings/python/robot_bus/ros2_bridge/**

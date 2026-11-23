@@ -37,21 +37,21 @@ console_sources_newer_than() {
 }
 
 run_once() {
-  local stamp="$root/assets/console/.watch-stamp"
+  local stamp="$root/crates/robot-bus-broker/assets/console/.watch-stamp"
   local need_console=0
 
   stop_broker_listeners
 
-  if [[ ! -f "$stamp" ]] || [[ ! -f "$root/assets/console/index.html" ]]; then
+  if [[ ! -f "$stamp" ]] || [[ ! -f "$root/crates/robot-bus-broker/assets/console/index.html" ]]; then
     need_console=1
   elif console_sources_newer_than "$stamp"; then
     need_console=1
   fi
 
   if [[ "$need_console" -eq 1 ]]; then
-    echo "Building console → assets/console/ ..."
+    echo "Building console → crates/robot-bus-broker/assets/console/ ..."
     just console
-    mkdir -p "$root/assets/console"
+    mkdir -p "$root/crates/robot-bus-broker/assets/console"
     touch "$stamp"
   else
     echo "Console assets up to date; skipping just console."
@@ -60,7 +60,7 @@ run_once() {
   echo "Starting broker → http://127.0.0.1:15560"
   # Do not `exec`: cargo-watch needs a killable process group; with `exec` the
   # broker can survive a flaky restart and keep serving stale assets.
-  cargo run --bin robot_bus_broker
+  cargo run -p robot-bus-broker --bin robot_bus_broker
 }
 
 if [[ "${1:-}" == "--once" ]]; then
@@ -76,7 +76,7 @@ fi
 
 export RUST_LOG="${RUST_LOG:-info}"
 
-echo "Watching src/ + console sources (Ctrl+C to stop)..."
+echo "Watching crates/ + console sources (Ctrl+C to stop)..."
 # Do NOT use --watch-when-idle: that flag ignores FS events while `cargo run`
 # is alive, so Rust/TS edits never restart the broker. Ignore build outputs
 # instead (below) so `just console` does not loop.
@@ -84,7 +84,7 @@ echo "Watching src/ + console sources (Ctrl+C to stop)..."
 exec cargo watch \
   --clear \
   -d 2 \
-  -w src \
+  -w crates \
   -w console/app \
   -w console/components \
   -w console/lib \
@@ -99,7 +99,7 @@ exec cargo watch \
   -i '**/out/**' \
   -i '**/tsconfig.tsbuildinfo' \
   -i '**/next-env.d.ts' \
-  -i 'assets/console/**' \
+  -i 'crates/robot-bus-broker/assets/console/**' \
   -i 'console/lib/bundled-docs.generated.ts' \
   -i 'bindings/typescript/dist/**' \
   -i 'bindings/typescript/generated/**' \

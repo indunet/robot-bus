@@ -8,7 +8,7 @@ In-process bridge between **ROS 2** and **robot-bus**: Topic / Service / Action.
 
 | Language | ROS client | Entry | Notes |
 |----------|------------|-------|-------|
-| **Rust** | `rclrs` | `robot_bus::ros2_bridge` (Cargo feature **`ros2`**) | Topics / services / actions all use typed `attach` (`TypedTopicMapper` / `TypedServiceMapper` / `TypedActionMapper`) |
+| **Rust** | `rclrs` | `robot_bus_ros2` (Cargo feature **`ros2`**) | Topics / services / actions all use typed `attach` (`TypedTopicMapper` / `TypedServiceMapper` / `TypedActionMapper`) |
 | **Python** | **`rclpy`** | `robot_bus.ros2_bridge` | Pure Python, **not** via Rust FFI / `rclrs` |
 | **C++** | **`rclcpp`** | `<robot_bus/ros2_bridge.hpp>` + `robot_bus_ros2_bridge` | Native C++, **not** via Rust FFI / `rclrs` |
 
@@ -338,7 +338,7 @@ Runnable: [`examples/ros2_bridge/rust/custom_add_two_ints.rs`](../../examples/ro
 use prost::Message as ProstMessage;
 use ros_env::example_interfaces::srv as ros_srv;
 use robot_bus::example_interfaces::srv::v1::{AddTwoIntsRequest, AddTwoIntsResponse};
-use robot_bus::ros2_bridge::TypedServiceMapper;
+use robot_bus_ros2::TypedServiceMapper;
 
 #[derive(Clone, Copy)]
 struct AddTwoIntsServiceMapper;
@@ -379,7 +379,7 @@ Action: `impl TypedActionMapper` (`type Ros = …` + six-way goal/feedback/resul
 Custom topic: `impl TypedTopicMapper` (associated `Ros` IDL type and `Bus` protobuf type), conversion only; the library owns `create_subscription` / `create_publisher`.
 
 ```rust
-use robot_bus::ros2_bridge::TypedTopicMapper;
+use robot_bus_ros2::TypedTopicMapper;
 
 #[derive(Clone, Copy)]
 struct MyStringMapper;
@@ -465,7 +465,7 @@ Topic / Action: same “proto first, then mapper” flow. `TypedTopicMapper` / `
 The dynamic RPC experiment with `rclrs` 0.8 found that registering a service or action with the executor by ROS type name would require access to private wait-set registration and node handles. The Rust bridge therefore creates these entities with concrete ROS types. For a custom interface, implement `TypedServiceMapper` or `TypedActionMapper`. The public `ros2_bridge::dynamic_rpc` module records the outcome of the experiment.
 
 ```rust
-use robot_bus::ros2_bridge::{
+use robot_bus_ros2::{
     Ros2Bridge, StdMsgsStringMapper, TopicQos, TriggerServiceMapper,
 };
 
@@ -505,10 +505,10 @@ sudo apt-get install libzmq3-dev ros-humble-rosidl-generator-rs \
   ros-humble-example-interfaces ros-humble-test-msgs
 source /opt/ros/humble/setup.bash
 python3 scripts/generate_rust_msgs.py
-cargo build --no-default-features --features ros2 --bin ros2_bridge_perf \
-  --example ros2_bridge_builtin --example ros2_bridge_custom_add_two_ints
+cargo build -p robot-bus-ros2-perf --bin ros2_bridge_perf
+cargo build -p robot-bus-ros2 --examples
 ROS_LOCALHOST_ONLY=1 ROS_DOMAIN_ID=94 RMW_IMPLEMENTATION=rmw_fastrtps_cpp \
-  cargo test --no-default-features --features ws,console-api,ros2 \
+  cargo test -p robot-bus-ros2 --features ws \
   --test ros2_bridge -- --test-threads=1
 ```
 

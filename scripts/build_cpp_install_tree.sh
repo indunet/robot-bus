@@ -22,7 +22,7 @@ mkdir -p "$DEST/usr/bin" "$DEST/usr/lib" "$DEST/usr/include" \
   "$DEST/usr/lib/pkgconfig" "$DEST/usr/lib/cmake/robot_bus"
 
 # Broker (default features: ws + console).
-cargo build --release --manifest-path "$ROOT/Cargo.toml" --bin robot_bus_broker
+cargo build --release --manifest-path "$ROOT/Cargo.toml" -p robot-bus-broker --bin robot_bus_broker
 cp -f "$ROOT/target/release/robot_bus_broker" "$DEST/usr/bin/"
 
 # The Windows import library embeds the original DLL filename.

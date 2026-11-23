@@ -10,8 +10,8 @@ use super::rpc_status::RpcStatus;
 use super::subscription_queue::{SubscriptionQueue, SubscriptionReceiver, SubscriptionStats};
 use serde::Serialize;
 
-use crate::message_bus::Subscriber;
-use crate::runtime::SubscriptionOverflowPolicy;
+use robot_bus::message_bus::Subscriber;
+use robot_bus::runtime::SubscriptionOverflowPolicy;
 
 const POLL_TIMEOUT: Duration = Duration::from_millis(200);
 
@@ -253,7 +253,7 @@ fn demux_loop(
                     remove_watchers(&sub, &state, &dead);
                 }
             }
-            Err(crate::errors::BusError::Timeout(_)) => {
+            Err(robot_bus::errors::BusError::Timeout(_)) => {
                 sweep_closed(&sub, &state);
             }
             Err(err) => {

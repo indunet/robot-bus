@@ -6,8 +6,17 @@ Record changes under the applicable version. Explain what changed, why it change
 
 ## [Unreleased]
 
+## [3.0.0] - 2026-11-23
+
+### Breaking
+
+- The Rust crate is now a workspace. `robot-bus` is the client SDK (Node, executors, topic / service / action, discovery, and the optional WebSocket client). `robot-bus-broker` is the broker, WebSocket server, console, tank demo, and `rbus` CLI. `robot-bus-msgs` holds the generated messages. `robot-bus-ros2` is the ROS 2 bridge and is not published.
+- `robot_bus::RobotBusBroker`, `robot_bus::broker`, `robot_bus::ws` (server), `robot_bus::console`, and `robot_bus::tank` moved to `robot_bus_broker`. `robot_bus::ros2_bridge` moved to `robot_bus_ros2`. Client programs that only use `Node` keep depending on `robot-bus`. Programs that embed a broker also depend on `robot-bus-broker`.
+- `robot-bus` no longer enables the WebSocket server, console, or tank demo by default, and no longer depends on `clap`, `axum`, `rust-embed`, or `pyo3`. The WebSocket client is `features = ["ws"]`. Low-level modules (`message_bus`, `service_bus`, `action_bus`, `transports`, `wire`) stay public but are `#[doc(hidden)]`.
+
 ### Changed
 
+- Splitting the crates does not change the Protobuf runtime range for Python, C++, Java, or Android.
 - The Android AAR (`org.indunet:robot-bus-android`) now compiles the Java SDK sources instead of keeping a second Kotlin copy. `RobotBusAndroid.init` is unchanged: call it before `Node` or `Broker`, and an in-process broker still puts IPC sockets under the app cache directory. Do not depend on `org.indunet:robot-bus` and `org.indunet:robot-bus-android` in the same app; the classes would be duplicated.
 - Kotlin code on Android can no longer pass named arguments to `BrokerOptions`, `NodeOptions`, or `DiscoverOpts`, and cannot use named arguments on the Java methods (for example `createPublisher(topic, qosDepth = 5)`). Use `brokerOptions`, `nodeOptions`, and `discoverOpts` when you want default arguments. Pass other arguments by position, or pick an overload.
 

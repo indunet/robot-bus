@@ -2,14 +2,14 @@
 //!
 //! ```bash
 //! source /opt/ros/humble/setup.bash
-//! cargo run --example ros2_bridge_builtin --features ros2
+//! cargo run -p robot-bus-ros2 --example ros2_bridge_builtin
 //! ```
 //!
 //! For the more common *custom* mapper pattern, see `ros2_bridge_custom_add_two_ints`.
 
 use std::time::Duration;
 
-use robot_bus::ros2_bridge::{
+use robot_bus_ros2::{
     FibonacciActionMapper, Ros2Bridge, StdMsgsStringMapper, TopicQos, TriggerServiceMapper,
 };
 

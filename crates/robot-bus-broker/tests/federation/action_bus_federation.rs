@@ -7,16 +7,16 @@ use std::time::{Duration, Instant};
 
 use crate::common::{free_ports, lock_brokers};
 #[cfg(feature = "console-api")]
-use robot_bus::ConsoleBrokerConfig;
+use robot_bus_broker::ConsoleBrokerConfig;
 #[cfg(feature = "ws")]
-use robot_bus::WsConfig;
+use robot_bus_broker::WsConfig;
 use robot_bus::action_bus::{ActionClient, ActionKind};
-use robot_bus::broker::action_bus::{ActionBusConfig, ActionPeer};
-use robot_bus::broker::message_bus::BusConfig;
-use robot_bus::broker::service_bus::ServiceBusConfig;
+use robot_bus_broker::broker::action_bus::{ActionBusConfig, ActionPeer};
+use robot_bus_broker::broker::message_bus::BusConfig;
+use robot_bus_broker::broker::service_bus::ServiceBusConfig;
 use robot_bus::errors::BusError;
 use robot_bus::worker_thread::WorkerThread;
-use robot_bus::{DiscoveryConfig, RobotBusBroker, RobotBusConfig};
+use robot_bus_broker::{DiscoveryConfig, RobotBusBroker, RobotBusConfig};
 
 fn connect_addr(bind: &str) -> String {
     bind.replace("tcp://0.0.0.0:", "tcp://127.0.0.1:")

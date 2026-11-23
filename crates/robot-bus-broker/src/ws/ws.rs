@@ -200,7 +200,7 @@ async fn run_subscribe(
         RequestHeader::Subscribe { topic, qos_depth } => (
             topic,
             qos_depth,
-            crate::SubscriptionOverflowPolicy::DropOldest,
+            robot_bus::SubscriptionOverflowPolicy::DropOldest,
         ),
         RequestHeader::SubscribeWithPolicy {
             topic,

@@ -131,7 +131,7 @@ bridge.run()  # Ctrl+C / SIGTERM to stop
 ### Rust
 
 ```rust
-use robot_bus::ros2_bridge::{
+use robot_bus_ros2::{
     Ros2Bridge, StdMsgsStringMapper, TopicQos, TriggerServiceMapper,
 };
 

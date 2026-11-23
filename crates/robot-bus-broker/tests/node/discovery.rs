@@ -10,7 +10,8 @@ use robot_bus::discovery::DiscoverOpts;
 #[cfg(feature = "ws")]
 use robot_bus::message_bus::{Publisher, Subscriber};
 #[cfg(feature = "ws")]
-use robot_bus::{Node, RobotBusBroker, RobotBusConfig};
+use robot_bus::{Node};
+use robot_bus_broker::{RobotBusBroker, RobotBusConfig};
 #[cfg(feature = "ws")]
 use std::thread;
 #[cfg(feature = "ws")]

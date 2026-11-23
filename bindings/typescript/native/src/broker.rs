@@ -7,7 +7,7 @@ use std::time::Duration;
 
 use napi::bindgen_prelude::*;
 use napi_derive::napi;
-use robot_bus::broker::{
+use robot_bus_broker::broker::{
     RobotBusBroker as RustRobotBusBroker, RobotBusConfig, apply_federation_opts,
     binding_broker_cli_args, parse_robot_bus_config, robot_bus_broker_help,
 };
@@ -182,7 +182,7 @@ impl RobotBusBroker {
             )
             .map_err(anyhow_err)?;
             if let Some(peers) = &o.peers {
-                robot_bus::apply_api_peers(&mut config, peers).map_err(anyhow_err)?;
+                robot_bus_broker::apply_api_peers(&mut config, peers).map_err(anyhow_err)?;
             }
             if o.no_discovery.unwrap_or(false) {
                 config.discovery.enabled = false;

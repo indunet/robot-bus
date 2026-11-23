@@ -1,0 +1,55 @@
+[package]
+name = "robot-bus-ros2"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+description = "In-process ROS 2 bridge for robot-bus"
+publish = false
+autobenches = false
+autotests = false
+
+[lib]
+name = "robot_bus_ros2"
+
+[features]
+default = []
+# Enables the WebSocket client on the SDK and the broker used by bridge tests.
+# `console-api` is a package feature so the shared broker test helper's
+# `cfg(feature = "console-api")` matches the broker type it constructs.
+ws = ["robot-bus/ws", "robot-bus-broker/ws", "console-api"]
+console-api = ["robot-bus-broker/console-api"]
+
+[dependencies]
+robot-bus = { path = "../robot-bus", version = "=3.0.0", default-features = false }
+rclrs = "0.8"
+rosidl_runtime_rs = "0.7"
+ros-env = "0.3"
+futures-channel = "0.3"
+anyhow = "1"
+log = "0.4"
+prost = "0.14"
+prost-types = "0.14"
+uuid = { version = "1", features = ["v4"] }
+
+[dev-dependencies]
+robot-bus-broker = { path = "../robot-bus-broker", version = "=3.0.0", default-features = false, features = ["ws", "console-api"] }
+libc = "0.2"
+zmq = "0.10"
+
+[[test]]
+name = "ros2_bridge"
+path = "tests/ros2_bridge/main.rs"
+
+[[example]]
+name = "ros2_bridge_builtin"
+path = "../../examples/ros2_bridge/rust/builtin.rs"
+
+[[example]]
+name = "ros2_bridge_custom_add_two_ints"
+path = "../../examples/ros2_bridge/rust/custom_add_two_ints.rs"
+
+[package.metadata.docs.rs]
+# docs.rs has no ROS 2 toolchain; this crate is not published.
+all-features = false

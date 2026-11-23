@@ -52,7 +52,8 @@ fn main() -> robot_bus::Result<()> {
 同进程 **inproc** 时必须与嵌入式 broker共享同一 Context：
 
 ```rust
-use robot_bus::{Context, Node, RobotBusBroker, RobotBusConfig};
+use robot_bus::{Context, Node};
+use robot_bus_broker::{RobotBusBroker, RobotBusConfig};
 
 fn main() -> anyhow::Result<()> {
     let ctx = Context::new();

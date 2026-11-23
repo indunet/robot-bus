@@ -15,6 +15,8 @@ jobs:
           python-version: "3.12"
       - name: Check documentation links and language pairs
         run: python3 scripts/check_docs.py
+      - name: Check package versions stay in sync
+        run: python3 scripts/check_versions.py
 
   rust:
     runs-on: ubuntu-latest
@@ -36,10 +38,12 @@ jobs:
         run: python3 scripts/generate_rust_msgs.py
       - name: Test SDK and headless feature combinations before building web assets
         run: |
-          cargo test --no-default-features
-          cargo test --no-default-features --features ws --lib --test ws
-          cargo test --no-default-features --features console-api --lib --test console --test node
-          cargo test --no-default-features --features ws,console-api --lib --test console
+          cargo test -p robot-bus
+          cargo test -p robot-bus --features ws --lib
+          cargo test -p robot-bus-broker --no-default-features
+          cargo test -p robot-bus-broker --no-default-features --features ws --lib --test ws
+          cargo test -p robot-bus-broker --no-default-features --features console-api --lib --test console --test node
+          cargo test -p robot-bus-broker --no-default-features --features ws,console-api --lib --test console
       - name: Check reconnect, subscriber backlog and short soak
         timeout-minutes: 5
         env:
@@ -54,9 +58,9 @@ jobs:
             pkg-config --modversion libzmq
           } > target/reliability/environment.log
           status=0
-          cargo test --no-default-features --features ws,console-api --test ws_reliability \
+          cargo test -p robot-bus-broker --no-default-features --features ws,console-api --test ws_reliability \
             -- --nocapture --test-threads=1 2>&1 | tee target/reliability/faults.log || status=1
-          cargo test --no-default-features --features ws,console-api --test ws_reliability \
+          cargo test -p robot-bus-broker --no-default-features --features ws,console-api --test ws_reliability \
             -- --ignored --nocapture --test-threads=1 2>&1 | tee target/reliability/soak.log || status=1
           exit "$status"
       - uses: actions/upload-artifact@v4
@@ -77,10 +81,13 @@ jobs:
           cache-dependency-path: console/pnpm-lock.yaml
       - name: Build embedded console assets
         run: ./scripts/build_console.sh
-      - run: cargo test
-      - run: cargo test --no-default-features --features ws,console --lib --test console
+      - run: cargo test -p robot-bus --features ws
+      - run: cargo test -p robot-bus-broker
+      - run: cargo test -p robot-bus-broker --no-default-features --features ws,console --lib --test console
       - name: Build Rust examples
-        run: cargo build --examples
+        run: |
+          cargo build -p robot-bus --examples
+          cargo build -p robot-bus-broker --examples
 
   python:
     runs-on: ubuntu-latest
@@ -419,7 +426,7 @@ jobs:
           cd bindings/python
           maturin develop --features extension-module,ws,console,demo-tank --no-default-features
       - name: Build Rust interop peer
-        run: cargo build --example robot_bus_interop
+        run: cargo build -p robot-bus-broker --example robot_bus_interop
       - name: Build C ABI + C++ interop peer
         run: |
           export PKG_CONFIG_PATH=/usr/local/lib/pkgconfig:${PKG_CONFIG_PATH:-}

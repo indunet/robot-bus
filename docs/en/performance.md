@@ -58,7 +58,7 @@ Build both release binaries in the same Linux container and run the [benchmark s
 
 ```bash
 source /opt/ros/humble/setup.bash
-cargo build --release --no-default-features --features ws --bin robot_bus_perf
+cargo build --release -p robot-bus-perf --bin robot_bus_perf
 bash benches/ros2_perf/run.sh --local --build-only
 source benches/ros2_perf/_ws/install/setup.bash
 bash benches/topic_cdr_perf/run.sh \

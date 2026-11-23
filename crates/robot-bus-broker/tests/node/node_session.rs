@@ -8,7 +8,7 @@ use robot_bus::{ConnectionState, Node, NodeOptions};
 #[cfg(feature = "ws")]
 use crate::common::{ephemeral_robot_bus_config, lock_brokers};
 #[cfg(feature = "ws")]
-use robot_bus::RobotBusBroker;
+use robot_bus_broker::RobotBusBroker;
 
 #[test]
 fn tcp_node_constructs_without_broker() {
