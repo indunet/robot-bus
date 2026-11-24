@@ -12,7 +12,7 @@ path = "main.rs"
 
 [dependencies]
 robot-bus = { path = "../../crates/robot-bus", default-features = false, features = ["ws"] }
-robot-bus-ros2 = { path = "../../crates/robot-bus-ros2" }
+robot-bus-ros2 = { path = "../../crates/robot-bus-ros2", features = ["demo"] }
 rclrs = "0.8"
 ros-env = "0.3"
 prost = "0.14"

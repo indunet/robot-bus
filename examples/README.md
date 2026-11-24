@@ -113,7 +113,7 @@ A **custom** bridge needs both sides in-tree:
 ```bash
 # Terminal 2 — pick one language
 python3 examples/ros2_bridge/python/builtin.py
-# cargo run -p robot-bus-ros2 --example ros2_bridge_builtin
+# cargo run -p robot-bus-ros2 --features demo --example ros2_bridge_builtin
 # ./examples/build/ros2_bridge_builtin
 
 # Terminal 3 — exercise from ROS (bus servers must exist for service/action)

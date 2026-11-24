@@ -176,9 +176,11 @@ fn trigger_ros2_to_bus_failure_replies_with_error_response() {
 
 /// A service type whose response has no failure field and whose mapper has no
 /// `error_response`.
+#[cfg(feature = "demo")]
 #[derive(Clone, Copy)]
 struct AddTwoIntsNoErrorResponse;
 
+#[cfg(feature = "demo")]
 impl robot_bus_ros2::TypedServiceMapper for AddTwoIntsNoErrorResponse {
     type Ros = ros_env::example_interfaces::srv::AddTwoInts;
 
@@ -218,6 +220,7 @@ impl robot_bus_ros2::TypedServiceMapper for AddTwoIntsNoErrorResponse {
 
 /// Same failure, but the mapper cannot express it: the ROS caller must get no
 /// reply (and so time out), never a default-valued `sum = 0`.
+#[cfg(feature = "demo")]
 #[test]
 fn custom_service_failure_without_error_response_sends_no_reply() {
     use ros_env::example_interfaces::srv as ex_srv;

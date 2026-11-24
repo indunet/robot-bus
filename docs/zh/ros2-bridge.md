@@ -6,7 +6,7 @@
 
 | 语言 | ROS客户端 | 入口 |
 |------|------------|------|
-| **Rust** | `rclrs` | `robot_bus_ros2`（Cargo feature **`ros2`**） |
+| **Rust** | `rclrs` | `robot-bus-ros2` crate（`robot_bus_ros2`） |
 | **Python** | `rclpy` | `robot_bus.ros2_bridge` |
 | **C++** | `rclcpp` | `<robot_bus/ros2_bridge.hpp>` + `robot_bus_ros2_bridge` |
 
@@ -27,7 +27,7 @@ cargo run --bin robot_bus_broker    # 或 python -m robot_bus.broker
 | 语言 | 依赖 |
 |------|------|
 | 通用 | 可达的 broker（tcp / ipc / discover） |
-| Rust | `robot-bus = { features = ["ros2"] }`，见下文 Rust 构建步骤 |
+| Rust | `robot-bus-ros2`（会一并依赖 `robot-bus`），见下文 Rust 构建步骤 |
 | Python | `robot_bus` + 系统 **`rclpy`**（`just python-dev` / `python-dev-ros2`） |
 | C++ | `robot-bus-ros2-humble` 或 `…-jazzy`，或 `just cpp-dev-ros2`（`-DROBOT_BUS_ROS2=ON`） |
 
@@ -492,7 +492,7 @@ struct AddTwoIntsServiceMapper
     .add()
 ```
 
-内置只有 `FibonacciActionMapper`（`example_interfaces/action/Fibonacci`）。
+内置只有 `FibonacciActionMapper`（`example_interfaces/action/Fibonacci`），需要启用 `demo` feature。
 
 ### 自定义 action mapper
 
@@ -575,13 +575,13 @@ sudo apt-get install libzmq3-dev ros-humble-rosidl-generator-rs \
 source /opt/ros/humble/setup.bash
 python3 scripts/generate_rust_msgs.py
 cargo build -p robot-bus-ros2-perf --bin ros2_bridge_perf
-cargo build -p robot-bus-ros2 --examples
+cargo build -p robot-bus-ros2 --features demo --examples
 ROS_LOCALHOST_ONLY=1 ROS_DOMAIN_ID=94 RMW_IMPLEMENTATION=rmw_fastrtps_cpp \
   cargo test -p robot-bus-ros2 --features ws \
   --test ros2_bridge -- --test-threads=1
 ```
 
-请使用带有兼容 Rust 绑定的接口包。Jazzy 环境使用对应的 `ros-jazzy-*` 软件包并执行 `source /opt/ros/jazzy/setup.bash`。在 Jazzy 上做本机测试时，使用 `ROS_AUTOMATIC_DISCOVERY_RANGE=LOCALHOST`。`example_interfaces` 提供 Fibonacci 和 AddTwoInts。已验证的环境见[支持与验证状态](support.md)。
+请使用带有兼容 Rust 绑定的接口包。Jazzy 环境使用对应的 `ros-jazzy-*` 软件包并执行 `source /opt/ros/jazzy/setup.bash`。在 Jazzy 上做本机测试时，使用 `ROS_AUTOMATIC_DISCOVERY_RANGE=LOCALHOST`。`example_interfaces` 不在 `ros_core` / `ros_base` 里，默认构建不需要它。`demo` feature（Fibonacci mapper、`ros2_bridge_builtin`、`ros2_bridge_custom_add_two_ints`）需要安装 `ros-<distro>-example-interfaces` 及其 Rust 绑定。已验证的环境见[支持与验证状态](support.md)。
 
 ### Python（`rclpy`）
 

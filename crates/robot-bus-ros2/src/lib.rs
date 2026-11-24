@@ -1,7 +1,9 @@
-//! In-process ROS 2 ↔ robot-bus topic/service/action bridge (`feature = "ros2"`).
+//! In-process ROS 2 ↔ robot-bus topic/service/action bridge (the `robot-bus-ros2` crate).
 //!
 //! Requires a sourced ROS 2 distribution so `rclrs` can link against `rcl`.
-//! Everyday robot-bus builds leave this feature off.
+//! Builtins only use interface packages shipped with `ros_core` / `ros_base`.
+//! The `demo` feature adds the `example_interfaces` Fibonacci mapper and the
+//! examples that need `ros-<distro>-example-interfaces`; it is off by default.
 //!
 //! Configuration is **code-only**: attach a concrete [`TopicMapper`] /
 //! [`ServiceMapper`] / [`ActionMapper`] with `.mapper(...)`. There is no YAML
@@ -33,9 +35,10 @@ pub mod mappers;
 
 /// Library-owned typed service/action attach helpers.
 pub mod typed_service {
+    #[cfg(feature = "demo")]
+    pub use super::typed_rpc::attach_fibonacci;
     pub use super::typed_rpc::{
-        attach_builtin_action, attach_builtin_service, attach_fibonacci, attach_set_bool,
-        attach_trigger,
+        attach_builtin_action, attach_builtin_service, attach_set_bool, attach_trigger,
     };
     pub use super::typed_wire::{
         attach_typed_bus_to_ros, create_typed_ros2_to_bus_sub, wire_typed_action,
@@ -57,6 +60,7 @@ pub use mapper::{
     TypedServiceMapper, TypedTopicMapper, lookup_topic_mapper, lookup_topic_mapper_arc,
     registered_topic_types,
 };
+#[cfg(feature = "demo")]
 pub use mappers::action_bridges::FibonacciActionMapper;
 pub use mappers::service_bridges::{SetBoolServiceMapper, TriggerServiceMapper};
 

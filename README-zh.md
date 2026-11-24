@@ -305,8 +305,7 @@ bridge = (
 bridge.run()  # Ctrl+C / SIGTERM 退出
 ```
 
-完整说明与示例（Rust / Python / C++）：[`docs/zh/ros2-bridge.md`](docs/zh/ros2-bridge.md)。若要做整包迁移（而不只是桥接），见 [`docs/skills/`](docs/skills/)。
-
+完整说明与示例（Rust / Python / C++）：[`docs/zh/ros2-bridge.md`](docs/zh/ros2-bridge.md)。
 浏览器 → Python 桥 → 真实 ROS2 的完整示例，以及 Chromium 自动验收入口，见 [ROS2 桥接实验台](docs/zh/ros2-web.md)。
 
 ## *4. Protobuf消息*
@@ -386,9 +385,6 @@ pub.publish(pb.BatteryStatus(voltage=48.0, percentage=0.85))
 ### *5.3 在 bus上原型开发，再迁移至 ROS2*
 
 robot-bus轻量、环境简单，适合先完成节点原型与联调验证，再将已验证的设计迁移为原生 ROS2节点；也可继续运行在 bus上，仅桥接需要进入 ROS2图的接口。
-
-迁移手册（给开发者 / Agent用）：[`docs/skills/ros2-to-robot-bus`](docs/skills/ros2-to-robot-bus/SKILL.md) 与 [`docs/skills/robot-bus-to-ros2`](docs/skills/robot-bus-to-ros2/SKILL.md)。在 Cursor里 `@` 这两个文件，或直接说「把某包迁到 robot-bus / ROS2」。
-
 ## *6. 贡献*
 
 源码环境、按语言验证与文档检查见[贡献指南](CONTRIBUTING.md)。

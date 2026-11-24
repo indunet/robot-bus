@@ -1,11 +1,21 @@
 # Only send sources used by this example; avoid unrelated local build trees.
 **
 !Cargo.toml
-!build.rs
 !README.md
 !LICENSE
-!src/
-!src/**
+# Workspace crates (robot-bus used to live at the repo root).
+!crates/
+!crates/robot-bus/
+!crates/robot-bus/**
+!crates/robot-bus-msgs/
+!crates/robot-bus-msgs/**
+!crates/robot-bus-ros2/
+!crates/robot-bus-ros2/**
+!benches/
+!benches/robot_bus_perf/
+!benches/robot_bus_perf/**
+!benches/ros2_bridge_perf/
+!benches/ros2_bridge_perf/**
 !proto/
 !proto/**
 !scripts/

@@ -7,7 +7,9 @@
 //! Extension stacks (nav2 / control / foxglove / apriltag) are not shipped;
 //! write a TypedTopicMapper for those.
 
+#[cfg(feature = "demo")]
 pub mod action;
+#[cfg(feature = "demo")]
 pub mod action_bridges;
 pub mod convert;
 pub mod service;

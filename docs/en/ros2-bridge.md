@@ -8,7 +8,7 @@ In-process bridge between **ROS 2** and **robot-bus**: Topic / Service / Action.
 
 | Language | ROS client | Entry | Notes |
 |----------|------------|-------|-------|
-| **Rust** | `rclrs` | `robot_bus_ros2` (Cargo feature **`ros2`**) | Topics / services / actions all use typed `attach` (`TypedTopicMapper` / `TypedServiceMapper` / `TypedActionMapper`) |
+| **Rust** | `rclrs` | `robot-bus-ros2` crate (`robot_bus_ros2`) | Topics / services / actions all use typed `attach` (`TypedTopicMapper` / `TypedServiceMapper` / `TypedActionMapper`) |
 | **Python** | **`rclpy`** | `robot_bus.ros2_bridge` | Pure Python, **not** via Rust FFI / `rclrs` |
 | **C++** | **`rclcpp`** | `<robot_bus/ros2_bridge.hpp>` + `robot_bus_ros2_bridge` | Native C++, **not** via Rust FFI / `rclrs` |
 
@@ -32,12 +32,12 @@ source /opt/ros/humble/setup.bash   # or jazzy
 cargo run --bin robot_bus_broker    # or python -m robot_bus.broker
 ```
 
-**Rust `feature = "ros2"`** uses crates.io **`rclrs`**. Typed messages come from **`ros-env`**, which re-exports `share/<pkg>/rust/` on `AMENT_PREFIX_PATH`. Builtin topic mappers cover **Humble/Jazzy distro-common** interface packages only (`CORE_BRIDGE_PACKAGES` in `scripts/generate_topic_mappers.py`). Sourcing ROS is necessary but does not guarantee compatible rust IDL; verify generated field types and build in the target environment. Extension stacks (`nav2_msgs` / `control_msgs` / `foxglove_msgs` / `apriltag_msgs`) are **not** bridge builtins — write a Typed*Mapper (protos may still exist for bus-native use). See **Rust messages** below.
+**Rust `robot-bus-ros2`** uses crates.io **`rclrs`**. Typed messages come from **`ros-env`**, which re-exports `share/<pkg>/rust/` on `AMENT_PREFIX_PATH`. Builtin topic mappers cover **Humble/Jazzy distro-common** interface packages only (`CORE_BRIDGE_PACKAGES` in `scripts/generate_topic_mappers.py`). Sourcing ROS is necessary but does not guarantee compatible rust IDL; verify generated field types and build in the target environment. Extension stacks (`nav2_msgs` / `control_msgs` / `foxglove_msgs` / `apriltag_msgs`) are **not** bridge builtins — write a Typed*Mapper (protos may still exist for bus-native use). See **Rust messages** below.
 
 | Language | Dependencies |
 |----------|--------------|
 | Common | Reachable broker (tcp / ipc / discover) |
-| Rust | `robot-bus = { features = ["ros2"] }` plus a sourced ROS env (typed messages below) |
+| Rust | `robot-bus-ros2` (pulls in `robot-bus`) plus a sourced ROS env (typed messages below) |
 | Python | `robot_bus` + system **`rclpy`** (`just python-dev` / `python-dev-ros2`) |
 | C++ | `robot-bus-ros2-humble` or `…-jazzy`, or `just cpp-dev-ros2` (`-DROBOT_BUS_ROS2=ON`, links **rclcpp**) |
 
@@ -173,7 +173,7 @@ Service / action remain hand-written builtins (no generated srv/action catalogs)
 | Topic (example) | `GeometryMsgsPoseStampedMapper` | `geometry_msgs/msg/PoseStamped` |
 | Service | `TriggerServiceMapper` | `std_srvs/srv/Trigger` |
 | Service | `SetBoolServiceMapper` | `std_srvs/srv/SetBool` |
-| Action | `FibonacciActionMapper` | `example_interfaces/action/Fibonacci` |
+| Action | `FibonacciActionMapper` (needs the `demo` feature) | `example_interfaces/action/Fibonacci` |
 
 Rust also exposes `lookup_topic_mapper` / `registered_topic_types` for the core set only.
 
@@ -496,7 +496,7 @@ fn main() -> robot_bus::Result<()> {
 
 Cargo builds the bridge with **`rclrs` 0.8**, **`ros-env` 0.3**, and **`rosidl_runtime_rs` 0.7**. `ros-env` reads the generated Rust bindings from the sourced ROS environment.
 
-The `ros2` Cargo feature requires generated Rust interfaces (`share/<pkg>/rust/` under `AMENT_PREFIX_PATH`) and their ROS system libraries. Use custom mappers for extension packages such as Nav2 and Foxglove.
+The `robot-bus-ros2` crate requires generated Rust interfaces (`share/<pkg>/rust/` under `AMENT_PREFIX_PATH`) and their ROS system libraries. Use custom mappers for extension packages such as Nav2 and Foxglove.
 
 With ROS 2 Humble and the build tools installed (Rust, Protobuf compiler 35.1, C/C++ toolchain and pkg-config), run from the repository root:
 
@@ -506,13 +506,13 @@ sudo apt-get install libzmq3-dev ros-humble-rosidl-generator-rs \
 source /opt/ros/humble/setup.bash
 python3 scripts/generate_rust_msgs.py
 cargo build -p robot-bus-ros2-perf --bin ros2_bridge_perf
-cargo build -p robot-bus-ros2 --examples
+cargo build -p robot-bus-ros2 --features demo --examples
 ROS_LOCALHOST_ONLY=1 ROS_DOMAIN_ID=94 RMW_IMPLEMENTATION=rmw_fastrtps_cpp \
   cargo test -p robot-bus-ros2 --features ws \
   --test ros2_bridge -- --test-threads=1
 ```
 
-Use interface packages that ship compatible Rust bindings. On Jazzy, install the corresponding `ros-jazzy-*` packages, source `/opt/ros/jazzy/setup.bash`, and use `ROS_AUTOMATIC_DISCOVERY_RANGE=LOCALHOST` for local tests. `example_interfaces` provides Fibonacci and AddTwoInts. See [support and verification status](support.md) for the tested environments.
+Use interface packages that ship compatible Rust bindings. On Jazzy, install the corresponding `ros-jazzy-*` packages, source `/opt/ros/jazzy/setup.bash`, and use `ROS_AUTOMATIC_DISCOVERY_RANGE=LOCALHOST` for local tests. `example_interfaces` is not part of `ros_core` / `ros_base`, so the default build does not need it. The `demo` feature (Fibonacci mapper, `ros2_bridge_builtin`, `ros2_bridge_custom_add_two_ints`) needs `ros-<distro>-example-interfaces` with its Rust bindings. See [support and verification status](support.md) for the tested environments.
 
 ---
 

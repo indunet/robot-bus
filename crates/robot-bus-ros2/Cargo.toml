@@ -20,9 +20,14 @@ default = []
 # `cfg(feature = "console-api")` matches the broker type it constructs.
 ws = ["robot-bus/ws", "console-api"]
 console-api = ["robot-bus/console-api"]
+# Demo-only builtins that need `example_interfaces` (Fibonacci action mapper, AddTwoInts
+# examples/tests). `example_interfaces` is not part of ros_core/ros_base, so this is off by
+# default: install `ros-<distro>-example-interfaces` (with its Rust IDL) before enabling.
+demo = []
 
 [dependencies]
-robot-bus = { path = "../robot-bus", version = "=3.0.0", default-features = false }
+# Full robot-bus (SDK + broker + WebSocket + console), so installing this crate is enough.
+robot-bus = { path = "../robot-bus", version = "=3.0.0" }
 rclrs = "0.8"
 rosidl_runtime_rs = "0.7"
 ros-env = "0.3"
@@ -35,7 +40,7 @@ uuid = { version = "1", features = ["v4"] }
 
 [dev-dependencies]
 # Bridge tests host an in-process broker.
-robot-bus = { path = "../robot-bus", version = "=3.0.0", default-features = false, features = ["ws", "console-api"] }
+robot-bus = { path = "../robot-bus", version = "=3.0.0", features = ["ws", "console-api"] }
 libc = "0.2"
 zmq = "0.10"
 
@@ -46,10 +51,12 @@ path = "tests/ros2_bridge/main.rs"
 [[example]]
 name = "ros2_bridge_builtin"
 path = "../../examples/ros2_bridge/rust/builtin.rs"
+required-features = ["demo"]
 
 [[example]]
 name = "ros2_bridge_custom_add_two_ints"
 path = "../../examples/ros2_bridge/rust/custom_add_two_ints.rs"
+required-features = ["demo"]
 
 [package.metadata.docs.rs]
 # docs.rs has no ROS 2 toolchain; this crate is not published.
