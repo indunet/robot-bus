@@ -16,8 +16,8 @@ pub use ports::{
     FRONTEND_PORT,
 };
 
-use robot_bus::shutdown;
-use robot_bus::transports::{BindAllOpts, bind_all, bind_tcp, format_endpoints};
+use crate::shutdown;
+use crate::transports::{BindAllOpts, bind_all, bind_tcp, format_endpoints};
 use anyhow::{Context, Result};
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;

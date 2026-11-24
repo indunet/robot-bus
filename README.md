@@ -38,8 +38,6 @@ pip install robot-bus
 
 ```toml
 robot-bus = "3.0.0"
-# Embed a broker in the same process:
-# robot-bus-broker = "3.0.0"
 ```
 
 * npm

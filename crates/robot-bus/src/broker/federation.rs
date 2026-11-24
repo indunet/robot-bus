@@ -4,8 +4,8 @@ use std::path::Path;
 
 use anyhow::{Context, Result, bail};
 
-use robot_bus::discovery::{DiscoverResponse, fetch_discover, normalize_api_base};
-use robot_bus::transports::{
+use crate::discovery::{DiscoverResponse, fetch_discover, normalize_api_base};
+use crate::transports::{
     ACTION_BACKEND_CHANNEL, SERVICE_BACKEND_CHANNEL, XPUB_CHANNEL, XSUB_CHANNEL, ipc_endpoint_in,
 };
 

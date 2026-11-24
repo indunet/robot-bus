@@ -2,7 +2,6 @@
 members = [
     "crates/robot-bus-msgs",
     "crates/robot-bus",
-    "crates/robot-bus-broker",
     "crates/robot-bus-ros2",
     "benches/robot_bus_perf",
     "benches/ros2_bridge_perf",
@@ -10,7 +9,6 @@ members = [
 default-members = [
     "crates/robot-bus-msgs",
     "crates/robot-bus",
-    "crates/robot-bus-broker",
 ]
 # Invoked via --manifest-path; each declares its own [workspace].
 exclude = [

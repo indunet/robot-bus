@@ -37,7 +37,6 @@ def main() -> None:
         "README.md": f'robot-bus = "{version}"',
         "README-zh.md": f'robot-bus = "{version}"',
         "crates/robot-bus/Cargo.toml": f'version = "{version}"',
-        "crates/robot-bus-broker/Cargo.toml": f'version = "={version}"',
         "crates/robot-bus-ros2/Cargo.toml": f'version = "={version}"',
     }
     for rel, needle in must_contain.items():
@@ -47,7 +46,6 @@ def main() -> None:
 
     for rel in (
         "crates/robot-bus/Cargo.toml",
-        "crates/robot-bus-broker/Cargo.toml",
         "crates/robot-bus-msgs/Cargo.toml",
         "crates/robot-bus-ros2/Cargo.toml",
     ):

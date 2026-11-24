@@ -18,7 +18,7 @@ use std::thread;
 use std::time::Duration;
 
 use robot_bus::{Context};
-use robot_bus_broker::{RobotBusBroker};
+use robot_bus::{RobotBusBroker};
 use support::{
     ScenarioResult, env_summary, lock_broker, options_for, perf_broker_config, write_report,
 };

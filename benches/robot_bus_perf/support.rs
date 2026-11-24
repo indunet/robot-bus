@@ -6,9 +6,9 @@ use std::sync::{Mutex, MutexGuard};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 #[cfg(feature = "console-api")]
-use robot_bus_broker::ConsoleBrokerConfig;
+use robot_bus::ConsoleBrokerConfig;
 use robot_bus::{NodeOptions};
-use robot_bus_broker::{RobotBusBroker, RobotBusConfig};
+use robot_bus::{RobotBusBroker, RobotBusConfig};
 
 /// Only one bind_all broker at a time (fixed ipc / inproc names).
 static BROKER_LOCK: Mutex<()> = Mutex::new(());

@@ -4,4 +4,4 @@ Python bindings for the robot-bus message bus: `Node`, executors, and topic, ser
 
 The wheel embeds the broker, WebSocket server, Web console, and the TANK demo. Message types are generated protobuf classes, for example `from robot_bus.sensor_msgs.msg.v1 import Imu`.
 
-Source, documentation, and the Rust crates (`robot-bus`, `robot-bus-msgs`, `robot-bus-broker`) live at https://github.com/indunet/robot-bus.
+Source, documentation, and the Rust crates (`robot-bus`, `robot-bus-msgs`) live at https://github.com/indunet/robot-bus.

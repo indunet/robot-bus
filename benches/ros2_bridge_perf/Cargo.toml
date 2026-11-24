@@ -11,8 +11,7 @@ name = "ros2_bridge_perf"
 path = "main.rs"
 
 [dependencies]
-robot-bus = { path = "../../crates/robot-bus", default-features = false }
-robot-bus-broker = { path = "../../crates/robot-bus-broker", default-features = false, features = ["ws"] }
+robot-bus = { path = "../../crates/robot-bus", default-features = false, features = ["ws"] }
 robot-bus-ros2 = { path = "../../crates/robot-bus-ros2" }
 rclrs = "0.8"
 ros-env = "0.3"

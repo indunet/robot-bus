@@ -2,8 +2,8 @@
 
 use robot_bus::errors::{BusError, parse_error_body, rpc_error_body};
 
+use robot_bus::RobotBusBroker;
 use robot_bus::{Node, NodeOptions};
-use robot_bus_broker::{RobotBusBroker};
 use std::sync::Arc;
 use std::thread;
 use std::time::{Duration, Instant};

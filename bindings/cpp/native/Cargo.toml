@@ -20,8 +20,7 @@ ros2 = ["dep:robot-bus-ros2"]
 [dependencies]
 anyhow = "1"
 prost = "0.14"
-robot-bus = { path = "../../../crates/robot-bus", default-features = false, features = ["ws"] }
-robot-bus-broker = { path = "../../../crates/robot-bus-broker", default-features = false, features = ["ws", "console", "demo-tank"] }
+robot-bus = { path = "../../../crates/robot-bus", default-features = false, features = ["ws", "console", "demo-tank"] }
 robot-bus-ros2 = { path = "../../../crates/robot-bus-ros2", optional = true }
 uuid = { version = "1", features = ["v4"] }
 

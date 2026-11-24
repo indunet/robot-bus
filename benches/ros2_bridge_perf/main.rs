@@ -23,7 +23,7 @@ fn main() {
         TriggerServiceMapper,
     };
     use robot_bus::{Context};
-use robot_bus_broker::{RobotBusBroker};
+use robot_bus::{RobotBusBroker};
 
     use config::MSG_HWM;
     use report::write_reports;

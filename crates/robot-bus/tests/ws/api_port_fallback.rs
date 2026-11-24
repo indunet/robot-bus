@@ -1,8 +1,8 @@
 use std::net::{SocketAddr, TcpListener};
 use std::time::Duration;
 
-use robot_bus::{discovery::fetch_discover};
-use robot_bus_broker::{RobotBusBroker, RobotBusConfig};
+use robot_bus::discovery::fetch_discover;
+use robot_bus::{RobotBusBroker, RobotBusConfig};
 
 fn consecutive_listeners() -> (TcpListener, TcpListener) {
     for _ in 0..32 {

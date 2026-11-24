@@ -89,4 +89,3 @@ jobs:
           wait_crate robot-bus-msgs "$VER"
           cargo publish -p robot-bus --allow-dirty
           wait_crate robot-bus "$VER"
-          cargo publish -p robot-bus-broker --allow-dirty

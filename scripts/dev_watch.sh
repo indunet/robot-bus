@@ -37,21 +37,21 @@ console_sources_newer_than() {
 }
 
 run_once() {
-  local stamp="$root/crates/robot-bus-broker/assets/console/.watch-stamp"
+  local stamp="$root/crates/robot-bus/assets/console/.watch-stamp"
   local need_console=0
 
   stop_broker_listeners
 
-  if [[ ! -f "$stamp" ]] || [[ ! -f "$root/crates/robot-bus-broker/assets/console/index.html" ]]; then
+  if [[ ! -f "$stamp" ]] || [[ ! -f "$root/crates/robot-bus/assets/console/index.html" ]]; then
     need_console=1
   elif console_sources_newer_than "$stamp"; then
     need_console=1
   fi
 
   if [[ "$need_console" -eq 1 ]]; then
-    echo "Building console → crates/robot-bus-broker/assets/console/ ..."
+    echo "Building console → crates/robot-bus/assets/console/ ..."
     just console
-    mkdir -p "$root/crates/robot-bus-broker/assets/console"
+    mkdir -p "$root/crates/robot-bus/assets/console"
     touch "$stamp"
   else
     echo "Console assets up to date; skipping just console."
@@ -60,7 +60,7 @@ run_once() {
   echo "Starting broker → http://127.0.0.1:15560"
   # Do not `exec`: cargo-watch needs a killable process group; with `exec` the
   # broker can survive a flaky restart and keep serving stale assets.
-  cargo run -p robot-bus-broker --bin robot_bus_broker
+  cargo run -p robot-bus --bin robot_bus_broker
 }
 
 if [[ "${1:-}" == "--once" ]]; then
@@ -99,7 +99,7 @@ exec cargo watch \
   -i '**/out/**' \
   -i '**/tsconfig.tsbuildinfo' \
   -i '**/next-env.d.ts' \
-  -i 'crates/robot-bus-broker/assets/console/**' \
+  -i 'crates/robot-bus/assets/console/**' \
   -i 'console/lib/bundled-docs.generated.ts' \
   -i 'bindings/typescript/dist/**' \
   -i 'bindings/typescript/generated/**' \

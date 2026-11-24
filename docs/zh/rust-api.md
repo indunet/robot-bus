@@ -6,12 +6,10 @@
 
 ```toml
 robot-bus = "3.0.0"
-robot-bus-broker = "3.0.0"
-# 本地：
-# robot-bus = { path = "../crates/robot-bus" }
-# robot-bus-broker = { path = "../crates/robot-bus-broker" }
-# 只写客户端时不必依赖 robot-bus-broker。WebSocket 客户端是 robot-bus 的 `ws` feature，默认关闭。
-# WebSocket 服务端、控制台和 tank 演示在 robot-bus-broker 里，默认开启。
+# 本地：robot-bus = { path = "../crates/robot-bus" }
+# 一个包同时包含 SDK 和 broker。默认的 `full` feature 会打开 broker、
+# WebSocket（客户端和服务端）、内嵌控制台和 tank 演示。
+# 只写客户端时可以全部关闭：robot-bus = { version = "3.0.0", default-features = false }
 ```
 
 ## Broker启动
@@ -19,7 +17,7 @@ robot-bus-broker = "3.0.0"
 **更鼓励在程序里启动 broker**（`RobotBusBroker::start`），让 broker 与业务同进程。CLI 适合演示、多进程示例，或单独拉起常驻 broker。默认一次启动 **message / service / action** 三条总线；每条 TCP默认 bind `…:0`（由操作系统分配空闲端口），并启动 **API**（WebSocket RPC `/ws-rpc` / `GET /api/v1/discover` / console http），默认 `0.0.0.0:15560`。
 
 ```rust
-use robot_bus_broker::{RobotBusBroker, RobotBusConfig};
+use robot_bus::{RobotBusBroker, RobotBusConfig};
 
 let broker = RobotBusBroker::start(RobotBusConfig::default())?;
 // 默认端点见下表；需要改端口 / 地址时再填 RobotBusConfig字段
@@ -29,8 +27,8 @@ broker.stop()?;
 需要独立进程时再用 CLI：
 
 ```bash
-cargo run -p robot-bus-broker --bin robot_bus_broker
-# 查看参数：cargo run -p robot-bus-broker --bin robot_bus_broker -- --help
+cargo run --bin robot_bus_broker
+# 查看参数：cargo run --bin robot_bus_broker -- --help
 # 只要 TCP：加 --tcp-only
 # API口：--api-listen 0.0.0.0:15560（别名 --console-listen）
 # 对外可达主机：--advertise-host HOST
@@ -92,8 +90,7 @@ node.add_on_connection_event(|old, new, reason| {
 **同进程 inproc：** ZeroMQ的 `inproc://`是 context-local。嵌入式 broker与 Node必须共用同一个 [`Context`](../../crates/robot-bus/src/runtime/context.rs)：
 
 ```rust
-use robot_bus::{Context, Node};
-use robot_bus_broker::{RobotBusBroker, RobotBusConfig};
+use robot_bus::{Context, Node, RobotBusBroker, RobotBusConfig};
 
 let ctx = Context::new();
 let broker = RobotBusBroker::start_with_context(&ctx, RobotBusConfig::default())?;
@@ -400,8 +397,7 @@ Raw bytes：`create_action_server_raw` / `create_action_client_raw`。KeepLast�
 
 ```rust
 use std::sync::Arc;
-use robot_bus::{Node, NodeOptions};
-use robot_bus_broker::{RobotBusBroker, RobotBusConfig};
+use robot_bus::{Node, NodeOptions, RobotBusBroker, RobotBusConfig};
 
 fn main() -> anyhow::Result<()> {
     let broker = RobotBusBroker::start(RobotBusConfig::default())?;
@@ -499,7 +495,7 @@ node.spin()?;
 
 ## WebSocket RPC服务端
 
-Rust WebSocket 服务端模块为 `robot_bus_broker::ws`。Broker 监听配置使用 `robot_bus_broker::WsConfig`；独立服务端配置使用 `robot_bus_broker::ws::WsServerConfig`。请求处理类型为 `WsMessageService`、`WsServiceHandler` 和 `WsActionHandler`。更新已有 Rust 集成时，需将模块导入和类型引用同步改为这些名称。`/ws-rpc` 地址、帧格式、`ws` feature 和客户端 API 保持不变。
+Rust WebSocket 服务端模块为 `robot_bus::ws`。Broker 监听配置使用 `robot_bus::WsConfig`；独立服务端配置使用 `robot_bus::ws::WsServerConfig`。请求处理类型为 `WsMessageService`、`WsServiceHandler` 和 `WsActionHandler`。更新已有 Rust 集成时，需将模块导入和类型引用同步改为这些名称。`/ws-rpc` 地址、帧格式、`ws` feature 和客户端 API 保持不变。
 
 由 `RobotBusBroker` / `robot_bus_broker`一并启动（feature `ws`，默认开启）。原生与浏览器客户端共用 API端口上的 **`/ws-rpc`**（默认 `0.0.0.0:15560`）。**不兼容旧版：** V3成帧；不再接受 V2的 method字符串和 `TopicMessage`信封。
 

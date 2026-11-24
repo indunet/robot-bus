@@ -7,11 +7,11 @@ use std::time::{Duration, Instant};
 
 use crate::common::{ephemeral_robot_bus_config, lock_brokers};
 use rclrs::CreateBasicExecutor;
-use robot_bus_ros2::CONSOLE_DETECT_TIMEOUT;
-use robot_bus_ros2::{Ros2Bridge, StdMsgsStringMapper, TopicQos, TypedTopicMapper};
+use robot_bus::RobotBusBroker;
 use robot_bus::std_msgs::msg::v1::String as BusString;
 use robot_bus::{Node, NodeOptions};
-use robot_bus_broker::{RobotBusBroker};
+use robot_bus_ros2::CONSOLE_DETECT_TIMEOUT;
+use robot_bus_ros2::{Ros2Bridge, StdMsgsStringMapper, TopicQos, TypedTopicMapper};
 
 fn node_options_from_broker(broker: &RobotBusBroker) -> NodeOptions {
     NodeOptions {
@@ -25,7 +25,7 @@ fn node_options_from_broker(broker: &RobotBusBroker) -> NodeOptions {
     }
 }
 
-fn console_on_config() -> robot_bus_broker::RobotBusConfig {
+fn console_on_config() -> robot_bus::RobotBusConfig {
     let mut config = ephemeral_robot_bus_config();
     config.console.enabled = true;
     config.console.tank_enabled = false;

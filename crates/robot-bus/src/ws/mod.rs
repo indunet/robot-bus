@@ -12,8 +12,8 @@ pub mod sub_demux;
 pub mod subscription_queue;
 pub mod ws;
 
-pub use robot_bus::wire::rpc_status;
-pub use robot_bus::wire::ws_frame;
+pub use crate::wire::rpc_status;
+pub use crate::wire::ws_frame;
 
 pub use action::WsActionHandler;
 pub use message::WsMessageService;

@@ -18,8 +18,8 @@ default = []
 # Enables the WebSocket client on the SDK and the broker used by bridge tests.
 # `console-api` is a package feature so the shared broker test helper's
 # `cfg(feature = "console-api")` matches the broker type it constructs.
-ws = ["robot-bus/ws", "robot-bus-broker/ws", "console-api"]
-console-api = ["robot-bus-broker/console-api"]
+ws = ["robot-bus/ws", "console-api"]
+console-api = ["robot-bus/console-api"]
 
 [dependencies]
 robot-bus = { path = "../robot-bus", version = "=3.0.0", default-features = false }
@@ -34,7 +34,8 @@ prost-types = "0.14"
 uuid = { version = "1", features = ["v4"] }
 
 [dev-dependencies]
-robot-bus-broker = { path = "../robot-bus-broker", version = "=3.0.0", default-features = false, features = ["ws", "console-api"] }
+# Bridge tests host an in-process broker.
+robot-bus = { path = "../robot-bus", version = "=3.0.0", default-features = false, features = ["ws", "console-api"] }
 libc = "0.2"
 zmq = "0.10"
 

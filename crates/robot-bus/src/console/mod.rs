@@ -79,7 +79,7 @@ pub async fn static_handler(uri: Uri) -> Response {
     // Do not SPA-fallback API, WebSocket RPC, or legacy gRPC path prefixes.
     if path.starts_with("api/")
         || path == "ws"
-        || path == robot_bus::discovery::DEFAULT_WS_RPC_PATH.trim_start_matches('/')
+        || path == crate::discovery::DEFAULT_WS_RPC_PATH.trim_start_matches('/')
         || path.starts_with("robot_bus_interfaces.")
     {
         return (StatusCode::NOT_FOUND, "not found").into_response();

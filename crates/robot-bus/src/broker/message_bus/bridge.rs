@@ -17,7 +17,7 @@ use zmq::{Context as ZmqContext, Socket, SocketType};
 use super::BusConfig;
 use super::metrics::MessageMetrics;
 use super::peer::MessagePeer;
-use robot_bus::console_topics;
+use crate::console_topics;
 
 const HOP_SEP: char = ',';
 

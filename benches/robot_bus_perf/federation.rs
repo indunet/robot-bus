@@ -10,18 +10,18 @@ use std::thread;
 use std::time::{Duration, Instant};
 
 #[cfg(feature = "console-api")]
-use robot_bus_broker::ConsoleBrokerConfig;
+use robot_bus::ConsoleBrokerConfig;
 use robot_bus::action_bus::ActionClient;
-use robot_bus_broker::broker::action_bus::{ActionBusConfig, ActionPeer};
-use robot_bus_broker::broker::message_bus::{BusConfig, MessagePeer};
-use robot_bus_broker::broker::service_bus::{ServiceBusConfig, ServicePeer};
+use robot_bus::broker::action_bus::{ActionBusConfig, ActionPeer};
+use robot_bus::broker::message_bus::{BusConfig, MessagePeer};
+use robot_bus::broker::service_bus::{ServiceBusConfig, ServicePeer};
 use robot_bus::service_bus::ServiceClient;
 use robot_bus::worker_thread::WorkerThread;
 use robot_bus::{HighWaterMark, Node, NodeOptions, Publisher};
-use robot_bus_broker::{DiscoveryConfig, RobotBusBroker, RobotBusConfig};
+use robot_bus::{DiscoveryConfig, RobotBusBroker, RobotBusConfig};
 
 #[cfg(feature = "ws")]
-use robot_bus_broker::WsConfig;
+use robot_bus::WsConfig;
 
 use crate::native::run_pubsub;
 use crate::pacing::{WARMUP, act_iters, make_payload, msg_hwm, rpc_warmup, svc_iters};

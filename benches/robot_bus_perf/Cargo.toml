@@ -10,6 +10,11 @@ description = "robot-bus performance harness"
 name = "robot_bus_perf"
 path = "main.rs"
 
+[features]
+default = ["ws", "console-api"]
+ws = ["robot-bus/ws"]
+console-api = ["robot-bus/console-api"]
+
 [dependencies]
-robot-bus = { path = "../../crates/robot-bus", default-features = false, features = ["ws"] }
-robot-bus-broker = { path = "../../crates/robot-bus-broker", default-features = false, features = ["ws"] }
+robot-bus = { path = "../../crates/robot-bus", default-features = false, features = ["broker"] }
+serde_json = "1"

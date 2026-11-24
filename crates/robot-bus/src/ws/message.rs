@@ -3,10 +3,10 @@
 use std::sync::{Arc, Mutex};
 
 use super::subscription_queue::SubscriptionReceiver;
-use robot_bus::runtime::SubscriptionOverflowPolicy;
+use crate::runtime::SubscriptionOverflowPolicy;
 
-use robot_bus::errors::BusError;
-use robot_bus::message_bus::Publisher;
+use crate::errors::BusError;
+use crate::message_bus::Publisher;
 
 use super::rpc_status::RpcStatus;
 use super::sub_demux::{SubDemux, SubscriptionSnapshot};

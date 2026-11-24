@@ -15,16 +15,15 @@ crate-type = ["cdylib"]
 [features]
 default = []
 extension-module = ["pyo3/extension-module"]
-ws = ["robot-bus/ws", "robot-bus-broker/ws"]
-console = ["console-api", "robot-bus-broker/console"]
-console-api = ["robot-bus-broker/console-api"]
-demo-tank = ["robot-bus-broker/demo-tank"]
+ws = ["robot-bus/ws"]
+console = ["console-api", "robot-bus/console"]
+console-api = ["robot-bus/console-api"]
+demo-tank = ["robot-bus/demo-tank"]
 
 [dependencies]
 pyo3 = { version = "0.25", features = ["abi3-py39"] }
 anyhow = "1"
-robot-bus = { path = "../../../crates/robot-bus", default-features = false }
-robot-bus-broker = { path = "../../../crates/robot-bus-broker", default-features = false }
+robot-bus = { path = "../../../crates/robot-bus", default-features = false, features = ["broker"] }
 uuid = { version = "1", features = ["v4"] }
 
 [profile.release]

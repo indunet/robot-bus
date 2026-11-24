@@ -433,7 +433,7 @@ jobs:
         shell: bash
         run: |
           set -eux
-          cargo build --release -p robot-bus-broker --bin robot_bus_broker
+          cargo build --release -p robot-bus --bin robot_bus_broker
           cargo build --release --manifest-path bindings/cpp/native/Cargo.toml
 
       - name: Build msgs (CMake)

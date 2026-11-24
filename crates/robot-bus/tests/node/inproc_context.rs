@@ -8,9 +8,11 @@ use std::time::{Duration, Instant};
 
 use crate::common::lock_brokers;
 #[cfg(feature = "console-api")]
-use robot_bus_broker::ConsoleBrokerConfig;
-use robot_bus::{ActionKind, ActionMessage, Context, HighWaterMark, Node, NodeOptions, Publisher, Subscriber};
-use robot_bus_broker::{RobotBusBroker, RobotBusConfig};
+use robot_bus::ConsoleBrokerConfig;
+use robot_bus::{
+    ActionKind, ActionMessage, Context, HighWaterMark, Node, NodeOptions, Publisher, Subscriber,
+};
+use robot_bus::{RobotBusBroker, RobotBusConfig};
 
 fn inproc_broker_config() -> RobotBusConfig {
     // Ephemeral TCP/gRPC ports — defaults (e.g. :15560) collide under parallel cargo test.

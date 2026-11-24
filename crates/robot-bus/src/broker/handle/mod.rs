@@ -17,9 +17,9 @@ use std::time::Duration;
 use super::action_bus::ActionMetrics;
 use super::message_bus::MessageMetrics;
 use super::service_bus::ServiceMetrics;
-use robot_bus::discovery::{DiscoverResponse, resolve_advertise_host, rewrite_bind_host};
-use robot_bus::runtime::Context as BusContext;
-use robot_bus::transports::{
+use crate::discovery::{DiscoverResponse, resolve_advertise_host, rewrite_bind_host};
+use crate::runtime::Context as BusContext;
+use crate::transports::{
     ACTION_BACKEND_CHANNEL, ACTION_FRONTEND_CHANNEL, BindAllOpts, SERVICE_BACKEND_CHANNEL,
     SERVICE_FRONTEND_CHANNEL, XPUB_CHANNEL, XSUB_CHANNEL, inproc_endpoint_with_prefix,
     ipc_endpoint_in, ipc_supported,
@@ -103,7 +103,7 @@ fn ws_rpc_url_for_listen(listen: SocketAddr) -> String {
     } else {
         http
     };
-    robot_bus::discovery::with_ws_rpc_path(&ws)
+    crate::discovery::with_ws_rpc_path(&ws)
 }
 
 #[cfg(feature = "ws")]
@@ -285,7 +285,7 @@ impl RobotBusBroker {
         Self::start_with_context(&context, config)
     }
 
-    /// Start buses using a shared [`robot_bus::Context`] (required for inproc with SDK Nodes).
+    /// Start buses using a shared [`crate::Context`] (required for inproc with SDK Nodes).
     ///
     /// Takes a shared reference; the ZMQ context is refcounted, so the caller keeps using
     /// the same `context` for Nodes without an explicit `.clone()`.
@@ -733,7 +733,7 @@ fn format_startup_banner(discover: &DiscoverResponse) -> String {
     }
     #[cfg(feature = "ws")]
     {
-        let ws_url = robot_bus::discovery::with_ws_rpc_path(discover.api_url.trim_end_matches('/'));
+        let ws_url = crate::discovery::with_ws_rpc_path(discover.api_url.trim_end_matches('/'));
         lines.push(row("ws", ws_url));
     }
     lines.push(row(

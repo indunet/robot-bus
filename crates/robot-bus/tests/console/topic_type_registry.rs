@@ -7,10 +7,10 @@ use std::time::{Duration, Instant};
 
 use crate::common::{ephemeral_robot_bus_config, lock_brokers};
 use prost::{Message, Name};
-use robot_bus_broker::broker::action_bus::ActionBusConfig;
-use robot_bus_broker::broker::message_bus::BusConfig;
-use robot_bus_broker::broker::service_bus::ServiceBusConfig;
-use robot_bus_broker::broker::{
+use robot_bus::broker::action_bus::ActionBusConfig;
+use robot_bus::broker::message_bus::BusConfig;
+use robot_bus::broker::service_bus::ServiceBusConfig;
+use robot_bus::broker::{
     ConsoleBrokerConfig, DiscoveryConfig, RobotBusBroker, RobotBusConfig, WsConfig,
 };
 use robot_bus::sensor_msgs::msg::v1::Imu;

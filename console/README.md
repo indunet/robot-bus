@@ -71,7 +71,7 @@ pnpm dev
 
 ## Embedded in the broker
 
-Static export synced to `crates/robot-bus-broker/assets/console/` (gitignored):
+Static export synced to `crates/robot-bus/assets/console/` (gitignored):
 
 ```bash
 # repo root
@@ -81,4 +81,4 @@ cargo run --bin robot_bus_broker
 # http://localhost:15560
 ```
 
-Builds of `robot-bus-broker` with the `console` feature require `crates/robot-bus-broker/assets/console/index.html` or `build.rs` fails and tells you to run `just console`.
+Builds of `robot-bus` with the `console` feature require `crates/robot-bus/assets/console/index.html` or `build.rs` fails and tells you to run `just console`.

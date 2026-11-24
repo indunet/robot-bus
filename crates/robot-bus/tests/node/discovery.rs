@@ -6,12 +6,12 @@ use robot_bus::{NodeOptions, discovery};
 #[cfg(feature = "ws")]
 use crate::common::{free_ports, lock_brokers};
 #[cfg(feature = "ws")]
+use robot_bus::Node;
+#[cfg(feature = "ws")]
 use robot_bus::discovery::DiscoverOpts;
 #[cfg(feature = "ws")]
 use robot_bus::message_bus::{Publisher, Subscriber};
-#[cfg(feature = "ws")]
-use robot_bus::{Node};
-use robot_bus_broker::{RobotBusBroker, RobotBusConfig};
+use robot_bus::{RobotBusBroker, RobotBusConfig};
 #[cfg(feature = "ws")]
 use std::thread;
 #[cfg(feature = "ws")]

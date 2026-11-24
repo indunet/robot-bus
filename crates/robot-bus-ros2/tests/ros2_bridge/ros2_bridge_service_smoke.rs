@@ -7,11 +7,11 @@ use std::time::{Duration, Instant};
 
 use crate::common::{ephemeral_robot_bus_config, lock_brokers};
 use rclrs::CreateBasicExecutor;
-use robot_bus_ros2::vendor::std_srvs::srv as ros_srv;
-use robot_bus_ros2::{Ros2Bridge, TopicQos, TriggerServiceMapper};
+use robot_bus::RobotBusBroker;
 use robot_bus::std_srvs::srv::v1::{Trigger, TriggerRequest, TriggerResponse};
 use robot_bus::{Node, NodeOptions};
-use robot_bus_broker::{RobotBusBroker};
+use robot_bus_ros2::vendor::std_srvs::srv as ros_srv;
+use robot_bus_ros2::{Ros2Bridge, TopicQos, TriggerServiceMapper};
 
 fn node_options_from_broker(broker: &RobotBusBroker) -> NodeOptions {
     NodeOptions {

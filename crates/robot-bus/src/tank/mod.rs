@@ -19,15 +19,15 @@ use std::time::{Duration, Instant};
 
 use uuid::Uuid;
 
-use robot_bus::action::v1::{
+use crate::action::v1::{
     MultiWaypointNavigation, MultiWaypointNavigationFeedback, MultiWaypointNavigationGoal,
     MultiWaypointNavigationResult, PointNavigation, PointNavigationFeedback, PointNavigationGoal,
     PointNavigationResult,
 };
-use robot_bus::geometry_msgs::msg::v1::{Pose2D, Twist};
-use robot_bus::robot_bus_interfaces::srv::v1::{Reset, ResetRequest, ResetResponse};
-use robot_bus::runtime::{CallbackGroupType, Context, MultiThreadedExecutor, Node, NodeOptions};
-use robot_bus::{ActionOutcome, BusError, Result};
+use crate::geometry_msgs::msg::v1::{Pose2D, Twist};
+use crate::robot_bus_interfaces::srv::v1::{Reset, ResetRequest, ResetResponse};
+use crate::runtime::{CallbackGroupType, Context, MultiThreadedExecutor, Node, NodeOptions};
+use crate::{ActionOutcome, BusError, Result};
 
 /// Built-in tank demo namespace under the reserved `/robot_bus/*` prefix.
 pub const TANK_PREFIX: &str = "/robot_bus/tank";

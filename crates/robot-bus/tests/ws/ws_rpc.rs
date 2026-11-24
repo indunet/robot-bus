@@ -7,12 +7,12 @@ use std::time::Duration;
 
 use crate::common::{ephemeral_robot_bus_config, lock_brokers};
 use futures_util::{SinkExt, StreamExt};
-use robot_bus_broker::ws::ws_frame::{
+use robot_bus::RobotBusBroker;
+use robot_bus::ws::ws_frame::{
     ACTION_KIND_RESULT, Frame, RequestHeader, decode_action_data, decode_frame,
     decode_subscribe_data, encode_frame,
 };
 use robot_bus::{Publisher, Subscriber};
-use robot_bus_broker::{RobotBusBroker};
 use tokio_tungstenite::connect_async;
 use tokio_tungstenite::tungstenite::Message;
 use zmq::{Context as ZmqContext, SocketType};

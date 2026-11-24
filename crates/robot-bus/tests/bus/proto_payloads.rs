@@ -8,7 +8,7 @@ use std::thread;
 use std::time::Duration;
 
 use prost::Message;
-use robot_bus_broker::RobotBusBroker;
+use robot_bus::RobotBusBroker;
 use robot_bus::action_bus::{ActionClient, ActionKind};
 use robot_bus::geometry_msgs::msg::v1::{
     Pose, Pose2D, PoseStamped, PoseWithCovariance, PoseWithCovarianceStamped, Twist, Vector3,

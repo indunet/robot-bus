@@ -9,7 +9,7 @@ node_modules/
 .next/
 console/out/
 console/lib/bundled-docs.generated.ts
-crates/robot-bus-broker/assets/console/
+crates/robot-bus/assets/console/
 *.tsbuildinfo
 pnpm-debug.log*
 npm-debug.log*

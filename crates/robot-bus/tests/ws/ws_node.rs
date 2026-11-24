@@ -3,9 +3,9 @@ use std::thread;
 use std::time::Duration;
 
 use crate::common::{ephemeral_robot_bus_config, lock_brokers};
+use robot_bus::RobotBusBroker;
 use robot_bus::worker_thread::WorkerThread;
 use robot_bus::{Node, Publisher, QosProfile};
-use robot_bus_broker::{RobotBusBroker};
 
 fn start_bus() -> (crate::common::BrokerLockGuard, RobotBusBroker) {
     let guard = lock_brokers();

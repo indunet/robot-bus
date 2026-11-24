@@ -6,13 +6,10 @@ English | [中文](../zh/rust-api.md)
 
 ```toml
 robot-bus = "3.0.0"
-robot-bus-broker = "3.0.0"
-# Local:
-# robot-bus = { path = "../crates/robot-bus" }
-# robot-bus-broker = { path = "../crates/robot-bus-broker" }
-# Client-only programs do not depend on robot-bus-broker.
-# The WebSocket client is the `ws` feature of robot-bus and is off by default.
-# The WebSocket server, console, and tank demo live in robot-bus-broker and are on by default.
+# Local: robot-bus = { path = "../crates/robot-bus" }
+# One crate holds the SDK and the broker. The default `full` feature set turns on the broker,
+# WebSocket (client and server), embedded console, and tank demo.
+# Client-only programs can drop all of it: robot-bus = { version = "3.0.0", default-features = false }
 ```
 
 ## Broker startup
@@ -20,7 +17,7 @@ robot-bus-broker = "3.0.0"
 **Prefer starting the broker from your program** (`RobotBusBroker::start`) so it shares a process with the application. The CLI is for demos, multi-process examples, or a standalone long-running broker. By default one startup brings up **message / service / action** buses; each TCP bind defaults to `…:0` (OS assigns a free port), plus **API** (WebSocket RPC `/ws-rpc` / `GET /api/v1/discover` / console http), default `0.0.0.0:15560`.
 
 ```rust
-use robot_bus_broker::{RobotBusBroker, RobotBusConfig};
+use robot_bus::{RobotBusBroker, RobotBusConfig};
 
 let broker = RobotBusBroker::start(RobotBusConfig::default())?;
 // Default endpoints in the table below; set RobotBusConfig fields when you need different ports / addresses
@@ -30,8 +27,8 @@ broker.stop()?;
 Use the CLI when you need a standalone process:
 
 ```bash
-cargo run -p robot-bus-broker --bin robot_bus_broker
-# See options: cargo run -p robot-bus-broker --bin robot_bus_broker -- --help
+cargo run --bin robot_bus_broker
+# See options: cargo run --bin robot_bus_broker -- --help
 # TCP only: add --tcp-only
 # API port: --api-listen 0.0.0.0:15560 (alias --console-listen)
 # Externally reachable host: --advertise-host HOST
@@ -93,8 +90,7 @@ node.add_on_connection_event(|old, new, reason| {
 **Same-process inproc:** ZeroMQ `inproc://` is context-local. An embedded broker and Node must share the same [`Context`](../../crates/robot-bus/src/runtime/context.rs):
 
 ```rust
-use robot_bus::{Context, Node};
-use robot_bus_broker::{RobotBusBroker, RobotBusConfig};
+use robot_bus::{Context, Node, RobotBusBroker, RobotBusConfig};
 
 let ctx = Context::new();
 let broker = RobotBusBroker::start_with_context(&ctx, RobotBusConfig::default())?;
@@ -401,8 +397,7 @@ No need to run the `robot_bus_broker` binary separately; fill bind addresses fro
 
 ```rust
 use std::sync::Arc;
-use robot_bus::{Node, NodeOptions};
-use robot_bus_broker::{RobotBusBroker, RobotBusConfig};
+use robot_bus::{Node, NodeOptions, RobotBusBroker, RobotBusConfig};
 
 fn main() -> anyhow::Result<()> {
     let broker = RobotBusBroker::start(RobotBusConfig::default())?;
@@ -500,7 +495,7 @@ Under the hood this is multiplexed WebSocket RPC (V3 opcodes: Subscribe / Publis
 
 ## WebSocket RPC server
 
-The Rust WebSocket module is `robot_bus::ws`. Broker listen options use `robot_bus_broker::WsConfig`; standalone server setup uses `robot_bus_broker::ws::WsServerConfig`. Request handling types are `WsMessageService`, `WsServiceHandler`, and `WsActionHandler`. When updating existing Rust integrations, update imports and type names to these names. The `/ws-rpc` endpoint, frame format, `ws` feature, and client APIs are unchanged.
+The Rust WebSocket module is `robot_bus::ws`. Broker listen options use `robot_bus::WsConfig`; standalone server setup uses `robot_bus::ws::WsServerConfig`. Request handling types are `WsMessageService`, `WsServiceHandler`, and `WsActionHandler`. When updating existing Rust integrations, update imports and type names to these names. The `/ws-rpc` endpoint, frame format, `ws` feature, and client APIs are unchanged.
 
 Started together by `RobotBusBroker` / `robot_bus_broker` (feature `ws`, on by default). Native and browser clients share **`/ws-rpc`** on the API port (default `0.0.0.0:15560`). **Breaking:** V3 framing; V2 method-string + `TopicMessage` envelopes are not accepted.
 

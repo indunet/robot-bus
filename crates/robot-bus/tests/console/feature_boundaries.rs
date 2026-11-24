@@ -7,7 +7,7 @@ fn monitoring_works_without_assets_and_demo_flag_matches_build() {
     config.console.enabled = true;
     // Even an explicitly enabled runtime flag cannot resurrect omitted code.
     config.console.tank_enabled = true;
-    let broker = robot_bus_broker::RobotBusBroker::start(config).unwrap();
+    let broker = robot_bus::RobotBusBroker::start(config).unwrap();
     let base = format!("http://{}", broker.console_listen().unwrap());
     let status: serde_json::Value = ureq::get(&format!("{base}/api/v1/status"))
         .call()
@@ -48,7 +48,7 @@ fn monitoring_only_accepts_api_listen_and_cors_flags() {
         "http://localhost:3020",
     ]
     .map(str::to_string);
-    let config = robot_bus_broker::broker::parse_robot_bus_config(&args)
+    let config = robot_bus::broker::parse_robot_bus_config(&args)
         .unwrap()
         .unwrap();
     assert_eq!(config.console.listen.to_string(), "127.0.0.1:0");

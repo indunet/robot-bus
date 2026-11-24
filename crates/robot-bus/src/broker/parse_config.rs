@@ -408,7 +408,7 @@ Console options (feature `console`, default on):\n  \
 --no-docs                      Hide docs sidebar in console (shown by default)\n  \
 --console-cors-origin ORIGIN   Allow browser origin (repeatable)\n\n\
 --help, -h                     Show this help\n\n\
-Embed in code: robot_bus_broker::RobotBusBroker::start(RobotBusConfig { ... }).\n\
+Embed in code: robot_bus::RobotBusBroker::start(RobotBusConfig { ... }).\n\
 Clients: GET /api/v1/discover on the actual API port shown at startup, then connect to returned ZMQ endpoints.\n"
 }
 

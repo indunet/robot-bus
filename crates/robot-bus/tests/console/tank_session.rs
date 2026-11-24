@@ -6,15 +6,15 @@ use std::thread;
 use std::time::{Duration, Instant};
 
 use crate::common::lock_brokers;
-use robot_bus_broker::broker::action_bus::ActionBusConfig;
-use robot_bus_broker::broker::message_bus::BusConfig;
-use robot_bus_broker::broker::service_bus::ServiceBusConfig;
-use robot_bus_broker::broker::{
+use robot_bus::broker::action_bus::ActionBusConfig;
+use robot_bus::broker::message_bus::BusConfig;
+use robot_bus::broker::service_bus::ServiceBusConfig;
+use robot_bus::broker::{
     ConsoleBrokerConfig, DiscoveryConfig, RobotBusBroker, RobotBusConfig, WsConfig,
 };
 use robot_bus::geometry_msgs::msg::v1::{Pose2D, Twist, Vector3};
+use robot_bus::{CMD_VEL_TOPIC, POSE_TOPIC};
 use robot_bus::{Node, NodeOptions};
-use robot_bus_broker::{CMD_VEL_TOPIC, POSE_TOPIC};
 
 fn test_broker_config(
     msg_xsub: u16,

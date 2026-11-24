@@ -4,7 +4,7 @@
 //! client (DEALER) and worker(s) (DEALER), then verifies end-to-end routing
 //! of goal/feedback/result and cancel flows.
 
-use robot_bus_broker::broker::action_bus::{ActionBusConfig, run_loop};
+use robot_bus::broker::action_bus::{ActionBusConfig, run_loop};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::thread;

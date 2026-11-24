@@ -9,10 +9,10 @@ use std::time::Duration;
 
 use crate::common::lock_brokers;
 use robot_bus::action_bus::ActionClient;
-use robot_bus_broker::broker::action_bus::ActionBusConfig;
-use robot_bus_broker::broker::message_bus::BusConfig;
-use robot_bus_broker::broker::service_bus::ServiceBusConfig;
-use robot_bus_broker::broker::{
+use robot_bus::broker::action_bus::ActionBusConfig;
+use robot_bus::broker::message_bus::BusConfig;
+use robot_bus::broker::service_bus::ServiceBusConfig;
+use robot_bus::broker::{
     ConsoleBrokerConfig, DiscoveryConfig, RobotBusBroker, RobotBusConfig, WsConfig,
 };
 use robot_bus::message_bus::{Publisher, Subscriber};

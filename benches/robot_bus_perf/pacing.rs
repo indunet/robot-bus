@@ -479,7 +479,7 @@ mod tests {
         use std::sync::Arc;
 
         use robot_bus::{HighWaterMark, Node, Publisher};
-use robot_bus_broker::{RobotBusBroker};
+use robot_bus::{RobotBusBroker};
 
         let _guard = crate::support::lock_broker();
         let mut config = crate::support::perf_broker_config();

@@ -1,8 +1,6 @@
 use anyhow::Result;
 use robot_bus::shutdown;
-use robot_bus_broker::{
-    RobotBusBroker, RobotBusConfig, parse_robot_bus_config, robot_bus_broker_help,
-};
+use robot_bus::{RobotBusBroker, RobotBusConfig, parse_robot_bus_config, robot_bus_broker_help};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::thread;

@@ -10,9 +10,10 @@ Record changes under the applicable version. Explain what changed, why it change
 
 ### Breaking
 
-- The Rust crate is now a workspace. `robot-bus` is the client SDK (Node, executors, topic / service / action, discovery, and the optional WebSocket client). `robot-bus-broker` is the broker, WebSocket server, console, tank demo, and `rbus` CLI. `robot-bus-msgs` holds the generated messages. `robot-bus-ros2` is the ROS 2 bridge and is not published.
-- `robot_bus::RobotBusBroker`, `robot_bus::broker`, `robot_bus::ws` (server), `robot_bus::console`, and `robot_bus::tank` moved to `robot_bus_broker`. `robot_bus::ros2_bridge` moved to `robot_bus_ros2`. Client programs that only use `Node` keep depending on `robot-bus`. Programs that embed a broker also depend on `robot-bus-broker`.
-- `robot-bus` no longer enables the WebSocket server, console, or tank demo by default, and no longer depends on `clap`, `axum`, `rust-embed`, or `pyo3`. The WebSocket client is `features = ["ws"]`. Low-level modules (`message_bus`, `service_bus`, `action_bus`, `transports`, `wire`) stay public but are `#[doc(hidden)]`.
+- The Rust crate is now a workspace. `robot-bus` stays the one crate users install: it holds the client SDK (Node, executors, topic / service / action, discovery) and the broker, WebSocket server, console, tank demo, and `rbus` CLI. `robot-bus-msgs` holds the generated messages and is re-exported by `robot-bus`. `robot-bus-ros2` is the ROS 2 bridge and is not published.
+- `robot_bus::ros2_bridge` moved to the separate `robot-bus-ros2` crate. Programs that use the bridge depend on `robot-bus-ros2`. Other Rust code keeps its imports, including `robot_bus::RobotBusBroker`.
+- `robot-bus` has a new `broker` feature for the broker, federation, and the `robot_bus_broker` / `rbus` binaries. `ws`, `console-api`, and `demo-tank` imply it. The default set `full` is unchanged (`broker`, `ws`, `console`, `demo-tank`). Client-only programs can use `default-features = false` to leave out the broker and its dependencies (`clap`, `axum`, `rust-embed`).
+- Low-level modules (`message_bus`, `service_bus`, `action_bus`, `transports`, `wire`) stay public but are `#[doc(hidden)]`.
 
 ### Changed
 

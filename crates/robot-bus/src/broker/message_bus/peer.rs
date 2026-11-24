@@ -2,7 +2,7 @@
 
 use anyhow::{Context, Result, bail};
 
-use robot_bus::transports::{XPUB_CHANNEL, XPUB_PORT, XSUB_CHANNEL, ipc_sibling_endpoint};
+use crate::transports::{XPUB_CHANNEL, XPUB_PORT, XSUB_CHANNEL, ipc_sibling_endpoint};
 
 /// Remote broker message-bus endpoints (client-facing XSUB/XPUB of the peer).
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -71,7 +71,7 @@ fn xsub_from_xpub(xpub: &str) -> Result<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use robot_bus::transports::XSUB_PORT;
+    use crate::transports::XSUB_PORT;
 
     #[test]
     fn derives_xsub_port_minus_one() {
