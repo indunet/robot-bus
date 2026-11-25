@@ -73,19 +73,41 @@ jobs:
         # dirty by design. Publish in dependency order and wait for the index.
         run: |
           set -eux
-          wait_crate() {
+          # crates.io rejects clients that only name the HTTP library.
+          # curl's default User-Agent gets HTTP 403, which is not "not published yet".
+          UA="robot-bus-publish (https://github.com/indunet/robot-bus)"
+          crate_status() {
             local name="$1" ver="$2"
+            curl -sS -o /dev/null -w '%{http_code}' -A "$UA" \
+              "https://crates.io/api/v1/crates/${name}/${ver}" || echo 000
+          }
+          wait_crate() {
+            local name="$1" ver="$2" code
             for _ in $(seq 1 60); do
-              if curl -fsS "https://crates.io/api/v1/crates/${name}/${ver}" >/dev/null; then
-                return 0
-              fi
+              code="$(crate_status "$name" "$ver")"
+              case "$code" in
+                200) return 0 ;;
+                404) ;;
+                403|401)
+                  echo "crates.io rejected the version check for ${name} ${ver} (HTTP ${code})" >&2
+                  return 1
+                  ;;
+                *) echo "waiting for ${name} ${ver} (HTTP ${code})" >&2 ;;
+              esac
               sleep 10
             done
             echo "timed out waiting for ${name} ${ver}" >&2
             return 1
           }
+          publish_crate() {
+            local name="$1" ver="$2"
+            if [ "$(crate_status "$name" "$ver")" = "200" ]; then
+              echo "${name} ${ver} is already on crates.io; skipping publish"
+              return 0
+            fi
+            cargo publish -p "$name" --allow-dirty
+            wait_crate "$name" "$ver"
+          }
           VER="$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -n1)"
-          cargo publish -p robot-bus-msgs --allow-dirty
-          wait_crate robot-bus-msgs "$VER"
-          cargo publish -p robot-bus --allow-dirty
-          wait_crate robot-bus "$VER"
+          publish_crate robot-bus-msgs "$VER"
+          publish_crate robot-bus "$VER"

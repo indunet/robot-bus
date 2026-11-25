@@ -86,13 +86,22 @@ add_library(robot_bus::robot_bus ALIAS robot_bus)
 add_dependencies(robot_bus robot_bus_ffi_build)
 set_target_properties(robot_bus PROPERTIES
   IMPORTED_LOCATION "${ROBOT_BUS_FFI_LINK}"
+  IMPORTED_LOCATION_RELEASE "${ROBOT_BUS_FFI_LINK}"
+  IMPORTED_CONFIGURATIONS RELEASE
+  MAP_IMPORTED_CONFIG_DEBUG Release
+  MAP_IMPORTED_CONFIG_RELWITHDEBINFO Release
+  MAP_IMPORTED_CONFIG_MINSIZEREL Release
   INTERFACE_INCLUDE_DIRECTORIES "${ROBOT_BUS_INCLUDE_DIR}")
 if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
   set_property(TARGET robot_bus PROPERTY IMPORTED_NO_SONAME TRUE)
 endif()
 if(WIN32)
+  # Cargo builds this cdylib once, as Release. A multi-config generator still
+  # requires IMPORTED_IMPLIB_RELEASE or Debug/RelWithDebInfo/MinSizeRel fail
+  # at generate time with "IMPORTED_IMPLIB not set".
   set_target_properties(robot_bus PROPERTIES
-    IMPORTED_IMPLIB "${ROBOT_BUS_FFI_TARGET_DIR}/robot_bus_c.dll.lib")
+    IMPORTED_IMPLIB "${ROBOT_BUS_FFI_TARGET_DIR}/robot_bus_c.dll.lib"
+    IMPORTED_IMPLIB_RELEASE "${ROBOT_BUS_FFI_TARGET_DIR}/robot_bus_c.dll.lib")
 endif()
 
 # --- Native rclcpp Ros2Bridge (optional) ---

@@ -61,10 +61,27 @@ macro(_robot_bus_add_consumer_rpath _robot_bus_rpath_target)
 endmacro()
 
 macro(_robot_bus_map_release_configs _robot_bus_rpath_target)
-  set_target_properties(${_robot_bus_rpath_target} PROPERTIES
+  # Visual Studio generates Debug, Release, RelWithDebInfo, and MinSizeRel.
+  # MAP_IMPORTED_CONFIG_<CONFIG> selects a named imported configuration only
+  # when IMPORTED_LOCATION_<CONFIG> or IMPORTED_IMPLIB_<CONFIG> is set. The
+  # unsuffixed properties are not a fallback once that mapping is set, and
+  # generation then fails with "IMPORTED_IMPLIB not set ... configuration
+  # Debug". Copy the single shipped binary onto Release first.
+  foreach(_robot_bus_prop IN ITEMS IMPORTED_LOCATION IMPORTED_IMPLIB)
+    get_target_property(_robot_bus_prop_value "${_robot_bus_rpath_target}" "${_robot_bus_prop}")
+    if(_robot_bus_prop_value)
+      set_target_properties("${_robot_bus_rpath_target}" PROPERTIES
+        "${_robot_bus_prop}_RELEASE" "${_robot_bus_prop_value}")
+    endif()
+  endforeach()
+  set_property(TARGET "${_robot_bus_rpath_target}" APPEND PROPERTY
+    IMPORTED_CONFIGURATIONS RELEASE)
+  set_target_properties("${_robot_bus_rpath_target}" PROPERTIES
     MAP_IMPORTED_CONFIG_DEBUG Release
     MAP_IMPORTED_CONFIG_RELWITHDEBINFO Release
     MAP_IMPORTED_CONFIG_MINSIZEREL Release)
+  unset(_robot_bus_prop)
+  unset(_robot_bus_prop_value)
 endmacro()
 
 if(EXISTS "${CMAKE_CURRENT_LIST_DIR}/robot_busTargets.cmake")
