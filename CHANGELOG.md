@@ -6,6 +6,12 @@ Record changes under the applicable version. Explain what changed, why it change
 
 ## [Unreleased]
 
+## [3.1.0]
+
+### Breaking
+
+- HTTP discovery now returns six numeric TCP data ports instead of endpoint strings or API URLs. Clients and `--peer` reuse the host they contacted. Only an explicit `--advertise-host` adds a TCP host override. WebSocket discovery reuses the requested API URL. Upgrade brokers and discovery clients together.
+
 ### Changed
 
 - `robot-bus-ros2` no longer needs `example_interfaces` by default. The `FibonacciActionMapper`, the `ros2_bridge_builtin` and `ros2_bridge_custom_add_two_ints` examples, and the AddTwoInts service test now sit behind a new `demo` feature. `example_interfaces` is not part of `ros_core` or `ros_base`, so a default build now only needs interface packages those variants already ship. To run the demos, install `ros-<distro>-example-interfaces` (with its Rust bindings) and build with `--features demo`.

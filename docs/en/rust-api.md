@@ -5,11 +5,11 @@ English | [中文](../zh/rust-api.md)
 `Cargo.toml`:
 
 ```toml
-robot-bus = "3.0.0"
+robot-bus = "3.1.0"
 # Local: robot-bus = { path = "../crates/robot-bus" }
 # One crate holds the SDK and the broker. The default `full` feature set turns on the broker,
 # WebSocket (client and server), embedded console, and tank demo.
-# Client-only programs can drop all of it: robot-bus = { version = "3.0.0", default-features = false }
+# Client-only programs can drop all of it: robot-bus = { version = "3.1.0", default-features = false }
 ```
 
 ## Broker startup
@@ -31,7 +31,7 @@ cargo run --bin robot_bus_broker
 # See options: cargo run --bin robot_bus_broker -- --help
 # TCP only: add --tcp-only
 # API port: --api-listen 0.0.0.0:15560 (alias --console-listen)
-# Externally reachable host: --advertise-host HOST
+# Override the discovered TCP host if it differs from the API host: --advertise-host HOST
 # Federation: --peer 10.0.0.2:15560 (peer API port; repeatable)
 # Console sidebar: --no-tank / --no-docs (docs shown by default)
 ```
@@ -51,9 +51,11 @@ You can still manually pin bus ports with `--message-xsub-bind` and similar flag
 
 ### HTTP discovery (fill addresses, not transport)
 
-Request `GET /api/v1/discover` on a known API port to obtain connectable ZMQ endpoints. You still choose the transport; discovery only fills in locations:
+Request `GET /api/v1/discover` on a known API port to obtain the ZMQ data ports. By default, TCP discovery and `--peer` combine those ports with the host in the discovery URL. Set `--advertise-host HOST` when native TCP uses a different host. WebSocket discovery keeps the HTTP API entry point as its base URL. You still choose the transport; discovery only fills in locations:
 
 For IPC discovery, use `NodeOptions::for_discovery("ipc")` instead of `NodeOptions::ipc()`, which pre-fills fixed paths.
+
+If you fetch the raw `DiscoverResponse`, pass the URL you contacted to `response.to_announcement(api_base)` to resolve the data endpoints.
 
 ```rust
 use robot_bus::{DiscoverOpts, Node, NodeOptions};
@@ -66,7 +68,7 @@ let opts = NodeOptions::tcp().discover(DiscoverOpts {
 let mut node = Node::with_options("talker", opts);
 ```
 
-Or in two steps: `discovery::wait(opts)?` → `ann.apply(NodeOptions::ws())?`.
+Or in two steps for WS: `discovery::wait(opts)?` → `ann.apply(NodeOptions::for_discovery("ws"))?`.
 
 UDP multicast discovery has been removed.
 

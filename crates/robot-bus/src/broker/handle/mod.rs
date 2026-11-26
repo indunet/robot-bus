@@ -17,7 +17,9 @@ use std::time::Duration;
 use super::action_bus::ActionMetrics;
 use super::message_bus::MessageMetrics;
 use super::service_bus::ServiceMetrics;
-use crate::discovery::{DiscoverResponse, resolve_advertise_host, rewrite_bind_host};
+use crate::discovery::{
+    DiscoverResponse, explicit_advertise_host, is_specific_tcp_bind, tcp_port_from_bind,
+};
 use crate::runtime::Context as BusContext;
 use crate::transports::{
     ACTION_BACKEND_CHANNEL, ACTION_FRONTEND_CHANNEL, BindAllOpts, SERVICE_BACKEND_CHANNEL,
@@ -81,7 +83,6 @@ fn bind_api_listener(requested: SocketAddr) -> Result<(TcpListener, SocketAddr)>
     }
 }
 
-#[cfg(feature = "ws")]
 fn connect_url_for_listen(listen: SocketAddr) -> String {
     let host = match listen.ip() {
         std::net::IpAddr::V4(ip) if ip.is_unspecified() => "127.0.0.1".to_string(),
@@ -364,7 +365,7 @@ impl RobotBusBroker {
         config.service.bind_opts = bind_opts.clone();
         config.action.bind_opts = bind_opts.clone();
 
-        let advertise_host = resolve_advertise_host(&config.discovery);
+        let advertise_host = explicit_advertise_host(&config.discovery).map(str::to_owned);
         let zmq = context.clone_zmq();
         // Capture metrics only when the console will read them — otherwise keep
         // the message bus on a plain proxy_steerable with zero monitoring overhead.
@@ -391,6 +392,28 @@ impl RobotBusBroker {
             ServiceBusBroker::start_with_zmq(zmq.clone(), config.service.clone(), service_metrics)?;
         let action = ActionBusBroker::start_with_zmq(zmq, config.action.clone(), action_metrics)?;
 
+        let tcp_binds = [
+            message.xsub_bind.as_str(),
+            message.xpub_bind.as_str(),
+            service.frontend_bind.as_str(),
+            service.backend_bind.as_str(),
+            action.frontend_bind.as_str(),
+            action.backend_bind.as_str(),
+        ];
+        if advertise_host.is_none() {
+            let specific_binds: Vec<_> = tcp_binds
+                .into_iter()
+                .filter(|bind| is_specific_tcp_bind(bind))
+                .collect();
+            if !specific_binds.is_empty() {
+                eprintln!(
+                    "warning: TCP listeners {} use specific addresses; set --advertise-host \
+                     if clients reach discovery through a different host",
+                    specific_binds.join(", ")
+                );
+            }
+        }
+
         let api_listen = {
             #[cfg(feature = "ws")]
             {
@@ -407,25 +430,22 @@ impl RobotBusBroker {
                     .expect("default api listen")
             }
         };
-        let api_url = format!("http://{advertise_host}:{}", api_listen.port());
-        let msg_xsub = rewrite_bind_host(&message.xsub_bind, &advertise_host);
-        let msg_xpub = rewrite_bind_host(&message.xpub_bind, &advertise_host);
-        let svc_fe = rewrite_bind_host(&service.frontend_bind, &advertise_host);
-        let svc_be = rewrite_bind_host(&service.backend_bind, &advertise_host);
-        let act_fe = rewrite_bind_host(&action.frontend_bind, &advertise_host);
-        let act_be = rewrite_bind_host(&action.backend_bind, &advertise_host);
-        #[allow(unused_mut)]
-        let mut discover = DiscoverResponse {
+        let api_url = connect_url_for_listen(api_listen);
+        let port = |bind: &str| {
+            tcp_port_from_bind(bind)
+                .filter(|&port| port != 0)
+                .with_context(|| format!("missing resolved TCP discovery port for {bind}"))
+        };
+        let discover = DiscoverResponse {
             broker_id: broker_id.clone(),
             domain_id: config.discovery.domain_id,
-            advertise_host: advertise_host.clone(),
-            api_url: api_url.clone(),
-            message_xsub: msg_xsub.clone(),
-            message_xpub: msg_xpub.clone(),
-            service_frontend: svc_fe.clone(),
-            service_backend: svc_be.clone(),
-            action_frontend: act_fe.clone(),
-            action_backend: act_be.clone(),
+            advertise_host,
+            message_xsub_port: port(tcp_binds[0])?,
+            message_xpub_port: port(tcp_binds[1])?,
+            service_frontend_port: port(tcp_binds[2])?,
+            service_backend_port: port(tcp_binds[3])?,
+            action_frontend_port: port(tcp_binds[4])?,
+            action_backend_port: port(tcp_binds[5])?,
             ipc_dir: (config.message.bind_all_transports
                 && (ipc_dir.is_some() || fixed_ipc_dir.is_some()))
             .then(|| bind_opts.ipc_dir.clone()),
@@ -433,16 +453,6 @@ impl RobotBusBroker {
                 .message
                 .bind_all_transports
                 .then(|| bind_opts.inproc_prefix.clone()),
-            console_url: {
-                #[cfg(feature = "console")]
-                {
-                    config.console.enabled.then(|| api_url.clone())
-                }
-                #[cfg(not(feature = "console"))]
-                {
-                    None
-                }
-            },
         };
 
         // Build console state before starting the WebSocket RPC server — when both features
@@ -504,10 +514,6 @@ impl RobotBusBroker {
 
         #[cfg(feature = "ws")]
         let ws = {
-            discover.api_url = connect_url_for_listen(config.ws.listen);
-            if discover.console_url.is_some() {
-                discover.console_url = Some(discover.api_url.clone());
-            }
             let ws_config = WsServerConfig {
                 listen: config.ws.listen,
                 message_xpub: bind_to_connect(&message.xpub_bind),
@@ -587,7 +593,14 @@ impl RobotBusBroker {
         #[cfg(all(feature = "console-api", feature = "demo-tank"))]
         let tank = console_state.as_ref().map(|s| Arc::clone(&s.tank));
 
-        println!("{}", format_startup_banner(&discover));
+        #[cfg(feature = "console")]
+        let show_console = config.console.enabled;
+        #[cfg(not(feature = "console"))]
+        let show_console = false;
+        println!(
+            "{}",
+            format_startup_banner(&discover, &api_url, show_console, tcp_binds)
+        );
 
         Ok(Self {
             message,
@@ -720,7 +733,12 @@ fn transport_aliases(tcp: &str, channel: &str, discover: &DiscoverResponse) -> S
 }
 
 /// Human-readable listen map printed after all buses (and the API port) are bound.
-fn format_startup_banner(discover: &DiscoverResponse) -> String {
+fn format_startup_banner(
+    discover: &DiscoverResponse,
+    api_url: &str,
+    show_console: bool,
+    tcp_binds: [&str; 6],
+) -> String {
     let mut lines = vec![format!(
         "robot-bus {} ready  id={}",
         env!("CARGO_PKG_VERSION"),
@@ -728,42 +746,27 @@ fn format_startup_banner(discover: &DiscoverResponse) -> String {
     )];
     let row = |label: &str, value: String| format!("  {label:<16}{value}");
     lines.push(String::new());
-    if let Some(console) = discover.console_url.as_deref().filter(|s| !s.is_empty()) {
-        lines.push(row("web console", console.to_string()));
+    if show_console {
+        lines.push(row("web console", api_url.to_owned()));
     }
     #[cfg(feature = "ws")]
     {
-        let ws_url = crate::discovery::with_ws_rpc_path(discover.api_url.trim_end_matches('/'));
+        let ws_url = crate::discovery::with_ws_rpc_path(api_url);
         lines.push(row("ws", ws_url));
     }
-    lines.push(row(
-        "message pub",
-        transport_aliases(&discover.message_xsub, XSUB_CHANNEL, discover),
-    ));
-    lines.push(row(
-        "message sub",
-        transport_aliases(&discover.message_xpub, XPUB_CHANNEL, discover),
-    ));
-    lines.push(row(
-        "service client",
-        transport_aliases(
-            &discover.service_frontend,
-            SERVICE_FRONTEND_CHANNEL,
-            discover,
-        ),
-    ));
-    lines.push(row(
-        "service worker",
-        transport_aliases(&discover.service_backend, SERVICE_BACKEND_CHANNEL, discover),
-    ));
-    lines.push(row(
-        "action client",
-        transport_aliases(&discover.action_frontend, ACTION_FRONTEND_CHANNEL, discover),
-    ));
-    lines.push(row(
-        "action worker",
-        transport_aliases(&discover.action_backend, ACTION_BACKEND_CHANNEL, discover),
-    ));
+    for ((label, channel), bind) in [
+        ("message pub", XSUB_CHANNEL),
+        ("message sub", XPUB_CHANNEL),
+        ("service client", SERVICE_FRONTEND_CHANNEL),
+        ("service worker", SERVICE_BACKEND_CHANNEL),
+        ("action client", ACTION_FRONTEND_CHANNEL),
+        ("action worker", ACTION_BACKEND_CHANNEL),
+    ]
+    .into_iter()
+    .zip(tcp_binds)
+    {
+        lines.push(row(label, transport_aliases(bind, channel, discover)));
+    }
     lines.join("\n")
 }
 
@@ -771,27 +774,32 @@ fn format_startup_banner(discover: &DiscoverResponse) -> String {
 mod tests {
     use super::*;
 
-    fn sample_discover(ipc: bool) -> DiscoverResponse {
-        DiscoverResponse {
+    fn sample_banner(ipc: bool) -> String {
+        let discover = DiscoverResponse {
             broker_id: "abc".into(),
             domain_id: 0,
-            advertise_host: "127.0.0.1".into(),
-            api_url: "http://127.0.0.1:15560".into(),
-            message_xsub: "tcp://127.0.0.1:1".into(),
-            message_xpub: "tcp://127.0.0.1:2".into(),
-            service_frontend: "tcp://127.0.0.1:3".into(),
-            service_backend: "tcp://127.0.0.1:4".into(),
-            action_frontend: "tcp://127.0.0.1:5".into(),
-            action_backend: "tcp://127.0.0.1:6".into(),
+            advertise_host: None,
+            message_xsub_port: 1,
+            message_xpub_port: 2,
+            service_frontend_port: 3,
+            service_backend_port: 4,
+            action_frontend_port: 5,
+            action_backend_port: 6,
             ipc_dir: ipc.then(|| "/tmp/robot_bus/abc".into()),
             inproc_prefix: ipc.then(|| "robot_bus".into()),
-            console_url: Some("http://127.0.0.1:15560".into()),
-        }
+        };
+        let binds = [1, 2, 3, 4, 5, 6].map(|port| format!("tcp://127.0.0.1:{port}"));
+        format_startup_banner(
+            &discover,
+            "http://127.0.0.1:15560",
+            true,
+            binds.each_ref().map(String::as_str),
+        )
     }
 
     #[test]
     fn startup_banner_lists_tcp_ipc_inproc() {
-        let text = format_startup_banner(&sample_discover(true));
+        let text = sample_banner(true);
         assert!(text.contains("robot-bus"));
         assert!(text.contains("id=abc"));
         assert!(text.contains("tcp://127.0.0.1:1"));
@@ -819,7 +827,7 @@ mod tests {
 
     #[test]
     fn startup_banner_tcp_only_omits_ipc_inproc() {
-        let text = format_startup_banner(&sample_discover(false));
+        let text = sample_banner(false);
         assert!(text.contains("tcp://127.0.0.1:1"));
         assert!(!text.contains("ipc://"));
         assert!(!text.contains("inproc://"));

@@ -244,8 +244,7 @@ fn parse_discover_opts(opts: *const RobotBusDiscoverOpts) -> Result<RustDiscover
 fn transport_base_options(transport: &str) -> Result<RustNodeOptions, c_int> {
     match transport {
         "tcp" => Ok(RustNodeOptions::tcp()),
-        "ipc" | "inproc" => Ok(RustNodeOptions::for_discovery(transport)),
-        "ws" => Ok(RustNodeOptions::ws()),
+        "ipc" | "inproc" | "ws" => Ok(RustNodeOptions::for_discovery(transport)),
         other => Err(err(format!("unknown transport {other:?}"))),
     }
 }

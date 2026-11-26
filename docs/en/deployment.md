@@ -55,7 +55,7 @@ This example uses `10.0.0.2` as the broker's reachable address; replace it with 
 
 ```bash
 python -m robot_bus.broker --tcp-only \
-  --api-listen 0.0.0.0:15560 --advertise-host 10.0.0.2 \
+  --api-listen 0.0.0.0:15560 \
   --message-xsub-bind tcp://0.0.0.0:15580 \
   --message-xpub-bind tcp://0.0.0.0:15581 \
   --service-frontend-bind tcp://0.0.0.0:15662 \
@@ -71,7 +71,11 @@ python -m robot_bus.broker --tcp-only \
 | 15662 / 15663 | Service frontend / backend | Native clients / servers |
 | 15664 / 15665 | Action frontend / backend | Native clients / servers |
 
-From the client machine, check that discover returns reachable addresses. Loopback and container-internal addresses are not directly usable by other hosts. NAT/container mappings must match the advertised host and ports; `--advertise-host` does not create port mappings.
+Native clients and `--peer` use the IP address or DNS name they contacted at `/discover` and take the six numeric data ports from the response. The broker does not infer or report a host by default. From the client machine, check that the data ports are reachable on the discovery host. Upgrade discovery clients and brokers together; the previous endpoint-string response format is not supported.
+
+The JSON fields are `messageXsubPort`, `messageXpubPort`, `serviceFrontendPort`, `serviceBackendPort`, `actionFrontendPort`, and `actionBackendPort`.
+
+If the HTTP entry point and native TCP listeners use different hosts (for example with a reverse proxy, NAT, or an interface-specific bind), set `--advertise-host HOST`. The response then includes `advertiseHost` for TCP, without changing listening interfaces or creating port mappings. Published NAT or container ports must match the data ports in the response.
 
 Native Python node:
 
@@ -98,7 +102,7 @@ WS clients use `robot_bus.Node.ws_at("remote", "http://10.0.0.2:15560")`. HTTPS 
 | Symptom | First check | Next action |
 | --- | --- | --- |
 | API is not on port 15560 | Actual port in the startup log | Connect using the actual port; only reuse an existing broker if intended |
-| Console works; native node cannot connect | Discovered data endpoints, interface addresses, port mappings | Allow required TCP ports and correct advertised host/fixed binds |
+| Console works; native node cannot connect | Discovery host and data ports, explicit override, port mappings | Allow the TCP ports; set `--advertise-host` only when the data host differs |
 | No topic output | Matching topic/type and active callback loop | Use repeated publication to accommodate asynchronous subscriptions; inspect Topics/Topology |
 | Service/action timeout | Server process and `start()`/`spin()`, route names, available workers | Run standard examples first; inspect blocking business callbacks rather than retrying indefinitely |
 | No inproc messages | Same process and shared Context | Pair `Node.inproc_with_context` with `RobotBusBroker.start(context=ctx)` |

@@ -62,6 +62,16 @@ def test_ws_node_rejects_servers() -> None:
         raise AssertionError("expected create_service to fail")
 
 
+def test_ws_discover_uses_requested_api_port() -> None:
+    import robot_bus
+
+    with robot_bus.RobotBusBroker.start(**_ephemeral_binds()) as broker:
+        node = robot_bus.Node.discover(
+            "ws_discovered", transport="ws", api_url=f"http://{broker.api_listen}"
+        )
+        assert node.wait_for_broker(timeout=3.0)
+
+
 def test_ws_node_publish() -> None:
     import robot_bus
 
@@ -170,6 +180,7 @@ def main() -> int:
     _require_native()
     test_ws_constructors()
     test_ws_node_rejects_servers()
+    test_ws_discover_uses_requested_api_port()
     test_ws_node_publish()
     test_ws_node_subscribe_and_service()
     test_ws_node_action_client()

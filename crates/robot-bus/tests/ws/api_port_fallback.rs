@@ -46,12 +46,10 @@ fn assert_api(broker: &RobotBusBroker, listen: SocketAddr) {
     #[cfg(not(feature = "ws"))]
     assert_eq!(broker.console_listen(), Some(listen));
     let response = fetch_discover(&base, Duration::from_secs(3)).unwrap();
-    assert_eq!(response.broker_id, broker.discover.broker_id);
-    assert_eq!(response.api_url, base);
-    assert_eq!(broker.discover.api_url, base);
-    if let Some(console_url) = response.console_url {
-        assert_eq!(console_url, base);
-    }
+    assert_eq!(response, broker.discover);
+    assert!(response.message_xpub_port > 0);
+    #[cfg(feature = "ws")]
+    assert_eq!(broker.api_url(), base);
 }
 
 #[test]
@@ -78,7 +76,7 @@ fn busy_api_ports_are_skipped_in_order() {
 }
 
 #[test]
-fn ephemeral_api_port_is_advertised_by_discovery() {
+fn discovery_works_on_ephemeral_api_port() {
     let broker = RobotBusBroker::start(config("127.0.0.1:0".parse().unwrap(), true)).unwrap();
     #[cfg(feature = "ws")]
     let actual = broker.api_listen();
@@ -86,5 +84,25 @@ fn ephemeral_api_port_is_advertised_by_discovery() {
     let actual = broker.console_listen().unwrap();
     assert_ne!(actual.port(), 0);
     assert_api(&broker, actual);
+    broker.stop().unwrap();
+}
+
+#[cfg(feature = "ws")]
+#[test]
+fn ws_discovery_keeps_the_requested_api_origin() {
+    use robot_bus::{Node, NodeOptions, discovery::DiscoverOpts};
+
+    let broker = RobotBusBroker::start(config("0.0.0.0:0".parse().unwrap(), false)).unwrap();
+    let api_url = format!("http://localhost:{}", broker.api_listen().port());
+    assert_ne!(broker.api_url(), api_url);
+
+    let opts = NodeOptions::for_discovery("ws")
+        .discover(DiscoverOpts::at(&api_url))
+        .unwrap();
+    assert_eq!(opts.ws_url.as_deref(), Some(api_url.as_str()));
+    assert_eq!(opts.console_url.as_deref(), Some(api_url.as_str()));
+    let node = Node::with_options("ws_discover_origin", opts);
+    assert!(node.wait_for_broker(Some(Duration::from_secs(5))));
+    drop(node);
     broker.stop().unwrap();
 }

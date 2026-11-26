@@ -5,11 +5,11 @@
 `Cargo.toml`：
 
 ```toml
-robot-bus = "3.0.0"
+robot-bus = "3.1.0"
 # 本地：robot-bus = { path = "../crates/robot-bus" }
 # 一个包同时包含 SDK 和 broker。默认的 `full` feature 会打开 broker、
 # WebSocket（客户端和服务端）、内嵌控制台和 tank 演示。
-# 只写客户端时可以全部关闭：robot-bus = { version = "3.0.0", default-features = false }
+# 只写客户端时可以全部关闭：robot-bus = { version = "3.1.0", default-features = false }
 ```
 
 ## Broker启动
@@ -31,7 +31,7 @@ cargo run --bin robot_bus_broker
 # 查看参数：cargo run --bin robot_bus_broker -- --help
 # 只要 TCP：加 --tcp-only
 # API口：--api-listen 0.0.0.0:15560（别名 --console-listen）
-# 对外可达主机：--advertise-host HOST
+# TCP 数据主机与 API 入口不同时：--advertise-host HOST
 # 邦联：--peer 10.0.0.2:15560（对端 API口；可重复）
 # 控制台侧栏：--no-tank / --no-docs（文档默认显示）
 ```
@@ -51,9 +51,11 @@ Broker 在系统临时目录下创建独立的 IPC 子目录，关闭时清理�
 
 ### HTTP发现（填地址，不选传输）
 
-对已知 API口请求 `GET /api/v1/discover`，拿到可连接的 ZMQ端点。传输方式仍由你指定；发现只填充位置：
+对已知 API 口请求 `GET /api/v1/discover`，拿到 ZMQ 数据端口。默认情况下，原生 TCP 客户端和 `--peer` 用发现 URL 的主机名或 IP 加这些端口来连接。TCP 数据主机与 API 入口不同时，用 `--advertise-host HOST` 覆盖。WebSocket 发现则沿用 HTTP API 入口。传输方式仍由你指定；发现只填充位置：
 
 发现 IPC 端点时用 `NodeOptions::for_discovery("ipc")`，不要用预填了固定路径的 `NodeOptions::ipc()`。
+
+如果直接读取 `DiscoverResponse`，调用 `response.to_announcement(api_base)` 时传入实际访问的 API 地址，即可解析数据端点。
 
 ```rust
 use robot_bus::{DiscoverOpts, Node, NodeOptions};
@@ -66,7 +68,7 @@ let opts = NodeOptions::tcp().discover(DiscoverOpts {
 let mut node = Node::with_options("talker", opts);
 ```
 
-或分两步：`discovery::wait(opts)?` → `ann.apply(NodeOptions::ws())?`。
+WebSocket 也可分两步发现：`discovery::wait(opts)?` → `ann.apply(NodeOptions::for_discovery("ws"))?`。
 
 UDP组播发现已移除。
 

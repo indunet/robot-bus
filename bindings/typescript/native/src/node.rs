@@ -190,8 +190,7 @@ impl Node {
         let transport = o.transport.unwrap_or_else(|| "tcp".into());
         let base = match transport.as_str() {
             "tcp" => RustNodeOptions::tcp(),
-            "ipc" | "inproc" => RustNodeOptions::for_discovery(transport.as_str()),
-            "ws" => RustNodeOptions::ws(),
+            "ipc" | "inproc" | "ws" => RustNodeOptions::for_discovery(transport.as_str()),
             other => {
                 return Err(Error::from_reason(format!("unknown transport {other:?}")));
             }

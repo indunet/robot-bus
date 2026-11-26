@@ -395,7 +395,7 @@ Shared bus options:\n  \
 --ipc-dir DIR                  Fixed IPC socket directory, one per broker (default: fresh temp dir)\n\n\
 Discovery / advertise:\n  \
 --domain-id N                  Soft label returned in /api/v1/discover (default: 0)\n  \
---advertise-host HOST          Host clients should connect to (default: inferred)\n  \
+--advertise-host HOST          Override TCP discovery host (default: use the API URL host)\n  \
 --no-discovery                 Compatibility no-op (UDP announce removed)\n\n\
 API options (feature `ws`, default on):\n  \
 --api-listen HOST:PORT         API listen (aliases: --listen, --console-listen)\n  \
@@ -409,7 +409,7 @@ Console options (feature `console`, default on):\n  \
 --console-cors-origin ORIGIN   Allow browser origin (repeatable)\n\n\
 --help, -h                     Show this help\n\n\
 Embed in code: robot_bus::RobotBusBroker::start(RobotBusConfig { ... }).\n\
-Clients: GET /api/v1/discover on the actual API port shown at startup, then connect to returned ZMQ endpoints.\n"
+Clients: GET /api/v1/discover on the actual API port shown at startup to obtain the ZMQ data ports.\n"
 }
 
 /// Apply federation options shared by language bindings (CLI-compatible string forms).

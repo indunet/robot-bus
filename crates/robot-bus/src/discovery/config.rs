@@ -49,7 +49,7 @@ pub struct DiscoveryConfig {
     pub enabled: bool,
     /// Optional soft filter / label (also returned in discover JSON).
     pub domain_id: u32,
-    /// Override advertise host (otherwise inferred / `127.0.0.1`).
+    /// Override the TCP discovery host. Otherwise clients use their API URL's host.
     pub advertise_host: Option<String>,
     /// Fixed IPC directory (advertised as `ipcDir`). `None` → a fresh temp dir per start.
     ///

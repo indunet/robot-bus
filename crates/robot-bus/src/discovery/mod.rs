@@ -1,7 +1,8 @@
 //! HTTP API broker discovery (control plane).
 //!
 //! Brokers expose [`GET /api/v1/discover`](crate::discovery::DiscoverResponse) on the
-//! API listen port (default `15560`). Clients fetch that JSON, then
+//! API listen port (default `15560`). Clients combine that JSON with the API
+//! base URL they contacted, then
 //! [`BrokerAnnouncement::apply`] fills location fields on a user-chosen
 //! [`crate::NodeOptions`] transport (`tcp` / `ipc` / `inproc` / `ws`).
 //!
@@ -14,18 +15,20 @@ mod packet;
 
 #[allow(deprecated)]
 pub use config::DEFAULT_DISCOVERY_PORT;
+#[doc(hidden)]
+pub use config::DiscoveryConfig;
 #[allow(deprecated)]
 pub use config::{
     DEFAULT_API_DISCOVER_PATH, DEFAULT_DISCOVERY_TIMEOUT, DEFAULT_MULTICAST_ADDR,
     DEFAULT_WS_RPC_PATH, DiscoverOpts, MAGIC, SCHEMA_VERSION, with_ws_rpc_path,
 };
 #[doc(hidden)]
-pub use config::DiscoveryConfig;
+pub use http::normalize_api_base;
 pub use http::{DiscoverResponse, fetch_discover};
 #[doc(hidden)]
-pub use http::{normalize_api_base, rewrite_bind_host};
-#[doc(hidden)]
-pub use net::{infer_advertise_host, resolve_advertise_host, tcp_port_from_bind};
+pub use net::tcp_port_from_bind;
+#[cfg(feature = "broker")]
+pub(crate) use net::{explicit_advertise_host, is_specific_tcp_bind};
 pub use packet::BrokerAnnouncement;
 #[doc(hidden)]
 pub use packet::{decode_announce, encode_announce, try_parse_datagram};
@@ -176,7 +179,7 @@ impl BrokerAnnouncement {
 
     fn apply_ws(&self, opts: &mut NodeOptions) -> Result<()> {
         let url = self.ws_url.as_deref().ok_or_else(|| {
-            BusError::Protocol("discovery announce has no ws_url / apiUrl".into())
+            BusError::Protocol("discovery announce has no WebSocket API URL".into())
         })?;
         if opts.ws_url.is_none() {
             opts.ws_url = Some(url.to_string());

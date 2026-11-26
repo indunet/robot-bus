@@ -1,34 +1,23 @@
-//! Host inference and TCP bind parsing.
+//! Explicit host overrides and TCP bind parsing.
 
-use std::net::UdpSocket;
-
+#[cfg(feature = "broker")]
 use super::config::DiscoveryConfig;
 
-/// Best-effort non-loopback IPv4 for advertise_host; falls back to 127.0.0.1.
-pub fn infer_advertise_host() -> String {
-    if let Ok(socket) = UdpSocket::bind("0.0.0.0:0") {
-        // Destination need not be reachable; used only to pick a local interface.
-        if socket.connect("8.8.8.8:80").is_ok() {
-            if let Ok(local) = socket.local_addr() {
-                let ip = local.ip();
-                if let std::net::IpAddr::V4(v4) = ip {
-                    if !v4.is_loopback() && !v4.is_unspecified() {
-                        return v4.to_string();
-                    }
-                }
-            }
-        }
-    }
-    "127.0.0.1".to_string()
-}
-
-/// Resolve advertise host from config or inference.
-pub fn resolve_advertise_host(config: &DiscoveryConfig) -> String {
+#[cfg(feature = "broker")]
+pub(crate) fn explicit_advertise_host(config: &DiscoveryConfig) -> Option<&str> {
     config
         .advertise_host
-        .clone()
-        .filter(|s| !s.is_empty() && s != "0.0.0.0" && s != "*")
-        .unwrap_or_else(infer_advertise_host)
+        .as_deref()
+        .map(str::trim)
+        .filter(|s| !matches!(*s, "" | "0.0.0.0" | "*" | "::" | "[::]"))
+}
+
+/// True if the TCP listener does not bind a wildcard address.
+#[cfg(feature = "broker")]
+pub(crate) fn is_specific_tcp_bind(bind: &str) -> bool {
+    bind.strip_prefix("tcp://")
+        .and_then(|addr| addr.rsplit_once(':'))
+        .is_some_and(|(host, _)| !matches!(host, "*" | "0.0.0.0" | "[::]"))
 }
 
 /// Parse TCP port from a ZMQ bind endpoint (`tcp://host:port`).

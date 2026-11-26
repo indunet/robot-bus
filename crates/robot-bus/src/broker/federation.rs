@@ -7,6 +7,7 @@ use anyhow::{Context, Result, bail};
 use crate::discovery::{DiscoverResponse, fetch_discover, normalize_api_base};
 use crate::transports::{
     ACTION_BACKEND_CHANNEL, SERVICE_BACKEND_CHANNEL, XPUB_CHANNEL, XSUB_CHANNEL, ipc_endpoint_in,
+    tcp_endpoint,
 };
 
 use super::action_bus::ActionPeer;
@@ -27,30 +28,34 @@ pub struct FederationPeerEndpoints {
 }
 
 impl FederationPeerEndpoints {
-    pub fn from_discover(disc: &DiscoverResponse) -> Self {
-        Self {
+    pub fn from_discover(disc: &DiscoverResponse, api_base: &str) -> Result<Self> {
+        disc.validate_ports()?;
+        let base = normalize_api_base(api_base);
+        let host = disc.tcp_host_at(&base)?;
+        let endpoint = |port| tcp_endpoint(&host, port);
+        Ok(Self {
             broker_id: disc.broker_id.clone(),
-            api_url: disc.api_url.clone(),
+            api_url: base,
             message: MessagePeer {
-                xpub: disc.message_xpub.clone(),
-                xsub: disc.message_xsub.clone(),
+                xpub: endpoint(disc.message_xpub_port),
+                xsub: endpoint(disc.message_xsub_port),
             },
             service: ServicePeer {
-                backend: disc.service_backend.clone(),
+                backend: endpoint(disc.service_backend_port),
                 broker_id: disc.broker_id.clone(),
             },
             action: ActionPeer {
-                backend: disc.action_backend.clone(),
+                backend: endpoint(disc.action_backend_port),
                 broker_id: disc.broker_id.clone(),
             },
-        }
+        })
     }
 
     /// Like [`Self::from_discover`], but connect over the peer's `ipc://` endpoints.
     ///
     /// Fails when the peer advertises no `ipc_dir` (e.g. `--tcp-only`) or its socket
     /// files are not visible here (different host, container, or filesystem namespace).
-    pub fn from_discover_ipc(disc: &DiscoverResponse) -> Result<Self> {
+    pub fn from_discover_ipc(disc: &DiscoverResponse, api_base: &str) -> Result<Self> {
         let dir = disc
             .ipc_dir
             .as_deref()
@@ -75,7 +80,7 @@ impl FederationPeerEndpoints {
         };
         Ok(Self {
             broker_id: disc.broker_id.clone(),
-            api_url: disc.api_url.clone(),
+            api_url: normalize_api_base(api_base),
             message: MessagePeer {
                 xpub: endpoint(XPUB_CHANNEL)?,
                 xsub: endpoint(XSUB_CHANNEL)?,
@@ -105,9 +110,9 @@ pub fn resolve_peer_from_api(api: &str) -> Result<FederationPeerEndpoints> {
     let disc = fetch_discover(&base, std::time::Duration::from_secs(3))
         .with_context(|| format!("resolve peer from API {base}"))?;
     if use_ipc {
-        FederationPeerEndpoints::from_discover_ipc(&disc)
+        FederationPeerEndpoints::from_discover_ipc(&disc, &base)
     } else {
-        Ok(FederationPeerEndpoints::from_discover(&disc))
+        FederationPeerEndpoints::from_discover(&disc, &base)
     }
 }
 
@@ -126,28 +131,41 @@ pub fn apply_api_peers(config: &mut super::RobotBusConfig, peers: &[String]) -> 
 #[cfg(test)]
 mod tests {
     use super::*;
+    const API: &str = "http://peer.example:15560";
 
     fn disc(ipc_dir: Option<String>) -> DiscoverResponse {
         DiscoverResponse {
             broker_id: "broker-b".into(),
             domain_id: 0,
-            advertise_host: "127.0.0.1".into(),
-            api_url: "http://127.0.0.1:15560".into(),
-            message_xsub: "tcp://127.0.0.1:1".into(),
-            message_xpub: "tcp://127.0.0.1:2".into(),
-            service_frontend: "tcp://127.0.0.1:3".into(),
-            service_backend: "tcp://127.0.0.1:4".into(),
-            action_frontend: "tcp://127.0.0.1:5".into(),
-            action_backend: "tcp://127.0.0.1:6".into(),
+            advertise_host: None,
+            message_xsub_port: 1,
+            message_xpub_port: 2,
+            service_frontend_port: 3,
+            service_backend_port: 4,
+            action_frontend_port: 5,
+            action_backend_port: 6,
             ipc_dir,
             inproc_prefix: None,
-            console_url: None,
         }
     }
 
     #[test]
+    fn tcp_peers_use_discovery_host_only_without_an_override() {
+        let mut disc = disc(None);
+        let automatic = FederationPeerEndpoints::from_discover(&disc, API).unwrap();
+        assert_eq!(automatic.api_url, API);
+        assert_eq!(automatic.message.xpub, "tcp://peer.example:2");
+        assert_eq!(automatic.message.xsub, "tcp://peer.example:1");
+        assert_eq!(automatic.service.backend, "tcp://peer.example:4");
+        assert_eq!(automatic.action.backend, "tcp://peer.example:6");
+        disc.advertise_host = Some("192.0.2.9".into());
+        let explicit = FederationPeerEndpoints::from_discover(&disc, API).unwrap();
+        assert_eq!(explicit.message.xpub, "tcp://192.0.2.9:2");
+    }
+
+    #[test]
     fn ipc_requires_advertised_dir() {
-        let err = FederationPeerEndpoints::from_discover_ipc(&disc(None)).unwrap_err();
+        let err = FederationPeerEndpoints::from_discover_ipc(&disc(None), API).unwrap_err();
         assert!(err.to_string().contains("--tcp-only"), "{err}");
     }
 
@@ -155,7 +173,7 @@ mod tests {
     fn ipc_requires_local_socket_files() {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().to_str().unwrap().to_owned();
-        let err = FederationPeerEndpoints::from_discover_ipc(&disc(Some(path))).unwrap_err();
+        let err = FederationPeerEndpoints::from_discover_ipc(&disc(Some(path)), API).unwrap_err();
         assert!(err.to_string().contains("not found on this host"), "{err}");
     }
 
@@ -176,7 +194,7 @@ mod tests {
             .unwrap();
         }
         let path = dir.path().to_str().unwrap().to_owned();
-        let p = FederationPeerEndpoints::from_discover_ipc(&disc(Some(path.clone()))).unwrap();
+        let p = FederationPeerEndpoints::from_discover_ipc(&disc(Some(path.clone())), API).unwrap();
         assert_eq!(p.message.xpub, ipc_endpoint_in(&path, XPUB_CHANNEL));
         assert_eq!(p.message.xsub, ipc_endpoint_in(&path, XSUB_CHANNEL));
         assert_eq!(

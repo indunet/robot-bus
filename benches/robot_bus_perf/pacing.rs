@@ -497,9 +497,8 @@ use robot_bus::{RobotBusBroker};
             None,
         )
         .unwrap();
-        let publisher =
-            Publisher::with_hwm(Some(&broker.discover.message_xsub), HighWaterMark::STREAM)
-                .unwrap();
+        let xsub = robot_bus::transports::tcp_endpoint("127.0.0.1", broker.discover.message_xsub_port);
+        let publisher = Publisher::with_hwm(Some(&xsub), HighWaterMark::STREAM).unwrap();
 
         let previous = receiver.start(0);
         let probe = receiver.payload(previous, 0);

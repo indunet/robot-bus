@@ -153,7 +153,7 @@ pub(crate) fn py_discover_options(
         "ws" => {
             #[cfg(feature = "ws")]
             {
-                RustNodeOptions::ws()
+                RustNodeOptions::for_discovery("ws")
             }
             #[cfg(not(feature = "ws"))]
             {

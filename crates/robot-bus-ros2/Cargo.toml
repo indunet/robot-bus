@@ -27,7 +27,7 @@ demo = []
 
 [dependencies]
 # Full robot-bus (SDK + broker + WebSocket + console), so installing this crate is enough.
-robot-bus = { path = "../robot-bus", version = "=3.0.0" }
+robot-bus = { path = "../robot-bus", version = "=3.1.0" }
 rclrs = "0.8"
 rosidl_runtime_rs = "0.7"
 ros-env = "0.3"
@@ -40,7 +40,7 @@ uuid = { version = "1", features = ["v4"] }
 
 [dev-dependencies]
 # Bridge tests host an in-process broker.
-robot-bus = { path = "../robot-bus", version = "=3.0.0", features = ["ws", "console-api"] }
+robot-bus = { path = "../robot-bus", version = "=3.1.0", features = ["ws", "console-api"] }
 libc = "0.2"
 zmq = "0.10"
 

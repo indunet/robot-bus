@@ -58,7 +58,7 @@ fn broker_uses_and_cleans_up_private_ipc_directory() {
     assert_eq!(directory.parent(), Some(root.path()));
     let endpoints = broker
         .discover
-        .to_announcement()
+        .to_announcement(&robot_bus::discovery::DiscoverOpts::default().api_url)
         .expect("broker announcement")
         .apply(NodeOptions::for_discovery("ipc"))
         .expect("discover IPC endpoints");

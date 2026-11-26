@@ -8,7 +8,6 @@ external brokers, altered snippet code, or mock API. Child timeouts include shut
 import os
 from pathlib import Path
 import re
-import socket
 import subprocess
 import sys
 import tempfile
@@ -55,26 +54,15 @@ def run_blocks():
 def start_broker():
     import robot_bus
 
-    # Data sockets use :0. The console's discovery snapshot currently retains
-    # API port 0 when the broker itself chooses that port. Select a concrete
-    # loopback API port first, as documented, and retry if another process wins
-    # the close/bind race. Never reuse or stop an existing broker.
+    # Use the effective API port exposed by the broker handle; discovery
+    # reports data ports, and the client supplies the API address.
     binds = {name: "tcp://127.0.0.1:0" for name in (
         "message_xsub_bind", "message_xpub_bind", "service_frontend_bind",
         "service_backend_bind", "action_frontend_bind", "action_backend_bind",
     )}
-    for attempt in range(5):
-        with socket.socket() as reservation:
-            reservation.bind(("127.0.0.1", 0))
-            port = reservation.getsockname()[1]
-        try:
-            return robot_bus.RobotBusBroker.start(
-                **binds, api_listen=f"127.0.0.1:{port}", advertise_host="127.0.0.1",
-                tcp_only=True, no_tank=True,
-            )
-        except RuntimeError as error:
-            if "bind API listen" not in str(error) or attempt == 4:
-                raise
+    return robot_bus.RobotBusBroker.start(
+        **binds, api_listen="127.0.0.1:0", tcp_only=True, no_tank=True,
+    )
 
 
 def main():

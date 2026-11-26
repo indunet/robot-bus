@@ -97,7 +97,11 @@ fn bidirectional_federation_over_ipc() {
     let broker_b = RobotBusBroker::start(config_b).expect("broker b");
 
     // A resolves B the way `--peer ipc+HOST:PORT` does after fetching discover.
-    let peer_b = FederationPeerEndpoints::from_discover_ipc(&broker_b.discover).expect("ipc peer");
+    let peer_b = FederationPeerEndpoints::from_discover_ipc(
+        &broker_b.discover,
+        &robot_bus::discovery::DiscoverOpts::default().api_url,
+    )
+    .expect("ipc peer");
     assert_eq!(peer_b.message.xpub, ipc_endpoint_in(dir_b, XPUB_CHANNEL));
     let mut config_a = ipc_broker_config("broker-a", dir_a);
     config_a.message.peers.push(peer_b.message);

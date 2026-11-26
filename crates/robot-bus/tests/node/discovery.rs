@@ -22,12 +22,23 @@ use std::time::Duration;
 #[cfg(feature = "ws")]
 #[test]
 fn discover_tcp_then_pubsub() {
+    check_discover_tcp_pubsub(Some("127.0.0.1"));
+}
+
+#[cfg(feature = "ws")]
+#[test]
+fn discover_tcp_via_api_host_then_pubsub() {
+    check_discover_tcp_pubsub(None);
+}
+
+#[cfg(feature = "ws")]
+fn check_discover_tcp_pubsub(advertise_host: Option<&str>) {
     let _guard = lock_brokers();
     let ports = free_ports(1);
     let api_port = ports[0];
 
     let mut config = RobotBusConfig::default();
-    config.discovery.advertise_host = Some("127.0.0.1".into());
+    config.discovery.advertise_host = advertise_host.map(str::to_owned);
     config.discovery.domain_id = 7;
     config.message.broker_id = "disco-test-broker".into();
     config.service.broker_id = "disco-test-broker".into();
@@ -57,9 +68,15 @@ fn discover_tcp_then_pubsub() {
     assert_eq!(node_opts.host, "127.0.0.1");
     let xpub = node_opts.message_xpub_endpoint().unwrap();
     let xsub = node_opts.message_xsub_endpoint().unwrap();
-    assert_eq!(xsub, broker.discover.message_xsub);
-    assert_eq!(xpub, broker.discover.message_xpub);
-    assert!(xpub.starts_with("tcp://127.0.0.1:"));
+    assert_eq!(broker.discover.advertise_host.as_deref(), advertise_host);
+    assert_eq!(
+        xsub,
+        format!("tcp://127.0.0.1:{}", broker.discover.message_xsub_port)
+    );
+    assert_eq!(
+        xpub,
+        format!("tcp://127.0.0.1:{}", broker.discover.message_xpub_port)
+    );
     assert!(xsub.starts_with("tcp://127.0.0.1:"));
     assert_ne!(xpub, xsub);
 
@@ -77,8 +94,8 @@ fn discover_tcp_then_pubsub() {
 
     let disc = &broker.discover;
     assert_eq!(disc.broker_id, "disco-test-broker");
-    assert_eq!(disc.api_url, api_url);
-    assert_ne!(disc.message_xsub, disc.message_xpub);
+    assert_eq!(node_opts.console_url.as_deref(), Some(api_url.as_str()));
+    assert_ne!(disc.message_xsub_port, disc.message_xpub_port);
 
     let _node = Node::with_options("disco_node", node_opts);
     broker.stop().expect("stop broker");

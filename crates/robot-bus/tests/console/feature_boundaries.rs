@@ -21,10 +21,14 @@ fn monitoring_works_without_assets_and_demo_flag_matches_build() {
         .into_json()
         .unwrap();
     assert_eq!(flags["tankEnabled"], cfg!(feature = "demo-tank"));
-    assert_eq!(
-        broker.discover.console_url.is_some(),
-        cfg!(feature = "console")
-    );
+    let discovery: serde_json::Value = ureq::get(&format!("{base}/api/v1/discover"))
+        .call()
+        .unwrap()
+        .into_json()
+        .unwrap();
+    assert_eq!(discovery["brokerId"], broker.discover.broker_id);
+    assert!(discovery["messageXpubPort"].as_u64().unwrap() > 0);
+    assert!(discovery.get("consoleUrl").is_none());
     let root = ureq::get(&base).call();
     #[cfg(feature = "console")]
     assert!(root.unwrap().into_string().unwrap().contains("<html"));

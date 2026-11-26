@@ -41,9 +41,13 @@ pub fn perf_broker_config() -> RobotBusConfig {
 }
 
 pub fn options_for(broker: &RobotBusBroker, transport: &str) -> robot_bus::Result<NodeOptions> {
+    #[cfg(feature = "ws")]
+    let api_url = broker.api_url();
+    #[cfg(not(feature = "ws"))]
+    let api_url = robot_bus::discovery::DiscoverOpts::default().api_url;
     broker
         .discover
-        .to_announcement()?
+        .to_announcement(&api_url)?
         .apply(NodeOptions::for_discovery(transport))
 }
 

@@ -29,7 +29,8 @@ pub fn bench_ws_publish(broker: &RobotBusBroker, url: &str) -> ScenarioResult {
         snd: msg_hwm(),
         rcv: msg_hwm(),
     };
-    let sub = match Subscriber::with_hwm(Some(&broker.discover.message_xpub), hwm) {
+    let xpub = robot_bus::transports::tcp_endpoint("127.0.0.1", broker.discover.message_xpub_port);
+    let sub = match Subscriber::with_hwm(Some(&xpub), hwm) {
         Ok(s) => s,
         Err(err) => {
             return ScenarioResult::skipped(transport, scenario, format!("subscriber: {err}"));
@@ -83,7 +84,8 @@ pub fn bench_ws_subscribe(broker: &RobotBusBroker, url: &str) -> ScenarioResult 
         snd: msg_hwm(),
         rcv: msg_hwm(),
     };
-    let publisher = match Publisher::with_hwm(Some(&broker.discover.message_xsub), hwm) {
+    let xsub = robot_bus::transports::tcp_endpoint("127.0.0.1", broker.discover.message_xsub_port);
+    let publisher = match Publisher::with_hwm(Some(&xsub), hwm) {
         Ok(p) => p,
         Err(err) => {
             return ScenarioResult::skipped(transport, scenario, format!("publisher: {err}"));

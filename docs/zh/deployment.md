@@ -55,7 +55,7 @@ curl --fail http://127.0.0.1:15560/api/v1/discover
 
 ```bash
 python -m robot_bus.broker --tcp-only \
-  --api-listen 0.0.0.0:15560 --advertise-host 10.0.0.2 \
+  --api-listen 0.0.0.0:15560 \
   --message-xsub-bind tcp://0.0.0.0:15580 \
   --message-xpub-bind tcp://0.0.0.0:15581 \
   --service-frontend-bind tcp://0.0.0.0:15662 \
@@ -71,7 +71,11 @@ python -m robot_bus.broker --tcp-only \
 | 15662 / 15663 | Service frontend / backend | 原生调用端 / 服务端 |
 | 15664 / 15665 | Action frontend / backend | 原生调用端 / 服务端 |
 
-在客户端机器先检查 discover 返回的地址能否从该机器访问；容器内地址或回环地址不能直接供其他机器连接。NAT/容器映射必须同时匹配宣告地址与端口；仅设置 `--advertise-host` 不会创建端口映射。
+原生客户端和 `--peer` 沿用访问 `/discover` 的 IP 或域名，从响应中取六个数字数据端口。broker 默认不推断也不返回主机地址。排查时请从客户端检查**入口主机加数据端口**是否可达。broker 与使用发现功能的客户端要一起升级；旧版端点字符串格式不再受支持。
+
+JSON 端口字段为 `messageXsubPort`、`messageXpubPort`、`serviceFrontendPort`、`serviceBackendPort`、`actionFrontendPort` 和 `actionBackendPort`。
+
+如果 HTTP 入口和原生 TCP 入口不是同一个主机（例如反向代理、NAT 或指定网卡绑定），使用 `--advertise-host HOST`，响应才包含用于 TCP 的 `advertiseHost`。它不限制监听网卡，也不创建端口映射；NAT 或容器发布端口须与响应里的数据端口匹配。
 
 Python 原生节点：
 
@@ -98,7 +102,7 @@ WS 客户端使用 `robot_bus.Node.ws_at("remote", "http://10.0.0.2:15560")`。H
 | 现象 | 先检查 | 下一步 |
 | --- | --- | --- |
 | API 不在 15560 | 启动日志中的实际端口 | 用实际端口连接；确认已有 broker 后再决定是否复用 |
-| 控制台能打开，原生节点连不上 | discover 中的数据端点、网卡地址、端口映射 | 开放相应 TCP 端口，修正 `--advertise-host` 与固定 bind |
+| 控制台能打开，原生节点连不上 | discover 入口和数据端口、显式宣告地址、端口映射 | 开放相应 TCP 端口；仅在数据主机与入口不同时设置 `--advertise-host` |
 | Topic 无输出 | 发布订阅的 topic/type 是否一致，回调循环是否启动 | 用持续发布验证异步订阅建立；在 Topics/Topology 查看节点与类型 |
 | Service/action 等待超时 | 服务端进程及 `start()`/`spin()`、路由名、是否已有 worker | 先跑仓库标准示例；再检查业务回调是否阻塞，避免直接无限重试 |
 | inproc 收不到消息 | 是否同一进程、同一 Context | 使用 `Node.inproc_with_context` 与 `RobotBusBroker.start(context=ctx)` |
