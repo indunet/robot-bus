@@ -5,7 +5,7 @@
 #
 #   cmake_minimum_required(VERSION 3.22)
 #   include(cmake/FetchRobotBus.cmake)
-#   robot_bus_fetch_sdk(VERSION 3.1.0 SHA256 <hash>)
+#   robot_bus_fetch_sdk(VERSION 3.2.0 SHA256 <hash>)
 #   target_link_libraries(my_app PRIVATE robot_bus::robot_bus robot_bus::msgs)
 #   robot_bus_copy_runtime_libs(my_app)
 #

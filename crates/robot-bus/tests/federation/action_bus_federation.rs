@@ -18,20 +18,20 @@ use robot_bus::errors::BusError;
 use robot_bus::worker_thread::WorkerThread;
 use robot_bus::{DiscoveryConfig, RobotBusBroker, RobotBusConfig};
 
-fn connect_addr(bind: &str) -> String {
+pub(crate) fn connect_addr(bind: &str) -> String {
     bind.replace("tcp://0.0.0.0:", "tcp://127.0.0.1:")
         .replace("tcp://*:", "tcp://127.0.0.1:")
 }
 
 /// Per-broker ports: `(act_fe, act_be)` plus 6 binds for message/service/grpc/console.
 /// Allocated in one `free_ports` batch so sequential probes cannot collide.
-struct ActionBrokerPorts {
-    act_fe: u16,
-    act_be: u16,
-    other: [u16; 6],
+pub(crate) struct ActionBrokerPorts {
+    pub(crate) act_fe: u16,
+    pub(crate) act_be: u16,
+    pub(crate) other: [u16; 6],
 }
 
-fn alloc_action_broker_ports(n: usize) -> Vec<ActionBrokerPorts> {
+pub(crate) fn alloc_action_broker_ports(n: usize) -> Vec<ActionBrokerPorts> {
     let raw = free_ports(n * 8);
     raw.chunks(8)
         .map(|c| ActionBrokerPorts {
@@ -42,7 +42,7 @@ fn alloc_action_broker_ports(n: usize) -> Vec<ActionBrokerPorts> {
         .collect()
 }
 
-fn federated_action_config(
+pub(crate) fn federated_action_config(
     broker_id: &str,
     peers: Vec<ActionPeer>,
     ports: &ActionBrokerPorts,
@@ -105,10 +105,11 @@ fn peer(broker_id: &str, backend: u16) -> ActionPeer {
     ActionPeer {
         backend: format!("tcp://127.0.0.1:{backend}"),
         broker_id: broker_id.to_string(),
+        join: false,
     }
 }
 
-fn demo_handler(tag: &'static [u8]) -> Arc<dyn Fn(&[u8]) -> Vec<(String, Vec<u8>)> + Send + Sync> {
+pub(crate) fn demo_handler(tag: &'static [u8]) -> Arc<dyn Fn(&[u8]) -> Vec<(String, Vec<u8>)> + Send + Sync> {
     Arc::new(move |body| {
         vec![
             ("FEEDBACK".into(), [b"fb:", tag].concat()),

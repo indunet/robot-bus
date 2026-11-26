@@ -24,7 +24,7 @@ pub use config::{
 };
 #[doc(hidden)]
 pub use http::normalize_api_base;
-pub use http::{DiscoverResponse, fetch_discover};
+pub use http::{DiscoverResponse, FEDERATION_JOIN, fetch_discover};
 #[doc(hidden)]
 pub use net::tcp_port_from_bind;
 #[cfg(feature = "broker")]

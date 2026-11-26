@@ -8,9 +8,12 @@ pub const XPUB_PORT: u16 = 0;
 
 pub const XSUB_CHANNEL: &str = "message_bus/xsub";
 pub const XPUB_CHANNEL: &str = "message_bus/xpub";
+pub const FED_CHANNEL: &str = crate::transports::MESSAGE_FED_CHANNEL;
 
 pub const DEFAULT_XSUB_BIND: &str = "tcp://0.0.0.0:0";
 pub const DEFAULT_XPUB_BIND: &str = "tcp://0.0.0.0:0";
+/// Federation channel: peer brokers join here. Empty string disables it.
+pub const DEFAULT_FED_BIND: &str = "tcp://0.0.0.0:0";
 
 /// Shallow ZMQ queues: prefer dropping over buffering for real-time streams.
 pub const DEFAULT_SND_HWM: i32 = 8;

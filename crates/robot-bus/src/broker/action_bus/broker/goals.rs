@@ -33,6 +33,8 @@ pub(crate) enum GoalReply {
     Frontend,
     /// Federated peer identity on our backend ROUTER (inbound goal from that peer).
     FedBackend { identity: Vec<u8> },
+    /// Goal that arrived on our own joining link (`peer_idx`); replies go back over its DEALER.
+    FedDealer { peer_idx: usize },
 }
 
 /// goal_id -> GoalEntry. Drives CANCEL routing and worker-death recovery.

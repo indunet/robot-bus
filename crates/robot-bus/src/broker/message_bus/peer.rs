@@ -11,6 +11,12 @@ pub struct MessagePeer {
     pub xpub: String,
     /// Peer XSUB — local bridge PUB connects here to push federated frames.
     pub xsub: String,
+    /// Peer broker id. Empty → unknown (the link is then always active; see
+    /// [`link ownership`](super)).
+    pub broker_id: String,
+    /// Peer federation channel (ROUTER). `Some` → the peer supports one-sided join and
+    /// the link uses it; `None` → legacy XPUB/XSUB links (both sides must configure peers).
+    pub fed: Option<String>,
 }
 
 impl MessagePeer {
@@ -22,7 +28,12 @@ impl MessagePeer {
     pub fn from_xpub(xpub: &str) -> Result<Self> {
         let xpub = normalize_tcp_endpoint(xpub);
         let xsub = xsub_from_xpub(&xpub)?;
-        Ok(Self { xpub, xsub })
+        Ok(Self {
+            xpub,
+            xsub,
+            broker_id: String::new(),
+            fed: None,
+        })
     }
 }
 

@@ -6,8 +6,8 @@ use anyhow::{Context, Result, bail};
 
 use crate::discovery::{DiscoverResponse, fetch_discover, normalize_api_base};
 use crate::transports::{
-    ACTION_BACKEND_CHANNEL, SERVICE_BACKEND_CHANNEL, XPUB_CHANNEL, XSUB_CHANNEL, ipc_endpoint_in,
-    tcp_endpoint,
+    ACTION_BACKEND_CHANNEL, MESSAGE_FED_CHANNEL, SERVICE_BACKEND_CHANNEL, XPUB_CHANNEL,
+    XSUB_CHANNEL, ipc_endpoint_in, tcp_endpoint,
 };
 
 use super::action_bus::ActionPeer;
@@ -22,6 +22,8 @@ pub const IPC_PEER_PREFIX: &str = "ipc+";
 pub struct FederationPeerEndpoints {
     pub broker_id: String,
     pub api_url: String,
+    /// The peer supports one-sided join (`federation: ["join"]` in discover).
+    pub join: bool,
     pub message: MessagePeer,
     pub service: ServicePeer,
     pub action: ActionPeer,
@@ -33,20 +35,26 @@ impl FederationPeerEndpoints {
         let base = normalize_api_base(api_base);
         let host = disc.tcp_host_at(&base)?;
         let endpoint = |port| tcp_endpoint(&host, port);
+        let join = disc.supports_join();
         Ok(Self {
             broker_id: disc.broker_id.clone(),
             api_url: base,
+            join,
             message: MessagePeer {
                 xpub: endpoint(disc.message_xpub_port),
                 xsub: endpoint(disc.message_xsub_port),
+                broker_id: disc.broker_id.clone(),
+                fed: (join && disc.message_fed_port != 0).then(|| endpoint(disc.message_fed_port)),
             },
             service: ServicePeer {
                 backend: endpoint(disc.service_backend_port),
                 broker_id: disc.broker_id.clone(),
+                join,
             },
             action: ActionPeer {
                 backend: endpoint(disc.action_backend_port),
                 broker_id: disc.broker_id.clone(),
+                join,
             },
         })
     }
@@ -66,6 +74,7 @@ impl FederationPeerEndpoints {
                     disc.broker_id
                 )
             })?;
+        let join = disc.supports_join();
         let endpoint = |channel: &str| -> Result<String> {
             let file = Path::new(dir).join(format!("{}.ipc", channel.replace('/', "_")));
             if !file.exists() {
@@ -81,17 +90,26 @@ impl FederationPeerEndpoints {
         Ok(Self {
             broker_id: disc.broker_id.clone(),
             api_url: normalize_api_base(api_base),
+            join,
             message: MessagePeer {
                 xpub: endpoint(XPUB_CHANNEL)?,
                 xsub: endpoint(XSUB_CHANNEL)?,
+                broker_id: disc.broker_id.clone(),
+                fed: if join && disc.message_fed_port != 0 {
+                    Some(endpoint(MESSAGE_FED_CHANNEL)?)
+                } else {
+                    None
+                },
             },
             service: ServicePeer {
                 backend: endpoint(SERVICE_BACKEND_CHANNEL)?,
                 broker_id: disc.broker_id.clone(),
+                join,
             },
             action: ActionPeer {
                 backend: endpoint(ACTION_BACKEND_CHANNEL)?,
                 broker_id: disc.broker_id.clone(),
+                join,
             },
         })
     }
@@ -121,6 +139,14 @@ pub fn apply_api_peers(config: &mut super::RobotBusConfig, peers: &[String]) -> 
     for peer in peers {
         let resolved =
             resolve_peer_from_api(peer).with_context(|| format!("invalid --peer {peer}"))?;
+        if !resolved.join {
+            log::warn!(
+                "peer {} ({peer}) does not support one-sided join: it only sees this broker \
+                 if --peer is configured on both brokers (topics also need this broker to have \
+                 local subscribers)",
+                resolved.broker_id
+            );
+        }
         config.message.peers.push(resolved.message);
         config.service.peers.push(resolved.service);
         config.action.peers.push(resolved.action);
@@ -146,6 +172,8 @@ mod tests {
             action_backend_port: 6,
             ipc_dir,
             inproc_prefix: None,
+            message_fed_port: 0,
+            federation: Vec::new(),
         }
     }
 

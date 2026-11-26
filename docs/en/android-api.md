@@ -10,7 +10,7 @@ The AAR compiles the sources in [`bindings/java`](../../bindings/java/src/main/j
 
 ```bash
 # Maven Central (when published)
-# implementation("org.indunet:robot-bus-android:3.1.0")
+# implementation("org.indunet:robot-bus-android:3.2.0")
 
 # Local:
 just gen-android    # → bindings/android/generated/
@@ -38,7 +38,7 @@ class App : Application() {
 ```kotlin
 // build.gradle.kts
 dependencies {
-  implementation("org.indunet:robot-bus-android:3.1.0")
+  implementation("org.indunet:robot-bus-android:3.2.0")
 }
 ```
 

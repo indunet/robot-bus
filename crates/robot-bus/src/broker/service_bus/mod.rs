@@ -148,20 +148,16 @@ pub fn run_with_shutdown_ctx_bound(
         },
     );
 
-    if config.peers.is_empty() {
-        broker::run_loop(&frontend, &backend, &config, &shutdown, metrics.as_ref())
-            .context("broker loop")?;
-    } else {
-        bridge::run_federated(
-            &context,
-            frontend,
-            backend,
-            &config,
-            &shutdown,
-            metrics.as_ref(),
-        )
-        .context("federated broker loop")?;
-    }
+    // The federated loop also serves brokers that join us, so it always runs.
+    bridge::run_federated(
+        &context,
+        frontend,
+        backend,
+        &config,
+        &shutdown,
+        metrics.as_ref(),
+    )
+    .context("service broker loop")?;
     Ok(())
 }
 

@@ -6,8 +6,8 @@ mod ports;
 pub use metrics::{MessageMetrics, MessageMetricsSnapshot, TopicSnapshot};
 pub use peer::MessagePeer;
 pub use ports::{
-    DEFAULT_RCV_HWM, DEFAULT_SND_HWM, DEFAULT_XPUB_BIND, DEFAULT_XSUB_BIND, XPUB_CHANNEL,
-    XPUB_PORT, XSUB_CHANNEL, XSUB_PORT,
+    DEFAULT_FED_BIND, DEFAULT_RCV_HWM, DEFAULT_SND_HWM, DEFAULT_XPUB_BIND, DEFAULT_XSUB_BIND,
+    FED_CHANNEL, XPUB_CHANNEL, XPUB_PORT, XSUB_CHANNEL, XSUB_PORT,
 };
 
 use crate::shutdown;
@@ -27,6 +27,9 @@ const PROXY_CAPTURE: &str = "inproc://robot_bus/message_bus/proxy-capture";
 pub struct BusConfig {
     pub xsub_bind: String,
     pub xpub_bind: String,
+    /// Federation channel: brokers that list this one as `--peer` join here, so this
+    /// broker needs no peer configuration of its own. Empty → joining disabled.
+    pub fed_bind: String,
     pub snd_hwm: i32,
     pub rcv_hwm: i32,
     /// When true (default), also bind inproc + ipc aliases via [`bind_all`].
@@ -35,7 +38,8 @@ pub struct BusConfig {
     pub bind_opts: BindAllOpts,
     /// Stable id for hop-path loop prevention. Empty → random UUID at start.
     pub broker_id: String,
-    /// Static peers for topic federation (empty → plain `proxy_steerable`).
+    /// Peers this broker joins (empty → plain `proxy_steerable` until another broker
+    /// joins this one).
     pub peers: Vec<MessagePeer>,
 }
 
@@ -44,6 +48,7 @@ impl Default for BusConfig {
         Self {
             xsub_bind: DEFAULT_XSUB_BIND.to_string(),
             xpub_bind: DEFAULT_XPUB_BIND.to_string(),
+            fed_bind: DEFAULT_FED_BIND.to_string(),
             snd_hwm: DEFAULT_SND_HWM,
             rcv_hwm: DEFAULT_RCV_HWM,
             bind_all_transports: true,
@@ -65,7 +70,9 @@ impl Default for BusConfig {
 /// bus and hurt communication efficiency.
 ///
 /// When [`BusConfig::peers`] is non-empty, a custom federated forwarder is used
-/// instead (hop-path anti-loop + on-demand topic push).
+/// instead (hop-path anti-loop + on-demand topic push). Without peers the libzmq
+/// proxy runs until another broker joins through [`BusConfig::fed_bind`]; from then on
+/// the forwarder takes over the same sockets.
 pub fn run_with_shutdown(
     config: BusConfig,
     shutdown: Arc<AtomicBool>,
@@ -85,13 +92,14 @@ pub fn run_with_shutdown_ctx(
     run_with_shutdown_ctx_bound(context, config, shutdown, metrics, None)
 }
 
-/// Like [`run_with_shutdown_ctx`], optionally reporting resolved TCP binds via `bound_tx`.
+/// Like [`run_with_shutdown_ctx`], optionally reporting resolved TCP binds
+/// `(xsub, xpub, federation)` via `bound_tx` (federation is empty when disabled).
 pub fn run_with_shutdown_ctx_bound(
     context: ZmqContext,
     config: BusConfig,
     shutdown: Arc<AtomicBool>,
     metrics: Option<Arc<MessageMetrics>>,
-    bound_tx: Option<SyncSender<(String, String)>>,
+    bound_tx: Option<SyncSender<(String, String, String)>>,
 ) -> Result<()> {
     let xsub = context
         .socket(SocketType::XSUB)
@@ -124,8 +132,31 @@ pub fn run_with_shutdown_ctx_bound(
             (rx.clone(), vec![rx], rp.clone(), vec![rp])
         };
 
+    let (router, resolved_fed, fed_endpoints) = if config.fed_bind.is_empty() {
+        (None, String::new(), Vec::new())
+    } else {
+        let router = context
+            .socket(SocketType::ROUTER)
+            .context("create federation ROUTER")?;
+        router.set_linger(0).context("federation linger")?;
+        // Control frames (demand) share the pipe with data: keep headroom.
+        router
+            .set_sndhwm(config.snd_hwm.max(1000))
+            .context("federation sndhwm")?;
+        router
+            .set_rcvhwm(config.rcv_hwm.max(1000))
+            .context("federation rcvhwm")?;
+        let (resolved, endpoints) = if config.bind_all_transports {
+            bind_all(&router, &config.fed_bind, FED_CHANNEL, &config.bind_opts)?
+        } else {
+            let resolved = bind_tcp(&router, &config.fed_bind)?;
+            (resolved.clone(), vec![resolved])
+        };
+        (Some(router), resolved, endpoints)
+    };
+
     if let Some(tx) = bound_tx {
-        let _ = tx.send((resolved_xsub, resolved_xpub));
+        let _ = tx.send((resolved_xsub, resolved_xpub, resolved_fed));
     }
 
     let federated = !config.peers.is_empty();
@@ -134,6 +165,7 @@ pub fn run_with_shutdown_ctx_bound(
          publishers (PUB) connect ->\n    {}\n  \
          subscribers (SUB) connect ->\n    {}\n  \
          transports: {}\n  \
+         federation (peers join here) ->\n    {}\n  \
          forwarding: {}",
         format_endpoints(&xsub_endpoints),
         format_endpoints(&xpub_endpoints),
@@ -141,6 +173,11 @@ pub fn run_with_shutdown_ctx_bound(
             "tcp + inproc + ipc per socket"
         } else {
             "tcp only"
+        },
+        if fed_endpoints.is_empty() {
+            "(disabled)".to_string()
+        } else {
+            format_endpoints(&fed_endpoints)
         },
         if federated {
             "federated forwarder (opaque multipart + hop-path peers)"
@@ -152,7 +189,7 @@ pub fn run_with_shutdown_ctx_bound(
     );
 
     if federated {
-        return bridge::run_federated(&context, xsub, xpub, &config, &shutdown, metrics);
+        return bridge::run_federated(&context, xsub, xpub, router, &config, &shutdown, metrics);
     }
 
     let control = context
@@ -170,8 +207,11 @@ pub fn run_with_shutdown_ctx_bound(
     let mut xsub = xsub;
     let mut xpub = xpub;
     let mut control = control;
+    let forwarder_metrics = metrics.clone();
 
-    if let Some(metrics) = metrics {
+    // The proxy thread hands the sockets back so the federated forwarder can take over
+    // the same bus when another broker joins.
+    let (sockets, joined) = if let Some(metrics) = metrics {
         // Capture mirrors traffic to a side thread. High HWM so metrics never
         // back-pressure the C proxy (drops are OK — monitoring may under-count).
         let mut capture = context
@@ -202,34 +242,62 @@ pub fn run_with_shutdown_ctx_bound(
             {
                 log::warn!("message bus proxy stopped with error: {err}");
             }
+            (xsub, xpub)
         });
 
-        wait_until_shutdown(&shutdown);
+        let joined = wait_for_join_or_shutdown(&shutdown, router.as_ref());
         let _ = control_client.send(b"TERMINATE".as_ref(), 0);
-        proxy
+        let sockets = proxy
             .join()
             .map_err(|e| anyhow::anyhow!("message bus proxy thread: {e:?}"))?;
         capture_stop.store(true, Ordering::Release);
         let _ = metrics_join.join();
+        (sockets, joined)
     } else {
         let proxy = thread::spawn(move || {
             let _ = zmq::proxy_steerable(&mut xsub, &mut xpub, &mut control);
+            (xsub, xpub)
         });
 
-        wait_until_shutdown(&shutdown);
+        let joined = wait_for_join_or_shutdown(&shutdown, router.as_ref());
         let _ = control_client.send(b"TERMINATE".as_ref(), 0);
-        proxy
+        let sockets = proxy
             .join()
             .map_err(|e| anyhow::anyhow!("message bus proxy thread: {e:?}"))?;
-    }
+        (sockets, joined)
+    };
 
+    if joined {
+        log::info!("message_bus: a broker joined; switching to the federated forwarder");
+        let (xsub, xpub) = sockets;
+        return bridge::run_federated(
+            &context,
+            xsub,
+            xpub,
+            router,
+            &config,
+            &shutdown,
+            forwarder_metrics,
+        );
+    }
     Ok(())
 }
 
-fn wait_until_shutdown(shutdown: &AtomicBool) {
+/// Wait until shutdown, or until the first frame arrives on the federation ROUTER
+/// (a broker is joining). The frame stays queued for the forwarder. Returns `true` on join.
+fn wait_for_join_or_shutdown(shutdown: &AtomicBool, router: Option<&Socket>) -> bool {
     while !shutdown.load(Ordering::Acquire) {
-        thread::sleep(Duration::from_millis(50));
+        match router {
+            Some(router) => {
+                let mut items = [router.as_poll_item(zmq::POLLIN)];
+                if zmq::poll(&mut items, 50).is_ok() && items[0].is_readable() {
+                    return true;
+                }
+            }
+            None => thread::sleep(Duration::from_millis(50)),
+        }
     }
+    false
 }
 
 /// Side thread: read capture copies and update counters. Never on the forward path.

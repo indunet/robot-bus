@@ -91,6 +91,7 @@ fn federated_config(
             bind_opts: Default::default(),
             broker_id: broker_id.to_string(),
             peers: msg_peer.into_iter().collect(),
+            fed_bind: "tcp://127.0.0.1:0".to_string(),
         },
         service: ServiceBusConfig {
             frontend_bind: format!("tcp://127.0.0.1:{}", ports.svc_fe),
@@ -163,14 +164,18 @@ pub fn bench_federation(skip_rpc: bool) -> Vec<ScenarioResult> {
         Some(MessagePeer {
             xpub: format!("tcp://127.0.0.1:{}", ports_b.xpub),
             xsub: format!("tcp://127.0.0.1:{}", ports_b.xsub),
+            broker_id: String::new(),
+            fed: None,
         }),
         Some(ServicePeer {
             backend: format!("tcp://127.0.0.1:{}", ports_b.svc_be),
             broker_id: "perf-fed-b".into(),
+            join: false,
         }),
         Some(ActionPeer {
             backend: format!("tcp://127.0.0.1:{}", ports_b.act_be),
             broker_id: "perf-fed-b".into(),
+            join: false,
         }),
     );
     let cfg_b = federated_config(
@@ -179,14 +184,18 @@ pub fn bench_federation(skip_rpc: bool) -> Vec<ScenarioResult> {
         Some(MessagePeer {
             xpub: format!("tcp://127.0.0.1:{}", ports_a.xpub),
             xsub: format!("tcp://127.0.0.1:{}", ports_a.xsub),
+            broker_id: String::new(),
+            fed: None,
         }),
         Some(ServicePeer {
             backend: format!("tcp://127.0.0.1:{}", ports_a.svc_be),
             broker_id: "perf-fed-a".into(),
+            join: false,
         }),
         Some(ActionPeer {
             backend: format!("tcp://127.0.0.1:{}", ports_a.act_be),
             broker_id: "perf-fed-a".into(),
+            join: false,
         }),
     );
 

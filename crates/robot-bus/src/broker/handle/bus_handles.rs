@@ -25,11 +25,11 @@ pub(super) fn join_broker_thread(name: &str, handle: JoinHandle<Result<()>>) -> 
 ///
 /// On disconnect, join the thread so a bind `EADDRINUSE` (or panic) is not
 /// flattened into a generic timeout error.
-fn recv_bound_endpoints(
+fn recv_bound_endpoints<T>(
     name: &str,
-    bound_rx: Receiver<(String, String)>,
+    bound_rx: Receiver<T>,
     handle: JoinHandle<Result<()>>,
-) -> Result<((String, String), JoinHandle<Result<()>>)> {
+) -> Result<(T, JoinHandle<Result<()>>)> {
     match bound_rx.recv_timeout(Duration::from_secs(5)) {
         Ok(pair) => Ok((pair, handle)),
         Err(RecvTimeoutError::Timeout) => Err(anyhow!(
@@ -50,6 +50,8 @@ fn recv_bound_endpoints(
 pub struct MessageBusBroker {
     pub xsub_bind: String,
     pub xpub_bind: String,
+    /// Federation channel brokers join through; empty when joining is disabled.
+    pub fed_bind: String,
     /// Per-topic counters updated by the proxy (shared with the console when enabled).
     pub metrics: Arc<MessageMetrics>,
     shutdown: Arc<AtomicBool>,
@@ -81,12 +83,13 @@ impl MessageBusBroker {
                 Some(bound_tx),
             )
         });
-        let ((xsub_bind, xpub_bind), handle) =
+        let ((xsub_bind, xpub_bind, fed_bind), handle) =
             recv_bound_endpoints("message bus", bound_rx, handle)?;
         thread::sleep(STARTUP_SETTLE);
         Ok(Self {
             xsub_bind,
             xpub_bind,
+            fed_bind,
             metrics: stored,
             shutdown,
             handle: Some(handle),

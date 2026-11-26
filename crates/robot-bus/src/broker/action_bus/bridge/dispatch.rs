@@ -111,9 +111,9 @@ pub(super) fn dispatch_goal(
         if let Some(m) = metrics {
             m.record_run_start(&act_str, goal_id);
         }
-        let _ = peers[peer_idx].dealer.send_multipart(
-            [action, goal_id, KIND_GOAL, out_hop.as_bytes(), body],
-            zmq::DONTWAIT,
+        peers[peer_idx].send(
+            backend,
+            &[action, goal_id, KIND_GOAL, out_hop.as_bytes(), body],
         );
         return Ok(());
     }
@@ -151,6 +151,9 @@ pub(super) fn clone_reply(r: &GoalReply) -> GoalReply {
         GoalReply::Frontend => GoalReply::Frontend,
         GoalReply::FedBackend { identity } => GoalReply::FedBackend {
             identity: identity.clone(),
+        },
+        GoalReply::FedDealer { peer_idx } => GoalReply::FedDealer {
+            peer_idx: *peer_idx,
         },
     }
 }
@@ -191,10 +194,7 @@ pub(super) fn handle_cancel(
     if let Some(entry) = goals.get(goal_id) {
         if let Some(peer_idx) = entry.via_peer {
             let hop = ""; // cancel follows established goal; hop not needed for routing
-            let _ = peers[peer_idx].dealer.send_multipart(
-                [action, goal_id, KIND_CANCEL, hop.as_bytes(), body],
-                zmq::DONTWAIT,
-            );
+            peers[peer_idx].send(backend, &[action, goal_id, KIND_CANCEL, hop.as_bytes(), body]);
         } else if !entry.worker_identity.is_empty() {
             let fwd = build_worker_cancel(&entry.worker_identity, client_id, action, goal_id, body);
             backend
@@ -257,6 +257,9 @@ pub(super) fn deliver_goal_reply(
                 zmq::DONTWAIT,
             );
         }
+        GoalReply::FedDealer { peer_idx } => {
+            peers[*peer_idx].send(backend, &[action, goal_id, kind, b"", body]);
+        }
     }
 
     if kind == KIND_RESULT {
@@ -271,7 +274,6 @@ pub(super) fn deliver_goal_reply(
             }
         }
     }
-    let _ = peers; // peer dealer replies already landed here via handle_peer_dealer
     Ok(())
 }
 
@@ -306,14 +308,17 @@ pub(super) fn send_error_result(
                 zmq::DONTWAIT,
             );
         }
+        GoalReply::FedDealer { peer_idx } => {
+            peers[*peer_idx].send(backend, &[action, goal_id, KIND_RESULT, b"", err.as_slice()]);
+        }
     }
-    let _ = peers;
     Ok(())
 }
 
 pub(super) fn send_died_results(
     frontend: &Socket,
     backend: &Socket,
+    peers: &[PeerLink],
     dropped: Vec<GoalEntry>,
     metrics: Option<&std::sync::Arc<crate::broker::action_bus::ActionMetrics>>,
 ) -> Result<()> {
@@ -347,6 +352,18 @@ pub(super) fn send_died_results(
                         err.as_slice(),
                     ],
                     zmq::DONTWAIT,
+                );
+            }
+            GoalReply::FedDealer { peer_idx } => {
+                peers[*peer_idx].send(
+                    backend,
+                    &[
+                        e.action.as_slice(),
+                        e.goal_id.as_slice(),
+                        KIND_RESULT,
+                        b"",
+                        err.as_slice(),
+                    ],
                 );
             }
         }
@@ -416,15 +433,15 @@ pub(super) fn retry_pending(
                 if let Some(m) = metrics {
                     m.record_run_start(&act_str, &req.goal_id);
                 }
-                let _ = peers[peer_idx].dealer.send_multipart(
-                    [
+                peers[peer_idx].send(
+                    backend,
+                    &[
                         req.action.as_slice(),
                         req.goal_id.as_slice(),
                         KIND_GOAL,
                         out_hop.as_bytes(),
                         req.body.as_slice(),
                     ],
-                    zmq::DONTWAIT,
                 );
                 dispatched = true;
             }

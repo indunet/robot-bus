@@ -9,8 +9,10 @@ use super::super::broker::{
     ERR_NO_WORKER, ERR_WORKER_DIED, InFlightEntry, InFlightTable, WorkerRegistry,
     build_client_reply, build_error_body, build_worker_forward, reclaim_worker_requests,
 };
+use super::protocol::CMD_FED_CALL;
 use super::remote::{
-    CorrEntry, PeerLink, PendingRequest, ReplyTarget, is_fed_identity, make_corr_id,
+    CorrEntry, PeerLink, PendingRequest, ReplyTarget, find_join_link, is_fed_identity,
+    make_corr_id, parse_link_broker_id,
 };
 
 fn clone_reply_target(t: &ReplyTarget) -> ReplyTarget {
@@ -26,7 +28,8 @@ fn clone_reply_target(t: &ReplyTarget) -> ReplyTarget {
 
 fn send_error_to_target(
     frontend: &Socket,
-    peers: Option<&[PeerLink]>,
+    backend: &Socket,
+    peers: &[PeerLink],
     target: &ReplyTarget,
     original_client_id: &[u8],
     svc: &[u8],
@@ -41,20 +44,40 @@ fn send_error_to_target(
                 .context("frontend send error")?;
         }
         ReplyTarget::Peer { peer_idx } => {
-            if let Some(peers) = peers {
-                let _ = peers[*peer_idx]
-                    .dealer
-                    .send_multipart([original_client_id, svc, req_id, err], zmq::DONTWAIT);
-            }
+            peers[*peer_idx].send_reply(backend, original_client_id, svc, req_id, err);
         }
     }
     Ok(())
 }
 
+/// Hand a request to the chosen worker: a local / peer-DEALER worker through the backend
+/// ROUTER, or a service behind our own joining link through that link's DEALER.
+fn forward_to_worker(
+    backend: &Socket,
+    peers: &[PeerLink],
+    worker_id: &[u8],
+    client_id: &[u8],
+    svc: &[u8],
+    req_id: &[u8],
+    body: &[u8],
+) -> Result<()> {
+    if let Some(peer_id) = parse_link_broker_id(worker_id) {
+        // If the link vanished meanwhile, the correlation entry expires with NO_WORKER.
+        if let Some(idx) = find_join_link(peers, &peer_id) {
+            peers[idx].send(backend, &[CMD_FED_CALL, client_id, svc, req_id, body]);
+        }
+        return Ok(());
+    }
+    let fwd = build_worker_forward(worker_id, client_id, svc, req_id, body);
+    backend
+        .send_multipart(fwd, 0)
+        .context("backend send forward")
+}
+
 pub(super) fn dispatch_request(
     frontend: &Socket,
     backend: &Socket,
-    peers: Option<&mut [PeerLink]>,
+    peers: &[PeerLink],
     registry: &mut WorkerRegistry,
     pending: &mut VecDeque<PendingRequest>,
     corr: &mut HashMap<Vec<u8>, CorrEntry>,
@@ -109,10 +132,15 @@ pub(super) fn dispatch_request(
         if let Some(m) = metrics {
             m.record_call_start(svc_str, client_id, req_id);
         }
-        let fwd = build_worker_forward(worker_id.as_slice(), &forward_client_id, svc, req_id, body);
-        backend
-            .send_multipart(fwd, 0)
-            .context("backend send forward")?;
+        forward_to_worker(
+            backend,
+            peers,
+            &worker_id,
+            &forward_client_id,
+            svc,
+            req_id,
+            body,
+        )?;
     } else if pending.len() < max_pending {
         pending.push_back(PendingRequest {
             client_identity: client_id.to_vec(),
@@ -129,13 +157,11 @@ pub(super) fn dispatch_request(
             m.record_error(svc_str);
         }
         let err = build_error_body(ERR_NO_WORKER, svc);
-        match (peer_idx, peers) {
-            (Some(idx), Some(peers)) => {
-                let _ = peers[idx]
-                    .dealer
-                    .send_multipart([client_id, svc, req_id, err.as_slice()], zmq::DONTWAIT);
+        match peer_idx {
+            Some(idx) => {
+                peers[idx].send_reply(backend, client_id, svc, req_id, &err);
             }
-            _ => {
+            None => {
                 let reply = build_client_reply(client_id, svc, req_id, &err, has_req_delim);
                 frontend
                     .send_multipart(reply, 0)
@@ -148,7 +174,8 @@ pub(super) fn dispatch_request(
 
 pub(super) fn deliver_reply(
     frontend: &Socket,
-    peers: &mut [PeerLink],
+    backend: &Socket,
+    peers: &[PeerLink],
     client_is_req: &HashMap<Vec<u8>, bool>,
     corr: &mut HashMap<Vec<u8>, CorrEntry>,
     in_flight: &mut InFlightTable,
@@ -173,10 +200,7 @@ pub(super) fn deliver_reply(
                     .context("frontend send reply")?;
             }
             ReplyTarget::Peer { peer_idx } => {
-                let _ = peers[peer_idx].dealer.send_multipart(
-                    [entry.original_client_id.as_slice(), svc, req_id, body],
-                    zmq::DONTWAIT,
-                );
+                peers[peer_idx].send_reply(backend, &entry.original_client_id, svc, req_id, body);
             }
         }
         return Ok(());
@@ -261,16 +285,15 @@ pub(super) fn retry_pending(
             if let Some(m) = metrics {
                 m.record_call_start(&svc_str, &req.client_identity, &req.request_id);
             }
-            let fwd = build_worker_forward(
-                worker_id.as_slice(),
+            forward_to_worker(
+                backend,
+                peers,
+                &worker_id,
                 &forward_client_id,
                 &req.service,
                 &req.request_id,
                 &req.body,
-            );
-            backend
-                .send_multipart(fwd, 0)
-                .context("backend send pending forward")?;
+            )?;
         } else if now.duration_since(req.queued_at) > pending_timeout {
             if let Some(m) = metrics {
                 m.record_error(&svc_str);
@@ -278,14 +301,12 @@ pub(super) fn retry_pending(
             }
             let err = build_error_body(ERR_NO_WORKER, &req.service);
             if let Some(idx) = req.peer_idx {
-                let _ = peers[idx].dealer.send_multipart(
-                    [
-                        req.client_identity.as_slice(),
-                        req.service.as_slice(),
-                        req.request_id.as_slice(),
-                        err.as_slice(),
-                    ],
-                    zmq::DONTWAIT,
+                peers[idx].send_reply(
+                    backend,
+                    &req.client_identity,
+                    &req.service,
+                    &req.request_id,
+                    &err,
                 );
             } else {
                 let reply = build_client_reply(
@@ -310,6 +331,7 @@ pub(super) fn retry_pending(
 /// Expire stale corr entries and notify the original client.
 pub(super) fn expire_corr(
     frontend: &Socket,
+    backend: &Socket,
     peers: &[PeerLink],
     corr: &mut HashMap<Vec<u8>, CorrEntry>,
     now: Instant,
@@ -331,7 +353,8 @@ pub(super) fn expire_corr(
             let err = build_error_body(ERR_NO_WORKER, &entry.service);
             send_error_to_target(
                 frontend,
-                Some(peers),
+                backend,
+                peers,
                 &entry.target,
                 &entry.original_client_id,
                 &entry.service,
@@ -346,6 +369,7 @@ pub(super) fn expire_corr(
 /// Reclaim corr + local in-flight entries for a dead worker identity.
 pub(super) fn reclaim_worker_inflight(
     frontend: &Socket,
+    backend: &Socket,
     peers: &[PeerLink],
     corr: &mut HashMap<Vec<u8>, CorrEntry>,
     in_flight: &mut InFlightTable,
@@ -369,7 +393,8 @@ pub(super) fn reclaim_worker_inflight(
             let err = build_error_body(ERR_WORKER_DIED, &entry.service);
             send_error_to_target(
                 frontend,
-                Some(peers),
+                backend,
+                peers,
                 &entry.target,
                 &entry.original_client_id,
                 &entry.service,

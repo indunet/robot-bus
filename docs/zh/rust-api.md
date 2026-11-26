@@ -5,11 +5,11 @@
 `Cargo.toml`：
 
 ```toml
-robot-bus = "3.1.0"
+robot-bus = "3.2.0"
 # 本地：robot-bus = { path = "../crates/robot-bus" }
 # 一个包同时包含 SDK 和 broker。默认的 `full` feature 会打开 broker、
 # WebSocket（客户端和服务端）、内嵌控制台和 tank 演示。
-# 只写客户端时可以全部关闭：robot-bus = { version = "3.1.0", default-features = false }
+# 只写客户端时可以全部关闭：robot-bus = { version = "3.2.0", default-features = false }
 ```
 
 ## Broker启动

@@ -2,25 +2,30 @@
 
 use anyhow::Result;
 use std::collections::HashMap;
+use zmq::Socket;
 
 use super::super::broker::{WorkerRegistry, hop_contains};
 use super::protocol::{CMD_DISCONNECT, CMD_HEARTBEAT, CMD_READY_FED};
-use super::remote::PeerLink;
+use super::remote::{LinkKind, PeerLink};
 
 pub(super) fn sync_all_advertisements(
     peers: &mut [PeerLink],
+    backend: &Socket,
     registry: &WorkerRegistry,
     broker_id: &str,
 ) -> Result<()> {
     let snapshot = registry.advertise_snapshot(broker_id);
     for link in peers.iter_mut() {
-        sync_peer_advertisement(link, &snapshot, broker_id)?;
+        if link.enabled() {
+            sync_peer_advertisement(link, backend, &snapshot, broker_id)?;
+        }
     }
     Ok(())
 }
 
 fn sync_peer_advertisement(
     link: &mut PeerLink,
+    backend: &Socket,
     snapshot: &[(String, String, String, String)],
     broker_id: &str,
 ) -> Result<()> {
@@ -59,9 +64,7 @@ fn sync_peer_advertisement(
         .cloned()
         .collect();
     for svc in stale {
-        let _ = link
-            .dealer
-            .send_multipart([CMD_DISCONNECT, svc.as_bytes()], zmq::DONTWAIT);
+        let _ = link.send(backend, &[CMD_DISCONNECT, svc.as_bytes()]);
         link.advertised.remove(&svc);
     }
 
@@ -71,14 +74,14 @@ fn sync_peer_advertisement(
             _ => true,
         };
         if need_ready {
-            let _ = link.dealer.send_multipart(
-                [
+            let _ = link.send(
+                backend,
+                &[
                     CMD_READY_FED,
                     svc.as_bytes(),
                     origin.as_bytes(),
                     hop.as_bytes(),
                 ],
-                zmq::DONTWAIT,
             );
             link.advertised
                 .insert(svc.clone(), (origin.clone(), hop.clone()));
@@ -87,12 +90,31 @@ fn sync_peer_advertisement(
     Ok(())
 }
 
-pub(super) fn send_peer_heartbeats(peers: &[PeerLink]) -> Result<()> {
+/// Keep the peer's view of our advertisements alive.
+///
+/// Legacy links send one `HEARTBEAT` per service. Joining links re-send the whole
+/// `READY_FED` set instead: it doubles as heartbeat and heals state the peer lost
+/// (restart, dropped frames) without any further handshake.
+pub(super) fn send_peer_heartbeats(peers: &[PeerLink], backend: &Socket) -> Result<()> {
     for link in peers {
-        for svc in link.advertised.keys() {
-            let _ = link
-                .dealer
-                .send_multipart([CMD_HEARTBEAT, svc.as_bytes()], zmq::DONTWAIT);
+        if !link.enabled() {
+            continue;
+        }
+        let refresh = link.join || matches!(link.kind, LinkKind::In(_));
+        for (svc, (origin, hop)) in &link.advertised {
+            if refresh {
+                let _ = link.send(
+                    backend,
+                    &[
+                        CMD_READY_FED,
+                        svc.as_bytes(),
+                        origin.as_bytes(),
+                        hop.as_bytes(),
+                    ],
+                );
+            } else {
+                let _ = link.send(backend, &[CMD_HEARTBEAT, svc.as_bytes()]);
+            }
         }
     }
     Ok(())

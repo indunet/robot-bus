@@ -77,6 +77,16 @@ pub fn parse_robot_bus_config(args: &[String]) -> Result<Option<RobotBusConfig>>
                 i += 1;
                 config.message.xpub_bind = normalize_tcp_bind(require_arg(args, i, arg)?);
             }
+            "--message-fed-bind" => {
+                i += 1;
+                let value = require_arg(args, i, arg)?;
+                // Empty / "none" turns off accepting joining brokers (topics only).
+                config.message.fed_bind = if value.is_empty() || value == "none" {
+                    String::new()
+                } else {
+                    normalize_tcp_bind(value)
+                };
+            }
             "--message-snd-hwm" => {
                 i += 1;
                 config.message.snd_hwm = parse_i32(arg, require_arg(args, i, arg)?)?;
@@ -363,12 +373,16 @@ console  same port as API (use --no-console to disable UI; discover still on API
 Message options:\n  \
 --message-xsub-bind ADDR       Publisher bind (default tcp://0.0.0.0:0; alias: --xsub-bind)\n  \
 --message-xpub-bind ADDR       Subscriber bind (default tcp://0.0.0.0:0; alias: --xpub-bind)\n  \
+--message-fed-bind ADDR        Where other brokers join this one (default tcp://0.0.0.0:0; none = off)\n  \
 --message-snd-hwm N            Message send HWM\n  \
 --message-rcv-hwm N            Message receive HWM\n  \
 --broker-id ID                 Hop-path id for message/service/action federation (default: random UUID)\n  \
 --message-peer tcp://HOST:XPUB Peer broker XPUB (advanced; XSUB = XPUB port - 1)\n  \
 --message-peer ipc://DIR/message_bus_xpub.ipc  Same-host peer (XSUB = DIR/message_bus_xsub.ipc)\n  \
---peer HOST:PORT               Federation peer via API listen (GET /api/v1/discover; repeatable)\n  \
+--peer HOST:PORT               Join the broker at HOST:PORT's API listen (GET /api/v1/discover; repeatable).\n  \
+                               One-sided: only this broker needs --peer; the running peer needs no\n  \
+                               config or restart. Topics, services and actions work in both directions.\n  \
+                               Listing each other on both sides still works (one link, no duplicates).\n  \
 --peer ipc+HOST:PORT           Same as --peer, but link over the peer's IPC endpoints (same host only)\n\n\
 Service options:\n  \
 --service-frontend-bind ADDR   Client (REQ) bind (default :0)\n  \
@@ -562,6 +576,18 @@ mod tests {
         assert!(config.console.enabled);
         assert_eq!(config.console.tank_enabled, cfg!(feature = "demo-tank"));
         assert!(!config.console.docs_enabled);
+    }
+
+    #[test]
+    fn parses_message_fed_bind() {
+        let config = parse_robot_bus_config(&args(&["--message-fed-bind", "127.0.0.1:22000"]))
+            .unwrap()
+            .expect("config");
+        assert_eq!(config.message.fed_bind, "tcp://127.0.0.1:22000");
+        let config = parse_robot_bus_config(&args(&["--message-fed-bind", "none"]))
+            .unwrap()
+            .expect("config");
+        assert!(config.message.fed_bind.is_empty());
     }
 
     #[test]

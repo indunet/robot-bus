@@ -5,6 +5,12 @@ pub(super) const CMD_READY_FED: &[u8] = b"READY_FED";
 pub(super) const CMD_HEARTBEAT: &[u8] = b"HEARTBEAT";
 pub(super) const CMD_DISCONNECT: &[u8] = b"DISCONNECT";
 
+/// One-sided join: sent by the joining broker, answered with `JOIN_ACK` (`[id][epoch][DEFER]`).
+pub(super) const CMD_JOIN: &[u8] = b"JOIN";
+pub(super) const CMD_JOIN_ACK: &[u8] = b"JOIN_ACK";
+/// `JOIN_ACK` flag: both brokers configured each other; the answering broker owns the link.
+pub(super) const DEFER: &[u8] = b"DEFER";
+
 pub(super) const KIND_GOAL: &[u8] = b"GOAL";
 pub(super) const KIND_FEEDBACK: &[u8] = b"FEEDBACK";
 pub(super) const KIND_RESULT: &[u8] = b"RESULT";

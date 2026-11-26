@@ -29,9 +29,29 @@ pub struct DiscoverResponse {
     pub ipc_dir: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub inproc_prefix: Option<String>,
+    /// Message-bus federation channel (ROUTER that joining brokers connect to).
+    /// `0` / absent: this broker has no such channel (older version).
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub message_fed_port: u16,
+    /// Federation capabilities. [`FEDERATION_JOIN`]: a peer may join this broker
+    /// with a one-sided `--peer` (no configuration needed on this side).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub federation: Vec<String>,
+}
+
+/// Federation capability: one-sided join (see [`DiscoverResponse::federation`]).
+pub const FEDERATION_JOIN: &str = "join";
+
+fn is_zero(v: &u16) -> bool {
+    *v == 0
 }
 
 impl DiscoverResponse {
+    /// Whether the broker accepts one-sided federation joins.
+    pub fn supports_join(&self) -> bool {
+        self.federation.iter().any(|c| c == FEDERATION_JOIN)
+    }
+
     /// Resolve a response using the API base the client originally contacted.
     pub fn to_announcement(&self, api_base: &str) -> Result<BrokerAnnouncement> {
         let base = normalize_api_base(api_base);

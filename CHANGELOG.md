@@ -6,6 +6,8 @@ Record changes under the applicable version. Explain what changed, why it change
 
 ## [Unreleased]
 
+## [3.2.0]
+
 ## [3.1.0]
 
 ### Breaking

@@ -16,6 +16,8 @@ pub const ACTION_BACKEND_PORT: u16 = 15665;
 
 pub const XSUB_CHANNEL: &str = "message_bus/xsub";
 pub const XPUB_CHANNEL: &str = "message_bus/xpub";
+/// Federation channel of the message bus (ROUTER joined brokers connect to).
+pub const MESSAGE_FED_CHANNEL: &str = "message_bus/fed";
 pub const SERVICE_FRONTEND_CHANNEL: &str = "service_bus/frontend";
 pub const SERVICE_BACKEND_CHANNEL: &str = "service_bus/backend";
 pub const ACTION_FRONTEND_CHANNEL: &str = "action_bus/frontend";

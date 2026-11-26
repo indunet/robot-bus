@@ -18,7 +18,8 @@ use super::action_bus::ActionMetrics;
 use super::message_bus::MessageMetrics;
 use super::service_bus::ServiceMetrics;
 use crate::discovery::{
-    DiscoverResponse, explicit_advertise_host, is_specific_tcp_bind, tcp_port_from_bind,
+    DiscoverResponse, FEDERATION_JOIN, explicit_advertise_host, is_specific_tcp_bind,
+    tcp_port_from_bind,
 };
 use crate::runtime::Context as BusContext;
 use crate::transports::{
@@ -436,6 +437,11 @@ impl RobotBusBroker {
                 .filter(|&port| port != 0)
                 .with_context(|| format!("missing resolved TCP discovery port for {bind}"))
         };
+        // Joining needs the message-bus federation channel; without it peers fall back
+        // to mutual configuration.
+        let message_fed_port = tcp_port_from_bind(&message.fed_bind)
+            .filter(|&port| port != 0)
+            .unwrap_or(0);
         let discover = DiscoverResponse {
             broker_id: broker_id.clone(),
             domain_id: config.discovery.domain_id,
@@ -453,6 +459,12 @@ impl RobotBusBroker {
                 .message
                 .bind_all_transports
                 .then(|| bind_opts.inproc_prefix.clone()),
+            message_fed_port,
+            federation: if message_fed_port != 0 {
+                vec![FEDERATION_JOIN.to_string()]
+            } else {
+                Vec::new()
+            },
         };
 
         // Build console state before starting the WebSocket RPC server — when both features
@@ -787,6 +799,8 @@ mod tests {
             action_backend_port: 6,
             ipc_dir: ipc.then(|| "/tmp/robot_bus/abc".into()),
             inproc_prefix: ipc.then(|| "robot_bus".into()),
+            message_fed_port: 0,
+            federation: Vec::new(),
         };
         let binds = [1, 2, 3, 4, 5, 6].map(|port| format!("tcp://127.0.0.1:{port}"));
         format_startup_banner(

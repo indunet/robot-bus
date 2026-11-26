@@ -16,19 +16,19 @@ use robot_bus::service_bus::ServiceClient;
 use robot_bus::worker_thread::WorkerThread;
 use robot_bus::{DiscoveryConfig, RobotBusBroker, RobotBusConfig};
 
-fn connect_addr(bind: &str) -> String {
+pub(crate) fn connect_addr(bind: &str) -> String {
     bind.replace("tcp://0.0.0.0:", "tcp://127.0.0.1:")
         .replace("tcp://*:", "tcp://127.0.0.1:")
 }
 
 /// Per-broker ports: `(svc_fe, svc_be)` plus 6 binds for message/action/grpc/console.
-struct ServiceBrokerPorts {
-    svc_fe: u16,
-    svc_be: u16,
-    other: [u16; 6],
+pub(crate) struct ServiceBrokerPorts {
+    pub(crate) svc_fe: u16,
+    pub(crate) svc_be: u16,
+    pub(crate) other: [u16; 6],
 }
 
-fn alloc_service_broker_ports(n: usize) -> Vec<ServiceBrokerPorts> {
+pub(crate) fn alloc_service_broker_ports(n: usize) -> Vec<ServiceBrokerPorts> {
     let raw = free_ports(n * 8);
     raw.chunks(8)
         .map(|c| ServiceBrokerPorts {
@@ -39,7 +39,7 @@ fn alloc_service_broker_ports(n: usize) -> Vec<ServiceBrokerPorts> {
         .collect()
 }
 
-fn federated_service_config(
+pub(crate) fn federated_service_config(
     broker_id: &str,
     peers: Vec<ServicePeer>,
     ports: &ServiceBrokerPorts,
@@ -97,10 +97,11 @@ fn federated_service_config(
     }
 }
 
-fn peer(broker_id: &str, backend: u16) -> ServicePeer {
+pub(crate) fn peer(broker_id: &str, backend: u16) -> ServicePeer {
     ServicePeer {
         backend: format!("tcp://127.0.0.1:{backend}"),
         broker_id: broker_id.to_string(),
+        join: false,
     }
 }
 

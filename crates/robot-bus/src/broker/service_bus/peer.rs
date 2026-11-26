@@ -15,6 +15,8 @@ pub struct ServicePeer {
     pub backend: String,
     /// Peer broker id for hop-path / no-advertise-back. Empty → learned later if possible.
     pub broker_id: String,
+    /// The peer supports one-sided join (its services are usable over this link too).
+    pub join: bool,
 }
 
 impl ServicePeer {
@@ -29,6 +31,7 @@ impl ServicePeer {
         Ok(Self {
             backend: normalize_tcp_endpoint(backend, BACKEND_PORT),
             broker_id,
+            join: false,
         })
     }
 
@@ -37,7 +40,11 @@ impl ServicePeer {
         let (broker_id, frontend) = split_peer_id(frontend);
         let frontend = normalize_tcp_endpoint(frontend, FRONTEND_PORT);
         let backend = backend_from_frontend(&frontend)?;
-        Ok(Self { backend, broker_id })
+        Ok(Self {
+            backend,
+            broker_id,
+            join: false,
+        })
     }
 }
 

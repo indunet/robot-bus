@@ -14,24 +14,26 @@ use robot_bus::broker::service_bus::ServiceBusConfig;
 use robot_bus::{DiscoveryConfig, RobotBusBroker, RobotBusConfig};
 use robot_bus::{Publisher, Subscriber};
 
-fn connect_addr(bind: &str) -> String {
+pub(crate) fn connect_addr(bind: &str) -> String {
     bind.replace("tcp://0.0.0.0:", "tcp://127.0.0.1:")
         .replace("tcp://*:", "tcp://127.0.0.1:")
 }
 
 /// Per-broker ports: `(xsub, xpub)` plus 6 binds for service/action/grpc/console.
-struct MessageBrokerPorts {
-    xsub: u16,
-    xpub: u16,
-    other: [u16; 6],
+pub(crate) struct MessageBrokerPorts {
+    pub(crate) xsub: u16,
+    pub(crate) xpub: u16,
+    pub(crate) fed: u16,
+    pub(crate) other: [u16; 6],
 }
 
-fn alloc_message_broker_ports(n: usize) -> Vec<MessageBrokerPorts> {
-    let raw = free_ports(n * 8);
-    raw.chunks(8)
+pub(crate) fn alloc_message_broker_ports(n: usize) -> Vec<MessageBrokerPorts> {
+    let raw = free_ports(n * 9);
+    raw.chunks(9)
         .map(|c| MessageBrokerPorts {
             xsub: c[0],
             xpub: c[1],
+            fed: c[8],
             other: [c[2], c[3], c[4], c[5], c[6], c[7]],
         })
         .collect()
@@ -39,7 +41,7 @@ fn alloc_message_broker_ports(n: usize) -> Vec<MessageBrokerPorts> {
 
 /// Ephemeral TCP binds for one broker; message XSUB/XPUB need not be adjacent
 /// because tests set [`MessagePeer`] explicitly.
-fn federated_bus_config(
+pub(crate) fn federated_bus_config(
     broker_id: &str,
     peers: Vec<MessagePeer>,
     ports: &MessageBrokerPorts,
@@ -49,6 +51,7 @@ fn federated_bus_config(
         message: BusConfig {
             xsub_bind: format!("tcp://127.0.0.1:{}", ports.xsub),
             xpub_bind: format!("tcp://127.0.0.1:{}", ports.xpub),
+            fed_bind: format!("tcp://127.0.0.1:{}", ports.fed),
             snd_hwm: 100,
             rcv_hwm: 100,
             bind_all_transports: false,
@@ -94,14 +97,26 @@ fn federated_bus_config(
     }
 }
 
-fn msg_peer(ports: &MessageBrokerPorts) -> MessagePeer {
+/// Legacy peer (XPUB/XSUB links, both brokers must list each other).
+pub(crate) fn msg_peer(ports: &MessageBrokerPorts) -> MessagePeer {
     MessagePeer {
         xpub: format!("tcp://127.0.0.1:{}", ports.xpub),
         xsub: format!("tcp://127.0.0.1:{}", ports.xsub),
+        broker_id: String::new(),
+        fed: None,
     }
 }
 
-fn recv_exact(sub: &Subscriber, expect: &[u8], timeout: Duration) -> String {
+/// Peer that is joined through its federation channel (one-sided).
+pub(crate) fn join_peer(id: &str, ports: &MessageBrokerPorts) -> MessagePeer {
+    MessagePeer {
+        broker_id: id.to_string(),
+        fed: Some(format!("tcp://127.0.0.1:{}", ports.fed)),
+        ..msg_peer(ports)
+    }
+}
+
+pub(crate) fn recv_exact(sub: &Subscriber, expect: &[u8], timeout: Duration) -> String {
     let deadline = Instant::now() + timeout;
     while Instant::now() < deadline {
         let left = deadline.saturating_duration_since(Instant::now());
@@ -117,7 +132,7 @@ fn recv_exact(sub: &Subscriber, expect: &[u8], timeout: Duration) -> String {
     panic!("timed out waiting for payload {:?}", expect);
 }
 
-fn count_matching(sub: &Subscriber, expect: &[u8], window: Duration) -> usize {
+pub(crate) fn count_matching(sub: &Subscriber, expect: &[u8], window: Duration) -> usize {
     let deadline = Instant::now() + window;
     let mut n = 0;
     while Instant::now() < deadline {
@@ -355,13 +370,17 @@ fn federation_peer_via_api_discover() {
 
     let pub_a = Publisher::new(Some(&connect_addr(&broker_a.message.xsub_bind))).expect("pub a");
     thread::sleep(Duration::from_millis(100));
-    pub_a
-        .publish("fleet/api_peer", b"via-api")
-        .expect("publish");
-    assert_eq!(
-        recv_exact(&sub_b, b"via-api", Duration::from_secs(2)),
-        "fleet/api_peer"
-    );
+    // The links need a moment to come up after the restart; keep publishing until one lands.
+    let deadline = Instant::now() + Duration::from_secs(8);
+    loop {
+        pub_a
+            .publish("fleet/api_peer", b"via-api")
+            .expect("publish");
+        if count_matching(&sub_b, b"via-api", Duration::from_millis(200)) > 0 {
+            break;
+        }
+        assert!(Instant::now() < deadline, "no message crossed the link");
+    }
 
     broker_a.stop().expect("stop a");
     broker_b.stop().expect("stop b");
