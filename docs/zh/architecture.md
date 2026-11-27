@@ -2,7 +2,12 @@
 
 # 架构
 
-Robot Bus 是一个多语言消息框架，采用类似 ROS 2 的节点模型。一个 broker 负责路由话题、服务和 Action，消息载荷使用 Protobuf。连接配置见[部署与排障](deployment.md)，桥接配置见 [ROS 2 桥接](ros2-bridge.md)。
+Robot Bus 是独立运行的多语言消息框架，采用 ROS 2 风格的节点模型。下面四部分各有用途：
+
+- **核心通信：** 节点通过 broker 发布话题、调用服务和运行 Action，共用 Protobuf 消息契约。原生节点走 ZeroMQ，不需要 ROS 2 或浏览器。连接配置见[部署与排障](deployment.md)。
+- **浏览器 SDK：** 让网页通过 [WebSocket](typescript-api.md#浏览器websocket-rpc)成为业务客户端，参与消息收发和调用。
+- **Web 控制台：** broker 可提供[观测和调试界面](../../README-zh.md#2-web控制台)。客户端之间收发消息不需要控制台。
+- **ROS 2 桥：** [可选集成](ros2-bridge.md)，把选定的路由映射到已有的 ROS 2 通信图。浏览器 SDK 和控制台都不需要 ROS 2，使用桥也不需要浏览器。
 
 ## 系统概览
 

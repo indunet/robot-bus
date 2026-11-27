@@ -9,18 +9,19 @@
 [![Maven Central](https://img.shields.io/maven-central/v/org.indunet/robot-bus.svg?label=Maven%20Central)](https://central.sonatype.com/artifact/org.indunet/robot-bus)
 [![License](https://img.shields.io/badge/license-Apache%202.0-4EB1BA.svg)](https://www.apache.org/licenses/LICENSE-2.0.html)
 
-Robot Bus是一套轻量级、多语言的通信 **框架**，提供类 ROS2的编程模型（topic / service / action、`Node` + `spin`），底层基于 ZeroMQ。它不是要取代 ROS2，而是把 ROS2生态扩展到不易部署的环境（例如 Android、Windows、浏览器），以及其他语言的开发（例如 Java、TypeScript）。
+Robot Bus 是面向机器人应用的轻量级多语言通信框架。不同语言编写的组件可以通过同一个 broker 发布状态、调用服务、下发或取消长时间运行的任务。核心通信基于 ZeroMQ，可以独立运行，不需要安装 ROS 2 或打开浏览器。
+
+例如，[Rust 进程发布 IMU 数据，Python 进程接收](examples/README.md#1-topic-topic_imu)：两端通过 TCP 连接到同一个 broker，共用同一种 Protobuf 消息类型。
+
+[运行 Python 快速开始](#1-快速开始) · [按任务找文档](#16-文档)
 
 SDK：**Rust**、**Python**、**TypeScript**、**C++**、**Java**、**Android**。
 
 ## *核心功能*
 
-- **类 ROS2原语：** Topic发布/订阅、service、action（`send_goal` → GoalHandle → `result` / `cancel`）、定时器与参数。
+- **ROS 2 风格的编程模型：** 用 `Node` 和 `spin` 驱动节点；Topic 用于发布订阅，Service 用于请求应答，Action 支持目标、反馈、结果和取消。节点还支持定时器和参数。
 - **一个 broker，多种语言：** Rust、Python、TypeScript、C++、Java、Android SDK接入同一条总线。**更鼓励在程序里启动 broker**（`RobotBusBroker.start()`）；CLI 用于演示或独立进程。
-- **内嵌 Web控制台：** Overview、Topics、Services、Actions、Topology，以及内置小坦克示例 —— 无需额外前端进程。
-- **可选 ROS2桥：** 进程内用 `rclrs` / `rclpy` / `rclcpp`桥接 topic / service / action（Humble / Jazzy）。未启用桥时，核心 SDK不依赖 ROS。
 - **Protobuf契约：** 全部载荷使用 Protocol Buffers（不是 ROS CDR），目录与常见 ROS2包名对齐，见 [`proto/`](proto/)。
-- **浏览器与远程客户端：** WebSocket RPC（`Node::ws` / `Node.ws`；传输 `"ws"`）。**不兼容旧版：** `/ws-rpc`为 V3成帧（opcode + 原始 payload），V2客户端连不上。
 
 Node编程模型——`Context` / `Node`、topic pub-sub、service、action以及 `spin`——为稳定的公开 API。
 
@@ -77,29 +78,19 @@ CMake 工程可以拉取预编译 SDK，而不必安装系统包。见 [C++ API 
 
 **更鼓励在程序里启动 broker**（`RobotBusBroker.start()` / 各语言等价 API），让 broker 与业务同进程、生命周期一起管理。CLI 适合演示、多进程联调，或需要单独拉起一个常驻 broker 的场合。
 
-为了先跑通下面三个示例，在终端 1 启动 broker，并保持运行：
+先运行 `python -m pip install robot-bus` 安装，然后在终端 1 启动 broker 并保持运行：
 
 ```bash
 python -m robot_bus.broker --api-listen 127.0.0.1:15560 --tcp-only
 ```
 
-打开 **http://127.0.0.1:15560** 应看到控制台。`0.0.0.0` 是监听地址，浏览器和客户端应使用 `127.0.0.1` 或服务器的实际地址。
+在终端 2，将下面的 Topic 示例保存为 `demo.py`，运行 `python demo.py`。终端出现 `acceleration.z: 9.8`，就表示节点已成功发布并收到消息。HTTP 地址供节点发现 broker，消息走 TCP；不需要用浏览器打开该地址。
 
-在终端 2，将 1.3–1.5 的任意完整代码块保存为 `demo.py`，运行 `python demo.py`；每段都可独立运行，成功后自动退出。可用环境变量 `ROBOT_BUS_API_URL` 指定其他 broker 的 HTTP 地址。
+Service 和 Action 示例也可独立运行，成功后自动退出。可用环境变量 `ROBOT_BUS_API_URL` 指定其他 broker 的可达 HTTP 地址。
 
 应用内嵌 broker 的生命周期与多机部署见[部署与排障](docs/zh/deployment.md)。Rust / Python / C++ 多进程示例见 [`examples/`](examples/)。
 
-### *1.2 小坦克示例*
-
-内置的小坦克仿真，无需先写代码即可看到 topic端到端跑通：
-
-1. 启动 broker（`python -m robot_bus.broker`）。
-2. 打开 **http://127.0.0.1:15560**，在侧栏点击 **TANK**（或访问 `/tank/`）。
-3. 点击面板后，用 **方向键** 遥控；也可切换到点选导航，在地图上 **鼠标点击** 下发目标点。
-
-打开面板会拉起进程内 tank节点：订阅 `/robot_bus/tank/cmd_vel`，发布 `/robot_bus/tank/pose`。多浏览器共享同一场景（遥控 last-writer-wins）。不需要时可加 `--no-tank`。侧栏 **文档** 默认显示，可用 `--no-docs`隐藏。
-
-### *1.3 Topic（发布 / 订阅）*
+### *1.2 Topic（发布 / 订阅）*
 
 <!-- runnable: topic -->
 ```python
@@ -139,7 +130,7 @@ finally:
 预期输出包含：`acceleration.z: 9.8`。
 
 
-### *1.4 Service*
+### *1.3 Service*
 
 <!-- runnable: service -->
 ```python
@@ -178,7 +169,7 @@ finally:
 预期输出包含：`service: True, set:True`。
 
 
-### *1.5 Action*
+### *1.4 Action*
 
 <!-- runnable: action -->
 ```python
@@ -236,9 +227,17 @@ finally:
 
 订阅建立是异步的，因此 Topic 示例在有限时间内重复发布；`start()` 在后台驱动回调，主线程才能同时等待 service/action 结果。生产中的请求重试需另行设计幂等性。
 
+### *1.5 跨语言示例*
+
+让 [Python 订阅端和 Rust 发布端](examples/README.md#1-topic-topic_imu)连接同一个 TCP broker，先启动订阅端。两端在 `/examples/imu` 上使用 `Imu`，Python 终端显示 `linear_acceleration.z=`，就表示收到了 Rust 进程发布的数据。其他已测试的语言组合和消息模式见[跨语言互通测试清单](tests/interop/README.md)。
+
 ### *1.6 文档*
 
-阅读路径：[支持与验证状态](docs/zh/support.md) → [部署与排障](docs/zh/deployment.md) → 各语言 API；参与开发见[贡献指南](CONTRIBUTING.md)。
+- **跑一个示例：** [原生 Topic、Service 和 Action 示例](examples/README.md)。
+- **选语言和 SDK：** [API 对照](docs/zh/api-compare.md)和下表的各语言指南。
+- **部署、排错或确认支持范围：** [部署指南](docs/zh/deployment.md)、[架构](docs/zh/architecture.md)和[支持与验证状态](docs/zh/support.md)。
+- **使用浏览器：** [开发 WebSocket 客户端](docs/zh/typescript-api.md#浏览器websocket-rpc)，或用 [Web 控制台](#2-web控制台)观察 broker。两者都不依赖 ROS 2。`/ws-rpc` 使用 V3 成帧，不兼容 V2 客户端。
+- **接入已有 ROS 2 系统：** 按[桥接指南](docs/zh/ros2-bridge.md)配置你自己的节点接口。想先看浏览器到 ROS 2 的完整链路，可以跑[独立实验台](docs/zh/ros2-web.md)，它会启动自己的 ROS 2 节点。
 
 | 语言 | 包 / 产物 | 文档 |
 |------|-----------|------|
@@ -248,11 +247,10 @@ finally:
 | C++ | [GitHub Releases](https://github.com/indunet/robot-bus/releases)（DEB / MSI / SDK 压缩包） | [`docs/zh/cpp-api.md`](docs/zh/cpp-api.md) |
 | Java | Maven Central `org.indunet:robot-bus` | [`docs/zh/java-api.md`](docs/zh/java-api.md) |
 | Android | Maven Central `org.indunet:robot-bus-android` | [`docs/zh/android-api.md`](docs/zh/android-api.md) |
-| ROS2桥 | 分语言（`rclrs` / `rclpy` / `rclcpp`） | [`docs/zh/ros2-bridge.md`](docs/zh/ros2-bridge.md) |
 
 ## *2. Web控制台*
 
-Broker内嵌监控界面（Overview、Topics、Services、Actions、Topology、日志）。在程序里 `RobotBusBroker.start()`（或独立进程 `python -m robot_bus.broker` / `cargo run --bin robot_bus_broker`）后，用浏览器打开：
+Web 控制台是 broker 的可选观测工具（Overview、Topics、Services、Actions、Topology、日志）。在程序里 `RobotBusBroker.start()`（或通过 `python -m robot_bus.broker` / `cargo run --bin robot_bus_broker` 独立运行）后，用浏览器打开：
 
 **http://127.0.0.1:15560**
 
@@ -264,7 +262,15 @@ Broker内嵌监控界面（Overview、Topics、Services、Actions、Topology、�
 
 *小坦克示例* — 侧栏 **TANK**。点击面板后，用 **方向键** 遥控；也可切换到点选导航，在地图上 **鼠标点击** 下发目标点。
 
-上手可先试侧栏 **TANK**的 [小坦克示例](#12-小坦克示例)。侧栏 **文档** 默认显示，可用 `--no-docs`隐藏。与 API / WebSocket服务端同端口。可用 `--no-console`关闭整个 UI。前端源码在 [`console/`](console/)；本地改 UI见 [`console/README.md`](console/README.md)。
+想动手体验可试[小坦克示例](#21-小坦克示例)。侧栏 **文档** 默认显示，可用 `--no-docs` 隐藏。控制台与 API / WebSocket 服务端同端口，可用 `--no-console` 关闭。前端开发见 [`console/README.md`](console/README.md)。
+
+### *2.1 小坦克示例*
+
+1. 启动 broker（`python -m robot_bus.broker`）。
+2. 打开 **http://127.0.0.1:15560**，在侧栏选择 **TANK**（或访问 `/tank/`）。
+3. 点击面板后，用方向键遥控；也可切换到点选导航，在地图上点击目标点。
+
+打开面板后，broker 会启动一个进程内节点，订阅 `/robot_bus/tank/cmd_vel`、发布 `/robot_bus/tank/pose`。多个浏览器共用一个仿真场景，最后收到的遥控指令生效。可用 `--no-tank` 禁用。
 
 ## *3. ROS2桥*
 
@@ -374,17 +380,18 @@ pub.publish(pb.BatteryStatus(voltage=48.0, percentage=0.85))
 
 ## *5. 典型应用场景*
 
-### *5.1 轻量级的类 ROS2通信*
+### *5.1 连接设备进程与上位机工具*
 
-当无需完整 ROS2安装时，robot-bus以更小的体积提供相近的编程模型，适用于原型验证、工具链、Windows主机以及资源受限的部署。
+Rust 或 C++ 设备进程可以向 Python 工具发布遥测，也可以提供配置服务。两端共用一份消息契约，都不需要 ROS 2 或浏览器。
 
-### *5.2 与 ROS2组成异构系统*
+### *5.2 开发浏览器操作界面*
 
-在 Ubuntu（或其他 Linux主机）上照常运行 ROS2，同时将部分计算部署在 Android等不便安装完整 ROS2的设备上。这些节点使用 robot-bus，保持相同的话题 / 服务 / Action模型，再通过 ROS2桥接入 ROS2图。
+网页客户端可以订阅状态、调用服务、跟踪 Action 反馈，设备工作仍由原生节点处理。如果只需要看总线上有什么，用内嵌控制台即可。
 
-### *5.3 在 bus上原型开发，再迁移至 ROS2*
+### *5.3 接入已有 ROS 2 系统*
 
-robot-bus轻量、环境简单，适合先完成节点原型与联调验证，再将已验证的设计迁移为原生 ROS2节点；也可继续运行在 bus上，仅桥接需要进入 ROS2图的接口。
+原有 ROS 2 节点照常运行，仅桥接 Android 应用、Windows 工具等 Robot Bus 客户端需要的话题、服务或 Action。
+
 ## *6. 贡献*
 
 源码环境、按语言验证与文档检查见[贡献指南](CONTRIBUTING.md)。

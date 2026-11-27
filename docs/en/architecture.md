@@ -2,7 +2,12 @@ English | [中文](../zh/architecture.md)
 
 # Architecture
 
-Robot Bus is a multi-language messaging framework with a ROS 2–style Node model. One broker routes topics, services, and actions. Payloads are protobuf. These figures are the pictures later docs can cite. Connection setup stays in [deployment](deployment.md). Bridge setup stays in [ROS 2 bridge](ros2-bridge.md).
+Robot Bus is a standalone multi-language messaging framework with a ROS 2–style Node API. Its parts serve different purposes:
+
+- **Core messaging:** Nodes use shared Protobuf contracts to publish topics, call services, and run actions through a broker. Native nodes use ZeroMQ and need neither ROS 2 nor a browser. See [deployment](deployment.md) for connection setup.
+- **Browser SDK:** A web app can act as a [WebSocket client](typescript-api.md#browser-websocket-rpc) for application messages and calls.
+- **Web console:** The broker can serve an [interface for inspecting and debugging the system](../../README.md#2-web-console). It is not needed for clients to exchange messages.
+- **ROS 2 bridge:** An [optional integration](ros2-bridge.md) maps selected routes between Robot Bus and an existing ROS 2 graph. Neither Web feature requires ROS 2, and the bridge does not require a browser.
 
 ## System overview
 

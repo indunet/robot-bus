@@ -2,6 +2,8 @@
 
 # 浏览器 → Robot Bus → 真实 ROS2
 
+这个实验台把两项可选能力组合起来：浏览器客户端和 ROS 2 桥。不需要这两项能力时，可以直接跑[原生示例](../../examples/README.md)。
+
 [桥接实验台](../../examples/ros2_web/README.md)在 **ROS 2 Humble 和 Jazzy** 上使用
 Python/rclpy、Fast DDS 和 Chromium。Broker 和 Python/TypeScript SDK
 均从当前源码构建。ROS 节点在独立进程中运行，与桥之间使用真实 DDS 实体通信。

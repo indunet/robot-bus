@@ -2,7 +2,9 @@
 
 # ROS2 Bridge（`ros2_bridge`）
 
-进程内把 **ROS2** 与 **robot-bus** 桥在一起。Python / C++ / Rust 各自用本语言 ROS 客户端（`rclpy` / `rclcpp` / `rclrs`），不经 FFI。
+用这个可选的进程内桥，把 Robot Bus 中选定的话题、服务和 Action 接入已有 **ROS 2** 系统。原生 Robot Bus 应用可以不启用桥，使用桥也不需要浏览器。想同时试用 WebSocket 客户端和桥，可参见[浏览器实验台](ros2-web.md)。
+
+Python / C++ / Rust 各自用本语言 ROS 客户端（`rclpy` / `rclcpp` / `rclrs`），不经 FFI。
 
 | 语言 | ROS客户端 | 入口 |
 |------|------------|------|

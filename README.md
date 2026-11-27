@@ -9,18 +9,19 @@ English | [中文](README-zh.md)
 [![Maven Central](https://img.shields.io/maven-central/v/org.indunet/robot-bus.svg?label=Maven%20Central)](https://central.sonatype.com/artifact/org.indunet/robot-bus)
 [![License](https://img.shields.io/badge/license-Apache%202.0-4EB1BA.svg)](https://www.apache.org/licenses/LICENSE-2.0.html)
 
-Robot Bus is a lightweight, multi-language messaging **framework** with a ROS 2–style programming model — topics, services, actions, and `Node` + `spin` — built on ZeroMQ. It does not replace ROS 2; it extends the ROS 2 ecosystem to environments that are hard to deploy (for example Android, Windows, and browsers), and to other languages such as Java and TypeScript.
+Robot Bus is a lightweight messaging framework for robot applications. Components written in different languages use the same broker to publish state, call services, and start or cancel long-running tasks. Core messaging runs on ZeroMQ and requires neither ROS 2 nor a browser.
+
+For example, a [Rust process publishes IMU readings and a Python process receives them](examples/README.md#1-topic-topic_imu) over TCP, using the same Protobuf message type.
+
+[Run the Python quick start](#1-quick-start) · [Find a guide](#16-documentation)
 
 SDKs: **Rust**, **Python**, **TypeScript**, **C++**, **Java**, **Android**.
 
 ## *Key Features*
 
-- **ROS 2–style primitives:** Topic pub/sub, service, action (`send_goal` → GoalHandle → `result` / `cancel`), timers, and parameters.
+- **ROS 2–style programming model:** `Node` and `spin`, topic pub/sub for streams, services for request/reply, and actions for goals, feedback, results, and cancellation. Nodes also support timers and parameters.
 - **One broker, many languages:** Rust, Python, TypeScript, C++, Java, and Android SDKs against the same bus. **Prefer starting the broker from your program** (`RobotBusBroker.start()`); the CLI is for demos or a standalone process.
-- **Embedded Web console:** Overview, Topics, Services, Actions, Topology, plus a built-in tank demo — no extra frontend process.
-- **Optional ROS 2 bridge:** In-process topic / service / action bridging with `rclrs` / `rclpy` / `rclcpp` (Humble / Jazzy). The core SDK stays ROS-free unless the bridge is enabled.
 - **Protobuf contracts:** All payloads are Protocol Buffers (not ROS CDR), aligned with common ROS 2 package names under [`proto/`](proto/).
-- **Browser and remote clients:** WebSocket RPC (`Node::ws` / `Node.ws`; transport `"ws"`). **Breaking:** `/ws-rpc` is V3 framing (opcode + raw payload); V2 clients are not compatible.
 
 The Node programming model — `Context` / `Node`, topic pub-sub, service, action, and `spin` — is the stable public API.
 
@@ -77,29 +78,19 @@ CMake projects can fetch the prebuilt SDK instead of installing a package. See [
 
 **Prefer starting the broker from your program** (`RobotBusBroker.start()` / the equivalent API in each language) so it shares a process and lifecycle with your application. The CLI is for demos, multi-process bring-up, or a standalone long-running broker.
 
-To run the three examples below, start a broker in terminal 1 and leave it running:
+Install `robot-bus` with `python -m pip install robot-bus`. Then start a broker in terminal 1 and leave it running:
 
 ```bash
 python -m robot_bus.broker --api-listen 127.0.0.1:15560 --tcp-only
 ```
 
-Open **http://127.0.0.1:15560** to see the console. `0.0.0.0` is a listen address; browsers and clients use `127.0.0.1` or the server's reachable address.
+In terminal 2, save the Topic example below as `demo.py` and run `python demo.py`. Seeing `acceleration.z: 9.8` in the terminal confirms that the node published and received a message. The HTTP address is used for discovery; the node exchanges messages over TCP. There is no need to open that address in a browser.
 
-In terminal 2, save any complete code block from 1.3–1.5 as `demo.py` and run `python demo.py`. Each runs independently and exits on success. Set `ROBOT_BUS_API_URL` to use another broker's HTTP address.
+The Service and Action examples also run independently and exit on success. Set `ROBOT_BUS_API_URL` to use another broker's reachable HTTP address.
 
 See [deployment and troubleshooting](docs/en/deployment.md) for embedded broker lifecycles and multi-host deployment. Rust / Python / C++ multi-process examples: [`examples/`](examples/).
 
-### *1.2 Tank demo*
-
-A built-in mini tank sim helps you see topics moving end-to-end without writing code first:
-
-1. Start the broker (`python -m robot_bus.broker`).
-2. Open **http://127.0.0.1:15560** and click **TANK** in the sidebar (or go to `/tank/`).
-3. Click the panel, then drive with **arrow keys**; or switch to point navigation and **click on the map** to send a goal.
-
-Opening the panel starts the in-process tank node. It subscribes to `/robot_bus/tank/cmd_vel` and publishes `/robot_bus/tank/pose`. Multiple browsers share one world (teleop is last-writer-wins). Disable with `--no-tank` if needed. Sidebar **DOCS** is shown by default; hide with `--no-docs`.
-
-### *1.3 Topic (publish / subscribe)*
+### *1.2 Topic (publish / subscribe)*
 
 <!-- runnable: topic -->
 ```python
@@ -139,7 +130,7 @@ finally:
 Expected output includes: `acceleration.z: 9.8`.
 
 
-### *1.4 Service*
+### *1.3 Service*
 
 <!-- runnable: service -->
 ```python
@@ -178,7 +169,7 @@ finally:
 Expected output includes: `service: True, set:True`.
 
 
-### *1.5 Action*
+### *1.4 Action*
 
 <!-- runnable: action -->
 ```python
@@ -236,9 +227,17 @@ More detail: [`docs/en/python-api.md`](docs/en/python-api.md).
 
 Subscription setup is asynchronous, so the Topic example publishes repeatedly within a deadline. `start()` drives callbacks in the background while the main thread waits for service/action results. Retrying application requests requires a separate idempotency design.
 
+### *1.5 Cross-language example*
+
+Run the [Python listener and Rust talker](examples/README.md#1-topic-topic_imu) against one TCP broker. Start the listener first. Both use `Imu` on `/examples/imu`; `linear_acceleration.z=` in the listener's terminal shows the Rust publisher's data reached Python. See the [interop test matrix](tests/interop/README.md) for other tested language pairs and message patterns.
+
 ### *1.6 Documentation*
 
-Reading path: [support and verification](docs/en/support.md) → [deployment and troubleshooting](docs/en/deployment.md) → language APIs. For development, see [contributing](CONTRIBUTING.md).
+- **Run an example:** [Native topic, service, and action examples](examples/README.md).
+- **Choose an SDK:** [API comparison](docs/en/api-compare.md) and the language guides below.
+- **Deploy or troubleshoot:** [Deployment guide](docs/en/deployment.md), [architecture](docs/en/architecture.md), and [support and verification](docs/en/support.md).
+- **Use a browser:** [Build a WebSocket client](docs/en/typescript-api.md#browser-websocket-rpc) or [inspect a broker in the console](#2-web-console). Both work without ROS 2. `/ws-rpc` uses V3 framing and is incompatible with V2 clients.
+- **Connect to an existing ROS 2 system:** Use the [bridge guide](docs/en/ros2-bridge.md) to map your node's interfaces. To see the full browser-to-ROS 2 path first, try the [self-contained lab](docs/en/ros2-web.md), which starts its own ROS 2 node.
 
 | Language | Package / artifact | Guide |
 |----------|--------------------|-------|
@@ -248,11 +247,10 @@ Reading path: [support and verification](docs/en/support.md) → [deployment and
 | C++ | [GitHub Releases](https://github.com/indunet/robot-bus/releases) (DEB / MSI / SDK archive) | [`docs/en/cpp-api.md`](docs/en/cpp-api.md) |
 | Java | Maven Central `org.indunet:robot-bus` | [`docs/en/java-api.md`](docs/en/java-api.md) |
 | Android | Maven Central `org.indunet:robot-bus-android` | [`docs/en/android-api.md`](docs/en/android-api.md) |
-| ROS 2 bridge | per-language (`rclrs` / `rclpy` / `rclcpp`) | [`docs/en/ros2-bridge.md`](docs/en/ros2-bridge.md) |
 
 ## *2. Web console*
 
-The broker ships with an embedded monitoring UI (Overview, Topics, Services, Actions, Topology, logs). After `RobotBusBroker.start()` in your program (or a standalone `python -m robot_bus.broker` / `cargo run --bin robot_bus_broker`), open:
+The embedded Web console is an optional tool for inspecting a broker (Overview, Topics, Services, Actions, Topology, logs). After `RobotBusBroker.start()` in your program (or a standalone `python -m robot_bus.broker` / `cargo run --bin robot_bus_broker`), open:
 
 **http://127.0.0.1:15560**
 
@@ -264,7 +262,15 @@ The broker ships with an embedded monitoring UI (Overview, Topics, Services, Act
 
 *Tank demo* — sidebar **TANK**. Click the panel, then drive with **arrow keys**; or switch to point navigation and **click on the map** to send a goal.
 
-For a hands-on walkthrough, try the [Tank demo](#12-tank-demo) from the sidebar **TANK** entry. Sidebar **DOCS** is shown by default (`--no-docs` to hide). Same port as the API / WebSocket server. Disable the UI with `--no-console` if needed. Frontend source: [`console/`](console/); local UI development: [`console/README.md`](console/README.md).
+For a hands-on walkthrough, try the [Tank demo](#21-tank-demo). Sidebar **DOCS** is shown by default (`--no-docs` to hide). The console uses the same port as the API / WebSocket server. Disable the UI with `--no-console` if needed. For frontend development, see [`console/README.md`](console/README.md).
+
+### *2.1 Tank demo*
+
+1. Start the broker (`python -m robot_bus.broker`).
+2. Open **http://127.0.0.1:15560** and choose **TANK** (or go to `/tank/`).
+3. Click the panel and drive with the arrow keys, or switch to point navigation and click on the map.
+
+Opening the panel starts an in-process node that subscribes to `/robot_bus/tank/cmd_vel` and publishes `/robot_bus/tank/pose`. Browsers share one simulation (teleoperation is last-writer-wins). Disable it with `--no-tank`.
 
 ## *3. ROS 2 bridge*
 
@@ -374,17 +380,18 @@ To contribute a type into this repo’s built-in set: add the file under [`proto
 
 ## *5. Application scenarios*
 
-### *5.1 Lightweight ROS 2–style messaging*
+### *5.1 Connect device software and tools*
 
-When a full ROS 2 installation is unnecessary, robot-bus provides the same programming model with a smaller footprint — suitable for prototypes, tooling, Windows hosts, and constrained deployments.
+A Rust or C++ device process can publish telemetry to Python tooling and expose services for configuration. Both sides share a message contract; neither needs ROS 2 or a browser.
 
-### *5.2 Heterogeneous systems with ROS 2*
+### *5.2 Build a browser operator interface*
 
-Run ROS 2 on Ubuntu (or other Linux hosts) as usual, and place part of the compute on Android devices or other hosts where ROS 2 is impractical. Use robot-bus on those hosts with the same topic / service / action model, then interconnect via the ROS 2 bridge.
+A browser client can subscribe to status, call services, and track action feedback while native nodes handle device work. Use the built-in console when you only need to inspect the bus.
 
-### *5.3 Prototype on bus, migrate to ROS 2*
+### *5.3 Integrate an existing ROS 2 system*
 
-Because robot-bus is lightweight and quick to bring up, teams can prototype and validate nodes on bus first, then migrate the validated design to native ROS 2 (or keep the process on bus and bridge only the interfaces that must join the ROS 2 graph).
+Keep your existing ROS 2 nodes and bridge only the topics, services, or actions that need to reach Robot Bus clients, such as Android apps or Windows tooling.
+
 ## *6. Contribution*
 
 See [contributing](CONTRIBUTING.md) for source setup, checks by language and documentation validation.

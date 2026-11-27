@@ -2,6 +2,9 @@
 
 # Browser → Robot Bus → real ROS2
 
+This lab combines two optional capabilities: a browser client and the ROS 2
+bridge. To try Robot Bus without either, start with the [native examples](../../examples/README.md).
+
 The [bridge lab](../../examples/ros2_web/README.md) provides a runnable acceptance
 scenario for **ROS 2 Humble and Jazzy, Python/rclpy, Fast DDS and Chromium**. It builds the
 broker and TypeScript/Python SDKs from the current checkout. A separate process

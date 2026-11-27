@@ -1,7 +1,12 @@
 # robot-bus examples
 
-Runnable demos for the core patterns and the ROS 2 bridge. These examples are
-multi-process, so start a **standalone** broker first, then run a
+The native Topic, Service, and Action examples show how processes written in
+different languages communicate without ROS 2 or a browser. Start with
+[Rust → Python IMU readings](#1-topic-topic_imu). For optional integrations, see
+the [ROS 2 bridge examples](ros2_bridge/README.md) or the
+[browser-to-ROS 2 lab](ros2_web/README.md).
+
+These examples are multi-process, so start a **standalone** broker first, then run a
 listener/server and a talker/client (or the bridge) in separate terminals.
 
 Application code should prefer embedding the broker in-process
@@ -47,6 +52,31 @@ C++ binaries after `just examples-cpp` (ROS bridge binaries need `just examples-
 ## Scenarios
 
 ### 1. Topic (`topic_imu`)
+
+#### Rust publisher → Python subscriber
+
+From the repository root, use the Rust toolchain and a Python environment with
+`robot-bus` installed (`python3 -m pip install robot-bus`, or see
+[source setup](../CONTRIBUTING.md) to build from this checkout). Use the broker's
+default TCP ports for this example. For a fresh checkout, first install the
+`protoc` version listed in the source setup and run `just gen-rust` to generate
+the Rust message types.
+
+```bash
+# Terminal 1 — broker
+python3 -m robot_bus.broker --tcp-only
+# Terminal 2 — subscriber (wait for "listening on /examples/imu")
+python3 -u examples/topic_imu/python/listener.py
+# Terminal 3 — publisher
+cargo run -p robot-bus --no-default-features --example topic_imu_talker
+```
+
+The Rust process sends five `Imu` messages on `/examples/imu` and exits. The
+Python terminal prints lines such as `linear_acceleration.z=9.8`. Stop the
+subscriber and broker with Ctrl+C when done. Other tested language pairs are
+listed in the [interop test matrix](../tests/interop/README.md).
+
+#### Other language combinations
 
 ```bash
 # Terminal 2 — listener

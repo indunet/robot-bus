@@ -2,7 +2,7 @@ English | [中文](../zh/ros2-bridge.md)
 
 # ROS2 Bridge (`ros2_bridge`)
 
-In-process bridge between **ROS 2** and **robot-bus**: Topic / Service / Action.
+Use this optional in-process bridge to connect selected topics, services, and actions to an existing **ROS 2** system. Native Robot Bus applications do not need the bridge, and bridging does not require a browser. To try WebSocket and ROS 2 bridging together, see the [browser lab](ros2-web.md).
 
 ## Architecture: native per language
 
