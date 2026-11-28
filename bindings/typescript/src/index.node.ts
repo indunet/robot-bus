@@ -13,6 +13,17 @@ import type {
   TopicPublisher as NativeTopicPublisher,
 } from "./native-types.js";
 
+export interface TopicQos {
+  depth?: number;
+  transientLocal?: boolean;
+}
+
+type TopicQosArgument = number | TopicQos;
+
+function topicQosArgs(qos: TopicQosArgument | undefined): [number?, boolean?] {
+  return typeof qos === "number" ? [qos] : [qos?.depth, qos?.transientLocal];
+}
+
 export * from "./native-types.js";
 export { encode, decode, type MessageType } from "./typed.js";
 export * as consoleTopics from "./console-topics.js";
@@ -312,36 +323,36 @@ export class Node {
     return this.inner.createCallbackGroup(kind);
   }
 
-  createPublisher(topic: string, qosDepth?: number): NativeTopicPublisher;
+  createPublisher(topic: string, qos?: TopicQosArgument): NativeTopicPublisher;
   createPublisher<T extends object>(
     topic: string,
     msgType: MessageType<T>,
-    qosDepth?: number,
+    qos?: TopicQosArgument,
   ): TypedTopicPublisher<T>;
   createPublisher<T extends object>(
     topic: string,
-    msgTypeOrDepth?: MessageType<T> | number,
-    maybeDepth?: number,
+    msgTypeOrQos?: MessageType<T> | TopicQosArgument,
+    qos?: TopicQosArgument,
   ): NativeTopicPublisher | TypedTopicPublisher<T> {
-    if (typeof msgTypeOrDepth === "number" || msgTypeOrDepth === undefined) {
-      return this.inner.createPublisher(topic, msgTypeOrDepth);
+    if (msgTypeOrQos && typeof msgTypeOrQos !== "number" && "fromBinary" in msgTypeOrQos) {
+      const pub = this.inner.createPublisher(topic, ...topicQosArgs(qos));
+      return new TypedTopicPublisher(pub, msgTypeOrQos);
     }
-    const pub = this.inner.createPublisher(topic, maybeDepth);
-    return new TypedTopicPublisher(pub, msgTypeOrDepth);
+    return this.inner.createPublisher(topic, ...topicQosArgs(msgTypeOrQos));
   }
 
   createSubscription(
     topic: string,
     callback: (payload: Buffer | object) => void,
     callbackGroup?: import("./native-types.js").JsCallbackGroup,
-    qosDepth?: number,
+    qos?: TopicQosArgument,
   ): import("./native-types.js").SubscriptionHandle;
   createSubscription<T extends object>(
     topic: string,
     callback: (msg: T) => void,
     msgType: MessageType<T>,
     callbackGroup?: import("./native-types.js").JsCallbackGroup,
-    qosDepth?: number,
+    qos?: TopicQosArgument,
   ): import("./native-types.js").SubscriptionHandle;
   createSubscription(
     topic: string,
@@ -349,15 +360,14 @@ export class Node {
     msgTypeOrGroup?:
       | MessageType<object>
       | import("./native-types.js").JsCallbackGroup,
-    maybeGroupOrDepth?: import("./native-types.js").JsCallbackGroup | number,
-    maybeDepth?: number,
+    groupOrQos?: import("./native-types.js").JsCallbackGroup | TopicQosArgument,
+    qos?: TopicQosArgument,
   ): import("./native-types.js").SubscriptionHandle {
     if (msgTypeOrGroup && "fromBinary" in msgTypeOrGroup) {
       const msgType = msgTypeOrGroup;
-      const group =
-        typeof maybeGroupOrDepth === "number" ? undefined : maybeGroupOrDepth;
-      const depth =
-        typeof maybeGroupOrDepth === "number" ? maybeGroupOrDepth : maybeDepth;
+      const group = typeof groupOrQos === "number" ? undefined :
+        groupOrQos as import("./native-types.js").JsCallbackGroup | undefined;
+      const typedQos = typeof groupOrQos === "number" ? groupOrQos : qos;
       return this.inner.createSubscription(
         topic,
         (payload) => {
@@ -367,19 +377,14 @@ export class Node {
           }
         },
         group,
-        depth,
+        ...topicQosArgs(typedQos),
       );
     }
-    const group = msgTypeOrGroup as
-      | import("./native-types.js").JsCallbackGroup
-      | undefined;
-    const depth =
-      typeof maybeGroupOrDepth === "number" ? maybeGroupOrDepth : maybeDepth;
     return this.inner.createSubscription(
       topic,
       callback as (payload: Buffer) => void,
-      group,
-      depth,
+      msgTypeOrGroup,
+      ...topicQosArgs(groupOrQos as TopicQosArgument | undefined),
     );
   }
 

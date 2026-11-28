@@ -17,7 +17,7 @@
 
 use std::collections::HashSet;
 use std::time::{Duration, Instant};
-use zmq::Socket;
+use crate::zmq::{self, Socket};
 
 pub(super) const CMD_HELLO: &[u8] = b"HELLO";
 pub(super) const CMD_WELCOME: &[u8] = b"WELCOME";

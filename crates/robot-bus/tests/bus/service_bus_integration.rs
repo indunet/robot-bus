@@ -9,7 +9,7 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::thread;
 use std::time::Duration;
-use zmq::{Context as ZmqContext, SocketType};
+use robot_bus::zmq_helpers::{self as zmq, Context as ZmqContext, SocketType};
 
 use crate::common::{BrokerLockGuard, ephemeral_robot_bus_config, lock_brokers};
 

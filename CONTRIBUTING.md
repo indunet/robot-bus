@@ -24,7 +24,7 @@ The test uses an isolated broker for each example, selects available loopback po
 
 ## Python and Rust setup
 
-Use the repository's CI as the versioned build reference: Rust stable with edition 2024 support, Python **3.12** for the CI baseline, protobuf compiler **35.1**, native C/C++ build tools and ZeroMQ build dependencies. Default builds also need Node.js **22**, pnpm **11** and the console assets. `just` is the task runner. See [CI](.github/workflows/ci.yml) for exact package installation steps and [build profiles](docs/en/build-profiles.md) for builds without web assets. Release-package users do not need to generate messages themselves.
+Use the repository's CI as the versioned build reference: Rust stable with edition 2024 support, Python **3.12** for the CI baseline, protobuf compiler **35.1**, and a native C/C++ toolchain for the bundled libzmq. Default builds also need Node.js **22**, pnpm **11** and the console assets. `just` is the task runner. See [CI](.github/workflows/ci.yml) for exact package installation steps and [build profiles](docs/en/build-profiles.md) for builds without web assets. Release-package users do not need to generate messages themselves.
 
 Run from a checkout's root:
 

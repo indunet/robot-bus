@@ -36,6 +36,7 @@ fn main() {
             );
         }
     }
+    zeromq_src::Build::new().build();
 }
 
 fn walkdir_files(dir: &Path) -> Vec<std::path::PathBuf> {

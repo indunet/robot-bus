@@ -5,7 +5,7 @@
 
 use std::sync::Mutex;
 
-use zmq::{Context as ZmqContext, Socket, SocketType};
+use crate::zmq::{Context as ZmqContext, Socket, SocketType};
 
 use crate::errors::{BusError, Result};
 use crate::runtime::Context;

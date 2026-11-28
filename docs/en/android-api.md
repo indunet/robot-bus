@@ -10,7 +10,7 @@ The AAR compiles the sources in [`bindings/java`](../../bindings/java/src/main/j
 
 ```bash
 # Maven Central (when published)
-# implementation("org.indunet:robot-bus-android:3.2.1")
+# implementation("org.indunet:robot-bus-android:3.3.0")
 
 # Local:
 just gen-android    # → bindings/android/generated/
@@ -38,7 +38,7 @@ class App : Application() {
 ```kotlin
 // build.gradle.kts
 dependencies {
-  implementation("org.indunet:robot-bus-android:3.2.1")
+  implementation("org.indunet:robot-bus-android:3.3.0")
 }
 ```
 
@@ -80,6 +80,8 @@ Broker().use { _ ->
   }
 }
 ```
+
+Android uses the same native topic QoS. Set `qosDepth` to bound samples awaiting callback execution, and enable `transientLocal` on both endpoints for state replay. See the [Java topic example](java-api.md).
 
 ### HTTP discovery (fill addresses, pick transport yourself)
 

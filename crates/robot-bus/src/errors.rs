@@ -1,5 +1,6 @@
 //! Broker-side error body conventions.
 
+use crate::ZmqError;
 use thiserror::Error;
 
 /// Base error type for the robot-bus SDK.
@@ -55,7 +56,7 @@ pub enum BusError {
     ParameterYaml(String),
 
     #[error("zmq error: {0}")]
-    Zmq(#[from] zmq::Error),
+    Zmq(#[from] ZmqError),
 }
 
 pub type Result<T> = std::result::Result<T, BusError>;

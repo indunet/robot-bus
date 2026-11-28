@@ -6,7 +6,7 @@
 use robot_bus::transports::{BindAllOpts, bind_all, inproc_endpoint};
 use std::thread;
 use std::time::Duration;
-use zmq::{Context as ZmqContext, SocketType};
+use robot_bus::zmq_helpers::{self as zmq, Context as ZmqContext, SocketType};
 
 fn bind_ephemeral(ctx: &ZmqContext, ty: SocketType) -> (zmq::Socket, String) {
     let sock = ctx.socket(ty).expect("create socket");

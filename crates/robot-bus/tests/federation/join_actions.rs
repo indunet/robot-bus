@@ -1,5 +1,6 @@
 //! One-sided action federation: only the joining broker lists `--peer`.
 
+use robot_bus::zmq_helpers as zmq;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::thread;
@@ -107,7 +108,7 @@ fn joining_broker_runs_goals_in_both_directions() {
 /// A worker that reports FEEDBACK for a GOAL and answers a CANCEL with a RESULT.
 fn cancellable_worker(backend: &str, action: &'static str) -> thread::JoinHandle<()> {
     let ctx = zmq::Context::new();
-    let sock = ctx.socket(zmq::DEALER).expect("dealer");
+    let sock = ctx.socket(zmq::SocketType::DEALER).expect("dealer");
     sock.set_linger(0).unwrap();
     sock.connect(backend).expect("connect");
     sock.send_multipart([b"READY".as_slice(), action.as_bytes()], 0)

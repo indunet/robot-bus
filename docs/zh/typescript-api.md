@@ -294,6 +294,8 @@ node.start();
 
 不需要额外的 recent/latest 配置。不传或传非正深度时使用 64。同一过滤器的多个回调必须使用相同有效深度。各过滤器采用独立流，避免自动合并订阅后，某个 topic 的消息挤掉另一个 topic 的最新值。请在 `start()` 前注册订阅。
 
-KeepLast 仅影响服务端待发送队列，不影响网络缓冲或客户端回调，也不保证可靠送达。前缀过滤器匹配的多个 topic 共用一个队列。原生 ZMQ 目前仍只把深度映射为 HWM，尚不保证移除最旧消息。新版 WS 客户端使用 opcode 5 显式请求丢旧，请先升级 broker。
+浏览器的 KeepLast 适用于服务端待发送队列，前缀过滤器匹配的多个 Topic 共用一个队列。新版 WS 客户端使用 opcode 5，请先升级 Broker。
+
+Node.js 原生客户端也会对等待 JS 回调的队列执行 KeepLast。原生发布和订阅都可传 `{ depth: 1, transientLocal: true }`，用于晚加入或重连时读取当前状态。
 
 控制台 Topics 页和 `GET /api/v1/subscriptions` 提供待发送数量、容量和溢出丢弃统计。详细范围见 [Rust QoS 指南](rust-api.md#高水位hwm与-qos)；无网页服务端见[按需构建](build-profiles.md)。

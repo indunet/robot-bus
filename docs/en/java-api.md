@@ -4,7 +4,7 @@ English | [中文](../zh/java-api.md)
 
 ```bash
 # Maven Central (when published)
-# implementation("org.indunet:robot-bus:3.2.1")           // JVM
+# implementation("org.indunet:robot-bus:3.3.0")           // JVM
 
 # Local:
 just java-dev       # gen-java + cargo FFI + mvn test
@@ -109,6 +109,14 @@ pub.publish(imu.toByteArray());
 node.createSubscription("/robot1/imu", (payload) -> {
   Imu msg = Imu.parseFrom(payload);
 });
+```
+
+Native subscription `qosDepth` sets the drop-oldest pending queue. Pass `true` on both native endpoints to enable `transient_local`.
+
+```java
+var statePublisher = node.createPublisher("/robot1/map_state", 1, true);
+var stateSubscription = node.createSubscription(
+    "/robot1/map_state", state -> System.out.println(state.length), null, 1, true);
 ```
 
 ### Android

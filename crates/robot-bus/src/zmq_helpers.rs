@@ -5,11 +5,12 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::thread::{self, JoinHandle};
 use std::time::Duration;
 
-use zmq::Socket;
+use crate::zmq;
+pub use crate::zmq::{Context, DONTWAIT, Error, POLLIN, Socket, SocketType, proxy_steerable};
 
 /// ZeroMQ send / receive high-water marks (max queued messages per direction).
 ///
-/// Topic [`crate::QosProfile::keep_last`] depth maps here (receive only on SUB).
+/// Publisher QoS and RPC depth can set these limits. Node subscription history has its own queue.
 /// When the queue is full, further sends block or drop depending on socket type / flags.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct HighWaterMark {

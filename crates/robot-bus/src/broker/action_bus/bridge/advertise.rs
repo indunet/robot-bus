@@ -2,7 +2,7 @@
 
 use anyhow::Result;
 use std::collections::HashMap;
-use zmq::Socket;
+use crate::zmq::Socket;
 
 use super::super::broker::{WorkerRegistry, hop_contains};
 use super::protocol::{CMD_DISCONNECT, CMD_HEARTBEAT, CMD_READY_FED};

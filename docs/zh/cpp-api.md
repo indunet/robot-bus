@@ -38,14 +38,14 @@ CMake设置 `CMAKE_CXX_STANDARD 17`。自有应用用更高标准（如 `-DCMAKE
 
 ```bash
 # 核心 SDK（无 ROS bridge）
-sudo apt install ./robot-bus_3.2.1_linux_amd64.deb
+sudo apt install ./robot-bus_3.3.0_linux_amd64.deb
 
 # 或 ROS2 bridge变体（Humble示例）— 需已安装 Humble
-sudo apt install ./robot-bus-ros2-humble_3.2.1_linux_amd64.deb
+sudo apt install ./robot-bus-ros2-humble_3.3.0_linux_amd64.deb
 source /opt/ros/humble/setup.bash
 
 # macOS Apple Silicon（仅核心包）
-sudo installer -pkg robot-bus_3.2.1_macos_arm64.pkg -target /
+sudo installer -pkg robot-bus_3.3.0_macos_arm64.pkg -target /
 # 安装于 /usr/local（{bin,lib,include}）
 
 # 或从源码（开发）
@@ -359,7 +359,13 @@ pub.publish(imu);
 
 完整可运行程序：[`examples/topic_imu/`](../../examples/topic_imu/)、[`examples/service_set_bool/`](../../examples/service_set_bool/)、[`examples/action_fibonacci/`](../../examples/action_fibonacci/)。
 
-可选 QoS：`qos_depth > 0` → KeepLast（topic为 PUB/SUB HWM；service / action为 DEALER HWM）。`create_publisher(topic, qos_depth)` / `create_subscription(..., group, qos_depth)` / `create_service(..., group, qos_depth)` / `create_client(name, qos_depth)` / `create_action_server(..., group, qos_depth)` / `create_action_client(name, qos_depth)`。  
+原生订阅用 `qos_depth` 设置待处理队列，满时丢旧留新。发布及原生 RPC 的深度用于套接字 HWM。发布和订阅均可传最后一个参数 `true` 启用 `transient_local`。
+
+```cpp
+auto writer = node.create_publisher("/robot1/map_state", 1, true);
+auto reader = node.create_subscription("/robot1/map_state",
+    [](robot_bus::BytesView state) { (void)state; }, nullptr, 1, true);
+```
 `create_wall_timer` = `create_timer`别名。`wait_for_message` / service·action client的 `wait_for_*`见 Node API。
 
 Raw bytes（手动 Serialize/Parse）仍可用：

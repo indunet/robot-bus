@@ -18,6 +18,34 @@ jobs:
       - name: Check package versions stay in sync
         run: python3 scripts/check_versions.py
 
+  rust-zmq-desktop:
+    name: Bundled ZeroMQ (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        include:
+          - os: windows-latest
+            protoc: win64
+          - os: macos-15
+            protoc: osx-aarch_64
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Build and test the bundled libzmq
+        shell: bash
+        run: |
+          set -euo pipefail
+          protoc_dir="$(mktemp -d)"
+          curl -fsSL -o "$protoc_dir/protoc.zip" \
+            "https://github.com/protocolbuffers/protobuf/releases/download/v35.1/protoc-35.1-${{ matrix.protoc }}.zip"
+          unzip -q "$protoc_dir/protoc.zip" -d "$protoc_dir"
+          export PATH="$protoc_dir/bin:$PATH"
+          python scripts/generate_rust_msgs.py
+          cargo test -p robot-bus --no-default-features --lib zmq::tests
+
   rust:
     runs-on: ubuntu-latest
     steps:
@@ -25,7 +53,7 @@ jobs:
       - name: Install dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y curl unzip libzmq3-dev pkg-config
+          sudo apt-get install -y curl unzip pkg-config
       - name: Install protobuf compiler (codegen)
         run: |
           set -eux
@@ -54,7 +82,7 @@ jobs:
             printf 'sha=%s\n' "$GITHUB_SHA"
             uname -a
             rustc --version
-            pkg-config --modversion libzmq
+            cargo tree --locked -p robot-bus -i zeromq-src
           } > target/reliability/environment.log
           status=0
           cargo test -p robot-bus --no-default-features --features ws,console-api --test ws_reliability \
@@ -101,7 +129,7 @@ jobs:
       - name: Install dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y curl unzip libzmq3-dev pkg-config
+          sudo apt-get install -y curl unzip pkg-config
       - name: Install protobuf compiler (match codegen)
         run: |
           set -eux
@@ -191,7 +219,7 @@ jobs:
       - name: Install dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y cmake g++ pkg-config libzmq3-dev \
+          sudo apt-get install -y cmake g++ pkg-config \
             curl unzip ninja-build
       - name: Install protobuf compiler + C++ runtime 35.1
         run: |
@@ -260,7 +288,7 @@ jobs:
       - name: Install dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y cmake g++ pkg-config libzmq3-dev curl unzip
+          sudo apt-get install -y cmake g++ pkg-config curl unzip
       - name: Install protobuf compiler (match codegen)
         run: |
           set -eux
@@ -307,7 +335,7 @@ jobs:
         run: |
           set -eux
           sudo apt-get update
-          sudo apt-get install -y cmake g++ make curl unzip pkg-config ninja-build libzmq3-dev
+          sudo apt-get install -y cmake g++ make curl unzip pkg-config ninja-build
           curl -fsSL -o /tmp/protoc.zip \
             "https://github.com/protocolbuffers/protobuf/releases/download/v35.1/protoc-35.1-linux-x86_64.zip"
           sudo unzip -o /tmp/protoc.zip -d /usr/local
@@ -369,7 +397,7 @@ jobs:
       - name: Install dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y cmake g++ pkg-config libzmq3-dev \
+          sudo apt-get install -y cmake g++ pkg-config \
             curl unzip ninja-build
       - name: Install protobuf compiler + C++ runtime 35.1
         run: |

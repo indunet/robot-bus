@@ -1,10 +1,11 @@
 //! SUB socket that connects to the message bus XPUB side.
 
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
-use zmq::{Context, Socket, SocketType};
+use crate::zmq::{self, Context, Socket, SocketType};
 
 use crate::errors::{BusError, Result};
+use crate::runtime::retained_topic::is_internal_topic;
 use crate::transports;
 use crate::zmq_helpers::{
     HighWaterMark, apply_subscriber_options_with, poll_readable, wait_for_connection,
@@ -71,37 +72,40 @@ impl Subscriber {
 
     /// Return `(topic, payload)`. Returns `BusError::Timeout` on timeout.
     pub fn receive(&self, timeout: Option<Duration>) -> Result<(String, Vec<u8>)> {
-        if let Some(duration) = timeout {
-            let ms = duration.as_millis().min(i64::MAX as u128) as i64;
-            self.socket.set_rcvtimeo(ms as i32)?;
-            if !poll_readable(&self.socket, ms)? {
-                return Err(BusError::Timeout(format!(
-                    "no message within {}s",
-                    duration.as_secs_f64()
+        let started = Instant::now();
+        let timed_out = || {
+            let secs = timeout.map(|d| d.as_secs_f64()).unwrap_or(0.0);
+            BusError::Timeout(format!("no message within {secs}s"))
+        };
+        self.socket.set_rcvtimeo(-1)?;
+        loop {
+            if let Some(duration) = timeout {
+                let remaining = duration.saturating_sub(started.elapsed());
+                let ms = remaining.as_millis().min(i64::MAX as u128) as i64;
+                if !poll_readable(&self.socket, ms)? {
+                    return Err(timed_out());
+                }
+            }
+            let mut frames = match self.socket.recv_multipart(0) {
+                Ok(frames) => frames,
+                Err(zmq::Error::EAGAIN) => return Err(timed_out()),
+                Err(err) => return Err(err.into()),
+            };
+            if frames.len() < 2 {
+                return Err(BusError::Protocol(format!(
+                    "expected multipart [topic][payload], got {} frames",
+                    frames.len()
                 )));
             }
-        } else {
-            self.socket.set_rcvtimeo(-1)?;
-        }
-
-        let mut frames = match self.socket.recv_multipart(0) {
-            Ok(frames) => frames,
-            Err(zmq::Error::EAGAIN) => {
-                let secs = timeout.map(|d| d.as_secs_f64()).unwrap_or(0.0);
-                return Err(BusError::Timeout(format!("no message within {secs}s")));
+            let topic = String::from_utf8_lossy(&frames[0]);
+            if is_internal_topic(&topic) {
+                if timeout.is_some_and(|duration| started.elapsed() >= duration) {
+                    return Err(timed_out());
+                }
+                continue;
             }
-            Err(err) => return Err(err.into()),
-        };
-
-        if frames.len() < 2 {
-            return Err(BusError::Protocol(format!(
-                "expected multipart [topic][payload], got {} frames",
-                frames.len()
-            )));
+            return Ok((topic.into_owned(), std::mem::take(&mut frames[1])));
         }
-        let topic = String::from_utf8_lossy(&frames[0]).into_owned();
-        let payload = std::mem::take(&mut frames[1]);
-        Ok((topic, payload))
     }
 }
 

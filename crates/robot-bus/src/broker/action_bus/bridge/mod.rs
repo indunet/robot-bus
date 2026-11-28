@@ -26,7 +26,7 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
 use uuid::Uuid;
-use zmq::{Context as ZmqContext, Socket};
+use crate::zmq::{self, Context as ZmqContext, Socket};
 
 use self::advertise::{send_peer_heartbeats, sync_all_advertisements};
 use self::dispatch::{
@@ -140,11 +140,11 @@ pub fn run_federated(
         }
         zmq::poll(&mut items, timeout_ms).context("poll")?;
 
-        let frontend_ready = items[0].get_revents().contains(zmq::POLLIN);
-        let backend_ready = items[1].get_revents().contains(zmq::POLLIN);
+        let frontend_ready = items[0].is_readable();
+        let backend_ready = items[1].is_readable();
         let peer_ready: Vec<bool> = items[2..]
             .iter()
-            .map(|it| it.get_revents().contains(zmq::POLLIN))
+            .map(|it| it.is_readable())
             .collect();
         drop(items);
 

@@ -17,7 +17,7 @@ jobs:
       - name: Install system dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y curl unzip libzmq3-dev pkg-config
+          sudo apt-get install -y curl unzip pkg-config
 
       - name: Install protobuf compiler (codegen)
         run: |

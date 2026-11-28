@@ -6,6 +6,8 @@
 #   ROBOT_BUS_ROS2=1  — build native rclcpp Ros2Bridge (`robot_bus_ros2_bridge`)
 #                       (requires sourced ROS 2; does NOT copy /opt/ros into DEST;
 #                        cargo FFI stays without --features ros2)
+#   ROBOT_BUS_SYMBOLS_DIR — strip staged Linux/macOS binaries and save their
+#                           symbols in this directory outside the install tree
 set -euo pipefail
 
 DEST="${1:?dest}"
@@ -91,5 +93,22 @@ sed -e "s|@CMAKE_INSTALL_PREFIX@|/usr|g" \
 # /usr deb resolves the prefix to /usr without hardcoding it.
 "$ROOT/scripts/stage_robot_bus_cmake_config.sh" \
   "$DEST/usr/lib/cmake/robot_bus" "$VERSION"
+
+if [[ -n "${ROBOT_BUS_SYMBOLS_DIR:-}" ]]; then
+  mkdir -p "$ROBOT_BUS_SYMBOLS_DIR"
+  symbols_dir="$(cd "$ROBOT_BUS_SYMBOLS_DIR" && pwd -P)"
+  stage_dir="$(cd "$DEST" && pwd -P)"
+  if [[ "$symbols_dir/" == "$stage_dir/"* ]]; then
+    echo "error: ROBOT_BUS_SYMBOLS_DIR must be outside the install tree" >&2
+    exit 1
+  fi
+  binaries=("$DEST/usr/bin/robot_bus_broker")
+  for binary in "$DEST/usr/lib/"librobot_bus*.so* "$DEST/usr/lib/"librobot_bus*.dylib; do
+    if [[ -f "$binary" && ! -L "$binary" ]]; then
+      binaries+=("$binary")
+    fi
+  done
+  bash "$ROOT/scripts/strip_release_binaries.sh" "$symbols_dir" "${binaries[@]}"
+fi
 
 echo "install tree ready at $DEST (ros2=${ROBOT_BUS_ROS2:-0})"

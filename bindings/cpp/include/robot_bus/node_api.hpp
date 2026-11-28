@@ -141,6 +141,16 @@ class Node {
         "create_publisher_with_qos")));
   }
 
+  [[nodiscard]] TopicPublisher create_publisher(const char *topic, int32_t qos_depth,
+                                                bool transient_local) {
+    if (!transient_local) {
+      return create_publisher(topic, qos_depth);
+    }
+    return TopicPublisher(static_cast<RobotBusTopicPublisher *>(check_ptr(
+        robot_bus_node_create_publisher_with_topic_qos(n_, topic, qos_depth, 1),
+        "create_publisher_with_topic_qos")));
+  }
+
   /// Keep the returned handle; dropping it unsubscribes (ROS 2 shared_ptr style).
   [[nodiscard]] SubscriptionHandle create_subscription(const char *topic, MsgCallback cb,
                                                        const CallbackGroup *group = nullptr) {
@@ -149,19 +159,22 @@ class Node {
 
   [[nodiscard]] SubscriptionHandle create_subscription(const char *topic, MsgCallback cb,
                                                        const CallbackGroup *group,
-                                                       int32_t qos_depth) {
+                                                       int32_t qos_depth,
+                                                       bool transient_local = false) {
     msg_cbs_.push_back(std::make_unique<MsgCallback>(std::move(cb)));
     MsgCallback *held = msg_cbs_.back().get();
-    return SubscriptionHandle(
-        n_, static_cast<RobotBusSubscriptionHandle *>(check_ptr(
-                robot_bus_node_create_subscription_with_qos(
-                    n_, topic,
-                    [](const uint8_t *data, size_t len, void *user) {
-                      auto *fn = static_cast<MsgCallback *>(user);
-                      (*fn)(BytesView(data, len));
-                    },
-                    held, group ? group->raw() : nullptr, qos_depth),
-                "create_subscription")));
+    const auto trampoline = [](const uint8_t *data, size_t len, void *user) {
+      auto *fn = static_cast<MsgCallback *>(user);
+      (*fn)(BytesView(data, len));
+    };
+    const auto *raw_group = group ? group->raw() : nullptr;
+    auto *handle = transient_local
+        ? robot_bus_node_create_subscription_with_topic_qos(
+              n_, topic, trampoline, held, raw_group, qos_depth, 1)
+        : robot_bus_node_create_subscription_with_qos(
+              n_, topic, trampoline, held, raw_group, qos_depth);
+    return SubscriptionHandle(n_, static_cast<RobotBusSubscriptionHandle *>(
+        check_ptr(handle, "create_subscription")));
   }
 
   std::optional<std::vector<uint8_t>> wait_for_message(const char *topic,

@@ -486,10 +486,10 @@ print(robot_bus.__version__)
 | `SingleThreadedExecutor(context=None)` | 显式单线程执行器（多节点共享时用） |
 | `MultiThreadedExecutor(num_threads=4, context=None)` | n条常驻 worker；订阅 / timer / service / action按 callback group调度 |
 | `executor.add_node(node)` | 把节点挂到执行器（须在该节点尚未 auto-attach之前） |
-| `node.create_publisher(topic, msg_type=None, qos_depth=None)` | typed → `TypedTopicPublisher.publish(Message)`；省略类型 → raw；`qos_depth>0` → KeepLast HWM（WS发布忽略） |
+| `node.create_publisher(topic, msg_type=None, qos_depth=None, *, transient_local=False)` | typed → `TypedTopicPublisher.publish(Message)`；省略类型 → raw；`qos_depth>0` → KeepLast HWM（WS发布忽略） |
 | `node.create_timer(period, callback)` → `TimerHandle` | 定时器（与 topic一样挂在 Node） |
 | `CallbackGroupType` / `create_callback_group` | `MutuallyExclusive` / `Reentrant` |
-| `create_subscription(..., msg_type=, callback_group=, qos_depth=)` | typed：`callback(Message)`；省略类型：`callback(bytes)`；WS：`qos_depth`为服务端订阅队列深度 |
+| `create_subscription(..., msg_type=, callback_group=, qos_depth=, transient_local=)` | typed：`callback(Message)`；省略类型：`callback(bytes)`；WS：`qos_depth`为服务端订阅队列深度 |
 | `create_service(..., request_type=, response_type=, qos_depth=)` | typed：`handler(Request) -> Response`；否则 raw bytes；`qos_depth>0` → KeepLast DEALER HWM |
 | `create_client(..., request_type=, response_type=, qos_depth=)` | typed → `TypedServiceClient`；`service_is_ready` / `wait_for_service`（console workers）；`qos_depth>0` → KeepLast DEALER HWM |
 | `create_action_server(..., goal_type=, feedback_type=, result_type=, qos_depth=)` | typed `handler(goal)` 返回 phase/message 列表，返回后发送反馈与结果；实时 raw handler 使用 `streaming=True` 且不传 typed 类型；`qos_depth>0` → KeepLast DEALER HWM |
@@ -503,4 +503,14 @@ print(robot_bus.__version__)
 
 WebSocket RPC模式 Node见上一节；底层 WebSocket RPC 帧协议见 Rust 指南（[rust-api.md](rust-api.md)）。
 
-使用 ZeroMQ 传输（`tcp`、`ipc`、`inproc`）时，最后一次显式指定的正数 `qos_depth` 决定共享 SUB socket 的接收高水位；省略时沿用当前设置。深度为 `1` 不等于为每个话题建立一个始终保留最新消息的队列。
+原生 ZeroMQ 订阅的 `qos_depth` 限制每个订阅的待处理队列，队列满时丢旧留新。
+
+在原生发布和订阅方法上同时传 `transient_local=True`，即可保留最近状态给晚加入或重连的订阅者。
+
+```python
+pub = node.create_publisher("/robot1/map_state", transient_local=True)
+pub.publish(b"map-ready")
+sub = node.create_subscription(
+    "/robot1/map_state", print, qos_depth=1, transient_local=True
+)
+```

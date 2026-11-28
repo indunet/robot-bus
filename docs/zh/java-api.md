@@ -4,7 +4,7 @@
 
 ```bash
 # Maven Central (when published)
-# implementation("org.indunet:robot-bus:3.2.1")           // JVM
+# implementation("org.indunet:robot-bus:3.3.0")           // JVM
 
 # 本地：
 just java-dev       # gen-java + cargo FFI + mvn test
@@ -111,6 +111,14 @@ pub.publish(imu.toByteArray());
 node.createSubscription("/robot1/imu", (payload) -> {
   Imu msg = Imu.parseFrom(payload);
 });
+```
+
+原生订阅的 `qosDepth` 设置丢旧留新的待处理队列。在原生发布和订阅两端都传 `true` 开启 `transient_local`。
+
+```java
+var statePublisher = node.createPublisher("/robot1/map_state", 1, true);
+var stateSubscription = node.createSubscription(
+    "/robot1/map_state", state -> System.out.println(state.length), null, 1, true);
 ```
 
 ### Android

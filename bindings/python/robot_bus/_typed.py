@@ -331,12 +331,19 @@ def install_typed_node_api(Node: Any) -> None:
     _raw_create_action_server = Node.create_action_server
     _raw_create_action_client = Node.create_action_client
 
-    def create_publisher(self, topic: str, msg_type: Any = None, qos_depth: Any = None):
-        # Only forward qos_depth when set so callers/fakes without the kwarg still work.
-        if qos_depth is None:
-            raw = _raw_create_publisher(self, topic)
-        else:
-            raw = _raw_create_publisher(self, topic, qos_depth=qos_depth)
+    def topic_kwargs(qos_depth: Any, transient_local: bool) -> dict[str, Any]:
+        kwargs = {}
+        if qos_depth is not None:
+            kwargs["qos_depth"] = qos_depth
+        if transient_local:
+            kwargs["transient_local"] = True
+        return kwargs
+
+    def create_publisher(
+        self, topic: str, msg_type: Any = None, qos_depth: Any = None,
+        *, transient_local: bool = False,
+    ):
+        raw = _raw_create_publisher(self, topic, **topic_kwargs(qos_depth, transient_local))
         if msg_type is None:
             return raw
         cls = _require_message_type(msg_type, what="msg_type")
@@ -349,12 +356,11 @@ def install_typed_node_api(Node: Any) -> None:
         callback_group: Any = None,
         msg_type: Any = None,
         qos_depth: Any = None,
+        *, transient_local: bool = False,
     ):
         def _raw_sub(cb: Callable[..., Any]):
-            if qos_depth is None:
-                return _raw_create_subscription(self, topic, cb, callback_group)
             return _raw_create_subscription(
-                self, topic, cb, callback_group, qos_depth=qos_depth
+                self, topic, cb, callback_group, **topic_kwargs(qos_depth, transient_local)
             )
 
         if msg_type is None:

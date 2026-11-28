@@ -3,7 +3,7 @@
 use anyhow::{Context, Result};
 use std::collections::HashMap;
 use std::time::{Duration, Instant};
-use zmq::{Context as ZmqContext, Socket, SocketType};
+use crate::zmq::{self, Context as ZmqContext, Socket, SocketType};
 
 use super::super::broker::{GoalReply, extend_hops};
 use super::protocol::FED_ID_PREFIX;

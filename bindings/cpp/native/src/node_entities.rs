@@ -18,10 +18,17 @@ use crate::clients::{
     RobotBusServiceHandler, RobotBusSubscriptionHandle, RobotBusTimerCallback, RobotBusTimerHandle,
     RobotBusTopicPublisher,
 };
-use crate::ffi::{
-    bus_err, clear_error, cstr_req, err, ok, set_error, robot_bus_free_string,
-};
+use crate::ffi::{bus_err, clear_error, cstr_req, err, ok, robot_bus_free_string, set_error};
 use crate::node::RobotBusNode;
+
+fn topic_qos(depth: i32, transient_local: c_int) -> Option<QosProfile> {
+    let qos = (depth > 0).then(|| QosProfile::keep_last(depth));
+    if transient_local != 0 {
+        Some(qos.unwrap_or_default().transient_local())
+    } else {
+        qos
+    }
+}
 
 #[unsafe(no_mangle)]
 pub extern "C" fn robot_bus_node_create_callback_group(
@@ -57,6 +64,16 @@ pub extern "C" fn robot_bus_node_create_publisher_with_qos(
     topic: *const c_char,
     depth: i32,
 ) -> *mut RobotBusTopicPublisher {
+    robot_bus_node_create_publisher_with_topic_qos(n, topic, depth, 0)
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn robot_bus_node_create_publisher_with_topic_qos(
+    n: *mut RobotBusNode,
+    topic: *const c_char,
+    depth: i32,
+    transient_local: c_int,
+) -> *mut RobotBusTopicPublisher {
     if n.is_null() {
         set_error("null node");
         return ptr::null_mut();
@@ -65,12 +82,10 @@ pub extern "C" fn robot_bus_node_create_publisher_with_qos(
         Ok(t) => t,
         Err(_) => return ptr::null_mut(),
     };
-    let result = if depth > 0 {
-        unsafe { &mut *n }
-            .inner
-            .create_publisher_raw_with_qos(topic, QosProfile::keep_last(depth))
-    } else {
-        unsafe { &mut *n }.inner.create_publisher_raw(topic)
+    let node = &mut unsafe { &mut *n }.inner;
+    let result = match topic_qos(depth, transient_local) {
+        Some(qos) => node.create_publisher_raw_with_qos(topic, qos),
+        None => node.create_publisher_raw(topic),
     };
     match result {
         Ok(inner) => {
@@ -104,6 +119,19 @@ pub extern "C" fn robot_bus_node_create_subscription_with_qos(
     group: *const RobotBusCallbackGroup,
     depth: i32,
 ) -> *mut RobotBusSubscriptionHandle {
+    robot_bus_node_create_subscription_with_topic_qos(n, topic, callback, user, group, depth, 0)
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn robot_bus_node_create_subscription_with_topic_qos(
+    n: *mut RobotBusNode,
+    topic: *const c_char,
+    callback: RobotBusMsgCallback,
+    user: *mut c_void,
+    group: *const RobotBusCallbackGroup,
+    depth: i32,
+    transient_local: c_int,
+) -> *mut RobotBusSubscriptionHandle {
     if n.is_null() {
         set_error("null node");
         return ptr::null_mut();
@@ -118,31 +146,18 @@ pub extern "C" fn robot_bus_node_create_subscription_with_qos(
     };
     // user pointer is assumed to outlive the subscription (caller responsibility).
     let user = user as usize;
-    let cb: robot_bus::runtime::MessageCallback = Arc::new(move |payload| {
-        unsafe {
-            cb_fn(
-                payload.as_ptr(),
-                payload.len(),
-                user as *mut c_void,
-            );
-        }
+    let cb: robot_bus::runtime::MessageCallback = Arc::new(move |payload| unsafe {
+        cb_fn(payload.as_ptr(), payload.len(), user as *mut c_void);
     });
     let group = if group.is_null() {
         None
     } else {
         Some(&unsafe { &*group }.inner)
     };
-    let result = if depth > 0 {
-        unsafe { &mut *n }.inner.create_subscription_raw_with_qos(
-            topic,
-            QosProfile::keep_last(depth),
-            cb,
-            group,
-        )
-    } else {
-        unsafe { &mut *n }
-            .inner
-            .create_subscription_raw(topic, cb, group)
+    let node = &mut unsafe { &mut *n }.inner;
+    let result = match topic_qos(depth, transient_local) {
+        Some(qos) => node.create_subscription_raw_with_qos(topic, qos, cb, group),
+        None => node.create_subscription_raw(topic, cb, group),
     };
     match result {
         Ok(inner) => {
@@ -196,11 +211,10 @@ pub extern "C" fn robot_bus_node_create_timer(
     } else {
         Some(&unsafe { &*group }.inner)
     };
-    match unsafe { &mut *n }.inner.create_timer(
-        Duration::from_secs_f64(period_secs),
-        cb,
-        group,
-    ) {
+    match unsafe { &mut *n }
+        .inner
+        .create_timer(Duration::from_secs_f64(period_secs), cb, group)
+    {
         Ok(inner) => {
             clear_error();
             Box::into_raw(Box::new(RobotBusTimerHandle { inner }))
@@ -499,9 +513,7 @@ pub extern "C" fn robot_bus_node_create_action_server_live_with_qos(
     };
     let user = user as usize;
     let cb: ActionGoalLiveHandler = Arc::new(move |payload, ctx| {
-        let mut wrapped = RobotBusActionGoalContext {
-            inner: ctx.clone(),
-        };
+        let mut wrapped = RobotBusActionGoalContext { inner: ctx.clone() };
         let mut out_data: *mut u8 = ptr::null_mut();
         let mut out_len: usize = 0;
         let rc = unsafe {
@@ -594,7 +606,9 @@ pub extern "C" fn robot_bus_node_create_action_client_with_qos(
             .inner
             .create_action_client_raw_with_qos(action_name, QosProfile::keep_last(depth))
     } else {
-        unsafe { &mut *n }.inner.create_action_client_raw(action_name)
+        unsafe { &mut *n }
+            .inner
+            .create_action_client_raw(action_name)
     } {
         Ok(inner) => {
             clear_error();

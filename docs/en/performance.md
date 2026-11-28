@@ -208,6 +208,40 @@ The 2026-11-21 WebSocket retest ran three rounds each before (`d24a506`) and aft
 
 With only `TCP_NODELAY` enabled, WS Subscribe topped out at about 128,000 messages/s, near the 132,441 messages/s recorded after both changes. The pre-change figure was 233,501 messages/s. After the inbox change, the one-way WS Subscribe p50 fell from 4,556 µs to 203 µs. The three rounds of logs, raw data, baseline binary, `TCP_NODELAY` control build, and summary script are in `bench-results/20261121-0911-ws-nodelay-inbox/`.
 
+## Native topic QoS performance
+
+Release builds from the workspace before and after the change ran alternately on the same AMD EPYC 9554 host, pinned to CPUs 48–55. The benchmark used a socket HWM of 2,048 and a single-threaded Node receiver. The 64 B and 256 KiB application payloads used a 16 B CDR header. Fixed-rate figures are medians of five runs. Single-message p99 comes from a separate probe that waits for each sample before sending the next.
+
+| Transport | 64 B received/s at 100,000/s | 64 B single-message p99 (µs) | 256 KiB received/s at 500/s | 256 KiB single-message p99 (µs) |
+| --- | ---: | ---: | ---: | ---: |
+| TCP | 99,988 → 99,980 | 186 → 234 | 500 → 500 | 937 → 507 |
+| IPC | 99,992 → 99,992 | 149 → 173 | 500 → 500 | 755 → 470 |
+| inproc | 99,998 → 99,997 | 93 → 96 | 500 → 500 | 499 → 165 |
+
+All fixed-rate runs delivered every sample after draining. Under the 100,000/s TCP load, the sampled 64 B p99 was 32.7 ms before and 32.1 ms after. Three stepped searches used a 1% loss limit and required sending and receiving at least 90% of the offered rate during the window. Median sustained 64 B receive rates were 200k → 200k/s over TCP, 300k → 425k/s over IPC, and 300k → 525k/s over inproc. The 256 KiB rates went from about 5,700/s to near the 6,500/s search ceiling on all three transports.
+
+For stateful topics, both endpoints enabled `transient_local`. The publisher wrote the sample before the subscriber registered. Replay latency runs from registration on an already-connected Node to its first callback. All five update trials at 5,000/s for 64 B and 500/s for 256 KiB delivered every sample after draining.
+
+| Transport | Median first replay (µs) | Single-update p99, 64 B / 256 KiB (µs) |
+| --- | ---: | ---: |
+| TCP | 1,008 | 242 / 613 |
+| IPC | 355 | 220 / 541 |
+| inproc | 167 | 139 / 304 |
+
+The slow-consumer test blocked the first callback, then published samples numbered 1 through 10. At depth 2, both single- and multi-threaded executors delivered only 9 and 10 after the callback unblocked. State tests covered late join, TCP reconnect after a broker restart, publisher shutdown, and replay over broker federation.
+
+Set `ROBOT_BUS_PERF_ONLY=cdr-topic` and `ROBOT_BUS_PERF_PAYLOAD_BYTES=64` or `262144` before running `cargo run --release -p robot-bus-perf`. Set `ROBOT_BUS_PERF_GOODPUT_RATE_LO` and `ROBOT_BUS_PERF_GOODPUT_RATE_HI` to the same value for fixed-rate trials. Add `ROBOT_BUS_PERF_TOPIC_QOS=transient-local` to measure state updates and replay. See the [benchmark guide](../../benches/robot_bus_perf/README.md).
+
+### Single-message latency attribution
+
+Three repeated runs of the original before/after binaries produced median TCP single-message p99s of 181 → 194 µs for 64 B and 925 → 504 µs for 256 KiB. The single-message probe waits for the callback after each send. The 500/s paced window ran separately. Its sampled 256 KiB TCP p99 in the original five runs was 859 → 556 µs.
+
+Temporary builds measured from receipt of both ZeroMQ frames to entry into the user callback. For 64 B TCP, the median for this interval went from **0.34 µs** to **25.1 µs**. The receive thread now enqueues the sample and wakes the executor to run the callback. The median for this interval was 23–25 µs across the three transports. End-to-end p99 also reflects transport and scheduling variability.
+
+The 256 KiB difference comes mainly from allocation and copying. The former path converted the received `Vec<u8>` into `Arc<[u8]>`, allocating and copying the entire sample again. Replacing only that conversion with `Arc::new(vec)` in the temporary inline-dispatch build reduced TCP p99 from **871 µs to 524 µs**. Allocation plus copy in the previous path took about **240 µs** at the median in this setup.
+
+A separate `strace` run counted **2,211 `brk` calls** in the original and **7** in the new version. The original receive thread repeatedly grew and shrank its heap. Setting glibc `mmap_threshold` and `trim_threshold` to 1 MiB for the unmodified original binary reduced its median TCP p99 over three runs from **940 µs to 554 µs**. The controls attribute most of the gap in this environment to repeated allocation and heap resizing. The new subscription queues share the received buffer. The allocator settings were used only for diagnosis. [glibc memory allocation tunables](https://sourceware.org/glibc/manual/latest/html_node/Memory-Allocation-Tunables.html)
+
 ## Archive and reproduction
 
 The initial local archive is `bench-results/20261120-134156-same-host/`. Its `run.sh` is the executed command sequence, `execution.tsv` records run order and exit codes, `raw.jsonl` contains per-trial counts, windows and latency samples, and `round-*.log` contains the full output. It also contains the environment, DDS profiles, source patches, Cargo lockfile, binary hashes, `SHA256SUMS` and an earlier Bus smoke timeout. The transport audit and corrected ROS 2 samples live in `transport/` and `isolated/` under `bench-results/20261120-183629-ros2-executor-probe/`, with XML, environment details, UDP counts and full logs.

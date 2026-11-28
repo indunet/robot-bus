@@ -6,9 +6,19 @@ Record changes under the applicable version. Explain what changed, why it change
 
 ## [Unreleased]
 
+## [3.3.0]
+
 ### Added
 
 - `rbus discover` shows advertised Broker endpoints even when the Web console is disabled and HTTP discovery is available. All `rbus` queries support `--json` for scripts and `--timeout-ms` to override the default 3-second HTTP timeout.
+
+### Changed
+
+- Robot Bus uses an internal Rust binding to the libzmq C API. Native builds statically link libzmq 4.3.5.
+
+### Breaking
+
+- `BusError::Zmq` now carries `robot_bus::ZmqError`. Replace `zmq::Error::EAGAIN` with `robot_bus::ZmqError::EAGAIN` in matches. Use `raw_code()` for the libzmq error code. For `Context::clone_zmq()`, low-level transport helpers, and socket options, use the context and socket types under `robot_bus::zmq_helpers`.
 
 ## [3.2.1]
 

@@ -58,12 +58,13 @@ console-api = [
 ]
 
 [dependencies]
-robot-bus-msgs = { path = "../robot-bus-msgs", version = "3.2.1" }
+robot-bus-msgs = { path = "../robot-bus-msgs", version = "3.3.0" }
 anyhow = "1"
 axum = { version = "0.8", optional = true, default-features = false, features = ["http1", "tokio", "query", "json"] }
 clap = { version = "4", optional = true, features = ["derive"] }
 futures-util = { version = "0.3", optional = true, default-features = false, features = ["sink"] }
 http = { version = "1", optional = true }
+libc = "0.2"
 log = "0.4"
 mime_guess = { version = "2", optional = true }
 prost = "0.14"
@@ -81,11 +82,13 @@ tower-http = { version = "0.6", optional = true, features = ["cors"] }
 ureq = { version = "2", default-features = false, features = ["json"] }
 url = "2"
 uuid = { version = "1", features = ["v4"] }
-zmq = "0.10"
+
+[build-dependencies]
+# This source package bundles libzmq 4.3.5.
+zeromq-src = "=0.3.6"
 
 [dev-dependencies]
 futures-util = { version = "0.3", default-features = false, features = ["sink"] }
-libc = "0.2"
 tempfile = "3"
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "sync", "time"] }
 tokio-stream = "0.1"

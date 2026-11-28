@@ -151,10 +151,10 @@ Same type in all three languages. Pass one copy per endpoint (depth / reliabilit
 | `TopicQos.default()` (C++: `ros_default()`) | KeepLast 10, reliable, volatile | Ordinary topics, services, actions. ROS `qos_profile_default` / `ServicesQoS`. **Not** ROS `SystemDefaultsQoS`. |
 | `TopicQos.sensor_data()` | KeepLast 5, best effort, volatile | Camera, lidar, IMU. ROS `SensorDataQoS`. |
 | `TopicQos.latched()` | KeepLast 1, reliable, transient local | `/tf_static` and other latched ROS topics. |
-| `TopicQos.bus()` | KeepLast 8, best effort | All bus endpoints (depth → HWM). |
+| `TopicQos.bus()` | KeepLast 8, best effort | All bus endpoints. |
 
 - **ROS** (`from_ros` / `to_ros`): preset or `keep_last`. Same `TopicQos` on topic, service, and action ROS endpoints. C++ uses `.durability_volatile()` to unset latch (`volatile` is a keyword).
-- **bus** (`from_bus` / `to_bus`): depth → HWM only (topic PUB/SUB, service/action DEALER); must be `.best_effort()` (`sensor_data()` / `bus()` / custom). Durability is ignored.
+- **bus** (`from_bus` / `to_bus`): depth controls native topic subscription queues and publisher/RPC HWM; must be `.best_effort()` (`sensor_data()` / `bus()` / custom). Bridge routes apply durability on the ROS side. Native applications can opt into [topic retention](rust-api.md#high-water-mark-hwm-and-qos).
 
 You can mix a preset on one end and `keep_last` on the other.
 
@@ -501,7 +501,7 @@ The `robot-bus-ros2` crate requires generated Rust interfaces (`share/<pkg>/rust
 With ROS 2 Humble and the build tools installed (Rust, Protobuf compiler 35.1, C/C++ toolchain and pkg-config), run from the repository root:
 
 ```bash
-sudo apt-get install libzmq3-dev ros-humble-rosidl-generator-rs \
+sudo apt-get install ros-humble-rosidl-generator-rs \
   ros-humble-example-interfaces ros-humble-test-msgs
 source /opt/ros/humble/setup.bash
 python3 scripts/generate_rust_msgs.py

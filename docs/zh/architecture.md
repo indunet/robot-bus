@@ -18,6 +18,8 @@ Robot Bus 通过 ROS 2 风格的 Node API 提供话题、服务和 Action。各�
 
 Broker 可以在应用内启动，也可以作为独立进程运行。话题用 XSUB/XPUB 代理分发，服务按服务名分派请求并关联响应，Action 按目标跟踪反馈、结果和取消请求。Broker 根据名称和协议元数据路由，Protobuf 载荷原样传递。传输选择和端口配置见[部署与排障](deployment.md)。
 
+原生订阅在收包与用户回调之间维护独立的 KeepLast 队列。状态话题由发布者保存当前样本，Broker 沿同一套 Topic 路由转发针对晚加入者的补发请求和响应。见 [Topic QoS 与状态保留](rust-api.md#高水位hwm与-qos)。
+
 ## 节点模型
 
 ![Node 的连接配置、实体注册与回调执行](../images/architecture-node-zh.svg)

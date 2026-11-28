@@ -1,6 +1,7 @@
 //! Context and Node napi bindings.
 
-use std::sync::Arc;
+use std::collections::VecDeque;
+use std::sync::{Arc, Mutex, Weak};
 use std::time::Duration;
 
 use napi::bindgen_prelude::*;
@@ -9,7 +10,7 @@ use napi_derive::napi;
 use robot_bus::discovery::{DiscoverOpts as RustDiscoverOpts, wait as discover_wait};
 use robot_bus::runtime::{
     ActionGoalHandler, Context as RustContext, Node as RustNode, NodeOptions as RustNodeOptions,
-    Parameter, ServiceHandler, TimerCallback,
+    Parameter, QosProfile, ServiceHandler, TimerCallback,
 };
 
 use crate::handles::{
@@ -30,10 +31,34 @@ pub struct DiscoverNodeOptions {
 }
 
 type ConnTsfn = ThreadsafeFunction<(String, String, String), ErrorStrategy::Fatal>;
-type MsgTsfn = ThreadsafeFunction<Vec<u8>, ErrorStrategy::Fatal>;
+type MsgTsfn = ThreadsafeFunction<(), ErrorStrategy::Fatal>;
 type VoidTsfn = ThreadsafeFunction<(), ErrorStrategy::Fatal>;
 type ServiceTsfn = ThreadsafeFunction<Vec<u8>, ErrorStrategy::CalleeHandled>;
 type ActionTsfn = ThreadsafeFunction<Vec<u8>, ErrorStrategy::CalleeHandled>;
+
+#[derive(Default)]
+struct JsTopicQueue {
+    pending: VecDeque<Vec<u8>>,
+    scheduled: bool,
+    callback: Weak<MsgTsfn>,
+}
+
+fn schedule_topic_callback(inbox: &Mutex<JsTopicQueue>, callback: &MsgTsfn) {
+    if callback.call((), ThreadsafeFunctionCallMode::NonBlocking) != Status::Ok {
+        let mut queue = inbox.lock().unwrap();
+        queue.pending.clear();
+        queue.scheduled = false;
+    }
+}
+
+fn topic_qos(depth: Option<i32>, transient_local: Option<bool>) -> Option<QosProfile> {
+    let qos = depth.filter(|d| *d > 0).map(QosProfile::keep_last);
+    if transient_local == Some(true) {
+        Some(qos.unwrap_or_default().transient_local())
+    } else {
+        qos
+    }
+}
 
 /// Shared ZeroMQ runtime context (required for same-process inproc).
 #[napi]
@@ -357,12 +382,10 @@ impl Node {
         &mut self,
         topic: String,
         qos_depth: Option<i32>,
+        transient_local: Option<bool>,
     ) -> Result<TopicPublisher> {
-        use robot_bus::runtime::QosProfile;
-        let inner = match qos_depth.filter(|d| *d > 0) {
-            Some(depth) => self
-                .inner
-                .create_publisher_raw_with_qos(&topic, QosProfile::keep_last(depth)),
+        let inner = match topic_qos(qos_depth, transient_local) {
+            Some(qos) => self.inner.create_publisher_raw_with_qos(&topic, qos),
             None => self.inner.create_publisher_raw(&topic),
         }
         .map_err(bus_err)?;
@@ -377,26 +400,54 @@ impl Node {
         callback: JsFunction,
         callback_group: Option<&JsCallbackGroup>,
         qos_depth: Option<i32>,
+        transient_local: Option<bool>,
     ) -> Result<SubscriptionHandle> {
-        use robot_bus::runtime::QosProfile;
-        let tsfn: MsgTsfn = callback.create_threadsafe_function(0, |ctx| {
-            let payload = ctx.value;
+        let depth = if self.inner.options().is_ws() {
+            robot_bus::runtime::ws_subscribe_queue_capacity(qos_depth.unwrap_or(0))
+        } else {
+            qos_depth
+                .filter(|d| *d > 0)
+                .unwrap_or(QosProfile::DEFAULT.depth()) as usize
+        };
+        let inbox = Arc::new(Mutex::new(JsTopicQueue::default()));
+        let drain_inbox = Arc::clone(&inbox);
+        let tsfn: MsgTsfn = callback.create_threadsafe_function(0, move |ctx| {
+            let (payload, next) = {
+                let mut queue = drain_inbox.lock().unwrap();
+                let payload = queue.pending.pop_front().expect("scheduled topic payload");
+                queue.scheduled = !queue.pending.is_empty();
+                let next = queue.scheduled.then(|| queue.callback.upgrade()).flatten();
+                (payload, next)
+            };
+            if let Some(next) = next {
+                schedule_topic_callback(&drain_inbox, &next);
+            }
             Ok(vec![
                 ctx.env.create_buffer_with_data(payload)?.into_unknown(),
             ])
         })?;
         let tsfn = Arc::new(tsfn);
+        inbox.lock().unwrap().callback = Arc::downgrade(&tsfn);
         let cb: robot_bus::runtime::MessageCallback = Arc::new(move |payload| {
-            let _ = tsfn.call(payload.to_vec(), ThreadsafeFunctionCallMode::NonBlocking);
+            let schedule = {
+                let mut queue = inbox.lock().unwrap();
+                if queue.pending.len() == depth {
+                    queue.pending.pop_front();
+                }
+                queue.pending.push_back(payload.to_vec());
+                let schedule = !queue.scheduled;
+                queue.scheduled = true;
+                schedule
+            };
+            if schedule {
+                schedule_topic_callback(&inbox, &tsfn);
+            }
         });
         let group = callback_group.map(|g| &g.inner);
-        let handle = match qos_depth.filter(|d| *d > 0) {
-            Some(depth) => self.inner.create_subscription_raw_with_qos(
-                &topic,
-                QosProfile::keep_last(depth),
-                cb,
-                group,
-            ),
+        let handle = match topic_qos(qos_depth, transient_local) {
+            Some(qos) => self
+                .inner
+                .create_subscription_raw_with_qos(&topic, qos, cb, group),
             None => self.inner.create_subscription_raw(&topic, cb, group),
         }
         .map_err(bus_err)?;

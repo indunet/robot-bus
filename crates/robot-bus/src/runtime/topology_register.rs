@@ -11,7 +11,7 @@ use std::thread;
 use std::time::Duration;
 
 use prost::Message;
-use zmq::Context as ZmqContext;
+use crate::zmq::Context as ZmqContext;
 
 use crate::console_topics;
 use crate::robot_bus_interfaces::msg::v1::{TopologyRegister, TopologyUnregister};

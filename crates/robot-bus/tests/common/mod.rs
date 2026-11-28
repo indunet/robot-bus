@@ -17,7 +17,7 @@ use robot_bus::broker::action_bus::ActionBusConfig;
 use robot_bus::broker::message_bus::BusConfig;
 use robot_bus::broker::service_bus::ServiceBusConfig;
 use robot_bus::{DiscoveryConfig, RobotBusBroker, RobotBusConfig};
-use zmq::{Context, Socket, SocketType};
+use robot_bus::zmq_helpers::{self as zmq, Context, Socket, SocketType};
 
 static PROXY_ID: AtomicU64 = AtomicU64::new(0);
 

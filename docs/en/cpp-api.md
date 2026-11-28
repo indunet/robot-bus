@@ -38,14 +38,14 @@ CMake sets `CMAKE_CXX_STANDARD 17`. Building with a newer standard (e.g. `-DCMAK
 
 ```bash
 # Core SDK (no ROS bridge)
-sudo apt install ./robot-bus_3.2.1_linux_amd64.deb
+sudo apt install ./robot-bus_3.3.0_linux_amd64.deb
 
 # Or ROS 2 bridge variant (Humble example) — needs Humble already installed
-sudo apt install ./robot-bus-ros2-humble_3.2.1_linux_amd64.deb
+sudo apt install ./robot-bus-ros2-humble_3.3.0_linux_amd64.deb
 source /opt/ros/humble/setup.bash
 
 # macOS Apple Silicon (core package only)
-sudo installer -pkg robot-bus_3.2.1_macos_arm64.pkg -target /
+sudo installer -pkg robot-bus_3.3.0_macos_arm64.pkg -target /
 # Installs under /usr/local ({bin,lib,include})
 
 # Or from source (dev)
@@ -359,7 +359,13 @@ pub.publish(imu);
 
 Full runnable programs: [`examples/topic_imu/`](../../examples/topic_imu/), [`examples/service_set_bool/`](../../examples/service_set_bool/), [`examples/action_fibonacci/`](../../examples/action_fibonacci/).
 
-Optional QoS: `qos_depth > 0` → KeepLast (topic PUB/SUB HWM; service / action DEALER HWM). `create_publisher(topic, qos_depth)` / `create_subscription(..., group, qos_depth)` / `create_service(..., group, qos_depth)` / `create_client(name, qos_depth)` / `create_action_server(..., group, qos_depth)` / `create_action_client(name, qos_depth)`. `create_wall_timer` aliases `create_timer`. See also `wait_for_message` / client `wait_for_*`. Parameters: `list_parameters` → `{names, prefixes}`; `list_all_parameters`; `undeclare_parameter`.
+Native subscriptions use `qos_depth` for their pending queue and drop the oldest sample on overflow. Native publishers and RPC use the depth for socket HWM. Pass `true` as the final argument on both native topic methods to enable `transient_local`.
+
+```cpp
+auto writer = node.create_publisher("/robot1/map_state", 1, true);
+auto reader = node.create_subscription("/robot1/map_state",
+    [](robot_bus::BytesView state) { (void)state; }, nullptr, 1, true);
+```
 
 Raw bytes still work via `create_publisher` / `create_subscription` with manual Serialize/Parse.
 

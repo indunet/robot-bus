@@ -1,39 +1,39 @@
-//! Topic / RPC QoS profile (v1).
-//!
-//! This is intentionally **not** a full ROS 2 / DDS QoS facsimile. We only
-//! use KeepLast(N) to retain the newest N pending server messages on WS.
-//! Native ZeroMQ currently maps the depth to socket high-water marks only;
-//! HWM alone does not implement replacement of the oldest queued message.
-//! On ZMQ topic sockets that is PUB HWM and SUB receive HWM; on ZMQ service /
-//! action sockets it is DEALER HWM (`snd` / `rcv` both = depth). On WebSocket nodes, subscribe
-//! depth sizes the server→client queue (drop oldest on full); publish QoS is ignored
-//! because WS publishers share one server PUB. Reliability is fixed to
-//! best-effort (PUB/SUB has no ACK; RPC has no DDS reliability either).
+//! Topic and RPC QoS settings.
 
 use crate::zmq_helpers::HighWaterMark;
 
 pub use crate::wire::SubscriptionOverflowPolicy;
 
-/// KeepLast(N) retains the newest N pending messages on WS subscriptions.
-/// Native ZMQ currently uses depth as HWM only; oldest-message replacement
-/// on that transport is not implemented yet. Publishers/RPC also use HWM only.
+/// KeepLast history depth, with optional publisher-local topic retention.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct QosProfile {
     depth: i32,
+    transient_local: bool,
 }
 
 impl QosProfile {
     /// Same depth as [`HighWaterMark::STREAM`] (8).
     pub const DEFAULT: Self = Self::keep_last(HighWaterMark::STREAM.snd);
 
-    /// ROS 2–style `KeepLast(depth)` history depth.
-    ///
-    /// On a ZMQ subscriber only receive HWM is set; subscription commands are not
-    /// subject to the depth. Publishers and service / action DEALER sockets set
-    /// both directions. On a WebSocket node, subscribe depth sizes the server→client
-    /// queue; publish / RPC depth is ignored.
+    /// Keep the newest `depth` pending samples on a subscription.
+    /// Native topic publishers and RPC endpoints use this depth as their socket HWM.
     pub const fn keep_last(depth: i32) -> Self {
-        Self { depth }
+        Self {
+            depth,
+            transient_local: false,
+        }
+    }
+
+    /// Enable publisher-local retention for a native topic publisher or subscription.
+    /// The publisher retains its latest sample for late joiners and reconnects.
+    pub const fn transient_local(mut self) -> Self {
+        self.transient_local = true;
+        self
+    }
+
+    /// Whether publisher-local topic retention was requested.
+    pub const fn is_transient_local(self) -> bool {
+        self.transient_local
     }
 
     /// History depth (KeepLast N).

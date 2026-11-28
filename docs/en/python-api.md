@@ -486,10 +486,10 @@ print(robot_bus.__version__)
 | `SingleThreadedExecutor(context=None)` | Explicit single-threaded executor (for shared multi-node use) |
 | `MultiThreadedExecutor(num_threads=4, context=None)` | n resident workers; subscriptions / timers / services / actions follow callback groups |
 | `executor.add_node(node)` | Attach node to executor (must be before auto-attach on that node) |
-| `node.create_publisher(topic, msg_type=None, qos_depth=None)` | typed → `TypedTopicPublisher`; omit type → raw; `qos_depth>0` → KeepLast HWM (ignored on WS publish) |
+| `node.create_publisher(topic, msg_type=None, qos_depth=None, *, transient_local=False)` | typed → `TypedTopicPublisher`; omit type → raw; `qos_depth>0` → KeepLast HWM (ignored on WS publish) |
 | `node.create_timer(period, callback)` → `TimerHandle` | Timer (attached to Node like topic) |
 | `CallbackGroupType` / `create_callback_group` | `MutuallyExclusive` / `Reentrant` |
-| `create_subscription(..., msg_type=, callback_group=, qos_depth=)` | typed: `callback(Message)`; omit type: `callback(bytes)`; WS: `qos_depth` sizes the server subscribe queue |
+| `create_subscription(..., msg_type=, callback_group=, qos_depth=, transient_local=)` | typed: `callback(Message)`; omit type: `callback(bytes)`; WS: `qos_depth` sizes the server subscribe queue |
 | `create_service(..., request_type=, response_type=, qos_depth=)` | typed: `handler(Request) -> Response`; otherwise raw bytes; `qos_depth>0` → KeepLast DEALER HWM |
 | `create_client(..., request_type=, response_type=, qos_depth=)` | typed → `TypedServiceClient`; `service_is_ready` / `wait_for_service` (console workers); `qos_depth>0` → KeepLast DEALER HWM |
 | `create_action_server(..., goal_type=, feedback_type=, result_type=, qos_depth=)` | typed `handler(goal)` returns phase/message pairs, emitted after return; live raw handlers use `streaming=True` without typed arguments; `qos_depth>0` → KeepLast DEALER HWM |
@@ -503,4 +503,14 @@ print(robot_bus.__version__)
 
 WebSocket RPC mode Node: see previous section; for the low-level WebSocket RPC frame protocol, see the Rust guide ([rust-api.md](rust-api.md)).
 
-For ZeroMQ transports (`tcp`, `ipc`, `inproc`), the last positive subscription `qos_depth` sets the receive high-water mark of the shared SUB socket. Omitting it leaves the current setting unchanged. A depth of `1` does not create a per-topic queue that always keeps the latest message.
+For native ZeroMQ subscriptions, `qos_depth` bounds each subscription’s waiting queue. A full queue drops the oldest sample.
+
+Pass `transient_local=True` to both native topic methods to supply the latest state to late joiners and reconnecting subscribers.
+
+```python
+pub = node.create_publisher("/robot1/map_state", transient_local=True)
+pub.publish(b"map-ready")
+sub = node.create_subscription(
+    "/robot1/map_state", print, qos_depth=1, transient_local=True
+)
+```

@@ -5,7 +5,7 @@ FROM ${ROS_BASE}
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 ENV DEBIAN_FRONTEND=noninteractive
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    build-essential curl ca-certificates unzip pkg-config libzmq3-dev \
+    build-essential curl ca-certificates unzip pkg-config \
     python3-venv python3-pip "ros-${ROS_DISTRO}-example-interfaces" \
     && rm -rf /var/lib/apt/lists/*
 COPY --from=node /usr/local/bin/node /usr/local/bin/node

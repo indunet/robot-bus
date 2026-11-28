@@ -5,6 +5,7 @@ use prost::Message;
 
 use crate::errors::{BusError, Result};
 use crate::message_bus::Publisher as BusPublisher;
+use crate::runtime::retained_topic::RetainedPublisher;
 use crate::runtime::topology_register::TopologyEndpointGuard;
 #[cfg(feature = "ws")]
 use crate::runtime::ws_runtime::WsClientContext;
@@ -28,6 +29,7 @@ pub struct TopicPublisherRaw {
 #[derive(Clone)]
 pub(super) enum TopicPublisherBackend {
     Zmq(Arc<BusPublisher>),
+    Retained(Arc<RetainedPublisher>),
     #[cfg(feature = "ws")]
     Ws(WsClientContext),
 }
@@ -40,6 +42,7 @@ impl TopicPublisherRaw {
     pub fn publish(&self, payload: &[u8]) -> Result<()> {
         match &self.backend {
             TopicPublisherBackend::Zmq(inner) => inner.publish(&self.topic, payload),
+            TopicPublisherBackend::Retained(inner) => inner.publish(payload),
             #[cfg(feature = "ws")]
             TopicPublisherBackend::Ws(ctx) => ctx.publish(&self.topic, payload),
         }
@@ -48,6 +51,7 @@ impl TopicPublisherRaw {
     pub fn high_water_mark(&self) -> Result<HighWaterMark> {
         match &self.backend {
             TopicPublisherBackend::Zmq(inner) => inner.high_water_mark(),
+            TopicPublisherBackend::Retained(inner) => inner.high_water_mark(),
             #[cfg(feature = "ws")]
             TopicPublisherBackend::Ws(_) => Ok(HighWaterMark::STREAM),
         }
@@ -56,6 +60,7 @@ impl TopicPublisherRaw {
     pub fn set_high_water_mark(&self, hwm: HighWaterMark) -> Result<()> {
         match &self.backend {
             TopicPublisherBackend::Zmq(inner) => inner.set_high_water_mark(hwm),
+            TopicPublisherBackend::Retained(inner) => inner.set_high_water_mark(hwm),
             #[cfg(feature = "ws")]
             TopicPublisherBackend::Ws(_) => Err(BusError::Protocol(
                 "set_high_water_mark is not available for WebSocket RPC publishers".into(),
@@ -67,6 +72,7 @@ impl TopicPublisherRaw {
     pub fn set_send_timeout_ms(&self, ms: i32) -> Result<()> {
         match &self.backend {
             TopicPublisherBackend::Zmq(inner) => inner.set_send_timeout_ms(ms),
+            TopicPublisherBackend::Retained(inner) => inner.set_send_timeout_ms(ms),
             #[cfg(feature = "ws")]
             TopicPublisherBackend::Ws(_) => Ok(()),
         }

@@ -285,16 +285,23 @@ ROBOT_BUS_API RobotBusTopicPublisher *robot_bus_node_create_publisher(RobotBusNo
 /** depth <= 0 keeps default HWM; depth > 0 maps to KeepLast depth. */
 ROBOT_BUS_API RobotBusTopicPublisher *robot_bus_node_create_publisher_with_qos(
     RobotBusNode *n, const char *topic, int32_t depth);
+/** Set transient_local to 1 to retain the latest sample on a native publisher. */
+ROBOT_BUS_API RobotBusTopicPublisher *robot_bus_node_create_publisher_with_topic_qos(
+    RobotBusNode *n, const char *topic, int32_t depth, int transient_local);
 /** Returns opaque handle (NULL on error). `robot_bus_subscription_handle_free`
  * only releases the handle; use `robot_bus_node_destroy_subscription` to
  * unsubscribe. The C++ `SubscriptionHandle` destructor destroys on drop. */
 ROBOT_BUS_API RobotBusSubscriptionHandle *robot_bus_node_create_subscription(
     RobotBusNode *n, const char *topic, RobotBusMsgCallback callback, void *user,
     const RobotBusCallbackGroup *group);
-/** depth <= 0 keeps default HWM; depth > 0 maps to KeepLast depth. */
+/** Positive depth sets this subscription's KeepLast queue capacity. */
 ROBOT_BUS_API RobotBusSubscriptionHandle *robot_bus_node_create_subscription_with_qos(
     RobotBusNode *n, const char *topic, RobotBusMsgCallback callback, void *user,
     const RobotBusCallbackGroup *group, int32_t depth);
+/** Set transient_local to 1 to receive retained native topic samples. */
+ROBOT_BUS_API RobotBusSubscriptionHandle *robot_bus_node_create_subscription_with_topic_qos(
+    RobotBusNode *n, const char *topic, RobotBusMsgCallback callback, void *user,
+    const RobotBusCallbackGroup *group, int32_t depth, int transient_local);
 ROBOT_BUS_API int robot_bus_node_destroy_subscription(RobotBusNode *n,
                                                       RobotBusSubscriptionHandle *handle);
 ROBOT_BUS_API RobotBusTimerHandle *robot_bus_node_create_timer(RobotBusNode *n, double period_secs,

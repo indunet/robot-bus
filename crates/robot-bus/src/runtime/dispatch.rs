@@ -1,33 +1,25 @@
 //! Frame parsing and inline callback dispatch for [`super::Executor`].
 
-use std::collections::HashMap;
+use crate::zmq;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::thread;
 
 use crate::action_bus::{ActionKind, ActionMessage};
-use crate::runtime::callback_group::SubscriptionCallback;
 use crate::runtime::queues::{ActionReply, OutboundCommand, ReplyMessage, ServiceReply};
 use crate::runtime::registrations::{
     ActionClientRegistration, ActionGoalContext, ActionRegistration, Registration,
-    RegistrationKind, ServiceRegistration, SubRegistration,
+    RegistrationKind, ServiceRegistration,
 };
-use crate::runtime::topic_callbacks::for_each_matching_callback;
 use crate::runtime::wake::WakingSender;
 use crate::runtime::worker_pool::{WorkerPool, run_callback};
 
 pub fn dispatch_registration(
     reg: &mut Registration,
-    topic_callbacks: &HashMap<String, Vec<SubscriptionCallback>>,
     reply_tx: &WakingSender<ReplyMessage>,
     worker_pool: Option<&WorkerPool>,
 ) {
     match reg.kind() {
-        RegistrationKind::Sub => {
-            if let Registration::Sub(sub) = reg {
-                dispatch_sub_message(sub, topic_callbacks, worker_pool);
-            }
-        }
         RegistrationKind::Service => {
             if let Registration::Service(service) = reg {
                 dispatch_service_request(service, reply_tx, worker_pool);
@@ -44,37 +36,6 @@ pub fn dispatch_registration(
             }
         }
     }
-}
-
-pub fn dispatch_sub_message(
-    reg: &SubRegistration,
-    topic_callbacks: &HashMap<String, Vec<SubscriptionCallback>>,
-    worker_pool: Option<&WorkerPool>,
-) {
-    let mut frames = match reg.socket.recv_multipart(0) {
-        Ok(frames) => frames,
-        Err(err) => {
-            log::warn!("sub recv failed on {}: {err}", reg.endpoint);
-            return;
-        }
-    };
-    if frames.len() < 2 {
-        log::warn!(
-            "ignored sub frame with count {} on {}",
-            frames.len(),
-            reg.endpoint
-        );
-        return;
-    }
-    let payload_bytes = std::mem::take(&mut frames[1]);
-    let topic = String::from_utf8_lossy(&frames[0]);
-    let payload: Arc<[u8]> = payload_bytes.into();
-    for_each_matching_callback(&topic, topic_callbacks, |entry| {
-        let callback = Arc::clone(&entry.callback);
-        let group = entry.group.clone();
-        let payload = Arc::clone(&payload);
-        group.run(worker_pool, move || callback(&payload));
-    });
 }
 
 pub fn dispatch_service_request(
@@ -433,13 +394,14 @@ mod tests {
     use crate::errors::{BusError, parse_error_body};
     use crate::runtime::wake::Waker;
     use crate::runtime::{CallbackGroup, CallbackGroupType};
+    use std::collections::HashMap;
     use std::sync::{Mutex, mpsc};
     use std::time::{Duration, Instant};
 
     fn wire_pair() -> (zmq::Socket, zmq::Socket) {
         let context = zmq::Context::new();
-        let receiver = context.socket(zmq::PAIR).unwrap();
-        let sender = context.socket(zmq::PAIR).unwrap();
+        let receiver = context.socket(zmq::SocketType::PAIR).unwrap();
+        let sender = context.socket(zmq::SocketType::PAIR).unwrap();
         for socket in [&receiver, &sender] {
             socket.set_linger(0).unwrap();
             socket.set_rcvtimeo(2000).unwrap();

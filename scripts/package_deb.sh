@@ -23,7 +23,7 @@ cp -a "$STAGING/." "$PKG_ROOT/"
 case "$VARIANT" in
   main)
     PACKAGE_NAME="robot-bus"
-    DEPENDS="libzmq5"
+    DEPENDS=""
     CONFLICTS="Conflicts: robot-bus-cpp, robot-bus-ros2-humble, robot-bus-ros2-jazzy, robot-bus-cpp-ros2-humble, robot-bus-cpp-ros2-jazzy
 Replaces: robot-bus-cpp"
     DESCRIPTION_SHORT="robot-bus C/C++ SDK and broker"
@@ -35,7 +35,7 @@ Replaces: robot-bus-cpp"
     ;;
   ros2-humble)
     PACKAGE_NAME="robot-bus-ros2-humble"
-    DEPENDS="libzmq5, ros-humble-rcl, ros-humble-std-msgs, ros-humble-sensor-msgs, ros-humble-std-srvs"
+    DEPENDS="ros-humble-rcl, ros-humble-std-msgs, ros-humble-sensor-msgs, ros-humble-std-srvs"
     CONFLICTS="Conflicts: robot-bus, robot-bus-cpp, robot-bus-ros2-jazzy, robot-bus-cpp-ros2-humble, robot-bus-cpp-ros2-jazzy
 Provides: robot-bus
 Replaces: robot-bus, robot-bus-cpp, robot-bus-cpp-ros2-humble"
@@ -47,7 +47,7 @@ Replaces: robot-bus, robot-bus-cpp, robot-bus-cpp-ros2-humble"
     ;;
   ros2-jazzy)
     PACKAGE_NAME="robot-bus-ros2-jazzy"
-    DEPENDS="libzmq5, ros-jazzy-rcl, ros-jazzy-std-msgs, ros-jazzy-sensor-msgs, ros-jazzy-std-srvs"
+    DEPENDS="ros-jazzy-rcl, ros-jazzy-std-msgs, ros-jazzy-sensor-msgs, ros-jazzy-std-srvs"
     CONFLICTS="Conflicts: robot-bus, robot-bus-cpp, robot-bus-ros2-humble, robot-bus-cpp-ros2-humble, robot-bus-cpp-ros2-jazzy
 Provides: robot-bus
 Replaces: robot-bus, robot-bus-cpp, robot-bus-cpp-ros2-jazzy"
@@ -70,7 +70,9 @@ esac
   echo "Priority: optional"
   echo "Architecture: ${ARCH}"
   echo "Maintainer: deng_ran <deng_ran@aliyun.com>"
-  echo "Depends: ${DEPENDS}"
+  if [[ -n "$DEPENDS" ]]; then
+    echo "Depends: ${DEPENDS}"
+  fi
   if [[ -n "$CONFLICTS" ]]; then
     printf '%s\n' "$CONFLICTS"
   fi

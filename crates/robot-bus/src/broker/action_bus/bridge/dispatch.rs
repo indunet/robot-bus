@@ -3,7 +3,7 @@
 use anyhow::{Context, Result};
 use std::collections::{HashMap, VecDeque};
 use std::time::{Duration, Instant};
-use zmq::Socket;
+use crate::zmq::{self, Socket};
 
 use super::super::broker::{
     GoalEntry, GoalReply, GoalTable, WorkerRegistry, build_client_reply, build_error_body,

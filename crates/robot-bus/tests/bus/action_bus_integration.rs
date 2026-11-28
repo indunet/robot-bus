@@ -9,7 +9,7 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::thread;
 use std::time::{Duration, Instant};
-use zmq::{Context as ZmqContext, SocketType};
+use robot_bus::zmq_helpers::{self as zmq, Context as ZmqContext, SocketType};
 
 /// Helper: bind a ROUTER to `tcp://127.0.0.1:0` and return (socket, real_endpoint).
 fn bind_ephemeral_router(ctx: &ZmqContext) -> (zmq::Socket, String) {

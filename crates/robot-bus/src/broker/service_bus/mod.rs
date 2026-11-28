@@ -22,7 +22,7 @@ use anyhow::{Context, Result};
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 use std::sync::mpsc::SyncSender;
-use zmq::{Context as ZmqContext, Socket, SocketType};
+use crate::zmq::{Context as ZmqContext, Socket, SocketType};
 
 #[derive(Clone, Debug)]
 pub struct ServiceBusConfig {

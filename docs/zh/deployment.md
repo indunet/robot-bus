@@ -120,7 +120,7 @@ WS 客户端使用 `robot_bus.Node.ws_at("remote", "http://10.0.0.2:15560")`。H
 | Service/action 等待超时 | 服务端进程及 `start()`/`spin()`、路由名、是否已有 worker | 先跑仓库标准示例；再检查业务回调是否阻塞，避免直接无限重试 |
 | inproc 收不到消息 | 是否同一进程、同一 Context | 使用 `Node.inproc_with_context` 与 `RobotBusBroker.start(context=ctx)` |
 | WS 断连或 unknown opcode 5 | broker/SDK 版本是否匹配 | 先升级 broker；V2/V3 不可混用；检查代理 WebSocket upgrade |
-| 慢订阅、丢消息 | Topics 中待发送队列与 dropped，回调耗时 | 按负载调队列；WS KeepLast 只控制服务端待发送队列，原生 HWM 不保证丢旧留新 |
+| 慢订阅、丢消息 | Topics 中待发送队列与 dropped，回调耗时 | 按负载调队列；原生 KeepLast 对待处理回调丢旧留新，传输 HWM 独立配置。控制台 dropped 统计 WS 服务端队列 |
 | ROS 桥不可用或编译失败 | source、rclpy/rclcpp、Rust IDL 与 typesupport | 查[支持状态](support.md)与[桥接常见问题](ros2-bridge.md#常见问题)，保留完整环境和错误 |
 
 提交问题时附版本/commit、系统和架构、语言、传输方式、broker 与节点命令、预期与实际输出；ROS 问题另附发行版、RMW 和 source/overlay 情况。移除日志中的凭据。完整构建选项见[按需构建](build-profiles.md)，队列与错误语义见 [Rust API](rust-api.md)。

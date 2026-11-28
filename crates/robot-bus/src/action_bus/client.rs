@@ -7,7 +7,7 @@ use std::sync::Mutex;
 use std::time::Duration;
 
 use uuid::Uuid;
-use zmq::{Context, Socket, SocketType};
+use crate::zmq::{Context, Socket, SocketType};
 
 use crate::errors::{BusError, Result, parse_error_body};
 use crate::transports;

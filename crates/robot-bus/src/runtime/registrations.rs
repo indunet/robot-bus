@@ -5,8 +5,8 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
+use crate::zmq::{Context, Socket, SocketType};
 use uuid::Uuid;
-use zmq::{Context, Socket, SocketType};
 
 use crate::runtime::callback_group::CallbackGroup;
 use crate::runtime::queues::ActionMessageCallback;
@@ -69,21 +69,9 @@ pub fn wrap_batch_action_handler(handler: ActionGoalHandler) -> ActionGoalLiveHa
 }
 
 pub enum RegistrationKind {
-    Sub,
     Service,
     Action,
     ActionClient,
-}
-
-pub struct SubRegistration {
-    pub socket: Socket,
-    pub endpoint: String,
-}
-
-impl SubRegistration {
-    pub fn kind(&self) -> RegistrationKind {
-        RegistrationKind::Sub
-    }
 }
 
 pub struct ServiceRegistration {
@@ -270,7 +258,6 @@ impl ActionClientRegistration {
 }
 
 pub enum Registration {
-    Sub(SubRegistration),
     Service(ServiceRegistration),
     Action(ActionRegistration),
     ActionClient(ActionClientRegistration),
@@ -279,7 +266,6 @@ pub enum Registration {
 impl Registration {
     pub fn socket(&self) -> &Socket {
         match self {
-            Self::Sub(reg) => &reg.socket,
             Self::Service(reg) => &reg.socket,
             Self::Action(reg) => &reg.socket,
             Self::ActionClient(reg) => &reg.socket,
@@ -288,7 +274,6 @@ impl Registration {
 
     pub fn kind(&self) -> RegistrationKind {
         match self {
-            Self::Sub(reg) => reg.kind(),
             Self::Service(reg) => reg.kind(),
             Self::Action(reg) => reg.kind(),
             Self::ActionClient(reg) => reg.kind(),

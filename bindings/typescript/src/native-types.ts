@@ -136,12 +136,13 @@ export declare class Node {
     callback: (oldState: string, next: string, reason: string) => void,
   ): void;
   createCallbackGroup(kind: JsCallbackGroupType): JsCallbackGroup;
-  createPublisher(topic: string, qosDepth?: number): TopicPublisher;
+  createPublisher(topic: string, qosDepth?: number, transientLocal?: boolean): TopicPublisher;
   createSubscription(
     topic: string,
     callback: (payload: Buffer) => void,
     callbackGroup?: JsCallbackGroup,
     qosDepth?: number,
+    transientLocal?: boolean,
   ): SubscriptionHandle;
   destroySubscription(handle: SubscriptionHandle): void;
   createTimer(

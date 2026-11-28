@@ -10,7 +10,7 @@ use std::thread;
 use std::time::{Duration, Instant};
 
 use tokio::sync::mpsc;
-use zmq::Context;
+use crate::zmq::Context;
 
 use crate::action_bus::{ActionClient, ActionKind as WireKind, ActionMessage};
 use crate::errors::{BusError, parse_error_body};

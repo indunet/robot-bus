@@ -9,6 +9,7 @@ use crate::message_bus::Publisher as BusPublisher;
 use crate::runtime::callback_group::CallbackGroup;
 use crate::runtime::qos::QosProfile;
 use crate::runtime::registrations::MessageCallback;
+use crate::runtime::retained_topic::{RetainedPublisher, is_internal_topic};
 use crate::runtime::timers::{SubscriptionHandle, TimerCallback, TimerHandle};
 use crate::zmq_helpers::HighWaterMark;
 
@@ -64,6 +65,24 @@ impl Node {
         topic: impl Into<String>,
         qos: QosProfile,
     ) -> Result<TopicPublisherRaw> {
+        if qos.is_transient_local() {
+            let topic = topic.into();
+            if self.options.is_ws() {
+                return Err(BusError::Protocol(
+                    "transient_local requires a native topic publisher".into(),
+                ));
+            }
+            self.ensure_connected()?;
+            let endpoint = self.options.message_xsub_endpoint()?;
+            let backend =
+                RetainedPublisher::new(self.context.zmq(), &endpoint, &topic, qos.to_hwm())?;
+            let topology = self.start_topology_guard("publisher", &topic);
+            return Ok(TopicPublisherRaw {
+                backend: TopicPublisherBackend::Retained(Arc::new(backend)),
+                topic,
+                _topology: Some(topology),
+            });
+        }
         self.create_publisher_raw_with_hwm(topic, Some(qos.to_hwm()))
     }
 
@@ -75,6 +94,9 @@ impl Node {
         hwm: Option<HighWaterMark>,
     ) -> Result<TopicPublisherRaw> {
         let topic = topic.into();
+        if is_internal_topic(&topic) {
+            return Err(BusError::Protocol("reserved topic name".into()));
+        }
         self.ensure_connected()?;
         let topology = Some(self.start_topology_guard("publisher", &topic));
         #[cfg(feature = "ws")]
@@ -205,9 +227,9 @@ impl Node {
 
     /// Subscribe with a protobuf-typed callback (ROS 2 `create_subscription`).
     ///
-    /// Does not change the node's stream HWM. Prefer
-    /// [`create_subscription_with_qos`](Self::create_subscription_with_qos) to set
-    /// the receive high-water mark on the shared SUB socket.
+    /// The queue depth defaults to the receive HWM. Use
+    /// [`create_subscription_with_qos`](Self::create_subscription_with_qos) to
+    /// choose a different subscription history depth.
     ///
     /// Decode failures are skipped (logged). `callback_group: None` uses the
     /// node's default mutually exclusive group.
@@ -237,10 +259,8 @@ impl Node {
 
     /// Subscribe with topic QoS (KeepLast depth).
     ///
-    /// Topic reliability is always best-effort. On ZMQ, the last explicit QoS
-    /// depth sets the shared SUB socket's receive high-water mark, not a
-    /// per-topic latest-message queue. On WebSocket, depth sizes that topic's
-    /// server→client queue.
+    /// Depth bounds pending callbacks for this subscription. On WebSocket it
+    /// also sizes the server-to-client queue. Topic delivery is best-effort.
     pub fn create_subscription_with_qos<M, F>(
         &mut self,
         topic: &str,
@@ -277,8 +297,7 @@ impl Node {
 
     /// Subscribe with a raw-bytes callback and topic QoS (KeepLast depth).
     ///
-    /// ZMQ: applies to the shared SUB socket's receive HWM. WebSocket: sizes
-    /// this topic's server→client queue.
+    /// Depth bounds this subscription's pending queue.
     pub fn create_subscription_raw_with_qos(
         &mut self,
         topic: &str,
@@ -300,20 +319,25 @@ impl Node {
             .cloned()
             .unwrap_or_else(|| self.default_callback_group.clone());
         self.ensure_connected()?;
+        if is_internal_topic(topic) {
+            return Err(BusError::Protocol("reserved topic name".into()));
+        }
         let topology = self.start_topology_guard("subscriber", topic);
         #[cfg(feature = "ws")]
         if self.options.is_ws() {
+            if qos.is_some_and(QosProfile::is_transient_local) {
+                return Err(BusError::Protocol(
+                    "transient_local requires a native topic subscription".into(),
+                ));
+            }
             let handle = self.ensure_ws()?.subscribe(topic, callback, group, qos)?;
             self.topology_subscriptions.insert(handle.id(), topology);
             return Ok(handle);
         }
-        if let Some(qos) = qos {
-            // Apply before connect so the first SUB socket gets the depth; also
-            // updates an already-connected shared SUB in place.
-            self.set_stream_hwm(qos.to_hwm())?;
-        }
         self.ensure_subscriber()?;
-        let handle = self.lock_executor()?.subscribe(topic, callback, group)?;
+        let handle = self
+            .lock_executor()?
+            .subscribe_with_qos(topic, callback, group, qos)?;
         self.topology_subscriptions.insert(handle.id(), topology);
         Ok(handle)
     }

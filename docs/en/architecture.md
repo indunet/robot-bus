@@ -18,6 +18,8 @@ Robot Bus gives applications a ROS 2–style Node API for topics, services, and 
 
 The broker can run inside an application or as a standalone process. Topic routing uses an XSUB/XPUB proxy. Service routing selects a worker by service name and correlates the reply. Action routing tracks each goal so feedback, results, and cancellation reach the appropriate endpoint. The broker routes by names and protocol metadata while keeping Protobuf payloads opaque. Use the [deployment guide](deployment.md) to choose a transport and configure ports.
 
+Native subscriptions have independent KeepLast queues between receive and callback execution. Stateful publishers retain the current sample. Brokers carry replay requests and responses through the topic routing path. See [topic QoS and retention](rust-api.md#high-water-mark-hwm-and-qos).
+
 ## Node model
 
 ![Node connection options, registered entities, and callback execution](../images/architecture-node.svg)

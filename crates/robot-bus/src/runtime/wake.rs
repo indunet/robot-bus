@@ -4,6 +4,7 @@
 //! process-local channels need a readable socket to end the wait. An inproc
 //! PAIR provides one on every platform libzmq supports.
 
+use crate::zmq;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{SendError, Sender};
 use std::sync::{Arc, Mutex};
@@ -81,8 +82,8 @@ fn try_wake_pair(context: &zmq::Context) -> Result<(Waker, WakeReceiver), zmq::E
         "inproc://robot-bus-executor-wake-{}",
         Uuid::new_v4().simple()
     );
-    let receiver = context.socket(zmq::PAIR)?;
-    let sender = context.socket(zmq::PAIR)?;
+    let receiver = context.socket(zmq::SocketType::PAIR)?;
+    let sender = context.socket(zmq::SocketType::PAIR)?;
     receiver.set_linger(0)?;
     sender.set_linger(0)?;
     receiver.bind(&endpoint)?;

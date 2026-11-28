@@ -35,7 +35,7 @@ jobs:
         run: |
           set -eux
           sudo apt-get update
-          sudo apt-get install -y cmake g++ make curl unzip pkg-config libzmq3-dev gnupg
+          sudo apt-get install -y cmake g++ make curl unzip pkg-config gnupg
           curl -fsSL -o /tmp/protoc.zip \
             "https://github.com/protocolbuffers/protobuf/releases/download/v35.1/protoc-35.1-linux-x86_64.zip"
           sudo unzip -o /tmp/protoc.zip -d /usr/local

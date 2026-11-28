@@ -15,7 +15,7 @@ use robot_bus::ws::ws_frame::{
 use robot_bus::{Publisher, Subscriber};
 use tokio_tungstenite::connect_async;
 use tokio_tungstenite::tungstenite::Message;
-use zmq::{Context as ZmqContext, SocketType};
+use robot_bus::zmq_helpers::{Context as ZmqContext, SocketType};
 
 fn start_bus() -> (crate::common::BrokerLockGuard, RobotBusBroker) {
     let guard = lock_brokers();

@@ -11,11 +11,11 @@
 //! TCP and IPC work across separate contexts; sharing is only required for inproc.
 //! [`crate::Node::new`] still creates a private context for the simple tcp path.
 
-use zmq::Context as ZmqContext;
+use crate::zmq::Context as ZmqContext;
 
 /// Shared runtime handle (ROS 2–style entry point for ZMQ participants).
 ///
-/// Internally holds a cloneable [`zmq::Context`]. Clone is cheap (refcounted).
+/// Cloning shares the same underlying ZeroMQ context.
 #[derive(Clone)]
 pub struct Context {
     inner: ZmqContext,

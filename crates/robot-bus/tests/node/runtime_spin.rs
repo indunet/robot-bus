@@ -1,5 +1,6 @@
 //! Executor / Node callback executor (subscribe + spin_once / spin / shutdown).
 
+use robot_bus::zmq_helpers as zmq;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::thread;
@@ -205,7 +206,7 @@ fn publisher_subscriber_hwm_roundtrip() {
 }
 
 #[test]
-fn node_topic_qos_keep_last_maps_to_hwm() {
+fn node_topic_keep_last_has_an_independent_receive_queue() {
     let proxy = MessageProxy::spawn();
     let (executor, mut node) = node_with_proxy("qos-pilot", &proxy);
     let _ = executor;
@@ -226,10 +227,7 @@ fn node_topic_qos_keep_last_maps_to_hwm() {
         None,
     )
     .expect("subscription with qos");
-    assert_eq!(
-        node.stream_hwm().expect("stream hwm"),
-        HighWaterMark::new(32, 32)
-    );
+    assert_eq!(node.stream_hwm().expect("stream hwm"), HighWaterMark::STREAM);
 }
 
 #[test]
@@ -242,7 +240,7 @@ fn node_tcp_subscriptions_register_at_any_qos_depth() {
         for depth_b in depths {
             // Observe the SUB control frames directly instead of guessing when
             // subscriptions have propagated through a proxy.
-            let xpub = context.socket(zmq::XPUB).expect("XPUB socket");
+            let xpub = context.socket(zmq::SocketType::XPUB).expect("XPUB socket");
             xpub.bind("tcp://127.0.0.1:0").expect("bind XPUB");
             xpub.set_rcvtimeo(1000).expect("XPUB receive timeout");
             let options = NodeOptions {

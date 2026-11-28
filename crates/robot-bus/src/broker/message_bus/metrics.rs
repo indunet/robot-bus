@@ -48,6 +48,9 @@ impl MessageMetrics {
     ///
     /// Runs on the capture side-thread only — not on the libzmq forward path.
     pub fn record(&self, topic: &str, frame_bytes: u64) {
+        if crate::runtime::retained_topic::is_internal_topic(topic) {
+            return;
+        }
         self.total_msgs.fetch_add(1, Ordering::Relaxed);
         self.total_bytes.fetch_add(frame_bytes, Ordering::Relaxed);
 

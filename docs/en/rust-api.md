@@ -5,11 +5,11 @@ English | [中文](../zh/rust-api.md)
 `Cargo.toml`:
 
 ```toml
-robot-bus = "3.2.1"
+robot-bus = "3.3.0"
 # Local: robot-bus = { path = "../crates/robot-bus" }
 # One crate holds the SDK and the broker. The default `full` feature set turns on the broker,
 # WebSocket (client and server), embedded console, and tank demo.
-# Client-only programs can drop all of it: robot-bus = { version = "3.2.1", default-features = false }
+# Client-only programs can drop all of it: robot-bus = { version = "3.3.0", default-features = false }
 ```
 
 ## Broker startup
@@ -282,22 +282,31 @@ The resident worker pool stops admitting new jobs at 1024 waiting jobs, with one
 
 ### High water mark (HWM) and QoS
 
-`QosProfile::keep_last(depth)` maps to ZMQ HWM. Topics use PUB/SUB HWM; service and action use DEALER HWM (`snd` / `rcv` both = depth). Reliability is fixed best-effort (RPC has no DDS reliability either). Omit QoS to keep the node default (topic 8/8, service 4/4, action 8/8).
+`QosProfile::keep_last(N)` bounds each native Node subscription to its newest N pending samples. When full, it evicts the oldest before adding the new sample. The receive thread keeps going while a user callback runs. `keep_last(1)` keeps one pending sample. A subscription created without a depth uses the current receive HWM as its initial depth (normally 8). A prefix filter shares one queue across its matching topics.
 
-On a **WebSocket** Node, `QosProfile::keep_last(N)` retains the newest N pending server messages. When full, it evicts the oldest before enqueueing the new message. `keep_last(1)` retains only the latest pending message. There is one depth-based API, with no separate recent/latest profiles.
+Use `set_stream_hwm` to configure the native SUB transport queue independently. Native topic publishers, services, and actions apply their respective QoS depths to socket HWM. Running callbacks continue, transport buffers have their own capacity, and topic delivery is best effort. The low-level `Subscriber` reads directly from its socket with HWM.
 
-Pass the profile to `create_subscription_with_qos` or `create_subscription_raw_with_qos` on `Node::ws` / `Node::ws_at`. For example: `node.create_subscription_raw_with_qos("/pose", QosProfile::keep_last(1), std::sync::Arc::new(|_bytes| {}), None)?;`. Omitted depth or depth ≤ 0 uses 64; depth above 1,048,576 is capped. Same-filter callbacks share a queue and must agree on its effective depth.
+On WebSocket subscriptions, KeepLast bounds unsent server messages and messages awaiting callback dispatch on a Rust WS Node. Omitted depth or depth ≤ 0 uses 64, capped at 1,048,576. Callbacks sharing a filter use the same effective depth. WS publish and RPC ignore depth. Current WS clients request drop-oldest explicitly with opcode 5. Upgrade an older broker before using those clients.
 
-KeepLast bounds **unsent server messages and, for a Rust WS Node, messages awaiting callback dispatch**. Each subscription filter has its own queue at each stage. A prefix filter shares its queue across matched topics. Messages already in network buffers or a running callback continue through delivery. ZeroMQ queues use HWM, and delivery remains best-effort. WS publish and RPC ignore depth.
+`GET /api/v1/subscriptions` and the console Topics tab report WS server queue depth and drops. The API's `dequeued` counts items removed for sending. `totalDropped` includes closed subscriptions and resets on broker restart. See [build profiles](build-profiles.md).
 
-`GET /api/v1/subscriptions` is available with `ws`, even without the console. The console Topics tab displays KeepLast depth, pending/capacity, and overflow drops. API rows additionally expose `received` and `dequeued`; dequeueing is not confirmed delivery. Rows disappear on cancellation; `totalDropped` includes closed subscriptions and resets on server restart. Counts exclude native transport loss; snapshots may change while read.
+#### Stateful topics with `transient_local`
 
-Compatibility: this corrects the previous drop-newest behavior. The server still accepts the original V3 opcode 1 layout, now with KeepLast/drop-oldest semantics. Updated Rust/TypeScript WS clients explicitly request drop-oldest via opcode 5 so an old server rejects unsupported behavior rather than silently dropping new messages. Upgrade the broker first. Wire policies 0 and 2 remain readable for compatibility; the public QoS API uses only KeepLast(N). See [build profiles](build-profiles.md).
+Set `QosProfile::keep_last(N).transient_local()` on both the native publisher and subscriber. The publisher keeps its latest sample for its lifetime, even when nobody is subscribed. Late joiners and reconnecting subscribers can receive it, then continue receiving live updates. Match the full topic name on both ends. Ordinary subscribers can still receive future samples from a stateful publisher. A reconnect can replay the same sample again.
+
+Each publisher holds one sample in memory irrespective of the subscription's KeepLast depth. This fits device configuration, map metadata, and low-rate localization state. The sample is released when the publisher closes. Native TCP, IPC, and inproc nodes support the option. WebSocket nodes receive live updates.
 
 ```rust
 use robot_bus::{Node, QosProfile, Publisher, HighWaterMark};
 
 let mut node = Node::new("pilot");
+let state_qos = QosProfile::keep_last(1).transient_local();
+let publisher = node.create_publisher_raw_with_qos("/robot1/map_state", state_qos)?;
+publisher.publish(b"map-ready")?;
+node.create_subscription_raw_with_qos(
+    "/robot1/map_state", state_qos, std::sync::Arc::new(|_state| {}), None,
+)?;
+
 let pub_ = node.create_publisher_with_qos::<robot_bus::sensor_msgs::msg::v1::Imu>(
     "/robot1/imu",
     QosProfile::keep_last(10),

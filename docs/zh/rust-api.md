@@ -5,11 +5,11 @@
 `Cargo.toml`：
 
 ```toml
-robot-bus = "3.2.1"
+robot-bus = "3.3.0"
 # 本地：robot-bus = { path = "../crates/robot-bus" }
 # 一个包同时包含 SDK 和 broker。默认的 `full` feature 会打开 broker、
 # WebSocket（客户端和服务端）、内嵌控制台和 tank 演示。
-# 只写客户端时可以全部关闭：robot-bus = { version = "3.2.1", default-features = false }
+# 只写客户端时可以全部关闭：robot-bus = { version = "3.3.0", default-features = false }
 ```
 
 ## Broker启动
@@ -282,22 +282,31 @@ node.create_timer(
 
 ### 高水位（HWM）与 QoS
 
-`QosProfile::keep_last(depth)`映射为 ZMQ HWM。Topic用 PUB/SUB HWM；service / action用 DEALER HWM（`snd` / `rcv`都等于 depth）。reliability固定 best-effort（RPC也没有 DDS reliability）。不传 QoS则用节点默认（topic 8/8，service 4/4，action 8/8）。
+`QosProfile::keep_last(N)` 将每个原生 Node 订阅的待处理队列限制为最近 N 条。队列满时先丢最旧的一条，再放入新样本。收包线程独立于用户回调，慢回调运行期间也会继续收包。`keep_last(1)` 只保留最新的待处理样本。创建时省略深度，则使用当前接收 HWM 作为初始深度（通常为 8）。前缀订阅匹配的数据共享该订阅的一条队列。
 
-**WebSocket** Node 的 `QosProfile::keep_last(N)` 保留最新 N 条服务端待发送消息。队列满时先移除最旧消息，再放入新消息；`keep_last(1)` 就是只留最新一条。统一使用深度参数，不另外提供 recent/latest 配置接口。
+用 `set_stream_hwm` 单独设置原生 SUB 的传输队列。发布和原生 Service、Action 的 QoS 深度仍用于各自的套接字 HWM。已开始执行的回调继续运行，ZeroMQ 和网络缓冲仍有自己的容量，Topic 投递为尽力而为。低层 `Subscriber` 使用套接字 HWM 直接收包。
 
-在 `Node::ws` / `Node::ws_at` 上，将配置传给 `create_subscription_with_qos` 或 `create_subscription_raw_with_qos`。例如：`node.create_subscription_raw_with_qos("/pose", QosProfile::keep_last(1), std::sync::Arc::new(|_bytes| {}), None)?;`。不传深度或 depth ≤ 0 使用 64，上限为 1,048,576。同一过滤器的多个回调共享队列，有效深度必须一致。
+WebSocket 订阅的 KeepLast 限制服务端待发送队列，也限制 Rust WS Node 等待回调的队列。省略深度或 `depth ≤ 0` 时取 64，最大为 1,048,576。同一过滤器的回调共享队列并使用同一有效深度。WS 发布和 RPC 忽略深度。新版 WS 客户端通过 opcode 5 请求丢旧，旧 Broker 需要先升级。
 
-KeepLast 限制**服务端待发送队列，以及 Rust WS Node 中等待回调的队列**。每个订阅过滤器在这两个阶段各有自己的队列，前缀过滤器匹配的所有 Topic 共用该过滤器的队列。已进入网络缓冲或正在执行回调的消息会继续处理。原生 ZMQ 队列使用 HWM，消息传递仍为尽力而为。WS 发布和 RPC 忽略深度参数。
+`GET /api/v1/subscriptions` 和控制台 Topics 页显示 WS 订阅积压及丢弃数。API 的 `dequeued` 统计服务端从队列取出的次数。`totalDropped` 包括已关闭订阅，Broker 重启时归零。此统计范围为 WS 服务端队列。见[按需构建](build-profiles.md)。
 
-启用 `ws` 即提供 `GET /api/v1/subscriptions`，无需控制台。控制台 Topics 页显示 KeepLast 深度、待发送数量/容量和溢出丢弃数。API 还返回 `received`（入队尝试）、`dequeued`（取出发送，不代表送达）。取消后移除该行；`totalDropped` 保留已关闭订阅的溢出计数，服务端重启归零。统计不包含原生传输丢包，读取期间队列仍可变化。
+#### 状态话题与 `transient_local`
 
-兼容说明：这里修正了原先“满时丢新”的行为。服务端继续接受原始 V3 opcode 1 布局，但现在执行 KeepLast/丢旧语义。新版 Rust/TypeScript WS 客户端使用 opcode 5 显式请求丢旧，避免旧服务端悄悄执行丢新；请先升级 broker。协议层保留策略 0 和 2 的兼容解码，公共 QoS 接口统一为 KeepLast(N)。构建选项见[按需构建](build-profiles.md)。
+在原生发布和订阅两端配置 `QosProfile::keep_last(N).transient_local()`。发布者在其生命周期内保留最后一条样本，即使发布时没有订阅者。晚加入或重连的订阅者可以收到这个样本，之后继续接收更新。两端使用完整的 Topic 名称进行精确匹配。普通订阅仍可接收启用状态保留的发布者后续发布的样本。重连时可再次收到同一份状态。
+
+首版每个发布者保留一份内存样本，独立于订阅的 KeepLast 深度。适合设备配置、地图元数据和低频定位状态。发布者关闭后该样本随之释放。原生 TCP、IPC 和 inproc 节点支持该选项，WebSocket 节点目前使用普通实时订阅。
 
 ```rust
 use robot_bus::{Node, QosProfile, Publisher, HighWaterMark};
 
 let mut node = Node::new("pilot");
+let state_qos = QosProfile::keep_last(1).transient_local();
+let publisher = node.create_publisher_raw_with_qos("/robot1/map_state", state_qos)?;
+publisher.publish(b"map-ready")?;
+node.create_subscription_raw_with_qos(
+    "/robot1/map_state", state_qos, std::sync::Arc::new(|_state| {}), None,
+)?;
+
 let pub_ = node.create_publisher_with_qos::<robot_bus::sensor_msgs::msg::v1::Imu>(
     "/robot1/imu",
     QosProfile::keep_last(10),

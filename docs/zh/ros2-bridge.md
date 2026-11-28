@@ -35,7 +35,7 @@ cargo run --bin robot_bus_broker    # 或 python -m robot_bus.broker
 
 `ros2_available()`：Python 看能否 `import rclpy`；C++ 看是否以 `ROBOT_BUS_HAS_ROS2` 链了 `robot_bus_ros2_bridge`；Rust FFI / 默认 C ABI 恒为 false（桥不在 FFI 里）。
 
-两端都写 **名字 + `TopicQos`**。常用命名预设：`default()`（C++ 为 `ros_default()`，因为 `default` 是关键字）、`sensor_data()`、`latched()`、`bus()`。自定义深度仍用 `keep_last(n).reliable()` / `.best_effort()`。ROS 端 reliable / best-effort 都行；**bus 端只能 `.best_effort()`**（没有 DDS reliability，depth 只变成 HWM），因此 `default()` / `latched()` 不能写在 bus 端。`default()` 对应 ROS `qos_profile_default` / `ServicesQoS`，**不是** ROS `SystemDefaultsQoS`。
+两端都写 **名字 + `TopicQos`**。常用命名预设：`default()`（C++ 为 `ros_default()`，因为 `default` 是关键字）、`sensor_data()`、`latched()`、`bus()`。自定义深度仍用 `keep_last(n).reliable()` / `.best_effort()`。ROS 端 reliable / best-effort 都行；**bus 端只能 `.best_effort()`**（采用尽力而为的投递），因此 `default()` / `latched()` 不能写在 bus 端。`default()` 对应 ROS `qos_profile_default` / `ServicesQoS`，**不是** ROS `SystemDefaultsQoS`。
 
 ---
 
@@ -121,7 +121,7 @@ bridge.spin();
 .add()
 ```
 
-相机 / lidar 对上 ROS `SensorDataQoS` 时用 `TopicQos.sensor_data()`（KeepLast 5, best effort）。bus 端也可以写 `TopicQos.bus()`，或同样用 `sensor_data()` 让 HWM=5。
+相机 / lidar 对上 ROS `SensorDataQoS` 时用 `TopicQos.sensor_data()`（KeepLast 5, best effort）。bus 端也可以写 `TopicQos.bus()`，或同样用 `sensor_data()` 设置深度为 5。
 
 `/tf_static` 这类 latch 话题用 `TopicQos.latched()`（KeepLast 1, reliable, transient local），否则默认 volatile 订不到已经发过的样本：
 
@@ -130,7 +130,7 @@ bridge.spin();
 .to_bus("/tf_static", TopicQos.bus())
 ```
 
-自定义深度仍可手写 `keep_last(n)…`，两端可以混用预设和手写。C++ 若要把 latch 改回 volatile，方法名是 `.durability_volatile()`（`volatile` 是关键字）。bus 端没有 DDS durability，写了也会被忽略。
+自定义深度仍可手写 `keep_last(n)…`，两端可以混用预设和手写。C++ 若要把 latch 改回 volatile，方法名是 `.durability_volatile()`（`volatile` 是关键字）。当前桥接路由只在 ROS 端应用 durability。原生应用可独立使用 [Topic 状态保留](rust-api.md#高水位hwm与-qos)。
 
 Topic mapper 三语言同一套目录（Humble/Jazzy **发行版常见自带**接口包，约 125 个类型）：Rust `src/ros2_bridge/mappers/`，Python `from robot_bus.ros2_bridge import GeometryMsgsPoseStampedMapper`，C++ `#include <robot_bus/ros2_bridge.hpp>`（伞头文件 `ros2_bridge_topic_mappers.hpp`）。包集合见 `scripts/generate_topic_mappers.py` 的 `CORE_BRIDGE_PACKAGES`。改 proto 后跑 `just gen-topic-mappers`。挂路由直接 `.mapper(GeometryMsgsPoseStampedMapper())` / `.mapper(GeometryMsgsPoseStampedMapper{})`。
 
@@ -572,7 +572,7 @@ class MyFibonacciMapper:
 安装 ROS 2 Humble 和构建工具（Rust、Protobuf 编译器 35.1、C/C++ 工具链及 pkg-config）后，在仓库根目录执行：
 
 ```bash
-sudo apt-get install libzmq3-dev ros-humble-rosidl-generator-rs \
+sudo apt-get install ros-humble-rosidl-generator-rs \
   ros-humble-example-interfaces ros-humble-test-msgs
 source /opt/ros/humble/setup.bash
 python3 scripts/generate_rust_msgs.py

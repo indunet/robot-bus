@@ -293,6 +293,8 @@ node.start();
 
 No separate recent/latest options are needed. Omitted/nonpositive depth uses 64. Same-filter callbacks must agree on effective depth. Filters use separate streams so another topic cannot evict a filter's last value through automatic coalescing. Register subscriptions before `start()`.
 
-KeepLast covers pending server messages per filter, not network buffers or client callbacks, and does not guarantee delivery. A prefix filter shares one queue across its matched topics. Native ZMQ currently uses depth as HWM only, without guaranteed oldest-message replacement. Updated WS clients explicitly request drop-oldest (opcode 5); upgrade the broker first.
+Browser KeepLast bounds the server’s unsent queue per filter. A prefix filter shares its queue across matching topics. Current WS clients use opcode 5. Upgrade the broker first.
+
+The native Node.js client also applies KeepLast to samples awaiting a JS callback. Pass `{ depth: 1, transientLocal: true }` on both native endpoints to get current state when joining or reconnecting.
 
 The console Topics tab and `GET /api/v1/subscriptions` expose pending/capacity and overflow drops. See the [Rust QoS guide](rust-api.md#high-water-mark-hwm-and-qos) for scope and [build profiles](build-profiles.md) for headless servers.

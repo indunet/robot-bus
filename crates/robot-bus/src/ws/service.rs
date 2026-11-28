@@ -5,7 +5,9 @@ use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 use tokio::sync::{OwnedSemaphorePermit, Semaphore};
 
-use zmq::Context;
+use crate::zmq::Context;
+#[cfg(test)]
+use crate::zmq;
 
 use crate::errors::BusError;
 use crate::service_bus::ServiceClient;
@@ -198,7 +200,7 @@ mod tests {
 
     fn handler() -> (WsServiceHandler, zmq::Socket) {
         let context = Context::new();
-        let server = context.socket(zmq::REP).unwrap();
+        let server = context.socket(zmq::SocketType::REP).unwrap();
         server.set_linger(0).unwrap();
         server.bind("tcp://127.0.0.1:*").unwrap();
         let endpoint = server.get_last_endpoint().unwrap().unwrap();

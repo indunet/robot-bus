@@ -50,6 +50,7 @@ struct WorkerPoolInner {
     tx: Mutex<Option<SyncSender<Job>>>,
     capacity: usize,
     admission_limit: usize,
+    worker_count: usize,
     counters: Arc<Counters>,
     threads: Mutex<Vec<JoinHandle<()>>>,
 }
@@ -119,10 +120,15 @@ impl WorkerPool {
                 tx: Mutex::new(Some(tx)),
                 capacity,
                 admission_limit,
+                worker_count: n,
                 counters: Arc::new(Counters::default()),
                 threads: Mutex::new(threads),
             }),
         }
+    }
+
+    pub(crate) fn worker_count(&self) -> usize {
+        self.inner.worker_count
     }
 
     pub(crate) fn downgrade(&self) -> WeakWorkerPool {

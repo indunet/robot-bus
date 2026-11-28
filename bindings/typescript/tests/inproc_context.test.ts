@@ -67,6 +67,53 @@ describe("inproc shared Context", () => {
     }
   });
 
+  it("replays state and keeps the newest samples while JavaScript is busy", async (t) => {
+    const native = await loadNativeOrSkip(t, ["Context", "RobotBusBroker", "Node"]);
+    if (!native) {
+      return;
+    }
+
+    const ctx = new native.Context();
+    const broker = native.RobotBusBroker.start(
+      { ...ephemeralTcp, tcpOnly: false, noConsole: true }, ctx,
+    );
+    const writer = native.Node.inprocWithContext(ctx, "qos-writer");
+    const reader = native.Node.inprocWithContext(ctx, "qos-reader");
+    try {
+      const state = writer.createPublisher("/state", 2, true);
+      state.publish(Buffer.from("current"));
+      const replayed: string[] = [];
+      reader.createSubscription("/state", (payload) => {
+        replayed.push(payload.toString());
+      }, undefined, 2, true);
+
+      const burst = writer.createPublisher("/burst");
+      const seen: number[] = [];
+      reader.createSubscription("/burst", (payload) => {
+        seen.push(payload[0]);
+      }, undefined, 2);
+      reader.start();
+      const deadline = Date.now() + 3000;
+      while (replayed.length === 0 && Date.now() < deadline) {
+        await sleep(20);
+      }
+      assert.deepEqual(replayed, ["current"]);
+
+      // Keep the JS event loop busy while the native reader keeps receiving.
+      const pause = new Int32Array(new SharedArrayBuffer(4));
+      for (let n = 1; n <= 10; ++n) {
+        burst.publish(Buffer.from([n]));
+        Atomics.wait(pause, 0, 0, 5);
+      }
+      Atomics.wait(pause, 0, 0, 50);
+      await sleep(50);
+      assert.deepEqual(seen, [9, 10]);
+    } finally {
+      reader.stop();
+      broker.stop();
+    }
+  });
+
   it("returns an action handle and streams feedback", async (t) => {
     const native = await loadNativeOrSkip(t, ["Context", "RobotBusBroker", "Node"]);
     if (!native) {

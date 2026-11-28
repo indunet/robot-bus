@@ -3,7 +3,7 @@
 use anyhow::{Context, Result};
 use std::collections::{HashMap, VecDeque};
 use std::time::{Duration, Instant};
-use zmq::Socket;
+use crate::zmq::Socket;
 
 use super::super::broker::{
     ERR_NO_WORKER, ERR_WORKER_DIED, InFlightEntry, InFlightTable, WorkerRegistry,

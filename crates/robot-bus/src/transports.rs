@@ -3,7 +3,7 @@
 use anyhow::{Context, Result, bail};
 use std::fs;
 use std::path::{Path, PathBuf};
-use zmq::Socket;
+use crate::zmq::{self, Socket};
 
 /// Legacy fixed TCP ports for client helpers when not using HTTP discover.
 /// Distinct from [`DEFAULT_API_PORT`] (console / WS / discover). Prefer discover / explicit binds.
@@ -157,7 +157,7 @@ pub fn bind_all(
 
 /// Whether libzmq and the host runtime support the IPC transport.
 pub fn ipc_supported() -> bool {
-    if zmq::has("ipc") != Some(true) {
+    if !zmq::has_ipc() {
         return false;
     }
     #[cfg(windows)]

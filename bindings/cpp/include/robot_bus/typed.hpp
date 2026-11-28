@@ -69,9 +69,10 @@ class TypedTopicPublisher {
 
 template <typename Msg>
 [[nodiscard]] TypedTopicPublisher<Msg> create_publisher(Node &node, const char *topic,
-                                                        int32_t qos_depth = 0) {
-  if (qos_depth > 0) {
-    return TypedTopicPublisher<Msg>(node.create_publisher(topic, qos_depth));
+                                                        int32_t qos_depth = 0,
+                                                        bool transient_local = false) {
+  if (qos_depth > 0 || transient_local) {
+    return TypedTopicPublisher<Msg>(node.create_publisher(topic, qos_depth, transient_local));
   }
   return TypedTopicPublisher<Msg>(node.create_publisher(topic));
 }
@@ -79,7 +80,8 @@ template <typename Msg>
 template <typename Msg>
 [[nodiscard]] SubscriptionHandle create_subscription(
     Node &node, const char *topic, std::function<void(const Msg &)> callback,
-    const CallbackGroup *group = nullptr, int32_t qos_depth = 0) {
+    const CallbackGroup *group = nullptr, int32_t qos_depth = 0,
+    bool transient_local = false) {
   return node.create_subscription(
       topic,
       [cb = std::move(callback)](BytesView payload) {
@@ -89,7 +91,7 @@ template <typename Msg>
         }
         cb(msg);
       },
-      group, qos_depth);
+      group, qos_depth, transient_local);
 }
 
 template <typename Req, typename Resp>

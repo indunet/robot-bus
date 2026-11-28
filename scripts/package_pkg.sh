@@ -64,9 +64,10 @@ fix_install_names() {
 
 shopt -s nullglob
 for f in "$PAYLOAD/usr/local/lib/"*.dylib "$PAYLOAD/usr/local/bin/"*; do
-  [[ -f "$f" ]] || continue
+  [[ -f "$f" && ! -L "$f" ]] || continue
   file "$f" | grep -q 'Mach-O' || continue
   fix_install_names "$f"
+  codesign --force --sign - "$f"
 done
 shopt -u nullglob
 

@@ -10,7 +10,7 @@ AAR 直接编译 [`bindings/java`](../../bindings/java/src/main/java/org/indunet
 
 ```bash
 # Maven Central (when published)
-# implementation("org.indunet:robot-bus-android:3.2.1")
+# implementation("org.indunet:robot-bus-android:3.3.0")
 
 # 本地：
 just gen-android    # → bindings/android/generated/
@@ -38,7 +38,7 @@ class App : Application() {
 ```kotlin
 // build.gradle.kts
 dependencies {
-  implementation("org.indunet:robot-bus-android:3.2.1")
+  implementation("org.indunet:robot-bus-android:3.3.0")
 }
 ```
 
@@ -80,6 +80,8 @@ Broker().use { _ ->
   }
 }
 ```
+
+Android 使用同一套原生 Topic QoS。可通过 `qosDepth` 控制等待回调的数据量，或在两端传 `transientLocal=true` 为晚加入订阅者补发状态。见 [Java Topic 示例](java-api.md)。
 
 ### HTTP发现（填地址，不选传输）
 

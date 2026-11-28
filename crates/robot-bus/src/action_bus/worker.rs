@@ -4,7 +4,7 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use uuid::Uuid;
-use zmq::{Context, Socket, SocketType};
+use crate::zmq::{self, Context, Socket, SocketType};
 
 use crate::errors::{BusError, Result};
 use crate::transports;

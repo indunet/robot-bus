@@ -146,11 +146,15 @@ public final class Node implements AutoCloseable {
 
     /** {@code qosDepth <= 0} keeps the default HWM; {@code qosDepth > 0} sets KeepLast depth. */
     public TopicPublisher createPublisher(String topic, int qosDepth) {
-        return new TopicPublisher(
-                Errors.checkPtr(
-                        RobotBusC.Holder.INSTANCE.robot_bus_node_create_publisher_with_qos(
-                                ptr, topic, qosDepth),
-                        "create_publisher"));
+        return createPublisher(topic, qosDepth, false);
+    }
+
+    public TopicPublisher createPublisher(String topic, int qosDepth, boolean transientLocal) {
+        RobotBusC api = RobotBusC.Holder.INSTANCE;
+        Pointer handle = transientLocal
+                ? api.robot_bus_node_create_publisher_with_topic_qos(ptr, topic, qosDepth, 1)
+                : api.robot_bus_node_create_publisher_with_qos(ptr, topic, qosDepth);
+        return new TopicPublisher(Errors.checkPtr(handle, "create_publisher"));
     }
 
     /** Typed publisher: {@code publish(Message)} with automatic protobuf encode. */
@@ -160,10 +164,15 @@ public final class Node implements AutoCloseable {
 
     public <T extends MessageLite> TypedTopicPublisher<T> createPublisher(
             String topic, Class<T> msgType, int qosDepth) {
+        return createPublisher(topic, msgType, qosDepth, false);
+    }
+
+    public <T extends MessageLite> TypedTopicPublisher<T> createPublisher(
+            String topic, Class<T> msgType, int qosDepth, boolean transientLocal) {
         ProtoCodec.requireMessageType(msgType, "msgType");
         @SuppressWarnings("unchecked")
         Class<T> typed = (Class<T>) msgType;
-        return new TypedTopicPublisher<>(createPublisher(topic, qosDepth), typed);
+        return new TypedTopicPublisher<>(createPublisher(topic, qosDepth, transientLocal), typed);
     }
 
     public SubscriptionHandle createSubscription(String topic, MsgCallback callback) {
@@ -176,6 +185,12 @@ public final class Node implements AutoCloseable {
 
     public SubscriptionHandle createSubscription(
             String topic, MsgCallback callback, CallbackGroup group, int qosDepth) {
+        return createSubscription(topic, callback, group, qosDepth, false);
+    }
+
+    public SubscriptionHandle createSubscription(
+            String topic, MsgCallback callback, CallbackGroup group, int qosDepth,
+            boolean transientLocal) {
         RobotBusC.MsgCb cb =
                 (data, len, user) -> {
                     byte[] bytes =
@@ -183,12 +198,13 @@ public final class Node implements AutoCloseable {
                     callback.onMessage(bytes);
                 };
         msgCallbacks.add(cb);
-        return new SubscriptionHandle(
-                ptr,
-                Errors.checkPtr(
-                        RobotBusC.Holder.INSTANCE.robot_bus_node_create_subscription_with_qos(
-                                ptr, topic, cb, null, group != null ? group.raw() : null, qosDepth),
-                        "create_subscription"));
+        RobotBusC api = RobotBusC.Holder.INSTANCE;
+        Pointer rawGroup = group != null ? group.raw() : null;
+        Pointer handle = transientLocal
+                ? api.robot_bus_node_create_subscription_with_topic_qos(
+                        ptr, topic, cb, null, rawGroup, qosDepth, 1)
+                : api.robot_bus_node_create_subscription_with_qos(ptr, topic, cb, null, rawGroup, qosDepth);
+        return new SubscriptionHandle(ptr, Errors.checkPtr(handle, "create_subscription"));
     }
 
     /** Typed subscription: callback receives a decoded protobuf message. */
@@ -208,6 +224,16 @@ public final class Node implements AutoCloseable {
             Class<T> msgType,
             CallbackGroup group,
             int qosDepth) {
+        return createSubscription(topic, callback, msgType, group, qosDepth, false);
+    }
+
+    public <T extends MessageLite> SubscriptionHandle createSubscription(
+            String topic,
+            TypedMsgCallback<T> callback,
+            Class<T> msgType,
+            CallbackGroup group,
+            int qosDepth,
+            boolean transientLocal) {
         ProtoCodec.requireMessageType(msgType, "msgType");
         @SuppressWarnings("unchecked")
         Class<T> typed = (Class<T>) msgType;
@@ -221,7 +247,8 @@ public final class Node implements AutoCloseable {
                     callback.onMessage(msg);
                 },
                 group,
-                qosDepth);
+                qosDepth,
+                transientLocal);
     }
 
     public TimerHandle createTimer(double periodSecs, TimerCallback callback) {

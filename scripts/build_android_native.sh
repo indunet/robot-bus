@@ -6,14 +6,11 @@
 #   - ANDROID_HOME or ANDROID_SDK_ROOT
 #   - NDK (r26 recommended): sdkmanager "ndk;26.3.11579264"
 #   - rustup targets + cargo-ndk
-#   - cmake, curl, unzip
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 NATIVE_CRATE="$ROOT/bindings/cpp/native"
 JNI_OUT="$ROOT/bindings/android/src/main/jniLibs"
-DEPS="$ROOT/bindings/android/.android-native-deps"
-LIBZMQ_VER="${LIBZMQ_VER:-4.3.5}"
 API_LEVEL="${ANDROID_API_LEVEL:-24}"
 
 ANDROID_HOME="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-}}"
@@ -71,69 +68,11 @@ fi
 
 rustup target add aarch64-linux-android armv7-linux-androideabi x86_64-linux-android
 
-mkdir -p "$DEPS"
-LIBZMQ_SRC="$DEPS/libzmq-$LIBZMQ_VER"
-if [[ ! -d "$LIBZMQ_SRC" ]]; then
-  echo "Fetching libzmq $LIBZMQ_VER..."
-  curl -fsSL "https://github.com/zeromq/libzmq/releases/download/v${LIBZMQ_VER}/zeromq-${LIBZMQ_VER}.tar.gz" \
-    | tar -xz -C "$DEPS"
-  mv "$DEPS/zeromq-$LIBZMQ_VER" "$LIBZMQ_SRC"
-fi
-
-# ABI -> rust triple, clang prefix, android abi dir
 build_abi() {
   local abi="$1"
-  local triple="$2"
-  local clang_triple="$3"
-  local zmq_prefix="$DEPS/libzmq-install/$abi"
-  local build_dir="$DEPS/libzmq-build/$abi"
+  local clang_triple="$2"
 
-  mkdir -p "$build_dir" "$zmq_prefix"
-  if [[ ! -f "$zmq_prefix/lib/libzmq.a" && ! -f "$zmq_prefix/lib/libzmq.so" ]]; then
-    echo "=== Building libzmq for $abi ==="
-    cmake -S "$LIBZMQ_SRC" -B "$build_dir" \
-      -DCMAKE_TOOLCHAIN_FILE="$ANDROID_NDK_HOME/build/cmake/android.toolchain.cmake" \
-      -DANDROID_ABI="$abi" \
-      -DANDROID_PLATFORM="android-$API_LEVEL" \
-      -DANDROID_STL=c++_shared \
-      -DCMAKE_BUILD_TYPE=Release \
-      -DCMAKE_INSTALL_PREFIX="$zmq_prefix" \
-      -DCMAKE_POLICY_VERSION_MINIMUM=3.5 \
-      -DBUILD_SHARED=OFF \
-      -DBUILD_STATIC=ON \
-      -DBUILD_TESTS=OFF \
-      -DWITH_PERF_TOOL=OFF \
-      -DWITH_DOCS=OFF \
-      -DENABLE_CPACK=OFF \
-      -DENABLE_DRAFTS=OFF
-    cmake --build "$build_dir" -j"$(sysctl -n hw.ncpu 2>/dev/null || nproc)"
-    cmake --install "$build_dir"
-  else
-    echo "=== Reusing libzmq for $abi at $zmq_prefix ==="
-  fi
-
-  mkdir -p "$zmq_prefix/lib/pkgconfig"
-  cat >"$zmq_prefix/lib/pkgconfig/libzmq.pc" <<EOF
-prefix=$zmq_prefix
-exec_prefix=\${prefix}
-libdir=\${prefix}/lib
-includedir=\${prefix}/include
-
-Name: libzmq
-Description: ZeroMQ library (Android static)
-Version: $LIBZMQ_VER
-Libs: -L\${libdir} -lzmq
-Libs.private: -lc++_shared -lm
-Cflags: -I\${includedir}
-EOF
-
-  echo "=== Building robot_bus_c for $abi ($triple) ==="
-  export PKG_CONFIG_ALLOW_CROSS=1
-  export PKG_CONFIG_PATH="$zmq_prefix/lib/pkgconfig:${PKG_CONFIG_PATH:-}"
-  export ZMQ_LIB_DIR="$zmq_prefix/lib"
-  export ZMQ_INCLUDE_DIR="$zmq_prefix/include"
-  export LIBZMQ_PREFIX="$zmq_prefix"
-
+  echo "=== Building robot_bus_c for $abi ==="
   (
     cd "$NATIVE_CRATE"
     # Ensure Rust msgs exist for dependent crate features
@@ -150,6 +89,13 @@ EOF
     exit 1
   fi
 
+  local dynamic
+  dynamic="$("$TOOLCHAIN/bin/llvm-readelf" -d "$JNI_OUT/$abi/librobot_bus_c.so")"
+  if [[ "$dynamic" == *libzmq.so* ]]; then
+    echo "Expected statically linked libzmq in robot_bus_c for $abi" >&2
+    exit 1
+  fi
+
   # Bundle c++_shared if linked dynamically (common with NDK STL)
   local cpp_shared="$TOOLCHAIN/sysroot/usr/lib/$clang_triple/libc++_shared.so"
   if [[ ! -f "$cpp_shared" ]]; then
@@ -161,9 +107,9 @@ EOF
 }
 
 mkdir -p "$JNI_OUT"
-build_abi "arm64-v8a" "aarch64-linux-android" "aarch64-linux-android"
-build_abi "armeabi-v7a" "armv7-linux-androideabi" "arm-linux-androideabi"
-build_abi "x86_64" "x86_64-linux-android" "x86_64-linux-android"
+build_abi "arm64-v8a" "aarch64-linux-android"
+build_abi "armeabi-v7a" "arm-linux-androideabi"
+build_abi "x86_64" "x86_64-linux-android"
 
 echo "Android jniLibs ready under $JNI_OUT"
 find "$JNI_OUT" -type f | sort

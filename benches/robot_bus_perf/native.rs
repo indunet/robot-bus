@@ -6,7 +6,7 @@ use std::time::{Duration, Instant};
 
 use crate::pacing::{TrialReceiver, WARMUP, make_payload, measure_pubsub, msg_hwm, rpc_warmup};
 use crate::support::{LatencyStats, ScenarioResult};
-use robot_bus::{Context, HighWaterMark, Node, NodeOptions, Publisher};
+use robot_bus::{Context, HighWaterMark, Node, NodeOptions, Publisher, QosProfile};
 
 pub fn bench_pubsub(
     ctx: &Context,
@@ -14,6 +14,9 @@ pub fn bench_pubsub(
     options: &NodeOptions,
     cdr: bool,
 ) -> ScenarioResult {
+    if std::env::var("ROBOT_BUS_PERF_TOPIC_QOS").as_deref() == Ok("transient-local") {
+        return bench_retained(ctx, transport, options, cdr);
+    }
     let scenario = "message pub/sub";
     let sub = Node::with_context_options(ctx, format!("perf-sub-{transport}"), options.clone());
     if !sub.wait_for_broker(Some(Duration::from_secs(5))) {
@@ -47,6 +50,85 @@ pub fn bench_pubsub(
         Duration::from_millis(250),
         TrialReceiver::with_cdr(cdr),
     )
+}
+
+fn bench_retained(
+    ctx: &Context,
+    transport: &str,
+    options: &NodeOptions,
+    cdr: bool,
+) -> ScenarioResult {
+    let scenario = "transient-local topic";
+    let topic = format!("perf/{transport}/state");
+    let qos = QosProfile::keep_last(msg_hwm()).transient_local();
+    let mut producer = Node::with_context_options(ctx, "perf-state-publisher", options.clone());
+    let publisher = match producer.create_publisher_raw_with_qos(&topic, qos) {
+        Ok(publisher) => publisher,
+        Err(err) => return ScenarioResult::skipped(transport, scenario, err.to_string()),
+    };
+    // This write happens before the subscriber exists.
+    let snapshot = b"retained probe";
+    publisher.publish(snapshot).expect("publish retained probe");
+    let mut sub = Node::with_context_options(ctx, "perf-state-subscriber", options.clone());
+    let hwm = HighWaterMark::new(msg_hwm(), msg_hwm());
+    sub.set_stream_hwm(hwm).expect("set stream HWM");
+    // Connect the reader once so the replay measurement reflects subscription
+    // propagation instead of native Node's initial socket setup delay.
+    let warmup = sub
+        .create_subscription_raw("perf/state/connect", Arc::new(|_| {}), None)
+        .expect("connect state subscriber");
+    sub.destroy_subscription(warmup)
+        .expect("remove warmup subscription");
+    let receiver = Arc::new(TrialReceiver::with_cdr(cdr));
+    let (tx, rx) = std::sync::mpsc::channel();
+    let started = Instant::now();
+    let handle = sub
+        .create_subscription_raw_with_qos(
+            &topic,
+            qos,
+            Arc::new({
+                let receiver = Arc::clone(&receiver);
+                move |payload| {
+                    if payload == snapshot {
+                        let _ = tx.send(started.elapsed());
+                    } else {
+                        receiver.receive(payload);
+                    }
+                }
+            }),
+            None,
+        )
+        .expect("subscribe to retained topic");
+    let elapsed = loop {
+        if let Ok(elapsed) = rx.try_recv() {
+            break elapsed;
+        }
+        if started.elapsed() > Duration::from_secs(4) {
+            return ScenarioResult::skipped(transport, scenario, "late-join replay timed out");
+        }
+        sub.spin_once(Some(Duration::from_millis(50)))
+            .expect("spin for retained probe");
+    };
+    println!(
+        "RAW replay {}",
+        serde_json::json!({"transport": transport, "subscribe_to_replay_us": elapsed.as_secs_f64() * 1e6})
+    );
+    let shutdown = sub.shutdown_handle().expect("shutdown handle");
+    let worker = thread::spawn({
+        let transport = transport.to_string();
+        move || {
+            let result = measure_pubsub(&transport, scenario, &receiver, |payload| {
+                publisher.publish(payload)
+            });
+            shutdown.shutdown();
+            result
+        }
+    });
+    sub.spin().expect("spin retained subscriber");
+    let result = worker.join().expect("state publisher thread");
+    sub.destroy_subscription(handle)
+        .expect("destroy subscription");
+    result
 }
 
 /// Pub on `publisher` (one broker) and sub on `sub` (possibly another broker).

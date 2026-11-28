@@ -178,11 +178,18 @@ interface RobotBusC extends Library {
 
     Pointer robot_bus_node_create_publisher_with_qos(Pointer n, String topic, int depth);
 
+    Pointer robot_bus_node_create_publisher_with_topic_qos(
+            Pointer n, String topic, int depth, int transientLocal);
+
     Pointer robot_bus_node_create_subscription(
             Pointer n, String topic, MsgCb callback, Pointer user, Pointer group);
 
     Pointer robot_bus_node_create_subscription_with_qos(
             Pointer n, String topic, MsgCb callback, Pointer user, Pointer group, int depth);
+
+    Pointer robot_bus_node_create_subscription_with_topic_qos(
+            Pointer n, String topic, MsgCb cb, Pointer user, Pointer group, int depth,
+            int transientLocal);
 
     int robot_bus_node_destroy_subscription(Pointer n, Pointer handle);
 

@@ -345,9 +345,7 @@ bundle_macos_deps() {
     if ! otool -l "$f" | grep -F "path $rpath (offset " >/dev/null; then
       install_name_tool -add_rpath "$rpath" "$f"
     fi
-    if command -v codesign >/dev/null 2>&1; then
-      codesign --force --sign - "$f" >/dev/null || echo "warning: codesign failed for $f" >&2
-    fi
+    codesign --force --sign - "$f" >/dev/null
   done < <(find "$WORK/lib" "$WORK/bin" -type f)
 }
 

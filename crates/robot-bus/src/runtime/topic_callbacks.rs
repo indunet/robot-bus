@@ -11,6 +11,16 @@ pub fn for_each_matching_callback(
     topic_callbacks: &HashMap<String, Vec<SubscriptionCallback>>,
     mut f: impl FnMut(&SubscriptionCallback),
 ) {
+    if topic_callbacks.len() == 1 {
+        if let Some((filter, entries)) = topic_callbacks.iter().next() {
+            if let [entry] = entries.as_slice() {
+                if topic == filter || (!filter.is_empty() && topic.starts_with(filter)) {
+                    f(entry);
+                }
+                return;
+            }
+        }
+    }
     let mut seen = HashSet::new();
 
     if let Some(exact) = topic_callbacks.get(topic) {

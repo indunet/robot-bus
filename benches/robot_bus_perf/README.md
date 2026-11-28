@@ -69,3 +69,7 @@ ROBOT_BUS_PERF_ONLY=local cargo run --release --bin robot_bus_perf --features ws
 - Message HWM=2048（仅 bench）；与 trial长度配合，避免深队列把过载藏掉。
 - 标准输出中的 `RAW trial`、`RAW latency` 和 `RAW result` 使用 JSON。保留完整输出可核对每档的唯一接收数、跨轮消息、重复、发送与排空边界，以及单条延迟样本。
 - 指标为单机本机回环，机器相关，不作为 CI门槛。
+
+## Stateful native topics
+
+Run `ROBOT_BUS_PERF_ONLY=cdr-topic ROBOT_BUS_PERF_TOPIC_QOS=transient-local cargo run --release -p robot-bus-perf` to benchmark the native stateful publisher and subscription over TCP, IPC, and inproc. `RAW replay` reports registration-to-first-callback time for a sample written before the subscription, with the underlying subscriber already connected. `RAW trial` reports the paced live update runs. The default path measures ordinary topics for comparison.

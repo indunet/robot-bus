@@ -18,7 +18,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::SyncSender;
 use std::thread;
 use std::time::Duration;
-use zmq::{Context as ZmqContext, Socket, SocketType};
+use crate::zmq::{self, Context as ZmqContext, Socket, SocketType};
 
 const PROXY_CONTROL: &str = "inproc://robot_bus/message_bus/proxy-ctl";
 const PROXY_CAPTURE: &str = "inproc://robot_bus/message_bus/proxy-capture";

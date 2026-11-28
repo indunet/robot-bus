@@ -26,6 +26,15 @@ pub(crate) struct PyActionGoalContext {
     inner: ActionGoalContext,
 }
 
+fn topic_qos(depth: Option<i32>, transient_local: bool) -> Option<QosProfile> {
+    let qos = depth.filter(|d| *d > 0).map(QosProfile::keep_last);
+    if transient_local {
+        Some(qos.unwrap_or_default().transient_local())
+    } else {
+        qos
+    }
+}
+
 #[pymethods]
 impl PyActionGoalContext {
     /// Bus goal id for this execution.
@@ -339,16 +348,15 @@ impl PyNode {
         }
     }
 
-    #[pyo3(signature = (topic, qos_depth=None))]
+    #[pyo3(signature = (topic, qos_depth=None, *, transient_local=false))]
     fn create_publisher(
         &mut self,
         topic: &str,
         qos_depth: Option<i32>,
+        transient_local: bool,
     ) -> PyResult<PyTopicPublisher> {
-        let inner = match qos_depth.filter(|d| *d > 0) {
-            Some(depth) => self
-                .inner
-                .create_publisher_raw_with_qos(topic, QosProfile::keep_last(depth)),
+        let inner = match topic_qos(qos_depth, transient_local) {
+            Some(qos) => self.inner.create_publisher_raw_with_qos(topic, qos),
             None => self.inner.create_publisher_raw(topic),
         }
         .map_err(bus_err)?;
@@ -356,13 +364,14 @@ impl PyNode {
     }
 
     /// Register a subscription callback `callback(payload: bytes)`.
-    #[pyo3(signature = (topic, callback, callback_group=None, qos_depth=None))]
+    #[pyo3(signature = (topic, callback, callback_group=None, qos_depth=None, *, transient_local=false))]
     fn create_subscription(
         slf: &Bound<'_, Self>,
         topic: &str,
         callback: Py<PyAny>,
         callback_group: Option<&PyCallbackGroup>,
         qos_depth: Option<i32>,
+        transient_local: bool,
     ) -> PyResult<PySubscriptionHandle> {
         let handle = {
             let mut this = slf.borrow_mut();
@@ -375,13 +384,10 @@ impl PyNode {
                 });
             });
             let group = callback_group.map(|g| &g.inner);
-            match qos_depth.filter(|d| *d > 0) {
-                Some(depth) => this.inner.create_subscription_raw_with_qos(
-                    topic,
-                    QosProfile::keep_last(depth),
-                    cb,
-                    group,
-                ),
+            match topic_qos(qos_depth, transient_local) {
+                Some(qos) => this
+                    .inner
+                    .create_subscription_raw_with_qos(topic, qos, cb, group),
                 None => this.inner.create_subscription_raw(topic, cb, group),
             }
             .map_err(bus_err)?

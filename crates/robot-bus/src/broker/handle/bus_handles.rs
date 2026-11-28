@@ -6,7 +6,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{Receiver, RecvTimeoutError};
 use std::thread::{self, JoinHandle};
 use std::time::Duration;
-use zmq::Context as ZmqContext;
+use crate::zmq::Context as ZmqContext;
 
 use super::super::action_bus::{self, ActionBusConfig, ActionMetrics};
 use super::super::message_bus::{self, BusConfig, MessageMetrics};

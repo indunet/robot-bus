@@ -21,7 +21,7 @@ use std::collections::HashSet;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Instant;
-use zmq::{Context as ZmqContext, Socket, SocketType};
+use crate::zmq::{self, Context as ZmqContext, Socket, SocketType};
 
 use self::link::{
     CMD_DATA, CMD_HELLO, CMD_RESYNC, CMD_SET, CMD_SUB, CMD_UNSUB, CMD_WELCOME, DEFER,
@@ -305,7 +305,7 @@ impl Forwarder {
         frame.push(u8::from(wanted));
         frame.extend_from_slice(topic.as_bytes());
         self.xsub
-            .send(frame, 0)
+            .send(&frame, 0)
             .context("update XSUB subscription")?;
         if wanted {
             self.upstream.insert(topic.to_string());
@@ -738,7 +738,8 @@ fn parse_subscription(frames: &[Vec<u8>]) -> Option<(String, bool)> {
 
 /// Console / status namespace stays per-broker; do not federate `/robot_bus*`.
 fn should_federate(topic: &str) -> bool {
-    !console_topics::is_reserved_name(topic)
+    let logical = crate::runtime::retained_topic::internal_source_topic(topic).unwrap_or(topic);
+    !console_topics::is_reserved_name(logical)
 }
 
 fn hop_contains(hops: &str, broker_id: &str) -> bool {

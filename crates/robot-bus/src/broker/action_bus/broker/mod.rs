@@ -26,7 +26,7 @@ use std::collections::VecDeque;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
-use zmq::Socket;
+use crate::zmq::{self, Socket};
 
 use super::ActionBusConfig;
 use super::metrics::ActionMetrics;
@@ -62,7 +62,7 @@ pub fn run_loop(
         ];
         zmq::poll(&mut items, timeout_ms).context("poll")?;
 
-        if items[0].get_revents().contains(zmq::POLLIN) {
+        if items[0].is_readable() {
             handle_client_message(
                 frontend,
                 backend,
@@ -72,7 +72,7 @@ pub fn run_loop(
                 metrics,
             )?;
         }
-        if items[1].get_revents().contains(zmq::POLLIN) {
+        if items[1].is_readable() {
             handle_worker_message(backend, frontend, &mut registry, &mut goals, metrics)?;
         }
 

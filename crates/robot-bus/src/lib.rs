@@ -35,6 +35,7 @@ pub mod wire;
 pub mod worker_thread;
 #[cfg(feature = "ws")]
 pub mod ws;
+mod zmq;
 #[doc(hidden)]
 pub mod zmq_helpers;
 
@@ -47,6 +48,7 @@ pub use robot_bus_msgs::{
     unique_identifier_msgs, vision_msgs, visualization_msgs,
 };
 
+pub use crate::zmq::Error as ZmqError;
 #[doc(hidden)]
 pub use action_bus::{ActionClient, ActionKind, ActionMessage, ActionWorker};
 #[cfg(feature = "console-api")]

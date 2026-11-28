@@ -4,7 +4,7 @@ use anyhow::{Context, Result};
 use std::collections::HashMap;
 use std::time::Instant;
 use uuid::Uuid;
-use zmq::{Context as ZmqContext, Socket, SocketType};
+use crate::zmq::{self, Context as ZmqContext, Socket, SocketType};
 
 use super::protocol::{CMD_FED_REPLY, FED_ID_PREFIX, FED_REQ_PREFIX, LINK_ID_PREFIX};
 

@@ -1,6 +1,8 @@
 //! One-sided federation: only the joining broker lists `--peer`; the joined broker is
 //! started without any peer configuration and never restarted.
 
+use robot_bus::zmq_helpers as zmq;
+use std::sync::{Arc, mpsc};
 use std::thread;
 use std::time::{Duration, Instant};
 
@@ -9,7 +11,7 @@ use crate::message_bus_federation::{
     alloc_message_broker_ports, connect_addr, count_matching, federated_bus_config, join_peer,
     msg_peer, recv_exact,
 };
-use robot_bus::{Publisher, RobotBusBroker, Subscriber};
+use robot_bus::{Node, NodeOptions, Publisher, QosProfile, RobotBusBroker, Subscriber};
 
 fn subscriber(broker: &RobotBusBroker, topic: &str) -> Subscriber {
     let sub = Subscriber::new(Some(&connect_addr(&broker.message.xpub_bind))).expect("subscriber");
@@ -252,7 +254,7 @@ fn leaving_broker_leaves_no_demand_behind() {
         RobotBusBroker::start(federated_bus_config("broker-b", Vec::new(), b)).expect("broker b");
     // A raw XPUB on B's XSUB sees exactly the subscriptions local publishers would see.
     let ctx = zmq::Context::new();
-    let probe = ctx.socket(zmq::XPUB).expect("probe");
+    let probe = ctx.socket(zmq::SocketType::XPUB).expect("probe");
     probe.set_xpub_verbose(true).expect("verbose");
     probe.connect(&broker_b.message.xsub_bind).expect("connect");
 
@@ -311,4 +313,60 @@ fn legacy_peers_still_work_with_mutual_configuration() {
 
     broker_a.stop().expect("stop a");
     broker_b.stop().expect("stop b");
+}
+
+#[test]
+fn transient_local_late_join_across_federated_brokers() {
+    let _guard = lock_brokers();
+    let ports = alloc_message_broker_ports(2);
+    let (a, b) = (&ports[0], &ports[1]);
+    let broker_b = RobotBusBroker::start(federated_bus_config("broker-b", Vec::new(), b)).unwrap();
+    let broker_a = RobotBusBroker::start(federated_bus_config(
+        "broker-a",
+        vec![join_peer("broker-b", b)],
+        a,
+    ))
+    .unwrap();
+    let qos = QosProfile::keep_last(4).transient_local();
+    let mut writer = Node::with_options(
+        "fleet-writer",
+        NodeOptions {
+            message_xsub: Some(connect_addr(&broker_a.message.xsub_bind)),
+            ..NodeOptions::tcp()
+        },
+    );
+    let publisher = writer
+        .create_publisher_raw_with_qos("/fleet/state", qos)
+        .unwrap();
+    publisher.publish(b"current robot state").unwrap();
+    let mut reader = Node::with_options(
+        "fleet-reader",
+        NodeOptions {
+            message_xpub: Some(connect_addr(&broker_b.message.xpub_bind)),
+            ..NodeOptions::tcp()
+        },
+    );
+    let (tx, rx) = mpsc::channel();
+    reader
+        .create_subscription_raw_with_qos(
+            "/fleet/state",
+            qos,
+            Arc::new(move |bytes| {
+                let _ = tx.send(bytes.to_vec());
+            }),
+            None,
+        )
+        .unwrap();
+    let deadline = Instant::now() + Duration::from_secs(5);
+    loop {
+        reader.spin_once(Some(Duration::from_millis(50))).unwrap();
+        if let Ok(payload) = rx.try_recv() {
+            assert_eq!(payload, b"current robot state");
+            break;
+        }
+        assert!(
+            Instant::now() < deadline,
+            "retained state did not cross brokers"
+        );
+    }
 }

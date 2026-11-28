@@ -22,25 +22,27 @@ use std::sync::mpsc::{self, Receiver};
 use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant};
 
+use crate::zmq::{self, SocketType};
 use prost::Message;
 use uuid::Uuid;
-use zmq::SocketType;
 
 use crate::runtime::Context;
 
 use crate::errors::{BusError, Result};
-use crate::runtime::callback_group::{CallbackGroup, SubscriptionCallback};
+use crate::runtime::callback_group::{CallbackGroup, CallbackGroupType, SubscriptionCallback};
 use crate::runtime::dispatch::{
     dispatch_registration, flush_outbound, flush_reply_queue, tick_heartbeats,
 };
 use crate::runtime::queues::{ActionMessageCallback, OutboundCommand, ReplyMessage};
 use crate::runtime::registrations::{
     ActionClientRegistration, ActionGoalHandler, ActionGoalLiveHandler, ActionRegistration,
-    MessageCallback, Registration, ServiceHandler, ServiceRegistration, SubRegistration,
+    MessageCallback, Registration, ServiceHandler, ServiceRegistration,
 };
+use crate::runtime::retained_topic::RetainedFilter;
 use crate::runtime::timers::{
     SubscriptionHandle, Timer, TimerCallback, TimerHandle, effective_poll_timeout_ms, tick_timers,
 };
+use crate::runtime::topic_inbox::{NativeSubscription, ReadyTopics, TopicReader};
 use crate::runtime::wake::{WakeReceiver, Waker, WakingSender, wake_pair};
 use crate::runtime::worker_pool::WorkerPool;
 use crate::transports::{
@@ -106,7 +108,9 @@ pub struct Executor {
     service_registrations: Vec<ServiceRegistration>,
     action_registrations: Vec<ActionRegistration>,
     action_client_registration: Option<ActionClientRegistration>,
-    topic_callbacks: HashMap<String, Vec<SubscriptionCallback>>,
+    topic_readers: Vec<TopicReader>,
+    subscriptions: HashMap<u64, Arc<NativeSubscription>>,
+    ready_topics: Arc<ReadyTopics>,
     socket_registrations: Vec<Registration>,
     outbound_tx: WakingSender<OutboundCommand>,
     outbound_rx: Option<Receiver<OutboundCommand>>,
@@ -180,7 +184,9 @@ impl Executor {
             service_registrations: Vec::new(),
             action_registrations: Vec::new(),
             action_client_registration: None,
-            topic_callbacks: HashMap::new(),
+            topic_readers: Vec::new(),
+            subscriptions: HashMap::new(),
+            ready_topics: Arc::new(ReadyTopics::default()),
             socket_registrations: Vec::new(),
             outbound_tx,
             outbound_rx: Some(outbound_rx),
@@ -233,10 +239,8 @@ impl Executor {
     pub fn set_stream_hwm(&mut self, hwm: HighWaterMark) -> Result<()> {
         self.ensure_open()?;
         self.stream_hwm = hwm;
-        for reg in &self.socket_registrations {
-            if let Registration::Sub(sub) = reg {
-                sub.socket.set_rcvhwm(hwm.rcv)?;
-            }
+        for reader in &self.topic_readers {
+            reader.set_hwm(hwm.rcv)?;
         }
         Ok(())
     }
@@ -279,15 +283,22 @@ impl Executor {
             Some(ep) => ep.to_string(),
             None => message_xpub_endpoint("localhost", "tcp").map_err(BusError::Protocol)?,
         };
+        if self
+            .topic_readers
+            .iter()
+            .any(|reader| reader.endpoint == endpoint)
+        {
+            return Ok(());
+        }
         let socket = self.context.zmq().socket(SocketType::SUB)?;
         apply_subscriber_options_with(&socket, self.stream_hwm)?;
         socket.connect(&endpoint)?;
         wait_for_connection();
-        let reg = SubRegistration {
+        self.topic_readers.push(TopicReader::start(
+            self.context.zmq(),
             socket,
-            endpoint: endpoint.clone(),
-        };
-        self.socket_registrations.push(Registration::Sub(reg));
+            endpoint.clone(),
+        )?);
         log::info!("subscriber connected to {endpoint}");
         Ok(())
     }
@@ -298,40 +309,73 @@ impl Executor {
         callback: MessageCallback,
         group: CallbackGroup,
     ) -> Result<SubscriptionHandle> {
+        self.subscribe_with_qos(topic, callback, group, None)
+    }
+
+    pub(crate) fn subscribe_with_qos(
+        &mut self,
+        topic: &str,
+        callback: MessageCallback,
+        group: CallbackGroup,
+        qos: Option<super::QosProfile>,
+    ) -> Result<SubscriptionHandle> {
         self.ensure_open()?;
         if self.started {
             return Err(BusError::Protocol(
                 "subscribe() cannot run while start() is active".into(),
             ));
         }
-        if !self.has_sub_registration() {
+        if self.topic_readers.is_empty() {
             return Err(BusError::Protocol(
                 "connect_subscriber() before subscribe()".into(),
             ));
         }
-        let topic_bytes = topic.as_bytes();
-        for reg in self.socket_registrations.iter_mut() {
-            if let Registration::Sub(sub) = reg {
-                sub.socket.set_subscribe(topic_bytes)?;
-            }
-        }
+        let depth = qos.map_or(self.stream_hwm.rcv, |p| p.depth());
+        let capacity = if depth > 0 {
+            depth as usize
+        } else {
+            HighWaterMark::STREAM.rcv as usize
+        };
+        let parallelism = if group.kind() == CallbackGroupType::Reentrant {
+            self.worker_pool
+                .as_ref()
+                .map_or(1, WorkerPool::worker_count)
+        } else {
+            1
+        };
+        let retained = qos.is_some_and(|qos| qos.is_transient_local());
         let id = self.next_subscription_id;
-        self.next_subscription_id += 1;
-        self.topic_callbacks
-            .entry(topic.to_string())
-            .or_default()
-            .push(SubscriptionCallback {
+        let sub = Arc::new(NativeSubscription::new(
+            SubscriptionCallback {
                 id,
                 callback,
                 group,
-            });
+            },
+            capacity,
+            parallelism,
+            &self.ready_topics,
+            self.waker.clone(),
+        ));
+        for (index, reader) in self.topic_readers.iter().enumerate() {
+            let filter = if retained {
+                Some(RetainedFilter::new(topic)?)
+            } else {
+                None
+            };
+            if let Err(err) = reader.add(topic.to_owned(), Arc::clone(&sub), filter) {
+                sub.deactivate();
+                for registered in &self.topic_readers[..index] {
+                    let _ = registered.remove(id);
+                }
+                return Err(err);
+            }
+        }
+        self.next_subscription_id += 1;
+        self.subscriptions.insert(id, sub);
         Ok(SubscriptionHandle { id })
     }
 
-    /// Remove a subscription created by [`subscribe`](Self::subscribe).
-    ///
-    /// When the last callback for a topic is removed, the SUB socket unsubscribes
-    /// from that topic filter.
+    /// Remove a subscription and discard its pending callbacks.
     pub fn destroy_subscription(&mut self, handle: SubscriptionHandle) -> Result<()> {
         self.ensure_open()?;
         if self.started {
@@ -339,38 +383,19 @@ impl Executor {
                 "destroy_subscription() cannot run while start() is active".into(),
             ));
         }
-        let mut found_topic: Option<String> = None;
-        for (topic, callbacks) in self.topic_callbacks.iter_mut() {
-            if let Some(pos) = callbacks.iter().position(|c| c.id == handle.id) {
-                callbacks.remove(pos);
-                found_topic = Some(topic.clone());
-                break;
-            }
-        }
-        let Some(topic) = found_topic else {
+        let Some(sub) = self.subscriptions.remove(&handle.id) else {
             return Err(BusError::Protocol(format!(
                 "unknown subscription id {}",
                 handle.id
             )));
         };
-        let empty = self
-            .topic_callbacks
-            .get(&topic)
-            .map(|c| c.is_empty())
-            .unwrap_or(true);
-        if empty {
-            self.topic_callbacks.remove(&topic);
-            let topic_bytes = topic.as_bytes();
-            for reg in self.socket_registrations.iter_mut() {
-                if let Registration::Sub(sub) = reg {
-                    let _ = sub.socket.set_unsubscribe(topic_bytes);
-                }
-            }
+        sub.deactivate();
+        for reader in &self.topic_readers {
+            reader.remove(handle.id)?;
         }
         Ok(())
     }
 
-    /// Subscribe with a protobuf-typed callback. Decode failures are skipped.
     pub fn subscribe_typed<M, F>(
         &mut self,
         topic: &str,
@@ -696,7 +721,7 @@ impl Executor {
         Ok(spin_once_inner(
             &mut self.socket_registrations,
             &mut self.timers,
-            &self.topic_callbacks,
+            &self.ready_topics,
             outbound_rx,
             reply_rx,
             &self.reply_tx,
@@ -750,7 +775,7 @@ impl Executor {
             let had_work = spin_once_inner(
                 &mut self.socket_registrations,
                 &mut self.timers,
-                &self.topic_callbacks,
+                &self.ready_topics,
                 outbound_rx,
                 reply_rx,
                 &self.reply_tx,
@@ -789,7 +814,7 @@ impl Executor {
             spin_once_inner(
                 &mut self.socket_registrations,
                 &mut self.timers,
-                &self.topic_callbacks,
+                &self.ready_topics,
                 outbound_rx,
                 reply_rx,
                 &self.reply_tx,
@@ -814,7 +839,7 @@ impl Executor {
         let running = self.running.clone();
         let mut registrations = std::mem::take(&mut self.socket_registrations);
         let mut timers = std::mem::take(&mut self.timers);
-        let topic_callbacks = self.topic_callbacks.clone();
+        let ready_topics = Arc::clone(&self.ready_topics);
         let outbound_rx = self
             .outbound_rx
             .take()
@@ -831,7 +856,7 @@ impl Executor {
                 spin_once_inner(
                     &mut registrations,
                     &mut timers,
-                    &topic_callbacks,
+                    &ready_topics,
                     &outbound_rx,
                     &reply_rx,
                     &reply_tx,
@@ -874,7 +899,7 @@ impl Executor {
             self.sync_all_registrations();
         }
         let has_timers = self.timers.iter().any(|t| !t.cancelled);
-        if self.socket_registrations.is_empty() && !has_timers {
+        if self.socket_registrations.is_empty() && self.topic_readers.is_empty() && !has_timers {
             return Err(BusError::Protocol(
                 "nothing registered; connect_subscriber, register worker, or create_timer first"
                     .into(),
@@ -888,12 +913,6 @@ impl Executor {
             return Err(BusError::Closed);
         }
         Ok(())
-    }
-
-    fn has_sub_registration(&self) -> bool {
-        self.socket_registrations
-            .iter()
-            .any(|reg| matches!(reg, Registration::Sub(_)))
     }
 
     fn has_action_client_registration(&self) -> bool {
@@ -971,6 +990,10 @@ impl Executor {
         self.service_registrations.clear();
         self.action_registrations.clear();
         self.action_client_registration = None;
+        self.topic_readers.clear();
+        for sub in self.subscriptions.drain().map(|(_, sub)| sub) {
+            sub.deactivate();
+        }
         self.timers.clear();
     }
 }
@@ -999,7 +1022,7 @@ fn timeout_to_ms(timeout: Option<Duration>) -> i64 {
 fn spin_once_inner(
     registrations: &mut [Registration],
     timers: &mut [Timer],
-    topic_callbacks: &HashMap<String, Vec<SubscriptionCallback>>,
+    ready_topics: &ReadyTopics,
     outbound_rx: &Receiver<OutboundCommand>,
     reply_rx: &Receiver<ReplyMessage>,
     reply_tx: &WakingSender<ReplyMessage>,
@@ -1013,7 +1036,14 @@ fn spin_once_inner(
 
     let mut had_work = tick_timers(timers, now, worker_pool);
 
-    let poll_ms = effective_poll_timeout_ms(timers, poll_timeout_ms, Instant::now());
+    let mut poll_ms = effective_poll_timeout_ms(timers, poll_timeout_ms, Instant::now());
+    if !ready_topics.is_empty() {
+        poll_ms = if worker_pool.is_some() && poll_ms != 0 {
+            1
+        } else {
+            0
+        };
+    }
     let socket_count = registrations.len();
     let mut poll_items: Vec<zmq::PollItem> = registrations
         .iter()
@@ -1045,15 +1075,12 @@ fn spin_once_inner(
             }
         }
         for index in readable {
-            dispatch_registration(
-                &mut registrations[index],
-                topic_callbacks,
-                reply_tx,
-                worker_pool,
-            );
+            dispatch_registration(&mut registrations[index], reply_tx, worker_pool);
         }
         had_work = true;
     }
+
+    had_work |= ready_topics.dispatch(worker_pool);
 
     // Flush replies produced by workers (or inline handlers) during this step.
     flush_queues(registrations, outbound_rx, reply_rx);
