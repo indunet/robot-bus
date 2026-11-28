@@ -71,4 +71,4 @@ A stable Node programming model does not imply an immutable wire protocol or err
 
 ## Performance evidence
 
-The 2026-11-20 [Robot Bus](perf-report.md) and [ROS 2 Humble](ros2-perf-report.md) reports each include three rounds. ROS 2 was rerun separately on the same host and resource limits after the transport audit isolated SHM and UDPv4. WS receive counts were checked by trial ID and sequence. See [performance interpretation and reproduction](performance.md) for the setup and evidence. [Bridge performance](ros2-bridge-perf-report.md) awaits separate sampling.
+The [Robot Bus and ROS 2 performance comparison](performance.md) brings together the three same-host rounds from 2026-11-20, follow-up runs, test conditions, and reproduction commands. Topic, Service, and Action metrics are grouped by scenario. [Bridge performance](ros2-bridge-perf-report.md) awaits separate sampling.

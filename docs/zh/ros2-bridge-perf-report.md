@@ -2,7 +2,7 @@
 
 # ROS 2 桥接性能测试报告
 
-**桥接吞吐和延迟待采样。** 2026-11-20 的同机复测分别测量了 [Robot Bus](perf-report.md) 和 [ROS 2 Humble](ros2-perf-report.md) 的独立路径。桥接路径需要让流量实际经过 `Ros2Bridge`，并单独记录两方向的数据。
+**桥接吞吐和延迟待采样。** 2026-11-20 的[同机性能对比](performance.md)覆盖 Robot Bus 和 ROS 2 Humble 各自的通信路径。桥接路径需要让流量实际经过 `Ros2Bridge`，并单独记录两方向的数据。
 
 ## 当前验证状态
 
@@ -16,4 +16,4 @@
 - 话题场景为 64 B `std_msgs/String` 和默认 640×480 rgb8 Image。Service 为 Trigger，Action 为 Fibonacci，两者均测双向。
 - 消息以约 1 秒的限速窗口搜索满足丢失率不超过 1% 的速率，延迟另做逐条单向采样。每轮记录 QoS、各方向实际完成数和原始延迟样本。
 
-运行入口为 `just perf-ros2-bridge`。 [桥接 bench](../../benches/ros2_bridge_perf/README.md) · [性能说明](performance.md)
+运行入口为 `just perf-ros2-bridge`。 [桥接 bench](../../benches/ros2_bridge_perf/README.md)

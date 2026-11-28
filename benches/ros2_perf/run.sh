@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Build and run ROS 2 perf (shm + udp) inside the `ros2` Docker container,
-# writing docs/zh/ros2-perf-report.md and docs/en/ros2-perf-report.md.
+# writing Markdown reports under bench-results/.
 set -euo pipefail
 
 PERF_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -12,10 +12,10 @@ else
 fi
 CONTAINER="${ROS2_PERF_CONTAINER:-ros2}"
 WS_IN_CONTAINER="${ROS2_PERF_WS:-/tmp/ros2_perf_ws}"
-REPORT_HOST_ZH="${ROOT}/docs/zh/ros2-perf-report.md"
-REPORT_HOST_EN="${ROOT}/docs/en/ros2-perf-report.md"
-# Back-compat alias used by single-mode paths / docker layout under WS.
-REPORT_HOST="${REPORT_HOST_ZH}"
+REPORT_ZH="bench-results/zh/ros2-perf-report.md"
+REPORT_EN="bench-results/en/ros2-perf-report.md"
+REPORT_HOST_ZH="${ROOT}/${REPORT_ZH}"
+REPORT_HOST_EN="${ROOT}/${REPORT_EN}"
 
 # Optional overrides (useful for smoke tests):
 #   ROS2_PERF_GOODPUT_TRIAL_MSGS / ROS2_PERF_GOODPUT_RATE_LO / ROS2_PERF_GOODPUT_RATE_HI
@@ -137,7 +137,7 @@ if [[ "${LOCAL}" -eq 1 ]]; then
   if [[ "${BUILD_ONLY}" -eq 1 ]]; then
     exit 0
   fi
-  mkdir -p "${ROOT}/docs/zh" "${ROOT}/docs/en"
+  mkdir -p "$(dirname "${REPORT_HOST_ZH}")" "$(dirname "${REPORT_HOST_EN}")"
   case "${MODE}" in
     shm)
       run_bench_local "${WS}" shm "${REPORT_HOST_ZH}"
@@ -206,10 +206,11 @@ if [[ "${BUILD_ONLY}" -eq 1 ]]; then
 fi
 
 echo "==> copying reports back"
-docker exec "${CONTAINER}" mkdir -p "${WS_IN_CONTAINER}/docs/zh" "${WS_IN_CONTAINER}/docs/en"
-docker cp "${CONTAINER}:${WS_IN_CONTAINER}/docs/zh/ros2-perf-report.md" "${REPORT_HOST_ZH}"
+mkdir -p "$(dirname "${REPORT_HOST_ZH}")"
+docker cp "${CONTAINER}:${WS_IN_CONTAINER}/${REPORT_ZH}" "${REPORT_HOST_ZH}"
 echo "done: ${REPORT_HOST_ZH}"
 if [[ "${MODE}" == both ]]; then
-  docker cp "${CONTAINER}:${WS_IN_CONTAINER}/docs/en/ros2-perf-report.md" "${REPORT_HOST_EN}"
+  mkdir -p "$(dirname "${REPORT_HOST_EN}")"
+  docker cp "${CONTAINER}:${WS_IN_CONTAINER}/${REPORT_EN}" "${REPORT_HOST_EN}"
   echo "done: ${REPORT_HOST_EN}"
 fi

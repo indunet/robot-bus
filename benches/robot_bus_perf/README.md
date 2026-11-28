@@ -2,7 +2,7 @@
 
 robot-bus本机性能压测：进程内 `RobotBusBroker`，覆盖 **tcp / ipc / inproc / ws** 的 pub/sub、service、action，以及 **federation**（两个 TCP broker，A→B）。
 
-方法与 `benches/ros2_perf`对齐，报告写入 [`docs/zh/perf-report.md`](../../docs/zh/perf-report.md) / [`docs/en/perf-report.md`](../../docs/en/perf-report.md)：
+测试方法与结果见 [Robot Bus 与 ROS 2 性能对比](../../docs/zh/performance.md)。生成的报告写入 `bench-results/zh/perf-report.md` 和 `bench-results/en/perf-report.md`。
 
 - **延迟**：限速抽样（发一条等收到再发）
 - **吞吐（主指标）**：在目标速率下限速发送，**二分搜索**丢包 ≤ 1% 的最大可持续速率（max goodput）
@@ -62,11 +62,10 @@ ROBOT_BUS_PERF_ONLY=local cargo run --release --bin robot_bus_perf --features ws
 | `ROBOT_BUS_PERF_SVC_ITERS` | `10000` | service call次数 |
 | `ROBOT_BUS_PERF_ACT_ITERS` | `5000` | action send_goal次数 |
 | `ROBOT_BUS_PERF_RPC_WARMUP` | service `50` / action `10` | 每个 RPC 场景的预热次数 |
-| `ROBOT_BUS_PERF_SKIP_REPORT` | （空） | 设为非空且非 `0` 时不覆盖 `docs/*perf-report.md` |
+| `ROBOT_BUS_PERF_SKIP_REPORT` | （空） | 设为非空且非 `0` 时跳过 Markdown 报告生成 |
 
 ## 说明
 
 - Message HWM=2048（仅 bench）；与 trial长度配合，避免深队列把过载藏掉。
 - 标准输出中的 `RAW trial`、`RAW latency` 和 `RAW result` 使用 JSON。保留完整输出可核对每档的唯一接收数、跨轮消息、重复、发送与排空边界，以及单条延迟样本。
 - 指标为单机本机回环，机器相关，不作为 CI门槛。
-- 与 ROS2对比见 [`../ros2_perf/`](../ros2_perf/) / [`docs/zh/ros2-perf-report.md`](../../docs/zh/ros2-perf-report.md)；注意 macOS本机 vs Linux容器环境差异。

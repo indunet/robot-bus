@@ -53,8 +53,8 @@
     "bridge_description": "Connect to a Humble or Jazzy graph through an optional in-process bridge.",
     "web_lab": "ROS 2 browser lab",
     "web_lab_description": "Follow a browser client through a Python bridge to a ROS 2 peer.",
-    "performance": "Performance and QoS",
-    "performance_description": "Explore queue behavior and benchmark methodology.",
+    "performance": "Robot Bus and ROS 2 performance",
+    "performance_description": "Compare throughput, latency, and delivery on the same host.",
     "support": "Support matrix",
     "support_description": "Check supported platforms and verified capabilities.",
     "releases": "Releases"
@@ -113,8 +113,8 @@
     "bridge_description": "通过可选的进程内桥接接入 Humble 或 Jazzy。",
     "web_lab": "ROS 2 浏览器实验",
     "web_lab_description": "运行从浏览器经 Python 桥接到真实 ROS 2 节点的示例。",
-    "performance": "性能与 QoS",
-    "performance_description": "了解队列行为和基准测试方法。",
+    "performance": "Robot Bus 与 ROS 2 性能对比",
+    "performance_description": "查看同一主机上的吞吐、延迟与投递率。",
     "support": "支持矩阵",
     "support_description": "查看支持的平台和已验证的功能。",
     "releases": "发布版本"

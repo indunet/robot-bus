@@ -242,6 +242,7 @@ finally:
 - **跑一个示例：** [原生 Topic、Service 和 Action 示例](examples/README.md)。
 - **选语言和 SDK：** [API 对照](docs/zh/api-compare.md)和下表的各语言指南。
 - **部署、排错或确认支持范围：** [部署指南](docs/zh/deployment.md)、[架构](docs/zh/architecture.md)和[支持与验证状态](docs/zh/support.md)。
+- [查看 Robot Bus 与 ROS 2 的性能实测](docs/zh/performance.md)。
 - **使用浏览器：** [开发 WebSocket 客户端](docs/zh/typescript-api.md#浏览器websocket-rpc)，或用 [Web 控制台](#2-web控制台)观察 broker。两者都不依赖 ROS 2。`/ws-rpc` 使用 V3 成帧，不兼容 V2 客户端。
 - **接入已有 ROS 2 系统：** 按[桥接指南](docs/zh/ros2-bridge.md)配置你自己的节点接口。想先看浏览器到 ROS 2 的完整链路，可以跑[独立实验台](docs/zh/ros2-web.md)，它会启动自己的 ROS 2 节点。
 

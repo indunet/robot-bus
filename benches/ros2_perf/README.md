@@ -7,7 +7,7 @@ ROS2（Humble）性能对比小项目：在 Docker容器里测 **pub/sub / servi
 | `shm` | Shared Memory **only**（`config/fastdds_shm.xml`，无 UDP） |
 | `udp` | UDPv4 only，无 SHM（`config/fastdds_udp.xml`） |
 
-方法对齐仓库 [`docs/zh/perf-report.md`](../../docs/zh/perf-report.md)：
+测试方法与结果见 [Robot Bus 与 ROS 2 性能对比](../../docs/zh/performance.md)。
 
 - **延迟**：限速抽样（发一条等收到再发）
 - **吞吐（主指标）**：按目标速率限速发送约 **1s**（可用 `ROS2_PERF_GOODPUT_TRIAL_MSGS`改为固定条数），**二分搜索**丢包 ≤ 1% 且发送窗口内 pub/sub均 ≥90% 目标速率的最大可持续速率（max goodput）；默认搜索上限 **500000 Hz**（可用 `ROS2_PERF_GOODPUT_RATE_HI`覆盖）
@@ -32,7 +32,7 @@ benches/ros2_perf/
 ./benches/ros2_perf/run.sh
 ```
 
-会：同步源码 → `colcon build` → 跑 shm + udp → 写回 [`docs/zh/ros2-perf-report.md`](../../docs/zh/ros2-perf-report.md) 与 [`docs/en/ros2-perf-report.md`](../../docs/en/ros2-perf-report.md)。
+脚本会同步源码、执行 `colcon build`、运行 SHM 和 UDPv4 测试，再将报告写入 `bench-results/zh/ros2-perf-report.md` 和 `bench-results/en/ros2-perf-report.md`。
 
 已在容器内时：
 

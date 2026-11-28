@@ -242,6 +242,7 @@ Run the [Python listener and Rust talker](examples/README.md#1-topic-topic_imu) 
 - **Run an example:** [Native topic, service, and action examples](examples/README.md).
 - **Choose an SDK:** [API comparison](docs/en/api-compare.md) and the language guides below.
 - **Deploy or troubleshoot:** [Deployment guide](docs/en/deployment.md), [architecture](docs/en/architecture.md), and [support and verification](docs/en/support.md).
+- [Compare Robot Bus and ROS 2 benchmark results](docs/en/performance.md).
 - **Use a browser:** [Build a WebSocket client](docs/en/typescript-api.md#browser-websocket-rpc) or [inspect a broker in the console](#2-web-console). Both work without ROS 2. `/ws-rpc` uses V3 framing and is incompatible with V2 clients.
 - **Connect to an existing ROS 2 system:** Use the [bridge guide](docs/en/ros2-bridge.md) to map your node's interfaces. To see the full browser-to-ROS 2 path first, try the [self-contained lab](docs/en/ros2-web.md), which starts its own ROS 2 node.
 

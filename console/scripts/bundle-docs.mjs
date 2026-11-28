@@ -20,8 +20,6 @@ const SLUGS = [
   'api-compare',
   'ros2-bridge',
   'performance',
-  'perf-report',
-  'ros2-perf-report',
   'ros2-bridge-perf-report',
 ]
 

@@ -71,4 +71,4 @@ Node 编程模型的稳定性不表示底层线协议和所有错误分类永远
 
 ## 性能证据
 
-2026-11-20，[Robot Bus](perf-report.md) 和 [ROS 2 Humble](ros2-perf-report.md) 报告各保留了三轮。传输复核隔离 SHM 与 UDPv4 后，ROS 2 在同一主机和资源限制下单独补测。WS 接收计数通过轮次与序号校验。环境、统计口径和证据见[性能说明](performance.md)。[桥接性能](ros2-bridge-perf-report.md)待单独采样。
+[Robot Bus 与 ROS 2 性能对比](performance.md)汇总了 2026-11-20 同机三轮实测、后续复测、测试条件和复现命令。两边的 Topic、Service 和 Action 指标按场景并排展示。[桥接性能](ros2-bridge-perf-report.md)待单独采样。

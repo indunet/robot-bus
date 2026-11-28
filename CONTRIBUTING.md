@@ -53,7 +53,7 @@ python scripts/test_doc_examples.py
 | Console | `just console`; see [console development](console/README.md) |
 | ROS bridge | Build the changed bridge against ROS 2 and run the affected routes in that environment. See the [bridge guide](docs/en/ros2-bridge.md). |
 
-Follow [support status](docs/en/support.md), and attach the environment and commands when adding device or ROS runtime claims. Performance runs overwrite generated reports. See [performance](docs/en/performance.md).
+Follow [support status](docs/en/support.md), and attach the environment and commands when adding device or ROS runtime claims. See the [performance comparison](docs/en/performance.md) for test conditions, archive paths, and reproduction commands.
 
 Record every user-visible change (new features, behavior changes, fixes, breaking changes) under the applicable version in [CHANGELOG.md](CHANGELOG.md).
 

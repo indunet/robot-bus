@@ -1,4 +1,4 @@
-//! robot-bus performance harness — writes `docs/zh/perf-report.md` and `docs/en/perf-report.md`.
+//! Robot Bus performance harness. Writes Markdown reports under `bench-results/`.
 //!
 //! Sources live under `benches/robot_bus_perf/`.
 //! Run: `just perf` or `cargo run --release --bin robot_bus_perf`
@@ -124,12 +124,12 @@ fn main() {
             .map(|v| !v.is_empty() && v != "0")
             .unwrap_or(false)
     {
-        println!("ROBOT_BUS_PERF_SKIP_REPORT set — not writing docs/*perf-report.md");
+        println!("Skipping benchmark report generation");
         return;
     }
 
     let path = write_report(&results, &env_summary()).expect("write report");
-    println!("wrote {} (and docs/en/perf-report.md)", path.display());
+    println!("wrote {} (and bench-results/en/perf-report.md)", path.display());
 }
 
 fn record_result(results: &mut Vec<ScenarioResult>, r: ScenarioResult) {

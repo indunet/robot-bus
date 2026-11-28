@@ -2,7 +2,7 @@ English | [中文](../zh/ros2-bridge-perf-report.md)
 
 # ROS 2 bridge performance report
 
-**Bridge throughput and latency sampling is pending.** The 2026-11-20 same-host run measured [Robot Bus](perf-report.md) and [ROS 2 Humble](ros2-perf-report.md) paths separately. A bridge run must send traffic through `Ros2Bridge` and capture each direction independently.
+**Bridge throughput and latency sampling is pending.** The 2026-11-20 [same-host performance comparison](performance.md) measured the native Robot Bus and ROS 2 Humble paths. A bridge run must send traffic through `Ros2Bridge` and capture each direction independently.
 
 ## Verification status
 
@@ -16,4 +16,4 @@ The historical 2026-08-31 run was blocked by a missing default `ros2` container 
 - Topic scenarios are 64 B `std_msgs/String` and 640×480 rgb8 Image by default. Service uses Trigger and Action uses Fibonacci, with both directions measured.
 - Use paced throughput windows of about one second to search for a rate within 1% loss and collect separate one-at-a-time latency samples. Record QoS, actual completions for each direction and raw latency samples for each round.
 
-Run with `just perf-ros2-bridge`. [Bridge bench](../../benches/ros2_bridge_perf/README.md) · [Performance guide](performance.md)
+Run with `just perf-ros2-bridge`. [Bridge bench](../../benches/ros2_bridge_perf/README.md)

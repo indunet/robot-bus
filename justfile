@@ -261,7 +261,7 @@ ci: gen-all
 	just test-python
 	just test-typescript
 
-# Performance harness (release); writes docs/zh/perf-report.md and docs/en/perf-report.md
+# Performance harness (release); writes reports under bench-results/
 perf: gen-rust
 	cargo run --release -p robot-bus-perf --bin robot_bus_perf
 
@@ -269,7 +269,7 @@ perf: gen-rust
 perf-federation: gen-rust
 	ROBOT_BUS_PERF_ONLY=federation cargo run --release -p robot-bus-perf --bin robot_bus_perf
 
-# ROS 2 comparison benches (Docker container `ros2`); writes docs/{zh,en}/ros2-perf-report.md
+# ROS 2 benchmark (Docker container `ros2`); writes reports under bench-results/
 perf-ros2:
 	./benches/ros2_perf/run.sh
 
