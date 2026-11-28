@@ -56,6 +56,8 @@ struct TopicResponse {
     sparkline: Vec<f64>,
     subscribers: u64,
     publishers: u64,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    conflict_types: Vec<String>,
 }
 
 #[derive(Serialize)]
@@ -213,6 +215,7 @@ fn build_topology(state: &ConsoleState) -> TopologyResponse {
 fn merge_topics(state: &ConsoleState) -> Vec<TopicResponse> {
     let rates = state.rates();
     let type_map: HashMap<String, String> = state.topic_types.snapshot().into_iter().collect();
+    let conflict_map = state.topic_types.conflict_snapshot();
     let counts = state.topology.counts_by_topic();
 
     let mut by_name: HashMap<String, TopicRate> = rates
@@ -261,6 +264,7 @@ fn merge_topics(state: &ConsoleState) -> Vec<TopicResponse> {
                 sparkline: vec![rate; 20],
                 subscribers,
                 publishers,
+                conflict_types: conflict_map.get(&name).cloned().unwrap_or_default(),
             })
         })
         .collect()

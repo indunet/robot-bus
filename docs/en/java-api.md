@@ -215,11 +215,11 @@ Message packages live under `org.indunet.robot.bus.<pkg>.{msg|srv|action}.v1` (a
 After local proto changes:
 
 ```bash
-just gen-java   # → bindings/java/generated/ (gitignored; protoc 35.1)
+just gen-java   # → bindings/java/generated/ (gitignored; protoc 29.3, GENCODE_PROTOC)
 just java-dev
 ```
 
-JAR/AAR published to Maven Central **embed** stubs; consumers do not need `protoc`. Runtime dependency: `com.google.protobuf:protobuf-java` (aligned with protoc 35.x, currently pinned `4.35.1`).
+JAR/AAR published to Maven Central **embed** stubs; consumers do not need `protoc`. Runtime dependency: `com.google.protobuf:protobuf-java` **4.29.3 or newer** (tested through 4.36.2). Android uses `protobuf-javalite` at the same floor. Lite classes have no descriptors; the SDK registers the type name by stripping the `org.indunet.robot.bus.` package prefix, which matches the protobuf full name for generated messages.
 
 ## Local development
 

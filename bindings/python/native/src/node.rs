@@ -348,6 +348,11 @@ impl PyNode {
         }
     }
 
+    /// Best-effort console registration. The broker keeps the first type name.
+    fn register_topic_type(&self, topic: &str, type_name: &str) {
+        self.inner.register_topic_type(topic, type_name);
+    }
+
     #[pyo3(signature = (topic, qos_depth=None, *, transient_local=false))]
     fn create_publisher(
         &mut self,

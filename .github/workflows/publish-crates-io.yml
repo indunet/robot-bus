@@ -20,12 +20,9 @@ jobs:
           sudo apt-get install -y curl unzip pkg-config
 
       - name: Install protobuf compiler (codegen)
-        run: |
-          set -eux
-          curl -fsSL -o /tmp/protoc.zip \
-            "https://github.com/protocolbuffers/protobuf/releases/download/v35.1/protoc-35.1-linux-x86_64.zip"
-          sudo unzip -o /tmp/protoc.zip -d /usr/local
-          protoc --version
+        uses: ./.github/actions/install-protoc
+        with:
+          key: CPP_PROTOC
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable

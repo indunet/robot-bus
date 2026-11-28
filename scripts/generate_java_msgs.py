@@ -14,7 +14,7 @@ Each proto gets::
 
 ``java_outer_classname`` avoids collisions between the file-descriptor class
 (derived from ``color_rgba.proto`` → ``ColorRgba``) and messages like
-``ColorRGBA`` under protobuf-java 4.35.
+``ColorRGBA``.
 
 Imports mirror other languages::
 
@@ -27,10 +27,13 @@ Usage (from repo root)::
   python3 scripts/generate_java_msgs.py
   # or: just gen-java
 
-Pin ``protoc`` to ``EXPECTED_PROTOC_VERSION`` (same as CI). Match
-``com.google.protobuf:protobuf-java`` to that generator (4.35.x for
-protoc 35.x). Override the check with
+Pin ``protoc`` to ``GENCODE_PROTOC`` in ``scripts/protobuf-versions.env``.
+Match ``com.google.protobuf:protobuf-java`` (or ``protobuf-javalite``) to
+``JAVA_PROTOBUF_FLOOR`` in that file. Override the check with
 ``ROBOT_BUS_SKIP_PROTOC_VERSION_CHECK=1`` only for local experiments.
+
+``ROBOT_BUS_JAVA_LITE=1`` emits the lite runtime (``--java_out=lite:``),
+used by the Android SDK.
 """
 
 from __future__ import annotations
@@ -44,6 +47,9 @@ import tempfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / "scripts"))
+from protobuf_versions import ensure_protoc_version, protoc_version, require  # noqa: E402
+
 PROTO_ROOT = ROOT / "proto"
 # Override with ROBOT_BUS_JAVA_OUT for Android: bindings/android/generated
 OUT_ROOT = Path(
@@ -53,8 +59,8 @@ OUT_ROOT = Path(
     )
 )
 PROTOC = os.environ.get("PROTOC", "protoc")
-
-EXPECTED_PROTOC_VERSION = "35.1"
+EXPECTED_PROTOC_VERSION = require("GENCODE_PROTOC")
+JAVA_LITE = os.environ.get("ROBOT_BUS_JAVA_LITE") == "1"
 
 JAVA_BASE = "org.indunet.robot.bus"
 
@@ -66,29 +72,6 @@ JAVA_MULTIPLE_RE = re.compile(
 JAVA_OUTER_RE = re.compile(
     r"^option\s+java_outer_classname\s*=\s*[^;]+;\s*\n?", re.MULTILINE
 )
-PROTOC_VERSION_RE = re.compile(r"libprotoc\s+(\d+\.\d+(?:\.\d+)?)")
-
-
-def protoc_version(protoc: str) -> str:
-    out = subprocess.check_output([protoc, "--version"], text=True).strip()
-    match = PROTOC_VERSION_RE.search(out)
-    if not match:
-        raise RuntimeError(f"could not parse protoc version from {out!r}")
-    return match.group(1)
-
-
-def ensure_protoc_version(protoc: str) -> None:
-    if os.environ.get("ROBOT_BUS_SKIP_PROTOC_VERSION_CHECK") == "1":
-        return
-    version = protoc_version(protoc)
-    if version != EXPECTED_PROTOC_VERSION:
-        raise SystemExit(
-            f"error: protoc {version} != required {EXPECTED_PROTOC_VERSION}\n"
-            f"  Install https://github.com/protocolbuffers/protobuf/releases/tag/v{EXPECTED_PROTOC_VERSION}\n"
-            f"  or set PROTOC to that binary. Skip with ROBOT_BUS_SKIP_PROTOC_VERSION_CHECK=1."
-        )
-
-
 def collect_protos() -> list[Path]:
     protos: list[Path] = []
     for path in PROTO_ROOT.rglob("*.proto"):
@@ -144,10 +127,11 @@ def clear_generated() -> None:
 
 
 def run_protoc(proto_root: Path, protos: list[Path]) -> None:
+    java_out = f"lite:{OUT_ROOT}" if JAVA_LITE else str(OUT_ROOT)
     cmd = [
         PROTOC,
         f"--proto_path={proto_root}",
-        f"--java_out={OUT_ROOT}",
+        f"--java_out={java_out}",
         *[str(p) for p in protos],
     ]
     subprocess.run(cmd, check=True)
@@ -158,7 +142,7 @@ def main() -> int:
         print(f"error: protoc not found ({PROTOC!r})", file=sys.stderr)
         return 1
 
-    ensure_protoc_version(PROTOC)
+    ensure_protoc_version(PROTOC, EXPECTED_PROTOC_VERSION)
 
     if not collect_protos():
         print("error: no proto files found", file=sys.stderr)

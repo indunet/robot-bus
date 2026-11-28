@@ -217,11 +217,11 @@ node.createSubscription("/robot1/imu", cb, Imu.class, group);
 本地改 proto后：
 
 ```bash
-just gen-java   # → bindings/java/generated/（gitignored；protoc 35.1）
+just gen-java   # → bindings/java/generated/（gitignored；protoc 29.3，GENCODE_PROTOC）
 just java-dev
 ```
 
-发布到 Maven Central的 JAR/AAR **已嵌入** stubs；消费方不需要 `protoc`。运行时依赖 `com.google.protobuf:protobuf-java`（与 protoc 35.x对齐，当前 pin `4.35.1`）。
+发布到 Maven Central的 JAR/AAR **已嵌入** stubs；消费方不需要 `protoc`。运行时依赖 `com.google.protobuf:protobuf-java` **4.29.3 或更新**（已测到 4.36.2）。Android 使用同一下限的 `protobuf-javalite`。lite 类没有 descriptor；SDK 去掉 `org.indunet.robot.bus.` 包前缀作为类型名，对生成的消息这就是 protobuf 全名。
 
 ## 本地开发
 

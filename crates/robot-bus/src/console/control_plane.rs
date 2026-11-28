@@ -206,13 +206,24 @@ fn handle_message(
             if topic_name.is_empty() || type_name.is_empty() {
                 return;
             }
-            let previous = state.topic_types.register(topic_name, type_name);
-            if previous.as_deref() != Some(type_name) {
-                state.events.emit(
-                    "INFO",
-                    "topic-registry",
-                    format!("registered {topic_name} -> {type_name}"),
-                );
+            match state.topic_types.register(topic_name, type_name) {
+                super::topic_registry::RegisterOutcome::Created => {
+                    state.events.emit(
+                        "INFO",
+                        "topic-registry",
+                        format!("registered {topic_name} -> {type_name}"),
+                    );
+                }
+                super::topic_registry::RegisterOutcome::Unchanged => {}
+                super::topic_registry::RegisterOutcome::Conflict { kept } => {
+                    state.events.emit(
+                        "WARN",
+                        "topic-registry",
+                        format!(
+                            "topic type conflict on {topic_name}: keeping {kept}, ignoring {type_name}"
+                        ),
+                    );
+                }
             }
         }
         _ => {}

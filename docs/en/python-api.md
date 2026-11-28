@@ -412,6 +412,12 @@ imu2 = Imu()
 imu2.ParseFromString(payload)
 ```
 
+### Payload encoding
+
+Pass a protobuf class to `create_publisher` / `create_subscription` and the SDK encodes and decodes. Omit the class and the callback receives `bytes`. The broker does not interpret either form. The runtime package is `protobuf>=5.29.3,<9`.
+
+A typed publisher registers the protobuf full name. The first name for a topic is kept. A different name is reported as `conflictTypes` and a single console `WARN` event, and the connection stays up. This runs only while the console API is enabled.
+
 ---
 
 ## ROS 2 bridge (`rclpy`)

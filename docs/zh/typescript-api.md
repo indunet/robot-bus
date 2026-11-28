@@ -246,7 +246,7 @@ try {
 
 ## Protobuf消息
 
-磁盘上生成代码在 `bindings/typescript/generated/`（`just gen-typescript`，protoc **35.1**；**gitignored**，随 npm包发布）；对外导入路径与 Python / Rust对齐（无 `generated`段）：
+磁盘上生成代码在 `bindings/typescript/generated/`（`just gen-typescript`，protoc **35.1** / `CPP_PROTOC`；**gitignored**，随 npm包发布）。Python 和 Java 生成用 protoc 29.3。对外导入路径与 Python / Rust对齐（无 `generated`段）：
 
 ```ts
 import { String$ } from "robot-bus/std_msgs/msg/v1/primitives.js";

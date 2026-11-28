@@ -73,14 +73,14 @@ docker rm ros2-web-acceptance
 
 ## 已 source Humble 的本机开发
 
-使用 Ubuntu 22.04、ROS 配套的 Python 3.10、Node 22、Rust 和 protoc 35.1。
+使用 Ubuntu 22.04、ROS 配套的 Python 3.10、Node 22 和 Rust。Rust 与 TypeScript 生成用 protoc 35.1，Python 生成用 protoc 29.3（`scripts/protobuf-versions.env`）。
 venv 必须能访问系统 ROS Python 包。在仓库根目录执行：
 
 ```bash
 source /opt/ros/humble/setup.bash
 python3 -m venv --system-site-packages .venv
 source .venv/bin/activate
-pip install 'maturin>=1.7,<2' 'protobuf>=7.35,<8'
+pip install 'maturin>=1.7,<2' 'protobuf>=5.29.3,<9'
 python3 scripts/generate_python_msgs.py
 python3 scripts/generate_rust_msgs.py
 npm ci --prefix bindings/typescript

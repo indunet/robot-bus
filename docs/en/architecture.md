@@ -34,6 +34,12 @@ With two current brokers, start A first and pass `--peer A:15560` when starting 
 
 Use TCP across hosts or `--peer ipc+A:15560` when the two brokers can access the same host’s IPC socket files. A legacy peer without the `join` capability requires mutual peer configuration. See the [broker options](rust-api.md#broker-startup) for explicit endpoints and fixed IPC directories.
 
+## Payload encoding
+
+Protobuf is the default encoding in every SDK. It is not part of the wire protocol. The broker forwards the payload unchanged and does not parse it. A publisher that omits a message type, or uses the raw-bytes API, can send any encoding. Subscribers on that topic must agree on the encoding themselves.
+
+Typed publishers register a type name with the broker console. The first name is kept. A later registration with a different name does not replace it and does not reject the connection. The console records the conflicting name, emits one `WARN` event for that pair, and returns the names as `conflictTypes` on the topics API. `rbus topic` prints them. The check runs only when the console API is enabled. Android lite messages have no descriptors; generated classes are registered by stripping the `org.indunet.robot.bus.` prefix from the Java class name, which is the protobuf full name. Custom lite types outside that package are not registered.
+
 ## ROS 2 bridge
 
 ![Robot Bus and ROS 2 meet in a bridge process with a Bus Node, typed mapper, and native ROS client](../images/architecture-ros2-bridge.svg)

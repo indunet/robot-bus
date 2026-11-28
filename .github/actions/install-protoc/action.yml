@@ -1,0 +1,102 @@
+name: Install protoc
+description: >-
+  Download a pinned protoc release, put it on PATH, and export PROTOC.
+  The version comes from scripts/protobuf-versions.env unless version is set.
+  CPP_PROTOC also sets ROBOT_BUS_PROTOC_CPP. GENCODE_PROTOC also sets
+  ROBOT_BUS_PROTOC_GENCODE. Call the action twice when one job generates
+  both C++/Rust stubs and Python/Java stubs.
+
+inputs:
+  key:
+    description: Key in scripts/protobuf-versions.env (CPP_PROTOC or GENCODE_PROTOC)
+    required: false
+    default: CPP_PROTOC
+  version:
+    description: Override the version from the env file. Empty uses key.
+    required: false
+    default: ""
+
+runs:
+  using: composite
+  steps:
+    - name: Install protoc
+      shell: bash
+      run: |
+        set -euo pipefail
+        key="${{ inputs.key }}"
+        version="${{ inputs.version }}"
+        if [[ ! "$key" =~ ^[A-Z0-9_]+$ ]]; then
+          echo "invalid protoc version key: $key" >&2
+          exit 1
+        fi
+        if [[ -z "$version" ]]; then
+          env_file="${GITHUB_WORKSPACE}/scripts/protobuf-versions.env"
+          line="$(grep -E "^${key}=" "$env_file" | tail -n 1 || true)"
+          version="${line#*=}"
+          version="${version%\"}"
+          version="${version#\"}"
+          version="${version%\'}"
+          version="${version#\'}"
+        fi
+        if [[ -z "$version" ]]; then
+          echo "no protoc version for ${key}" >&2
+          exit 1
+        fi
+
+        os="$(uname -s)"
+        machine="$(uname -m)"
+        case "$os" in
+          Linux)
+            case "$machine" in
+              x86_64) plat=linux-x86_64 ;;
+              aarch64|arm64) plat=linux-aarch_64 ;;
+              *) echo "unsupported arch ${machine}" >&2; exit 1 ;;
+            esac
+            ;;
+          Darwin)
+            case "$machine" in
+              arm64) plat=osx-aarch_64 ;;
+              x86_64) plat=osx-x86_64 ;;
+              *) echo "unsupported arch ${machine}" >&2; exit 1 ;;
+            esac
+            ;;
+          MINGW*|MSYS*|CYGWIN*)
+            plat=win64
+            ;;
+          *)
+            echo "unsupported os ${os}" >&2
+            exit 1
+            ;;
+        esac
+
+        dest="${RUNNER_TEMP}/robot-bus-protoc-${version}"
+        mkdir -p "$dest"
+        zip="$dest/protoc.zip"
+        url="https://github.com/protocolbuffers/protobuf/releases/download/v${version}/protoc-${version}-${plat}.zip"
+        curl -fsSL -o "$zip" "$url"
+        unzip -qo "$zip" -d "$dest"
+        if [[ -x "$dest/bin/protoc.exe" ]]; then
+          exe="$dest/bin/protoc.exe"
+        else
+          exe="$dest/bin/protoc"
+        fi
+        "$exe" --version
+
+        if [[ -n "${GITHUB_PATH:-}" ]]; then
+          if command -v cygpath >/dev/null 2>&1; then
+            bin_path="$(cygpath -w "$dest/bin")"
+            exe_path="$(cygpath -w "$exe")"
+          else
+            bin_path="$dest/bin"
+            exe_path="$exe"
+          fi
+          echo "$bin_path" >> "$GITHUB_PATH"
+          {
+            echo "PROTOC=${exe_path}"
+            if [[ "$key" == "CPP_PROTOC" ]]; then
+              echo "ROBOT_BUS_PROTOC_CPP=${exe_path}"
+            elif [[ "$key" == "GENCODE_PROTOC" ]]; then
+              echo "ROBOT_BUS_PROTOC_GENCODE=${exe_path}"
+            fi
+          } >> "$GITHUB_ENV"
+        fi

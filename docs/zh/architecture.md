@@ -34,6 +34,12 @@ Broker 可以在应用内启动，也可以作为独立进程运行。话题用 
 
 跨主机使用 TCP。同一主机上的两个 Broker 如果能访问对端的 IPC 套接字文件，可以使用 `--peer ipc+A:15560`。与缺少 `join` 能力的旧版 Broker 互通时，需要在两侧配置对端。显式端点和固定 IPC 目录见 [Broker 启动选项](rust-api.md#broker启动)。
 
+## 载荷编码
+
+Protobuf 是各 SDK 的默认编码，不是线协议的一部分。Broker 原样转发载荷，不解析内容。不带消息类型的发布者，或使用 raw bytes 接口的发布者，可以发送任何编码。同一话题的订阅方需要自己约定编码。
+
+带类型的发布者会向 Broker 控制台登记类型名。第一次登记的名字保留。之后用另一个名字登记不会覆盖，也不会拒绝连接。控制台记下冲突的名字，对这一对类型发一条 `WARN` 事件，并在话题 API 的 `conflictTypes` 里返回。`rbus topic` 会打印这些名字。只有打开控制台 API 时才做这项检查。Android lite 消息没有 descriptor；生成的类去掉 `org.indunet.robot.bus.` 前缀后登记，这就是 protobuf 全名。不在这个包里的自定义 lite 类型不会登记。
+
 ## ROS 2 桥接
 
 ![桥接进程通过 Bus Node、类型映射器和原生 ROS 客户端连接 Robot Bus 与 ROS 2](../images/architecture-ros2-bridge-zh.svg)

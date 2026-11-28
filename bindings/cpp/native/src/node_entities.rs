@@ -51,6 +51,29 @@ pub extern "C" fn robot_bus_node_create_callback_group(
 }
 
 #[unsafe(no_mangle)]
+pub extern "C" fn robot_bus_node_register_topic_type(
+    n: *mut RobotBusNode,
+    topic: *const c_char,
+    type_name: *const c_char,
+) -> c_int {
+    if n.is_null() {
+        return err("null node");
+    }
+    let topic = match cstr_req(topic) {
+        Ok(topic) => topic,
+        Err(code) => return code,
+    };
+    let type_name = match cstr_req(type_name) {
+        Ok(type_name) => type_name,
+        Err(code) => return code,
+    };
+    unsafe { &mut *n }
+        .inner
+        .register_topic_type(topic, type_name);
+    ok()
+}
+
+#[unsafe(no_mangle)]
 pub extern "C" fn robot_bus_node_create_publisher(
     n: *mut RobotBusNode,
     topic: *const c_char,

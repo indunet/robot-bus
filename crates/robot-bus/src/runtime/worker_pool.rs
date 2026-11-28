@@ -2,11 +2,23 @@
 
 use std::panic::{AssertUnwindSafe, catch_unwind};
 use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
-use std::sync::mpsc::{self, Receiver, SyncSender};
 use std::sync::{Arc, Mutex, Weak};
 use std::thread::{self, JoinHandle};
 
 type Job = Box<dyn FnOnce() + Send + 'static>;
+type CompletionHook = Arc<dyn Fn() + Send + Sync>;
+
+struct CompletionNotify(Option<CompletionHook>);
+
+impl Drop for CompletionNotify {
+    fn drop(&mut self) {
+        if let Some(hook) = self.0.take() {
+            if catch_unwind(AssertUnwindSafe(|| hook())).is_err() {
+                log::error!("robot-bus worker completion hook panicked");
+            }
+        }
+    }
+}
 
 /// Default number of waiting jobs (running jobs do not count toward this limit).
 pub const DEFAULT_QUEUE_CAPACITY: usize = 1024;
@@ -47,20 +59,19 @@ where
 }
 
 struct WorkerPoolInner {
-    tx: Mutex<Option<SyncSender<Job>>>,
+    tx: crossbeam_channel::Sender<Job>,
     capacity: usize,
     admission_limit: usize,
     worker_count: usize,
     counters: Arc<Counters>,
+    completion: Mutex<Option<CompletionHook>>,
     threads: Mutex<Vec<JoinHandle<()>>>,
 }
 
 impl Drop for WorkerPoolInner {
     fn drop(&mut self) {
-        {
-            let mut tx = self.tx.lock().expect("worker pool send mutex");
-            *tx = None;
-        }
+        let (disconnected, _) = crossbeam_channel::bounded::<Job>(1);
+        drop(std::mem::replace(&mut self.tx, disconnected));
         let threads = {
             let mut guard = self.threads.lock().expect("worker pool thread mutex");
             std::mem::take(&mut *guard)
@@ -104,24 +115,25 @@ impl WorkerPool {
         // A running worker can yield its group's continuation even when all
         // external queue slots are occupied. At most n such slots are needed.
         let capacity = admission_limit.saturating_add(n);
-        let (tx, rx) = mpsc::sync_channel::<Job>(capacity);
-        let rx = Arc::new(Mutex::new(rx));
+        let (tx, rx) = crossbeam_channel::bounded::<Job>(capacity);
         let mut threads = Vec::with_capacity(n);
         for i in 0..n {
-            let rx = Arc::clone(&rx);
+            let rx = rx.clone();
             let handle = thread::Builder::new()
                 .name(format!("robot-bus-worker-{i}"))
-                .spawn(move || worker_loop(&rx))
+                .spawn(move || worker_loop(rx))
                 .expect("spawn worker pool thread");
             threads.push(handle);
         }
+        drop(rx);
         Self {
             inner: Arc::new(WorkerPoolInner {
-                tx: Mutex::new(Some(tx)),
+                tx,
                 capacity,
                 admission_limit,
                 worker_count: n,
                 counters: Arc::new(Counters::default()),
+                completion: Mutex::new(None),
                 threads: Mutex::new(threads),
             }),
         }
@@ -129,6 +141,14 @@ impl WorkerPool {
 
     pub(crate) fn worker_count(&self) -> usize {
         self.inner.worker_count
+    }
+
+    /// Runs after each job, including jobs that panic. Installed once by the executor.
+    pub(crate) fn set_completion_hook<F>(&self, hook: F)
+    where
+        F: Fn() + Send + Sync + 'static,
+    {
+        *self.inner.completion.lock().expect("completion hook") = Some(Arc::new(hook));
     }
 
     pub(crate) fn downgrade(&self) -> WeakWorkerPool {
@@ -163,29 +183,24 @@ impl WorkerPool {
         F: FnOnce() + Send + 'static,
     {
         let counters = Arc::clone(&self.inner.counters);
+        if !continuation && counters.pending.load(Ordering::Relaxed) >= self.inner.admission_limit {
+            counters.rejected.fetch_add(1, Ordering::Relaxed);
+            return Err(SubmitError::Full);
+        }
         let job_counters = Arc::clone(&counters);
+        let hook = self
+            .inner
+            .completion
+            .lock()
+            .expect("completion hook")
+            .clone();
         let job: Job = Box::new(move || {
             job_counters.pending.fetch_sub(1, Ordering::Relaxed);
+            let _notify = CompletionNotify(hook);
             job();
         });
-        // Drop rejected closures only after releasing the sender lock: their
-        // captures can include pool handles or other objects with custom Drop.
-        let result = {
-            let guard = self.inner.tx.lock().expect("worker pool send mutex");
-            if !continuation
-                && counters.pending.load(Ordering::Relaxed) >= self.inner.admission_limit
-            {
-                counters.rejected.fetch_add(1, Ordering::Relaxed);
-                drop(guard);
-                return Err(SubmitError::Full);
-            }
-            counters.pending.fetch_add(1, Ordering::Relaxed);
-            match guard.as_ref() {
-                Some(tx) => tx.try_send(job),
-                None => Err(mpsc::TrySendError::Disconnected(job)),
-            }
-        };
-        match result {
+        counters.pending.fetch_add(1, Ordering::Relaxed);
+        match self.inner.tx.try_send(job) {
             Ok(()) => Ok(()),
             Err(err) => {
                 counters.pending.fetch_sub(1, Ordering::Relaxed);
@@ -193,26 +208,17 @@ impl WorkerPool {
                     counters.rejected.fetch_add(1, Ordering::Relaxed);
                 }
                 Err(match err {
-                    mpsc::TrySendError::Full(_) => SubmitError::Full,
-                    mpsc::TrySendError::Disconnected(_) => SubmitError::Closed,
+                    crossbeam_channel::TrySendError::Full(_) => SubmitError::Full,
+                    crossbeam_channel::TrySendError::Disconnected(_) => SubmitError::Closed,
                 })
             }
         }
     }
 }
 
-fn worker_loop(rx: &Mutex<Receiver<Job>>) {
-    loop {
-        let job = {
-            let guard = rx.lock().expect("worker pool recv mutex");
-            guard.recv()
-        };
-        match job {
-            Ok(job) => {
-                let _ = run_callback(job);
-            }
-            Err(_) => break,
-        }
+fn worker_loop(rx: crossbeam_channel::Receiver<Job>) {
+    while let Ok(job) = rx.recv() {
+        let _ = run_callback(job);
     }
 }
 
@@ -220,6 +226,7 @@ fn worker_loop(rx: &Mutex<Receiver<Job>>) {
 mod tests {
     use super::*;
     use std::sync::atomic::{AtomicUsize, Ordering};
+    use std::sync::mpsc;
     use std::time::{Duration, Instant};
 
     #[test]
@@ -238,6 +245,23 @@ mod tests {
         }
         drop(pool);
         assert_eq!(hits.load(Ordering::SeqCst), 1);
+    }
+
+    #[test]
+    fn completion_hook_runs_after_success_and_panic() {
+        let pool = WorkerPool::new(1);
+        let hits = Arc::new(AtomicUsize::new(0));
+        let hits_hook = Arc::clone(&hits);
+        pool.set_completion_hook(move || {
+            hits_hook.fetch_add(1, Ordering::SeqCst);
+        });
+        pool.try_submit(|| {}).unwrap();
+        pool.try_submit(|| panic!("hook must still run")).unwrap();
+        let deadline = Instant::now() + Duration::from_secs(2);
+        while hits.load(Ordering::SeqCst) < 2 {
+            assert!(Instant::now() < deadline, "completion hook did not run");
+            thread::sleep(Duration::from_millis(1));
+        }
     }
     #[test]
     fn panic_does_not_remove_a_worker() {

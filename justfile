@@ -34,9 +34,9 @@ gen-cpp:
 gen-java:
 	python3 scripts/generate_java_msgs.py
 
-# Generate protobuf stubs for Android SDK under bindings/android/generated/
+# Generate lite protobuf stubs for the Android SDK under bindings/android/generated/
 gen-android:
-	ROBOT_BUS_JAVA_OUT=bindings/android/generated python3 scripts/generate_java_msgs.py
+	ROBOT_BUS_JAVA_LITE=1 ROBOT_BUS_JAVA_OUT=bindings/android/generated python3 scripts/generate_java_msgs.py
 
 # Generate Rust prost/tonic stubs under crates/robot-bus-msgs/src/generated/ (gitignored)
 gen-rust:

@@ -458,6 +458,12 @@ pub_.publish(&twist)?;
 
 Service / Action同理（如 `create_client::<SetBool>`、`create_action_client::<Fibonacci>`）。
 
+### 载荷编码
+
+`create_publisher::<M>` 在 `M` 是生成的消息时用 protobuf 编码。这些方法也接受任何 [`WireMessage`](../../crates/robot-bus-msgs/src/typed.rs)：为自己的编码实现 `to_wire` / `from_wire` 即可。`create_publisher_raw` / `create_subscription_raw` 不做编码。Broker 不查看这些字节。
+
+话题上第一次登记的类型名会保留。之后换一个名字只产生警告（控制台话题 API 的 `conflictTypes`，每一对类型一条 `WARN` 事件），不会丢掉发布者或订阅者。只有打开控制台 API 时才有这条警告。
+
 ---
 
 ## WebSocket RPC模式 Node（客户端）

@@ -288,6 +288,9 @@ ROBOT_BUS_API RobotBusTopicPublisher *robot_bus_node_create_publisher_with_qos(
 /** Set transient_local to 1 to retain the latest sample on a native publisher. */
 ROBOT_BUS_API RobotBusTopicPublisher *robot_bus_node_create_publisher_with_topic_qos(
     RobotBusNode *n, const char *topic, int32_t depth, int transient_local);
+/** Best-effort console type registration. Empty names are ignored. Returns 0. */
+ROBOT_BUS_API int robot_bus_node_register_topic_type(RobotBusNode *n, const char *topic,
+                                                     const char *type_name);
 /** Returns opaque handle (NULL on error). `robot_bus_subscription_handle_free`
  * only releases the handle; use `robot_bus_node_destroy_subscription` to
  * unsubscribe. The C++ `SubscriptionHandle` destructor destroys on drop. */

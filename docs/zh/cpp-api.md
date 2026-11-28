@@ -73,7 +73,7 @@ just cpp-dev-ros2
 | macOS (PKG) | `/usr/local/include`、`/usr/local/lib` | 同上；默认搜索路径含 `/usr/local` |
 | Windows (MSI) | `C:\Program Files\robot-bus\include`（+ `lib`，`bin`在 PATH） | `-DCMAKE_PREFIX_PATH="C:/Program Files/robot-bus"` |
 
-安装包（`.deb` / `.msi` / `.pkg`）会带上与 SDK 匹配的 Protobuf 动态库（Windows 的 DLL 在 `bin/`）。用安装包编译自己的程序时，机器上还要有 Protobuf **35.1** 的开发文件。下面的预编译 SDK 压缩包自带头文件、库和 CMake 配置。typed msgs 链接 `robot_bus_msgs`。
+安装包（`.deb` / `.msi` / `.pkg`）和预编译 SDK 压缩包带上 Protobuf **35.1**（`scripts/protobuf-versions.env` 里的 `CPP_PROTOC`），包括头文件、库和 CMake 配置（Windows 的 DLL 在 `bin/`）。对着安装包或这份压缩包编译时用这一份。从本仓库源码构建时，如果找到的 protobuf 和预生成头文件不一致，会重新生成 C++ stubs（`ROBOT_BUS_GENERATE_MSGS=AUTO`）。编译器至少要 3.15，因为 proto 用了 proto3 `optional`。Ubuntu 22.04 的 3.12 不够；Ubuntu 24.04 的系统 protobuf 可以。typed msgs 链接 `robot_bus_msgs`。
 
 运行时检查：`robot_bus::ros2_available()` / `robot_bus_ros2_available()` — 默认包为 `0`，ros2-* 包为 `1`。
 
@@ -419,7 +419,7 @@ target_link_libraries(my_app PRIVATE robot_bus::robot_bus robot_bus::msgs)
 ## 本地开发
 
 ```bash
-just gen-cpp          # 写入 bindings/cpp/generated（gitignored；protoc 35.1）
+just gen-cpp          # 写入 bindings/cpp/generated（gitignored；protoc 35.1，CPP_PROTOC）
 
 just cpp-dev          # cargo FFI + cmake msgs/tests（无 ros2）
 just cpp-dev-ros2     # 原生 rclcpp bridge库（先 source Humble/Jazzy）

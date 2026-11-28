@@ -1,7 +1,7 @@
 use std::marker::PhantomData;
 use std::sync::Arc;
 
-use prost::Message;
+use crate::typed::WireMessage;
 
 use crate::errors::{BusError, Result};
 use crate::message_bus::Publisher as BusPublisher;
@@ -81,18 +81,18 @@ impl TopicPublisherRaw {
 
 /// Typed topic publisher returned by [`Node::create_publisher`] (ROS 2 style).
 #[derive(Clone)]
-pub struct TopicPublisher<M: Message + Default> {
+pub struct TopicPublisher<M: WireMessage> {
     pub(super) inner: TopicPublisherRaw,
     pub(super) _marker: PhantomData<M>,
 }
 
-impl<M: Message + Default> TopicPublisher<M> {
+impl<M: WireMessage> TopicPublisher<M> {
     pub fn topic(&self) -> &str {
         self.inner.topic()
     }
 
     pub fn publish(&self, msg: &M) -> Result<()> {
-        self.inner.publish(&msg.encode_to_vec())
+        self.inner.publish(&msg.to_wire())
     }
 
     pub fn high_water_mark(&self) -> Result<HighWaterMark> {

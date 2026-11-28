@@ -6,6 +6,22 @@ Record changes under the applicable version. Explain what changed, why it change
 
 ## [Unreleased]
 
+### Added
+
+- Topic type conflicts are warnings. The console keeps the first registered type, records later names, emits one `WARN` event per pair, and shows them as `conflictTypes` in the topics API and in `rbus`. Connections are not rejected. This check runs only while the console API is enabled.
+- Rust typed publish, subscribe, service, and action accept any `WireMessage`. Protobuf messages still implement it. A custom codec can be used without changing the broker.
+
+### Changed
+
+- Python depends on `protobuf>=5.29.3,<9`. Java uses `protobuf-java` 4.29.3 or newer. Generated Python and Java stubs come from protoc 29.3. The prebuilt C++ SDK, Rust, and TypeScript stay on protoc 35.1.
+- A C++ source build regenerates message stubs with the protobuf it finds when that runtime does not match the pregenerated 35.1 headers (`ROBOT_BUS_GENERATE_MSGS=AUTO`). The compiler must be 3.15 or newer. Ubuntu 22.04's protobuf 3.12 is not supported for this path. Ubuntu 24.04's system protobuf is.
+- When a multi-threaded executor cannot admit a topic callback, it waits for a worker to finish instead of polling every 1 ms. A 10 ms timeout remains as a fallback.
+- The callback worker queue uses `crossbeam-channel`. A local comparison with 8 workers was about 22–30% faster than `Mutex<Receiver>` on five runs (one run was 14%).
+
+### Breaking
+
+- Android links `protobuf-javalite` instead of `protobuf-java`, and its generated messages are lite. Code that used descriptors, JSON conversion, or other full-runtime APIs on those classes needs to change. The Java (non-Android) SDK still uses the full runtime.
+
 ## [3.3.0]
 
 ### Added

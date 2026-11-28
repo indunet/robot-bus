@@ -1,10 +1,13 @@
 #!/usr/bin/env bash
-# Install protobuf C++ runtime matching EXPECTED_PROTOC_VERSION (35.1).
+# Install the protobuf C++ runtime pinned by CPP_PROTOC in protobuf-versions.env.
 # Usage: scripts/install_protobuf_cpp.sh [prefix]
 set -euo pipefail
 
 PREFIX="${1:-/usr/local}"
-VERSION="${PROTOBUF_VERSION:-35.1}"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck disable=SC1091
+source "$SCRIPT_DIR/protobuf-versions.env"
+VERSION="${PROTOBUF_VERSION:-$CPP_PROTOC}"
 WORK="$(mktemp -d)"
 trap 'rm -rf "$WORK"' EXIT
 

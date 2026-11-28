@@ -17,6 +17,14 @@ use super::retained_topic::{RetainedFilter, is_internal_topic};
 pub(crate) struct ReadyTopics {
     queue: Mutex<VecDeque<Arc<NativeSubscription>>>,
     direct: Option<DirectDispatch>,
+    /// A ticket is waiting because the pool or its callback group was full.
+    deferred: AtomicBool,
+}
+
+enum DirectAdmit {
+    Submitted,
+    Rejected,
+    Inactive,
 }
 
 struct DirectDispatch {
@@ -40,6 +48,7 @@ impl ReadyTopics {
     pub(crate) fn new(pool: Option<&WorkerPool>, running: &Arc<AtomicBool>) -> Self {
         Self {
             queue: Mutex::new(VecDeque::new()),
+            deferred: AtomicBool::new(false),
             direct: pool.map(|pool| DirectDispatch {
                 pool: pool.downgrade(),
                 running: Arc::clone(running),
@@ -62,13 +71,14 @@ impl ReadyTopics {
         let mut queue = self.queue.lock().unwrap();
         let was_empty = queue.is_empty();
         // Give already waiting tickets first use of newly available pool slots.
-        if was_empty
-            && self
-                .direct
-                .as_ref()
-                .is_some_and(|direct| direct.submit(sub))
-        {
-            return false;
+        if was_empty {
+            if let Some(direct) = &self.direct {
+                match direct.admit(sub) {
+                    DirectAdmit::Submitted => return false,
+                    DirectAdmit::Rejected => self.deferred.store(true, Ordering::Release),
+                    DirectAdmit::Inactive => {}
+                }
+            }
         }
         // Manual spin, or a worker/group queue with no room. The executor will
         // retry the ticket while its payload stays in the KeepLast queue.
@@ -80,10 +90,20 @@ impl ReadyTopics {
         self.queue.lock().unwrap().is_empty()
     }
 
+    pub(crate) fn has_deferred(&self) -> bool {
+        self.deferred.load(Ordering::Acquire)
+    }
+
+    /// Clears the flag. The caller wakes the spin thread when this returns true.
+    pub(crate) fn take_deferred(&self) -> bool {
+        self.deferred.swap(false, Ordering::AcqRel)
+    }
+
     pub(crate) fn dispatch(&self, pool: Option<&WorkerPool>) -> bool {
         // Only run one ready item per subscription before polling other entities.
         let count = self.queue.lock().unwrap().len();
         let mut did_work = false;
+        let mut rejected = false;
         for _ in 0..count {
             let mut queue = self.queue.lock().unwrap();
             let Some(sub) = queue.pop_front() else {
@@ -92,6 +112,8 @@ impl ReadyTopics {
             if let Some(pool) = pool {
                 if sub.submit(pool).is_err() {
                     // Keep the bounded inbox with its newest contents until the pool has room.
+                    rejected = true;
+                    self.deferred.store(true, Ordering::Release);
                     queue.push_back(sub);
                     continue;
                 }
@@ -101,19 +123,27 @@ impl ReadyTopics {
             }
             did_work = true;
         }
+        if !rejected {
+            self.deferred.store(false, Ordering::Release);
+        }
         did_work
     }
 }
 
 impl DirectDispatch {
-    fn submit(&self, sub: &Arc<NativeSubscription>) -> bool {
+    fn admit(&self, sub: &Arc<NativeSubscription>) -> DirectAdmit {
         let enabled = self.enabled.lock().unwrap();
-        *enabled
-            && self.running.load(Ordering::Acquire)
-            && self
-                .pool
-                .upgrade()
-                .is_some_and(|pool| sub.submit(&pool).is_ok())
+        if !*enabled || !self.running.load(Ordering::Acquire) {
+            return DirectAdmit::Inactive;
+        }
+        let Some(pool) = self.pool.upgrade() else {
+            return DirectAdmit::Inactive;
+        };
+        if sub.submit(&pool).is_ok() {
+            DirectAdmit::Submitted
+        } else {
+            DirectAdmit::Rejected
+        }
     }
 }
 
@@ -535,5 +565,41 @@ mod tests {
         assert_eq!(latest, Some(10));
         assert_eq!(newer, Some(11));
         assert!(ready.is_empty());
+    }
+
+    #[test]
+    fn completion_hook_observes_a_rejected_ticket() {
+        let pool = WorkerPool::with_queue_capacity(1, 1);
+        let running = Arc::new(AtomicBool::new(true));
+        let ready = Arc::new(ReadyTopics::new(Some(&pool), &running));
+        let saw = Arc::new(AtomicBool::new(false));
+        let saw_hook = Arc::clone(&saw);
+        let ready_hook = Arc::clone(&ready);
+        pool.set_completion_hook(move || {
+            if ready_hook.take_deferred() {
+                saw_hook.store(true, Ordering::SeqCst);
+            }
+        });
+        let (entered_tx, entered_rx) = mpsc::channel();
+        let (release_tx, release_rx) = mpsc::channel();
+        pool.try_submit(move || {
+            entered_tx.send(()).unwrap();
+            release_rx.recv_timeout(WAIT).unwrap();
+        })
+        .unwrap();
+        entered_rx.recv_timeout(WAIT).unwrap();
+        pool.try_submit(|| {}).unwrap();
+
+        let _guard = ready.enable_direct_dispatch();
+        let (sub, _rx) = subscription(&ready, 4);
+        sub.push(Arc::new(vec![1]), 0);
+        assert!(ready.has_deferred());
+
+        release_tx.send(()).unwrap();
+        let deadline = std::time::Instant::now() + WAIT;
+        while !saw.load(Ordering::SeqCst) {
+            assert!(std::time::Instant::now() < deadline, "completion did not wake");
+            std::thread::sleep(Duration::from_millis(1));
+        }
     }
 }

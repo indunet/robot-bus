@@ -73,7 +73,7 @@ After a system install you should be able to compile against the headers immedia
 | macOS (PKG) | `/usr/local/include`, `/usr/local/lib` | same; `/usr/local` is on default search paths |
 | Windows (MSI) | `C:\Program Files\robot-bus\include` (+ `lib`, `bin` on PATH) | `-DCMAKE_PREFIX_PATH="C:/Program Files/robot-bus"` |
 
-Installer packages (`.deb` / `.msi` / `.pkg`) ship the matching Protobuf shared libraries beside the SDK (DLLs under `bin/` on Windows). Compiling your own sources against an installer requires a Protobuf **35.1** development package on the machine. The prebuilt SDK archive below includes Protobuf 35.1 headers, libraries, and CMake config. Typed messages link `robot_bus_msgs`.
+Installer packages (`.deb` / `.msi` / `.pkg`) and the prebuilt SDK archive ship Protobuf **35.1** (`CPP_PROTOC` in `scripts/protobuf-versions.env`) beside the SDK, including headers, libraries, and CMake config (DLLs under `bin/` on Windows). Compiling against an installer or that archive uses this copy. A source build from this repository regenerates C++ stubs when the protobuf it finds does not match the pregenerated headers (`ROBOT_BUS_GENERATE_MSGS=AUTO`). The compiler must be 3.15 or newer, because the protos use proto3 `optional`. Ubuntu 22.04's 3.12 is not enough; Ubuntu 24.04's system protobuf is. Typed messages link `robot_bus_msgs`.
 
 Check at runtime: `robot_bus::ros2_available()` / `robot_bus_ros2_available()` — `0` on the default package, `1` on ros2-* packages.
 
@@ -408,7 +408,7 @@ target_link_libraries(my_app PRIVATE robot_bus::robot_bus robot_bus::msgs)
 ## Local development
 
 ```bash
-just gen-cpp          # write bindings/cpp/generated (gitignored; protoc 35.1)
+just gen-cpp          # write bindings/cpp/generated (gitignored; protoc 35.1, CPP_PROTOC)
 
 just cpp-dev          # cargo FFI + cmake msgs/tests (no ros2)
 just cpp-dev-ros2     # native rclcpp bridge lib (source Humble/Jazzy first)

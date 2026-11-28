@@ -53,7 +53,7 @@ android {
 dependencies {
     // Device: JNA Android AAR. Host unit tests also need the platform JAR (jnidispatch).
     api("net.java.dev.jna:jna:5.16.0@aar")
-    api("com.google.protobuf:protobuf-java:4.35.1")
+    api("com.google.protobuf:protobuf-javalite:4.29.3")
 
     testImplementation("net.java.dev.jna:jna:5.16.0")
     testImplementation("junit:junit:4.13.2")

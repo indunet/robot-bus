@@ -15,15 +15,164 @@ option(ROBOT_BUS_ROS2 "Enable native C++ ROS 2 bridge (rclcpp)" OFF)
 # (ABSL_CONSUME_DLL / PROTOBUF_USE_DLLS on Windows shared builds). CMake's
 # FindProtobuf MODULE mode only locates libprotobuf and skips Abseil, which
 # causes MSVC LNK2001 for LogMessage::operator<< in generated .pb.cc.
-find_package(Protobuf CONFIG REQUIRED)
+# Older distro packages (Ubuntu 22.04's 3.12) ship no config file; fall back
+# to the module and synthesize the same imported target.
+find_package(Protobuf CONFIG QUIET)
+if(NOT Protobuf_FOUND)
+  find_package(Protobuf REQUIRED)
+  if(NOT TARGET protobuf::libprotobuf)
+    add_library(protobuf::libprotobuf UNKNOWN IMPORTED)
+    set_target_properties(protobuf::libprotobuf PROPERTIES
+      IMPORTED_LOCATION "${Protobuf_LIBRARIES}"
+      INTERFACE_INCLUDE_DIRECTORIES "${Protobuf_INCLUDE_DIRS}")
+  endif()
+endif()
 
-set(ROBOT_BUS_GENERATED_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/generated")
+set(ROBOT_BUS_GENERATE_MSGS "AUTO" CACHE STRING
+  "Generate C++ stubs with the protobuf found here. AUTO regenerates when pregenerated stubs do not match. ON always generates. OFF keeps bindings/cpp/generated.")
+set_property(CACHE ROBOT_BUS_GENERATE_MSGS PROPERTY STRINGS AUTO ON OFF)
+set(ROBOT_BUS_PROTO_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/../../proto")
+set(ROBOT_BUS_PREGENERATED_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/generated")
 set(ROBOT_BUS_INCLUDE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/include")
 
-# --- msgs library from committed generated sources ---
+# Code baked into a pregenerated header (#if PROTOBUF_VERSION != N) or, for
+# protobuf 3.x stubs, absent. The installed runtime's matching macro is
+# PROTOBUF_VERSION (22+) or GOOGLE_PROTOBUF_VERSION (3.x).
+function(_robot_bus_header_version header macro out_var)
+  set(${out_var} "" PARENT_SCOPE)
+  if(NOT EXISTS "${header}")
+    return()
+  endif()
+  file(READ "${header}" _text LIMIT 8000)
+  string(REGEX MATCH "#define ${macro} ([0-9]+)" _match "${_text}")
+  if(CMAKE_MATCH_1)
+    set(${out_var} "${CMAKE_MATCH_1}" PARENT_SCOPE)
+  endif()
+endfunction()
+
+function(_robot_bus_runtime_version out_var)
+  set(_header "")
+  if(TARGET protobuf::libprotobuf)
+    get_target_property(_incs protobuf::libprotobuf INTERFACE_INCLUDE_DIRECTORIES)
+    if(NOT _incs)
+      set(_incs "")
+    endif()
+    foreach(_dir IN LISTS _incs Protobuf_INCLUDE_DIRS)
+      if(EXISTS "${_dir}/google/protobuf/runtime_version.h")
+        set(_header "${_dir}/google/protobuf/runtime_version.h")
+        break()
+      elseif(EXISTS "${_dir}/google/protobuf/stubs/common.h")
+        set(_header "${_dir}/google/protobuf/stubs/common.h")
+      endif()
+    endforeach()
+  endif()
+  set(_code "")
+  if(_header MATCHES "runtime_version.h$")
+    _robot_bus_header_version("${_header}" PROTOBUF_VERSION _code)
+  elseif(NOT _header STREQUAL "")
+    _robot_bus_header_version("${_header}" GOOGLE_PROTOBUF_VERSION _code)
+  endif()
+  set(${out_var} "${_code}" PARENT_SCOPE)
+endfunction()
+
+function(_robot_bus_pregenerated_version out_var)
+  set(${out_var} "" PARENT_SCOPE)
+  file(GLOB _sample "${ROBOT_BUS_PREGENERATED_ROOT}/robot_bus/std_msgs/msg/v1/header.pb.h")
+  if(NOT _sample)
+    return()
+  endif()
+  file(READ "${_sample}" _text LIMIT 2500)
+  string(REGEX MATCH "PROTOBUF_VERSION != ([0-9]+)" _match "${_text}")
+  if(CMAKE_MATCH_1)
+    set(${out_var} "${CMAKE_MATCH_1}" PARENT_SCOPE)
+  endif()
+endfunction()
+
+set(_robot_bus_generate OFF)
+if(ROBOT_BUS_GENERATE_MSGS STREQUAL "ON")
+  set(_robot_bus_generate ON)
+elseif(ROBOT_BUS_GENERATE_MSGS STREQUAL "OFF")
+  set(_robot_bus_generate OFF)
+else()
+  _robot_bus_runtime_version(_robot_bus_runtime)
+  _robot_bus_pregenerated_version(_robot_bus_pregenerated)
+  if(_robot_bus_pregenerated STREQUAL "")
+    set(_robot_bus_generate ON)
+  elseif(NOT _robot_bus_runtime STREQUAL "" AND NOT _robot_bus_runtime STREQUAL _robot_bus_pregenerated)
+    set(_robot_bus_generate ON)
+  endif()
+endif()
+
+if(_robot_bus_generate)
+  if(NOT EXISTS "${ROBOT_BUS_PROTO_ROOT}/std_msgs/msg/v1/header.proto")
+    message(FATAL_ERROR
+      "protobuf ${Protobuf_VERSION} does not match the pregenerated C++ stubs, "
+      "and ${ROBOT_BUS_PROTO_ROOT} is not available to regenerate them. "
+      "Install the protobuf that matches bindings/cpp/generated, or build from a git checkout that contains proto/.")
+  endif()
+  if(NOT Protobuf_PROTOC_EXECUTABLE)
+    message(FATAL_ERROR "protoc was not found next to the protobuf runtime")
+  endif()
+  execute_process(
+    COMMAND "${Protobuf_PROTOC_EXECUTABLE}" --version
+    OUTPUT_VARIABLE _robot_bus_protoc_version
+    OUTPUT_STRIP_TRAILING_WHITESPACE
+    ERROR_QUIET)
+  # proto3 `optional` needs protoc 3.15+. Ubuntu 22.04's 3.12 cannot compile these files.
+  if(_robot_bus_protoc_version MATCHES "([0-9]+)\\.([0-9]+)")
+    if(CMAKE_MATCH_1 EQUAL 3 AND CMAKE_MATCH_2 LESS 15)
+      message(FATAL_ERROR
+        "${_robot_bus_protoc_version} cannot compile these protos: proto3 optional requires protoc 3.15 or newer. "
+        "Ubuntu 22.04 ships 3.12. Use Ubuntu 24.04's protobuf, or the prebuilt package's protobuf (CPP_PROTOC in scripts/protobuf-versions.env).")
+    endif()
+  endif()
+  set(ROBOT_BUS_GENERATED_ROOT "${CMAKE_CURRENT_BINARY_DIR}/generated")
+  message(STATUS "robot_bus: generating C++ stubs with ${Protobuf_PROTOC_EXECUTABLE} into ${ROBOT_BUS_GENERATED_ROOT}")
+else()
+  set(ROBOT_BUS_GENERATED_ROOT "${ROBOT_BUS_PREGENERATED_ROOT}")
+  message(STATUS "robot_bus: using pregenerated C++ stubs in ${ROBOT_BUS_GENERATED_ROOT}")
+endif()
+
+# --- msgs library ---
 if(ROBOT_BUS_BUILD_MSGS)
-  file(GLOB_RECURSE ROBOT_BUS_PB_SOURCES CONFIGURE_DEPENDS
-    "${ROBOT_BUS_GENERATED_ROOT}/robot_bus/*.pb.cc")
+  if(_robot_bus_generate)
+    file(GLOB_RECURSE ROBOT_BUS_PROTO_FILES CONFIGURE_DEPENDS
+      "${ROBOT_BUS_PROTO_ROOT}/*.proto")
+    list(FILTER ROBOT_BUS_PROTO_FILES EXCLUDE REGEX "/robot_bus_interfaces/grpc/")
+    set(ROBOT_BUS_PB_SOURCES "")
+    foreach(_proto IN LISTS ROBOT_BUS_PROTO_FILES)
+      file(RELATIVE_PATH _rel "${ROBOT_BUS_PROTO_ROOT}" "${_proto}")
+      string(REGEX REPLACE "\\.proto$" ".pb.cc" _rel_cc "${_rel}")
+      list(APPEND ROBOT_BUS_PB_SOURCES "${ROBOT_BUS_GENERATED_ROOT}/robot_bus/${_rel_cc}")
+    endforeach()
+    # protobuf_generate() cannot add the robot_bus/ include prefix or the
+    # dllexport_decl this shared library needs. Use the protoc find_package
+    # located, which is what that function would invoke, then rewrite includes.
+    set(_gen_root "${ROBOT_BUS_GENERATED_ROOT}/robot_bus")
+    add_custom_command(
+      OUTPUT ${ROBOT_BUS_PB_SOURCES}
+      COMMAND ${CMAKE_COMMAND} -E rm -rf "${ROBOT_BUS_GENERATED_ROOT}"
+      COMMAND ${CMAKE_COMMAND} -E make_directory "${_gen_root}"
+      COMMAND ${Protobuf_PROTOC_EXECUTABLE}
+              --proto_path=${ROBOT_BUS_PROTO_ROOT}
+              --cpp_out=dllexport_decl=ROBOT_BUS_MSGS_API:${_gen_root}
+              ${ROBOT_BUS_PROTO_FILES}
+      COMMAND ${CMAKE_COMMAND}
+              -DROBOT_BUS_GEN_ROOT=${_gen_root}
+              -P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/rewrite_pb_includes.cmake
+      DEPENDS ${ROBOT_BUS_PROTO_FILES}
+              ${CMAKE_CURRENT_SOURCE_DIR}/cmake/rewrite_pb_includes.cmake
+      COMMENT "Generating C++ protobuf stubs"
+      VERBATIM)
+  else()
+    file(GLOB_RECURSE ROBOT_BUS_PB_SOURCES CONFIGURE_DEPENDS
+      "${ROBOT_BUS_GENERATED_ROOT}/robot_bus/*.pb.cc")
+    if(NOT ROBOT_BUS_PB_SOURCES)
+      message(FATAL_ERROR
+        "No pregenerated C++ stubs in ${ROBOT_BUS_GENERATED_ROOT}. "
+        "Run scripts/generate_cpp_msgs.py or configure with -DROBOT_BUS_GENERATE_MSGS=ON.")
+    endif()
+  endif()
   add_library(robot_bus_msgs SHARED ${ROBOT_BUS_PB_SOURCES})
   add_library(robot_bus::msgs ALIAS robot_bus_msgs)
   target_include_directories(robot_bus_msgs
@@ -32,6 +181,8 @@ if(ROBOT_BUS_BUILD_MSGS)
       $<BUILD_INTERFACE:${ROBOT_BUS_INCLUDE_DIR}>
       $<INSTALL_INTERFACE:include>)
   target_link_libraries(robot_bus_msgs PUBLIC protobuf::libprotobuf)
+  add_executable(msgs_proto_only tests/msgs_proto_only.cpp)
+  target_link_libraries(msgs_proto_only PRIVATE robot_bus_msgs)
   # Belt-and-suspenders: shared Abseil on MSVC exports LogMessage templates
   # from abseil_dll; without ABSL_CONSUME_DLL the linker looks for static
   # symbols and fails with LNK2001.

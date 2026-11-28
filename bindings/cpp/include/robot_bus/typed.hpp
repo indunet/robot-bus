@@ -41,6 +41,27 @@ bool try_parse_message_lite(const BytesView &payload, Msg *out) {
   return true;
 }
 
+template <typename Msg, typename = void>
+struct MessageTypeName {
+  static void apply(Node &, const char *) {}
+};
+
+template <typename Msg>
+struct MessageTypeName<Msg, std::void_t<decltype(Msg::descriptor()->full_name())>> {
+  static void apply(Node &node, const char *topic) {
+    // Protobuf 3.x returns std::string; 22+ returns absl::string_view.
+    const std::string name(Msg::descriptor()->full_name());
+    if (!name.empty()) {
+      node.register_topic_type(topic, name.c_str());
+    }
+  }
+};
+
+template <typename Msg>
+void register_message_type(Node &node, const char *topic) {
+  MessageTypeName<Msg>::apply(node, topic);
+}
+
 }  // namespace detail
 
 /// Encode any MessageLite to opaque bytes (for typed action FEEDBACK/RESULT phases).
@@ -71,10 +92,12 @@ template <typename Msg>
 [[nodiscard]] TypedTopicPublisher<Msg> create_publisher(Node &node, const char *topic,
                                                         int32_t qos_depth = 0,
                                                         bool transient_local = false) {
-  if (qos_depth > 0 || transient_local) {
-    return TypedTopicPublisher<Msg>(node.create_publisher(topic, qos_depth, transient_local));
-  }
-  return TypedTopicPublisher<Msg>(node.create_publisher(topic));
+  TypedTopicPublisher<Msg> publisher =
+      (qos_depth > 0 || transient_local)
+          ? TypedTopicPublisher<Msg>(node.create_publisher(topic, qos_depth, transient_local))
+          : TypedTopicPublisher<Msg>(node.create_publisher(topic));
+  detail::register_message_type<Msg>(node, topic);
+  return publisher;
 }
 
 template <typename Msg>
@@ -82,7 +105,7 @@ template <typename Msg>
     Node &node, const char *topic, std::function<void(const Msg &)> callback,
     const CallbackGroup *group = nullptr, int32_t qos_depth = 0,
     bool transient_local = false) {
-  return node.create_subscription(
+  auto handle = node.create_subscription(
       topic,
       [cb = std::move(callback)](BytesView payload) {
         Msg msg;
@@ -92,6 +115,8 @@ template <typename Msg>
         cb(msg);
       },
       group, qos_depth, transient_local);
+  detail::register_message_type<Msg>(node, topic);
+  return handle;
 }
 
 template <typename Req, typename Resp>

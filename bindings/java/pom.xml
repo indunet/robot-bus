@@ -40,7 +40,7 @@
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     <maven.compiler.release>11</maven.compiler.release>
     <jna.version>5.16.0</jna.version>
-    <protobuf.version>4.35.1</protobuf.version>
+    <protobuf.version>4.29.3</protobuf.version>
     <junit.version>5.11.4</junit.version>
   </properties>
 

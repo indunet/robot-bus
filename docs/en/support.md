@@ -19,6 +19,19 @@ Core SDKs need no ROS installation unless the bridge is enabled. The table refle
 
 Consult the [language API guides](../../README.md#16-documentation) for interface differences. WS Nodes operate as clients and cannot register service/action servers.
 
+## Protobuf runtimes
+
+Pins live in `scripts/protobuf-versions.env`. The broker carries opaque bytes. Protobuf is the default SDK encoding, not a wire requirement.
+
+| Language | Code generator | Runtime |
+| --- | --- | --- |
+| C++ prebuilt SDK and installers | protoc 35.1 (`CPP_PROTOC`) | The bundled protobuf 35.1. Do not mix another protobuf in the same process. |
+| C++ source build | The `protoc` found at configure time, 3.15 or newer (`ROBOT_BUS_GENERATE_MSGS=AUTO`) | That same protobuf. Ubuntu 22.04's 3.12 cannot compile proto3 `optional`. Ubuntu 24.04's system protobuf can. |
+| Rust, TypeScript | protoc 35.1 (`CPP_PROTOC`) | prost (Rust) and the generated TypeScript runtime. No separate protobuf package pin. |
+| Python | protoc 29.3 (`GENCODE_PROTOC`) | `protobuf>=5.29.3,<9`. Checked on 5.29.3, 6.33.6, and 7.36.2. |
+| Java | protoc 29.3 (`GENCODE_PROTOC`) | `protobuf-java` 4.29.3 or newer. Checked on 4.29.3, 4.33.6, and 4.36.2. |
+| Android | protoc 29.3 with `--java_out=lite` | `protobuf-javalite` 4.29.3 or newer. Lite messages have no descriptors. |
+
 The [release workflow](../../.github/workflows/release-cpp.yml) job `sdk-smoke` downloads the Linux amd64 and Windows x64 core SDK archives and builds a FetchContent consumer (a protobuf round-trip and an in-process node) on a runner that does not install protobuf or Rust. The same workflow uploads arm64, macOS, and ROS 2 archives; this smoke job covers the two core archives above.
 
 ## Reliability regression tests

@@ -76,6 +76,8 @@ struct TopicRow {
     type_name: Option<String>,
     #[serde(default)]
     total_msgs: u64,
+    #[serde(default)]
+    conflict_types: Vec<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -154,7 +156,7 @@ fn typed_publisher_registers_type_before_traffic() {
 }
 
 #[test]
-fn type_register_last_write_wins() {
+fn type_register_keeps_the_first_name_and_records_the_conflict() {
     let _guard = lock_brokers();
     let http_port = 28870u16;
     let broker = RobotBusBroker::start(test_broker_config(
@@ -182,10 +184,8 @@ fn type_register_last_write_wins() {
     }
 
     let info = get_topic_info(&console_url, "/conflict");
-    assert_eq!(
-        info.type_name.as_deref(),
-        Some(BusString::full_name().as_str())
-    );
+    assert_eq!(info.type_name.as_deref(), Some("sensor_msgs.msg.v1.Imu"));
+    assert_eq!(info.conflict_types, vec![BusString::full_name()]);
 
     broker.stop().expect("stop");
 }

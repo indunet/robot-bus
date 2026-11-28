@@ -17,9 +17,6 @@ on:
 permissions:
   contents: write
 
-env:
-  PROTOC_VERSION: "35.1"
-
 jobs:
   # Core SDK (no ROS). One artifact per arch, both on 22.04 so glibc works
   # on Humble/22.04 and newer (24.04 can load a 22.04 binary; not vice versa).
@@ -30,10 +27,8 @@ jobs:
         include:
           - runner: ubuntu-22.04
             arch: amd64
-            protoc_zip: protoc-35.1-linux-x86_64.zip
           - runner: ubuntu-22.04-arm
             arch: arm64
-            protoc_zip: protoc-35.1-linux-aarch_64.zip
     runs-on: ${{ matrix.runner }}
     steps:
       - uses: actions/checkout@v6
@@ -57,12 +52,13 @@ jobs:
             cmake g++ pkg-config \
             curl unzip ninja-build patchelf binutils
 
-      - name: Install pinned protoc + C++ runtime
+      - name: Install protobuf compiler
+        uses: ./.github/actions/install-protoc
+        with:
+          key: CPP_PROTOC
+      - name: Install pinned protobuf C++ runtime
         run: |
           set -eux
-          curl -fsSL -o /tmp/protoc.zip \
-            "https://github.com/protocolbuffers/protobuf/releases/download/v${PROTOC_VERSION}/${{ matrix.protoc_zip }}"
-          sudo unzip -o /tmp/protoc.zip -d /usr/local
           sudo ./scripts/install_protobuf_cpp.sh /usr/local
           sudo ldconfig
           protoc --version
@@ -164,19 +160,15 @@ jobs:
           - runner: ubuntu-22.04
             arch: amd64
             distro: humble
-            protoc_zip: protoc-35.1-linux-x86_64.zip
           - runner: ubuntu-24.04
             arch: amd64
             distro: jazzy
-            protoc_zip: protoc-35.1-linux-x86_64.zip
           - runner: ubuntu-22.04-arm
             arch: arm64
             distro: humble
-            protoc_zip: protoc-35.1-linux-aarch_64.zip
           - runner: ubuntu-24.04-arm
             arch: arm64
             distro: jazzy
-            protoc_zip: protoc-35.1-linux-aarch_64.zip
     runs-on: ${{ matrix.runner }}
     steps:
       - uses: actions/checkout@v6
@@ -237,12 +229,13 @@ jobs:
             "ros-${{ matrix.distro }}-test-msgs" \
             "ros-${{ matrix.distro }}-rmw-fastrtps-cpp"
 
-      - name: Install pinned protoc + C++ runtime
+      - name: Install protobuf compiler
+        uses: ./.github/actions/install-protoc
+        with:
+          key: CPP_PROTOC
+      - name: Install pinned protobuf C++ runtime
         run: |
           set -eux
-          curl -fsSL -o /tmp/protoc.zip \
-            "https://github.com/protocolbuffers/protobuf/releases/download/v${PROTOC_VERSION}/${{ matrix.protoc_zip }}"
-          sudo unzip -o /tmp/protoc.zip -d /usr/local
           sudo ./scripts/install_protobuf_cpp.sh /usr/local
           sudo ldconfig
           protoc --version
@@ -380,20 +373,13 @@ jobs:
           cache-dependency-path: console/pnpm-lock.yaml
 
       # Windows previously mixed Chocolatey protoc with unpinned vcpkg
-      # libprotobuf (currently ~33.4), which trips the generated-header
-      # PROTOBUF_VERSION guard. Pin both sides to PROTOC_VERSION like Linux/macOS.
-      # protoc must be on PATH before build_console.sh (TypeScript codegen).
-      - name: Install pinned protoc ${{ env.PROTOC_VERSION }}
-        shell: bash
-        run: |
-          set -eux
-          curl -fsSL -o /tmp/protoc.zip \
-            "https://github.com/protocolbuffers/protobuf/releases/download/v${PROTOC_VERSION}/protoc-${PROTOC_VERSION}-win64.zip"
-          rm -rf /c/protoc
-          mkdir -p /c/protoc
-          unzip -o /tmp/protoc.zip -d /c/protoc
-          echo "/c/protoc/bin" >> "$GITHUB_PATH"
-          /c/protoc/bin/protoc.exe --version
+      # libprotobuf, which trips the generated-header PROTOBUF_VERSION guard.
+      # Pin the compiler and the runtime to CPP_PROTOC. protoc must be on PATH
+      # before build_console.sh (TypeScript codegen).
+      - name: Install protobuf compiler
+        uses: ./.github/actions/install-protoc
+        with:
+          key: CPP_PROTOC
 
       - name: Build embedded console assets
         shell: bash
@@ -403,7 +389,7 @@ jobs:
         shell: bash
         run: choco install wixtoolset -y
 
-      - name: Install pinned protobuf C++ runtime ${{ env.PROTOC_VERSION }}
+      - name: Install pinned protobuf C++ runtime
         shell: bash
         run: |
           set -eux
@@ -416,8 +402,7 @@ jobs:
         shell: bash
         run: |
           set -eux
-          export PROTOC="/c/protoc/bin/protoc.exe"
-          "$PROTOC" --version
+          protoc --version
           python3 scripts/generate_cpp_msgs.py
           python3 scripts/generate_rust_msgs.py
 
@@ -549,12 +534,13 @@ jobs:
           brew install cmake pkg-config ninja
           brew unlink protobuf 2>/dev/null || true
 
-      - name: Install pinned protoc + C++ runtime
+      - name: Install protobuf compiler
+        uses: ./.github/actions/install-protoc
+        with:
+          key: CPP_PROTOC
+      - name: Install pinned protobuf C++ runtime
         run: |
           set -eux
-          curl -fsSL -o /tmp/protoc.zip \
-            "https://github.com/protocolbuffers/protobuf/releases/download/v${PROTOC_VERSION}/protoc-${PROTOC_VERSION}-osx-aarch_64.zip"
-          sudo unzip -o /tmp/protoc.zip -d /usr/local
           sudo ./scripts/install_protobuf_cpp.sh /usr/local
           export PATH="/usr/local/bin:$PATH"
           protoc --version

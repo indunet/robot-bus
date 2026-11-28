@@ -569,7 +569,7 @@ class MyFibonacciMapper:
 
 启用 Cargo 的 `ros2` 功能时，桥使用 `rclrs` 0.8、`ros-env` 0.3 和 `rosidl_runtime_rs` 0.7。构建需要 `AMENT_PREFIX_PATH` 中的 Rust 消息定义（`share/<pkg>/rust/`）以及对应的 ROS 系统库。Nav2、Foxglove 等扩展包可通过自定义 mapper 接入。
 
-安装 ROS 2 Humble 和构建工具（Rust、Protobuf 编译器 35.1、C/C++ 工具链及 pkg-config）后，在仓库根目录执行：
+安装 ROS 2 Humble 和构建工具（Rust、用于 Rust 桥和预编译 C++ 包的 Protobuf 编译器 35.1、C/C++ 工具链及 pkg-config）后，在仓库根目录执行：
 
 ```bash
 sudo apt-get install ros-humble-rosidl-generator-rs \

@@ -6,15 +6,13 @@ use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::{Duration, Instant};
 
-use prost::Message;
-
 use crate::action_bus::{ActionClient as BusActionClient, ActionKind, ActionMessage};
 use crate::errors::{BusError, Result, parse_error_body};
 use crate::runtime::console_ready::{self, ReadyKind};
 use crate::runtime::topology_register::TopologyEndpointGuard;
 #[cfg(feature = "ws")]
 use crate::runtime::ws_runtime::WsClientContext;
-use crate::typed::{Action, ActionOutcome};
+use crate::typed::{Action, ActionOutcome, WireMessage};
 use crate::zmq_helpers::HighWaterMark;
 
 /// Action server handle returned by [`Node::create_action_server`] /
@@ -314,7 +312,7 @@ impl<A: Action> GoalHandle<A> {
 
     pub fn wait_result(&self) -> Result<A::Result> {
         let message = self.inner.wait_result()?;
-        A::Result::decode(message.body.as_slice()).map_err(|err| {
+        A::Result::from_wire(message.body.as_slice()).map_err(|err| {
             BusError::Protocol(format!(
                 "action '{}' result decode failed: {err}",
                 self.action_name()
@@ -490,7 +488,7 @@ impl<A: Action> NodeActionClient<A> {
         let action_name = self.action_name().to_string();
         let raw_callback = feedback_callback.map(|callback| {
             Arc::new(move |message: &ActionMessage| {
-                match A::Feedback::decode(message.body.as_slice()) {
+                match A::Feedback::from_wire(message.body.as_slice()) {
                     Ok(feedback) => callback(feedback),
                     Err(err) => {
                         log::warn!("action '{}' feedback decode failed: {err}", action_name)
@@ -500,7 +498,7 @@ impl<A: Action> NodeActionClient<A> {
         });
         let inner = self
             .inner
-            .send_goal(&goal.encode_to_vec(), goal_id, timeout, raw_callback)?;
+            .send_goal(&goal.to_wire(), goal_id, timeout, raw_callback)?;
         Ok(GoalHandle {
             inner,
             _marker: PhantomData,
@@ -516,13 +514,13 @@ impl<A: Action> NodeActionClient<A> {
     ) -> Result<ActionOutcome<A>> {
         let messages = self
             .inner
-            .send_goal_and_wait(&goal.encode_to_vec(), goal_id, timeout)?;
+            .send_goal_and_wait(&goal.to_wire(), goal_id, timeout)?;
         let mut feedbacks = Vec::new();
         let mut result = None;
         for msg in messages {
             match msg.kind {
                 ActionKind::Feedback => {
-                    let fb = A::Feedback::decode(msg.body.as_slice()).map_err(|err| {
+                    let fb = A::Feedback::from_wire(msg.body.as_slice()).map_err(|err| {
                         BusError::Protocol(format!(
                             "action '{}' feedback decode failed: {err}",
                             self.action_name()
@@ -531,7 +529,7 @@ impl<A: Action> NodeActionClient<A> {
                     feedbacks.push(fb);
                 }
                 ActionKind::Result => {
-                    let res = A::Result::decode(msg.body.as_slice()).map_err(|err| {
+                    let res = A::Result::from_wire(msg.body.as_slice()).map_err(|err| {
                         BusError::Protocol(format!(
                             "action '{}' result decode failed: {err}",
                             self.action_name()

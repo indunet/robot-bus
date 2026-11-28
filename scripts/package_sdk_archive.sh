@@ -15,7 +15,7 @@
 # are copied in with relative RPATHs. ROS libraries stay in the system install.
 #
 # Env:
-#   PROTOBUF_PREFIX   install prefix of protobuf 35.1 (default /usr/local)
+#   PROTOBUF_PREFIX   install prefix of the CPP_PROTOC protobuf runtime (default /usr/local)
 #   EXTRA_LIB_DIRS    colon-separated directories searched for NEEDED libraries
 set -euo pipefail
 

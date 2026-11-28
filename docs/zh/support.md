@@ -19,6 +19,19 @@
 
 各语言接口差异以对应 [API 指南](../../README-zh.md#16-文档) 为准。WS Node 是客户端模式，不提供 service/action 服务端注册。
 
+## Protobuf 运行时
+
+版本集中在 `scripts/protobuf-versions.env`。Broker 转发的是不透明字节。Protobuf 是 SDK 的默认编码，不是线协议要求。
+
+| 语言 | 代码生成 | 运行时 |
+| --- | --- | --- |
+| C++ 预编译 SDK 和安装包 | protoc 35.1（`CPP_PROTOC`） | 随包的 protobuf 35.1。同一进程不要再链另一份 protobuf。 |
+| C++ 源码构建 | 配置时找到的 `protoc`，至少 3.15（`ROBOT_BUS_GENERATE_MSGS=AUTO`） | 同一份 protobuf。Ubuntu 22.04 的 3.12 编不过 proto3 `optional`。Ubuntu 24.04 的系统 protobuf 可以。 |
+| Rust、TypeScript | protoc 35.1（`CPP_PROTOC`） | Rust 用 prost，TypeScript 用生成的运行时。没有单独的 protobuf 包版本下限。 |
+| Python | protoc 29.3（`GENCODE_PROTOC`） | `protobuf>=5.29.3,<9`。已在 5.29.3、6.33.6、7.36.2 上验证。 |
+| Java | protoc 29.3（`GENCODE_PROTOC`） | `protobuf-java` 4.29.3 或更新。已在 4.29.3、4.33.6、4.36.2 上验证。 |
+| Android | protoc 29.3，`--java_out=lite` | `protobuf-javalite` 4.29.3 或更新。lite 消息没有 descriptor。 |
+
 [发布工作流](../../.github/workflows/release-cpp.yml) 的 `sdk-smoke` 会下载 Linux amd64 和 Windows x64 核心 SDK 压缩包，并在未安装 protobuf 和 Rust 的 runner 上用 FetchContent 编译一个消费者（protobuf 往返和一个进程内 node）。同一工作流还会上传 arm64、macOS 和 ROS 2 压缩包；这次冒烟覆盖上面两个核心包。
 
 ## 可靠性回归测试

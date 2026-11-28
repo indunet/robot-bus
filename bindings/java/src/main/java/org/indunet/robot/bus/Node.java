@@ -172,7 +172,10 @@ public final class Node implements AutoCloseable {
         ProtoCodec.requireMessageType(msgType, "msgType");
         @SuppressWarnings("unchecked")
         Class<T> typed = (Class<T>) msgType;
-        return new TypedTopicPublisher<>(createPublisher(topic, qosDepth, transientLocal), typed);
+        TypedTopicPublisher<T> publisher =
+                new TypedTopicPublisher<>(createPublisher(topic, qosDepth, transientLocal), typed);
+        registerGeneratedType(topic, typed);
+        return publisher;
     }
 
     public SubscriptionHandle createSubscription(String topic, MsgCallback callback) {
@@ -237,6 +240,7 @@ public final class Node implements AutoCloseable {
         ProtoCodec.requireMessageType(msgType, "msgType");
         @SuppressWarnings("unchecked")
         Class<T> typed = (Class<T>) msgType;
+        registerGeneratedType(topic, typed);
         return createSubscription(
                 topic,
                 (payload) -> {
@@ -249,6 +253,24 @@ public final class Node implements AutoCloseable {
                 group,
                 qosDepth,
                 transientLocal);
+    }
+
+    /**
+     * Generated classes live in {@code org.indunet.robot.bus.<proto package>}. Stripping that
+     * prefix is the protobuf full name. Lite classes have no descriptor, so Android uses the
+     * same rule. Types outside that package are skipped.
+     */
+    private void registerGeneratedType(String topic, Class<?> msgType) {
+        final String prefix = "org.indunet.robot.bus.";
+        String name = msgType.getName();
+        if (!name.startsWith(prefix) || name.indexOf('$') >= 0) {
+            return;
+        }
+        String typeName = name.substring(prefix.length());
+        if (typeName.isEmpty()) {
+            return;
+        }
+        RobotBusC.Holder.INSTANCE.robot_bus_node_register_topic_type(ptr, topic, typeName);
     }
 
     public TimerHandle createTimer(double periodSecs, TimerCallback callback) {

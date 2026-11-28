@@ -2,9 +2,8 @@ use std::marker::PhantomData;
 use std::sync::Arc;
 use std::time::Duration;
 
-use prost::{Message, Name};
-
 use crate::errors::{BusError, Result};
+use crate::typed::WireMessage;
 use crate::message_bus::Publisher as BusPublisher;
 use crate::runtime::callback_group::CallbackGroup;
 use crate::runtime::qos::QosProfile;
@@ -23,8 +22,8 @@ impl Node {
     /// [`create_publisher_with_qos`](Self::create_publisher_with_qos) to set KeepLast depth.
     ///
     /// Multiple publishers on the same node share one bus PUB socket.
-    /// Best-effort registers `topic → M::full_name()` with the broker console.
-    pub fn create_publisher<M: Message + Name + Default>(
+    /// Best-effort registers `topic → M::wire_type_name()` with the broker console.
+    pub fn create_publisher<M: WireMessage>(
         &mut self,
         topic: impl Into<String>,
     ) -> Result<TopicPublisher<M>> {
@@ -33,14 +32,14 @@ impl Node {
             inner: self.create_publisher_raw(topic.clone())?,
             _marker: PhantomData,
         };
-        self.remember_topic_type(&topic, &M::full_name());
+        self.note_topic_type::<M>(&topic);
         Ok(pub_)
     }
 
     /// Create a typed topic publisher with topic QoS (KeepLast depth → HWM).
     ///
     /// Topic reliability is always best-effort.
-    pub fn create_publisher_with_qos<M: Message + Name + Default>(
+    pub fn create_publisher_with_qos<M: WireMessage>(
         &mut self,
         topic: impl Into<String>,
         qos: QosProfile,
@@ -50,7 +49,7 @@ impl Node {
             inner: self.create_publisher_raw_with_qos(topic.clone(), qos)?,
             _marker: PhantomData,
         };
-        self.remember_topic_type(&topic, &M::full_name());
+        self.note_topic_type::<M>(&topic);
         Ok(pub_)
     }
 
@@ -121,7 +120,7 @@ impl Node {
 
     /// Like [`create_publisher`](Self::create_publisher), setting HWM on first socket connect.
     /// Prefer [`create_publisher_with_qos`](Self::create_publisher_with_qos) for topic depth.
-    pub fn create_publisher_with_hwm<M: Message + Name + Default>(
+    pub fn create_publisher_with_hwm<M: WireMessage>(
         &mut self,
         topic: impl Into<String>,
         hwm: HighWaterMark,
@@ -131,8 +130,14 @@ impl Node {
             inner: self.create_publisher_raw_with_hwm(topic.clone(), Some(hwm))?,
             _marker: PhantomData,
         };
-        self.remember_topic_type(&topic, &M::full_name());
+        self.note_topic_type::<M>(&topic);
         Ok(pub_)
+    }
+
+    fn note_topic_type<M: WireMessage>(&self, topic: &str) {
+        if let Some(name) = M::wire_type_name() {
+            self.remember_topic_type(topic, &name);
+        }
     }
 
     fn ensure_bus_publisher(&mut self, hwm: Option<HighWaterMark>) -> Result<()> {
@@ -233,7 +238,7 @@ impl Node {
     ///
     /// Decode failures are skipped (logged). `callback_group: None` uses the
     /// node's default mutually exclusive group.
-    /// Best-effort registers `topic → M::full_name()` with the broker console.
+    /// Best-effort registers `topic → M::wire_type_name()` with the broker console.
     pub fn create_subscription<M, F>(
         &mut self,
         topic: &str,
@@ -241,19 +246,19 @@ impl Node {
         callback_group: Option<&CallbackGroup>,
     ) -> Result<SubscriptionHandle>
     where
-        M: Message + Name + Default + 'static,
+        M: WireMessage,
         F: Fn(M) + Send + Sync + 'static,
     {
         let group = callback_group
             .cloned()
             .unwrap_or_else(|| self.default_callback_group.clone());
         let topic_name = topic.to_string();
-        let cb: MessageCallback = Arc::new(move |payload| match M::decode(payload) {
+        let cb: MessageCallback = Arc::new(move |payload| match M::from_wire(payload) {
             Ok(msg) => callback(msg),
             Err(err) => log::warn!("typed subscription decode failed on {topic_name}: {err}"),
         });
         let handle = self.create_subscription_raw(topic, cb, Some(&group))?;
-        self.remember_topic_type(topic, &M::full_name());
+        self.note_topic_type::<M>(topic);
         Ok(handle)
     }
 
@@ -269,19 +274,19 @@ impl Node {
         callback_group: Option<&CallbackGroup>,
     ) -> Result<SubscriptionHandle>
     where
-        M: Message + Name + Default + 'static,
+        M: WireMessage,
         F: Fn(M) + Send + Sync + 'static,
     {
         let group = callback_group
             .cloned()
             .unwrap_or_else(|| self.default_callback_group.clone());
         let topic_name = topic.to_string();
-        let cb: MessageCallback = Arc::new(move |payload| match M::decode(payload) {
+        let cb: MessageCallback = Arc::new(move |payload| match M::from_wire(payload) {
             Ok(msg) => callback(msg),
             Err(err) => log::warn!("typed subscription decode failed on {topic_name}: {err}"),
         });
         let handle = self.create_subscription_raw_with_qos(topic, qos, cb, Some(&group))?;
-        self.remember_topic_type(topic, &M::full_name());
+        self.note_topic_type::<M>(topic);
         Ok(handle)
     }
 

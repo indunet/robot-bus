@@ -174,6 +174,8 @@ interface RobotBusC extends Library {
 
     Pointer robot_bus_node_create_callback_group(Pointer n, int kind);
 
+    int robot_bus_node_register_topic_type(Pointer n, String topic, String typeName);
+
     Pointer robot_bus_node_create_publisher(Pointer n, String topic);
 
     Pointer robot_bus_node_create_publisher_with_qos(Pointer n, String topic, int depth);

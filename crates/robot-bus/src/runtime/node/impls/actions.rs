@@ -1,14 +1,12 @@
 use std::marker::PhantomData;
 use std::sync::{Arc, Mutex};
 
-use prost::Message;
-
 use crate::errors::Result;
 use crate::runtime::callback_group::CallbackGroup;
 use crate::runtime::qos::QosProfile;
 use crate::runtime::queues::ActionMessageCallback;
 use crate::runtime::registrations::{ActionGoalHandler, ActionGoalLiveHandler};
-use crate::typed::{Action, ActionOutcome};
+use crate::typed::{Action, ActionOutcome, WireMessage};
 use crate::zmq_helpers::HighWaterMark;
 
 use super::super::Node;
@@ -29,14 +27,14 @@ impl Node {
         A: Action,
         F: Fn(A::Goal) -> ActionOutcome<A> + Send + Sync + 'static,
     {
-        let cb: ActionGoalHandler = Arc::new(move |body| match A::Goal::decode(body) {
+        let cb: ActionGoalHandler = Arc::new(move |body| match A::Goal::from_wire(body) {
             Ok(goal) => {
                 let outcome = handler(goal);
                 let mut replies = Vec::with_capacity(outcome.feedbacks.len() + 1);
                 for fb in outcome.feedbacks {
-                    replies.push(("FEEDBACK".into(), fb.encode_to_vec()));
+                    replies.push(("FEEDBACK".into(), fb.to_wire()));
                 }
-                replies.push(("RESULT".into(), outcome.result.encode_to_vec()));
+                replies.push(("RESULT".into(), outcome.result.to_wire()));
                 replies
             }
             Err(err) => {
@@ -59,14 +57,14 @@ impl Node {
         A: Action,
         F: Fn(A::Goal) -> ActionOutcome<A> + Send + Sync + 'static,
     {
-        let cb: ActionGoalHandler = Arc::new(move |body| match A::Goal::decode(body) {
+        let cb: ActionGoalHandler = Arc::new(move |body| match A::Goal::from_wire(body) {
             Ok(goal) => {
                 let outcome = handler(goal);
                 let mut replies = Vec::with_capacity(outcome.feedbacks.len() + 1);
                 for fb in outcome.feedbacks {
-                    replies.push(("FEEDBACK".into(), fb.encode_to_vec()));
+                    replies.push(("FEEDBACK".into(), fb.to_wire()));
                 }
-                replies.push(("RESULT".into(), outcome.result.encode_to_vec()));
+                replies.push(("RESULT".into(), outcome.result.to_wire()));
                 replies
             }
             Err(err) => {

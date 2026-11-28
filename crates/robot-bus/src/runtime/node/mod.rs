@@ -307,6 +307,19 @@ impl Node {
         }));
     }
 
+    /// Best-effort console registration of `topic → type_name`.
+    ///
+    /// The broker keeps the first name. A later different name is a warning and
+    /// does not reject the publisher or subscriber. Empty strings are ignored.
+    /// Language bindings call this for typed APIs that do not go through
+    /// [`create_publisher`](Self::create_publisher).
+    pub fn register_topic_type(&self, topic: &str, type_name: &str) {
+        if topic.is_empty() || type_name.is_empty() {
+            return;
+        }
+        self.remember_topic_type(topic, type_name);
+    }
+
     fn remember_topic_type(&self, topic: &str, type_name: &str) {
         self.control_plane.remember_topic_type(topic, type_name);
         topic_type_register::register_topic_type(

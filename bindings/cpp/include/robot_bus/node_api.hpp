@@ -130,6 +130,14 @@ class Node {
     return robot_bus_node_wait_for_broker(n_, timeout_secs) != 0;
   }
 
+  /// Best-effort. The broker keeps the first type name and warns on a conflict.
+  void register_topic_type(const char *topic, const char *type_name) {
+    if (topic == nullptr || type_name == nullptr) {
+      return;
+    }
+    robot_bus_node_register_topic_type(n_, topic, type_name);
+  }
+
   [[nodiscard]] TopicPublisher create_publisher(const char *topic) {
     return TopicPublisher(static_cast<RobotBusTopicPublisher *>(
         check_ptr(robot_bus_node_create_publisher(n_, topic), "create_publisher")));

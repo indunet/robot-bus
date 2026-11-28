@@ -12,5 +12,6 @@ mod node_service_action;
 mod node_session;
 mod runtime_spin;
 mod topic_qos;
+mod wire_message;
 #[cfg(feature = "console-api")]
 mod wait_helpers;

@@ -128,6 +128,8 @@ struct TopicRow {
     subscribers: u64,
     #[serde(default)]
     publishers: u64,
+    #[serde(default)]
+    conflict_types: Vec<String>,
 }
 
 #[derive(Deserialize)]
@@ -187,7 +189,16 @@ fn run() -> Result<()> {
         } => api.show(TOPICS_PATH, |body: TopicList| {
             for t in body.topics {
                 let ty = t.type_name.as_deref().unwrap_or("-");
-                println!("{}\t{}", t.name, ty);
+                if t.conflict_types.is_empty() {
+                    println!("{}\t{}", t.name, ty);
+                } else {
+                    println!(
+                        "{}\t{}\tconflict:{}",
+                        t.name,
+                        ty,
+                        t.conflict_types.join(",")
+                    );
+                }
             }
         }),
         Commands::Topic {
@@ -197,6 +208,9 @@ fn run() -> Result<()> {
             api.show(&path, |t: TopicRow| {
                 println!("Topic: {}", t.name);
                 println!("Type: {}", t.type_name.as_deref().unwrap_or("-"));
+                if !t.conflict_types.is_empty() {
+                    println!("Conflicts: {}", t.conflict_types.join(", "));
+                }
                 println!("Publisher count: {}", t.publishers);
                 println!("Subscription count: {}", t.subscribers);
                 println!("Msg/s: {}", t.msg_per_sec);

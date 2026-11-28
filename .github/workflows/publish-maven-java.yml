@@ -36,10 +36,14 @@ jobs:
           set -eux
           sudo apt-get update
           sudo apt-get install -y cmake g++ make curl unzip pkg-config gnupg
-          curl -fsSL -o /tmp/protoc.zip \
-            "https://github.com/protocolbuffers/protobuf/releases/download/v35.1/protoc-35.1-linux-x86_64.zip"
-          sudo unzip -o /tmp/protoc.zip -d /usr/local
-          protoc --version
+      - name: Install protobuf compiler (Java codegen)
+        uses: ./.github/actions/install-protoc
+        with:
+          key: GENCODE_PROTOC
+      - name: Install protobuf compiler (Rust codegen)
+        uses: ./.github/actions/install-protoc
+        with:
+          key: CPP_PROTOC
 
       - uses: dtolnay/rust-toolchain@stable
 
@@ -75,8 +79,8 @@ jobs:
 
       - name: Build C ABI (host)
         run: |
-          python3 scripts/generate_rust_msgs.py
-          python3 scripts/generate_java_msgs.py
+          PROTOC="${ROBOT_BUS_PROTOC_CPP}" python3 scripts/generate_rust_msgs.py
+          PROTOC="${ROBOT_BUS_PROTOC_GENCODE}" python3 scripts/generate_java_msgs.py
           cargo build --release --manifest-path bindings/cpp/native/Cargo.toml
 
       - name: Deploy to Maven Central

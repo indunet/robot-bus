@@ -1,14 +1,12 @@
 use std::marker::PhantomData;
 use std::sync::Arc;
 
-use prost::Message;
-
 use crate::errors::Result;
 use crate::runtime::callback_group::CallbackGroup;
 use crate::runtime::qos::QosProfile;
 use crate::runtime::registrations::ServiceHandler;
 use crate::service_bus::ServiceClient as BusServiceClient;
-use crate::typed::Service;
+use crate::typed::{Service, WireMessage};
 use crate::zmq_helpers::HighWaterMark;
 
 use super::super::Node;
@@ -31,8 +29,8 @@ impl Node {
         S: Service,
         F: Fn(S::Request) -> S::Response + Send + Sync + 'static,
     {
-        let cb: ServiceHandler = Arc::new(move |body| match S::Request::decode(body) {
-            Ok(req) => handler(req).encode_to_vec(),
+        let cb: ServiceHandler = Arc::new(move |body| match S::Request::from_wire(body) {
+            Ok(req) => handler(req).to_wire(),
             Err(err) => {
                 log::warn!("typed service decode failed: {err}");
                 Vec::new()
@@ -53,8 +51,8 @@ impl Node {
         S: Service,
         F: Fn(S::Request) -> S::Response + Send + Sync + 'static,
     {
-        let cb: ServiceHandler = Arc::new(move |body| match S::Request::decode(body) {
-            Ok(req) => handler(req).encode_to_vec(),
+        let cb: ServiceHandler = Arc::new(move |body| match S::Request::from_wire(body) {
+            Ok(req) => handler(req).to_wire(),
             Err(err) => {
                 log::warn!("typed service decode failed: {err}");
                 Vec::new()

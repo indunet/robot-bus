@@ -498,7 +498,7 @@ Cargo builds the bridge with **`rclrs` 0.8**, **`ros-env` 0.3**, and **`rosidl_r
 
 The `robot-bus-ros2` crate requires generated Rust interfaces (`share/<pkg>/rust/` under `AMENT_PREFIX_PATH`) and their ROS system libraries. Use custom mappers for extension packages such as Nav2 and Foxglove.
 
-With ROS 2 Humble and the build tools installed (Rust, Protobuf compiler 35.1, C/C++ toolchain and pkg-config), run from the repository root:
+With ROS 2 Humble and the build tools installed (Rust, Protobuf compiler 35.1 for the Rust bridge and the prebuilt C++ package, C/C++ toolchain and pkg-config), run from the repository root:
 
 ```bash
 sudo apt-get install ros-humble-rosidl-generator-rs \

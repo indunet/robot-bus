@@ -26,6 +26,21 @@ def _require_message_type(msg_type: Any, *, what: str) -> Type[Message]:
     return msg_type
 
 
+def _protobuf_full_name(msg_type: type) -> str | None:
+    descriptor = getattr(msg_type, "DESCRIPTOR", None)
+    name = getattr(descriptor, "full_name", None)
+    if isinstance(name, str) and name:
+        return name
+    return None
+
+
+def _register_topic_type(node: Any, topic: str, msg_type: type) -> None:
+    name = _protobuf_full_name(msg_type)
+    register = getattr(node, "register_topic_type", None)
+    if name and register is not None:
+        register(topic, name)
+
+
 def _encode(msg: Message) -> bytes:
     if not isinstance(msg, Message):
         raise TypeError(
@@ -347,6 +362,7 @@ def install_typed_node_api(Node: Any) -> None:
         if msg_type is None:
             return raw
         cls = _require_message_type(msg_type, what="msg_type")
+        _register_topic_type(self, topic, cls)
         return TypedTopicPublisher(raw, cls)
 
     def create_subscription(
@@ -366,6 +382,7 @@ def install_typed_node_api(Node: Any) -> None:
         if msg_type is None:
             return _raw_sub(callback)
         cls = _require_message_type(msg_type, what="msg_type")
+        _register_topic_type(self, topic, cls)
 
         def _wrapped(payload: bytes) -> None:
             msg = _decode(cls, payload)

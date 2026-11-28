@@ -23,12 +23,12 @@ use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant};
 
 use crate::zmq::{self, SocketType};
-use prost::Message;
 use uuid::Uuid;
 
 use crate::runtime::Context;
 
 use crate::errors::{BusError, Result};
+use crate::typed::WireMessage;
 use crate::runtime::callback_group::{CallbackGroup, CallbackGroupType, SubscriptionCallback};
 use crate::runtime::dispatch::{
     dispatch_registration, flush_outbound, flush_reply_queue, tick_heartbeats,
@@ -177,6 +177,15 @@ impl Executor {
         let reply_tx = WakingSender::new(reply_tx, waker.clone());
         let running = Arc::new(AtomicBool::new(false));
         let ready_topics = Arc::new(ReadyTopics::new(worker_pool.as_ref(), &running));
+        if let Some(pool) = worker_pool.as_ref() {
+            let ready = Arc::clone(&ready_topics);
+            let wake = waker.clone();
+            pool.set_completion_hook(move || {
+                if ready.take_deferred() {
+                    wake.wake();
+                }
+            });
+        }
         Self {
             context,
             heartbeat_interval_ms,
@@ -405,11 +414,11 @@ impl Executor {
         group: CallbackGroup,
     ) -> Result<SubscriptionHandle>
     where
-        M: Message + Default + 'static,
+        M: WireMessage,
         F: Fn(M) + Send + Sync + 'static,
     {
         let topic_name = topic.to_string();
-        let cb: MessageCallback = Arc::new(move |payload| match M::decode(payload) {
+        let cb: MessageCallback = Arc::new(move |payload| match M::from_wire(payload) {
             Ok(msg) => callback(msg),
             Err(err) => log::warn!("typed subscribe decode failed on {topic_name}: {err}"),
         });
@@ -1041,9 +1050,12 @@ fn spin_once_inner(
     let mut had_work = tick_timers(timers, now, worker_pool);
 
     let mut poll_ms = effective_poll_timeout_ms(timers, poll_timeout_ms, Instant::now());
-    if !ready_topics.is_empty() {
-        poll_ms = if worker_pool.is_some() && poll_ms != 0 {
-            1
+    if !ready_topics.is_empty() && poll_ms != 0 {
+        // A ticket the pool refused waits for a worker to finish. The timeout
+        // only covers a wake that was missed because the worker finished first.
+        const DEFERRED_DISPATCH_FALLBACK_MS: i64 = 10;
+        poll_ms = if worker_pool.is_some() && ready_topics.has_deferred() {
+            DEFERRED_DISPATCH_FALLBACK_MS.min(poll_ms)
         } else {
             0
         };

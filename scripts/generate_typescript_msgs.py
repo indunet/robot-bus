@@ -12,13 +12,12 @@ Usage (from repo root)::
   python3 scripts/generate_typescript_msgs.py
   # or: just gen-typescript
 
-Pin ``protoc`` to ``EXPECTED_PROTOC_VERSION`` (same as CI / Python codegen).
+Pin ``protoc`` to ``CPP_PROTOC`` in ``scripts/protobuf-versions.env``.
 """
 
 from __future__ import annotations
 
 import os
-import re
 import shutil
 import subprocess
 import sys
@@ -26,12 +25,15 @@ import tempfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / "scripts"))
+from protobuf_versions import ensure_protoc_version, protoc_version, require  # noqa: E402
+
 PROTO_ROOT = ROOT / "proto"
 TS_ROOT = ROOT / "bindings" / "typescript"
 OUT_ROOT = TS_ROOT / "generated"
 PROTOC = os.environ.get("PROTOC", "protoc")
 
-EXPECTED_PROTOC_VERSION = "35.1"
+EXPECTED_PROTOC_VERSION = require("CPP_PROTOC")
 
 MSG_PACKAGES = (
     "ackermann_msgs",
@@ -56,29 +58,6 @@ MSG_PACKAGES = (
     "vision_msgs",
     "visualization_msgs",
 )
-
-PROTOC_VERSION_RE = re.compile(r"libprotoc\s+(\d+\.\d+(?:\.\d+)?)")
-
-
-def protoc_version(protoc: str) -> str:
-    out = subprocess.check_output([protoc, "--version"], text=True).strip()
-    match = PROTOC_VERSION_RE.search(out)
-    if not match:
-        raise RuntimeError(f"could not parse protoc version from {out!r}")
-    return match.group(1)
-
-
-def ensure_protoc_version(protoc: str) -> None:
-    if os.environ.get("ROBOT_BUS_SKIP_PROTOC_VERSION_CHECK") == "1":
-        return
-    version = protoc_version(protoc)
-    if version != EXPECTED_PROTOC_VERSION:
-        raise SystemExit(
-            f"error: protoc {version} != required {EXPECTED_PROTOC_VERSION}\n"
-            f"  Install https://github.com/protocolbuffers/protobuf/releases/tag/v{EXPECTED_PROTOC_VERSION}\n"
-            f"  or set PROTOC to that binary. Skip with ROBOT_BUS_SKIP_PROTOC_VERSION_CHECK=1."
-        )
-
 
 def find_protoc_gen_ts_js() -> Path:
     """Resolve the Node entry for @protobuf-ts/plugin (the real plugin script)."""
@@ -193,7 +172,7 @@ def main() -> int:
         print(f"error: protoc not found ({PROTOC!r})", file=sys.stderr)
         return 1
 
-    ensure_protoc_version(PROTOC)
+    ensure_protoc_version(PROTOC, EXPECTED_PROTOC_VERSION)
     js_plugin = find_protoc_gen_ts_js()
     protos = collect_protos()
     if not protos:

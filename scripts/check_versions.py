@@ -52,6 +52,29 @@ def main() -> None:
         if "version.workspace = true" not in (ROOT / rel).read_text():
             errors.append(f"{rel} does not use version.workspace")
 
+    versions = {}
+    for raw in (ROOT / "scripts" / "protobuf-versions.env").read_text().splitlines():
+        line = raw.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, value = line.split("=", 1)
+        versions[key.strip()] = value.strip()
+    python_floor = versions["PYTHON_PROTOBUF_FLOOR"]
+    java_floor = versions["JAVA_PROTOBUF_FLOOR"]
+    pyproject = (ROOT / "bindings/python/pyproject.toml").read_text()
+    if f"protobuf>={python_floor},<9" not in pyproject:
+        errors.append(
+            f"bindings/python/pyproject.toml does not depend on protobuf>={python_floor},<9"
+        )
+    pom = (ROOT / "bindings/java/pom.xml").read_text()
+    if f"<protobuf.version>{java_floor}</protobuf.version>" not in pom:
+        errors.append(f"bindings/java/pom.xml protobuf.version is not {java_floor}")
+    gradle = (ROOT / "bindings/android/build.gradle.kts").read_text()
+    if f"protobuf-javalite:{java_floor}" not in gradle:
+        errors.append(
+            f"bindings/android/build.gradle.kts does not use protobuf-javalite:{java_floor}"
+        )
+
     if errors:
         print("version check failed:", file=sys.stderr)
         for error in errors:

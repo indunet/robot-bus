@@ -19,7 +19,9 @@ Usage (from repo root)::
   python3 scripts/generate_cpp_msgs.py
   # or: just gen-cpp
 
-Pin ``protoc`` to ``EXPECTED_PROTOC_VERSION`` (same as CI).
+Pin ``protoc`` to ``CPP_PROTOC`` in ``scripts/protobuf-versions.env``.
+An explicit ``PROTOC`` that does not match (a source build using another
+protobuf) warns and continues. The default ``protoc`` on ``PATH`` must match.
 """
 
 from __future__ import annotations
@@ -33,12 +35,15 @@ import tempfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / "scripts"))
+from protobuf_versions import ensure_protoc_version, protoc_version, require  # noqa: E402
+
 PROTO_ROOT = ROOT / "proto"
 OUT_ROOT = ROOT / "bindings" / "cpp" / "generated" / "robot_bus"
 GENERATED_ROOT = ROOT / "bindings" / "cpp" / "generated"
 PROTOC = os.environ.get("PROTOC", "protoc")
 
-EXPECTED_PROTOC_VERSION = "35.1"
+EXPECTED_PROTOC_VERSION = require("CPP_PROTOC")
 
 MSG_PACKAGES = (
     "ackermann_msgs",
@@ -66,34 +71,12 @@ MSG_PACKAGES = (
     "visualization_msgs",
 )
 
-PROTOC_VERSION_RE = re.compile(r"libprotoc\s+(\d+\.\d+(?:\.\d+)?)")
-
 INCLUDE_RE = re.compile(
     r'(#include\s+)([<"])('
     + "|".join(re.escape(p) for p in MSG_PACKAGES)
     + r"|robot_bus_interfaces"
     + r')(/[^">]+)([>"])'
 )
-
-
-def protoc_version(protoc: str) -> str:
-    out = subprocess.check_output([protoc, "--version"], text=True).strip()
-    match = PROTOC_VERSION_RE.search(out)
-    if not match:
-        raise RuntimeError(f"could not parse protoc version from {out!r}")
-    return match.group(1)
-
-
-def ensure_protoc_version(protoc: str) -> None:
-    if os.environ.get("ROBOT_BUS_SKIP_PROTOC_VERSION_CHECK") == "1":
-        return
-    version = protoc_version(protoc)
-    if version != EXPECTED_PROTOC_VERSION:
-        raise SystemExit(
-            f"error: protoc {version} != required {EXPECTED_PROTOC_VERSION}\n"
-            f"  Install https://github.com/protocolbuffers/protobuf/releases/tag/v{EXPECTED_PROTOC_VERSION}\n"
-            f"  or set PROTOC to that binary. Skip with ROBOT_BUS_SKIP_PROTOC_VERSION_CHECK=1."
-        )
 
 
 def collect_protos() -> list[Path]:
@@ -192,7 +175,7 @@ def main() -> int:
         print(f"error: protoc not found ({PROTOC!r})", file=sys.stderr)
         return 1
 
-    ensure_protoc_version(PROTOC)
+    ensure_protoc_version(PROTOC, EXPECTED_PROTOC_VERSION, warn_if_protoc_env=True)
 
     protos = collect_protos()
     if not protos:

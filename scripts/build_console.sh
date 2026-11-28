@@ -7,7 +7,7 @@
 # `console/lib/bundled-docs.generated.ts` is also gitignored; `pnpm typecheck`
 # / `pnpm build` run `pretypecheck` / `prebuild` to generate it.
 #
-# Requires: protoc 35.1 on PATH, Node/npm, pnpm.
+# Requires: protoc from scripts/protobuf-versions.env (CPP_PROTOC) on PATH, Node/npm, pnpm.
 set -euo pipefail
 root="$(cd "$(dirname "$0")/.." && pwd)"
 ts="$root/bindings/typescript"

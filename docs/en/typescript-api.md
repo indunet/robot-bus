@@ -245,7 +245,7 @@ None of the three provide server-side cancel acknowledgment. SendGoal is opcode 
 
 ## Protobuf messages
 
-Generated code on disk lives in `bindings/typescript/generated/` (`just gen-typescript`, protoc **35.1**; **gitignored**, published with the npm package); public import paths align with Python / Rust (no `generated` segment):
+Generated code on disk lives in `bindings/typescript/generated/` (`just gen-typescript`, protoc **35.1** / `CPP_PROTOC`; **gitignored**, published with the npm package). Python and Java codegen use protoc 29.3. Public import paths align with Python / Rust (no `generated` segment):
 
 ```ts
 import { String$ } from "robot-bus/std_msgs/msg/v1/primitives.js";

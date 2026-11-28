@@ -458,6 +458,12 @@ pub_.publish(&twist)?;
 
 Service / Action likewise (e.g. `create_client::<SetBool>`, `create_action_client::<Fibonacci>`).
 
+### Payload encoding
+
+`create_publisher::<M>` encodes with protobuf when `M` is a generated message. The same methods accept any [`WireMessage`](../../crates/robot-bus-msgs/src/typed.rs): implement `to_wire` / `from_wire` for a codec you already have. `create_publisher_raw` / `create_subscription_raw` skip encoding entirely. The broker does not look at the bytes.
+
+The first type name registered for a topic is kept. A different name later is a warning (`conflictTypes` on the console topics API, one `WARN` event per pair) and does not drop the publisher or subscriber. The warning exists only while the console API is enabled.
+
 ---
 
 ## WebSocket RPC mode Node (client)

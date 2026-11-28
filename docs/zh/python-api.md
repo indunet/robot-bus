@@ -412,6 +412,12 @@ imu2 = Imu()
 imu2.ParseFromString(payload)
 ```
 
+### 载荷编码
+
+`create_publisher` / `create_subscription` 传入 protobuf 类时，SDK 负责编码和解码。不传类型时回调收到 `bytes`。Broker 两种都不解析。运行时依赖是 `protobuf>=5.29.3,<9`。
+
+带类型的发布者登记 protobuf 全名。话题上的第一个名字会保留。另一个名字记入 `conflictTypes`，并发一条控制台 `WARN` 事件，连接保持。只有打开控制台 API 时才做这项检查。
+
 ---
 
 ## ROS2桥（`rclpy`）

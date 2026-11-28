@@ -2,15 +2,13 @@ use std::marker::PhantomData;
 use std::sync::Arc;
 use std::time::Duration;
 
-use prost::Message;
-
 use crate::errors::{BusError, Result};
 use crate::runtime::console_ready::{self, ReadyKind};
 use crate::runtime::topology_register::TopologyEndpointGuard;
 #[cfg(feature = "ws")]
 use crate::runtime::ws_runtime::WsClientContext;
 use crate::service_bus::ServiceClient as BusServiceClient;
-use crate::typed::Service;
+use crate::typed::{Service, WireMessage};
 use crate::zmq_helpers::HighWaterMark;
 
 /// Service server handle returned by [`Node::create_service`] / [`Node::create_service_raw`].
@@ -130,8 +128,8 @@ impl<S: Service> NodeServiceClient<S> {
     }
 
     pub fn call(&self, request: &S::Request, timeout: Option<Duration>) -> Result<S::Response> {
-        let reply = self.inner.call(&request.encode_to_vec(), timeout)?;
-        S::Response::decode(reply.as_slice()).map_err(|err| {
+        let reply = self.inner.call(&request.to_wire(), timeout)?;
+        S::Response::from_wire(reply.as_slice()).map_err(|err| {
             BusError::Protocol(format!(
                 "service '{}' response decode failed: {err}",
                 self.service_name()
