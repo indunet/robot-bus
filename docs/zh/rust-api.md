@@ -103,7 +103,9 @@ broker.stop()?;
 
 `RobotBusBroker::start(config)`仍可用（内部自建 Context）；跨进程 tcp/ipc不要求共享。
 
-跨 broker（federation）：优先 `--peer HOST:PORT`（对端 API口，内部会 `GET /api/v1/discover`填齐 ZMQ peers），或在 `RobotBusConfig`上设置 `broker_id`与 `peers`（`MessagePeer` / `ServicePeer` / `ActionPeer`），或 CLI `--broker-id` / `--message-peer` / `--service-peer` / `--action-peer`。同一台机器上的 broker 可用 `--peer ipc+HOST:PORT` 走对端的 `ipc://` socket，`*-peer` 参数也接受显式的 `ipc://目录/<通道>.ipc`。topic 邦联要求双方互相配置 peer，先启动的一方需要知道后启动方的目录，所以要用 `--ipc-dir DIR`（`DiscoveryConfig::ipc_dir`）给后启动方固定 IPC 目录。各语言嵌入式 start API使用同款字符串约定（见对应 `*-api.md`）。Message federation **不会**转发保留命名空间 `/robot_bus`（含 `/robot_bus/status`、topology、bot等 console系统 topic），避免多 broker帮连时状态快照互相覆盖；用户业务 topic仍按需推送。
+配置 [Broker 联邦](architecture.md#broker-联邦)时，先启动目标 Broker，再给发起加入的一方传入 `--peer HOST:PORT`，端口填目标的 HTTP API 端口。目标在发现响应中声明 `federation: ["join"]` 时，只需在一侧配置，话题、服务和 Action 即可双向转发。跨主机用 TCP，同一主机可用 `--peer ipc+HOST:PORT`，通过 HTTP 发现，再连接目标的 `ipc://` 套接字。
+
+对接缺少 `join` 能力的旧版时，两侧都要配置对端。可以通过 `RobotBusConfig` 设置 `broker_id` 和 `peers`（`MessagePeer` / `ServicePeer` / `ActionPeer`），也可以使用 `--broker-id`、`--message-peer`、`--service-peer` 和 `--action-peer`。显式配置 IPC 端点时，为每个 Broker 用 `--ipc-dir DIR`（`DiscoveryConfig::ipc_dir`）固定独立目录，便于两侧引用 `ipc://DIR/<通道>.ipc`。嵌入式启动 API 使用同样的 peer 字符串。保留的 `/robot_bus` 话题只在本地传递。
 
 典型流程：`Context` → `Node::with_context` → `create_*` → `node.spin()`（或便捷 `Node::new`）。多节点或需并行时再 `executor.add_node` + `executor.spin`。仅连 WebSocket RPC服务端时用 `Node::ws` / `Node::ws_at`（见下文「WebSocket RPC模式 Node」）。
 

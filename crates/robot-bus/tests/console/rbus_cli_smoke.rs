@@ -1,79 +1,28 @@
-//! Smoke: `rbus` CLI against an in-process broker console API.
+//! Smoke: `rbus` CLI against the broker's discovery and monitoring APIs.
 //!
 //! Topic list only shows topics with real subscriber traffic (same as metrics).
 
-use std::process::Command;
+use std::io::{BufRead, BufReader, Write};
+use std::net::TcpListener;
+use std::process::{Command, Output};
 use std::sync::Arc;
 use std::thread;
 use std::time::Duration;
 
-use crate::common::lock_brokers;
+use crate::common::{ephemeral_robot_bus_config, lock_brokers};
 use robot_bus::action_bus::ActionClient;
-use robot_bus::broker::action_bus::ActionBusConfig;
-use robot_bus::broker::message_bus::BusConfig;
-use robot_bus::broker::service_bus::ServiceBusConfig;
-use robot_bus::broker::{
-    ConsoleBrokerConfig, DiscoveryConfig, RobotBusBroker, RobotBusConfig, WsConfig,
-};
+use robot_bus::broker::RobotBusBroker;
 use robot_bus::message_bus::{Publisher, Subscriber};
 use robot_bus::service_bus::ServiceClient;
 use robot_bus::worker_thread::WorkerThread;
+use serde_json::Value;
 
-fn test_broker_config(
-    msg_xsub: u16,
-    msg_xpub: u16,
-    svc_fe: u16,
-    svc_be: u16,
-    act_fe: u16,
-    act_be: u16,
-    http: u16,
-) -> RobotBusConfig {
-    RobotBusConfig {
-        message: BusConfig {
-            xsub_bind: format!("tcp://127.0.0.1:{msg_xsub}"),
-            xpub_bind: format!("tcp://127.0.0.1:{msg_xpub}"),
-            bind_all_transports: false,
-            bind_opts: Default::default(),
-            ..BusConfig::default()
-        },
-        service: ServiceBusConfig {
-            frontend_bind: format!("tcp://127.0.0.1:{svc_fe}"),
-            backend_bind: format!("tcp://127.0.0.1:{svc_be}"),
-            bind_all_transports: false,
-            bind_opts: Default::default(),
-            ..ServiceBusConfig::default()
-        },
-        action: ActionBusConfig {
-            frontend_bind: format!("tcp://127.0.0.1:{act_fe}"),
-            backend_bind: format!("tcp://127.0.0.1:{act_be}"),
-            bind_all_transports: false,
-            bind_opts: Default::default(),
-            ..ActionBusConfig::default()
-        },
-        discovery: DiscoveryConfig {
-            enabled: false,
-            ..DiscoveryConfig::default()
-        },
-        ws: WsConfig {
-            listen: format!("127.0.0.1:{http}").parse().unwrap(),
-            ..WsConfig::default()
-        },
-        console: ConsoleBrokerConfig {
-            enabled: true,
-            tank_enabled: false,
-            docs_enabled: true,
-            listen: format!("127.0.0.1:{http}").parse().unwrap(),
-            cors_origins: vec![],
-        },
-    }
-}
-
-fn rbus_bin() -> &'static str {
-    env!("CARGO_BIN_EXE_rbus")
+fn rbus() -> Command {
+    Command::new(env!("CARGO_BIN_EXE_rbus"))
 }
 
 fn run_rbus(url: &str, args: &[&str]) -> (i32, String, String) {
-    let output = Command::new(rbus_bin())
+    let output = rbus()
         .arg("--url")
         .arg(url)
         .args(args)
@@ -85,17 +34,53 @@ fn run_rbus(url: &str, args: &[&str]) -> (i32, String, String) {
     (code, stdout, stderr)
 }
 
+fn returned_json(output: Output) -> Value {
+    assert!(output.status.success(), "{output:?}");
+    assert!(output.stderr.is_empty(), "{output:?}");
+    serde_json::from_slice(&output.stdout).expect("parse rbus JSON output")
+}
+
+fn rbus_json(url: &str, args: &[&str]) -> Value {
+    returned_json(
+        rbus()
+            .args(["--url", url])
+            .args(args)
+            .arg("--json")
+            .output()
+            .unwrap(),
+    )
+}
+
+fn assert_failure((code, stdout, stderr): (i32, String, String), diagnostic: &str) {
+    assert_ne!(code, 0, "unexpected success with stdout={stdout}");
+    assert!(stdout.is_empty(), "unexpected stdout={stdout}");
+    assert!(stderr.contains(diagnostic), "stderr={stderr}");
+}
+
 #[test]
 fn rbus_lists_and_status() {
     let _guard = lock_brokers();
-    let http_port = 27770u16;
-    let broker = RobotBusBroker::start(test_broker_config(
-        27560, 27561, 27662, 27663, 27664, 27665, http_port,
-    ))
-    .expect("start broker");
+    let mut config = ephemeral_robot_bus_config();
+    config.console.enabled = true;
+    let broker = RobotBusBroker::start(config).expect("start broker");
     thread::sleep(Duration::from_millis(200));
 
-    let url = format!("http://127.0.0.1:{http_port}");
+    let url = format!("http://{}", broker.api_listen());
+
+    let (code, stdout, stderr) = run_rbus(&url, &["discover"]);
+    assert_eq!(code, 0, "discover: stderr={stderr}");
+    assert!(
+        stdout.lines().any(|line| line == "TCP host: 127.0.0.1"),
+        "{stdout}"
+    );
+    assert!(
+        stdout.contains(&format!("Topic XSUB: {}", broker.message.xsub_bind)),
+        "{stdout}"
+    );
+    assert_eq!(
+        rbus_json(&url, &["discover"]),
+        serde_json::to_value(&broker.discover).unwrap()
+    );
 
     // Empty topic list is fine (exit 0).
     let (code, stdout, stderr) = run_rbus(&url, &["topic", "list"]);
@@ -105,9 +90,9 @@ fn rbus_lists_and_status() {
         "expected empty topics, got {stdout}"
     );
 
-    let pub_ = Publisher::new(Some("tcp://127.0.0.1:27560")).expect("publisher");
+    let pub_ = Publisher::new(Some(&broker.message.xsub_bind)).expect("publisher");
     thread::sleep(Duration::from_millis(100));
-    let sub = Subscriber::new(Some("tcp://127.0.0.1:27561")).expect("subscriber");
+    let sub = Subscriber::new(Some(&broker.message.xpub_bind)).expect("subscriber");
     sub.subscribe("/rbus").expect("subscribe");
     thread::sleep(Duration::from_millis(500));
 
@@ -119,22 +104,24 @@ fn rbus_lists_and_status() {
 
     let svc_handler: Arc<dyn Fn(&[u8]) -> Vec<u8> + Send + Sync> =
         Arc::new(|body| [b"ok:", body].concat());
-    let svc_worker = WorkerThread::spawn_service("svc.rbus", svc_handler, "tcp://127.0.0.1:27663")
-        .expect("service worker");
+    let svc_worker =
+        WorkerThread::spawn_service("svc.rbus", svc_handler, &broker.service.backend_bind)
+            .expect("service worker");
 
     let act_handler: Arc<dyn Fn(&[u8]) -> Vec<(String, Vec<u8>)> + Send + Sync> =
         Arc::new(|body| vec![("RESULT".into(), [b"done:", body].concat())]);
-    let act_worker = WorkerThread::spawn_action("act.rbus", act_handler, "tcp://127.0.0.1:27665")
-        .expect("action worker");
+    let act_worker =
+        WorkerThread::spawn_action("act.rbus", act_handler, &broker.action.backend_bind)
+            .expect("action worker");
 
     thread::sleep(Duration::from_millis(150));
 
-    let svc_client = ServiceClient::new(Some("tcp://127.0.0.1:27662")).expect("svc client");
+    let svc_client = ServiceClient::new(Some(&broker.service.frontend_bind)).expect("svc client");
     svc_client
         .call("svc.rbus", b"ping", None, Some(Duration::from_secs(5)))
         .expect("service call");
 
-    let act_client = ActionClient::new(Some("tcp://127.0.0.1:27664")).expect("act client");
+    let act_client = ActionClient::new(Some(&broker.action.frontend_bind)).expect("act client");
     act_client
         .send_goal("act.rbus", b"go", None, Some(Duration::from_secs(10)))
         .expect("action goal");
@@ -169,8 +156,197 @@ fn rbus_lists_and_status() {
     assert!(stdout.contains("status: ONLINE"), "status stdout={stdout}");
     assert!(stdout.contains("version:"), "status stdout={stdout}");
 
+    let (code, stdout, stderr) = run_rbus(&url, &["topic", "info", "/rbus/cli"]);
+    assert_eq!(code, 0, "topic info: stderr={stderr}");
+    assert!(
+        stdout.starts_with("Topic: /rbus/cli\nType: -\n"),
+        "{stdout}"
+    );
+    assert!(stdout.contains("Total msgs: "), "{stdout}");
+
+    let topics = rbus_json(&url, &["topic", "list"]);
+    let topic = topics["topics"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|item| item["name"] == "/rbus/cli")
+        .unwrap();
+    assert!(topic["sparkline"].is_array(), "{topic}");
+    let detail = rbus_json(&url, &["topic", "info", "/rbus/cli"]);
+    assert_eq!(detail["name"], "/rbus/cli");
+    assert!(detail["totalMsgs"].is_u64(), "{detail}");
+    let services = rbus_json(&url, &["service", "list"]);
+    assert!(
+        services["services"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|item| item["name"] == "svc.rbus" && item["workers"] == 1),
+        "{services}"
+    );
+    let actions = rbus_json(&url, &["action", "list"]);
+    assert!(
+        actions["actions"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|item| item["name"] == "act.rbus" && item["runs"] == 1),
+        "{actions}"
+    );
+    let status = rbus_json(&url, &["status"]);
+    assert_eq!(status["status"], "ONLINE");
+    assert_eq!(status["svcFE"], broker.service.frontend_bind);
+    assert_failure(
+        run_rbus(&url, &["topic", "info", "/rbus/absent", "--json"]),
+        "topic not found",
+    );
+
     drop(sub);
     svc_worker.stop();
     act_worker.stop();
     broker.stop().expect("stop");
+}
+
+#[test]
+fn rbus_discover_without_monitoring() {
+    let _guard = lock_brokers();
+    let mut config = ephemeral_robot_bus_config();
+    config.discovery.advertise_host = Some("data.example.test".into());
+    config.discovery.domain_id = 7;
+    let broker = RobotBusBroker::start(config).expect("start broker");
+    let address = broker.api_listen().to_string();
+
+    let (code, stdout, stderr) = run_rbus(&address, &["discover"]);
+    assert_eq!(code, 0, "discover: stderr={stderr}");
+    for line in [
+        format!("Broker ID: {}", broker.discover.broker_id),
+        "Domain ID: 7".into(),
+        "TCP host: data.example.test".into(),
+        format!(
+            "Topic XSUB: tcp://data.example.test:{}",
+            broker.discover.message_xsub_port
+        ),
+        format!(
+            "Topic XPUB: tcp://data.example.test:{}",
+            broker.discover.message_xpub_port
+        ),
+        format!(
+            "Service frontend: tcp://data.example.test:{}",
+            broker.discover.service_frontend_port
+        ),
+        format!(
+            "Service backend: tcp://data.example.test:{}",
+            broker.discover.service_backend_port
+        ),
+        format!(
+            "Action frontend: tcp://data.example.test:{}",
+            broker.discover.action_frontend_port
+        ),
+        format!(
+            "Action backend: tcp://data.example.test:{}",
+            broker.discover.action_backend_port
+        ),
+        format!(
+            "Topic federation: tcp://data.example.test:{}",
+            broker.discover.message_fed_port
+        ),
+        "Federation capabilities: join".into(),
+    ] {
+        assert!(
+            stdout.lines().any(|actual| actual == line),
+            "missing {line:?} in {stdout}"
+        );
+    }
+
+    let expected = serde_json::to_value(&broker.discover).unwrap();
+    let by_env = rbus()
+        .env("ROBOT_BUS_BROKER_URL", format!(" {address}/ "))
+        .args(["--json", "discover"])
+        .output()
+        .unwrap();
+    assert_eq!(returned_json(by_env), expected);
+    let by_flag = rbus()
+        .env("ROBOT_BUS_BROKER_URL", "127.0.0.1:0")
+        .args(["discover", "--url", &address, "--json"])
+        .output()
+        .unwrap();
+    assert_eq!(returned_json(by_flag), expected);
+
+    for args in [
+        &["status", "--json"][..],
+        &["topic", "info", "/rbus/absent"],
+    ] {
+        let failure = run_rbus(&address, args);
+        assert!(failure.2.contains("rbus discover"), "stderr={}", failure.2);
+        assert_failure(failure, "monitoring API unavailable (HTTP 404)");
+    }
+    broker.stop().expect("stop");
+}
+
+fn rbus_with_http_response(args: &[&str], response: &'static str) -> (i32, String, String) {
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let address = listener.local_addr().unwrap().to_string();
+    let server = thread::spawn(move || {
+        let (mut stream, _) = listener.accept().unwrap();
+        let mut request = BufReader::new(&mut stream);
+        let mut line = String::new();
+        loop {
+            line.clear();
+            if request.read_line(&mut line).unwrap() == 0 || line == "\r\n" {
+                break;
+            }
+        }
+        stream.write_all(response.as_bytes()).unwrap();
+    });
+    let output = run_rbus(&address, args);
+    server.join().unwrap();
+    output
+}
+
+#[test]
+fn rbus_rejects_missing_discovery_and_invalid_responses() {
+    assert_failure(
+        rbus_with_http_response(
+            &["discover"],
+            "HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\n\r\n",
+        ),
+        "discovery endpoint unavailable",
+    );
+    assert_failure(
+        rbus_with_http_response(
+            &["status", "--json"],
+            "HTTP/1.1 200 OK\r\nContent-Length: 8\r\n\r\nnot JSON",
+        ),
+        "invalid JSON response",
+    );
+    assert_failure(
+        rbus_with_http_response(
+            &["topic", "list"],
+            "HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\n{}",
+        ),
+        "missing field `topics`",
+    );
+}
+
+#[test]
+fn rbus_reports_unreachable_api_and_enforces_timeout() {
+    assert_failure(
+        run_rbus("127.0.0.1:0", &["discover"]),
+        "could not reach broker API",
+    );
+    assert_failure(
+        run_rbus("127.0.0.1:0", &["status", "--timeout-ms", "0"]),
+        "invalid value '0'",
+    );
+
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let address = listener.local_addr().unwrap().to_string();
+    let server = thread::spawn(move || {
+        let (_stream, _) = listener.accept().unwrap();
+        // Close after a delay so a client that ignores the timeout still exits.
+        thread::sleep(Duration::from_millis(800));
+    });
+    let output = run_rbus(&address, &["--timeout-ms", "100", "discover", "--json"]);
+    server.join().unwrap();
+    assert_failure(output, "timed out");
 }

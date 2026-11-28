@@ -6,7 +6,9 @@ on:
     paths:
       - 'site/**'
       - 'Cargo.toml'
+      - 'docs/images/architecture-overview*.svg'
       - 'docs/images/console-overview.png'
+      - 'docs/images/python-broker-console.*'
       - '.github/workflows/pages.yml'
   workflow_dispatch:
 

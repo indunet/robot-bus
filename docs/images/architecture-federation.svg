@@ -1,82 +1,47 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="760" viewBox="0 0 1200 760" role="img" aria-labelledby="title desc">
-  <title id="title">Robot Bus broker federation</title>
-  <desc id="desc">Optional link between two brokers. Each broker learns the peer from GET /api/v1/discover, then connects ZeroMQ sockets over TCP or same-host IPC. Topics must be peered both ways. Services and actions connect a DEALER to the peer backend. A hop path of broker ids stops loops. The /robot_bus namespace stays local. Clients stay on their own broker.</desc>
-  <rect width="1200" height="760" fill="#F4F7FB"/>
+<svg xmlns="http://www.w3.org/2000/svg" width="1040" height="526" viewBox="0 0 1040 526" role="img" aria-labelledby="title desc" xml:lang="en">
+  <title id="title">One-sided broker federation</title>
+  <desc id="desc">Running broker A advertises its join capability. Broker B starts with --peer A:15560 and discovers A over HTTP. B opens ZeroMQ links to A and application traffic flows in both directions. Native clients remain connected to their local brokers and reserved /robot_bus topics stay local.</desc>
   <defs>
-    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
-      <path d="M 0 1.2 L 9 5 L 0 8.8 Z" fill="#1F4E79"/>
+    <style>
+      text { font-family: Inter, "Segoe UI", "PingFang SC", "Microsoft YaHei", "Noto Sans CJK SC", sans-serif; }
+      .mono { font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace; }
+    </style>
+    <marker id="green" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 Z" fill="#12644e"/>
+    </marker>
+    <marker id="blue" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 Z" fill="#255987"/>
     </marker>
   </defs>
-
-  <text x="40" y="42" fill="#172033" font-family="Segoe UI, Helvetica, Arial, sans-serif" font-size="22" font-weight="600">Broker federation</text>
-  <text x="40" y="66" fill="#5C6B7A" font-family="Segoe UI, Helvetica, Arial, sans-serif" font-size="14">Optional. Each broker forwards to a peer. Clients stay on their own broker.</text>
-
-  <rect x="32" y="92" width="500" height="220" rx="14" fill="#E7F0FA" stroke="#1F4E79"/>
-  <text x="52" y="124" fill="#1F4E79" font-family="Segoe UI, Helvetica, Arial, sans-serif" font-size="16" font-weight="600">Broker A</text>
-  <text x="148" y="124" fill="#3D5A73" font-family="Segoe UI, Helvetica, Arial, sans-serif" font-size="13">broker_id</text>
-  <rect x="52" y="144" width="460" height="144" rx="10" fill="#FFFFFF" stroke="#D5DDE8"/>
-  <text x="72" y="176" fill="#172033" font-family="Segoe UI, Helvetica, Arial, sans-serif" font-size="14" font-weight="600">Local nodes</text>
-  <text x="72" y="202" fill="#5C6B7A" font-family="Segoe UI, Helvetica, Arial, sans-serif" font-size="13">Publishers and subscribers</text>
-  <text x="72" y="224" fill="#5C6B7A" font-family="Segoe UI, Helvetica, Arial, sans-serif" font-size="13">Service and action clients</text>
-  <text x="72" y="246" fill="#5C6B7A" font-family="Segoe UI, Helvetica, Arial, sans-serif" font-size="13">Service and action workers</text>
-  <text x="72" y="268" fill="#1F4E79" font-family="Segoe UI, Helvetica, Arial, sans-serif" font-size="13">They connect only to Broker A</text>
-
-  <line x1="548" y1="190" x2="636" y2="190" stroke="#1F4E79" stroke-width="2" marker-start="url(#arrow)" marker-end="url(#arrow)"/>
-  <text x="592" y="174" fill="#1F4E79" font-family="Segoe UI, Helvetica, Arial, sans-serif" font-size="12" text-anchor="middle">peer</text>
-
-  <rect x="668" y="92" width="500" height="220" rx="14" fill="#E7F0FA" stroke="#1F4E79"/>
-  <text x="688" y="124" fill="#1F4E79" font-family="Segoe UI, Helvetica, Arial, sans-serif" font-size="16" font-weight="600">Broker B</text>
-  <text x="784" y="124" fill="#3D5A73" font-family="Segoe UI, Helvetica, Arial, sans-serif" font-size="13">broker_id</text>
-  <rect x="688" y="144" width="460" height="144" rx="10" fill="#FFFFFF" stroke="#D5DDE8"/>
-  <text x="708" y="176" fill="#172033" font-family="Segoe UI, Helvetica, Arial, sans-serif" font-size="14" font-weight="600">Local nodes</text>
-  <text x="708" y="202" fill="#5C6B7A" font-family="Segoe UI, Helvetica, Arial, sans-serif" font-size="13">Publishers and subscribers</text>
-  <text x="708" y="224" fill="#5C6B7A" font-family="Segoe UI, Helvetica, Arial, sans-serif" font-size="13">Service and action clients</text>
-  <text x="708" y="246" fill="#5C6B7A" font-family="Segoe UI, Helvetica, Arial, sans-serif" font-size="13">Service and action workers</text>
-  <text x="708" y="268" fill="#1F4E79" font-family="Segoe UI, Helvetica, Arial, sans-serif" font-size="13">They connect only to Broker B</text>
-
-  <rect x="32" y="332" width="1136" height="132" rx="14" fill="#FFFFFF" stroke="#D5DDE8"/>
-  <text x="52" y="364" fill="#172033" font-family="Segoe UI, Helvetica, Arial, sans-serif" font-size="16" font-weight="600">Resolving a peer</text>
-  <text x="220" y="364" fill="#5C6B7A" font-family="Segoe UI, Helvetica, Arial, sans-serif" font-size="13">HTTP discover first. ZeroMQ sockets second.</text>
-
-  <rect x="52" y="384" width="300" height="60" rx="8" fill="#F8FAFC" stroke="#E3E9F0"/>
-  <text x="68" y="408" fill="#172033" font-family="Segoe UI, Helvetica, Arial, sans-serif" font-size="14" font-weight="600">--peer HOST:PORT</text>
-  <text x="68" y="428" fill="#5C6B7A" font-family="Segoe UI, Helvetica, Arial, sans-serif" font-size="12">ipc+HOST:PORT on one host</text>
-
-  <line x1="360" y1="414" x2="408" y2="414" stroke="#1F4E79" stroke-width="1.5" marker-end="url(#arrow)"/>
-
-  <rect x="416" y="384" width="320" height="60" rx="8" fill="#F8FAFC" stroke="#E3E9F0"/>
-  <text x="432" y="408" fill="#172033" font-family="Segoe UI, Helvetica, Arial, sans-serif" font-size="14" font-weight="600">GET /api/v1/discover</text>
-  <text x="432" y="428" fill="#5C6B7A" font-family="Segoe UI, Helvetica, Arial, sans-serif" font-size="12">Peer API port, not a data port</text>
-
-  <line x1="744" y1="414" x2="792" y2="414" stroke="#1F4E79" stroke-width="1.5" marker-end="url(#arrow)"/>
-
-  <rect x="800" y="384" width="344" height="60" rx="8" fill="#E7F0FA" stroke="#1F4E79"/>
-  <text x="816" y="408" fill="#1F4E79" font-family="Segoe UI, Helvetica, Arial, sans-serif" font-size="14" font-weight="600">ZeroMQ endpoints</text>
-  <text x="816" y="428" fill="#1F4E79" font-family="Segoe UI, Helvetica, Arial, sans-serif" font-size="12">TCP across hosts, or ipc:// on one host</text>
-
-  <g font-family="Segoe UI, Helvetica, Arial, sans-serif">
-    <rect x="32" y="484" width="368" height="180" rx="12" fill="#FFFFFF" stroke="#D5DDE8"/>
-    <text x="52" y="516" fill="#172033" font-size="16" font-weight="600">Topics</text>
-    <text x="52" y="544" fill="#5C6B7A" font-size="13">Each broker peers the other</text>
-    <text x="52" y="566" fill="#5C6B7A" font-size="13">Push into the peer XSUB</text>
-    <text x="52" y="588" fill="#5C6B7A" font-size="13">Subscribe on the peer XPUB</text>
-    <text x="52" y="618" fill="#1F4E79" font-size="13">/robot_bus stays local</text>
-
-    <rect x="416" y="484" width="368" height="180" rx="12" fill="#FFFFFF" stroke="#D5DDE8"/>
-    <text x="436" y="516" fill="#172033" font-size="16" font-weight="600">Services</text>
-    <text x="436" y="544" fill="#5C6B7A" font-size="13">DEALER id fed/broker_id</text>
-    <text x="436" y="566" fill="#5C6B7A" font-size="13">Connects to the peer backend</text>
-    <text x="436" y="588" fill="#5C6B7A" font-size="13">READY_FED advertises services</text>
-    <text x="436" y="618" fill="#1F4E79" font-size="13">Peer shows up as a worker</text>
-
-    <rect x="800" y="484" width="368" height="180" rx="12" fill="#FFFFFF" stroke="#D5DDE8"/>
-    <text x="820" y="516" fill="#172033" font-size="16" font-weight="600">Actions</text>
-    <text x="820" y="544" fill="#5C6B7A" font-size="13">DEALER to the peer backend</text>
-    <text x="820" y="566" fill="#5C6B7A" font-size="13">State is keyed by goal id</text>
-    <text x="820" y="588" fill="#5C6B7A" font-size="13">Feedback may repeat</text>
-    <text x="820" y="618" fill="#1F4E79" font-size="13">A result clears the goal</text>
-  </g>
-
-  <text x="40" y="700" fill="#172033" font-family="Segoe UI, Helvetica, Arial, sans-serif" font-size="14" font-weight="600">Loops, IPC, and the default</text>
-  <text x="40" y="724" fill="#5C6B7A" font-family="Segoe UI, Helvetica, Arial, sans-serif" font-size="13">A hop path of broker ids drops circles. Same-host IPC needs a fixed --ipc-dir on the broker that starts second. Federation is off unless a peer is set.</text>
+  <rect x="1" y="1" width="1038" height="524" rx="18" fill="#f5f9f8" stroke="#cedddb"/>
+  <text x="32" y="53" fill="#172d33" font-size="28" font-weight="700" text-anchor="start">One-sided broker federation</text>
+  <rect x="32" y="85" width="242" height="271" rx="10" fill="#eaf5ef" stroke="#cedddb"/>
+  <text x="48" y="114" fill="#12644e" font-size="19" font-weight="700" text-anchor="start">Broker A · running</text>
+  <text x="48" y="138" fill="#435961" font-size="15" font-weight="400" text-anchor="start">Advertises join capability</text>
+  <rect x="766" y="85" width="242" height="271" rx="10" fill="#eaf5ef" stroke="#cedddb"/>
+  <text x="782" y="114" fill="#12644e" font-size="19" font-weight="700" text-anchor="start">Broker B · joining</text>
+  <text x="782" y="138" fill="#435961" font-size="15" font-weight="400" text-anchor="start">--peer A:15560</text>
+  <rect x="49" y="226" width="208" height="100" rx="10" fill="#fff" stroke="#cedddb"/>
+  <text x="65" y="255" fill="#12644e" font-size="19" font-weight="700" text-anchor="start">Local clients</text>
+  <text x="65" y="279" fill="#435961" font-size="15" font-weight="400" text-anchor="start">Use their own broker</text>
+  <rect x="783" y="226" width="208" height="100" rx="10" fill="#fff" stroke="#cedddb"/>
+  <text x="799" y="255" fill="#12644e" font-size="19" font-weight="700" text-anchor="start">Local clients</text>
+  <text x="799" y="279" fill="#435961" font-size="15" font-weight="400" text-anchor="start">Use their own broker</text>
+  <text x="520" y="111" fill="#255987" font-size="17" font-weight="700" text-anchor="middle">HTTP discovery</text>
+  <path d="M758 132 H282" fill="none" stroke="#255987" stroke-width="2" stroke-linejoin="round" stroke-dasharray="5 5" marker-end="url(#blue)"/>
+  <text x="520" y="156" fill="#255987" font-size="15" font-weight="400" text-anchor="middle" class="mono">GET /api/v1/discover</text>
+  <text x="520" y="185" fill="#12644e" font-size="17" font-weight="700" text-anchor="middle">Topics</text>
+  <path d="M282 196 H758" fill="none" stroke="#12644e" stroke-width="2" stroke-linejoin="round" marker-end="url(#green)" marker-start="url(#green)"/>
+  <text x="520" y="218" fill="#435961" font-size="14" font-weight="400" text-anchor="middle">DEALER ↔ federation ROUTER · subscription demand + data</text>
+  <text x="520" y="252" fill="#12644e" font-size="17" font-weight="700" text-anchor="middle">Services</text>
+  <path d="M282 263 H758" fill="none" stroke="#12644e" stroke-width="2" stroke-linejoin="round" marker-end="url(#green)" marker-start="url(#green)"/>
+  <text x="520" y="285" fill="#435961" font-size="14" font-weight="400" text-anchor="middle">DEALER ↔ backend ROUTER · requests and replies</text>
+  <text x="520" y="319" fill="#12644e" font-size="17" font-weight="700" text-anchor="middle">Actions</text>
+  <path d="M282 330 H758" fill="none" stroke="#12644e" stroke-width="2" stroke-linejoin="round" marker-end="url(#green)" marker-start="url(#green)"/>
+  <text x="520" y="352" fill="#435961" font-size="14" font-weight="400" text-anchor="middle">DEALER ↔ backend ROUTER · goals, feedback and results</text>
+  <rect x="32" y="376" width="976" height="63" rx="10" fill="#fff" stroke="#cedddb"/>
+  <text x="48" y="401" fill="#12644e" font-size="16" font-weight="700" text-anchor="start">ZeroMQ transport</text>
+  <text x="48" y="424" fill="#435961" font-size="15" font-weight="400" text-anchor="start">TCP across hosts · use ipc+HOST:PORT for socket files visible from the same host.</text>
+  <rect x="32" y="447" width="976" height="55" rx="10" fill="#fff" stroke="#cedddb"/>
+  <text x="48" y="480" fill="#435961" font-size="15" font-weight="400" text-anchor="start">Broker IDs prevent loops · reserved /robot_bus topics remain local.</text>
 </svg>

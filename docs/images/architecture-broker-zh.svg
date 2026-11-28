@@ -1,0 +1,77 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1040" height="618" viewBox="0 0 1040 618" role="img" aria-labelledby="title desc" xml:lang="zh-CN">
+  <title id="title">Broker 路由与原生套接字</title>
+  <desc id="desc">原生话题数据从 PUB 经 XSUB 和 XPUB 发往 SUB。服务的客户端使用 REQ，工作端使用 DEALER，Broker 使用一对 ROUTER。Action 两端均使用 DEALER。服务响应及 Action 的反馈和结果返回调用端。原生传输支持 inproc、IPC 和 TCP。</desc>
+  <defs>
+    <style>
+      text { font-family: Inter, "Segoe UI", "PingFang SC", "Microsoft YaHei", "Noto Sans CJK SC", sans-serif; }
+    </style>
+    <marker id="green" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 Z" fill="#12644e"/>
+    </marker>
+  </defs>
+  <rect x="1" y="1" width="1038" height="616" rx="18" fill="#f5f9f8" stroke="#cedddb"/>
+  <text x="32" y="53" fill="#172d33" font-size="28" font-weight="700" text-anchor="start">Broker 路由与原生套接字</text>
+  <rect x="32" y="76" width="320" height="75" rx="10" fill="#fff" stroke="#cedddb"/>
+  <text x="48" y="105" fill="#255987" font-size="19" font-weight="700" text-anchor="start">inproc</text>
+  <text x="48" y="129" fill="#435961" font-size="15" font-weight="400" text-anchor="start">同一进程 · 共用 Context</text>
+  <rect x="360" y="76" width="320" height="75" rx="10" fill="#fff" stroke="#cedddb"/>
+  <text x="376" y="105" fill="#255987" font-size="19" font-weight="700" text-anchor="start">ipc</text>
+  <text x="376" y="129" fill="#435961" font-size="15" font-weight="400" text-anchor="start">同一主机 · Unix 套接字文件</text>
+  <rect x="688" y="76" width="320" height="75" rx="10" fill="#fff" stroke="#cedddb"/>
+  <text x="704" y="105" fill="#255987" font-size="19" font-weight="700" text-anchor="start">tcp</text>
+  <text x="704" y="129" fill="#435961" font-size="15" font-weight="400" text-anchor="start">跨主机 · 通过 HTTP 发现端口</text>
+  <rect x="280" y="166" width="480" height="410" rx="12" fill="#eaf5ef" stroke="#b6cec4"/>
+  <text x="520" y="192" fill="#12644e" font-size="16" font-weight="700" text-anchor="middle">Broker 内部套接字</text>
+  <text x="32" y="224" fill="#172d33" font-size="21" font-weight="700" text-anchor="start">话题</text>
+  <rect x="32" y="236" width="184" height="65" rx="10" fill="#fff" stroke="#cedddb"/>
+  <text x="124.0" y="265" fill="#255987" font-size="19" font-weight="700" text-anchor="middle">发布者</text>
+  <text x="124.0" y="289" fill="#435961" font-size="15" font-weight="400" text-anchor="middle">PUB</text>
+  <rect x="310" y="236" width="184" height="65" rx="10" fill="#fff" stroke="#cedddb"/>
+  <text x="402.0" y="265" fill="#12644e" font-size="19" font-weight="700" text-anchor="middle">XSUB</text>
+  <text x="402.0" y="289" fill="#435961" font-size="15" font-weight="400" text-anchor="middle">接收发布</text>
+  <rect x="546" y="236" width="184" height="65" rx="10" fill="#fff" stroke="#cedddb"/>
+  <text x="638.0" y="265" fill="#12644e" font-size="19" font-weight="700" text-anchor="middle">XPUB</text>
+  <text x="638.0" y="289" fill="#435961" font-size="15" font-weight="400" text-anchor="middle">分发订阅</text>
+  <rect x="824" y="236" width="184" height="65" rx="10" fill="#fff" stroke="#cedddb"/>
+  <text x="916.0" y="265" fill="#255987" font-size="19" font-weight="700" text-anchor="middle">订阅者</text>
+  <text x="916.0" y="289" fill="#435961" font-size="15" font-weight="400" text-anchor="middle">SUB</text>
+  <path d="M224 268 H302" fill="none" stroke="#12644e" stroke-width="2" stroke-linejoin="round" marker-end="url(#green)"/>
+  <path d="M502 268 H538" fill="none" stroke="#12644e" stroke-width="2" stroke-linejoin="round" marker-end="url(#green)"/>
+  <path d="M738 268 H816" fill="none" stroke="#12644e" stroke-width="2" stroke-linejoin="round" marker-end="url(#green)"/>
+  <text x="520" y="318" fill="#435961" font-size="14" font-weight="400" text-anchor="middle">载荷沿箭头方向传递，订阅需求沿反向传递。</text>
+  <text x="32" y="345" fill="#172d33" font-size="21" font-weight="700" text-anchor="start">服务</text>
+  <rect x="32" y="357" width="184" height="65" rx="10" fill="#fff" stroke="#cedddb"/>
+  <text x="124.0" y="386" fill="#255987" font-size="19" font-weight="700" text-anchor="middle">客户端</text>
+  <text x="124.0" y="410" fill="#435961" font-size="15" font-weight="400" text-anchor="middle">REQ</text>
+  <rect x="310" y="357" width="184" height="65" rx="10" fill="#fff" stroke="#cedddb"/>
+  <text x="402.0" y="386" fill="#12644e" font-size="19" font-weight="700" text-anchor="middle">ROUTER</text>
+  <text x="402.0" y="410" fill="#435961" font-size="15" font-weight="400" text-anchor="middle">前端</text>
+  <rect x="546" y="357" width="184" height="65" rx="10" fill="#fff" stroke="#cedddb"/>
+  <text x="638.0" y="386" fill="#12644e" font-size="19" font-weight="700" text-anchor="middle">ROUTER</text>
+  <text x="638.0" y="410" fill="#435961" font-size="15" font-weight="400" text-anchor="middle">后端</text>
+  <rect x="824" y="357" width="184" height="65" rx="10" fill="#fff" stroke="#cedddb"/>
+  <text x="916.0" y="386" fill="#255987" font-size="19" font-weight="700" text-anchor="middle">服务端</text>
+  <text x="916.0" y="410" fill="#435961" font-size="15" font-weight="400" text-anchor="middle">DEALER</text>
+  <path d="M224 389 H302" fill="none" stroke="#12644e" stroke-width="2" stroke-linejoin="round" marker-end="url(#green)" marker-start="url(#green)"/>
+  <path d="M502 389 H538" fill="none" stroke="#12644e" stroke-width="2" stroke-linejoin="round" marker-end="url(#green)" marker-start="url(#green)"/>
+  <path d="M738 389 H816" fill="none" stroke="#12644e" stroke-width="2" stroke-linejoin="round" marker-end="url(#green)" marker-start="url(#green)"/>
+  <text x="520" y="439" fill="#435961" font-size="14" font-weight="400" text-anchor="middle">按服务名路由请求，每个请求对应一条响应。</text>
+  <text x="32" y="466" fill="#172d33" font-size="21" font-weight="700" text-anchor="start">Actions</text>
+  <rect x="32" y="478" width="184" height="65" rx="10" fill="#fff" stroke="#cedddb"/>
+  <text x="124.0" y="507" fill="#255987" font-size="19" font-weight="700" text-anchor="middle">客户端</text>
+  <text x="124.0" y="531" fill="#435961" font-size="15" font-weight="400" text-anchor="middle">DEALER</text>
+  <rect x="310" y="478" width="184" height="65" rx="10" fill="#fff" stroke="#cedddb"/>
+  <text x="402.0" y="507" fill="#12644e" font-size="19" font-weight="700" text-anchor="middle">ROUTER</text>
+  <text x="402.0" y="531" fill="#435961" font-size="15" font-weight="400" text-anchor="middle">前端</text>
+  <rect x="546" y="478" width="184" height="65" rx="10" fill="#fff" stroke="#cedddb"/>
+  <text x="638.0" y="507" fill="#12644e" font-size="19" font-weight="700" text-anchor="middle">ROUTER</text>
+  <text x="638.0" y="531" fill="#435961" font-size="15" font-weight="400" text-anchor="middle">后端</text>
+  <rect x="824" y="478" width="184" height="65" rx="10" fill="#fff" stroke="#cedddb"/>
+  <text x="916.0" y="507" fill="#255987" font-size="19" font-weight="700" text-anchor="middle">Action 服务端</text>
+  <text x="916.0" y="531" fill="#435961" font-size="15" font-weight="400" text-anchor="middle">DEALER</text>
+  <path d="M224 510 H302" fill="none" stroke="#12644e" stroke-width="2" stroke-linejoin="round" marker-end="url(#green)" marker-start="url(#green)"/>
+  <path d="M502 510 H538" fill="none" stroke="#12644e" stroke-width="2" stroke-linejoin="round" marker-end="url(#green)" marker-start="url(#green)"/>
+  <path d="M738 510 H816" fill="none" stroke="#12644e" stroke-width="2" stroke-linejoin="round" marker-end="url(#green)" marker-start="url(#green)"/>
+  <text x="520" y="560" fill="#435961" font-size="14" font-weight="400" text-anchor="middle">转发目标与取消请求，按目标 ID 返回反馈和结果。</text>
+  <text x="520" y="601" fill="#435961" font-size="15" font-weight="400" text-anchor="middle">原生 TCP 消息端口在启动时分配，也可以通过绑定地址固定。</text>
+</svg>

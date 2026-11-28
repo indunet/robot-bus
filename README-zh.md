@@ -72,6 +72,12 @@ sudo apt install ./robot-bus_3.2.0_linux_amd64.deb
 CMake 工程可以拉取预编译 SDK，而不必安装系统包。见 [C++ API — 预编译 SDK 压缩包](docs/zh/cpp-api.md#预编译-sdk-压缩包cmake-fetchcontent)。
 
 
+### *系统架构*
+
+![Robot Bus 系统架构，展示原生节点、浏览器 SDK 和 Web 控制台的接入方式](docs/images/architecture-overview-zh.svg)
+
+[查看 Broker 路由、节点模型、联邦与 ROS 2 桥接](docs/zh/architecture.md)。
+
 ## *1. 快速开始*
 
 ### *1.1 安装并启动 broker*
@@ -250,13 +256,20 @@ finally:
 
 ## *2. Web控制台*
 
-Web 控制台是 broker 的可选观测工具（Overview、Topics、Services、Actions、Topology、日志）。在程序里 `RobotBusBroker.start()`（或通过 `python -m robot_bus.broker` / `cargo run --bin robot_bus_broker` 独立运行）后，用浏览器打开：
+安装 `robot-bus` 后，在终端启动 Broker 并保持运行。
 
-**http://127.0.0.1:15560**
+```bash
+python -m robot_bus.broker --api-listen 127.0.0.1:15560 --tcp-only
+```
 
-![Robot Bus Web控制台](docs/images/console-overview.png)
+在浏览器打开 **http://127.0.0.1:15560**，即可查看 Broker 状态、话题、服务、Action、拓扑和日志。也可以用 `RobotBusBroker.start()` 或 `cargo run --bin robot_bus_broker` 启动后打开控制台。如果端口不同，以启动日志里的地址为准。
 
-*Web控制台* — Overview / Topics / Services / Actions / Topology。
+<details>
+<summary>观看从 Python 启动 Broker 到打开控制台的动图</summary>
+
+![终端用 Python 启动 Broker，随后在 Chrome 输入 127.0.0.1:15560，打开控制台查看运行状态](docs/images/python-broker-console.gif)
+
+</details>
 
 ![Web控制台中的小坦克仿真](docs/images/tank-sim.png)
 

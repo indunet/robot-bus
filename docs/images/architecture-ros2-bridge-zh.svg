@@ -1,0 +1,54 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1040" height="437" viewBox="0 0 1040 437" role="img" aria-labelledby="title desc" xml:lang="zh-CN">
+  <title id="title">接入 ROS 2 通信图的可选桥接</title>
+  <desc id="desc">Robot Bus 节点与 Broker 交换 Protobuf。桥接进程内有 Bus Node、类型映射器和原生 ROS 客户端。ROS 客户端接入 Humble 或 Jazzy 的 DDS 通信图。每条路由配置数据或请求的方向，响应、反馈和结果返回调用端。</desc>
+  <defs>
+    <style>
+      text { font-family: Inter, "Segoe UI", "PingFang SC", "Microsoft YaHei", "Noto Sans CJK SC", sans-serif; }
+    </style>
+    <marker id="blue" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 Z" fill="#255987"/>
+    </marker>
+    <marker id="purple" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 Z" fill="#65408a"/>
+    </marker>
+  </defs>
+  <rect x="1" y="1" width="1038" height="435" rx="18" fill="#f5f9f8" stroke="#cedddb"/>
+  <text x="32" y="53" fill="#172d33" font-size="28" font-weight="700" text-anchor="start">接入 ROS 2 通信图的可选桥接</text>
+  <rect x="32" y="78" width="238" height="228" rx="12" fill="#edf5fb" stroke="#cedddb"/>
+  <text x="48" y="108" fill="#255987" font-size="20" font-weight="700" text-anchor="start">Robot Bus</text>
+  <rect x="48" y="126" width="206" height="70" rx="10" fill="#fff" stroke="#cedddb"/>
+  <text x="64" y="155" fill="#255987" font-size="19" font-weight="700" text-anchor="start">应用节点</text>
+  <text x="64" y="179" fill="#435961" font-size="15" font-weight="400" text-anchor="start">任一 Robot Bus SDK</text>
+  <path d="M151 201 V224" fill="none" stroke="#255987" stroke-width="2" stroke-linejoin="round" marker-end="url(#blue)" marker-start="url(#blue)"/>
+  <rect x="48" y="228" width="206" height="63" rx="10" fill="#fff" stroke="#cedddb"/>
+  <text x="64" y="257" fill="#255987" font-size="19" font-weight="700" text-anchor="start">Broker</text>
+  <text x="64" y="281" fill="#435961" font-size="15" font-weight="400" text-anchor="start">Protobuf</text>
+  <rect x="316" y="78" width="408" height="228" rx="12" fill="#eaf5ef" stroke="#b6cec4"/>
+  <text x="332" y="108" fill="#12644e" font-size="20" font-weight="700" text-anchor="start">桥接进程</text>
+  <text x="332" y="137" fill="#435961" font-size="15" font-weight="400" text-anchor="start">Python / rclpy · Rust / rclrs · C++ / rclcpp</text>
+  <rect x="332" y="222" width="115" height="70" rx="10" fill="#fff" stroke="#cedddb"/>
+  <text x="389.5" y="251" fill="#12644e" font-size="19" font-weight="700" text-anchor="middle">Bus Node</text>
+  <text x="389.5" y="275" fill="#435961" font-size="15" font-weight="400" text-anchor="middle">Protobuf</text>
+  <rect x="462" y="222" width="115" height="70" rx="10" fill="#fff" stroke="#cedddb"/>
+  <text x="519.5" y="251" fill="#12644e" font-size="19" font-weight="700" text-anchor="middle">映射器</text>
+  <text x="519.5" y="275" fill="#435961" font-size="15" font-weight="400" text-anchor="middle">类型化字段</text>
+  <rect x="592" y="222" width="115" height="70" rx="10" fill="#fff" stroke="#cedddb"/>
+  <text x="649.5" y="251" fill="#12644e" font-size="19" font-weight="700" text-anchor="middle">ROS 客户端</text>
+  <text x="649.5" y="275" fill="#435961" font-size="15" font-weight="400" text-anchor="middle">ROS 消息</text>
+  <path d="M448 257 H460" fill="none" stroke="#12644e" stroke-width="2"/>
+  <path d="M578 257 H590" fill="none" stroke="#12644e" stroke-width="2"/>
+  <text x="520" y="175" fill="#12644e" font-size="16" font-weight="700" text-anchor="middle">每条路由配置一个方向</text>
+  <text x="520" y="200" fill="#12644e" font-size="16" font-weight="700" text-anchor="middle">ROS → Bus   /   Bus → ROS</text>
+  <rect x="770" y="78" width="238" height="228" rx="12" fill="#f5f0fa" stroke="#cedddb"/>
+  <text x="786" y="108" fill="#65408a" font-size="20" font-weight="700" text-anchor="start">ROS 2 通信图</text>
+  <text x="786" y="137" fill="#435961" font-size="15" font-weight="400" text-anchor="start">Humble / Jazzy</text>
+  <rect x="786" y="222" width="206" height="70" rx="10" fill="#fff" stroke="#cedddb"/>
+  <text x="802" y="251" fill="#65408a" font-size="19" font-weight="700" text-anchor="start">现有 ROS 节点</text>
+  <text x="802" y="275" fill="#435961" font-size="15" font-weight="400" text-anchor="start">DDS · CDR</text>
+  <path d="M260 257 H326" fill="none" stroke="#255987" stroke-width="2" stroke-linejoin="round" marker-end="url(#blue)" marker-start="url(#blue)"/>
+  <path d="M713 257 H780" fill="none" stroke="#65408a" stroke-width="2" stroke-linejoin="round" marker-end="url(#purple)" marker-start="url(#purple)"/>
+  <rect x="32" y="326" width="976" height="85" rx="10" fill="#fff" stroke="#cedddb"/>
+  <text x="48" y="355" fill="#12644e" font-size="17" font-weight="700" text-anchor="start">路由方向</text>
+  <text x="48" y="380" fill="#435961" font-size="15" font-weight="400" text-anchor="start">配置的方向适用于话题数据、服务请求或 Action 目标。</text>
+  <text x="48" y="401" fill="#435961" font-size="15" font-weight="400" text-anchor="start">服务响应、Action 反馈与结果沿反方向返回调用端。</text>
+</svg>

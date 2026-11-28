@@ -2,39 +2,38 @@ English | [中文](../zh/architecture.md)
 
 # Architecture
 
-Robot Bus is a standalone multi-language messaging framework with a ROS 2–style Node API. Its parts serve different purposes:
-
-- **Core messaging:** Nodes use shared Protobuf contracts to publish topics, call services, and run actions through a broker. Native nodes use ZeroMQ and need neither ROS 2 nor a browser. See [deployment](deployment.md) for connection setup.
-- **Browser SDK:** A web app can act as a [WebSocket client](typescript-api.md#browser-websocket-rpc) for application messages and calls.
-- **Web console:** The broker can serve an [interface for inspecting and debugging the system](../../README.md#2-web-console). It is not needed for clients to exchange messages.
-- **ROS 2 bridge:** An [optional integration](ros2-bridge.md) maps selected routes between Robot Bus and an existing ROS 2 graph. Neither Web feature requires ROS 2, and the bridge does not require a browser.
+Robot Bus gives applications a ROS 2–style Node API for topics, services, and actions. SDKs share Protobuf message definitions, and the broker routes payloads across languages. The [ROS 2 bridge](#ros-2-bridge) is an optional integration for connecting to an existing ROS 2 graph.
 
 ## System overview
 
-![System overview: clients, broker primitives, and the control plane](../images/architecture-overview.svg)
+![Native ZeroMQ nodes, browser WebSocket clients, and operators using the broker’s HTTP console](../images/architecture-overview.svg)
 
-*Language SDKs and the browser share one broker. Discover, the console, and WebSocket RPC share the HTTP port.*
+- Native SDKs use ZeroMQ for application traffic. For TCP, `GET /api/v1/discover` supplies the data ports. Clients use the host they contacted unless the broker advertises a different host.
+- The [TypeScript browser SDK](typescript-api.md#browser-websocket-rpc) uses `/ws-rpc` to publish and subscribe, call services, and send action goals. Service and action servers run on native ZeroMQ nodes.
+- The [Web console](../../README.md#2-web-console) provides runtime inspection. Its UI at `/`, HTTP discovery, and WebSocket RPC share the broker’s HTTP listener, which defaults to port `15560`.
 
 ## Broker and transports
 
-![Broker routing, ZeroMQ transports, and WebSocket limits](../images/architecture-broker.svg)
+![Native socket paths through the broker for topics, services, and actions](../images/architecture-broker.svg)
 
-*Native nodes use inproc, ipc, or tcp. Browsers call in over WebSocket and cannot register servers.*
+The broker can run inside an application or as a standalone process. Topic routing uses an XSUB/XPUB proxy. Service routing selects a worker by service name and correlates the reply. Action routing tracks each goal so feedback, results, and cancellation reach the appropriate endpoint. The broker routes by names and protocol metadata while keeping Protobuf payloads opaque. Use the [deployment guide](deployment.md) to choose a transport and configure ports.
 
 ## Node model
 
-![Node programming model: Context, Node, entities, and spin](../images/architecture-node.svg)
+![Node connection options, registered entities, and callback execution](../images/architecture-node.svg)
 
-*A node registers entities, then start() or spin() drives callbacks. Constructing a Node does not connect.*
+Constructing a `Node` alone leaves the connection unestablished. For readiness, explicitly discover the broker or use `wait_for_broker`. Register publishers, subscriptions, servers, and other entities, then drive callbacks with `spin()` or the SDK’s background `start()` where available. Within a single process, an inproc broker and its nodes share a ZeroMQ `Context`.
 
 ## Broker federation
 
-![Two brokers linked by discover, then ZeroMQ, for topics, services, and actions](../images/architecture-federation.svg)
+![Broker B discovers Broker A over HTTP and opens bidirectional ZeroMQ links for topics, services, and actions](../images/architecture-federation.svg)
 
-*Federation is optional. A broker learns its peer from discover, then forwards topics, services, and actions. Clients stay on their own broker.*
+With two current brokers, start A first and pass `--peer A:15560` when starting B. A advertises `federation: ["join"]` and `messageFedPort` in discovery. B uses the advertised endpoints to join A. That one configuration enables traffic in both directions while clients stay connected to their local brokers. Topic links exchange subscription demand, and the reserved `/robot_bus` topic namespace stays on each broker.
+
+Use TCP across hosts or `--peer ipc+A:15560` when the two brokers can access the same host’s IPC socket files. A legacy peer without the `join` capability requires mutual peer configuration. See the [broker options](rust-api.md#broker-startup) for explicit endpoints and fixed IPC directories.
 
 ## ROS 2 bridge
 
-![ROS 2 bridge between edge hosts and a ROS 2 graph](../images/architecture-ros2-bridge.svg)
+![Robot Bus and ROS 2 meet in a bridge process with a Bus Node, typed mapper, and native ROS client](../images/architecture-ros2-bridge.svg)
 
-*Edge hosts stay on protobuf. An in-process bridge maps one direction onto a Humble or Jazzy graph, and that process is the only meeting point.*
+A bridge runs in a Python, Rust, or C++ application and maps selected routes between Protobuf on Robot Bus and ROS 2 types on a Humble or Jazzy graph. Each route chooses one direction for topic data, service requests, or action goals. Service responses and action feedback and results flow back to the caller. See the [ROS 2 bridge guide](ros2-bridge.md) for typed mappers and examples.

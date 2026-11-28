@@ -1,103 +1,68 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="720" viewBox="0 0 1200 720" role="img" aria-labelledby="title desc">
-  <title id="title">Robot Bus system overview</title>
-  <desc id="desc">Language SDKs and a browser client share one broker. The broker routes topics, services, and actions. Discover, the embedded console, and WebSocket RPC share HTTP port 15560. Payloads are protobuf. The core SDK does not include ROS 2 unless the bridge is enabled.</desc>
-  <rect width="1200" height="720" fill="#F4F7FB"/>
+<svg xmlns="http://www.w3.org/2000/svg" width="1040" height="536" viewBox="0 0 1040 536" role="img" aria-labelledby="title desc" xml:lang="en">
+  <title id="title">How clients reach the broker</title>
+  <desc id="desc">Native SDKs use ZeroMQ sockets. TypeScript web apps send application traffic through /ws-rpc. Operators open the Web console in a browser. HTTP discovery, the console and WebSocket share the HTTP listener. Topics, services and actions carry Protobuf payloads.</desc>
   <defs>
-    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
-      <path d="M 0 1.2 L 9 5 L 0 8.8 Z" fill="#1F4E79"/>
+    <style>
+      text { font-family: Inter, "Segoe UI", "PingFang SC", "Microsoft YaHei", "Noto Sans CJK SC", sans-serif; }
+    </style>
+    <marker id="blue" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 Z" fill="#255987"/>
+    </marker>
+    <marker id="purple" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 Z" fill="#65408a"/>
+    </marker>
+    <marker id="amber" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 Z" fill="#8b5318"/>
     </marker>
   </defs>
-
-  <text x="40" y="42" fill="#172033" font-family="Segoe UI, Helvetica, Arial, sans-serif" font-size="22" font-weight="600">System overview</text>
-  <text x="40" y="66" fill="#5C6B7A" font-family="Segoe UI, Helvetica, Arial, sans-serif" font-size="14">One broker. Protobuf payloads. ROS 2 stays out of the core SDK.</text>
-
-  <!-- Clients -->
-  <rect x="32" y="92" width="268" height="588" rx="14" fill="#FFFFFF" stroke="#D5DDE8"/>
-  <text x="52" y="124" fill="#172033" font-family="Segoe UI, Helvetica, Arial, sans-serif" font-size="16" font-weight="600">Clients</text>
-  <text x="52" y="146" fill="#5C6B7A" font-family="Segoe UI, Helvetica, Arial, sans-serif" font-size="12">Same Node model</text>
-
-  <g font-family="Segoe UI, Helvetica, Arial, sans-serif">
-    <rect x="48" y="168" width="236" height="64" rx="8" fill="#F8FAFC" stroke="#E3E9F0"/>
-    <text x="64" y="194" fill="#172033" font-size="15" font-weight="600">Rust</text>
-    <text x="64" y="214" fill="#5C6B7A" font-size="12">Native SDK</text>
-
-    <rect x="48" y="242" width="236" height="64" rx="8" fill="#F8FAFC" stroke="#E3E9F0"/>
-    <text x="64" y="268" fill="#172033" font-size="15" font-weight="600">Python</text>
-    <text x="64" y="288" fill="#5C6B7A" font-size="12">Native SDK</text>
-
-    <rect x="48" y="316" width="236" height="64" rx="8" fill="#F8FAFC" stroke="#E3E9F0"/>
-    <text x="64" y="342" fill="#172033" font-size="15" font-weight="600">TypeScript</text>
-    <text x="64" y="362" fill="#5C6B7A" font-size="12">Native SDK</text>
-
-    <rect x="48" y="390" width="236" height="64" rx="8" fill="#F8FAFC" stroke="#E3E9F0"/>
-    <text x="64" y="416" fill="#172033" font-size="15" font-weight="600">C++</text>
-    <text x="64" y="436" fill="#5C6B7A" font-size="12">Native SDK</text>
-
-    <rect x="48" y="464" width="236" height="64" rx="8" fill="#F8FAFC" stroke="#E3E9F0"/>
-    <text x="64" y="490" fill="#172033" font-size="15" font-weight="600">Java</text>
-    <text x="64" y="510" fill="#5C6B7A" font-size="12">Native SDK</text>
-
-    <rect x="48" y="538" width="236" height="64" rx="8" fill="#F8FAFC" stroke="#E3E9F0"/>
-    <text x="64" y="564" fill="#172033" font-size="15" font-weight="600">Android</text>
-    <text x="64" y="584" fill="#5C6B7A" font-size="12">Kotlin SDK</text>
-
-    <rect x="48" y="612" width="236" height="60" rx="8" fill="#F8FAFC" stroke="#E3E9F0"/>
-    <text x="64" y="636" fill="#172033" font-size="15" font-weight="600">Browser</text>
-    <text x="64" y="656" fill="#5C6B7A" font-size="12">WebSocket client</text>
-  </g>
-
-  <line x1="308" y1="386" x2="348" y2="386" stroke="#1F4E79" stroke-width="2" marker-end="url(#arrow)"/>
-  <text x="328" y="374" fill="#1F4E79" font-family="Segoe UI, Helvetica, Arial, sans-serif" font-size="11" text-anchor="middle">protobuf</text>
-
-  <!-- Broker -->
-  <rect x="360" y="92" width="808" height="588" rx="14" fill="#E7F0FA" stroke="#1F4E79"/>
-  <text x="384" y="124" fill="#1F4E79" font-family="Segoe UI, Helvetica, Arial, sans-serif" font-size="16" font-weight="600">Broker</text>
-  <text x="384" y="146" fill="#3D5A73" font-family="Segoe UI, Helvetica, Arial, sans-serif" font-size="12">Topics, services, and actions in one process</text>
-
-  <g font-family="Segoe UI, Helvetica, Arial, sans-serif">
-    <rect x="384" y="168" width="244" height="220" rx="10" fill="#FFFFFF" stroke="#D5DDE8"/>
-    <text x="404" y="204" fill="#172033" font-size="16" font-weight="600">Topics</text>
-    <text x="404" y="236" fill="#172033" font-size="13">Publish / subscribe</text>
-    <text x="404" y="260" fill="#5C6B7A" font-size="13">Same topic name</text>
-    <text x="404" y="284" fill="#5C6B7A" font-size="13">Protobuf message</text>
-    <text x="404" y="348" fill="#1F4E79" font-size="13">XSUB proxies to XPUB</text>
-
-    <rect x="644" y="168" width="244" height="220" rx="10" fill="#FFFFFF" stroke="#D5DDE8"/>
-    <text x="664" y="204" fill="#172033" font-size="16" font-weight="600">Services</text>
-    <text x="664" y="236" fill="#172033" font-size="13">Request and reply</text>
-    <text x="664" y="260" fill="#5C6B7A" font-size="13">Broker reads the name</text>
-    <text x="664" y="284" fill="#5C6B7A" font-size="13">Body stays opaque</text>
-    <text x="664" y="348" fill="#1F4E79" font-size="13">REQ client, DEALER worker</text>
-
-    <rect x="904" y="168" width="240" height="220" rx="10" fill="#FFFFFF" stroke="#D5DDE8"/>
-    <text x="924" y="204" fill="#172033" font-size="16" font-weight="600">Actions</text>
-    <text x="924" y="236" fill="#172033" font-size="13">send_goal</text>
-    <text x="924" y="260" fill="#5C6B7A" font-size="13">Feedback while it runs</text>
-    <text x="924" y="284" fill="#5C6B7A" font-size="13">Result or cancel</text>
-    <text x="924" y="348" fill="#1F4E79" font-size="13">GoalHandle on the client</text>
-  </g>
-
-  <rect x="384" y="408" width="760" height="248" rx="10" fill="#FFFFFF" stroke="#D5DDE8"/>
-  <text x="404" y="440" fill="#172033" font-family="Segoe UI, Helvetica, Arial, sans-serif" font-size="16" font-weight="600">Control plane</text>
-  <text x="540" y="440" fill="#5C6B7A" font-family="Segoe UI, Helvetica, Arial, sans-serif" font-size="13">HTTP port 15560 by default. One port for all three.</text>
-
-  <g font-family="Segoe UI, Helvetica, Arial, sans-serif">
-    <rect x="404" y="464" width="232" height="168" rx="8" fill="#F8FAFC" stroke="#E3E9F0"/>
-    <text x="420" y="496" fill="#172033" font-size="14" font-weight="600">Discover</text>
-    <text x="420" y="522" fill="#5C6B7A" font-size="13">GET /api/v1/discover</text>
-    <text x="420" y="546" fill="#5C6B7A" font-size="13">Advertised endpoints</text>
-    <text x="420" y="570" fill="#5C6B7A" font-size="13">Native data ports</text>
-
-    <rect x="652" y="464" width="232" height="168" rx="8" fill="#F8FAFC" stroke="#E3E9F0"/>
-    <text x="668" y="496" fill="#172033" font-size="14" font-weight="600">Console</text>
-    <text x="668" y="522" fill="#5C6B7A" font-size="13">Embedded UI</text>
-    <text x="668" y="546" fill="#5C6B7A" font-size="13">Topics, services, actions</text>
-    <text x="668" y="570" fill="#5C6B7A" font-size="13">Topology and logs</text>
-
-    <rect x="900" y="464" width="224" height="168" rx="8" fill="#F8FAFC" stroke="#E3E9F0"/>
-    <text x="916" y="496" fill="#172033" font-size="14" font-weight="600">WebSocket RPC</text>
-    <text x="916" y="522" fill="#5C6B7A" font-size="13">/ws-rpc, V3 framing</text>
-    <text x="916" y="546" fill="#5C6B7A" font-size="13">Call services, actions</text>
-    <text x="916" y="570" fill="#5C6B7A" font-size="13">No server registration</text>
-  </g>
+  <rect x="1" y="1" width="1038" height="534" rx="18" fill="#f5f9f8" stroke="#cedddb"/>
+  <text x="32" y="53" fill="#172d33" font-size="28" font-weight="700" text-anchor="start">How clients reach the broker</text>
+  <rect x="32" y="234" width="976" height="270" rx="14" fill="#fff" stroke="#a7c6ba"/>
+  <text x="52" y="263" fill="#12644e" font-size="22" font-weight="700" text-anchor="start">Broker</text>
+  <rect x="372" y="244" width="616" height="120" rx="10" fill="#f5f9f8" stroke="#cedddb"/>
+  <text x="387" y="267" fill="#12644e" font-size="15" font-weight="700" text-anchor="start">Shared HTTP listener · default port 15560</text>
+  <rect x="32" y="76" width="304" height="97" rx="10" fill="#edf5fb" stroke="#cedddb"/>
+  <text x="48" y="105" fill="#255987" font-size="19" font-weight="700" text-anchor="start">Native SDK nodes</text>
+  <text x="48" y="129" fill="#435961" font-size="15" font-weight="400" text-anchor="start">Rust · Python · C++</text>
+  <text x="48" y="149" fill="#435961" font-size="15" font-weight="400" text-anchor="start">Node.js · Java · Android</text>
+  <path d="M200 175 V275" fill="none" stroke="#255987" stroke-width="2" stroke-linejoin="round" marker-end="url(#blue)"/>
+  <rect x="134" y="188" width="132" height="32" rx="16" fill="#f5f9f8" stroke="#cedddb"/>
+  <text x="200" y="209" fill="#255987" font-size="15" font-weight="700" text-anchor="middle">ZeroMQ</text>
+  <rect x="368" y="76" width="304" height="97" rx="10" fill="#f5f0fa" stroke="#cedddb"/>
+  <text x="384" y="105" fill="#65408a" font-size="19" font-weight="700" text-anchor="start">Browser SDK</text>
+  <text x="384" y="129" fill="#435961" font-size="15" font-weight="400" text-anchor="start">TypeScript web app</text>
+  <text x="384" y="149" fill="#435961" font-size="15" font-weight="400" text-anchor="start">Application traffic</text>
+  <path d="M520 175 V239" fill="none" stroke="#65408a" stroke-width="2" stroke-linejoin="round" marker-end="url(#purple)"/>
+  <rect x="454" y="188" width="132" height="32" rx="16" fill="#f5f9f8" stroke="#cedddb"/>
+  <text x="520" y="209" fill="#65408a" font-size="15" font-weight="700" text-anchor="middle">WebSocket</text>
+  <rect x="704" y="76" width="304" height="97" rx="10" fill="#fbf2e5" stroke="#cedddb"/>
+  <text x="720" y="105" fill="#8b5318" font-size="19" font-weight="700" text-anchor="start">Console operator</text>
+  <text x="720" y="129" fill="#435961" font-size="15" font-weight="400" text-anchor="start">Web browser</text>
+  <text x="720" y="149" fill="#435961" font-size="15" font-weight="400" text-anchor="start">Inspect and debug the broker</text>
+  <path d="M840 175 V239" fill="none" stroke="#8b5318" stroke-width="2" stroke-linejoin="round" stroke-dasharray="5 5" marker-end="url(#amber)"/>
+  <rect x="774" y="188" width="132" height="32" rx="16" fill="#f5f9f8" stroke="#cedddb"/>
+  <text x="840" y="209" fill="#8b5318" font-size="15" font-weight="700" text-anchor="middle">HTTP</text>
+  <rect x="52" y="279" width="296" height="76" rx="10" fill="#edf5fb" stroke="#cedddb"/>
+  <text x="200.0" y="308" fill="#255987" font-size="19" font-weight="700" text-anchor="middle">Native data sockets</text>
+  <text x="200.0" y="332" fill="#435961" font-size="15" font-weight="400" text-anchor="middle">inproc · ipc · tcp</text>
+  <rect x="380" y="279" width="280" height="76" rx="10" fill="#f5f0fa" stroke="#cedddb"/>
+  <text x="520.0" y="308" fill="#65408a" font-size="19" font-weight="700" text-anchor="middle">WebSocket gateway</text>
+  <text x="520.0" y="332" fill="#435961" font-size="15" font-weight="400" text-anchor="middle">/ws-rpc</text>
+  <rect x="672" y="279" width="308" height="76" rx="10" fill="#fbf2e5" stroke="#cedddb"/>
+  <text x="826.0" y="308" fill="#8b5318" font-size="19" font-weight="700" text-anchor="middle">HTTP discovery and console</text>
+  <text x="826.0" y="332" fill="#435961" font-size="15" font-weight="400" text-anchor="middle">GET /api/v1/discover  ·  GET /</text>
+  <path d="M200 355 V397" fill="none" stroke="#255987" stroke-width="2" stroke-linejoin="round" marker-end="url(#blue)"/>
+  <path d="M520 355 V397" fill="none" stroke="#65408a" stroke-width="2" stroke-linejoin="round" marker-end="url(#purple)"/>
+  <text x="826" y="386" fill="#8b5318" font-size="15" font-weight="400" text-anchor="middle">Discover returns native data ports</text>
+  <rect x="52" y="401" width="936" height="85" rx="10" fill="#eaf5ef" stroke="#b6cec4"/>
+  <text x="520" y="425" fill="#12644e" font-size="15" font-weight="700" text-anchor="middle">Message routing</text>
+  <path d="M364 437 V474" fill="none" stroke="#b6cec4" stroke-width="2" stroke-linejoin="round"/>
+  <path d="M676 437 V474" fill="none" stroke="#b6cec4" stroke-width="2" stroke-linejoin="round"/>
+  <text x="208" y="451" fill="#12644e" font-size="19" font-weight="700" text-anchor="middle">Topics</text>
+  <text x="208" y="474" fill="#435961" font-size="16" font-weight="400" text-anchor="middle">Publish / subscribe</text>
+  <text x="520" y="451" fill="#12644e" font-size="19" font-weight="700" text-anchor="middle">Services</text>
+  <text x="520" y="474" fill="#435961" font-size="16" font-weight="400" text-anchor="middle">Request / reply</text>
+  <text x="832" y="451" fill="#12644e" font-size="19" font-weight="700" text-anchor="middle">Actions</text>
+  <text x="832" y="474" fill="#435961" font-size="16" font-weight="400" text-anchor="middle">Goal / feedback / result / cancel</text>
+  <text x="520" y="524" fill="#12644e" font-size="15" font-weight="700" text-anchor="middle">Shared message contracts · Protocol Buffers</text>
 </svg>

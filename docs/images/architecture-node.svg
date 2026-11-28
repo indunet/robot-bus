@@ -1,76 +1,53 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="700" viewBox="0 0 1200 700" role="img" aria-labelledby="title desc">
-  <title id="title">Robot Bus Node programming model</title>
-  <desc id="desc">A Context owns the ZeroMQ state. A Node is created with discover, inproc_with_context, or ws. The node registers publishers, subscriptions, service servers and clients, action servers and clients, timers, and parameters. start or spin drives callbacks. Constructing a Node does not connect.</desc>
-  <rect width="1200" height="700" fill="#F4F7FB"/>
+<svg xmlns="http://www.w3.org/2000/svg" width="1040" height="502" viewBox="0 0 1040 502" role="img" aria-labelledby="title desc" xml:lang="en">
+  <title id="title">From Node configuration to callbacks</title>
+  <desc id="desc">Choose a Node connection. Inproc uses a shared ZeroMQ Context, native TCP and IPC can use HTTP discovery, and WebSocket connects to /ws-rpc. Nodes own communication entities, timers and local parameters. spin or start runs callbacks.</desc>
   <defs>
-    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
-      <path d="M 0 1.2 L 9 5 L 0 8.8 Z" fill="#1F4E79"/>
+    <style>
+      text { font-family: Inter, "Segoe UI", "PingFang SC", "Microsoft YaHei", "Noto Sans CJK SC", sans-serif; }
+    </style>
+    <marker id="green" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 Z" fill="#12644e"/>
+    </marker>
+    <marker id="blue" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 Z" fill="#255987"/>
     </marker>
   </defs>
-
-  <text x="40" y="42" fill="#172033" font-family="Segoe UI, Helvetica, Arial, sans-serif" font-size="22" font-weight="600">Node programming model</text>
-  <text x="40" y="66" fill="#5C6B7A" font-family="Segoe UI, Helvetica, Arial, sans-serif" font-size="14">Context, Node, and the entities a node registers. This is the stable public API.</text>
-
-  <rect x="32" y="92" width="280" height="132" rx="12" fill="#FFFFFF" stroke="#D5DDE8"/>
-  <text x="52" y="128" fill="#172033" font-family="Segoe UI, Helvetica, Arial, sans-serif" font-size="16" font-weight="600">Context</text>
-  <text x="52" y="154" fill="#5C6B7A" font-family="Segoe UI, Helvetica, Arial, sans-serif" font-size="13">Shared ZeroMQ context</text>
-  <text x="52" y="176" fill="#5C6B7A" font-family="Segoe UI, Helvetica, Arial, sans-serif" font-size="13">Required for inproc</text>
-
-  <line x1="320" y1="158" x2="368" y2="158" stroke="#1F4E79" stroke-width="2" marker-end="url(#arrow)"/>
-
-  <rect x="380" y="92" width="788" height="132" rx="12" fill="#E7F0FA" stroke="#1F4E79"/>
-  <text x="404" y="128" fill="#1F4E79" font-family="Segoe UI, Helvetica, Arial, sans-serif" font-size="16" font-weight="600">Node</text>
-  <text x="404" y="156" fill="#3D5A73" font-family="Segoe UI, Helvetica, Arial, sans-serif" font-size="13">discover</text>
-  <text x="490" y="156" fill="#3D5A73" font-family="Segoe UI, Helvetica, Arial, sans-serif" font-size="13">inproc_with_context</text>
-  <text x="680" y="156" fill="#3D5A73" font-family="Segoe UI, Helvetica, Arial, sans-serif" font-size="13">ws</text>
-  <text x="404" y="184" fill="#5C6B7A" font-family="Segoe UI, Helvetica, Arial, sans-serif" font-size="13">Register entities, then run callbacks. Construction alone does not connect.</text>
-
-  <text x="40" y="260" fill="#172033" font-family="Segoe UI, Helvetica, Arial, sans-serif" font-size="16" font-weight="600">Entities</text>
-
-  <g font-family="Segoe UI, Helvetica, Arial, sans-serif">
-    <rect x="32" y="280" width="276" height="112" rx="10" fill="#FFFFFF" stroke="#D5DDE8"/>
-    <text x="48" y="312" fill="#172033" font-size="15" font-weight="600">Publisher</text>
-    <text x="48" y="338" fill="#5C6B7A" font-size="13">create_publisher</text>
-    <text x="48" y="360" fill="#5C6B7A" font-size="13">Typed protobuf payload</text>
-
-    <rect x="320" y="280" width="276" height="112" rx="10" fill="#FFFFFF" stroke="#D5DDE8"/>
-    <text x="336" y="312" fill="#172033" font-size="15" font-weight="600">Subscription</text>
-    <text x="336" y="338" fill="#5C6B7A" font-size="13">create_subscription</text>
-    <text x="336" y="360" fill="#5C6B7A" font-size="13">Callback per message</text>
-
-    <rect x="608" y="280" width="276" height="112" rx="10" fill="#FFFFFF" stroke="#D5DDE8"/>
-    <text x="624" y="312" fill="#172033" font-size="15" font-weight="600">Service server</text>
-    <text x="624" y="338" fill="#5C6B7A" font-size="13">One request, one reply</text>
-    <text x="624" y="360" fill="#5C6B7A" font-size="13">Handler runs on spin</text>
-
-    <rect x="896" y="280" width="272" height="112" rx="10" fill="#FFFFFF" stroke="#D5DDE8"/>
-    <text x="912" y="312" fill="#172033" font-size="15" font-weight="600">Service client</text>
-    <text x="912" y="338" fill="#5C6B7A" font-size="13">call, then wait</text>
-    <text x="912" y="360" fill="#5C6B7A" font-size="13">Server must be spinning</text>
-
-    <rect x="32" y="408" width="276" height="112" rx="10" fill="#FFFFFF" stroke="#D5DDE8"/>
-    <text x="48" y="440" fill="#172033" font-size="15" font-weight="600">Action server</text>
-    <text x="48" y="466" fill="#5C6B7A" font-size="13">Accepts a goal</text>
-    <text x="48" y="488" fill="#5C6B7A" font-size="13">Feedback, result, cancel</text>
-
-    <rect x="320" y="408" width="276" height="112" rx="10" fill="#FFFFFF" stroke="#D5DDE8"/>
-    <text x="336" y="440" fill="#172033" font-size="15" font-weight="600">Action client</text>
-    <text x="336" y="466" fill="#5C6B7A" font-size="13">send_goal</text>
-    <text x="336" y="488" fill="#5C6B7A" font-size="13">GoalHandle</text>
-
-    <rect x="608" y="408" width="276" height="112" rx="10" fill="#FFFFFF" stroke="#D5DDE8"/>
-    <text x="624" y="440" fill="#172033" font-size="15" font-weight="600">Timer</text>
-    <text x="624" y="466" fill="#5C6B7A" font-size="13">Periodic callback</text>
-    <text x="624" y="488" fill="#5C6B7A" font-size="13">Runs on the executor</text>
-
-    <rect x="896" y="408" width="272" height="112" rx="10" fill="#FFFFFF" stroke="#D5DDE8"/>
-    <text x="912" y="440" fill="#172033" font-size="15" font-weight="600">Parameters</text>
-    <text x="912" y="466" fill="#5C6B7A" font-size="13">declare, get, and set</text>
-    <text x="912" y="488" fill="#5C6B7A" font-size="13">Local, not on the bus</text>
-  </g>
-
-  <rect x="32" y="544" width="1136" height="124" rx="12" fill="#E7F0FA" stroke="#1F4E79"/>
-  <text x="52" y="582" fill="#1F4E79" font-family="Segoe UI, Helvetica, Arial, sans-serif" font-size="16" font-weight="600">start() or spin() drives callbacks</text>
-  <text x="52" y="610" fill="#3D5A73" font-family="Segoe UI, Helvetica, Arial, sans-serif" font-size="14">Register publishers, subscriptions, and servers before callbacks run.</text>
-  <text x="52" y="634" fill="#3D5A73" font-family="Segoe UI, Helvetica, Arial, sans-serif" font-size="14">Stop the node and wait before stopping the broker.</text>
+  <rect x="1" y="1" width="1038" height="500" rx="18" fill="#f5f9f8" stroke="#cedddb"/>
+  <text x="32" y="53" fill="#172d33" font-size="28" font-weight="700" text-anchor="start">From Node configuration to callbacks</text>
+  <rect x="32" y="76" width="304" height="72" rx="10" fill="#edf5fb" stroke="#cedddb"/>
+  <text x="184.0" y="105" fill="#255987" font-size="19" font-weight="700" text-anchor="middle">Shared Context</text>
+  <text x="184.0" y="129" fill="#435961" font-size="15" font-weight="400" text-anchor="middle">inproc · same process</text>
+  <rect x="368" y="76" width="304" height="72" rx="10" fill="#edf5fb" stroke="#cedddb"/>
+  <text x="520.0" y="105" fill="#255987" font-size="19" font-weight="700" text-anchor="middle">HTTP discovery</text>
+  <text x="520.0" y="129" fill="#435961" font-size="15" font-weight="400" text-anchor="middle">Native tcp or ipc endpoints</text>
+  <rect x="704" y="76" width="304" height="72" rx="10" fill="#edf5fb" stroke="#cedddb"/>
+  <text x="856.0" y="105" fill="#255987" font-size="19" font-weight="700" text-anchor="middle">WebSocket</text>
+  <text x="856.0" y="129" fill="#435961" font-size="15" font-weight="400" text-anchor="middle">Broker URL · /ws-rpc</text>
+  <path d="M184 150 V174" fill="none" stroke="#255987" stroke-width="2" stroke-linejoin="round" marker-end="url(#blue)"/>
+  <path d="M520 150 V174" fill="none" stroke="#255987" stroke-width="2" stroke-linejoin="round" marker-end="url(#blue)"/>
+  <path d="M856 150 V174" fill="none" stroke="#255987" stroke-width="2" stroke-linejoin="round" marker-end="url(#blue)"/>
+  <rect x="32" y="180" width="976" height="225" rx="12" fill="#fff" stroke="#a7c6ba"/>
+  <text x="52" y="213" fill="#12644e" font-size="22" font-weight="700" text-anchor="start">Node</text>
+  <text x="52" y="239" fill="#435961" font-size="16" font-weight="400" text-anchor="start">Register communication entities and local runtime resources.</text>
+  <rect x="52" y="250" width="302" height="66" rx="10" fill="#eaf5ef" stroke="#cedddb"/>
+  <text x="68" y="279" fill="#12644e" font-size="19" font-weight="700" text-anchor="start">Topics</text>
+  <text x="68" y="303" fill="#435961" font-size="15" font-weight="400" text-anchor="start">Publishers and subscriptions</text>
+  <rect x="369" y="250" width="302" height="66" rx="10" fill="#eaf5ef" stroke="#cedddb"/>
+  <text x="385" y="279" fill="#12644e" font-size="19" font-weight="700" text-anchor="start">Services</text>
+  <text x="385" y="303" fill="#435961" font-size="15" font-weight="400" text-anchor="start">Clients and servers</text>
+  <rect x="686" y="250" width="302" height="66" rx="10" fill="#eaf5ef" stroke="#cedddb"/>
+  <text x="702" y="279" fill="#12644e" font-size="19" font-weight="700" text-anchor="start">Actions</text>
+  <text x="702" y="303" fill="#435961" font-size="15" font-weight="400" text-anchor="start">Clients and servers</text>
+  <rect x="52" y="323" width="302" height="66" rx="10" fill="#eaf5ef" stroke="#cedddb"/>
+  <text x="68" y="352" fill="#12644e" font-size="19" font-weight="700" text-anchor="start">Timers</text>
+  <text x="68" y="376" fill="#435961" font-size="15" font-weight="400" text-anchor="start">Periodic callbacks</text>
+  <rect x="369" y="323" width="302" height="66" rx="10" fill="#eaf5ef" stroke="#cedddb"/>
+  <text x="385" y="352" fill="#12644e" font-size="19" font-weight="700" text-anchor="start">Parameters</text>
+  <text x="385" y="376" fill="#435961" font-size="15" font-weight="400" text-anchor="start">Local configuration</text>
+  <rect x="686" y="323" width="302" height="66" rx="10" fill="#eaf5ef" stroke="#cedddb"/>
+  <text x="702" y="352" fill="#12644e" font-size="19" font-weight="700" text-anchor="start">Callback groups</text>
+  <text x="702" y="376" fill="#435961" font-size="15" font-weight="400" text-anchor="start">Control callback concurrency</text>
+  <path d="M520 406 V431" fill="none" stroke="#12644e" stroke-width="2" stroke-linejoin="round" marker-end="url(#green)"/>
+  <rect x="306" y="437" width="428" height="43" rx="10" fill="#eaf5ef" stroke="#b6cec4"/>
+  <text x="520" y="465" fill="#12644e" font-size="18" font-weight="700" text-anchor="middle">spin() / start() drives callbacks</text>
 </svg>

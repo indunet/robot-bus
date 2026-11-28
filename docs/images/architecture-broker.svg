@@ -1,134 +1,77 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="860" viewBox="0 0 1200 860" role="img" aria-labelledby="title desc">
-  <title id="title">Robot Bus broker and transports</title>
-  <desc id="desc">Native nodes reach the broker over inproc, ipc, or tcp. Browsers use WebSocket and cannot register servers. Topics proxy from XSUB to XPUB. Services use a REQ client, dual ROUTER sockets, and a DEALER worker. Actions use DEALER clients and a goal table for GOAL, FEEDBACK, RESULT, and CANCEL. Data ports are dynamic unless bind flags fix them. Federation is optional.</desc>
-  <rect width="1200" height="860" fill="#F4F7FB"/>
+<svg xmlns="http://www.w3.org/2000/svg" width="1040" height="618" viewBox="0 0 1040 618" role="img" aria-labelledby="title desc" xml:lang="en">
+  <title id="title">Broker routing and native sockets</title>
+  <desc id="desc">Native topic data moves from PUB through XSUB and XPUB to SUB. Services use a REQ client and a DEALER worker, with two broker ROUTER sockets. Actions use DEALER on both ends. Service replies and action feedback and results return to their callers. Native transports are inproc, IPC and TCP.</desc>
   <defs>
-    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
-      <path d="M 0 1.2 L 9 5 L 0 8.8 Z" fill="#1F4E79"/>
+    <style>
+      text { font-family: Inter, "Segoe UI", "PingFang SC", "Microsoft YaHei", "Noto Sans CJK SC", sans-serif; }
+    </style>
+    <marker id="green" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 Z" fill="#12644e"/>
     </marker>
   </defs>
-
-  <text x="40" y="42" fill="#172033" font-family="Segoe UI, Helvetica, Arial, sans-serif" font-size="22" font-weight="600">Broker and transports</text>
-  <text x="40" y="66" fill="#5C6B7A" font-family="Segoe UI, Helvetica, Arial, sans-serif" font-size="14">Native nodes use ZeroMQ. Browsers use WebSocket on the HTTP port.</text>
-
-  <g font-family="Segoe UI, Helvetica, Arial, sans-serif">
-    <rect x="32" y="88" width="276" height="112" rx="10" fill="#FFFFFF" stroke="#D5DDE8"/>
-    <text x="48" y="118" fill="#172033" font-size="16" font-weight="600">inproc</text>
-    <text x="48" y="142" fill="#5C6B7A" font-size="13">Same process</text>
-    <text x="48" y="162" fill="#5C6B7A" font-size="13">Shared Context</text>
-
-    <rect x="320" y="88" width="276" height="112" rx="10" fill="#FFFFFF" stroke="#D5DDE8"/>
-    <text x="336" y="118" fill="#172033" font-size="16" font-weight="600">ipc</text>
-    <text x="336" y="142" fill="#5C6B7A" font-size="13">Same host</text>
-    <text x="336" y="162" fill="#5C6B7A" font-size="13">Socket files</text>
-
-    <rect x="608" y="88" width="276" height="112" rx="10" fill="#FFFFFF" stroke="#D5DDE8"/>
-    <text x="624" y="118" fill="#172033" font-size="16" font-weight="600">tcp</text>
-    <text x="624" y="142" fill="#5C6B7A" font-size="13">Across hosts</text>
-    <text x="624" y="162" fill="#5C6B7A" font-size="13">Discover over HTTP</text>
-
-    <rect x="896" y="88" width="272" height="112" rx="10" fill="#FFFFFF" stroke="#1F4E79"/>
-    <text x="912" y="118" fill="#172033" font-size="16" font-weight="600">WebSocket</text>
-    <text x="912" y="142" fill="#5C6B7A" font-size="13">Publish, subscribe, call</text>
-    <text x="912" y="162" fill="#5C6B7A" font-size="13">Cannot register servers</text>
-  </g>
-
-  <rect x="32" y="220" width="1136" height="500" rx="14" fill="#E7F0FA" stroke="#1F4E79"/>
-  <text x="52" y="252" fill="#1F4E79" font-family="Segoe UI, Helvetica, Arial, sans-serif" font-size="16" font-weight="600">Inside the broker</text>
-  <text x="228" y="252" fill="#3D5A73" font-family="Segoe UI, Helvetica, Arial, sans-serif" font-size="13">The broker reads names and control tokens. Message bodies stay opaque.</text>
-
-  <!-- Topics -->
-  <rect x="52" y="272" width="1096" height="136" rx="10" fill="#FFFFFF" stroke="#D5DDE8"/>
-  <text x="72" y="312" fill="#172033" font-family="Segoe UI, Helvetica, Arial, sans-serif" font-size="15" font-weight="600">Topics</text>
-  <text x="72" y="334" fill="#5C6B7A" font-family="Segoe UI, Helvetica, Arial, sans-serif" font-size="12">pub / sub</text>
-
-  <g font-family="Segoe UI, Helvetica, Arial, sans-serif" text-anchor="middle">
-    <rect x="210" y="300" width="140" height="64" rx="8" fill="#F8FAFC" stroke="#E3E9F0"/>
-    <text x="280" y="326" fill="#172033" font-size="13" font-weight="600">Publisher</text>
-    <text x="280" y="346" fill="#5C6B7A" font-size="12">PUB</text>
-
-    <line x1="354" y1="332" x2="386" y2="332" stroke="#1F4E79" stroke-width="1.5" marker-end="url(#arrow)"/>
-
-    <rect x="392" y="300" width="120" height="64" rx="8" fill="#E7F0FA" stroke="#1F4E79"/>
-    <text x="452" y="336" fill="#1F4E79" font-size="14" font-weight="600">XSUB</text>
-
-    <line x1="516" y1="332" x2="548" y2="332" stroke="#1F4E79" stroke-width="1.5" marker-end="url(#arrow)"/>
-
-    <rect x="554" y="300" width="140" height="64" rx="8" fill="#E7F0FA" stroke="#1F4E79"/>
-    <text x="624" y="336" fill="#1F4E79" font-size="14" font-weight="600">proxy</text>
-
-    <line x1="698" y1="332" x2="730" y2="332" stroke="#1F4E79" stroke-width="1.5" marker-end="url(#arrow)"/>
-
-    <rect x="736" y="300" width="120" height="64" rx="8" fill="#E7F0FA" stroke="#1F4E79"/>
-    <text x="796" y="336" fill="#1F4E79" font-size="14" font-weight="600">XPUB</text>
-
-    <line x1="860" y1="332" x2="892" y2="332" stroke="#1F4E79" stroke-width="1.5" marker-end="url(#arrow)"/>
-
-    <rect x="898" y="300" width="150" height="64" rx="8" fill="#F8FAFC" stroke="#E3E9F0"/>
-    <text x="973" y="326" fill="#172033" font-size="13" font-weight="600">Subscriber</text>
-    <text x="973" y="346" fill="#5C6B7A" font-size="12">SUB</text>
-  </g>
-  <text x="210" y="388" fill="#5C6B7A" font-family="Segoe UI, Helvetica, Arial, sans-serif" font-size="12">Publishers connect to XSUB. Subscribers connect to XPUB.</text>
-
-  <!-- Services -->
-  <rect x="52" y="420" width="1096" height="136" rx="10" fill="#FFFFFF" stroke="#D5DDE8"/>
-  <text x="72" y="460" fill="#172033" font-family="Segoe UI, Helvetica, Arial, sans-serif" font-size="15" font-weight="600">Services</text>
-  <text x="72" y="482" fill="#5C6B7A" font-family="Segoe UI, Helvetica, Arial, sans-serif" font-size="12">one reply</text>
-
-  <g font-family="Segoe UI, Helvetica, Arial, sans-serif" text-anchor="middle">
-    <rect x="200" y="448" width="150" height="64" rx="8" fill="#F8FAFC" stroke="#E3E9F0"/>
-    <text x="275" y="474" fill="#172033" font-size="13" font-weight="600">Client</text>
-    <text x="275" y="494" fill="#5C6B7A" font-size="12">REQ</text>
-
-    <line x1="354" y1="480" x2="382" y2="480" stroke="#1F4E79" stroke-width="1.5" marker-end="url(#arrow)"/>
-
-    <rect x="388" y="448" width="168" height="64" rx="8" fill="#E7F0FA" stroke="#1F4E79"/>
-    <text x="472" y="474" fill="#1F4E79" font-size="13" font-weight="600">frontend</text>
-    <text x="472" y="494" fill="#1F4E79" font-size="12">ROUTER</text>
-
-    <line x1="560" y1="480" x2="588" y2="480" stroke="#1F4E79" stroke-width="1.5" marker-end="url(#arrow)"/>
-
-    <rect x="594" y="448" width="176" height="64" rx="8" fill="#E7F0FA" stroke="#1F4E79"/>
-    <text x="682" y="474" fill="#1F4E79" font-size="13" font-weight="600">service name</text>
-    <text x="682" y="494" fill="#1F4E79" font-size="12">opaque body</text>
-
-    <line x1="774" y1="480" x2="802" y2="480" stroke="#1F4E79" stroke-width="1.5" marker-end="url(#arrow)"/>
-
-    <rect x="808" y="448" width="160" height="64" rx="8" fill="#E7F0FA" stroke="#1F4E79"/>
-    <text x="888" y="474" fill="#1F4E79" font-size="13" font-weight="600">backend</text>
-    <text x="888" y="494" fill="#1F4E79" font-size="12">ROUTER</text>
-
-    <line x1="972" y1="480" x2="996" y2="480" stroke="#1F4E79" stroke-width="1.5" marker-end="url(#arrow)"/>
-
-    <rect x="1002" y="448" width="126" height="64" rx="8" fill="#F8FAFC" stroke="#E3E9F0"/>
-    <text x="1065" y="474" fill="#172033" font-size="13" font-weight="600">Worker</text>
-    <text x="1065" y="494" fill="#5C6B7A" font-size="12">DEALER</text>
-  </g>
-
-  <!-- Actions -->
-  <rect x="52" y="568" width="1096" height="132" rx="10" fill="#FFFFFF" stroke="#D5DDE8"/>
-  <text x="72" y="608" fill="#172033" font-family="Segoe UI, Helvetica, Arial, sans-serif" font-size="15" font-weight="600">Actions</text>
-  <text x="72" y="630" fill="#5C6B7A" font-family="Segoe UI, Helvetica, Arial, sans-serif" font-size="12">goal table</text>
-
-  <g font-family="Segoe UI, Helvetica, Arial, sans-serif" text-anchor="middle">
-    <rect x="200" y="592" width="150" height="64" rx="8" fill="#F8FAFC" stroke="#E3E9F0"/>
-    <text x="275" y="618" fill="#172033" font-size="13" font-weight="600">Client</text>
-    <text x="275" y="638" fill="#5C6B7A" font-size="12">DEALER</text>
-
-    <line x1="354" y1="624" x2="386" y2="624" stroke="#1F4E79" stroke-width="1.5" marker-end="url(#arrow)"/>
-
-    <rect x="392" y="592" width="430" height="64" rx="8" fill="#E7F0FA" stroke="#1F4E79"/>
-    <text x="607" y="616" fill="#1F4E79" font-size="13" font-weight="600">GOAL  /  FEEDBACK  /  RESULT  /  CANCEL</text>
-    <text x="607" y="636" fill="#1F4E79" font-size="12">action name and goal id; body stays opaque</text>
-
-    <line x1="826" y1="624" x2="858" y2="624" stroke="#1F4E79" stroke-width="1.5" marker-end="url(#arrow)"/>
-
-    <rect x="864" y="592" width="264" height="64" rx="8" fill="#F8FAFC" stroke="#E3E9F0"/>
-    <text x="996" y="618" fill="#172033" font-size="13" font-weight="600">Worker</text>
-    <text x="996" y="638" fill="#5C6B7A" font-size="12">DEALER on backend ROUTER</text>
-  </g>
-
-  <rect x="32" y="740" width="1136" height="88" rx="12" fill="#FFFFFF" stroke="#D5DDE8"/>
-  <text x="52" y="772" fill="#172033" font-family="Segoe UI, Helvetica, Arial, sans-serif" font-size="14" font-weight="600">Ports and federation</text>
-  <text x="52" y="796" fill="#5C6B7A" font-family="Segoe UI, Helvetica, Arial, sans-serif" font-size="13">Data ports are dynamic unless bind flags fix them. Federation is optional: TCP, or IPC on the same host. It is not the default path.</text>
+  <rect x="1" y="1" width="1038" height="616" rx="18" fill="#f5f9f8" stroke="#cedddb"/>
+  <text x="32" y="53" fill="#172d33" font-size="28" font-weight="700" text-anchor="start">Broker routing and native sockets</text>
+  <rect x="32" y="76" width="320" height="75" rx="10" fill="#fff" stroke="#cedddb"/>
+  <text x="48" y="105" fill="#255987" font-size="19" font-weight="700" text-anchor="start">inproc</text>
+  <text x="48" y="129" fill="#435961" font-size="15" font-weight="400" text-anchor="start">Same process · shared Context</text>
+  <rect x="360" y="76" width="320" height="75" rx="10" fill="#fff" stroke="#cedddb"/>
+  <text x="376" y="105" fill="#255987" font-size="19" font-weight="700" text-anchor="start">ipc</text>
+  <text x="376" y="129" fill="#435961" font-size="15" font-weight="400" text-anchor="start">Same host · Unix socket files</text>
+  <rect x="688" y="76" width="320" height="75" rx="10" fill="#fff" stroke="#cedddb"/>
+  <text x="704" y="105" fill="#255987" font-size="19" font-weight="700" text-anchor="start">tcp</text>
+  <text x="704" y="129" fill="#435961" font-size="15" font-weight="400" text-anchor="start">Across hosts · HTTP discovery</text>
+  <rect x="280" y="166" width="480" height="410" rx="12" fill="#eaf5ef" stroke="#b6cec4"/>
+  <text x="520" y="192" fill="#12644e" font-size="16" font-weight="700" text-anchor="middle">Broker sockets</text>
+  <text x="32" y="224" fill="#172d33" font-size="21" font-weight="700" text-anchor="start">Topics</text>
+  <rect x="32" y="236" width="184" height="65" rx="10" fill="#fff" stroke="#cedddb"/>
+  <text x="124.0" y="265" fill="#255987" font-size="19" font-weight="700" text-anchor="middle">Publisher</text>
+  <text x="124.0" y="289" fill="#435961" font-size="15" font-weight="400" text-anchor="middle">PUB</text>
+  <rect x="310" y="236" width="184" height="65" rx="10" fill="#fff" stroke="#cedddb"/>
+  <text x="402.0" y="265" fill="#12644e" font-size="19" font-weight="700" text-anchor="middle">XSUB</text>
+  <text x="402.0" y="289" fill="#435961" font-size="15" font-weight="400" text-anchor="middle">Ingress</text>
+  <rect x="546" y="236" width="184" height="65" rx="10" fill="#fff" stroke="#cedddb"/>
+  <text x="638.0" y="265" fill="#12644e" font-size="19" font-weight="700" text-anchor="middle">XPUB</text>
+  <text x="638.0" y="289" fill="#435961" font-size="15" font-weight="400" text-anchor="middle">Fan-out</text>
+  <rect x="824" y="236" width="184" height="65" rx="10" fill="#fff" stroke="#cedddb"/>
+  <text x="916.0" y="265" fill="#255987" font-size="19" font-weight="700" text-anchor="middle">Subscriber</text>
+  <text x="916.0" y="289" fill="#435961" font-size="15" font-weight="400" text-anchor="middle">SUB</text>
+  <path d="M224 268 H302" fill="none" stroke="#12644e" stroke-width="2" stroke-linejoin="round" marker-end="url(#green)"/>
+  <path d="M502 268 H538" fill="none" stroke="#12644e" stroke-width="2" stroke-linejoin="round" marker-end="url(#green)"/>
+  <path d="M738 268 H816" fill="none" stroke="#12644e" stroke-width="2" stroke-linejoin="round" marker-end="url(#green)"/>
+  <text x="520" y="318" fill="#435961" font-size="14" font-weight="400" text-anchor="middle">Data flows right. Subscription demand flows left.</text>
+  <text x="32" y="345" fill="#172d33" font-size="21" font-weight="700" text-anchor="start">Services</text>
+  <rect x="32" y="357" width="184" height="65" rx="10" fill="#fff" stroke="#cedddb"/>
+  <text x="124.0" y="386" fill="#255987" font-size="19" font-weight="700" text-anchor="middle">Client</text>
+  <text x="124.0" y="410" fill="#435961" font-size="15" font-weight="400" text-anchor="middle">REQ</text>
+  <rect x="310" y="357" width="184" height="65" rx="10" fill="#fff" stroke="#cedddb"/>
+  <text x="402.0" y="386" fill="#12644e" font-size="19" font-weight="700" text-anchor="middle">ROUTER</text>
+  <text x="402.0" y="410" fill="#435961" font-size="15" font-weight="400" text-anchor="middle">Frontend</text>
+  <rect x="546" y="357" width="184" height="65" rx="10" fill="#fff" stroke="#cedddb"/>
+  <text x="638.0" y="386" fill="#12644e" font-size="19" font-weight="700" text-anchor="middle">ROUTER</text>
+  <text x="638.0" y="410" fill="#435961" font-size="15" font-weight="400" text-anchor="middle">Backend</text>
+  <rect x="824" y="357" width="184" height="65" rx="10" fill="#fff" stroke="#cedddb"/>
+  <text x="916.0" y="386" fill="#255987" font-size="19" font-weight="700" text-anchor="middle">Worker</text>
+  <text x="916.0" y="410" fill="#435961" font-size="15" font-weight="400" text-anchor="middle">DEALER</text>
+  <path d="M224 389 H302" fill="none" stroke="#12644e" stroke-width="2" stroke-linejoin="round" marker-end="url(#green)" marker-start="url(#green)"/>
+  <path d="M502 389 H538" fill="none" stroke="#12644e" stroke-width="2" stroke-linejoin="round" marker-end="url(#green)" marker-start="url(#green)"/>
+  <path d="M738 389 H816" fill="none" stroke="#12644e" stroke-width="2" stroke-linejoin="round" marker-end="url(#green)" marker-start="url(#green)"/>
+  <text x="520" y="439" fill="#435961" font-size="14" font-weight="400" text-anchor="middle">Request by service name · one reply returns to the caller</text>
+  <text x="32" y="466" fill="#172d33" font-size="21" font-weight="700" text-anchor="start">Actions</text>
+  <rect x="32" y="478" width="184" height="65" rx="10" fill="#fff" stroke="#cedddb"/>
+  <text x="124.0" y="507" fill="#255987" font-size="19" font-weight="700" text-anchor="middle">Client</text>
+  <text x="124.0" y="531" fill="#435961" font-size="15" font-weight="400" text-anchor="middle">DEALER</text>
+  <rect x="310" y="478" width="184" height="65" rx="10" fill="#fff" stroke="#cedddb"/>
+  <text x="402.0" y="507" fill="#12644e" font-size="19" font-weight="700" text-anchor="middle">ROUTER</text>
+  <text x="402.0" y="531" fill="#435961" font-size="15" font-weight="400" text-anchor="middle">Frontend</text>
+  <rect x="546" y="478" width="184" height="65" rx="10" fill="#fff" stroke="#cedddb"/>
+  <text x="638.0" y="507" fill="#12644e" font-size="19" font-weight="700" text-anchor="middle">ROUTER</text>
+  <text x="638.0" y="531" fill="#435961" font-size="15" font-weight="400" text-anchor="middle">Backend</text>
+  <rect x="824" y="478" width="184" height="65" rx="10" fill="#fff" stroke="#cedddb"/>
+  <text x="916.0" y="507" fill="#255987" font-size="19" font-weight="700" text-anchor="middle">Worker</text>
+  <text x="916.0" y="531" fill="#435961" font-size="15" font-weight="400" text-anchor="middle">DEALER</text>
+  <path d="M224 510 H302" fill="none" stroke="#12644e" stroke-width="2" stroke-linejoin="round" marker-end="url(#green)" marker-start="url(#green)"/>
+  <path d="M502 510 H538" fill="none" stroke="#12644e" stroke-width="2" stroke-linejoin="round" marker-end="url(#green)" marker-start="url(#green)"/>
+  <path d="M738 510 H816" fill="none" stroke="#12644e" stroke-width="2" stroke-linejoin="round" marker-end="url(#green)" marker-start="url(#green)"/>
+  <text x="520" y="560" fill="#435961" font-size="14" font-weight="400" text-anchor="middle">Goal and cancel go out · feedback and result come back</text>
+  <text x="520" y="601" fill="#435961" font-size="15" font-weight="400" text-anchor="middle">Native TCP data ports are assigned at startup unless a bind address fixes them.</text>
 </svg>

@@ -65,6 +65,7 @@ def build(output):
             other_lang="zh-CN" if english else "en",
             other_url="./zh/" if english else "../",
             base="./" if english else "../",
+            architecture_asset="architecture-overview.svg" if english else "architecture-overview-zh.svg",
             sdk_tabs=sdk_tabs,
             sdk_panels=sdk_panels,
         )
@@ -76,7 +77,15 @@ def build(output):
     assets.mkdir(exist_ok=True)
     for name in ("site.css", "site.js"):
         copyfile(SITE / "assets" / name, assets / name)
-    copyfile(ROOT / "docs/images/console-overview.png", assets / "console-overview.png")
+    for name in (
+        "architecture-overview.svg",
+        "architecture-overview-zh.svg",
+        "console-overview.png",
+        "python-broker-console.gif",
+        "python-broker-console.jpg",
+        "python-broker-console.mp4",
+    ):
+        copyfile(ROOT / "docs/images" / name, assets / name)
     (output / ".nojekyll").write_text("", encoding="utf-8")
 
 

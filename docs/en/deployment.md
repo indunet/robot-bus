@@ -49,6 +49,19 @@ Expect JSON containing the broker's advertised connection information. Open `htt
 
 The shared API defaults to port `15560`. If the requested port is in use, the broker tries up to 32 following ports in order; `:0` lets the OS allocate a port. WebSocket, HTTP discovery, and the console share the resulting port. Use the actual port from the startup log or the SDK's `api_listen` for clients and container port mappings; clients do not scan for it.
 
+### Diagnose from a terminal with `rbus`
+
+From a source checkout with the [Rust build prerequisites](../../CONTRIBUTING.md#python-and-rust-setup), install the CLI with `cargo install --path crates/robot-bus --no-default-features --features broker --bin rbus`.
+
+```bash
+rbus --url 192.168.1.20:15560 discover
+rbus status --json
+```
+
+Run `discover` on the client machine to find the TCP host and ports the broker advertises. Replace the example address with the broker's API address. The command works with `--no-console` when HTTP discovery is available. A successful query confirms the HTTP endpoint is reachable. Check reachability of the advertised TCP data ports separately from the client machine.
+
+`status`, `topic list`, `topic info`, `service list`, and `action list` require the monitoring API. All queries accept `--json` for the broker's JSON response. The HTTP timeout defaults to 3 seconds and can be changed with `--timeout-ms`. `--url` takes precedence over `ROBOT_BUS_BROKER_URL`, and the default is `http://127.0.0.1:15560`.
+
 ## Multiple hosts and fixed ports
 
 This example uses `10.0.0.2` as the broker's reachable address; replace it with your address. These ports are explicitly configured here, not broker defaults.
@@ -71,7 +84,7 @@ python -m robot_bus.broker --tcp-only \
 | 15662 / 15663 | Service frontend / backend | Native clients / servers |
 | 15664 / 15665 | Action frontend / backend | Native clients / servers |
 
-Native clients and `--peer` use the IP address or DNS name they contacted at `/discover` and take the six numeric data ports from the response. The broker does not infer or report a host by default. From the client machine, check that the data ports are reachable on the discovery host. Upgrade discovery clients and brokers together; the previous endpoint-string response format is not supported.
+Native clients use the IP address or DNS name they contacted at `/discover` and take the six numeric data ports from the response. A broker using `--peer` also reads the advertised federation capability and topic federation port, when present. The broker does not infer or report a host by default. From the client machine, check that the data ports are reachable on the discovery host. Upgrade discovery clients and brokers together; the previous endpoint-string response format is not supported.
 
 The JSON fields are `messageXsubPort`, `messageXpubPort`, `serviceFrontendPort`, `serviceBackendPort`, `actionFrontendPort`, and `actionBackendPort`.
 

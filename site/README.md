@@ -1,6 +1,6 @@
 # Robot Bus 项目网站
 
-页面模板在 `index.html`，中英文文案在 `content.json`，样式和 SDK 选择器在 `assets/`。构建时会读取 `Cargo.toml` 中的项目版本，并使用仓库现有的 Web 控制台截图。构建仅需 Python 3.11 或更新版本。
+页面模板在 `index.html`，中英文文案在 `content.json`，样式和 SDK 选择器在 `assets/`。构建时会读取 `Cargo.toml` 中的项目版本，并从 `docs/images/` 复制系统架构图和控制台演示素材。构建仅需 Python 3.11 或更新版本。
 
 ## 本地预览
 

@@ -72,6 +72,12 @@ sudo apt install ./robot-bus_3.2.0_linux_amd64.deb
 CMake projects can fetch the prebuilt SDK instead of installing a package. See [C++ API — prebuilt SDK archive](docs/en/cpp-api.md#prebuilt-sdk-archive-cmake-fetchcontent).
 
 
+### *System architecture*
+
+![Robot Bus architecture showing native nodes, the browser SDK, and the Web console](docs/images/architecture-overview.svg)
+
+[See broker routing, the Node model, federation, and ROS 2 bridging](docs/en/architecture.md).
+
 ## *1. Quick start*
 
 ### *1.1 Install and start the broker*
@@ -250,13 +256,20 @@ Run the [Python listener and Rust talker](examples/README.md#1-topic-topic_imu) 
 
 ## *2. Web console*
 
-The embedded Web console is an optional tool for inspecting a broker (Overview, Topics, Services, Actions, Topology, logs). After `RobotBusBroker.start()` in your program (or a standalone `python -m robot_bus.broker` / `cargo run --bin robot_bus_broker`), open:
+With `robot-bus` installed, run the broker in a terminal and leave it running.
 
-**http://127.0.0.1:15560**
+```bash
+python -m robot_bus.broker --api-listen 127.0.0.1:15560 --tcp-only
+```
 
-![Robot Bus Web console](docs/images/console-overview.png)
+Open **http://127.0.0.1:15560** in a browser. The console shows broker status, topics, services, actions, topology, and logs. You can also open it after starting the broker with `RobotBusBroker.start()` or `cargo run --bin robot_bus_broker`. Use the address shown in the startup log if the port differs.
 
-*Web console* — Overview / Topics / Services / Actions / Topology.
+<details>
+<summary>Watch the Python startup and browser walkthrough</summary>
+
+![A terminal starts the broker with Python, then Chrome opens the console at 127.0.0.1:15560 and shows the active broker](docs/images/python-broker-console.gif)
+
+</details>
 
 ![Tank sim in the Web console](docs/images/tank-sim.png)
 

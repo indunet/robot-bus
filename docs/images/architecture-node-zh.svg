@@ -1,0 +1,53 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1040" height="502" viewBox="0 0 1040 502" role="img" aria-labelledby="title desc" xml:lang="zh-CN">
+  <title id="title">从节点配置到回调执行</title>
+  <desc id="desc">为 Node 选择连接方式。同进程连接共用 ZeroMQ Context，原生 TCP 和 IPC 可通过 HTTP 发现，WebSocket 连接 /ws-rpc。节点拥有通信实体、定时器和本地参数，由 spin 或 start 执行回调。</desc>
+  <defs>
+    <style>
+      text { font-family: Inter, "Segoe UI", "PingFang SC", "Microsoft YaHei", "Noto Sans CJK SC", sans-serif; }
+    </style>
+    <marker id="green" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 Z" fill="#12644e"/>
+    </marker>
+    <marker id="blue" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 Z" fill="#255987"/>
+    </marker>
+  </defs>
+  <rect x="1" y="1" width="1038" height="500" rx="18" fill="#f5f9f8" stroke="#cedddb"/>
+  <text x="32" y="53" fill="#172d33" font-size="28" font-weight="700" text-anchor="start">从节点配置到回调执行</text>
+  <rect x="32" y="76" width="304" height="72" rx="10" fill="#edf5fb" stroke="#cedddb"/>
+  <text x="184.0" y="105" fill="#255987" font-size="19" font-weight="700" text-anchor="middle">共用 Context</text>
+  <text x="184.0" y="129" fill="#435961" font-size="15" font-weight="400" text-anchor="middle">inproc · 同一进程</text>
+  <rect x="368" y="76" width="304" height="72" rx="10" fill="#edf5fb" stroke="#cedddb"/>
+  <text x="520.0" y="105" fill="#255987" font-size="19" font-weight="700" text-anchor="middle">HTTP 发现</text>
+  <text x="520.0" y="129" fill="#435961" font-size="15" font-weight="400" text-anchor="middle">获取原生 tcp 或 ipc 端点</text>
+  <rect x="704" y="76" width="304" height="72" rx="10" fill="#edf5fb" stroke="#cedddb"/>
+  <text x="856.0" y="105" fill="#255987" font-size="19" font-weight="700" text-anchor="middle">WebSocket</text>
+  <text x="856.0" y="129" fill="#435961" font-size="15" font-weight="400" text-anchor="middle">Broker 地址 · /ws-rpc</text>
+  <path d="M184 150 V174" fill="none" stroke="#255987" stroke-width="2" stroke-linejoin="round" marker-end="url(#blue)"/>
+  <path d="M520 150 V174" fill="none" stroke="#255987" stroke-width="2" stroke-linejoin="round" marker-end="url(#blue)"/>
+  <path d="M856 150 V174" fill="none" stroke="#255987" stroke-width="2" stroke-linejoin="round" marker-end="url(#blue)"/>
+  <rect x="32" y="180" width="976" height="225" rx="12" fill="#fff" stroke="#a7c6ba"/>
+  <text x="52" y="213" fill="#12644e" font-size="22" font-weight="700" text-anchor="start">Node</text>
+  <text x="52" y="239" fill="#435961" font-size="16" font-weight="400" text-anchor="start">注册通信实体与本地运行资源。</text>
+  <rect x="52" y="250" width="302" height="66" rx="10" fill="#eaf5ef" stroke="#cedddb"/>
+  <text x="68" y="279" fill="#12644e" font-size="19" font-weight="700" text-anchor="start">话题</text>
+  <text x="68" y="303" fill="#435961" font-size="15" font-weight="400" text-anchor="start">发布者与订阅</text>
+  <rect x="369" y="250" width="302" height="66" rx="10" fill="#eaf5ef" stroke="#cedddb"/>
+  <text x="385" y="279" fill="#12644e" font-size="19" font-weight="700" text-anchor="start">服务</text>
+  <text x="385" y="303" fill="#435961" font-size="15" font-weight="400" text-anchor="start">客户端与服务端</text>
+  <rect x="686" y="250" width="302" height="66" rx="10" fill="#eaf5ef" stroke="#cedddb"/>
+  <text x="702" y="279" fill="#12644e" font-size="19" font-weight="700" text-anchor="start">Actions</text>
+  <text x="702" y="303" fill="#435961" font-size="15" font-weight="400" text-anchor="start">客户端与服务端</text>
+  <rect x="52" y="323" width="302" height="66" rx="10" fill="#eaf5ef" stroke="#cedddb"/>
+  <text x="68" y="352" fill="#12644e" font-size="19" font-weight="700" text-anchor="start">定时器</text>
+  <text x="68" y="376" fill="#435961" font-size="15" font-weight="400" text-anchor="start">周期回调</text>
+  <rect x="369" y="323" width="302" height="66" rx="10" fill="#eaf5ef" stroke="#cedddb"/>
+  <text x="385" y="352" fill="#12644e" font-size="19" font-weight="700" text-anchor="start">参数</text>
+  <text x="385" y="376" fill="#435961" font-size="15" font-weight="400" text-anchor="start">节点本地配置</text>
+  <rect x="686" y="323" width="302" height="66" rx="10" fill="#eaf5ef" stroke="#cedddb"/>
+  <text x="702" y="352" fill="#12644e" font-size="19" font-weight="700" text-anchor="start">回调组</text>
+  <text x="702" y="376" fill="#435961" font-size="15" font-weight="400" text-anchor="start">控制回调的并发执行</text>
+  <path d="M520 406 V431" fill="none" stroke="#12644e" stroke-width="2" stroke-linejoin="round" marker-end="url(#green)"/>
+  <rect x="306" y="437" width="428" height="43" rx="10" fill="#eaf5ef" stroke="#b6cec4"/>
+  <text x="520" y="465" fill="#12644e" font-size="18" font-weight="700" text-anchor="middle">通过 spin() / start() 执行回调</text>
+</svg>

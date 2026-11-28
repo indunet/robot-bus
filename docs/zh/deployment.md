@@ -49,6 +49,19 @@ curl --fail http://127.0.0.1:15560/api/v1/discover
 
 默认共享 API 端口是 `15560`。如果请求的端口已被占用，broker 会逐个尝试接下来的最多 32 个端口；`:0` 则直接由操作系统分配。WebSocket、HTTP 发现和控制台共用最终的端口。客户端与容器端口映射应使用启动日志或 SDK `api_listen` 给出的实际端口，不会自动扫描。
 
+### 用 `rbus` 在终端排障
+
+在源码仓库准备好 [Rust 构建环境](../../CONTRIBUTING.md#python-and-rust-setup)后，可用 `cargo install --path crates/robot-bus --no-default-features --features broker --bin rbus` 安装命令行工具。
+
+```bash
+rbus --url 192.168.1.20:15560 discover
+rbus status --json
+```
+
+在客户端机器运行 `discover`，查看 Broker 公布的 TCP 主机和端口。把示例地址换成实际的 Broker API 地址。使用 `--no-console` 启动时，只要保留 HTTP 发现接口就能查询。查询成功确认 HTTP 入口可达，公布的 TCP 数据端口仍需在客户端机器上另行验证。
+
+`status`、`topic list`、`topic info`、`service list` 和 `action list` 依赖监控 API。所有查询都可以用 `--json` 输出 Broker 返回的数据。HTTP 请求默认超时 3 秒，可用 `--timeout-ms` 调整。`--url` 优先于 `ROBOT_BUS_BROKER_URL`，默认地址是 `http://127.0.0.1:15560`。
+
 ## 多机与固定端口
 
 以下以 broker 的可达地址 `10.0.0.2` 为例；替换成实际地址。端口是本例显式配置，不是 broker 默认值。
@@ -71,7 +84,7 @@ python -m robot_bus.broker --tcp-only \
 | 15662 / 15663 | Service frontend / backend | 原生调用端 / 服务端 |
 | 15664 / 15665 | Action frontend / backend | 原生调用端 / 服务端 |
 
-原生客户端和 `--peer` 沿用访问 `/discover` 的 IP 或域名，从响应中取六个数字数据端口。broker 默认不推断也不返回主机地址。排查时请从客户端检查**入口主机加数据端口**是否可达。broker 与使用发现功能的客户端要一起升级；旧版端点字符串格式不再受支持。
+原生客户端沿用访问 `/discover` 的 IP 或域名，从响应中取六个数字数据端口。使用 `--peer` 的 Broker 还会读取响应中提供的联邦能力和话题联邦端口。broker 默认不推断也不返回主机地址。排查时请从客户端检查**入口主机加数据端口**是否可达。broker 与使用发现功能的客户端要一起升级；旧版端点字符串格式不再受支持。
 
 JSON 端口字段为 `messageXsubPort`、`messageXpubPort`、`serviceFrontendPort`、`serviceBackendPort`、`actionFrontendPort` 和 `actionBackendPort`。
 

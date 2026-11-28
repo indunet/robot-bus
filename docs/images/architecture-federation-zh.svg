@@ -1,0 +1,47 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1040" height="526" viewBox="0 0 1040 526" role="img" aria-labelledby="title desc" xml:lang="zh-CN">
+  <title id="title">单侧配置的 Broker 联邦</title>
+  <desc id="desc">已运行的 Broker A 通告加入能力。Broker B 启动时指定 --peer A:15560，通过 HTTP 发现 A，再建立 ZeroMQ 链路。业务流量可双向转发，客户端仍连接本地 Broker，保留话题 /robot_bus 留在本地。</desc>
+  <defs>
+    <style>
+      text { font-family: Inter, "Segoe UI", "PingFang SC", "Microsoft YaHei", "Noto Sans CJK SC", sans-serif; }
+      .mono { font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace; }
+    </style>
+    <marker id="green" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 Z" fill="#12644e"/>
+    </marker>
+    <marker id="blue" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 Z" fill="#255987"/>
+    </marker>
+  </defs>
+  <rect x="1" y="1" width="1038" height="524" rx="18" fill="#f5f9f8" stroke="#cedddb"/>
+  <text x="32" y="53" fill="#172d33" font-size="28" font-weight="700" text-anchor="start">单侧配置的 Broker 联邦</text>
+  <rect x="32" y="85" width="242" height="271" rx="10" fill="#eaf5ef" stroke="#cedddb"/>
+  <text x="48" y="114" fill="#12644e" font-size="19" font-weight="700" text-anchor="start">Broker A · 已运行</text>
+  <text x="48" y="138" fill="#435961" font-size="15" font-weight="400" text-anchor="start">通告加入能力</text>
+  <rect x="766" y="85" width="242" height="271" rx="10" fill="#eaf5ef" stroke="#cedddb"/>
+  <text x="782" y="114" fill="#12644e" font-size="19" font-weight="700" text-anchor="start">Broker B · 发起加入</text>
+  <text x="782" y="138" fill="#435961" font-size="15" font-weight="400" text-anchor="start">--peer A:15560</text>
+  <rect x="49" y="226" width="208" height="100" rx="10" fill="#fff" stroke="#cedddb"/>
+  <text x="65" y="255" fill="#12644e" font-size="19" font-weight="700" text-anchor="start">本地客户端</text>
+  <text x="65" y="279" fill="#435961" font-size="15" font-weight="400" text-anchor="start">连接各自的 Broker</text>
+  <rect x="783" y="226" width="208" height="100" rx="10" fill="#fff" stroke="#cedddb"/>
+  <text x="799" y="255" fill="#12644e" font-size="19" font-weight="700" text-anchor="start">本地客户端</text>
+  <text x="799" y="279" fill="#435961" font-size="15" font-weight="400" text-anchor="start">连接各自的 Broker</text>
+  <text x="520" y="111" fill="#255987" font-size="17" font-weight="700" text-anchor="middle">HTTP 发现</text>
+  <path d="M758 132 H282" fill="none" stroke="#255987" stroke-width="2" stroke-linejoin="round" stroke-dasharray="5 5" marker-end="url(#blue)"/>
+  <text x="520" y="156" fill="#255987" font-size="15" font-weight="400" text-anchor="middle" class="mono">GET /api/v1/discover</text>
+  <text x="520" y="185" fill="#12644e" font-size="17" font-weight="700" text-anchor="middle">话题</text>
+  <path d="M282 196 H758" fill="none" stroke="#12644e" stroke-width="2" stroke-linejoin="round" marker-end="url(#green)" marker-start="url(#green)"/>
+  <text x="520" y="218" fill="#435961" font-size="14" font-weight="400" text-anchor="middle">DEALER ↔ 联邦 ROUTER · 交换订阅需求与数据</text>
+  <text x="520" y="252" fill="#12644e" font-size="17" font-weight="700" text-anchor="middle">服务</text>
+  <path d="M282 263 H758" fill="none" stroke="#12644e" stroke-width="2" stroke-linejoin="round" marker-end="url(#green)" marker-start="url(#green)"/>
+  <text x="520" y="285" fill="#435961" font-size="14" font-weight="400" text-anchor="middle">DEALER ↔ 后端 ROUTER · 请求与响应</text>
+  <text x="520" y="319" fill="#12644e" font-size="17" font-weight="700" text-anchor="middle">Actions</text>
+  <path d="M282 330 H758" fill="none" stroke="#12644e" stroke-width="2" stroke-linejoin="round" marker-end="url(#green)" marker-start="url(#green)"/>
+  <text x="520" y="352" fill="#435961" font-size="14" font-weight="400" text-anchor="middle">DEALER ↔ 后端 ROUTER · 目标、反馈与结果</text>
+  <rect x="32" y="376" width="976" height="63" rx="10" fill="#fff" stroke="#cedddb"/>
+  <text x="48" y="401" fill="#12644e" font-size="16" font-weight="700" text-anchor="start">ZeroMQ 传输</text>
+  <text x="48" y="424" fill="#435961" font-size="15" font-weight="400" text-anchor="start">跨主机使用 TCP。同一主机可用 ipc+HOST:PORT，但需要能访问对端套接字文件。</text>
+  <rect x="32" y="447" width="976" height="55" rx="10" fill="#fff" stroke="#cedddb"/>
+  <text x="48" y="480" fill="#435961" font-size="15" font-weight="400" text-anchor="start">Broker ID 用于防止转发环路。保留话题 /robot_bus 只在本地传递。</text>
+</svg>

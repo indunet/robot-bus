@@ -16,6 +16,7 @@
     <div class="wrap header-inner">
       <a class="brand" href="#top"><span class="mark" aria-hidden="true"></span>Robot<span>Bus</span></a>
       <nav aria-label="$nav">
+        <a href="#architecture">$nav_architecture</a>
         <a href="#model">$nav_model</a>
         <a href="#start">$nav_start</a>
         <a href="#docs">$nav_docs</a>
@@ -39,26 +40,26 @@
             <a class="button secondary" href="$repo">$source</a>
           </div>
         </div>
-        <figure class="topology" aria-label="$topology_alt">
-          <figcaption><span class="topology-dot"></span>$topology_title <span class="topology-transport">ZeroMQ / WS</span></figcaption>
-          <div class="network" aria-hidden="true">
-            <div class="network-column">
-              <div class="network-node"><span class="node-icon terminal-icon"></span><div><strong>$native</strong><small>Rust / Python / C++</small></div></div>
-              <div class="network-node"><span class="node-icon mobile-icon"></span><div><strong>$jvm</strong><small>Java / Android</small></div></div>
-              <div class="network-node"><span class="node-icon browser-icon"></span><div><strong>$browser</strong><small>TypeScript</small></div></div>
-            </div>
-            <div class="network-column network-core">
-              <i class="trace trace-left" aria-hidden="true"></i>
-              <div class="broker"><span class="mark" aria-hidden="true"></span><strong>Robot Bus</strong><small>Broker</small></div>
-              <i class="trace trace-right" aria-hidden="true"></i>
-            </div>
-            <div class="network-column network-output">
-              <div class="network-node"><span class="node-icon pulse-icon"></span><div><strong>$topics</strong><small>$pubsub</small></div></div>
-              <div class="network-node"><span class="node-icon service-icon"></span><div><strong>$services</strong><small>$request_reply</small></div></div>
-              <div class="network-node"><span class="node-icon target-icon"></span><div><strong>$actions</strong><small>$goal_feedback</small></div></div>
-            </div>
+        <figure class="console-frame">
+          <div class="window-bar" aria-hidden="true"><span></span><span></span><span></span><code>127.0.0.1:15560</code></div>
+          <img src="${base}assets/console-overview.png" width="1600" height="960" alt="$console_alt">
+        </figure>
+      </div>
+    </section>
+
+    <section class="architecture section" id="architecture" aria-labelledby="architecture-title">
+      <div class="wrap">
+        <div class="section-intro">
+          <h2 id="architecture-title">$nav_architecture</h2>
+          <p>$architecture_description</p>
+        </div>
+        <figure>
+          <div class="architecture-diagram" role="region" aria-label="$architecture_diagram_label" tabindex="0">
+            <img src="${base}assets/$architecture_asset" width="1040" height="536" loading="lazy" alt="$architecture_alt">
           </div>
-          <div class="topology-footer"><span>Protocol Buffers</span><span>$topology_contract</span></div>
+          <figcaption>
+            <a class="text-link" href="$guide/architecture.md">$architecture_link</a>
+          </figcaption>
         </figure>
       </div>
     </section>
@@ -90,7 +91,6 @@
             <code>/fibonacci</code>
           </article>
         </div>
-        <a class="text-link" href="$guide/architecture.md">$architecture_link</a>
       </div>
     </section>
 
@@ -126,9 +126,15 @@
           </ul>
           <a class="text-link" href="$readme#$console_id">$console_link</a>
         </div>
-        <figure class="console-frame">
-          <div class="window-bar" aria-hidden="true"><span></span><span></span><span></span><code>127.0.0.1:15560</code></div>
-          <img src="${base}assets/console-overview.png" width="3308" height="2510" loading="lazy" alt="$console_alt">
+        <figure class="console-demo">
+          <video class="console-frame" width="1120" height="660" controls playsinline preload="metadata"
+            poster="${base}assets/python-broker-console.jpg" aria-label="$console_recording">
+            <source src="${base}assets/python-broker-console.mp4" type="video/mp4">
+          </video>
+          <figcaption>
+            <span>$console_recording</span>
+            <a class="text-link" href="${base}assets/python-broker-console.gif">$console_gif</a>
+          </figcaption>
         </figure>
       </div>
     </section>

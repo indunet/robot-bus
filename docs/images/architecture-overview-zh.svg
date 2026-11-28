@@ -1,0 +1,68 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1040" height="536" viewBox="0 0 1040 536" role="img" aria-labelledby="title desc" xml:lang="zh-CN">
+  <title id="title">客户端如何接入 Broker</title>
+  <desc id="desc">原生 SDK 使用 ZeroMQ 套接字。TypeScript 网页应用通过 /ws-rpc 收发业务消息。运维人员在浏览器打开 Web 控制台。发现接口、控制台和 WebSocket 共用 HTTP 监听端口。话题、服务和 Action 使用 Protobuf 载荷。</desc>
+  <defs>
+    <style>
+      text { font-family: Inter, "Segoe UI", "PingFang SC", "Microsoft YaHei", "Noto Sans CJK SC", sans-serif; }
+    </style>
+    <marker id="blue" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 Z" fill="#255987"/>
+    </marker>
+    <marker id="purple" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 Z" fill="#65408a"/>
+    </marker>
+    <marker id="amber" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 Z" fill="#8b5318"/>
+    </marker>
+  </defs>
+  <rect x="1" y="1" width="1038" height="534" rx="18" fill="#f5f9f8" stroke="#cedddb"/>
+  <text x="32" y="53" fill="#172d33" font-size="28" font-weight="700" text-anchor="start">客户端如何接入 Broker</text>
+  <rect x="32" y="234" width="976" height="270" rx="14" fill="#fff" stroke="#a7c6ba"/>
+  <text x="52" y="263" fill="#12644e" font-size="22" font-weight="700" text-anchor="start">Broker</text>
+  <rect x="372" y="244" width="616" height="120" rx="10" fill="#f5f9f8" stroke="#cedddb"/>
+  <text x="387" y="267" fill="#12644e" font-size="15" font-weight="700" text-anchor="start">共用 HTTP 监听端口（默认 15560）</text>
+  <rect x="32" y="76" width="304" height="97" rx="10" fill="#edf5fb" stroke="#cedddb"/>
+  <text x="48" y="105" fill="#255987" font-size="19" font-weight="700" text-anchor="start">原生 SDK 节点</text>
+  <text x="48" y="129" fill="#435961" font-size="15" font-weight="400" text-anchor="start">Rust · Python · C++</text>
+  <text x="48" y="149" fill="#435961" font-size="15" font-weight="400" text-anchor="start">Node.js · Java · Android</text>
+  <path d="M200 175 V275" fill="none" stroke="#255987" stroke-width="2" stroke-linejoin="round" marker-end="url(#blue)"/>
+  <rect x="134" y="188" width="132" height="32" rx="16" fill="#f5f9f8" stroke="#cedddb"/>
+  <text x="200" y="209" fill="#255987" font-size="15" font-weight="700" text-anchor="middle">ZeroMQ</text>
+  <rect x="368" y="76" width="304" height="97" rx="10" fill="#f5f0fa" stroke="#cedddb"/>
+  <text x="384" y="105" fill="#65408a" font-size="19" font-weight="700" text-anchor="start">浏览器 SDK</text>
+  <text x="384" y="129" fill="#435961" font-size="15" font-weight="400" text-anchor="start">TypeScript 网页应用</text>
+  <text x="384" y="149" fill="#435961" font-size="15" font-weight="400" text-anchor="start">业务消息与调用</text>
+  <path d="M520 175 V239" fill="none" stroke="#65408a" stroke-width="2" stroke-linejoin="round" marker-end="url(#purple)"/>
+  <rect x="454" y="188" width="132" height="32" rx="16" fill="#f5f9f8" stroke="#cedddb"/>
+  <text x="520" y="209" fill="#65408a" font-size="15" font-weight="700" text-anchor="middle">WebSocket</text>
+  <rect x="704" y="76" width="304" height="97" rx="10" fill="#fbf2e5" stroke="#cedddb"/>
+  <text x="720" y="105" fill="#8b5318" font-size="19" font-weight="700" text-anchor="start">控制台用户</text>
+  <text x="720" y="129" fill="#435961" font-size="15" font-weight="400" text-anchor="start">浏览器</text>
+  <text x="720" y="149" fill="#435961" font-size="15" font-weight="400" text-anchor="start">查看和调试 Broker</text>
+  <path d="M840 175 V239" fill="none" stroke="#8b5318" stroke-width="2" stroke-linejoin="round" stroke-dasharray="5 5" marker-end="url(#amber)"/>
+  <rect x="774" y="188" width="132" height="32" rx="16" fill="#f5f9f8" stroke="#cedddb"/>
+  <text x="840" y="209" fill="#8b5318" font-size="15" font-weight="700" text-anchor="middle">HTTP</text>
+  <rect x="52" y="279" width="296" height="76" rx="10" fill="#edf5fb" stroke="#cedddb"/>
+  <text x="200.0" y="308" fill="#255987" font-size="19" font-weight="700" text-anchor="middle">原生消息套接字</text>
+  <text x="200.0" y="332" fill="#435961" font-size="15" font-weight="400" text-anchor="middle">inproc · ipc · tcp</text>
+  <rect x="380" y="279" width="280" height="76" rx="10" fill="#f5f0fa" stroke="#cedddb"/>
+  <text x="520.0" y="308" fill="#65408a" font-size="19" font-weight="700" text-anchor="middle">WebSocket 网关</text>
+  <text x="520.0" y="332" fill="#435961" font-size="15" font-weight="400" text-anchor="middle">/ws-rpc</text>
+  <rect x="672" y="279" width="308" height="76" rx="10" fill="#fbf2e5" stroke="#cedddb"/>
+  <text x="826.0" y="308" fill="#8b5318" font-size="19" font-weight="700" text-anchor="middle">HTTP 发现与控制台</text>
+  <text x="826.0" y="332" fill="#435961" font-size="15" font-weight="400" text-anchor="middle">GET /api/v1/discover  ·  GET /</text>
+  <path d="M200 355 V397" fill="none" stroke="#255987" stroke-width="2" stroke-linejoin="round" marker-end="url(#blue)"/>
+  <path d="M520 355 V397" fill="none" stroke="#65408a" stroke-width="2" stroke-linejoin="round" marker-end="url(#purple)"/>
+  <text x="826" y="386" fill="#8b5318" font-size="15" font-weight="400" text-anchor="middle">发现接口返回原生通信端口</text>
+  <rect x="52" y="401" width="936" height="85" rx="10" fill="#eaf5ef" stroke="#b6cec4"/>
+  <text x="520" y="425" fill="#12644e" font-size="15" font-weight="700" text-anchor="middle">消息路由</text>
+  <path d="M364 437 V474" fill="none" stroke="#b6cec4" stroke-width="2" stroke-linejoin="round"/>
+  <path d="M676 437 V474" fill="none" stroke="#b6cec4" stroke-width="2" stroke-linejoin="round"/>
+  <text x="208" y="451" fill="#12644e" font-size="19" font-weight="700" text-anchor="middle">话题</text>
+  <text x="208" y="474" fill="#435961" font-size="16" font-weight="400" text-anchor="middle">发布 / 订阅</text>
+  <text x="520" y="451" fill="#12644e" font-size="19" font-weight="700" text-anchor="middle">服务</text>
+  <text x="520" y="474" fill="#435961" font-size="16" font-weight="400" text-anchor="middle">请求 / 响应</text>
+  <text x="832" y="451" fill="#12644e" font-size="19" font-weight="700" text-anchor="middle">Actions</text>
+  <text x="832" y="474" fill="#435961" font-size="16" font-weight="400" text-anchor="middle">目标 / 反馈 / 结果 / 取消</text>
+  <text x="520" y="524" fill="#12644e" font-size="15" font-weight="700" text-anchor="middle">统一消息契约 · Protocol Buffers</text>
+</svg>
