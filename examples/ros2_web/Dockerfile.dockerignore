@@ -20,6 +20,8 @@
 !proto/**
 !scripts/
 !scripts/generate*.py
+!scripts/protobuf-versions.env
+!scripts/protobuf_versions.py
 !scripts/gen_rust_msgs/
 !scripts/gen_rust_msgs/**
 !bindings/

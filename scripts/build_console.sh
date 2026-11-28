@@ -12,6 +12,13 @@ set -euo pipefail
 root="$(cd "$(dirname "$0")/.." && pwd)"
 ts="$root/bindings/typescript"
 
+# TypeScript stubs use CPP_PROTOC. install-protoc overwrites PROTOC on every
+# call, so a later GENCODE_PROTOC install leaves PROTOC at 29.3. Prefer the
+# C++/Rust/TypeScript binary the action recorded.
+if [[ -n "${ROBOT_BUS_PROTOC_CPP:-}" ]]; then
+  export PROTOC="$ROBOT_BUS_PROTOC_CPP"
+fi
+
 # Honor PROTOC= (full path). On Windows GHA, Git Bash PATH may not see a
 # MSYS-style install unless we prepend the compiler's directory.
 if [[ -n "${PROTOC:-}" ]]; then

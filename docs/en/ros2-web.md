@@ -82,17 +82,17 @@ browser traces/screenshots on failure.
 
 ## Local development with sourced Humble
 
-Use Ubuntu 22.04, Python 3.10 from the ROS installation, Node 22, and Rust. Rust and TypeScript codegen use protoc 35.1; Python codegen uses protoc 29.3 (`scripts/protobuf-versions.env`). A venv must expose the system ROS Python packages. In the repository root:
+Use Ubuntu 22.04, Python 3.10 from the ROS installation, Node 22, and Rust. Rust and TypeScript codegen use protoc 35.1; Python codegen uses protoc 29.3 (`scripts/protobuf-versions.env`). Export `PROTOC_GENCODE` and `PROTOC_CPP` to those two `protoc` binaries. A venv must expose the system ROS Python packages. In the repository root:
 
 ```bash
 source /opt/ros/humble/setup.bash
 python3 -m venv --system-site-packages .venv
 source .venv/bin/activate
 pip install 'maturin>=1.7,<2' 'protobuf>=5.29.3,<9'
-python3 scripts/generate_python_msgs.py
-python3 scripts/generate_rust_msgs.py
+PROTOC="$PROTOC_GENCODE" python3 scripts/generate_python_msgs.py
+PROTOC="$PROTOC_CPP" python3 scripts/generate_rust_msgs.py
 npm ci --prefix bindings/typescript
-python3 scripts/generate_typescript_msgs.py
+PROTOC="$PROTOC_CPP" python3 scripts/generate_typescript_msgs.py
 npm run build:ts --prefix bindings/typescript
 (cd bindings/python && maturin develop --no-default-features --features extension-module,ws,console-api)
 cd examples/ros2_web
