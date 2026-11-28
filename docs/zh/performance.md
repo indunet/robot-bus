@@ -242,6 +242,20 @@ TCP、IPC 和 inproc 的 Action 用默认 SDK 路径复测。回复入队后唤�
 
 在一组单独的 `strace` 运行中，原始旧版出现 **2,211 次 `brk`**，新版出现 **7 次**。旧版接收线程反复扩缩堆。保持原始旧版代码，只在进程内将 glibc 的 `mmap_threshold` 和 `trim_threshold` 都设为 1 MiB，三轮 TCP p99 的中位数从 **940 µs 降到 554 µs**。这些对照说明旧版差距大部分来自该环境下重复分配和堆扩缩。新版在订阅队列间共享已收到的缓冲区。分配器参数仅用于诊断。 [glibc 内存分配参数](https://sourceware.org/glibc/manual/latest/html_node/Memory-Allocation-Tunables.html)
 
+### 执行器唤醒和工作池直投
+
+将此改动前后的 release 构建在同一台 AMD EPYC 9554 Linux 主机上做三轮交替对照，走隔离的本机回环网络。同一组对照固定相同 CPU。基线已经包含 KeepLast。分段构建从 ZeroMQ 收完消息开始计时，到订阅回调开始为止。独立的端到端探测每轮逐条发送 850 个样本，等到回调后再发下一条。
+
+| 64 B 通道 | 单线程收包到回调 p50 / p99（µs） | 两工作线程收包到回调 p50 / p99（µs） | 单线程端到端 p99（µs） | 两工作线程端到端 p99（µs） |
+| --- | ---: | ---: | ---: | ---: |
+| TCP | 22.5 / 39.2 → 12.2 / 22.7 | 38.1 / 57.3 → 12.6 / 17.7 | 224.3 → 179.5 | 212.4 → 177.0 |
+| IPC | 22.1 / 36.1 → 12.7 / 20.7 | 36.3 / 52.1 → 13.3 / 24.9 | 174.0 → 160.0 | 211.5 → 152.7 |
+| inproc | 22.4 / 33.7 → 11.5 / 21.4 | 32.7 / 49.5 → 14.2 / 36.2 | 110.1 → 101.0 | 126.9 → 74.9 |
+
+独立的定速测试每轮发送 0.4 秒，结束后排空 100 ms。64 B 消息在每秒 100,000 条时，两工作线程的旧版排空后投递率中位数为 42.3%–47.4%，新版三条传输的三轮全部收齐。256 KiB 在每秒 500 条时，两版各轮均收齐。两工作线程的 256 KiB 单条端到端 p99 为 TCP 477 → 489 µs、IPC 428 → 446 µs、inproc 195 → 169 µs。
+
+用 `ROBOT_BUS_PERF_ONLY=cdr-topic` 运行 `cargo run --release -p robot-bus-perf`，设置 `ROBOT_BUS_PERF_TOPIC_THREADS=0` 测单线程，设为 `2` 测两工作线程。使用 `ROBOT_BUS_PERF_MSG_LATENCY_SAMPLES=850`、`ROBOT_BUS_PERF_GOODPUT_TRIAL_SECS=0.40`，按载荷设置相同的 `ROBOT_BUS_PERF_GOODPUT_RATE_LO` 和 `ROBOT_BUS_PERF_GOODPUT_RATE_HI`，可以复测端到端和定速窗口。
+
 ## 归档与复现
 
 初始证据保存在本机 `bench-results/20261120-134156-same-host/`。其中 `run.sh` 是实际运行脚本，`execution.tsv` 记录轮次和退出码，`raw.jsonl` 包含每档计数、窗口时间和延迟样本，`round-*.log` 含完整输出。同目录保留环境、DDS 配置、源码补丁、Cargo 依赖锁定、二进制哈希、`SHA256SUMS` 和一次超时的 Bus 冒烟。传输复核和修正后的 ROS 2 样本分别位于 `bench-results/20261120-183629-ros2-executor-probe/transport/` 与 `isolated/`，各有 XML、环境、UDP 计数和完整日志。

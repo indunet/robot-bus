@@ -276,7 +276,9 @@ node.create_timer(
 
 启用 Rust panic 展开时，回调 panic 会被记录并隔离。订阅或定时器异常不会导致工作线程退出或回调组停止调度。服务和动作处理函数异常时，原生总线返回 `BusError::HandlerPanicked`（`HANDLER_PANICKED\0name`），WebSocket 服务端返回 Internal 状态。
 
-常驻线程池在等待任务达到 1024 个时停止接受新任务，并为每个工作线程保留一个内部续执行名额，避免繁忙回调组长期占用线程；每个互斥回调组也默认最多等待 1024 个回调，可用 `CallbackGroup::with_queue_capacity(kind, capacity)` 调整组容量。队列满时立即拒绝新任务，不阻塞消息接收线程：订阅和定时器回调被丢弃并记录日志；服务和动作请求返回 `BusError::Busy`（`BUSY\0name`，WebSocket 为 ResourceExhausted）。已接受的同组回调按先后顺序执行。这些执行器限制独立于传输层 HWM，不提供“覆盖为最新值”的策略。
+常驻线程池最多接受 1024 个等待任务，并为每个工作线程保留一个内部续执行名额。每个互斥回调组也默认最多等待 1024 个任务，可用 `CallbackGroup::with_queue_capacity(kind, capacity)` 调整组容量。饱和时，原生订阅在 KeepLast 队列中保留最新的待处理样本并重试提交，定时器回调会被丢弃并记录日志，服务和动作请求会返回 `BusError::Busy`。已接受的同组回调按先后顺序执行。
+
+原生多线程执行器在持续 `spin()` 或 `start()` 期间由收包线程直接向工作池提交订阅回调，仍遵守回调组和队列限额。`spin_once()` 与 `spin_some()` 由调用方推进。Linux 执行器优先通过 `eventfd` 唤醒轮询，其他平台通过进程内 ZeroMQ PAIR 唤醒。
 
 `CallbackGroup::queue_stats()` 提供组内等待数和拒绝数，`Executor::worker_queue_stats()` 提供常驻线程池队列统计。`executor.shutdown()` 和 `executor.shutdown_handle()` 不需要获取 spin 循环的锁，可在其他线程运行 spin 时调用。停止信号用于退出轮询，不会强制终止已经执行的用户回调。
 

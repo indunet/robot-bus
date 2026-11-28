@@ -59,6 +59,7 @@ ROBOT_BUS_PERF_ONLY=local cargo run --release --bin robot_bus_perf --features ws
 | `ROBOT_BUS_PERF_GOODPUT_RATE_STEP` | `1` | 相邻搜索档位的间距（Hz） |
 | `ROBOT_BUS_PERF_GOODPUT_SETTLE_MS` | `100` | 停止发送后继续收包的时间 |
 | `ROBOT_BUS_PERF_MSG_LATENCY_SAMPLES` | `5000` | 限速延迟抽样次数 |
+| `ROBOT_BUS_PERF_TOPIC_THREADS` | `0` | 原生普通话题的工作线程数。`0` 使用单线程执行器，正数为多线程执行器的 worker 数 |
 | `ROBOT_BUS_PERF_SVC_ITERS` | `10000` | service call次数 |
 | `ROBOT_BUS_PERF_ACT_ITERS` | `5000` | action send_goal次数 |
 | `ROBOT_BUS_PERF_RPC_WARMUP` | service `50` / action `10` | 每个 RPC 场景的预热次数 |

@@ -356,6 +356,22 @@ impl Drop for Message {
 #[repr(transparent)]
 pub(crate) struct PollItem<'a>(ffi::PollItem, PhantomData<&'a Socket>);
 
+#[cfg(target_os = "linux")]
+impl<'a> PollItem<'a> {
+    pub(crate) fn readable_fd(fd: std::os::fd::BorrowedFd<'a>) -> Self {
+        use std::os::fd::AsRawFd;
+        Self(
+            ffi::PollItem {
+                socket: ptr::null_mut(),
+                fd: fd.as_raw_fd(),
+                events: POLLIN,
+                revents: 0,
+            },
+            PhantomData,
+        )
+    }
+}
+
 impl PollItem<'_> {
     pub(crate) fn is_readable(&self) -> bool {
         self.0.revents & POLLIN != 0
@@ -370,7 +386,7 @@ pub(crate) fn poll(items: &mut [PollItem<'_>], timeout: i64) -> Result<i32> {
         timeout.clamp(i64::from(i32::MIN), i64::from(i32::MAX))
     };
     // SAFETY: PollItem is transparent over the C structure. Its lifetime keeps
-    // every socket alive until the poll returns.
+    // every socket and file descriptor alive until the poll returns.
     check(unsafe { ffi::zmq_poll(items.as_mut_ptr().cast(), count, timeout as c_long) })
 }
 

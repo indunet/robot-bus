@@ -106,7 +106,7 @@ fn transient_local_replays_after_tcp_broker_restart() {
 #[test]
 fn native_keep_last_replaces_waiting_callbacks_while_consumer_is_running() {
     let _guard = lock_brokers();
-    for multi_threaded in [false, true] {
+    for (multi_threaded, background) in [(false, false), (true, false), (true, true)] {
         let context = Context::new();
         let mut config = ephemeral_robot_bus_config();
         config.message.bind_all_transports = true;
@@ -137,7 +137,12 @@ fn native_keep_last_replaces_waiting_callbacks_while_consumer_is_running() {
             )
             .unwrap();
         let shutdown = subscriber.shutdown_handle().unwrap();
-        let spin = thread::spawn(move || subscriber.spin().unwrap());
+        let spin = if background {
+            subscriber.start().unwrap();
+            None
+        } else {
+            Some(thread::spawn(move || subscriber.spin().unwrap()))
+        };
         thread::sleep(Duration::from_millis(80));
         publisher.publish(&[0]).unwrap();
         assert_eq!(observed_rx.recv_timeout(WAIT).unwrap(), 0);
@@ -152,7 +157,11 @@ fn native_keep_last_replaces_waiting_callbacks_while_consumer_is_running() {
             observed_rx.recv_timeout(WAIT).unwrap(),
         ];
         shutdown.shutdown();
-        spin.join().unwrap();
+        if let Some(spin) = spin {
+            spin.join().unwrap();
+        } else {
+            executor.wait().unwrap();
+        }
         assert_eq!(remaining, [9, 10]);
         assert!(observed_rx.try_recv().is_err());
     }

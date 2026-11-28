@@ -242,6 +242,20 @@ The 256 KiB difference comes mainly from allocation and copying. The former path
 
 A separate `strace` run counted **2,211 `brk` calls** in the original and **7** in the new version. The original receive thread repeatedly grew and shrank its heap. Setting glibc `mmap_threshold` and `trim_threshold` to 1 MiB for the unmodified original binary reduced its median TCP p99 over three runs from **940 µs to 554 µs**. The controls attribute most of the gap in this environment to repeated allocation and heap resizing. The new subscription queues share the received buffer. The allocator settings were used only for diagnosis. [glibc memory allocation tunables](https://sourceware.org/glibc/manual/latest/html_node/Memory-Allocation-Tunables.html)
 
+### Executor wake-ups and direct worker submission
+
+Three alternating release-build comparisons ran on the same Linux AMD EPYC 9554 host over isolated local loopback, with the same CPU affinity for each pair. The baseline already implemented KeepLast. Temporary instrumentation measured from when ZeroMQ returned the full sample to when the subscription callback started. A separate end-to-end probe sent 850 samples per run, waiting for each callback before sending the next sample.
+
+| 64 B transport | Single-thread receive-to-callback p50 / p99 (µs) | Two-worker receive-to-callback p50 / p99 (µs) | Single-thread end-to-end p99 (µs) | Two-worker end-to-end p99 (µs) |
+| --- | ---: | ---: | ---: | ---: |
+| TCP | 22.5 / 39.2 → 12.2 / 22.7 | 38.1 / 57.3 → 12.6 / 17.7 | 224.3 → 179.5 | 212.4 → 177.0 |
+| IPC | 22.1 / 36.1 → 12.7 / 20.7 | 36.3 / 52.1 → 13.3 / 24.9 | 174.0 → 160.0 | 211.5 → 152.7 |
+| inproc | 22.4 / 33.7 → 11.5 / 21.4 | 32.7 / 49.5 → 14.2 / 36.2 | 110.1 → 101.0 | 126.9 → 74.9 |
+
+Separate paced trials sent for 0.4 s and drained for 100 ms. At 100,000 64 B samples/s with two workers, median delivery after draining was 42.3%–47.4% on the baseline. The new build received every sample in all three runs on all three transports. Both builds delivered all 256 KiB samples at 500/s. Two-worker single-message end-to-end p99 for 256 KiB went from 477 to 489 µs on TCP, 428 to 446 µs on IPC, and 195 to 169 µs on inproc.
+
+Run `cargo run --release -p robot-bus-perf` with `ROBOT_BUS_PERF_ONLY=cdr-topic`. Set `ROBOT_BUS_PERF_TOPIC_THREADS=0` for single-threaded runs or `2` for two-worker runs. Use `ROBOT_BUS_PERF_MSG_LATENCY_SAMPLES=850`, `ROBOT_BUS_PERF_GOODPUT_TRIAL_SECS=0.40` and matching `ROBOT_BUS_PERF_GOODPUT_RATE_LO` and `ROBOT_BUS_PERF_GOODPUT_RATE_HI` for each payload size to reproduce the end-to-end and paced trials.
+
 ## Archive and reproduction
 
 The initial local archive is `bench-results/20261120-134156-same-host/`. Its `run.sh` is the executed command sequence, `execution.tsv` records run order and exit codes, `raw.jsonl` contains per-trial counts, windows and latency samples, and `round-*.log` contains the full output. It also contains the environment, DDS profiles, source patches, Cargo lockfile, binary hashes, `SHA256SUMS` and an earlier Bus smoke timeout. The transport audit and corrected ROS 2 samples live in `transport/` and `isolated/` under `bench-results/20261120-183629-ros2-executor-probe/`, with XML, environment details, UDP counts and full logs.

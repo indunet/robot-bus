@@ -5,8 +5,10 @@ use std::thread;
 use std::time::{Duration, Instant};
 
 use crate::pacing::{TrialReceiver, WARMUP, make_payload, measure_pubsub, msg_hwm, rpc_warmup};
-use crate::support::{LatencyStats, ScenarioResult};
-use robot_bus::{Context, HighWaterMark, Node, NodeOptions, Publisher, QosProfile};
+use crate::support::{LatencyStats, ScenarioResult, env_usize};
+use robot_bus::{
+    Context, HighWaterMark, MultiThreadedExecutor, Node, NodeOptions, Publisher, QosProfile,
+};
 
 pub fn bench_pubsub(
     ctx: &Context,
@@ -142,6 +144,17 @@ pub fn run_pubsub(
 ) -> ScenarioResult {
     let transport = transport.to_string();
     let topic = format!("perf/{transport}/msg");
+
+    let workers = env_usize("ROBOT_BUS_PERF_TOPIC_THREADS", 0);
+    let _executor = if workers == 0 {
+        None
+    } else {
+        let executor = MultiThreadedExecutor::with_context(sub.context().clone(), workers);
+        if let Err(err) = executor.add_node(&mut sub) {
+            return ScenarioResult::skipped(&transport, scenario, format!("add topic node: {err}"));
+        }
+        Some(executor)
+    };
 
     let receiver = Arc::new(receiver);
     let hwm = HighWaterMark {

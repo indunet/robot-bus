@@ -43,7 +43,7 @@ use crate::runtime::timers::{
     SubscriptionHandle, Timer, TimerCallback, TimerHandle, effective_poll_timeout_ms, tick_timers,
 };
 use crate::runtime::topic_inbox::{NativeSubscription, ReadyTopics, TopicReader};
-use crate::runtime::wake::{WakeReceiver, Waker, WakingSender, wake_pair};
+use crate::runtime::wake::{WakeReceiver, Waker, WakingSender, executor_wake_pair};
 use crate::runtime::worker_pool::WorkerPool;
 use crate::transports::{
     action_backend_endpoint, action_frontend_endpoint, message_xpub_endpoint,
@@ -170,11 +170,13 @@ impl Executor {
         heartbeat_interval_ms: u64,
         worker_pool: Option<WorkerPool>,
     ) -> Self {
-        let (waker, wake_rx) = wake_pair(context.zmq());
+        let (waker, wake_rx) = executor_wake_pair(context.zmq());
         let (outbound_tx, outbound_rx) = mpsc::channel();
         let (reply_tx, reply_rx) = mpsc::channel();
         let outbound_tx = WakingSender::new(outbound_tx, waker.clone());
         let reply_tx = WakingSender::new(reply_tx, waker.clone());
+        let running = Arc::new(AtomicBool::new(false));
+        let ready_topics = Arc::new(ReadyTopics::new(worker_pool.as_ref(), &running));
         Self {
             context,
             heartbeat_interval_ms,
@@ -186,7 +188,7 @@ impl Executor {
             action_client_registration: None,
             topic_readers: Vec::new(),
             subscriptions: HashMap::new(),
-            ready_topics: Arc::new(ReadyTopics::default()),
+            ready_topics,
             socket_registrations: Vec::new(),
             outbound_tx,
             outbound_rx: Some(outbound_rx),
@@ -200,7 +202,7 @@ impl Executor {
             next_service_id: 1,
             next_action_id: 1,
             worker_pool,
-            running: Arc::new(AtomicBool::new(false)),
+            running,
             started: false,
             closed: false,
             thread: None,
@@ -810,6 +812,7 @@ impl Executor {
             .reply_rx
             .as_ref()
             .ok_or_else(|| BusError::Protocol("runtime already started".into()))?;
+        let _direct_topics = self.ready_topics.enable_direct_dispatch();
         while self.running.load(Ordering::Acquire) {
             spin_once_inner(
                 &mut self.socket_registrations,
@@ -852,6 +855,7 @@ impl Executor {
         let wake_rx = self.wake_rx.take();
         let worker_pool = self.worker_pool.clone();
         let handle = thread::spawn(move || {
+            let _direct_topics = ready_topics.enable_direct_dispatch();
             while running.load(Ordering::Acquire) {
                 spin_once_inner(
                     &mut registrations,
