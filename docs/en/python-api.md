@@ -502,3 +502,5 @@ print(robot_bus.__version__)
 | `ShutdownHandle` / `TimerHandle` | Spin and timer control |
 
 WebSocket RPC mode Node: see previous section; for the low-level WebSocket RPC frame protocol, see the Rust guide ([rust-api.md](rust-api.md)).
+
+For ZeroMQ transports (`tcp`, `ipc`, `inproc`), the last positive subscription `qos_depth` sets the receive high-water mark of the shared SUB socket. Omitting it leaves the current setting unchanged. A depth of `1` does not create a per-topic queue that always keeps the latest message.

@@ -7,7 +7,7 @@ use std::time::Duration;
 
 use crate::common::MessageProxy;
 use robot_bus::geometry_msgs::msg::v1::Vector3;
-use robot_bus::message_bus::Publisher;
+use robot_bus::message_bus::{Publisher, Subscriber};
 use robot_bus::sensor_msgs::msg::v1::Imu;
 use robot_bus::{
     CallbackGroup, Executor, HighWaterMark, MessageCallback, Node, NodeOptions, QosProfile,
@@ -183,6 +183,17 @@ fn publisher_subscriber_hwm_roundtrip() {
     pub_.set_high_water_mark(bumped).expect("set");
     assert_eq!(pub_.high_water_mark().expect("get"), bumped);
 
+    let sub = Subscriber::with_hwm(Some(&proxy.xpub_endpoint), custom).expect("subscriber");
+    assert_eq!(
+        sub.high_water_mark().expect("get subscriber HWM"),
+        HighWaterMark::new(0, custom.rcv)
+    );
+    sub.set_high_water_mark(bumped).expect("set subscriber HWM");
+    assert_eq!(
+        sub.high_water_mark().expect("get subscriber HWM"),
+        HighWaterMark::new(0, bumped.rcv)
+    );
+
     let mut executor = Executor::new();
     executor
         .set_stream_hwm(HighWaterMark::new(20, 20))
@@ -219,6 +230,77 @@ fn node_topic_qos_keep_last_maps_to_hwm() {
         node.stream_hwm().expect("stream hwm"),
         HighWaterMark::new(32, 32)
     );
+}
+
+#[test]
+fn node_tcp_subscriptions_register_at_any_qos_depth() {
+    use std::time::Instant;
+
+    let context = zmq::Context::new();
+    let depths = [None, Some(1), Some(2), Some(4)];
+    for depth_a in depths {
+        for depth_b in depths {
+            // Observe the SUB control frames directly instead of guessing when
+            // subscriptions have propagated through a proxy.
+            let xpub = context.socket(zmq::XPUB).expect("XPUB socket");
+            xpub.bind("tcp://127.0.0.1:0").expect("bind XPUB");
+            xpub.set_rcvtimeo(1000).expect("XPUB receive timeout");
+            let options = NodeOptions {
+                message_xpub: Some(xpub.get_last_endpoint().unwrap().unwrap()),
+                ..NodeOptions::tcp()
+            };
+            let executor = SingleThreadedExecutor::new();
+            let mut node = Node::with_options("qos-matrix", options);
+            executor.add_node(&mut node).expect("add node");
+
+            let mut subscriptions = Vec::new();
+            for (topic, depth) in [("/t/a", depth_a), ("/t/b", depth_b)] {
+                let hits = Arc::new(AtomicUsize::new(0));
+                let count = Arc::clone(&hits);
+                let callback: MessageCallback = Arc::new(move |payload| {
+                    assert_eq!(payload, b"x");
+                    count.fetch_add(1, Ordering::SeqCst);
+                });
+                match depth {
+                    Some(depth) => node.create_subscription_raw_with_qos(
+                        topic,
+                        QosProfile::keep_last(depth),
+                        callback,
+                        None,
+                    ),
+                    None => node.create_subscription_raw(topic, callback, None),
+                }
+                .expect("create subscription");
+                subscriptions.push((topic, hits));
+            }
+
+            for (topic, _) in &subscriptions {
+                let frame = xpub.recv_bytes(0).unwrap_or_else(|err| {
+                    panic!("QoS {depth_a:?}/{depth_b:?}: missing subscription for {topic}: {err}")
+                });
+                assert_eq!(frame[0], 1);
+                assert_eq!(&frame[1..], topic.as_bytes());
+            }
+
+            for expected in 1..=5 {
+                for (topic, hits) in &subscriptions {
+                    // Let each callback drain before sending another message:
+                    // this tests registration, not best-effort burst delivery.
+                    xpub.send_multipart([topic.as_bytes(), b"x"], 0)
+                        .expect("publish");
+                    let deadline = Instant::now() + Duration::from_secs(1);
+                    while hits.load(Ordering::SeqCst) < expected {
+                        assert!(
+                            Instant::now() < deadline,
+                            "QoS {depth_a:?}/{depth_b:?}: missing message {expected} on {topic}"
+                        );
+                        executor.spin_once(Some(Duration::from_millis(20))).unwrap();
+                    }
+                    assert_eq!(hits.load(Ordering::SeqCst), expected);
+                }
+            }
+        }
+    }
 }
 
 fn node_with_proxy(name: &str, proxy: &MessageProxy) -> (SingleThreadedExecutor, Node) {

@@ -47,14 +47,15 @@ impl Subscriber {
         &self.endpoint
     }
 
-    /// Current send / receive high-water marks.
+    /// Current socket high-water marks. The send side is unlimited (`0`) for
+    /// subscription control commands.
     pub fn high_water_mark(&self) -> Result<HighWaterMark> {
         Ok(HighWaterMark::from_socket(&self.socket)?)
     }
 
-    /// Update send / receive high-water marks on the live socket.
+    /// Update the receive high-water mark on the live socket. `hwm.snd` is ignored.
     pub fn set_high_water_mark(&self, hwm: HighWaterMark) -> Result<()> {
-        hwm.apply(&self.socket)?;
+        self.socket.set_rcvhwm(hwm.rcv)?;
         Ok(())
     }
 

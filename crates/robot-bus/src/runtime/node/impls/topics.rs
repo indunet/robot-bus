@@ -207,7 +207,7 @@ impl Node {
     ///
     /// Does not change the node's stream HWM. Prefer
     /// [`create_subscription_with_qos`](Self::create_subscription_with_qos) to set
-    /// KeepLast depth on the shared SUB socket.
+    /// the receive high-water mark on the shared SUB socket.
     ///
     /// Decode failures are skipped (logged). `callback_group: None` uses the
     /// node's default mutually exclusive group.
@@ -237,9 +237,10 @@ impl Node {
 
     /// Subscribe with topic QoS (KeepLast depth).
     ///
-    /// Topic reliability is always best-effort. On ZMQ, multiple subscriptions on
-    /// one node share one SUB socket — the last explicit QoS depth wins for that
-    /// socket. On WebSocket, depth sizes that topic's server→client queue.
+    /// Topic reliability is always best-effort. On ZMQ, the last explicit QoS
+    /// depth sets the shared SUB socket's receive high-water mark, not a
+    /// per-topic latest-message queue. On WebSocket, depth sizes that topic's
+    /// server→client queue.
     pub fn create_subscription_with_qos<M, F>(
         &mut self,
         topic: &str,
@@ -276,8 +277,8 @@ impl Node {
 
     /// Subscribe with a raw-bytes callback and topic QoS (KeepLast depth).
     ///
-    /// ZMQ: applies to the shared SUB socket HWM. WebSocket: sizes this topic's
-    /// server→client queue.
+    /// ZMQ: applies to the shared SUB socket's receive HWM. WebSocket: sizes
+    /// this topic's server→client queue.
     pub fn create_subscription_raw_with_qos(
         &mut self,
         topic: &str,

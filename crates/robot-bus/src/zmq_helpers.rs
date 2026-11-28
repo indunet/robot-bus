@@ -9,8 +9,8 @@ use zmq::Socket;
 
 /// ZeroMQ send / receive high-water marks (max queued messages per direction).
 ///
-/// Topic [`crate::QosProfile::keep_last`] depth maps here. When the queue is full,
-/// further sends block or drop depending on socket type / flags.
+/// Topic [`crate::QosProfile::keep_last`] depth maps here (receive only on SUB).
+/// When the queue is full, further sends block or drop depending on socket type / flags.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct HighWaterMark {
     /// `ZMQ_SNDHWM` — outbound queue depth.
@@ -68,12 +68,16 @@ pub fn apply_subscriber_options(socket: &Socket) -> Result<(), zmq::Error> {
     apply_subscriber_options_with(socket, HighWaterMark::STREAM)
 }
 
+/// Configure a SUB socket, using only the receive half of `hwm`.
 pub fn apply_subscriber_options_with(
     socket: &Socket,
     hwm: HighWaterMark,
 ) -> Result<(), zmq::Error> {
     socket.set_linger(0)?;
-    hwm.apply(socket)?;
+    // SUB sends only subscribe/unsubscribe commands. libzmq can silently
+    // drop them at SNDHWM, leaving the peer with stale or missing filters.
+    socket.set_sndhwm(0)?;
+    socket.set_rcvhwm(hwm.rcv)?;
     Ok(())
 }
 

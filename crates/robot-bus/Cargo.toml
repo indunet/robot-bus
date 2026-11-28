@@ -58,7 +58,7 @@ console-api = [
 ]
 
 [dependencies]
-robot-bus-msgs = { path = "../robot-bus-msgs", version = "3.2.0" }
+robot-bus-msgs = { path = "../robot-bus-msgs", version = "3.2.1" }
 anyhow = "1"
 axum = { version = "0.8", optional = true, default-features = false, features = ["http1", "tokio", "query", "json"] }
 clap = { version = "4", optional = true, features = ["derive"] }

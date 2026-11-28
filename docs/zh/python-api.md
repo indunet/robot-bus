@@ -502,3 +502,5 @@ print(robot_bus.__version__)
 | `ShutdownHandle` / `TimerHandle` | spin与定时器控制 |
 
 WebSocket RPC模式 Node见上一节；底层 WebSocket RPC 帧协议见 Rust 指南（[rust-api.md](rust-api.md)）。
+
+使用 ZeroMQ 传输（`tcp`、`ipc`、`inproc`）时，最后一次显式指定的正数 `qos_depth` 决定共享 SUB socket 的接收高水位；省略时沿用当前设置。深度为 `1` 不等于为每个话题建立一个始终保留最新消息的队列。

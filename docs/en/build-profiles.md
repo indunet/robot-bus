@@ -1,6 +1,6 @@
 # Build profiles
 
-The Rust crate `robot-bus` contains both the client SDK and the broker. Its default feature set (`full`) includes the broker, WebSocket, the embedded console, and the tank demo, so `robot-bus = "3.2.0"` is all most programs need. The table below shows how to select less.
+The Rust crate `robot-bus` contains both the client SDK and the broker. Its default feature set (`full`) includes the broker, WebSocket, the embedded console, and the tank demo, so `robot-bus = "3.2.1"` is all most programs need. The table below shows how to select less.
 
 WebSocket is a core communication capability. The `ws` feature only provides build-time transport selection; the console and demos are separate components.
 
@@ -25,9 +25,9 @@ For a small Rust dependency:
 
 ```toml
 # Client SDK only
-robot-bus = { version = "3.2.0", default-features = false }
+robot-bus = { version = "3.2.1", default-features = false }
 # SDK + broker + WebSocket, without the console or tank demo
-# robot-bus = { version = "3.2.0", default-features = false, features = ["ws"] }
+# robot-bus = { version = "3.2.1", default-features = false, features = ["ws"] }
 ```
 
 Existing default Cargo builds and official Python, Node, C++/Java/Android distributions retain the full bundle. Existing explicit `--no-default-features --features ws,console` builds must add `demo-tank` if they need the demo. Runtime `--no-console` and `--no-tank` flags disable behavior; compile-time features remove components from the build.

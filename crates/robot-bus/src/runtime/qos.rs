@@ -4,8 +4,8 @@
 //! use KeepLast(N) to retain the newest N pending server messages on WS.
 //! Native ZeroMQ currently maps the depth to socket high-water marks only;
 //! HWM alone does not implement replacement of the oldest queued message.
-//! On ZMQ topic sockets that is PUB/SUB HWM; on ZMQ service / action sockets
-//! it is DEALER HWM (`snd` / `rcv` both = depth). On WebSocket nodes, subscribe
+//! On ZMQ topic sockets that is PUB HWM and SUB receive HWM; on ZMQ service /
+//! action sockets it is DEALER HWM (`snd` / `rcv` both = depth). On WebSocket nodes, subscribe
 //! depth sizes the server→client queue (drop oldest on full); publish QoS is ignored
 //! because WS publishers share one server PUB. Reliability is fixed to
 //! best-effort (PUB/SUB has no ACK; RPC has no DDS reliability either).
@@ -28,10 +28,10 @@ impl QosProfile {
 
     /// ROS 2–style `KeepLast(depth)` history depth.
     ///
-    /// On a ZMQ publisher this primarily sets send HWM; on a ZMQ subscriber, receive HWM.
-    /// Both directions are set to `depth` on the local socket. Service / action DEALER
-    /// sockets use the same mapping. On a WebSocket node, subscribe depth sizes the
-    /// server→client queue; publish / RPC depth is ignored.
+    /// On a ZMQ subscriber only receive HWM is set; subscription commands are not
+    /// subject to the depth. Publishers and service / action DEALER sockets set
+    /// both directions. On a WebSocket node, subscribe depth sizes the server→client
+    /// queue; publish / RPC depth is ignored.
     pub const fn keep_last(depth: i32) -> Self {
         Self { depth }
     }

@@ -5,11 +5,11 @@ English | [中文](../zh/rust-api.md)
 `Cargo.toml`:
 
 ```toml
-robot-bus = "3.2.0"
+robot-bus = "3.2.1"
 # Local: robot-bus = { path = "../crates/robot-bus" }
 # One crate holds the SDK and the broker. The default `full` feature set turns on the broker,
 # WebSocket (client and server), embedded console, and tank demo.
-# Client-only programs can drop all of it: robot-bus = { version = "3.2.0", default-features = false }
+# Client-only programs can drop all of it: robot-bus = { version = "3.2.1", default-features = false }
 ```
 
 ## Broker startup

@@ -227,15 +227,15 @@ impl Executor {
         self.action_hwm
     }
 
-    /// Set HWM applied to subsequent `connect_subscriber` sockets.
+    /// Set the stream HWM defaults for new PUB/SUB sockets.
     ///
-    /// Already-connected SUB sockets are updated in place when present.
+    /// Only the receive HWM applies to SUB sockets, including those already connected.
     pub fn set_stream_hwm(&mut self, hwm: HighWaterMark) -> Result<()> {
         self.ensure_open()?;
         self.stream_hwm = hwm;
         for reg in &self.socket_registrations {
             if let Registration::Sub(sub) = reg {
-                hwm.apply(&sub.socket)?;
+                sub.socket.set_rcvhwm(hwm.rcv)?;
             }
         }
         Ok(())

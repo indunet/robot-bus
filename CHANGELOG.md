@@ -10,6 +10,12 @@ Record changes under the applicable version. Explain what changed, why it change
 
 - `rbus discover` shows advertised Broker endpoints even when the Web console is disabled and HTTP discovery is available. All `rbus` queries support `--json` for scripts and `--timeout-ms` to override the default 3-second HTTP timeout.
 
+## [3.2.1]
+
+### Fixed
+
+- ZeroMQ subscriptions at `qos_depth=1` no longer silently lose subscription commands when registering multiple topics on a node. Subscription depth still sets the shared receive high-water mark; it no longer limits the outbound control queue.
+
 ## [3.2.0]
 
 ## [3.1.0]
